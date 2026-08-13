@@ -4665,8 +4665,12 @@
         "WorktreeVisibilityHelpPopover": {
           "c41f2d7e90": "哪些工作树默认隐藏？",
           "8db4e19a26": "此设置不会隐藏通过 Orca 创建的工作树。",
-          "54a7c2f183": "对于新添加的仓库，手动或通过其他工具创建的工作树默认隐藏，以免侧边栏出现意外内容。",
-          "b9e0d43675": "“始终显示”会显示当前及以后创建的非 Orca 工作树，包括 .claude/worktrees/* 和 .gsd-workspaces/* 下的智能体工作树。关闭时，可使用下方的“显示”逐个添加。"
+          "ec1e6a10fb": "其他工作树默认隐藏，以免侧边栏意外变得杂乱。",
+          "1c68c9cf77": "启用来源可显示其当前及未来的所有工作树，也可以在下方单独显示工作树。"
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "无需启用来源即可单独显示一个工作树。",
+          "showWorktree": "显示位于 {{value1}} 的 {{value0}}"
         },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "非 Orca 工作树",
@@ -4680,10 +4684,38 @@
           "b8d24e61f5": "无法列出此仓库的工作树。",
           "c5e70a93b1": "重试",
           "7d21c5e848": "已隐藏的工作树（{{value0}}）",
-          "9b53f7a160": "选择要单独显示的隐藏工作树。",
           "2f80cd4b97": "显示中…",
           "e64b81d3a9": "显示",
-          "d40d436fc2": "无法更新工作树可见性。请重试。"
+          "d40d436fc2": "无法更新工作树可见性。请重试。",
+          "unsupportedHost": "此主机不支持按来源设置工作树可见性。请更新主机上的 Orca 以更改此设置。",
+          "search": "搜索隐藏的工作树",
+          "searchPlaceholder": "搜索 {{value0}} 个工作树…",
+          "noMatches": "没有匹配的工作树",
+          "allShown": "已显示所有检测到的工作树",
+          "noneFound": "未找到非 Orca 工作树",
+          "tryDifferentSearch": "请尝试其他名称或路径。",
+          "disableSource": "禁用来源后可单独管理其工作树。",
+          "appearWhenDetected": "Orca 检测到新工作树后，它们会显示在这里。"
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "其他位置",
+          "custom": "自定义位置",
+          "otherPath": "所列来源之外",
+          "invalidPath": "请输入此主机上的绝对路径。",
+          "duplicatePath": "此位置已在列表中。",
+          "limit": "请先移除一个自定义位置再添加新位置。",
+          "sources": "来源",
+          "sourcesDescription": "已启用来源的当前及未来工作树会显示在侧边栏中。",
+          "found": "找到 {{value0}} 个",
+          "remove": "移除 {{value0}}",
+          "removeLocation": "移除自定义位置",
+          "toggle": "显示 {{value0}} 的当前及未来工作树",
+          "addLocation": "添加位置",
+          "worktreeRoot": "工作树根目录",
+          "add": "添加",
+          "rootHelp": "Orca 会识别此文件夹下的工作树。"
         },
         "add": {
           "repo": {
@@ -14320,6 +14352,7 @@
           "high": "高",
           "xhigh": "极高",
           "max": "最大",
+          "ultra": "极致",
           "on": "开",
           "off": "关"
         },

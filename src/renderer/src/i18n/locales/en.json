@@ -2138,7 +2138,9 @@
         "pluginCommandFailed": "Could not run the plugin command.",
         "recentChatsTerminalsHeader": "Recent Chats & Terminals",
         "27f10cca63": "Search chats, terminals, worktrees, settings, and actions...",
-        "2770f02910": "Search chats, terminals, worktrees, settings, and actions"
+        "2770f02910": "Search chats, terminals, worktrees, settings, and actions",
+        "paletteOpenTabBranch": "Branch name",
+        "paletteOpenTabWorkspace": "Workspace name"
       },
       "github": {
         "pr": {
@@ -4890,8 +4892,12 @@
         "WorktreeVisibilityHelpPopover": {
           "c41f2d7e90": "Which worktrees are hidden by default?",
           "8db4e19a26": "This setting never hides worktrees created through Orca.",
-          "54a7c2f183": "For newly added repositories, worktrees created manually or by another tool are hidden by default to avoid unexpected sidebar clutter.",
-          "b9e0d43675": "Always show includes current and future non-Orca worktrees, including agent worktrees under .claude/worktrees/* and .gsd-workspaces/*. When it is off, use Show below to add one individually."
+          "ec1e6a10fb": "Other worktrees start hidden to avoid unexpected sidebar clutter.",
+          "1c68c9cf77": "Enable a source for all current and future worktrees, or show individual worktrees below."
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "Show one without enabling its source.",
+          "showWorktree": "Show {{value0}} at {{value1}}"
         },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Non-Orca worktrees",
@@ -4905,10 +4911,18 @@
           "b8d24e61f5": "Could not list this repo's worktrees.",
           "c5e70a93b1": "Try again",
           "7d21c5e848": "Hidden worktrees ({{value0}})",
-          "9b53f7a160": "Choose which hidden worktrees to show individually.",
           "2f80cd4b97": "Showing…",
           "e64b81d3a9": "Show",
-          "d40d436fc2": "Could not update worktree visibility. Try again."
+          "d40d436fc2": "Could not update worktree visibility. Try again.",
+          "unsupportedHost": "This host doesn't support source-specific worktree visibility. Update Orca on the host to change this setting.",
+          "search": "Search hidden worktrees",
+          "searchPlaceholder": "Search {{value0}} worktrees…",
+          "noMatches": "No matching worktrees",
+          "allShown": "All discovered worktrees are shown",
+          "noneFound": "No non-Orca worktrees found",
+          "tryDifferentSearch": "Try a different name or path.",
+          "disableSource": "Disable a source to manage its worktrees individually.",
+          "appearWhenDetected": "New worktrees will appear here when Orca detects them."
         },
         "add": {
           "repo": {
@@ -5406,6 +5420,26 @@
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Jump to top"
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "Other locations",
+          "custom": "Custom location",
+          "otherPath": "Outside listed sources",
+          "invalidPath": "Enter an absolute path for this host.",
+          "duplicatePath": "This location is already listed.",
+          "limit": "Remove a custom location before adding another.",
+          "sources": "Sources",
+          "sourcesDescription": "Enabled sources include current and future worktrees in the sidebar.",
+          "found": "{{value0}} found",
+          "remove": "Remove {{value0}}",
+          "removeLocation": "Remove custom location",
+          "toggle": "Show current and future worktrees from {{value0}}",
+          "addLocation": "Add location",
+          "worktreeRoot": "Worktree root",
+          "add": "Add",
+          "rootHelp": "Orca will recognize worktrees beneath this folder."
         }
       },
       "shared": {
@@ -15205,6 +15239,7 @@
           "high": "High",
           "xhigh": "Extra high",
           "max": "Max",
+          "ultra": "Ultra",
           "on": "On",
           "off": "Off"
         }
@@ -15363,7 +15398,10 @@
       "agentCount": "{{count}} agents",
       "agentCount_one": "{{count}} agent",
       "agentCount_other": "{{count}} agents",
-      "noWorkspaceAgents": "No agents in this workspace."
+      "noWorkspaceAgents": "No agents in this workspace.",
+      "status": {
+        "doneSeen": "Done, seen"
+      }
     },
     "placeholder": {
       "title": "Agent dashboard",

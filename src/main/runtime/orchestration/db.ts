@@ -3510,6 +3510,18 @@ export class OrchestrationDb {
     )
   }
 
+  getUndeliveredUnreadMailboxHandles(): string[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT DISTINCT to_handle FROM messages
+           WHERE read = 0 AND delivered_at IS NULL
+             AND delivery_contract = 'current_delivery'`
+        )
+        .all() as { to_handle: string }[]
+    ).map((row) => row.to_handle)
+  }
+
   getAllMessages(toHandle: string, limit = 20): MessageRow[] {
     return exposeMessageListTimestamps(
       this.db

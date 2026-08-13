@@ -18,6 +18,7 @@ import {
   type AgentMapHostFilter
 } from './agent-map-filter'
 import { updateAgentMapLayout, type AgentMapLayoutCache } from './agent-map-layout'
+import { selectAgentMapRecentFinishPaneKeys } from './agent-map-node-metadata'
 import './agent-map.css'
 
 type AgentMapProps = {
@@ -120,6 +121,10 @@ export function AgentMap({
     () => updateAgentMapLayout(layoutCacheRef.current, visibleCards, now, visibleWorkspaces),
     [visibleCards, visibleWorkspaces, now]
   )
+  const recentFinishPaneKeys = useMemo(
+    () => selectAgentMapRecentFinishPaneKeys(visibleCards),
+    [visibleCards]
+  )
   useEffect(() => {
     layoutCacheRef.current = layoutResult.cache
   }, [layoutResult.cache])
@@ -173,6 +178,7 @@ export function AgentMap({
           selectedPaneKey={selectedPaneKey}
           allowAggregation
           showOrchestrationLinks={showOrchestrationLinks}
+          recentFinishPaneKeys={recentFinishPaneKeys}
           launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
           workspaceContextMenusEnabled={workspaceContextMenusEnabled}
           onWorkspaceContextMenuOpenChange={onWorkspaceContextMenuOpenChange}

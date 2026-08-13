@@ -502,7 +502,7 @@ describe('AgentKanbanBoard', () => {
     expect(ackAgent).toHaveBeenCalledWith('pk-ack')
   })
 
-  it('keeps an acknowledged result visible as Idle in the map without review state', async () => {
+  it('keeps an acknowledged result visible as a seen finish in the map without review state', async () => {
     const fresh = card({
       paneKey: 'fresh-result',
       bucket: 'done',
@@ -530,7 +530,9 @@ describe('AgentKanbanBoard', () => {
         initialView="map"
       />
     )
-    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass('fleet-status-idle')
+    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass(
+      'fleet-status-done-seen'
+    )
     expect(screen.getByTestId('terminal-panel')).toBeInTheDocument()
 
     view.unmount()
@@ -543,6 +545,8 @@ describe('AgentKanbanBoard', () => {
         initialView="map"
       />
     )
-    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass('fleet-status-idle')
+    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass(
+      'fleet-status-done-seen'
+    )
   })
 })

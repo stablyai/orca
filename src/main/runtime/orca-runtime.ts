@@ -165,6 +165,7 @@ import type {
 import { clearFederationAckCheckpoints } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
 import { formatMessagePointer } from './orchestration/formatter'
+import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoint-scheduler'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import type {
   Automation,
@@ -486,11 +487,12 @@ import {
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../shared/worktree-ownership'
+import { isAgentScratchRepoRootPath } from '../../shared/agent-scratch-worktrees'
 import {
-  createAgentScratchWorktreePathMatcher,
-  isAgentScratchRepoRootPath,
-  type AgentScratchWorktreePathMatcher
-} from '../../shared/agent-scratch-worktrees'
+  createWorktreeVisibilitySourceMatcher,
+  normalizeCustomWorktreeVisibilitySources,
+  type WorktreeVisibilitySourceMatcher
+} from '../../shared/worktree-visibility-sources'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -2836,6 +2838,11 @@ export class OrcaRuntimeService {
   private handleByPtyId = new Map<string, string>()
   // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
   private readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
+  // Why: a waiter can reserve an older row while a newer row advances the sequence watermark.
+  private readonly pointedMessageIdsByHandle = new Map<string, Set<string>>()
+  private readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
+    this.repointPendingMessagesForHandle(handle)
+  )
   private syntheticTerminalHandles = new Set<string>()
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
@@ -3856,14 +3863,19 @@ export class OrcaRuntimeService {
       const dbPath = join(app.getPath('userData'), 'orchestration.db')
       this._orchestrationDb = new OrchestrationDb(dbPath)
       this.ensureOrchestrationFederationRelay()
+      this.scheduleRestoredMessageRepoints()
     }
     return this._orchestrationDb
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this.stopOrchestrationFederationRelay()
+    this.mailPointerRepointScheduler.clear()
+    this.lastPointedMessageSequenceByHandle.clear()
+    this.pointedMessageIdsByHandle.clear()
     this._orchestrationDb = db
     this.ensureOrchestrationFederationRelay()
+    this.scheduleRestoredMessageRepoints()
   }
 
   private getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {
@@ -5562,6 +5574,7 @@ export class OrcaRuntimeService {
       throw new Error('Runtime graph publisher does not match the authoritative window')
     }
 
+    const graphWasReady = this.graphStatus === 'ready'
     const previousTabs = this.tabs
     const previousLeaves = this.leaves
     this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
@@ -5732,6 +5745,20 @@ export class OrcaRuntimeService {
     this.refreshWritableFlags()
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
+      const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      if (
+        this._orchestrationDb &&
+        leaf.lastAgentStatus === 'idle' &&
+        leaf.lastAgentStatusObservedLive &&
+        leaf.writable &&
+        (!graphWasReady ||
+          previousLeaf?.ptyId !== leaf.ptyId ||
+          !previousLeaf.writable ||
+          previousLeaf.lastAgentStatus !== 'idle' ||
+          !previousLeaf.lastAgentStatusObservedLive)
+      ) {
+        this.deliverPendingMessagesForLeaf(leaf)
+      }
     }
 
     // Why: createTerminal waits for the renderer's graph sync to populate the
@@ -9182,8 +9209,16 @@ export class OrcaRuntimeService {
         executionHostId: ExecutionHostId
       }
     >()
-    for (const worktree of await this.listResolvedWorktrees()) {
-      if (!this.isRuntimeWorktreeVisible(worktree)) {
+    const resolvedWorktrees = await this.listResolvedWorktrees()
+    const visibilitySourceMatchersByRepoId =
+      this.buildRuntimeVisibilitySourceMatchersByRepoId(resolvedWorktrees)
+    for (const worktree of resolvedWorktrees) {
+      if (
+        !this.isRuntimeWorktreeVisible(
+          worktree,
+          visibilitySourceMatchersByRepoId.get(worktree.repoId)
+        )
+      ) {
         continue
       }
       const candidateConnectionId = this.store?.getRepo(worktree.repoId)?.connectionId ?? undefined
@@ -17689,8 +17724,11 @@ export class OrcaRuntimeService {
       throw new Error('invalid_limit')
     }
     const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
+    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+      resolvedWorktreeSnapshot.worktrees
+    )
     const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
-      this.isRuntimeWorktreeVisible(worktree)
+      this.isRuntimeWorktreeVisible(worktree, visibilitySourceMatchersByRepoId.get(worktree.repoId))
     )
     // Why: worktree.ps backs the mobile sidebar, so it must use the same
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
@@ -19198,6 +19236,8 @@ export class OrcaRuntimeService {
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'agentWorktreeVisibility'
+        | 'customWorktreeVisibilitySources'
+        | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'projectGroupOrder'
       >
@@ -20998,28 +21038,15 @@ export class OrcaRuntimeService {
     }
     const resolved = await this.listResolvedWorktrees()
     const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
-    const checkoutPathsByRepoId = new Map<string, string[]>()
-    for (const worktree of resolved) {
-      const checkoutPaths = checkoutPathsByRepoId.get(worktree.repoId) ?? []
-      checkoutPaths.push(worktree.path)
-      checkoutPathsByRepoId.set(worktree.repoId, checkoutPaths)
-    }
-    const agentScratchMatchersByRepoId = new Map(
-      (this.store?.getRepos() ?? []).map((repo) => [
-        repo.id,
-        createAgentScratchWorktreePathMatcher([
-          repo.path,
-          ...(checkoutPathsByRepoId.get(repo.id) ?? [])
-        ])
-      ])
-    )
+    const visibilitySourceMatchersByRepoId =
+      this.buildRuntimeVisibilitySourceMatchersByRepoId(resolved)
     const worktrees = resolved.filter((worktree) => {
       if (repoId && worktree.repoId !== repoId) {
         return false
       }
       return this.isRuntimeWorktreeVisible(
         worktree,
-        agentScratchMatchersByRepoId.get(worktree.repoId)
+        visibilitySourceMatchersByRepoId.get(worktree.repoId)
       )
     })
     return {
@@ -21044,7 +21071,13 @@ export class OrcaRuntimeService {
     const store = this.requireStore()
     if (isFolderRepo(repo)) {
       const worktrees = listRuntimeFolderWorkspaces(store, repo)
-      const detected = worktrees.map((worktree) => this.toRuntimeDetectedWorktree(repo, worktree))
+      const matcher = createWorktreeVisibilitySourceMatcher(
+        [repo.path, ...worktrees.map((worktree) => worktree.path)],
+        normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+      )
+      const detected = worktrees.map((worktree) =>
+        this.toRuntimeDetectedWorktree(repo, worktree, matcher)
+      )
       return {
         repoId: repo.id,
         authoritative: true,
@@ -21061,10 +21094,10 @@ export class OrcaRuntimeService {
     if (scan.ok) {
       pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
     }
-    const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
-      repo.path,
-      ...scan.worktrees.map((worktree) => worktree.path)
-    ])
+    const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
+      [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
+      normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+    )
     const detected = scan.worktrees.map((gitWorktree) => {
       const worktreeId = `${repo.id}::${gitWorktree.path}`
       const meta = store.getWorktreeMeta(worktreeId)
@@ -21075,7 +21108,7 @@ export class OrcaRuntimeService {
       const detectedWorktree = this.toRuntimeDetectedWorktree(
         repo,
         worktree,
-        agentScratchWorktreePathMatcher
+        worktreeVisibilitySourceMatcher
       )
       if (scan.ok) {
         return detectedWorktree
@@ -21142,19 +21175,41 @@ export class OrcaRuntimeService {
 
   private isRuntimeWorktreeVisible(
     worktree: Worktree,
-    agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
+    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
   ): boolean {
     const repo = this.store?.getRepo(worktree.repoId)
     if (!repo || !this.store) {
       return true
     }
-    return this.toRuntimeDetectedWorktree(repo, worktree, agentScratchWorktreePathMatcher).visible
+    return this.toRuntimeDetectedWorktree(repo, worktree, worktreeVisibilitySourceMatcher).visible
+  }
+
+  private buildRuntimeVisibilitySourceMatchersByRepoId(
+    worktrees: readonly Worktree[]
+  ): Map<string, WorktreeVisibilitySourceMatcher> {
+    const checkoutPathsByRepoId = new Map<string, string[]>()
+    for (const worktree of worktrees) {
+      const checkoutPaths = checkoutPathsByRepoId.get(worktree.repoId) ?? []
+      checkoutPaths.push(worktree.path)
+      checkoutPathsByRepoId.set(worktree.repoId, checkoutPaths)
+    }
+    return new Map(
+      (this.store?.getRepos() ?? [])
+        .filter((repo) => checkoutPathsByRepoId.has(repo.id))
+        .map((repo) => [
+          repo.id,
+          createWorktreeVisibilitySourceMatcher(
+            [repo.path, ...(checkoutPathsByRepoId.get(repo.id) ?? [])],
+            normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+          )
+        ])
+    )
   }
 
   private toRuntimeDetectedWorktree(
     repo: Repo,
     worktree: Worktree,
-    agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
+    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
   ): DetectedWorktree {
     const settings = this.store?.getSettings()
     if (!settings) {
@@ -21172,7 +21227,7 @@ export class OrcaRuntimeService {
       settings,
       knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
       isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo),
-      agentScratchWorktreePathMatcher
+      worktreeVisibilitySourceMatcher
     })
   }
 
@@ -30830,11 +30885,13 @@ export class OrcaRuntimeService {
             { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
           )
         : null
-      const launchAgent = tab.launchAgent ?? liveLeafPty?.launchAgent ?? pty?.launchAgent ?? null
+      // Renderer omission is authoritative: PTY launch provenance outlives agent exit.
+      const launchAgent = tab.launchAgent ?? null
+      const launchOwnerAgent = launchAgent ?? liveLeafPty?.launchAgent ?? pty?.launchAgent ?? null
       // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
       const ownerAgent =
         resolvePaneAgentOwner({
-          launchAgent,
+          launchAgent: launchOwnerAgent,
           hookAgent:
             tab.agentStatus?.agentType ??
             hookAgentStatus?.agentType ??
@@ -31903,6 +31960,23 @@ export class OrcaRuntimeService {
     }
   }
 
+  private scheduleRestoredMessageRepoints(): void {
+    const handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
+    for (const handle of handles) {
+      if (!handle.startsWith('dispatch:')) {
+        this.mailPointerRepointScheduler.schedule(handle)
+      }
+    }
+  }
+
+  private repointPendingMessagesForHandle(handle: string): void {
+    try {
+      this.deliverPendingMessagesForHandle(handle)
+    } catch {
+      // The unref'd repair can outlive a test/runtime-owned database during shutdown.
+    }
+  }
+
   private deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
     this.deliverPendingMessages(leaf)
     if (!this._orchestrationDb) {
@@ -31916,6 +31990,9 @@ export class OrcaRuntimeService {
 
   // Why: wake blocking orchestration.check --wait calls on this handle so they return the new message immediately instead of polling.
   notifyMessageArrived(handle: string, messageType?: string): void {
+    if (!handle.startsWith('dispatch:')) {
+      this.mailPointerRepointScheduler.schedule(handle)
+    }
     // Why: push-on-idle is driven by status transitions; a message that
     // arrives while the recipient is already idle never sees a transition, so
     // deliver now (#12536). deliverPendingMessagesForHandle no-ops when the
@@ -32586,15 +32663,19 @@ export class OrcaRuntimeService {
       const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
       if (handle) {
         this.lastPointedMessageSequenceByHandle.delete(handle)
+        this.pointedMessageIdsByHandle.delete(handle)
+        this.mailPointerRepointScheduler.schedule(handle)
       }
       const run = this._orchestrationDb?.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
       if (run) {
         this.lastPointedMessageSequenceByHandle.delete(`run:${run.id}`)
+        this.pointedMessageIdsByHandle.delete(`run:${run.id}`)
+        this.mailPointerRepointScheduler.schedule(`run:${run.id}`)
       }
     }
   }
 
-  // Why: push-on-idle delivery is event-driven (no polling) because the runtime owns both the message store and terminal status detection.
+  // Why: normal delivery stays event-driven; the bounded mailbox retry only repairs missed liveness edges.
   private deliverPendingMessages(
     leaf: RuntimeLeafRecord,
     options: {
@@ -32634,14 +32715,35 @@ export class OrcaRuntimeService {
     // still-blocked case; reservedTypes carries the notify-time snapshot for a
     // waiter resolved later in the same drain, which is already gone from the map.
     const waiters = this.messageWaitersByHandle.get(mailboxHandle)
-    const unread = this._orchestrationDb
-      .getUndeliveredUnreadMessages(mailboxHandle)
-      .filter(
-        (message) =>
-          !options.reservedTypes?.has(message.type) &&
-          !messageTypeHasLiveWaiter(waiters, message.type)
-      )
+    const pending = this._orchestrationDb.getUndeliveredUnreadMessages(mailboxHandle)
+    const pendingIds = new Set(pending.map((message) => message.id))
+    const pointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
+    if (pointedIds) {
+      for (const id of pointedIds) {
+        if (!pendingIds.has(id)) {
+          pointedIds.delete(id)
+        }
+      }
+      if (pointedIds.size === 0) {
+        this.pointedMessageIdsByHandle.delete(mailboxHandle)
+      }
+    }
+    const unread = pending.filter(
+      (message) =>
+        !options.reservedTypes?.has(message.type) &&
+        !messageTypeHasLiveWaiter(waiters, message.type)
+    )
     if (unread.length === 0) {
+      return
+    }
+
+    const watermark = this.lastPointedMessageSequenceByHandle.get(mailboxHandle) ?? -1
+    const priorPointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
+    if (
+      !unread.some(
+        (message) => message.sequence > watermark || priorPointedIds?.has(message.id) !== true
+      )
+    ) {
       return
     }
 
@@ -32649,10 +32751,7 @@ export class OrcaRuntimeService {
       return
     }
     const newestSequence = unread.at(-1)?.sequence
-    if (
-      newestSequence === undefined ||
-      newestSequence <= (this.lastPointedMessageSequenceByHandle.get(mailboxHandle) ?? -1)
-    ) {
+    if (newestSequence === undefined) {
       return
     }
 
@@ -32723,7 +32822,16 @@ export class OrcaRuntimeService {
       if (!wrote) {
         return
       }
-      this.lastPointedMessageSequenceByHandle.set(mailboxHandle, newestSequence)
+      this.lastPointedMessageSequenceByHandle.set(
+        mailboxHandle,
+        Math.max(watermark, newestSequence)
+      )
+      const pointedIdsAfterWrite =
+        this.pointedMessageIdsByHandle.get(mailboxHandle) ?? new Set<string>()
+      for (const message of unread) {
+        pointedIdsAfterWrite.add(message.id)
+      }
+      this.pointedMessageIdsByHandle.set(mailboxHandle, pointedIdsAfterWrite)
 
       const tabTitle = this.tabs.get(leaf.tabId)?.title
       if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {

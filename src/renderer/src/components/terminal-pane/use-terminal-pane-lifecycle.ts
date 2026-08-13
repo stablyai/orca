@@ -272,6 +272,7 @@ type UseTerminalPaneLifecycleDeps = {
   effectiveMacOptionAsAltRef: React.RefObject<EffectiveMacOptionAsAlt>
   initialLayoutRef: React.RefObject<TerminalLayoutSnapshot>
   managerRef: React.RefObject<PaneManager | null>
+  getTabWideAgentHintLeafId: () => string | null
   containerRef: React.RefObject<HTMLDivElement | null>
   expandedStyleSnapshotRef: React.MutableRefObject<
     Map<HTMLElement, { display: string; flex: string }>
@@ -624,6 +625,7 @@ export function useTerminalPaneLifecycle({
   effectiveMacOptionAsAltRef,
   initialLayoutRef,
   managerRef,
+  getTabWideAgentHintLeafId,
   containerRef,
   expandedStyleSnapshotRef,
   paneFontSizesRef,
@@ -921,7 +923,8 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       getManager: () => managerRef.current,
       getContainer: () => containerRef.current,
-      getPtyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
+      getPtyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null,
+      getTabWideAgentHintLeafId
     })
 
     const fileOpenLinkHint = getTerminalFileOpenHint()

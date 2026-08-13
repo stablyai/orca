@@ -32,6 +32,33 @@ export const POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET = RESET_TERMINAL_CURSOR_STYLE
 /** Dead-TUI bytes feed a fresh shell; clear mouse modes here and renderer-owned modes later. */
 export const COLD_RESTORE_SEED_MODE_RESET = RESET_MOUSE_REPORTING
 
+// Why separate from every profile above: those clear DEC *mode* bits and none of
+// them touches SGR. A recovery path that declares bytes unrecoverable has by
+// definition lost whatever turned the pen on, so the pen must be cleared too —
+// otherwise a dropped `ESC[22m` leaves bold applied to everything written after
+// (STA-4042: hidden-delivery gate drops the reset, the abandoned restore then
+// drains queued foreground chunks under the stale pen).
+export const RESET_GRAPHIC_RENDITION = '\x1b[0m'
+
+/**
+ * State to re-establish when renderer-bound bytes were dropped and the gap
+ * cannot be replayed away.
+ *
+ * Scoped to the pen on purpose. A gap can in principle strand other carried
+ * state — an ISO 2022 charset designation, an open OSC 8 hyperlink, a partial
+ * escape — and earlier revisions of this reset covered those too. They are
+ * dropped here because each one changes what a live TUI sees on a path that
+ * runs in production, none of them has a reported symptom behind it, and the
+ * pen is what the field reports actually show (STA-4042). Widen this only with
+ * a symptom to point at.
+ *
+ * Deliberately NOT a soft reset (DECSTR) either: xterm's DECSTR wipes kitty
+ * flags and stacks (see terminal-kitty-keyboard-mode-tracker applySoftReset),
+ * which would silence Option chords for a live agent that negotiates them only
+ * at startup.
+ */
+export const RESET_AFTER_BYTE_GAP = RESET_GRAPHIC_RENDITION
+
 // Why: DECTCEM applies in emission order, so the payload's last ?25l/?25h is the cursor state the TUI left.
 export function replayPayloadEndsWithCursorHidden(payload: string): boolean {
   const hideIndex = payload.lastIndexOf('\x1b[?25l')

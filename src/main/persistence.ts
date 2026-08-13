@@ -139,6 +139,10 @@ import {
 import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
+import {
+  normalizeCustomWorktreeVisibilitySources,
+  normalizeWorktreeVisibilitySourcePreferences
+} from '../shared/worktree-visibility-sources'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
@@ -1478,6 +1482,8 @@ function sanitizeRepoUpdatesForPersistence<
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
+      | 'customWorktreeVisibilitySources'
+      | 'worktreeVisibilitySourcePreferences'
     >
   >
 >(updates: T): T {
@@ -1536,6 +1542,26 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.forkSyncMode
     } else {
       sanitized.forkSyncMode = forkSyncMode
+    }
+  }
+  if ('customWorktreeVisibilitySources' in sanitized) {
+    const sources = normalizeCustomWorktreeVisibilitySources(
+      sanitized.customWorktreeVisibilitySources
+    )
+    if (!sources) {
+      delete sanitized.customWorktreeVisibilitySources
+    } else {
+      sanitized.customWorktreeVisibilitySources = sources
+    }
+  }
+  if ('worktreeVisibilitySourcePreferences' in sanitized) {
+    const preferences = normalizeWorktreeVisibilitySourcePreferences(
+      sanitized.worktreeVisibilitySourcePreferences
+    )
+    if (!preferences) {
+      delete sanitized.worktreeVisibilitySourcePreferences
+    } else {
+      sanitized.worktreeVisibilitySourcePreferences = preferences
     }
   }
   return sanitized
@@ -5001,6 +5027,8 @@ export class Store {
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'agentWorktreeVisibility'
+        | 'customWorktreeVisibilitySources'
+        | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
@@ -5019,6 +5047,20 @@ export class Store {
       return null
     }
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    if (
+      'agentWorktreeVisibility' in sanitizedUpdates &&
+      !('worktreeVisibilitySourcePreferences' in sanitizedUpdates) &&
+      (sanitizedUpdates.agentWorktreeVisibility === 'hide' ||
+        sanitizedUpdates.agentWorktreeVisibility === 'show')
+    ) {
+      sanitizedUpdates.worktreeVisibilitySourcePreferences = {
+        ...repo.worktreeVisibilitySourcePreferences,
+        builtIn: {
+          claude: sanitizedUpdates.agentWorktreeVisibility,
+          gsd: sanitizedUpdates.agentWorktreeVisibility
+        }
+      }
+    }
     if ('projectGroupId' in sanitizedUpdates) {
       const nextGroupId = sanitizedUpdates.projectGroupId
       if (
@@ -5184,6 +5226,8 @@ export class Store {
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
       forkSyncMode: rawForkSyncMode,
+      customWorktreeVisibilitySources: rawCustomWorktreeVisibilitySources,
+      worktreeVisibilitySourcePreferences: rawWorktreeVisibilitySourcePreferences,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
@@ -5192,6 +5236,12 @@ export class Store {
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
+    const customWorktreeVisibilitySources = normalizeCustomWorktreeVisibilitySources(
+      rawCustomWorktreeVisibilitySources
+    )
+    const worktreeVisibilitySourcePreferences = normalizeWorktreeVisibilitySourcePreferences(
+      rawWorktreeVisibilitySourcePreferences
+    )
     // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
     const gitUsername = isFolderRepo(repo)
       ? ''
@@ -5205,6 +5255,10 @@ export class Store {
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
+      ...(customWorktreeVisibilitySources !== undefined ? { customWorktreeVisibilitySources } : {}),
+      ...(worktreeVisibilitySourcePreferences !== undefined
+        ? { worktreeVisibilitySourcePreferences }
+        : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {

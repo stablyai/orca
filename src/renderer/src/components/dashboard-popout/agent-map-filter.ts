@@ -1,17 +1,19 @@
-import {
-  dashboardCardDisplayState,
-  type DashboardCard,
-  type DashboardCardHostKind
-} from '../../../../shared/dashboard-snapshot'
+import type { DashboardCard, DashboardCardHostKind } from '../../../../shared/dashboard-snapshot'
+import { agentMapNodeStatus } from './agent-map-node-metadata'
 
 export type AgentMapState = 'attention' | 'working' | 'done' | 'idle'
 export type AgentMapHostFilter = 'all' | DashboardCardHostKind
 export type AgentMapCounts = Record<AgentMapState, number>
 
 export function agentMapState(card: DashboardCard): AgentMapState {
-  const state = dashboardCardDisplayState(card)
+  const state = agentMapNodeStatus(card)
   if (state === 'blocked' || state === 'waiting') {
     return 'attention'
+  }
+  // Why: an acknowledged finish still paints emerald, so it has to answer the Done
+  // chip. Filtering it as idle would let "hide idle" blank out visibly green nodes.
+  if (state === 'done-seen') {
+    return 'done'
   }
   return state
 }

@@ -35,8 +35,6 @@ import { useAgentMapViewportTransition } from './useAgentMapViewportTransition'
 
 const AGENT_FOCUS_DURATION_MS = 240
 
-type Point = { x: number; y: number }
-
 export type AgentMapCanvasHandle = {
   fit: () => void
   focusProject: (project: AgentMapProjectRing) => void
@@ -48,6 +46,7 @@ type AgentMapCanvasProps = {
   selectedPaneKey: string | null
   allowAggregation: boolean
   showOrchestrationLinks: boolean
+  recentFinishPaneKeys: ReadonlySet<string>
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   workspaceContextMenusEnabled?: boolean
   onWorkspaceContextMenuOpenChange?: (open: boolean) => void
@@ -64,6 +63,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       selectedPaneKey,
       allowAggregation,
       showOrchestrationLinks,
+      recentFinishPaneKeys,
       launchableAgentsByWorktreeId,
       workspaceContextMenusEnabled = false,
       onWorkspaceContextMenuOpenChange,
@@ -78,8 +78,8 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     const nodeRefs = useRef(new Map<string, SVGGElement>())
     const dragRef = useRef<{
       pointerId: number
-      point: Point
-      center: Point
+      point: AgentMapViewport['center']
+      center: AgentMapViewport['center']
       worldPerPixelX: number
       worldPerPixelY: number
     } | null>(null)
@@ -387,6 +387,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               selectedPaneKey={selectedPaneKey}
               allowAggregation={allowAggregation}
               showOrchestrationLinks={showOrchestrationLinks}
+              recentFinishPaneKeys={recentFinishPaneKeys}
               launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
               nodeRefs={nodeRefs}
               onSelectAgent={onSelectAgent}

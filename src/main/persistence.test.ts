@@ -4739,7 +4739,7 @@ describe('Store', () => {
     expect(updated!.externalWorktreeVisibilityLegacy).toBe(true)
   })
 
-  it('persists agent worktree visibility independently from external visibility', async () => {
+  it('keeps rollback agent visibility writes authoritative for both built-in sources', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ externalWorktreeVisibility: 'hide' }))
 
@@ -4747,15 +4747,51 @@ describe('Store', () => {
 
     expect(updated).toMatchObject({
       externalWorktreeVisibility: 'hide',
-      agentWorktreeVisibility: 'show'
+      agentWorktreeVisibility: 'show',
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show', gsd: 'show' }
+      }
     })
 
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')).toMatchObject({
       externalWorktreeVisibility: 'hide',
-      agentWorktreeVisibility: 'show'
+      agentWorktreeVisibility: 'show',
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show', gsd: 'show' }
+      }
     })
+  })
+
+  it('persists bounded custom worktree sources separately from their preferences', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      customWorktreeVisibilitySources: [
+        { id: 'team', rootPath: ' /srv/team-worktrees ' },
+        { id: 'invalid', rootPath: '../relative' }
+      ],
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show', gsd: 'hide' },
+        custom: { team: 'show' }
+      }
+    })
+
+    expect(updated).toMatchObject({
+      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team-worktrees' }],
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show', gsd: 'hide' },
+        custom: { team: 'show' }
+      }
+    })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')?.customWorktreeVisibilitySources).toEqual([
+      { id: 'team', rootPath: '/srv/team-worktrees' }
+    ])
   })
 
   it('updateRepo clears source-control AI overrides independently from other clearable fields', async () => {

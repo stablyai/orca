@@ -4653,8 +4653,12 @@
         "WorktreeVisibilityHelpPopover": {
           "c41f2d7e90": "기본적으로 숨겨지는 워크트리",
           "8db4e19a26": "이 설정은 Orca에서 만든 워크트리를 숨기지 않습니다.",
-          "54a7c2f183": "새로 추가한 저장소에서는 직접 만들거나 다른 도구에서 만든 워크트리가 예기치 않은 항목으로 사이드바를 복잡하게 하지 않도록 기본적으로 숨겨집니다.",
-          "b9e0d43675": "'항상 표시'는 .claude/worktrees/* 및 .gsd-workspaces/* 아래의 에이전트 워크트리를 포함하여 현재와 앞으로 생성되는 Orca 외부 워크트리를 표시합니다. 꺼져 있을 때는 아래의 '표시'를 사용해 하나씩 추가할 수 있습니다."
+          "ec1e6a10fb": "다른 워크트리는 사이드바가 예기치 않게 복잡해지지 않도록 기본적으로 숨겨집니다.",
+          "1c68c9cf77": "소스를 활성화해 현재와 앞으로 생성되는 모든 워크트리를 표시하거나 아래에서 개별 워크트리를 표시하세요."
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "소스를 활성화하지 않고 하나만 표시합니다.",
+          "showWorktree": "{{value1}}의 {{value0}} 표시"
         },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Orca 외부 워크트리",
@@ -4668,10 +4672,38 @@
           "b8d24e61f5": "이 저장소의 워크트리를 나열할 수 없습니다.",
           "c5e70a93b1": "다시 시도",
           "7d21c5e848": "숨겨진 워크트리({{value0}})",
-          "9b53f7a160": "개별적으로 사이드바에 표시할 숨겨진 워크트리를 선택하세요.",
           "2f80cd4b97": "표시 중…",
           "e64b81d3a9": "표시",
-          "d40d436fc2": "워크트리 표시 설정을 업데이트하지 못했습니다. 다시 시도하세요."
+          "d40d436fc2": "워크트리 표시 설정을 업데이트하지 못했습니다. 다시 시도하세요.",
+          "unsupportedHost": "이 호스트는 소스별 워크트리 표시 설정을 지원하지 않습니다. 이 설정을 변경하려면 호스트의 Orca를 업데이트하세요.",
+          "search": "숨겨진 워크트리 검색",
+          "searchPlaceholder": "워크트리 {{value0}}개 검색…",
+          "noMatches": "일치하는 워크트리가 없습니다",
+          "allShown": "발견된 모든 워크트리가 표시 중입니다",
+          "noneFound": "Orca 외부 워크트리를 찾지 못했습니다",
+          "tryDifferentSearch": "다른 이름이나 경로를 시도하세요.",
+          "disableSource": "소스를 비활성화하면 워크트리를 개별적으로 관리할 수 있습니다.",
+          "appearWhenDetected": "Orca가 새 워크트리를 발견하면 여기에 표시됩니다."
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "기타 위치",
+          "custom": "사용자 지정 위치",
+          "otherPath": "목록에 없는 소스",
+          "invalidPath": "이 호스트의 절대 경로를 입력하세요.",
+          "duplicatePath": "이 위치는 이미 목록에 있습니다.",
+          "limit": "다른 위치를 추가하기 전에 사용자 지정 위치를 제거하세요.",
+          "sources": "소스",
+          "sourcesDescription": "활성화된 소스의 현재와 앞으로 생성되는 워크트리가 사이드바에 표시됩니다.",
+          "found": "{{value0}}개 발견",
+          "remove": "{{value0}} 제거",
+          "removeLocation": "사용자 지정 위치 제거",
+          "toggle": "{{value0}}의 현재와 앞으로 생성되는 워크트리 표시",
+          "addLocation": "위치 추가",
+          "worktreeRoot": "워크트리 루트",
+          "add": "추가",
+          "rootHelp": "Orca는 이 폴더 아래의 워크트리를 인식합니다."
         },
         "add": {
           "repo": {
@@ -14311,6 +14343,7 @@
           "high": "높음",
           "xhigh": "매우 높음",
           "max": "최대",
+          "ultra": "울트라",
           "on": "켜짐",
           "off": "꺼짐"
         },

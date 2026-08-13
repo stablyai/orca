@@ -125,6 +125,7 @@ import {
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
+  RESET_AFTER_BYTE_GAP,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
@@ -414,7 +415,7 @@ const FOREGROUND_GRID_DRIFT_CHECK_MIN_MS = 250
 // Why: this is only shown if hidden renderer output was skipped and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
-  '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because main recovery was unavailable.]\r\n'
+  '\r\n[Orca skipped hidden terminal output because main recovery was unavailable.]\r\n'
 type E2eTerminalPtyDataInjectionApi = {
   inject: (paneKey: string, data: string, meta?: PtyDataMeta) => boolean
   keys: () => string[]
@@ -6208,6 +6209,17 @@ export function connectPanePty(
         noteHiddenOutputRestoreFloodBackpressure()
         return
       }
+      // Why the emulator too: it carries state across chunks exactly like the
+      // parser does. If the gap swallowed the `ESC[22m` closing a bold run,
+      // every cell written afterwards inherits it. This marker is the one point
+      // where "bytes were dropped" is known, so ground the pen here rather than
+      // relying on each recovery path to remember (STA-4042).
+      // Why after the backpressure return and not before: under flood these
+      // markers arrive continuously, and writing per marker would add work in
+      // exactly the case that guard exists to damp. The flood path repaints via
+      // buildMainModelSnapshotReplayWrites, which grounds the pen itself, so
+      // nothing is lost by skipping it here.
+      writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
       // Why: a marker during an in-flight restore means that snapshot may predate the drop, so a fresh one must follow; capture BEFORE the mark, which starts a restore synchronously on a visible pane.
       const restoreWasInFlight = hiddenOutputRestoreInFlight !== null
       markHiddenOutputRestoreNeeded()
@@ -7108,6 +7120,7 @@ export function connectPanePty(
         cycle: hiddenOutputRestoreRemoteAbandonCycles
       })
       noteHiddenOutputRestoreFloodBackpressure()
+      writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
       return true
     }
 
@@ -7160,6 +7173,13 @@ export function connectPanePty(
         // backpressure must not outlive it — it would re-open recovery and banner a second time.
         clearHiddenOutputRestoreFloodRepaintTimer()
         writeRestoreUnavailableWarning()
+      }
+      // Why not an else: the unavailable warning is plain text and carries no SGR
+      // of its own, so folding the reset into the other branch skipped it on the
+      // primary abandon path — the one that declares the bytes unrecoverable.
+      // Guarded only against the remote re-arm, which writes its own reset.
+      if (!rearmedRemoteRestore) {
+        writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
       }
       if (hadPendingOverflow) {
         return
@@ -7301,6 +7321,8 @@ export function connectPanePty(
     }
 
     function writeRestoreUnavailableWarning(): void {
+      // The reset must parse before both the warning and any foreground drain.
+      writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
       if (!shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
         return
       }

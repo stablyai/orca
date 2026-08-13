@@ -9,7 +9,6 @@ import {
   Image,
   PanResponder,
   PixelRatio,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -54,6 +53,7 @@ import {
   type BrowserZoomState
 } from './browser-touch-geometry'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
 
 export type MobileBrowserTab = {
@@ -140,7 +140,7 @@ export function MobileBrowserPane({
   onToast
 }: MobileBrowserPaneProps) {
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
-    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId)
+    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
   const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId, browserViewMode)
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
@@ -264,6 +264,10 @@ export function MobileBrowserPane({
     lastZoomResetUrlRef.current = tab.url || 'about:blank'
     resetBrowserZoomState()
   }, [resetBrowserZoomState, tab.browserPageId, tab.url])
+
+  useEffect(() => {
+    setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url))
+  }, [tab.browserPageId, tab.url, worktreeId])
 
   const pageParams = useCallback(() => {
     if (!tab.browserPageId) {
@@ -1018,10 +1022,6 @@ export function MobileBrowserPane({
   )
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
-  const addressSelection = useMemo(
-    () => (addressFocused ? undefined : { start: 0, end: 0 }),
-    [addressFocused]
-  )
   const goBack = useCallback(() => {
     if (controlsDisabled || !tab.canGoBack) {
       return
@@ -1045,8 +1045,7 @@ export function MobileBrowserPane({
       if (browserViewMode === mode) {
         return
       }
-      // Why: browser panes can remount during normal tab/workspace navigation;
-      // keep a page-scoped choice while new browser pages still default to Web.
+      // Why: preserve explicit page-scoped choices across normal browser pane remounts.
       saveMobileBrowserViewMode(worktreeId, tab.browserPageId, mode)
       setBrowserViewMode(mode)
       resetBrowserZoomState()
@@ -1104,23 +1103,14 @@ export function MobileBrowserPane({
         >
           <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
         </MobileBrowserToolbarIconButton>
-        <TextInput
-          style={styles.addressInput}
+        <MobileBrowserAddressField
           value={addressValue}
           onChangeText={setAddressValue}
           onFocus={() => setAddressFocused(true)}
           onBlur={() => setAddressFocused(false)}
-          onSubmitEditing={() => void navigateToAddress()}
-          selectTextOnFocus
-          selection={addressSelection}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
-          numberOfLines={1}
-          returnKeyType="go"
-          placeholder="URL"
-          placeholderTextColor={colors.textMuted}
-          editable={!controlsDisabled}
+          onSubmit={() => void navigateToAddress()}
+          focused={addressFocused}
+          disabled={controlsDisabled}
         />
         <MobileBrowserViewModeSwitch
           disabled={controlsDisabled}
@@ -1493,21 +1483,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
-  },
-  addressInput: {
-    flex: 1,
-    minWidth: 0,
-    height: 28,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    fontSize: 12,
-    lineHeight: 16,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    fontFamily: typography.monoFamily
   },
   viewport: {
     flex: 1,

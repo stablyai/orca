@@ -29,6 +29,7 @@ type AgentMapSceneProps = {
   selectedPaneKey: string | null
   allowAggregation: boolean
   showOrchestrationLinks: boolean
+  recentFinishPaneKeys: ReadonlySet<string>
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   nodeRefs: MutableRefObject<Map<string, SVGGElement>>
   onSelectAgent: (card: DashboardCard) => void
@@ -72,6 +73,7 @@ export const AgentMapScene = memo(function AgentMapScene({
   selectedPaneKey,
   allowAggregation,
   showOrchestrationLinks,
+  recentFinishPaneKeys,
   launchableAgentsByWorktreeId,
   nodeRefs,
   onSelectAgent,
@@ -218,6 +220,7 @@ export const AgentMapScene = memo(function AgentMapScene({
                 selectedPaneKey={selectedPaneKey}
                 allowAggregation={allowAggregation}
                 showOrchestrationLinks={showOrchestrationLinks}
+                recentFinishPaneKeys={recentFinishPaneKeys}
                 launchableAgents={launchableAgentsByWorktreeId?.[worktree.worktreeId]}
                 nodeRefs={nodeRefs}
                 onSelectAgent={onSelectAgent}

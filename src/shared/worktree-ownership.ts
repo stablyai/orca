@@ -11,6 +11,12 @@ import {
   isAgentScratchWorktreePath,
   type AgentScratchWorktreePathMatcher
 } from './agent-scratch-worktrees'
+import {
+  createWorktreeVisibilitySourceMatcher,
+  effectiveWorktreeSourceVisibility,
+  normalizeCustomWorktreeVisibilitySources,
+  type WorktreeVisibilitySourceMatcher
+} from './worktree-visibility-sources'
 import { isExplicitlyImportedExternalWorktreePath } from './external-worktree-inbox'
 import {
   effectiveAgentWorktreeVisibility,
@@ -145,6 +151,7 @@ export function classifyWorktreeOwnership(args: {
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
   knownOrcaLayouts: OrcaWorkspaceLayout[]
   agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
+  worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
 }): WorktreeOwnership {
   if (hasStrongOrcaMetadata(args.meta)) {
     return 'orca-managed'
@@ -153,8 +160,9 @@ export function classifyWorktreeOwnership(args: {
   // Why: sub-agent scratch worktrees (e.g. .claude/worktrees) are tool
   // plumbing, not workspaces; classify before layout heuristics (#9388).
   if (
-    args.agentScratchWorktreePathMatcher?.(args.worktree.path) ??
-    isAgentScratchWorktreePath(args.repo.path, args.worktree.path)
+    args.worktreeVisibilitySourceMatcher?.(args.worktree.path)?.kind === 'built-in' ||
+    (args.agentScratchWorktreePathMatcher?.(args.worktree.path) ??
+      isAgentScratchWorktreePath(args.repo.path, args.worktree.path))
   ) {
     return 'agent-scratch'
   }
@@ -180,8 +188,19 @@ export function toDetectedWorktree(args: {
   knownOrcaLayouts: OrcaWorkspaceLayout[]
   isLegacyRepoForVisibility?: boolean
   agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
+  worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
 }): DetectedWorktree {
-  const ownership = classifyWorktreeOwnership(args)
+  const sourceMatcher =
+    args.worktreeVisibilitySourceMatcher ??
+    createWorktreeVisibilitySourceMatcher(
+      [args.repo.path],
+      normalizeCustomWorktreeVisibilitySources(args.repo.customWorktreeVisibilitySources) ?? []
+    )
+  const visibilitySource = sourceMatcher(args.worktree.path)
+  const ownership = classifyWorktreeOwnership({
+    ...args,
+    worktreeVisibilitySourceMatcher: sourceMatcher
+  })
   const selectedCheckout = areRuntimePathsEqual(args.worktree.path, args.repo.path)
   const isLegacyRepoForVisibility =
     args.isLegacyRepoForVisibility ?? isLegacyRepoForExternalWorktreeVisibility(args.repo)
@@ -191,14 +210,16 @@ export function toDetectedWorktree(args: {
     repo: args.repo,
     isLegacyRepoForVisibility,
     isSelectedCheckout: selectedCheckout,
-    importedExternalWorktreePaths: args.repo.importedExternalWorktreePaths
+    importedExternalWorktreePaths: args.repo.importedExternalWorktreePaths,
+    visibilitySource
   })
 
   return {
     ...args.worktree,
     ownership,
     selectedCheckout,
-    visible
+    visible,
+    ...(visibilitySource ? { visibilitySource } : {})
   }
 }
 
@@ -209,6 +230,7 @@ export function shouldShowWorktree(args: {
   isLegacyRepoForVisibility: boolean
   isSelectedCheckout: boolean
   importedExternalWorktreePaths?: readonly string[] | undefined
+  visibilitySource?: ReturnType<WorktreeVisibilitySourceMatcher>
 }): boolean {
   if (args.isSelectedCheckout) {
     return true
@@ -223,6 +245,9 @@ export function shouldShowWorktree(args: {
   ) {
     return true
   }
+  if (args.visibilitySource) {
+    return effectiveWorktreeSourceVisibility(args.repo, args.visibilitySource) === 'show'
+  }
   if (args.ownership === 'agent-scratch') {
     return effectiveAgentWorktreeVisibility(args.repo) === 'show'
   }
@@ -233,7 +258,7 @@ export function shouldShowWorktree(args: {
 }
 
 export function applyMetadataFallbackVisibility(detected: DetectedWorktree): DetectedWorktree {
-  if (detected.ownership === 'agent-scratch') {
+  if (detected.ownership === 'agent-scratch' || detected.visibilitySource) {
     // Why: retain scratch policy, including explicit imports, while ordinary fallback fails open.
     return detected
   }

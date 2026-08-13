@@ -548,6 +548,10 @@ function TerminalPane(
     const leafIds = getNativeChatLeafIds()
     return leafIds.length === 1 ? leafIds[0] : null
   }, [getNativeChatLeafIds, tabWideAgentHintLeafId])
+  const getTabWideAgentHintLeafIdRef = useRef(getTabWideAgentHintLeafId)
+  useEffect(() => {
+    getTabWideAgentHintLeafIdRef.current = getTabWideAgentHintLeafId
+  }, [getTabWideAgentHintLeafId])
   useEffect(() => {
     if (tabWideAgentHintLeafId !== undefined) {
       return
@@ -1349,6 +1353,7 @@ function TerminalPane(
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
     managerRef,
+    getTabWideAgentHintLeafId: () => getTabWideAgentHintLeafIdRef.current(),
     containerRef,
     expandedStyleSnapshotRef,
     paneFontSizesRef,

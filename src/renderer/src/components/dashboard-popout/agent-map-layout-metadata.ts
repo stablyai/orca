@@ -1,11 +1,12 @@
 import type { DashboardCard, DashboardWorkspace } from '../../../../shared/dashboard-snapshot'
-import type { AgentMapLayout, AgentMapStatusCounts } from './agent-map-layout'
+import type { AgentMapLayout } from './agent-map-layout'
 import { agentMapWorkspaceIdentity } from './agent-map-workspace-identity'
-import { agentMapDurationMinutes, agentMapNodeStatus } from './agent-map-node-metadata'
-
-function emptyStatusCounts(): AgentMapStatusCounts {
-  return { working: 0, blocked: 0, waiting: 0, done: 0, idle: 0 }
-}
+import {
+  agentMapDurationMinutes,
+  agentMapNodeStatus,
+  agentMapQuietCount,
+  emptyAgentMapStatusCounts
+} from './agent-map-node-metadata'
 
 export function refreshAgentMapMetadata(
   geometry: AgentMapLayout,
@@ -29,7 +30,7 @@ export function refreshAgentMapMetadata(
       let workspaceKind = workspace?.workspaceKind ?? worktree.workspaceKind
       let hostKind = workspace?.hostKind ?? worktree.hostKind
       let hostLabel = workspace?.hostLabel ?? worktree.hostLabel
-      const statusCounts = emptyStatusCounts()
+      const statusCounts = emptyAgentMapStatusCounts()
       const agents = worktree.agents.flatMap((agent) => {
         const card = cardsByPaneKey.get(agent.card.paneKey)
         if (!card) {
@@ -59,7 +60,7 @@ export function refreshAgentMapMetadata(
         hostLabel,
         agents,
         statusCounts,
-        quiet: statusCounts.idle === agents.length
+        quiet: agentMapQuietCount(statusCounts) === agents.length
       }
     })
     return { ...project, name: projectName, worktrees, agentCount }

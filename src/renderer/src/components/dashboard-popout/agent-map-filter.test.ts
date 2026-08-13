@@ -28,9 +28,11 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
 }
 
 describe('agent map filtering', () => {
-  it('keeps unseen completions done and settles acknowledged completions into idle', () => {
+  it('files both unseen and acknowledged completions under done, never idle', () => {
     expect(agentMapState(card({ unseen: true }))).toBe('done')
-    expect(agentMapState(card({ unseen: false }))).toBe('idle')
+    // Why not idle: an acknowledged finish still paints emerald, so hiding "idle"
+    // must not blank it out. Only a card that never finished is idle.
+    expect(agentMapState(card({ unseen: false }))).toBe('done')
     expect(agentMapState(card({ bucket: 'idle', dotState: 'idle' }))).toBe('idle')
   })
 
@@ -64,13 +66,14 @@ describe('agent map filtering', () => {
       card({ paneKey: 'done-new', unseen: true }),
       card({ paneKey: 'done-seen', unseen: false }),
       card({ paneKey: 'working', bucket: 'working', dotState: 'working', finishedAt: null }),
-      card({ paneKey: 'waiting', bucket: 'attention', dotState: 'waiting', finishedAt: null })
+      card({ paneKey: 'waiting', bucket: 'attention', dotState: 'waiting', finishedAt: null }),
+      card({ paneKey: 'idle', bucket: 'idle', dotState: 'idle', finishedAt: null })
     ]
 
     expect(countAgentMapCards(cards)).toEqual({
       attention: 1,
       working: 1,
-      done: 1,
+      done: 2,
       idle: 1
     })
   })

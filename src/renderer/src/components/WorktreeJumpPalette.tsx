@@ -42,6 +42,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
@@ -464,47 +465,110 @@ function PaletteOpenTabPrimaryLine({
   titleRange,
   secondaryText,
   secondaryRange,
-  worktreeName,
-  worktreeRange,
   leadingBadges
 }: {
   title: string
   titleRange: MatchRange | null
   secondaryText: string
   secondaryRange: MatchRange | null
-  worktreeName: string
-  worktreeRange: MatchRange | null
   leadingBadges?: React.ReactNode
 }): React.JSX.Element {
   // Why gate on non-empty: empty secondaries (terminals/simulators) used to still
-  // render two "·" separators, which read as a double mark and stole width from
-  // the worktree name until it collided with host/repo badges.
+  // render a leftover "·" after the title.
   const showSecondary = secondaryText.trim().length > 0
-  const showWorktree = worktreeName.trim().length > 0
 
   return (
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-      <span className="min-w-0 max-w-[42%] shrink-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+      <span
+        data-slot="palette-open-tab-title"
+        className="min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
+      >
         <HighlightedText text={title} matchRange={titleRange} />
       </span>
       {leadingBadges}
       {showSecondary ? (
         <>
           <span className="shrink-0 text-muted-foreground/45">·</span>
-          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
+          <span className="min-w-0 max-w-[34%] truncate text-[12px] font-medium text-muted-foreground/92">
             <HighlightedText text={secondaryText} matchRange={secondaryRange} />
           </span>
         </>
       ) : null}
-      {showWorktree ? (
-        <>
-          <span className="shrink-0 text-muted-foreground/45">·</span>
-          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
-            <HighlightedText text={worktreeName} matchRange={worktreeRange} />
-          </span>
-        </>
-      ) : null}
     </div>
+  )
+}
+
+function resolveOpenTabWorktreeRailTooltip({
+  isBranch,
+  truncated,
+  name
+}: {
+  isBranch: boolean
+  truncated: boolean
+  name: string
+}): string {
+  if (truncated) {
+    return name
+  }
+  return isBranch
+    ? translate('auto.components.WorktreeJumpPalette.paletteOpenTabBranch', 'Branch name')
+    : translate('auto.components.WorktreeJumpPalette.paletteOpenTabWorkspace', 'Workspace name')
+}
+
+function PaletteOpenTabWorktreeRailLabel({
+  name,
+  matchRange,
+  worktree,
+  className,
+  slot = 'palette-open-tab-worktree'
+}: {
+  name: string
+  matchRange: MatchRange | null
+  worktree?: Pick<Worktree, 'branch'> | null
+  className?: string
+  slot?: string
+}): React.JSX.Element | null {
+  const [truncated, setTruncated] = useState(false)
+  const labelRef = useRef<HTMLSpanElement | null>(null)
+  // Why: observe in an effect so unmount disconnects the ResizeObserver instead of
+  // leaking the callback-ref subscription (react-doctor effect-needs-cleanup).
+  useLayoutEffect(() => {
+    const node = labelRef.current
+    if (!node) {
+      setTruncated(false)
+      return
+    }
+    const updateTruncated = (): void => {
+      const next = node.scrollWidth > node.clientWidth
+      setTruncated((current) => (current === next ? current : next))
+    }
+    updateTruncated()
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(updateTruncated)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [name])
+
+  if (name.trim().length === 0) {
+    return null
+  }
+  // Why tag the visible value: a custom display name or folder path is a workspace
+  // label, not a branch, even when the workspace sits on one.
+  const isBranch = worktree != null && name === resolveWorktreeBranchLabel(worktree)
+  const tooltip = resolveOpenTabWorktreeRailTooltip({ isBranch, truncated, name })
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span ref={labelRef} data-slot={slot} tabIndex={-1} className={className}>
+          <HighlightedText text={name} matchRange={matchRange} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} className="max-w-80 break-all">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -3007,16 +3071,13 @@ function WorktreeJumpPaletteContent({
                                 )}
                               </span>
                             )}
-                            <span className="truncate text-[14px] font-semibold text-foreground">
-                              {entry.match.displayNameRange ? (
-                                <HighlightedText
-                                  text={worktreeLabel}
-                                  matchRange={entry.match.displayNameRange}
-                                />
-                              ) : (
-                                worktreeLabel
-                              )}
-                            </span>
+                            <PaletteOpenTabWorktreeRailLabel
+                              name={worktreeLabel}
+                              matchRange={entry.match.displayNameRange}
+                              worktree={worktree}
+                              slot="palette-worktree-name"
+                              className="truncate text-[14px] font-semibold text-foreground"
+                            />
                             {isCurrentWorktree && (
                               <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
                                 {translate(
@@ -3033,17 +3094,18 @@ function WorktreeJumpPaletteContent({
                                 )}
                               </span>
                             )}
-                            <span className="shrink-0 text-muted-foreground/45">·</span>
-                            <span className="truncate text-[12px] font-medium text-muted-foreground/92">
-                              {entry.match.branchRange ? (
-                                <HighlightedText
-                                  text={branch}
+                            {branch.trim().length > 0 ? (
+                              <>
+                                <span className="shrink-0 text-muted-foreground/45">·</span>
+                                <PaletteOpenTabWorktreeRailLabel
+                                  name={branch}
                                   matchRange={entry.match.branchRange}
+                                  worktree={worktree}
+                                  slot="palette-worktree-branch"
+                                  className="truncate text-[12px] font-medium text-muted-foreground/92"
                                 />
-                              ) : (
-                                branch
-                              )}
-                            </span>
+                              </>
+                            ) : null}
                           </div>
                           {entry.match.supportingText && (
                             <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] leading-5 text-muted-foreground/88">
@@ -3204,8 +3266,6 @@ function WorktreeJumpPaletteContent({
                             titleRange={result.titleRange}
                             secondaryText={result.secondaryText}
                             secondaryRange={result.secondaryRange}
-                            worktreeName={result.worktreeName}
-                            worktreeRange={result.worktreeRange}
                             leadingBadges={
                               <>
                                 {result.isCurrentTab && (
@@ -3229,6 +3289,12 @@ function WorktreeJumpPaletteContent({
                           />
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
+                          <PaletteOpenTabWorktreeRailLabel
+                            name={result.worktreeName}
+                            matchRange={result.worktreeRange}
+                            worktree={workspaceTabWorktree}
+                            className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
+                          />
                           <PaletteHostBadgeChip badge={workspaceTabHostBadge} />
                           {workspaceTabRepoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
@@ -3283,8 +3349,6 @@ function WorktreeJumpPaletteContent({
                             titleRange={result.titleRange}
                             secondaryText={result.secondaryText}
                             secondaryRange={result.secondaryRange}
-                            worktreeName={result.worktreeName}
-                            worktreeRange={result.worktreeRange}
                             leadingBadges={
                               <>
                                 {result.isCurrentTab && (
@@ -3308,6 +3372,12 @@ function WorktreeJumpPaletteContent({
                           />
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
+                          <PaletteOpenTabWorktreeRailLabel
+                            name={result.worktreeName}
+                            matchRange={result.worktreeRange}
+                            worktree={simulatorWorktree}
+                            className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
+                          />
                           <PaletteHostBadgeChip badge={simulatorHostBadge} />
                           {simulatorRepoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
@@ -3359,8 +3429,6 @@ function WorktreeJumpPaletteContent({
                           titleRange={result.titleRange}
                           secondaryText={result.secondaryText}
                           secondaryRange={result.secondaryRange}
-                          worktreeName={result.worktreeName}
-                          worktreeRange={result.worktreeRange}
                           leadingBadges={
                             <>
                               {result.isCurrentPage && (
@@ -3384,6 +3452,12 @@ function WorktreeJumpPaletteContent({
                         />
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
+                        <PaletteOpenTabWorktreeRailLabel
+                          name={result.worktreeName}
+                          matchRange={result.worktreeRange}
+                          worktree={browserWorktree}
+                          className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
+                        />
                         <PaletteHostBadgeChip badge={browserHostBadge} />
                         {browserRepoName && (
                           <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
@@ -3453,9 +3527,11 @@ function WorktreeJumpPaletteContent({
   )
 
   return (
-    <PaletteLiveStatusProvider active={paletteStatusInputsActive}>
-      {paletteDialog}
-    </PaletteLiveStatusProvider>
+    <TooltipProvider delayDuration={400}>
+      <PaletteLiveStatusProvider active={paletteStatusInputsActive}>
+        {paletteDialog}
+      </PaletteLiveStatusProvider>
+    </TooltipProvider>
   )
 }
 

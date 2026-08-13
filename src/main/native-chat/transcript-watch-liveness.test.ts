@@ -33,6 +33,7 @@ vi.mock('node:fs', async () => {
 import { subscribeNativeChatTranscript } from './transcript-watch'
 
 const roots: string[] = []
+const HOST_FILESYSTEM_RECONCILIATION_TIMEOUT_MS = 8_000
 
 afterEach(async () => {
   vi.useRealTimers()
@@ -205,7 +206,10 @@ describe('native chat transcript watcher liveness', () => {
     await rename(root, oldRoot)
     await mkdir(root)
     await writeFile(filePath, claudeLine('new-file', 'user', 'after'))
-    await waitFor(() => replacements.mock.calls.length === 1 && watchers.length === 2)
+    await waitFor(
+      () => replacements.mock.calls.length === 1 && watchers.length === 2,
+      HOST_FILESYSTEM_RECONCILIATION_TIMEOUT_MS
+    )
     await appendFile(filePath, claudeLine('new-followup', 'assistant', 'event-driven'))
     watchCallbacks[1]!('change', 'transcript.jsonl')
     await waitFor(() => appends.mock.calls.flat(2).some((message) => message.id === 'new-followup'))
