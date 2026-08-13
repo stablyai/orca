@@ -20,7 +20,8 @@ const item = {
   url: 'https://github.com/stablyai/orca/issues/14198',
   labels: [],
   updatedAt: '2026-08-12T12:00:00.000Z',
-  author: 'nwparker'
+  author: 'nwparker',
+  repoId: 'repo-1'
 } satisfies GitHubWorkItem
 
 describe('lookupCmdJGitHubUrlWorkItem', () => {

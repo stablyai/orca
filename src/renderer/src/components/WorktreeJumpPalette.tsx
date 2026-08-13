@@ -281,6 +281,8 @@ type CmdJGitHubWorkItemPreview = {
   query: string
   item: GitHubWorkItem | null
   loading: boolean
+  initialRepoId: string | null
+  sourceContext: TaskSourceContext | null
 }
 
 // Why: keep quick actions curated — Cmd+J is a fast intent surface, not a dump of every setup button.
@@ -696,6 +698,10 @@ function WorktreeJumpPaletteContent({
   const [githubWorkItemPreview, setGithubWorkItemPreview] =
     useState<CmdJGitHubWorkItemPreview | null>(null)
   const githubLookupGenerationRef = useRef(0)
+  const githubLookupRef = useRef<{
+    query: string
+    promise: Promise<CmdJGitHubWorkItemPreview>
+  } | null>(null)
   const linearIssueLookupGenerationRef = useRef(0)
   const linearIssueLookupRef = useRef<{
     query: string
@@ -1748,20 +1754,15 @@ function WorktreeJumpPaletteContent({
 
   useLayoutEffect(() => {
     const generation = ++githubLookupGenerationRef.current
+    githubLookupRef.current = null
     if (!visible || !githubUrlLink) {
       setGithubWorkItemPreview(null)
       return
     }
 
-    const pendingPreview: CmdJGitHubWorkItemPreview = {
-      query: createWorktreeName,
-      item: null,
-      loading: true
-    }
-    setGithubWorkItemPreview(pendingPreview)
-
     const state = useAppStore.getState()
     const workspaceTarget = getComposerDefaultWorkspaceTarget(state)
+    const initialRepoId = workspaceTarget?.repoId ?? null
     const sourceContext = workspaceTarget
       ? buildTaskSourceContextFromRepo({
           provider: 'github',
@@ -1770,17 +1771,32 @@ function WorktreeJumpPaletteContent({
           projectHostSetupId: workspaceTarget.projectHostSetupId
         })
       : null
-    void lookupCmdJGitHubUrlWorkItem({
+    const pendingPreview: CmdJGitHubWorkItemPreview = {
+      query: createWorktreeName,
+      item: null,
+      loading: true,
+      initialRepoId,
+      sourceContext
+    }
+    setGithubWorkItemPreview(pendingPreview)
+
+    const promise = lookupCmdJGitHubUrlWorkItem({
       link: githubUrlLink,
       repo: workspaceTarget?.repo ?? null,
       sourceContext
-    }).then((item) => {
-      if (githubLookupGenerationRef.current === generation) {
-        setGithubWorkItemPreview({
-          query: createWorktreeName,
-          item,
+    })
+      .catch(() => null)
+      .then(
+        (item): CmdJGitHubWorkItemPreview => ({
+          ...pendingPreview,
+          item: item ?? null,
           loading: false
         })
+      )
+    githubLookupRef.current = { query: createWorktreeName, promise }
+    void promise.then((preview) => {
+      if (githubLookupGenerationRef.current === generation) {
+        setGithubWorkItemPreview(preview)
       }
     })
 
@@ -1804,6 +1820,8 @@ function WorktreeJumpPaletteContent({
     )
   }, [createWorktreeName, githubWorkItemPreview, parsedTaskUrlCreatePreview])
 
+  const currentGitHubWorkItemPreview =
+    githubWorkItemPreview?.query === createWorktreeName ? githubWorkItemPreview : null
   const currentLinearIssuePreview =
     linearIssuePreview?.query === createWorktreeName ? linearIssuePreview : null
   const [linearLoadingFeedbackQuery, setLinearLoadingFeedbackQuery] = useState<string | null>(null)
@@ -2551,9 +2569,57 @@ function WorktreeJumpPaletteContent({
     }
 
     // Case 1: user pasted a GH/GitLab/Jira URL.
-    // Why: hand the raw URL to the composer so it runs Cmd+N cross-project detection; pre-resolving here silently linked to the wrong project.
-    // Linked worktrees are listed above this row — selecting one jumps there.
-    if (ghLink || taskUrlCreatePreview) {
+    // Why: GitHub uses the in-flight Cmd+J preview so Enter attaches the issue/PR
+    // entity. GitLab/Jira still hand the raw URL to the composer. Linked worktrees
+    // are listed above this row — selecting one jumps there.
+    if (ghLink) {
+      const openGitHubUrlComposer = async (): Promise<void> => {
+        const lookup = githubLookupRef.current
+        const preview = currentGitHubWorkItemPreview?.loading
+          ? await lookup?.promise
+          : (currentGitHubWorkItemPreview ?? (await lookup?.promise))
+        if (
+          lookup?.query !== trimmed ||
+          githubLookupRef.current !== lookup ||
+          liveQueryRef.current.trim() !== trimmed
+        ) {
+          return
+        }
+        const item = preview?.item ?? null
+        const composerData = item
+          ? (() => {
+              const linkedWorkItem: LinkedWorkItemSummary = {
+                provider: 'github',
+                type: item.type,
+                number: item.number,
+                title: item.title,
+                url: item.url,
+                ...(item.repoId ? { repoId: item.repoId } : {})
+              }
+              return {
+                prefilledName:
+                  getLinkedWorkItemWorkspaceName(linkedWorkItem)?.seedName ??
+                  getLinkedWorkItemSuggestedName({ title: item.title }),
+                linkedWorkItem,
+                initialGitHubWorkItem: item,
+                ...(preview?.initialRepoId ? { initialRepoId: preview.initialRepoId } : {}),
+                ...(preview?.sourceContext ? { taskSourceContext: preview.sourceContext } : {})
+              }
+            })()
+          : preview?.initialRepoId
+            ? { prefilledName: trimmed, initialRepoId: preview.initialRepoId }
+            : { prefilledName: trimmed }
+
+        if (useAppStore.getState().activeModal !== 'worktree-palette') {
+          return
+        }
+        openComposer(composerData)
+      }
+      void openGitHubUrlComposer()
+      return
+    }
+
+    if (taskUrlCreatePreview) {
       const state = useAppStore.getState()
       const eligibleRepos = state.repos.filter((r) => isGitRepoKind(r))
       const repoForLookup =
@@ -2656,6 +2722,7 @@ function WorktreeJumpPaletteContent({
     closeModal,
     createLookupGuard,
     createWorktreeName,
+    currentGitHubWorkItemPreview,
     currentLinearIssuePreview,
     focusFallbackSurface,
     linearIssueUrlIntent,

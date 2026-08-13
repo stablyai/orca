@@ -7,16 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { LinearIssue, Repo } from '../../../shared/types'
+import type { GitHubWorkItem, LinearIssue, Repo } from '../../../shared/types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '@/lib/worktree-palette-query-bounds'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeRecentTabState, makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
-import type { GitHubWorkItem } from '../../../shared/types'
 
 const { lookupCmdJGitHubUrlWorkItem } = vi.hoisted(() => ({
-  lookupCmdJGitHubUrlWorkItem: vi.fn(async () => null)
+  lookupCmdJGitHubUrlWorkItem: vi.fn()
 }))
 
 vi.mock('@/lib/cmd-j-github-url-lookup', () => ({
@@ -643,9 +642,9 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     expect(testContainer.querySelector('[data-cmd-j-linear-issue-preview="true"]')).not.toBeNull()
   })
 
-  it('resolves a pasted GitHub issue URL and still hands the raw URL to create', async () => {
+  it('resolves a pasted GitHub issue URL and opens create with the linked issue', async () => {
     const githubIssueUrl = 'https://github.com/stablyai/orca/issues/14198'
-    lookupCmdJGitHubUrlWorkItem.mockResolvedValue({
+    const githubIssue = {
       id: 'issue-14198',
       type: 'issue',
       number: 14198,
@@ -654,8 +653,10 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
       url: githubIssueUrl,
       labels: [],
       updatedAt: '2026-08-12T12:00:00.000Z',
-      author: 'nwparker'
-    } satisfies GitHubWorkItem)
+      author: 'nwparker',
+      repoId: 'repo-1'
+    } satisfies GitHubWorkItem
+    lookupCmdJGitHubUrlWorkItem.mockResolvedValue(githubIssue)
     await renderPalette({
       prefetchWorktreeCreateBase: vi.fn(async () => {})
     })
@@ -688,11 +689,19 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
 
     expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
     expect(useAppStore.getState().modalData).toMatchObject({
-      prefilledName: githubIssueUrl,
+      prefilledName: 'agent-terminals-disappearing-randomly',
       initialRepoId: 'repo-1',
-      telemetrySource: 'command_palette'
+      telemetrySource: 'command_palette',
+      linkedWorkItem: {
+        provider: 'github',
+        type: 'issue',
+        number: 14198,
+        title: 'Agent terminals disappearing randomly',
+        url: githubIssueUrl,
+        repoId: 'repo-1'
+      },
+      initialGitHubWorkItem: githubIssue
     })
-    expect(useAppStore.getState().modalData).not.toHaveProperty('linkedWorkItem')
   })
 
   it('previews a pasted GitHub pull URL', async () => {
@@ -725,7 +734,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     ])
     expect(getCommandValue()).toBe('worktree:wt-linked')
     expect(
-      testContainer.querySelector('[data-cmd-j-task-url-preview="true"]')?.dataset
+      testContainer.querySelector<HTMLElement>('[data-cmd-j-task-url-preview="true"]')?.dataset
         .cmdJTaskUrlProvider
     ).toBe('github')
   })
