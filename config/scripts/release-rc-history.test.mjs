@@ -23,6 +23,10 @@ function withGitRepo(run) {
     git(dir, ['init', '--initial-branch=main'])
     git(dir, ['config', 'user.name', 'Test Bot'])
     git(dir, ['config', 'user.email', 'test@example.com'])
+    // Why: a contributor signing commits and tags globally turns these lightweight
+    // fixture tags into annotated ones, which then fail on a missing tag message.
+    git(dir, ['config', 'commit.gpgsign', 'false'])
+    git(dir, ['config', 'tag.gpgsign', 'false'])
     run(dir)
   } finally {
     rmSync(dir, { recursive: true, force: true })
