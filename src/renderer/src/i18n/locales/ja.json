@@ -10660,7 +10660,7 @@
             "createPrIntentEmptyGeneratedBody": "生成されたレビューの詳細に説明が含まれていませんでした。PR の作成を再試行してください。",
             "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PR の作成を再試行してください。",
             "c93d5a7e24": "フォルダーパスを展開",
-            "d04e6b8f35": "フォルダーパスをまとめる"
+            "d04e6b8f35": "フォルダーパスをコンパクトに表示"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",

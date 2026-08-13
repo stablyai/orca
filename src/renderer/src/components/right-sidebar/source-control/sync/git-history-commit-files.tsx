@@ -32,6 +32,11 @@ export type GitHistoryCommitFilesState =
   | { status: 'error'; error: string }
   | { status: 'ready'; entries: GitBranchChangeEntry[] }
 
+/**
+ * One changed file inside an expanded commit. `depth` switches the row from the
+ * flat list's fixed indent to tree indentation; `showPathHint` hides the dimmed
+ * directory suffix that the surrounding tree already expresses.
+ */
 function CommitFileRow({
   entry,
   onOpen,
@@ -85,6 +90,10 @@ function CommitFileRow({
   )
 }
 
+/**
+ * One directory level inside an expanded commit's tree, showing how many changed
+ * files it contains and toggling its subtree open or closed.
+ */
 function CommitDirectoryRow({
   name,
   depth,
@@ -131,6 +140,11 @@ function CommitDirectoryRow({
 
 // Why: collapse state is per mounted commit, so directory keys never collide across
 // commits and the tree needs no key namespacing.
+/**
+ * Tree view of a commit's changed files. Collapse state is per instance, and this
+ * component mounts only while its commit is expanded, so two expanded commits can
+ * never share directory keys.
+ */
 function CommitFileTree({
   entries,
   compactFolders,
@@ -150,6 +164,7 @@ function CommitFileTree({
     [roots, collapsedDirectoryKeys]
   )
 
+  /** Opens a collapsed directory or collapses an open one. */
   const toggleDirectory = (key: string): void => {
     setCollapsedDirectoryKeys((prev) => {
       const next = new Set(prev)
@@ -188,6 +203,10 @@ function CommitFileTree({
   )
 }
 
+/**
+ * Renders the body of an expanded commit: the loading, error, and empty states, then
+ * either the tree or the flat list depending on the Source Control view mode.
+ */
 function CommitFilesBody({
   state,
   viewMode,
@@ -266,6 +285,10 @@ function CommitFilesBody({
   )
 }
 
+/**
+ * The panel shown under an expanded commit row: author and date, the changed files,
+ * and the optional "open all changes" action.
+ */
 export function GitHistoryCommitFiles({
   state,
   viewMode,

@@ -220,6 +220,13 @@ export function compactSourceControlTree<Entry extends SourceControlTreeEntry, A
 
 // Why: every Source Control tree honors one per-user "compact folders" preference,
 // so the conditional lives here instead of being re-derived at each call site.
+/**
+ * Applies the user's "compact folder paths" preference to an already-built tree.
+ *
+ * @param nodes - Root nodes from `buildSourceControlTree`.
+ * @param compactFolders - When true, collapses single-child folder chains into one row.
+ * @returns The compacted tree, or `nodes` unchanged when the preference is off.
+ */
 export function applySourceControlFolderCompaction<
   Entry extends SourceControlTreeEntry,
   Area extends string

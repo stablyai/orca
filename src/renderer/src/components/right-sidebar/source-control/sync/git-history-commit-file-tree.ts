@@ -14,6 +14,13 @@ export type GitHistoryCommitTreeNode = SourceControlTreeNode<
 
 // Why: uncompacted keeps `depth` at the real path depth the builder assigns, so every
 // package segment gets its own indented row; compacting collapses single-child chains.
+/**
+ * Builds the directory tree for one commit's changed files.
+ *
+ * @param entries - The commit's changed files, in the order Git reported them.
+ * @param compactFolders - When true, collapses single-child folder chains into one row.
+ * @returns Root nodes ready for `flattenSourceControlTree`.
+ */
 export function buildGitHistoryCommitFileTree(
   entries: GitBranchChangeEntry[],
   compactFolders = false
