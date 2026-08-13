@@ -189,21 +189,21 @@ export function TerminalQuickCommandContentSection({
         />
 
         <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/50 px-3 py-2">
-          {!isTerminalAgentQuickCommand(draft) ? (
+          {!isTerminalAgentQuickCommand(draft) && !draft.openInBackground ? (
             <TerminalQuickCommandAppendEnterSwitch
               appendEnter={draft.appendEnter}
               onToggle={toggleAppendEnter}
               compact
             />
-          ) : (
+          ) : isTerminalAgentQuickCommand(draft) ? (
             <span className="text-[11px] text-muted-foreground">
               {translate(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_footer_hint',
                 'Multi-line prompts are fine — keep them focused.'
               )}
             </span>
-          )}
-          <span className="shrink-0 text-[11px] text-muted-foreground">
+          ) : null}
+          <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
             {translate(
               'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.resize_hint',
               'Drag corner to resize'

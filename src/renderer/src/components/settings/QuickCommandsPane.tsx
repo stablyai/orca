@@ -395,6 +395,7 @@ export function QuickCommandsPane({
           mode={editor.mode}
           command={editor.command}
           repos={hostRepos}
+          showBackgroundPreference={editor.hostId === LOCAL_EXECUTION_HOST_ID}
           defaultAdvancedOpen
           onOpenChange={(open) => !open && setEditor(null)}
           onSave={saveCommand}

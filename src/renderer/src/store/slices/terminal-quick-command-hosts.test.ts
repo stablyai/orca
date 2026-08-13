@@ -177,4 +177,19 @@ describe('terminal quick command host collections', () => {
     expect(set).toHaveBeenCalledWith({ terminalQuickCommands: [savedCommand] })
     expect(store.getState().settings?.terminalQuickCommands).toEqual([savedCommand])
   })
+
+  it('lets authoritative local edits clear background execution', async () => {
+    const set = vi.fn(async (updates: { terminalQuickCommands: TerminalQuickCommand[] }) => updates)
+    vi.stubGlobal('window', { api: { settings: { set } } })
+    const existing: TerminalQuickCommand = { ...savedCommand, openInBackground: true }
+    const store = createTestStore()
+    store.setState({
+      settings: { ...getDefaultSettings('/tmp'), terminalQuickCommands: [existing] }
+    })
+
+    await store.getState().upsertTerminalQuickCommand('local', savedCommand)
+
+    expect(set).toHaveBeenCalledWith({ terminalQuickCommands: [savedCommand] })
+    expect(store.getState().settings?.terminalQuickCommands).toEqual([savedCommand])
+  })
 })

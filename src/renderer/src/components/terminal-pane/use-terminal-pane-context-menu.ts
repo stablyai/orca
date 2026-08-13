@@ -1,10 +1,13 @@
 import { useCallback, useRef } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
-import type { PaneCwdMap } from './resolve-split-cwd'
+import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
-import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
+import { shouldOpenTerminalQuickCommandInBackground } from '../../../../shared/terminal-quick-commands'
+import {
+  sendTerminalQuickCommandToPane,
+  shouldRunTerminalQuickCommandInNewTab
+} from './terminal-quick-command-dispatch'
 import type { TerminalPasteSource } from './terminal-paste-coordinator'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
@@ -205,8 +208,32 @@ export function useTerminalPaneContextMenu({
     copyAgentSessionContextFromMenuPane(resolveMenuPane())
 
   const onQuickCommand = (command: TerminalQuickCommand, historyId: string): void => {
-    if (isTerminalAgentQuickCommand(command)) {
-      runQuickCommandInNewTab({ command, worktreeId, groupId, historyId })
+    if (shouldRunTerminalQuickCommandInNewTab(command)) {
+      const launch = (initialCwd?: string): void => {
+        runQuickCommandInNewTab({ command, worktreeId, groupId, historyId, initialCwd })
+      }
+      if (!shouldOpenTerminalQuickCommandInBackground(command)) {
+        launch()
+        return
+      }
+
+      const pane = resolveMenuPane()
+      if (!pane) {
+        launch(fallbackCwd)
+        return
+      }
+      const cachedCwd = paneCwdRef.current.get(pane.id)
+      if (cachedCwd?.confirmed && cachedCwd.cwd) {
+        launch(cachedCwd.cwd)
+        return
+      }
+      const sourcePtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      void resolveSplitCwd({
+        paneCwdMap: paneCwdRef.current,
+        sourcePaneId: pane.id,
+        sourcePtyId,
+        fallbackCwd
+      }).then(launch, () => launch(fallbackCwd))
       return
     }
 

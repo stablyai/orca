@@ -48,6 +48,16 @@ export function getTerminalQuickCommandScope(
   return normalizeTerminalQuickCommandScope(command.scope)
 }
 
+export function shouldOpenTerminalQuickCommandInBackground(command: TerminalQuickCommand): boolean {
+  return command.openInBackground === true
+}
+
+export function shouldAppendEnterToTerminalQuickCommand(
+  command: TerminalCommandQuickCommand
+): boolean {
+  return shouldOpenTerminalQuickCommandInBackground(command) || command.appendEnter
+}
+
 export function terminalQuickCommandMatchesRepo(
   command: TerminalQuickCommand,
   repoId: string | null
@@ -127,7 +137,8 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
     const base = {
       id,
       label: label.slice(0, MAX_QUICK_COMMAND_LABEL_LENGTH),
-      scope: normalizeTerminalQuickCommandScope(record.scope)
+      scope: normalizeTerminalQuickCommandScope(record.scope),
+      ...(record.openInBackground === true ? { openInBackground: true } : {})
     }
 
     if (action === 'agent-prompt') {
@@ -199,17 +210,35 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
   }
   if (isTerminalAgentQuickCommand(expected)) {
     return (
-      hasExactKeys(command, ['id', 'label', 'action', 'agent', 'prompt', 'scope']) &&
+      hasExactKeys(command, [
+        'id',
+        'label',
+        'action',
+        'agent',
+        'prompt',
+        'scope',
+        ...(expected.openInBackground ? ['openInBackground'] : [])
+      ]) &&
       command.action === 'agent-prompt' &&
       command.agent === expected.agent &&
-      command.prompt === expected.prompt
+      command.prompt === expected.prompt &&
+      command.openInBackground === expected.openInBackground
     )
   }
   return (
-    hasExactKeys(command, ['id', 'label', 'action', 'command', 'appendEnter', 'scope']) &&
+    hasExactKeys(command, [
+      'id',
+      'label',
+      'action',
+      'command',
+      'appendEnter',
+      'scope',
+      ...(expected.openInBackground ? ['openInBackground'] : [])
+    ]) &&
     command.action === 'terminal-command' &&
     command.command === expected.command &&
-    command.appendEnter === expected.appendEnter
+    command.appendEnter === expected.appendEnter &&
+    command.openInBackground === expected.openInBackground
   )
 }
 
@@ -231,9 +260,7 @@ export function parseNormalizedTerminalQuickCommands(
   return normalized
 }
 
-// Why: paired clients can edit settings concurrently. Applying one command at
-// the host boundary preserves unrelated commands added by another client.
-export function applyTerminalQuickCommandMutation(
+export function applyAuthoritativeTerminalQuickCommandMutation(
   commands: readonly TerminalQuickCommand[],
   mutation: TerminalQuickCommandMutation
 ): TerminalQuickCommand[] {
@@ -247,8 +274,28 @@ export function applyTerminalQuickCommandMutation(
   return commands.map((command, index) => (index === existingIndex ? mutation.command : command))
 }
 
+// Why: v1 paired clients omit desktop-only fields, so their partial upserts
+// must preserve fields they cannot represent while still updating one command.
+export function applyTerminalQuickCommandMutation(
+  commands: readonly TerminalQuickCommand[],
+  mutation: TerminalQuickCommandMutation
+): TerminalQuickCommand[] {
+  if (mutation.type === 'delete') {
+    return applyAuthoritativeTerminalQuickCommandMutation(commands, mutation)
+  }
+  const existing = commands.find((command) => command.id === mutation.command.id)
+  const command =
+    existing?.openInBackground && mutation.command.openInBackground === undefined
+      ? { ...mutation.command, openInBackground: true }
+      : mutation.command
+  return applyAuthoritativeTerminalQuickCommandMutation(commands, {
+    type: 'upsert',
+    command
+  })
+}
+
 export function buildTerminalQuickCommandInput(command: TerminalCommandQuickCommand): string {
-  return command.appendEnter ? `${command.command}\r` : command.command
+  return shouldAppendEnterToTerminalQuickCommand(command) ? `${command.command}\r` : command.command
 }
 
 const LINE_BREAK_RE = /\r\n|\r|\n/

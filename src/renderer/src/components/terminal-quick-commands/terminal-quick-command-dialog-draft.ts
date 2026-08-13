@@ -64,7 +64,8 @@ export function switchTerminalQuickCommandDialogAction(
   const base = {
     id: draft.id,
     label: draft.label,
-    scope: getTerminalQuickCommandScope(draft)
+    scope: getTerminalQuickCommandScope(draft),
+    ...(draft.openInBackground ? { openInBackground: true } : {})
   }
 
   // Why: action modes are independent editors; toggling should not transform

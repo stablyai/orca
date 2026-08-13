@@ -380,6 +380,18 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
+  it('creates inactive local agent tabs without changing the active view', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', activate: false })
+
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'codex',
+      activate: false
+    })
+    expect(mockSetActiveTabType).not.toHaveBeenCalled()
+  })
+
   it('does not inject native-chat model preferences into terminal Quick Commands', async () => {
     store.settings = {
       agentCmdOverrides: {},

@@ -161,6 +161,48 @@ describe('terminal quick commands', () => {
     ])
   })
 
+  it('preserves only enabled background-tab presentation', () => {
+    expect(
+      normalizeTerminalQuickCommands([
+        {
+          id: 'background',
+          label: 'Background',
+          command: 'pnpm test',
+          openInBackground: true
+        },
+        {
+          id: 'foreground',
+          label: 'Foreground',
+          command: 'pnpm lint',
+          openInBackground: false
+        }
+      ])
+    ).toEqual([
+      expect.objectContaining({ id: 'background', openInBackground: true }),
+      expect.not.objectContaining({ openInBackground: expect.anything() })
+    ])
+  })
+
+  it('preserves the authored append-enter preference for background commands', () => {
+    expect(
+      normalizeTerminalQuickCommands([
+        {
+          id: 'background',
+          label: 'Background',
+          command: 'pnpm test',
+          appendEnter: false,
+          openInBackground: true
+        }
+      ])
+    ).toEqual([
+      expect.objectContaining({
+        id: 'background',
+        appendEnter: false,
+        openInBackground: true
+      })
+    ])
+  })
+
   it('keeps larger reusable agent prompts while bounding shell commands separately', () => {
     const largePrompt = 'Review this diff.\n'.repeat(320)
     const overLimitPrompt = 'x'.repeat(6001)
@@ -246,6 +288,26 @@ describe('terminal quick commands', () => {
     ).toEqual([second])
   })
 
+  it('keeps desktop background presentation when an older client edits a command', () => {
+    const [background] = normalizeTerminalQuickCommands([
+      {
+        id: 'background',
+        label: 'Background',
+        command: 'pnpm test',
+        openInBackground: true
+      }
+    ])
+    const edited = { ...background!, label: 'Edited', appendEnter: false }
+    delete edited.openInBackground
+
+    expect(
+      applyTerminalQuickCommandMutation([background!], {
+        type: 'upsert',
+        command: edited
+      })
+    ).toEqual([{ ...edited, appendEnter: false, openInBackground: true }])
+  })
+
   it('matches global commands everywhere and repo commands only in their repo', () => {
     expect(
       terminalQuickCommandMatchesRepo(
@@ -302,6 +364,15 @@ describe('terminal quick commands', () => {
         appendEnter: false
       })
     ).toBe('git status')
+    expect(
+      buildTerminalQuickCommandInput({
+        id: 'background',
+        label: 'Background',
+        command: 'pnpm test',
+        appendEnter: false,
+        openInBackground: true
+      })
+    ).toBe('pnpm test\r')
   })
 
   it('classifies quick command actions and body text', () => {

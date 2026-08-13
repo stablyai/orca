@@ -2,16 +2,25 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, type Mock, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
 const mountedRoots: Root[] = []
+
+type RenderDialogOptions = {
+  defaultAdvancedOpen?: boolean
+  showBackgroundPreference?: boolean
+  onSave?: Mock<(command: TerminalQuickCommand) => void>
+}
 
 async function renderDialog(
   command: TerminalQuickCommand,
-  props: { defaultAdvancedOpen?: boolean } = {}
-): Promise<void> {
+  options: RenderDialogOptions = {}
+): Promise<{ onSave: Mock<(command: TerminalQuickCommand) => void> }> {
+  const onSave = options.onSave ?? vi.fn<(command: TerminalQuickCommand) => void>()
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -24,12 +33,14 @@ async function renderDialog(
         mode="add"
         command={command}
         repos={[]}
-        defaultAdvancedOpen={props.defaultAdvancedOpen}
+        defaultAdvancedOpen={options.defaultAdvancedOpen}
+        showBackgroundPreference={options.showBackgroundPreference ?? true}
         onOpenChange={vi.fn()}
-        onSave={vi.fn()}
+        onSave={onSave}
       />
     )
   })
+  return { onSave }
 }
 
 function findAnimatedRowContaining(text: string): HTMLElement {
@@ -126,5 +137,114 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     const advancedToggle = document.body.querySelector('[aria-expanded="true"]')
     expect(advancedToggle?.textContent).toContain('Advanced')
     expect(document.body.textContent).not.toMatch(/Advanced\s*·\s*Global/)
+  })
+
+  it('saves background presentation for agent prompt commands', async () => {
+    const { onSave } = await renderDialog({
+      id: 'qc-1',
+      label: 'Review',
+      action: 'agent-prompt',
+      agent: 'codex',
+      prompt: 'Review this diff',
+      scope: { type: 'global' }
+    })
+    const advanced = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('Advanced')
+    )
+    const background = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Toggle open in background"]'
+    )
+    const save = document.body.querySelector<HTMLButtonElement>('button[title^="Save ("]')
+
+    expect(advanced).toBeTruthy()
+    expect(background).toBeTruthy()
+    expect(save).toBeTruthy()
+    await act(async () => {
+      advanced!.click()
+    })
+    await act(async () => {
+      background!.click()
+    })
+    await act(async () => {
+      save!.click()
+    })
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ openInBackground: true, action: 'agent-prompt' })
+    )
+  })
+
+  it('preserves append-enter when enabling background and exposes the canonical focus ring', async () => {
+    const { onSave } = await renderDialog({
+      id: 'qc-1',
+      label: 'Start dev server',
+      action: 'terminal-command',
+      command: 'npm run dev',
+      appendEnter: false,
+      scope: { type: 'global' }
+    })
+    const advanced = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('Advanced')
+    )
+    const background = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Toggle open in background"]'
+    )
+    const save = document.body.querySelector<HTMLButtonElement>('button[title^="Save ("]')
+
+    expect(background?.className).toContain('focus-visible:ring-[3px]')
+    expect(background?.className).toContain('focus-visible:ring-ring/50')
+    expect(background?.tabIndex).toBe(0)
+    await act(async () => {
+      advanced!.click()
+    })
+    await act(async () => {
+      background!.focus()
+      background!.click()
+    })
+    expect(document.body.textContent).not.toContain('Append Enter — run immediately')
+    await act(async () => {
+      save!.click()
+    })
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ openInBackground: true, appendEnter: false })
+    )
+  })
+
+  it('keeps collapsed advanced controls inert', async () => {
+    await renderDialog({
+      id: 'qc-1',
+      label: 'Status',
+      action: 'terminal-command',
+      command: 'git status',
+      appendEnter: true,
+      scope: { type: 'global' }
+    })
+    const advancedRow = findAnimatedRowContaining('Open in background')
+    const advanced = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('Advanced')
+    )
+
+    expect(advancedRow.inert).toBe(true)
+    await act(async () => {
+      advanced!.click()
+    })
+    expect(advancedRow.inert).toBe(false)
+  })
+
+  it('hides the background preference for remote-owned commands', async () => {
+    await renderDialog(
+      {
+        id: 'qc-1',
+        label: 'Status',
+        action: 'terminal-command',
+        command: 'git status',
+        appendEnter: true,
+        scope: { type: 'global' }
+      },
+      { showBackgroundPreference: false }
+    )
+
+    expect(document.body.textContent).not.toContain('Open in background')
   })
 })

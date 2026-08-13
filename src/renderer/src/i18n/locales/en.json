@@ -803,6 +803,10 @@
       "pluginCommandKeybindings": {
         "group": "Plugins"
       },
+      "runQuickCommandInNewTab": {
+        "agentPromptDeliveryFailed": "The agent started, but the Quick Command prompt could not be sent.",
+        "remoteLaunchFailed": "Could not run the Quick Command on the remote host."
+      },
       "feedback": {
         "image": {
           "attachments": {
@@ -2821,6 +2825,11 @@
               "c936c2d6d2": "Submit immediately instead of only inserting text.",
               "5fa607d807": "Append Enter",
               "767e4be3e3": "Append Enter — run immediately"
+            },
+            "TerminalQuickCommandBackgroundSwitch": {
+              "bbcfd77bb5": "Toggle open in background",
+              "6f8f01b606": "Run in a new terminal without switching to it.",
+              "cf0b237949": "Open in background"
             },
             "TerminalQuickCommandDialog": {
               "925b8e0f6e": "Advanced",

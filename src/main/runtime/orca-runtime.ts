@@ -4007,7 +4007,11 @@ export class OrcaRuntimeService {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
     }
-    return this.store.getSettings().terminalQuickCommands ?? []
+    return (this.store.getSettings().terminalQuickCommands ?? []).map((command) => {
+      // Why: mobile clients predate desktop presentation fields and reject extra canonical keys.
+      const { openInBackground: _openInBackground, ...clientCommand } = command
+      return clientCommand
+    })
   }
 
   updateClientTerminalQuickCommands(
@@ -4016,7 +4020,7 @@ export class OrcaRuntimeService {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
-    const current = this.getClientTerminalQuickCommands()
+    const current = this.store.getSettings().terminalQuickCommands ?? []
     if (
       mutation.type === 'upsert' &&
       !current.some((command) => command.id === mutation.command.id) &&

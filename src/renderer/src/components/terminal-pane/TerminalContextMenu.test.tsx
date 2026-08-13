@@ -164,6 +164,48 @@ describe('TerminalContextMenu', () => {
     expect(shortcuts.list.some((shortcut) => shortcut.includes(','))).toBe(false)
   })
 
+  it('labels only foreground non-submitting quick commands as Insert', () => {
+    renderMenu({
+      quickCommandHosts: [
+        {
+          hostId: 'local',
+          label: 'Local Linux',
+          repoCommands: [],
+          globalCommands: [
+            {
+              id: 'background',
+              label: 'Background',
+              command: 'pnpm test',
+              appendEnter: false,
+              openInBackground: true
+            }
+          ]
+        }
+      ]
+    })
+    expect(shortcuts.list).not.toContain('Insert')
+
+    shortcuts.list = []
+    renderMenu({
+      quickCommandHosts: [
+        {
+          hostId: 'local',
+          label: 'Local Linux',
+          repoCommands: [],
+          globalCommands: [
+            {
+              id: 'insert',
+              label: 'Insert',
+              command: 'pnpm test',
+              appendEnter: false
+            }
+          ]
+        }
+      ]
+    })
+    expect(shortcuts.list).toContain('Insert')
+  })
+
   it('labels commands and add actions by their owning host', () => {
     const onAddQuickCommand = vi.fn()
     const rendered = renderMenu({

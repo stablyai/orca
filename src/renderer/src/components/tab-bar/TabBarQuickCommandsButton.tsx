@@ -22,7 +22,11 @@ import {
   type HostedTerminalQuickCommand,
   useTerminalQuickCommandHosts
 } from '@/hooks/use-terminal-quick-command-hosts'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { useProjectHostSetupProjection } from '@/store/selectors'
 import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
 
@@ -204,6 +208,7 @@ export function TabBarQuickCommandsButton({
           mode={editor?.mode ?? 'add'}
           command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
           repos={editorRepos}
+          showBackgroundPreference={editor?.hostId === LOCAL_EXECUTION_HOST_ID}
           onOpenChange={(open) => !open && setEditor(null)}
           onSave={handleSaveCommand}
         />
@@ -233,6 +238,7 @@ export function TabBarQuickCommandsButton({
         mode={editor?.mode ?? 'add'}
         command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
         repos={editorRepos}
+        showBackgroundPreference={editor?.hostId === LOCAL_EXECUTION_HOST_ID}
         onOpenChange={(open) => !open && setEditor(null)}
         onSave={handleSaveCommand}
       />
