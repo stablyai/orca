@@ -217,6 +217,10 @@ export function createUsageEventAggregation<
       const session = sessionsById.get(event.sessionId) ?? createEmptySession(event)
       if (!sessionsById.has(event.sessionId)) {
         sessionsById.set(event.sessionId, session)
+      } else if (session.accountId !== event.accountId) {
+        // Why: same fail-closed rule as mergeUsageSessions — mixed account
+        // evidence cannot be represented by one session-level filter.
+        delete session.accountId
       }
       if (event.timestamp < session.firstTimestamp) {
         session.firstTimestamp = event.timestamp

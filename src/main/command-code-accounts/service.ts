@@ -68,12 +68,16 @@ export class CommandCodeAccountService {
     if (!account) {
       throw new Error('Selected Command Code account is no longer available.')
     }
-    const authPath = assertOwnedCommandCodeAuth({
-      candidatePath: account.managedAuthPath,
-      managedAccountsRoot: this.managedAccountsRoot,
-      accountId
-    })
-    return readCommandCodeAuthFile(authPath).apiKey
+    try {
+      const authPath = assertOwnedCommandCodeAuth({
+        candidatePath: account.managedAuthPath,
+        managedAccountsRoot: this.managedAccountsRoot,
+        accountId
+      })
+      return readCommandCodeAuthFile(authPath).apiKey
+    } catch (error) {
+      throw this.redactManagedPathFailure(error, account.managedAuthPath)
+    }
   }
 
   addAccountFromHome(sourceHome: string, label: string): Promise<CommandCodeManagedAccountsState> {
@@ -114,12 +118,17 @@ export class CommandCodeAccountService {
   removeAccount(accountId: string): Promise<CommandCodeManagedAccountsState> {
     return this.serializeMutation(async () => {
       const account = this.requireAccount(accountId)
-      const ownedAuth = assertOwnedCommandCodeAuth({
-        candidatePath: account.managedAuthPath,
-        managedAccountsRoot: this.managedAccountsRoot,
-        accountId
-      })
-      rmSync(resolve(ownedAuth, '..'), { recursive: true, force: true })
+      let ownedAuth: string
+      try {
+        ownedAuth = assertOwnedCommandCodeAuth({
+          candidatePath: account.managedAuthPath,
+          managedAccountsRoot: this.managedAccountsRoot,
+          accountId
+        })
+        rmSync(resolve(ownedAuth, '..'), { recursive: true, force: true })
+      } catch (error) {
+        throw this.redactManagedPathFailure(error, account.managedAuthPath)
+      }
       const settings = this.store.getSettings()
       this.store.updateSettings({
         commandCodeManagedAccounts: (settings.commandCodeManagedAccounts ?? []).filter(
@@ -186,6 +195,16 @@ export class CommandCodeAccountService {
           .replaceAll(this.managedAccountsRoot, '[managed accounts]')
       )
     }
+  }
+
+  private redactManagedPathFailure(error: unknown, managedAuthPath: string): Error {
+    const message =
+      error instanceof Error ? error.message : 'Command Code account operation failed.'
+    return new Error(
+      message
+        .replaceAll(resolve(managedAuthPath), '[managed credential]')
+        .replaceAll(this.managedAccountsRoot, '[managed accounts]')
+    )
   }
 
   private requireAccount(accountId: string): CommandCodeManagedAccount {

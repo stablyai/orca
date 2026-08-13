@@ -1,4 +1,13 @@
-import { mkdtempSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -97,6 +106,30 @@ describe('CommandCodeAccountService', () => {
     expect((await service.renameAccount(accountId, 'Renamed')).accounts[0].label).toBe('Renamed')
     expect((await service.removeAccount(accountId)).accounts).toEqual([])
     expect(() => statSync(managedAuth)).toThrow()
+  })
+
+  it('redacts managed paths when selected credentials disappear', async () => {
+    const root = tempRoot()
+    const store = createStore()
+    const service = createService(store, root)
+    await service.addAccountFromHome(createSourceHome(root), 'Work')
+    const stored = store.getSettings().commandCodeManagedAccounts![0]
+    const decoy = join(root, 'decoy-auth.json')
+    copyFileSync(stored.managedAuthPath, decoy)
+    rmSync(join(stored.managedAuthPath, '..'), { recursive: true, force: true })
+    store.updateSettings({
+      commandCodeManagedAccounts: [{ ...stored, managedAuthPath: decoy }]
+    })
+
+    expect(() => service.getSelectedApiKey()).toThrow(/\[managed (credential|accounts)\]/)
+    try {
+      service.getSelectedApiKey()
+    } catch (error) {
+      const message = (error as Error).message
+      expect(message).not.toContain(decoy)
+      expect(message).not.toContain(stored.managedAuthPath)
+      expect(message).not.toContain(join(root, 'managed'))
+    }
   })
 
   it('refuses removal after the ownership marker changes', async () => {

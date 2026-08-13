@@ -1074,16 +1074,22 @@ function prepareCodexRuntimeHomeForLaunch(
       resolvedAccountRef.runtime === 'wsl'
         ? { runtime: 'wsl' as const, wslDistro: resolvedAccountRef.wslDistro ?? null }
         : { runtime: 'host' as const }
-    const status = hooksEnabled
-      ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
-        codexHookService.install(runtimeHomePath ?? undefined))
-      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
-        codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined))
-    if (status.state === 'error') {
-      console.warn(
-        '[codex-hook-service] failed to prepare explicit account runtime hooks',
-        status.detail
-      )
+    try {
+      // Why: same best-effort rule as the implicit launch path — a malformed hooks
+      // file must not fail an account-scoped Codex start.
+      const status = hooksEnabled
+        ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
+          codexHookService.install(runtimeHomePath ?? undefined))
+        : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
+          codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined))
+      if (status.state === 'error') {
+        console.warn(
+          '[codex-hook-service] failed to prepare explicit account runtime hooks',
+          status.detail
+        )
+      }
+    } catch (error) {
+      console.warn('[codex-hook-service] failed to prepare explicit account runtime hooks', error)
     }
     return runtimeHomePath
   }

@@ -61,7 +61,10 @@ export class KimiAccountService {
       this.store.updateSettings({ activeKimiManagedAccountId: activeAccountId })
     }
     return {
-      accounts: accounts.map(({ managedHomePath: _managedHomePath, ...summary }) => summary),
+      accounts: accounts.map(
+        ({ managedHomePath: _managedHomePath, wslLinuxHomePath: _wslLinuxHomePath, ...summary }) =>
+          summary
+      ),
       activeAccountId
     }
   }

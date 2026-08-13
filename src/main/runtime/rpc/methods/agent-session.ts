@@ -12,6 +12,7 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../../../shared/agent-session-host-authority'
 import {
+  isProviderAccountRef,
   PROVIDER_ACCOUNT_REF_MAX_ID_LENGTH,
   PROVIDER_ACCOUNT_REF_MAX_PROVIDER_LENGTH,
   PROVIDER_ACCOUNT_REF_MAX_WSL_DISTRO_LENGTH
@@ -130,6 +131,7 @@ const ProviderAccountRefSchema = z
       .optional()
   })
   .strict()
+  .refine((value) => isProviderAccountRef(value), 'Invalid provider account reference')
 
 const AutomaticEnsure = z
   .object({

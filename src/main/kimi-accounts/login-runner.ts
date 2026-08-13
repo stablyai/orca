@@ -20,6 +20,17 @@ export type KimiLoginInstructionHandler = (
   instructions: KimiLoginInstructions
 ) => Promise<'continue' | 'cancel'>
 
+export function retainRecentLoginOutput(output: string): string {
+  if (output.length <= MAX_LOGIN_OUTPUT_CHARS) {
+    return output
+  }
+  const sliced = output.slice(-MAX_LOGIN_OUTPUT_CHARS)
+  const newline = sliced.indexOf('\n')
+  // Why: a byte cut can land inside the managed-home path; drop that partial line
+  // so later redaction still matches complete remaining lines.
+  return newline === -1 ? '' : sliced.slice(newline + 1)
+}
+
 export function parseKimiLoginInstructions(
   output: string,
   managedHomePath: string
@@ -113,7 +124,7 @@ export function runKimiLogin(
       complete()
     }
     const onData = (chunk: Buffer): void => {
-      output = `${output}${chunk.toString('utf-8')}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
+      output = retainRecentLoginOutput(`${output}${chunk.toString('utf-8')}`)
       if (prompted) {
         return
       }

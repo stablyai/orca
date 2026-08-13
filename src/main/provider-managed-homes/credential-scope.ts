@@ -18,6 +18,22 @@ type CredentialScope = {
   files: { relativePath: string; required: boolean }[]
 }
 
+function assertNonSymlinkDirectory(path: string, required: boolean): boolean {
+  if (!existsSync(path)) {
+    if (required) {
+      throw new Error('The selected provider home does not contain required credentials.')
+    }
+    return false
+  }
+  const info = lstatSync(path)
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error(
+      'Managed provider credential directories must be regular directories, not symbolic links.'
+    )
+  }
+  return true
+}
+
 function assertRegularBoundedFile(path: string, required: boolean): boolean {
   if (!existsSync(path)) {
     if (required) {
@@ -94,6 +110,9 @@ function resolveCredentialScope(
     const sourceEnvHome = existsSync(join(selected, 'auth.json'))
       ? selected
       : join(selected, '.grok')
+    if (sourceEnvHome !== selected) {
+      assertNonSymlinkDirectory(sourceEnvHome, true)
+    }
     return {
       sourceEnvHome,
       files: [{ relativePath: 'auth.json', required: true }]
@@ -103,6 +122,10 @@ function resolveCredentialScope(
     basename(selected) === '.gemini' && existsSync(join(selected, 'oauth_creds.json'))
       ? dirname(selected)
       : selected
+  if (sourceEnvHome !== selected) {
+    assertNonSymlinkDirectory(sourceEnvHome, true)
+  }
+  assertNonSymlinkDirectory(join(sourceEnvHome, '.gemini'), true)
   return {
     sourceEnvHome,
     files: [

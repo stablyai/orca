@@ -106,7 +106,10 @@ export type KimiManagedAccount = {
   lastAuthenticatedAt: number
 }
 
-export type KimiManagedAccountSummary = Omit<KimiManagedAccount, 'managedHomePath'>
+export type KimiManagedAccountSummary = Omit<
+  KimiManagedAccount,
+  'managedHomePath' | 'wslLinuxHomePath'
+>
 
 export type KimiManagedAccountsState = {
   accounts: KimiManagedAccountSummary[]

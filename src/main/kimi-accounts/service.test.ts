@@ -71,6 +71,7 @@ describe('KimiAccountService', () => {
     expect(snapshot.accounts).toHaveLength(1)
     expect(snapshot.accounts[0]).toMatchObject({ label: 'Work', managedHomeRuntime: 'host' })
     expect(snapshot.accounts[0]).not.toHaveProperty('managedHomePath')
+    expect(snapshot.accounts[0]).not.toHaveProperty('wslLinuxHomePath')
     expect(JSON.stringify(snapshot)).not.toContain('secret')
     const stored = store.getSettings().kimiManagedAccounts![0]
     expect(readFileSync(join(stored.managedHomePath, 'config.toml'), 'utf-8')).toContain(

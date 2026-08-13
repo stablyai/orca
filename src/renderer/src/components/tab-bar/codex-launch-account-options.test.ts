@@ -47,10 +47,15 @@ describe('buildCodexLaunchAccountOptions', () => {
     })
 
     expect(options.map(({ key }) => key)).toEqual(['current-default', 'system-default', 'wsl-a'])
+    expect(options[1].providerAccountRef).toMatchObject({
+      accountId: null,
+      runtime: 'wsl',
+      wslDistro: 'ubuntu'
+    })
     expect(options[2].providerAccountRef).toMatchObject({
       accountId: 'wsl-a',
       runtime: 'wsl',
-      wslDistro: 'ubuntu'
+      wslDistro: 'Ubuntu'
     })
   })
 })

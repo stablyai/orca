@@ -243,7 +243,7 @@ Common Commands:
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
-  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--agent codex --account <uuid|system> [--account-runtime host|wsl] [--wsl-distro <name>]] [--focus] [--json]
+  orca terminal create [--worktree <selector>] ([--title <name>] [--command <text>] | [--agent codex --account <uuid|system> [--account-runtime host|wsl] [--wsl-distro <name>]]) [--focus] [--json]
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--tab] [--json]

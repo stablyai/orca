@@ -64,6 +64,7 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import type { ProviderAccountRef } from '../../shared/provider-account-ref'
+import { assertProviderAccountRefForWorkspace } from './provider-account-workspace-scope'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
@@ -25751,26 +25752,11 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
-    if (request.providerAccountRef) {
-      if (request.agent !== 'codex' || request.providerAccountRef.provider !== 'codex') {
-        throw new Error('agent_session_account_agent_mismatch')
-      }
-      if (workspace.connectionId) {
-        throw new Error('agent_session_account_runtime_mismatch')
-      }
-      const wsl = parseWslUncPath(workspace.path)
-      if ((request.providerAccountRef.runtime === 'wsl') !== Boolean(wsl)) {
-        throw new Error('agent_session_account_runtime_mismatch')
-      }
-      if (
-        wsl &&
-        request.providerAccountRef.wslDistro?.trim() &&
-        request.providerAccountRef.wslDistro.trim().toLocaleLowerCase('en-US') !==
-          wsl.distro.toLocaleLowerCase('en-US')
-      ) {
-        throw new Error('agent_session_account_runtime_mismatch')
-      }
-    }
+    assertProviderAccountRefForWorkspace({
+      agent: request.agent,
+      providerAccountRef: request.providerAccountRef,
+      workspace
+    })
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||
@@ -25930,28 +25916,11 @@ export class OrcaRuntimeService {
         // Why: the exact legacy launch remains client-owned until this pre-spawn check succeeds.
         throw new Error('agent_session_legacy_required')
       }
-      if (request.providerAccountRef) {
-        if (request.agent !== 'codex' || request.providerAccountRef.provider !== 'codex') {
-          throw new Error('agent_session_account_agent_mismatch')
-        }
-        if (workspace.connectionId) {
-          // Why: an account ref belongs to this Orca runtime, not an SSH
-          // downstream whose credential registry this process cannot attest.
-          throw new Error('agent_session_account_runtime_mismatch')
-        }
-        const wsl = parseWslUncPath(workspace.path)
-        if ((request.providerAccountRef.runtime === 'wsl') !== Boolean(wsl)) {
-          throw new Error('agent_session_account_runtime_mismatch')
-        }
-        if (
-          wsl &&
-          request.providerAccountRef.wslDistro?.trim() &&
-          request.providerAccountRef.wslDistro.trim().toLocaleLowerCase('en-US') !==
-            wsl.distro.toLocaleLowerCase('en-US')
-        ) {
-          throw new Error('agent_session_account_runtime_mismatch')
-        }
-      }
+      assertProviderAccountRefForWorkspace({
+        agent: request.agent,
+        providerAccountRef: request.providerAccountRef,
+        workspace
+      })
       const startupCwd = this.resolveWorkspaceTerminalStartupCwd(workspace, request.startupCwd)
       // Why: aliases and object property order are client syntax, not authority;
       // fingerprint the host-resolved fields in one fixed order.

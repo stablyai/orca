@@ -154,6 +154,33 @@ describe.each(['grok', 'gemini'] as const)('ManagedCliHomeAccountService: %s', (
     ).rejects.toThrow(/1 MB safety limit/i)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'rejects a symbolic-link credential directory',
+    async () => {
+      const root = tempRoot()
+      const source = createSource(root, provider)
+      if (provider === 'gemini') {
+        const { renameSync } = await import('node:fs')
+        const realGemini = join(source, '.gemini')
+        const outside = join(root, 'outside-gemini')
+        renameSync(realGemini, outside)
+        symlinkSync(outside, realGemini, 'dir')
+      } else {
+        const { mkdirSync: mkdir, renameSync } = await import('node:fs')
+        const grokDir = join(source, '.grok')
+        mkdir(grokDir, { recursive: true })
+        renameSync(join(source, 'auth.json'), join(grokDir, 'auth.json'))
+        const outside = join(root, 'outside-grok')
+        renameSync(grokDir, outside)
+        symlinkSync(outside, grokDir, 'dir')
+      }
+
+      await expect(
+        createService(createStore(), root, provider).addAccountFromHome(source, 'Work')
+      ).rejects.toThrow(/symbolic link/i)
+    }
+  )
+
   it.skipIf(process.platform === 'win32')('rejects a symbolic-link source home', async () => {
     const root = tempRoot()
     const source = createSource(root, provider)

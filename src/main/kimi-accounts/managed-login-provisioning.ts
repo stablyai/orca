@@ -48,12 +48,19 @@ export async function provisionKimiManagedLogin(args: {
     hardenDirectory(pendingRoot)
     hardenDirectory(pendingHome)
     await args.runManagedLogin(pendingHome, args.onInstructions)
-    const credentialPath = join(pendingHome, 'credentials', 'kimi-code.json')
+    const credentialsDir = join(pendingHome, 'credentials')
+    const credentialPath = join(credentialsDir, 'kimi-code.json')
     if (!existsSync(credentialPath)) {
       throw new Error('Kimi sign-in completed without a valid credential file.')
     }
+    const credentialsStat = lstatSync(credentialsDir)
     const credentialStat = lstatSync(credentialPath)
-    if (!credentialStat.isFile() || credentialStat.isSymbolicLink()) {
+    if (
+      !credentialsStat.isDirectory() ||
+      credentialsStat.isSymbolicLink() ||
+      !credentialStat.isFile() ||
+      credentialStat.isSymbolicLink()
+    ) {
       throw new Error('Kimi sign-in completed without a valid credential file.')
     }
     if (process.platform !== 'win32') {

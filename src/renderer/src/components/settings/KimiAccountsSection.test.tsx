@@ -54,7 +54,6 @@ const account = {
   label: 'Work',
   managedHomeRuntime: 'host' as const,
   wslDistro: null,
-  wslLinuxHomePath: null,
   createdAt: 1,
   updatedAt: 1,
   lastAuthenticatedAt: 1
