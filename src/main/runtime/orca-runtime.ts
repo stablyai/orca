@@ -11,6 +11,7 @@ import {
   isShellProcess,
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
+import { getGlobalAgentRegistry } from './agent-registry'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree-sort-order-update'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
@@ -25434,6 +25435,18 @@ export class OrcaRuntimeService {
       agentSessionClaim: claim,
       signal: _caller.signal
     })
+    // P0-1: Register agent session in the global registry
+    try {
+      getGlobalAgentRegistry().register({
+        keyId: claim.keyId,
+        agentType: request.agent,
+        sessionId: terminal.handle,
+        supportedMethods: []
+      })
+    } catch (error) {
+      // Log but don't fail if registration fails
+      console.error('[P0-1 Registry] Failed to register agent session:', error)
+    }
     return {
       terminal,
       disposition: terminal.agentSessionDisposition ?? 'created'
@@ -25441,6 +25454,10 @@ export class OrcaRuntimeService {
   }
 
   async createAgentSession(
+    // P0-1 Note: Agent registry registration is NOT implemented for createAgentSession
+    // Reason: RuntimeCreateAgentSessionRequest lacks providerSession field needed to compute
+    // agentSessionClaim.keyId. ensureAgentSession handles resume scenarios with proper claims.
+    // createAgentSession (fresh spawn) would need alternative keyId derivation strategy.
     request: RuntimeCreateAgentSessionRequest,
     caller: RuntimeAgentSessionRpcCaller = {}
   ): Promise<RuntimeCreateAgentSessionResult> {
