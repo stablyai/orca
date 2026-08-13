@@ -2289,7 +2289,7 @@ void app.whenReady().then(async () => {
     getSnapshot: () => agentHookServer.getStatusSnapshot(),
     subscribeChanges: (cb) => agentHookServer.subscribeStatusChanges(cb),
     client: createDiscordRpcClient(DISCORD_RICH_PRESENCE_CLIENT_ID),
-    isEnabled: () => store.getSettings().discordRichPresenceEnabled === true,
+    isEnabled: () => store!.getSettings().discordRichPresenceEnabled === true,
     assetKey: DISCORD_RICH_PRESENCE_ASSET_KEY
   })
   discordPresenceManager.start()

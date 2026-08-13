@@ -11,8 +11,8 @@ export function createPresenceThrottle(
   publish: (activity: DiscordActivity | null) => void,
   intervalMs: number = DEFAULT_INTERVAL_MS
 ): PresenceThrottle {
-  let pending: DiscordActivity | null | undefined
-  let lastPublished: DiscordActivity | null = undefined
+  let pending: DiscordActivity | null | undefined = undefined
+  let lastPublished: DiscordActivity | null | undefined = undefined
   let lastTime = 0
   let timer: ReturnType<typeof setTimeout> | null = null
 

@@ -46,9 +46,10 @@ function decodeFrame(buf: Buffer): { opcode: number; payload: string } | null {
 type SocketLike = {
   connect(opts: Record<string, unknown>, cb?: () => void): void
   on(event: string, cb: (...args: unknown[]) => void): void
+  removeListener(event: string, cb: (...args: unknown[]) => void): void
   write(data: Uint8Array | string, cb?: (err?: Error) => void): boolean
   destroy(): void
-  removeAllListeners(): void
+  removeAllListeners(event?: string): void
 }
 
 export function createDiscordRpcClient(
@@ -80,7 +81,7 @@ export function createDiscordRpcClient(
         const pipePath = discoverPipePath(pipeIndex)
         let settled = false
 
-        const onError = (err: Error & { code?: string }) => {
+        const onError = (..._args: unknown[]) => {
           if (settled) return
           settled = true
           socket!.removeAllListeners()
@@ -111,17 +112,17 @@ export function createDiscordRpcClient(
       function performHandshake(resolve: (v: void) => void, reject: (err: Error) => void) {
         if (!socket) return
 
-        const onError = (err: Error) => {
-          reject(err)
+        const onError = (..._args: unknown[]) => {
+          reject(_args[0] as Error)
         }
         socket.on('error', onError)
-        socket.on('close', () => {
+        socket.on('close', (..._args: unknown[]) => {
           reject(new Error('Socket closed during handshake'))
         })
 
         let handshakeData = Buffer.alloc(0)
-        socket.on('data', (chunk: Buffer) => {
-          handshakeData = Buffer.concat([handshakeData, chunk])
+        socket.on('data', (chunk: unknown) => {
+          handshakeData = Buffer.concat([handshakeData, chunk as Buffer])
           const frame = decodeFrame(handshakeData)
           if (!frame) return
 
@@ -148,24 +149,11 @@ export function createDiscordRpcClient(
 
   function setupDataHandler() {
     if (!socket) return
-    socket.on('data', (chunk: Buffer) => {
-      buffer = Buffer.concat([buffer, chunk])
-      while (true) {
-        const frame = decodeFrame(buffer)
-        if (!frame) break
-        buffer = buffer.subarray(8 + Buffer.from(frame.payload, 'utf-8').length)
-
-        // Update the subarray to use the decoded length from header
-        // Actually, let's redo this with frame-based parsing
-      }
-    })
-
-    // Re-do with correct parsing
     socket.removeAllListeners('data')
     buffer = Buffer.alloc(0)
 
-    socket.on('data', (chunk: Buffer) => {
-      buffer = Buffer.concat([buffer, chunk])
+    socket.on('data', (chunk: unknown) => {
+      buffer = Buffer.concat([buffer, chunk as Buffer])
       while (buffer.length >= 8) {
         const opcode = buffer.readInt32LE(0)
         const length = buffer.readInt32LE(4)
@@ -189,7 +177,7 @@ export function createDiscordRpcClient(
       }
     })
 
-    socket.on('close', () => {
+    socket.on('close', (..._args: unknown[]) => {
       disconnectCb?.()
     })
   }

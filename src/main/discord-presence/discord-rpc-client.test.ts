@@ -1,12 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { createDiscordRpcClient } from './discord-rpc-client'
-import type { DiscordRpcClient } from './discord-rpc-client'
 import type { DiscordActivity } from './discord-presence-activity'
 
-const OP_HANDSHAKE = 0
 const OP_FRAME = 1
-const OP_PONG = 4
 
 function encodeFrame(opcode: number, payload: string): Buffer {
   const jsonBuffer = Buffer.from(payload, 'utf-8')
@@ -118,7 +115,7 @@ describe('createDiscordRpcClient', () => {
     await cp
     sock.written = []
 
-    const sp = client.setActivity(null)
+    void client.setActivity(null)
     const payload = JSON.parse(sock.lastPayload()!)
     expect(payload.cmd).toBe('SET_ACTIVITY')
     expect(payload.args.activity).toBeUndefined()

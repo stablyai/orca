@@ -1,11 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { DiscordPresenceManager } from './discord-presence-manager'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import type { DiscordRpcClient } from './discord-rpc-client'
 import type { DiscordActivity } from './discord-presence-activity'
 
 // Fakes for dependencies
-function makeClient(): DiscordRpcClient & { setActivity: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; onDisconnectCbs: Array<() => void> } {
+function makeClient() {
   const cbs: Array<() => void> = []
   return {
     connect: vi.fn().mockResolvedValue(undefined),
