@@ -32,7 +32,11 @@ filter_path() {
       normalized="${SHELL_DOLLAR}{normalized%/}"
     done
     candidate="${SHELL_DOLLAR}{entry:-.}"
-    if [[ -n "$legacy_target" && "$normalized" == "$legacy_target" ]]; then
+    if [[ -z "$entry" ]]; then
+      # Why: an empty PATH element means the current directory, so keeping it would let a
+      # repository-local git/gh win the lookup below.
+      :
+    elif [[ -n "$legacy_target" && "$normalized" == "$legacy_target" ]]; then
       :
     elif [[ "$candidate" -ef "$wrapper_dir" ]]; then
       :
