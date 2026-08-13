@@ -92,6 +92,16 @@ describe('bundled skill guide generator', () => {
     }
   })
 
+  it('uses the exported recipe id variable in per-workspace environment examples', async () => {
+    const source = await readFile(
+      path.join(projectDir, 'skill-guides', 'orca-per-workspace-env.md'),
+      'utf8'
+    )
+
+    expect(source).toContain('ORCA_RECIPE_ID')
+    expect(source).not.toContain('ORCA_VM_RECIPE_ID')
+  })
+
   it('embeds canonical names, discovery descriptions, Markdown, and append-only aliases', async () => {
     expect(BUNDLED_SKILL_GUIDES.map((guide) => guide.name)).toEqual(
       [...CANONICAL_GUIDE_NAMES].sort((left, right) => left.localeCompare(right, 'en'))
