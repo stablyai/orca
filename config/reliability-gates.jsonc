@@ -8276,10 +8276,10 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract and a live dev-runtime CLI repro. SSH, daemon, remote-runtime, Linux, and Windows remain provider/platform gaps; the product path stays provider-owned and does not add local filesystem or process assumptions.",
+      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract, a live dev-runtime CLI repro, and a Haiku composer trace. The Claude render gate stays on the PTY-owning runtime, so paired and SSH callers use the same provider write/output path without a wire change. SSH, daemon, remote-runtime, Linux, and Windows live journeys remain gaps.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/7226"],
-      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and send Enter only after the paste frame completes.",
-      "oracle": "Runtime tests assert the exact PTY write sequence and failure cleanup; orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness dispatches a 32KB task to a fake Codex-like TUI and requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
+      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Claude must acknowledge the post-paste composer render or reach the bounded fallback first.",
+      "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, and a Claude-shaped delayed render where Enter at the legacy 500 ms boundary is premature but the post-paste show-cursor marker submits exactly once. Orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
@@ -8305,6 +8305,8 @@
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "runtime writes bracketed paste before a delayed submit",
+            "Claude ignores unrelated and split pre-marker output, then submits once after the post-paste show-cursor render",
+            "a silent Claude composer reaches one bounded fallback submit",
             "large prompt frames are chunked and reconstructed before submit",
             "partial prompt write failure closes the paste frame and does not submit"
           ]
@@ -8335,6 +8337,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "result": "passed",
+          "durationSeconds": 16.9,
+          "summary": "4 files and 1,282 tests passed. Unmodified main wrote Enter at 500 ms before the deterministic Claude composer rendered at 750 ms; the candidate waited for the split show-cursor marker and wrote one Enter. A live Claude Code 2.1.231 Haiku trace rendered the pasted marker and show-cursor in one 523-byte frame without submitting a model request."
+        },
+        {
           "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
@@ -8363,11 +8374,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The live harness reproduced the unsafe raw multiline contract before the fix and passes after the fix; intentional-break evidence is local only and not yet in CI."
+        "evidence": "The Claude-shaped runtime oracle fails on unmodified main and passes with the render gate; the earlier live harness also reproduced the unsafe raw multiline contract before its framing fix. Intentional-break evidence remains local rather than a separate CI job."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent prompt dispatch remains O(prompt bytes), uses the existing 16KB terminal input chunking and one existing 500ms submit delay, and adds no polling, provider listing, subprocess churn, hidden-pane wakeups, or renderer work."
+        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude adds one PTY-local output listener until its normal post-paste show-cursor frame or an 8s fallback; other agents retain the platform delay. No polling, provider listing, subprocess churn, hidden-pane wakeups, renderer work, or wire traffic is added."
       },
       "promotionCriteria": [
         "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",

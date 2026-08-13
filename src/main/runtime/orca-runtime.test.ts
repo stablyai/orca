@@ -16375,6 +16375,96 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('waits for Claude to render the pasted composer before submitting exactly once', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      let composerReady = false
+      let prematureEnters = 0
+      let submissions = 0
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+            setTimeout(() => {
+              runtime.onPtyData('pty-bg', 'partial redraw without cursor', Date.now())
+            }, 650)
+            setTimeout(() => {
+              runtime.onPtyData('pty-bg', '\x1b[?2', Date.now())
+            }, 750)
+            setTimeout(() => {
+              composerReady = true
+              runtime.onPtyData('pty-bg', '5h', Date.now())
+            }, 751)
+          }
+          if (data === '\r') {
+            if (composerReady) {
+              submissions += 1
+            } else {
+              prematureEnters += 1
+            }
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'claude'
+      })
+      const assertAuthority = vi.fn()
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        beforeWrite: assertAuthority
+      })
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(writes).not.toContain('\r')
+      await vi.advanceTimersByTimeAsync(150)
+      expect(writes).not.toContain('\r')
+      await vi.advanceTimersByTimeAsync(101)
+      await sendPromise
+      expect(prematureEnters).toBe(0)
+      expect(submissions).toBe(1)
+      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+      expect(assertAuthority).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('submits a silent Claude composer once after the bounded render fallback', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'claude'
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      await vi.advanceTimersByTimeAsync(7_999)
+      expect(writes).not.toContain('\r')
+
+      await vi.advanceTimersByTimeAsync(1)
+      await sendPromise
+      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('chunks large agent prompt paste frames before delayed submit', async () => {
     vi.useFakeTimers()
     try {
@@ -16389,7 +16479,9 @@ describe('OrcaRuntimeService', () => {
         kill: () => true,
         getForegroundProcess: async () => null
       })
-      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'claude'
+      })
       const prompt = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}\ntail`
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
@@ -16426,7 +16518,9 @@ describe('OrcaRuntimeService', () => {
         kill: () => true,
         getForegroundProcess: async () => null
       })
-      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'claude'
+      })
       const prompt = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)

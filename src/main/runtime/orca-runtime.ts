@@ -1830,6 +1830,9 @@ const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
+const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
+// Why: Claude emits show-cursor only after its composer has rendered the pasted draft.
+const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
@@ -17380,19 +17383,24 @@ export class OrcaRuntimeService {
       suffixFailureError?: string
     } = {}
   ): Promise<void> {
+    const renderGate = this.createClaudeAgentPromptRenderGate(ptyId)
     let wrotePasteBytes = false
     let completedPaste = false
     try {
       const chunks = iterateTerminalInputChunks(pastePayload)
       let chunk = chunks.next()
       while (!chunk.done) {
+        const nextChunk = chunks.next()
         await options.beforeWrite?.(ptyId)
+        if (nextChunk.done) {
+          renderGate?.arm()
+        }
         const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
         if (!wrote) {
           throw new Error('terminal_not_writable')
         }
         wrotePasteBytes = true
-        chunk = chunks.next()
+        chunk = nextChunk
         if (!chunk.done) {
           await new Promise((resolve) => setTimeout(resolve, 0))
         }
@@ -17402,10 +17410,16 @@ export class OrcaRuntimeService {
       if (wrotePasteBytes && !completedPaste) {
         this.ptyController?.write(ptyId, AGENT_PROMPT_BRACKETED_PASTE_END)
       }
+      renderGate?.dispose()
       throw error
     }
 
-    await new Promise((resolve) => setTimeout(resolve, AGENT_PROMPT_SUBMIT_DELAY_MS))
+    if (renderGate) {
+      await renderGate.wait()
+      renderGate.dispose()
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, AGENT_PROMPT_SUBMIT_DELAY_MS))
+    }
     try {
       await options.beforeWrite?.(ptyId)
     } catch (error) {
@@ -17417,6 +17431,62 @@ export class OrcaRuntimeService {
     const suffixWrote = this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT) ?? false
     if (!suffixWrote) {
       throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+    }
+  }
+
+  private createClaudeAgentPromptRenderGate(ptyId: string): {
+    arm: () => void
+    wait: () => Promise<void>
+    dispose: () => void
+  } | null {
+    const pty = this.ptysById.get(ptyId)
+    if ((pty?.launchAgent ?? pty?.foregroundAgent) !== 'claude') {
+      return null
+    }
+    let armed = false
+    let observed = false
+    let markerCarry = ''
+    let resolveRender!: () => void
+    const rendered = new Promise<void>((resolve) => {
+      resolveRender = resolve
+    })
+    const dispose = this.subscribeToTerminalData(ptyId, (data) => {
+      if (!armed || observed) {
+        return
+      }
+      const combined = markerCarry + data
+      markerCarry = combined.slice(-(CLAUDE_AGENT_PROMPT_RENDER_MARKER.length - 1))
+      if (!combined.includes(CLAUDE_AGENT_PROMPT_RENDER_MARKER)) {
+        return
+      }
+      observed = true
+      resolveRender()
+    })
+    return {
+      arm: () => {
+        armed = true
+        markerCarry = ''
+      },
+      wait: async () => {
+        if (observed) {
+          return
+        }
+        await new Promise<void>((resolve) => {
+          let settled = false
+          let timer: NodeJS.Timeout
+          const finish = (): void => {
+            if (settled) {
+              return
+            }
+            settled = true
+            clearTimeout(timer)
+            resolve()
+          }
+          timer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS)
+          void rendered.then(finish)
+        })
+      },
+      dispose
     }
   }
 
