@@ -3,6 +3,7 @@ import './assets/main.css'
 import { StrictMode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
+import { EditorPopoutRoot } from './components/editor-popout/EditorPopoutRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   installRendererCrashDiagnostics,
@@ -20,8 +21,14 @@ import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 // so it must run the same renderer bootstrap as main.tsx (crash diagnostics,
 // theme, i18n, error boundary) rather than inheriting anything from the main
 // window. It shares the preload/window.api but not the DOM or JS context.
-recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
-installRendererCrashDiagnostics('dashboard-popout')
+const searchParams = new URLSearchParams(window.location.search)
+const requestedSurface = searchParams.get('surface')
+const isEditorPopout = requestedSurface === 'editor'
+recordRendererCrashBreadcrumb('popout_bootstrap_started', {
+  dev: import.meta.env.DEV,
+  surface: isEditorPopout ? 'editor' : 'dashboard'
+})
+installRendererCrashDiagnostics(isEditorPopout ? 'editor-popout' : 'dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
   applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
@@ -52,7 +59,7 @@ if (!rootElement) {
 
 // The main process loads popout.html with ?view=<name> so a single entry can
 // host different dashboard layouts (kanban, etc.).
-const requestedView = new URLSearchParams(window.location.search).get('view')
+const requestedView = searchParams.get('view')
 
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
@@ -99,6 +106,21 @@ function PopoutSettingsSync(): null {
 
 function PopoutRoot(): React.JSX.Element {
   useTranslation()
+  if (isEditorPopout) {
+    return (
+      <RecoverableRenderErrorBoundary
+        boundaryId="editor-popout.root"
+        surface="editor-popout"
+        title={translate('editorPopout.recoverableError.title', 'Orca editor hit an error.')}
+        description={translate(
+          'editorPopout.recoverableError.description',
+          'The detached editor could not finish rendering. Reopen the file and try again.'
+        )}
+      >
+        <EditorPopoutRoot />
+      </RecoverableRenderErrorBoundary>
+    )
+  }
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="dashboard-popout.root"

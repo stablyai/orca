@@ -29,7 +29,8 @@ const {
   nativeImageCreateFromBufferMock,
   randomUUIDMock,
   getSshFilesystemProviderMock,
-  callRuntimeEnvironmentMock
+  callRuntimeEnvironmentMock,
+  isEditorPopoutRendererMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
@@ -64,7 +65,8 @@ const {
   nativeImageCreateFromBufferMock: vi.fn(),
   randomUUIDMock: vi.fn(() => '00000000-0000-4000-8000-000000000000'),
   getSshFilesystemProviderMock: vi.fn(),
-  callRuntimeEnvironmentMock: vi.fn()
+  callRuntimeEnvironmentMock: vi.fn(),
+  isEditorPopoutRendererMock: vi.fn(() => false)
 }))
 
 vi.mock('node:child_process', () => ({
@@ -135,6 +137,9 @@ vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
+vi.mock('./editor-popout-window', () => ({
+  isEditorPopoutRenderer: isEditorPopoutRendererMock
+}))
 
 import {
   registerClipboardHandlers,
@@ -193,6 +198,7 @@ function shellIdListArray(childCount: number): Buffer {
 describe('registerClipboardHandlers', () => {
   beforeEach(() => {
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
+    isEditorPopoutRendererMock.mockReturnValue(false)
     removeHandlerMock.mockReset()
     handleMock.mockReset()
     spawnMock.mockClear()
@@ -303,6 +309,24 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('allows editor popouts to use only the clipboard APIs exposed by their preload', async () => {
+    isEditorPopoutRendererMock.mockReturnValue(true)
+    clipboardReadTextMock.mockReturnValue('copied')
+    clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
+    setTrustedClipboardRendererWebContentsId(17)
+    registerClipboardHandlers({} as never)
+    const handlers = getRegisteredHandlers()
+    const editorPopoutEvent = makeClipboardEvent({ id: 42 })
+
+    await expect(handlers.get('clipboard:readText')?.(editorPopoutEvent)).resolves.toBe('copied')
+    await expect(
+      handlers.get('clipboard:writeText')?.(editorPopoutEvent, 'updated')
+    ).resolves.toBeUndefined()
+    await expect(
+      handlers.get('clipboard:saveImageAsTempFile')?.(editorPopoutEvent)
+    ).resolves.toBeNull()
   })
 
   it('writes local files through the trusted clipboard IPC handler', async () => {

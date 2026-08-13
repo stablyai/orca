@@ -14551,6 +14551,27 @@
       "showIdleCopy": "Incluye agentes que han permanecido inactivos durante 30 minutos sin informar que finalizaron. Ocultos de forma predeterminada."
     }
   },
+  "editorPopout": {
+    "openInNewWindow": "Abrir en una ventana nueva",
+    "openFailed": "No se pudo abrir este archivo en una ventana nueva.",
+    "externalChange": "Este archivo cambió fuera del editor independiente. Vuelve a abrirlo antes de guardarlo.",
+    "binarySaveUnsupported": "Los archivos binarios no se pueden guardar aquí.",
+    "binaryEditUnsupported": "Los archivos binarios no se pueden editar aquí.",
+    "saveFailed": "No se pudo guardar este archivo. Si cambió la conexión remota, vuelve a abrir la ventana e inténtalo de nuevo.",
+    "reloadDirty": "Guarda o descarta los cambios antes de volver a cargar este archivo.",
+    "reloadFailed": "No se pudo volver a cargar este archivo. Si cambió la conexión remota, vuelve a abrir la ventana e inténtalo de nuevo.",
+    "save": "Guardar",
+    "discard": "No guardar",
+    "cancel": "Cancelar",
+    "unsavedChanges": "Cambios sin guardar",
+    "closeConfirmTitle": "¿Guardar los cambios en {{name}}?",
+    "closeConfirmMessage": "Los cambios se perderán si cierras esta ventana sin guardarlos.",
+    "stateUnavailable": "El estado del editor independiente no está disponible.",
+    "recoverableError": {
+      "title": "El editor de Orca encontró un error.",
+      "description": "El editor independiente no pudo terminar de renderizarse. Vuelve a abrir el archivo e inténtalo de nuevo."
+    }
+  },
   "dashboard": {
     "sidebar": {
       "label": "Panel de agentes"

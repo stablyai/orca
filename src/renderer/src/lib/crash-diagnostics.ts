@@ -15,7 +15,7 @@ const BYTES_PER_KILOBYTE = 1024
 // Why: one detailed breadcrumb per threshold names what grew before an OOM.
 const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
 
-type RendererSurface = 'main' | 'dashboard-popout'
+type RendererSurface = 'main' | 'dashboard-popout' | 'editor-popout'
 
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number

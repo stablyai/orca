@@ -349,7 +349,6 @@ function EditorPanelInner({
         activeMarkdownContent ?? ''
       )
     )
-
   return (
     // Why: each split pane needs an isolated bridge between its diff editor and header controls.
     <DiffNavigationProvider>

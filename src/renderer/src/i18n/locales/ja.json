@@ -14551,6 +14551,27 @@
       "showIdleCopy": "完了を報告せずに30分間停止している Agent を含めます。デフォルトでは非表示です。"
     }
   },
+  "editorPopout": {
+    "openInNewWindow": "新しいウィンドウで開く",
+    "openFailed": "このファイルを新しいウィンドウで開けませんでした。",
+    "externalChange": "このファイルは別ウィンドウのエディター外部で変更されました。保存する前にウィンドウを開き直してください。",
+    "binarySaveUnsupported": "バイナリファイルはここでは保存できません。",
+    "binaryEditUnsupported": "バイナリファイルはここでは編集できません。",
+    "saveFailed": "このファイルを保存できませんでした。リモート接続が変更された場合は、ウィンドウを開き直して再試行してください。",
+    "reloadDirty": "このファイルを再読み込みする前に、変更を保存するか破棄してください。",
+    "reloadFailed": "このファイルを再読み込みできませんでした。リモート接続が変更された場合は、ウィンドウを開き直して再試行してください。",
+    "save": "保存",
+    "discard": "保存しない",
+    "cancel": "キャンセル",
+    "unsavedChanges": "未保存の変更",
+    "closeConfirmTitle": "{{name}} の変更を保存しますか？",
+    "closeConfirmMessage": "保存せずにこのウィンドウを閉じると、変更内容は失われます。",
+    "stateUnavailable": "別ウィンドウのエディター状態を利用できません。",
+    "recoverableError": {
+      "title": "Orca エディターでエラーが発生しました。",
+      "description": "別ウィンドウのエディターを表示できませんでした。ファイルを開き直して再試行してください。"
+    }
+  },
   "dashboard": {
     "sidebar": {
       "label": "Agent ダッシュボード"

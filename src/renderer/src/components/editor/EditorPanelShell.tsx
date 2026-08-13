@@ -11,6 +11,7 @@ import type { EditorToggleValue } from './EditorViewToggle'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 import { translate } from '@/i18n/i18n'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import { createEditorPopoutAction } from '@/components/editor-popout/editor-popout-action'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
@@ -95,6 +96,15 @@ export function EditorPanelShell({
   onRenameConfirm,
   markdownAnnotationsEnabled
 }: EditorPanelShellProps): JSX.Element {
+  const openMarkdownInNewWindow = createEditorPopoutAction({
+    getState: useAppStore.getState,
+    file: activeFile,
+    fileContent: fileContents[activeFile.id],
+    content: editorDrafts[activeFile.id],
+    viewMode: model.mdViewMode,
+    showFrontmatter: markdownFrontmatterVisible
+  })
+
   return (
     <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
       {!model.isCombinedDiff && activeFile.mode !== 'check-details' && (
@@ -131,6 +141,7 @@ export function EditorPanelShell({
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
           createMarkdownArtifactRequest={createMarkdownArtifactRequest}
+          onOpenMarkdownInNewWindow={openMarkdownInNewWindow}
         />
       )}
       <Suspense fallback={<EditorLoadingFallback />}>

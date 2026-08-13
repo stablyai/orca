@@ -283,6 +283,16 @@ export const electronViteConfig: UserConfig = {
     build: {
       externalizeDeps: {
         exclude: ['@electron-toolkit/preload']
+      },
+      rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          'editor-popout': resolve('src/preload/editor-popout.ts')
+        },
+        output: {
+          entryFileNames: '[name].js',
+          format: 'cjs'
+        }
       }
     }
   },

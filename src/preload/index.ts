@@ -11,6 +11,7 @@ import type {
   DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
+import type { EditorPopoutOpenRequest, EditorPopoutOpenResult } from '../shared/editor-popout'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -2415,6 +2416,29 @@ const api = {
       ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
     sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
+  },
+
+  editorPopout: {
+    open: (request: EditorPopoutOpenRequest): Promise<EditorPopoutOpenResult> =>
+      ipcRenderer.invoke('editorPopout:open', request),
+    getState: (): Promise<EditorPopoutOpenRequest | null> =>
+      ipcRenderer.invoke('editorPopout:getState'),
+    reportReady: (): Promise<void> => ipcRenderer.invoke('editorPopout:ready'),
+    setDirty: (dirty: boolean): Promise<void> => ipcRenderer.invoke('editorPopout:setDirty', dirty),
+    reportCloseState: (dirty: boolean): Promise<void> =>
+      ipcRenderer.invoke('editorPopout:reportCloseState', dirty),
+    completeSaveAndClose: (saved: boolean): Promise<void> =>
+      ipcRenderer.invoke('editorPopout:completeSaveAndClose', saved),
+    onRequestCloseState: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('editorPopout:requestCloseState', listener)
+      return () => ipcRenderer.removeListener('editorPopout:requestCloseState', listener)
+    },
+    onSaveAndClose: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('editorPopout:saveAndClose', listener)
+      return () => ipcRenderer.removeListener('editorPopout:saveAndClose', listener)
+    }
   },
 
   terminalPreview: {

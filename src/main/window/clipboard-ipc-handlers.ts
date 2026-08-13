@@ -38,6 +38,7 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
+import { isEditorPopoutRenderer } from './editor-popout-window'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
@@ -243,7 +244,7 @@ function makeClipboardFileDeps(
 }
 
 function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
-  if (!isTrustedClipboardRenderer(event.sender)) {
+  if (!isTrustedClipboardRenderer(event.sender) && !isEditorPopoutRenderer(event.sender)) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
 }
@@ -251,7 +252,11 @@ function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
 function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
   // Why: terminal copy/paste runs in the exact dashboard popout window, but its
   // clipboard authority must not extend to image, file, or remote operations.
-  if (!isTrustedClipboardRenderer(event.sender) && !isDashboardPopoutRenderer(event.sender)) {
+  if (
+    !isTrustedClipboardRenderer(event.sender) &&
+    !isDashboardPopoutRenderer(event.sender) &&
+    !isEditorPopoutRenderer(event.sender)
+  ) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
 }

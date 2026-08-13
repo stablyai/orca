@@ -1,0 +1,316 @@
+import { BrowserWindow, dialog, nativeTheme, type WebContents } from 'electron'
+import { join } from 'node:path'
+import { is } from '@electron-toolkit/utils'
+import type { EditorPopoutOpenRequest, EditorPopoutOpenResult } from '../../shared/editor-popout'
+import { getRuntimePathBasename } from '../../shared/cross-platform-path'
+import { translateMain } from '../i18n/main-i18n'
+import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+
+const EDITOR_POPOUT_PARTITION = 'orca-editor-popout'
+const CLOSE_STATE_TIMEOUT_MS = 1_500
+const READY_TIMEOUT_MS = 10_000
+const MIN_WIDTH = 560
+const MIN_HEIGHT = 420
+
+type EditorPopoutReadyWaiter = {
+  resolve: () => void
+  reject: (error: Error) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
+type EditorPopoutEntry = {
+  window: BrowserWindow
+  request: EditorPopoutOpenRequest
+  dirty: boolean
+  allowClose: boolean
+  closeDialogOpen: boolean
+  closeCheckPending: boolean
+  closeCheckTimer: ReturnType<typeof setTimeout> | null
+  onQuitAborted?: () => void
+  ready: boolean
+  readyWaiters: Set<EditorPopoutReadyWaiter>
+}
+
+const entriesByKey = new Map<string, EditorPopoutEntry>()
+const entriesByWebContentsId = new Map<number, EditorPopoutEntry>()
+
+function getRequestKey(request: EditorPopoutOpenRequest): string {
+  const owner =
+    request.document.runtimeEnvironmentId ?? request.document.externalSshTargetId ?? 'local'
+  return `${owner}\0${request.document.worktreeId}\0${request.document.filePath}`
+}
+
+function loadEditorPopout(window: BrowserWindow): void {
+  const search = 'surface=editor'
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html?${search}`)
+    return
+  }
+  void window.loadFile(join(__dirname, '../renderer/popout.html'), { search })
+}
+
+async function confirmDirtyClose(entry: EditorPopoutEntry): Promise<void> {
+  const name = getRuntimePathBasename(entry.request.document.filePath)
+  const result = await dialog.showMessageBox(entry.window, {
+    type: 'warning',
+    title: translateMain('editorPopout.unsavedChanges', 'Unsaved Changes'),
+    message: translateMain('editorPopout.closeConfirmTitle', `Save changes to ${name}?`, { name }),
+    detail: translateMain(
+      'editorPopout.closeConfirmMessage',
+      'Your changes will be lost if you close this window without saving.'
+    ),
+    buttons: [
+      translateMain('editorPopout.save', 'Save'),
+      translateMain('editorPopout.cancel', 'Cancel'),
+      translateMain('editorPopout.discard', "Don't Save")
+    ],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  })
+  if (entry.window.isDestroyed()) {
+    return
+  }
+  if (result.response === 0) {
+    entry.window.webContents.send('editorPopout:saveAndClose')
+    return
+  }
+  entry.closeDialogOpen = false
+  if (result.response === 1) {
+    entry.onQuitAborted?.()
+    entry.onQuitAborted = undefined
+    return
+  }
+  entry.allowClose = true
+  entry.window.close()
+}
+
+async function confirmUnresponsiveClose(entry: EditorPopoutEntry): Promise<void> {
+  const result = await dialog.showMessageBox(entry.window, {
+    type: 'warning',
+    title: translateMain('editorPopout.unsavedChanges', 'Unsaved Changes'),
+    message: translateMain(
+      'editorPopout.closeStateUnavailable',
+      'The detached editor is not responding.'
+    ),
+    detail: translateMain(
+      'editorPopout.closeStateUnavailableDetail',
+      'Its latest changes could not be checked. Closing may discard unsaved work.'
+    ),
+    buttons: [
+      translateMain('editorPopout.cancel', 'Cancel'),
+      translateMain('editorPopout.discard', "Don't Save")
+    ],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  })
+  if (entry.window.isDestroyed()) {
+    return
+  }
+  entry.closeDialogOpen = false
+  if (result.response === 0) {
+    entry.onQuitAborted?.()
+    entry.onQuitAborted = undefined
+    return
+  }
+  entry.allowClose = true
+  entry.window.close()
+}
+
+export function createOrFocusEditorPopout(request: EditorPopoutOpenRequest): BrowserWindow {
+  const key = getRequestKey(request)
+  const existing = entriesByKey.get(key)
+  if (existing && !existing.window.isDestroyed()) {
+    if (existing.window.isMinimized()) {
+      existing.window.restore()
+    }
+    existing.window.focus()
+    return existing.window
+  }
+
+  const window = new BrowserWindow({
+    width: 960,
+    height: 760,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
+    title: `${getRuntimePathBasename(request.document.filePath)} - Orca`,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    webPreferences: {
+      preload: join(__dirname, '../preload/editor-popout.js'),
+      sandbox: true,
+      partition: EDITOR_POPOUT_PARTITION,
+      webviewTag: false
+    }
+  })
+  installPrivilegedWindowNavigationPolicy(window.webContents)
+  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
+    callback(false)
+  )
+  window.webContents.session.setPermissionCheckHandler(() => false)
+
+  const entry: EditorPopoutEntry = {
+    window,
+    request,
+    dirty: request.content !== request.savedContent,
+    allowClose: false,
+    closeDialogOpen: false,
+    closeCheckPending: false,
+    closeCheckTimer: null,
+    ready: false,
+    readyWaiters: new Set()
+  }
+  const webContentsId = window.webContents.id
+  entriesByKey.set(key, entry)
+  entriesByWebContentsId.set(webContentsId, entry)
+
+  window.once('ready-to-show', () => {
+    if (!window.isDestroyed()) {
+      window.show()
+    }
+  })
+  window.on('close', (event) => {
+    if (entry.allowClose) {
+      return
+    }
+    event.preventDefault()
+    if (!entry.closeDialogOpen && !entry.closeCheckPending) {
+      entry.closeCheckPending = true
+      window.webContents.send('editorPopout:requestCloseState')
+      entry.closeCheckTimer = setTimeout(() => {
+        entry.closeCheckTimer = null
+        entry.closeCheckPending = false
+        entry.dirty = true
+        entry.closeDialogOpen = true
+        void confirmUnresponsiveClose(entry)
+      }, CLOSE_STATE_TIMEOUT_MS)
+    }
+  })
+  window.on('closed', () => {
+    if (entry.closeCheckTimer) {
+      clearTimeout(entry.closeCheckTimer)
+      entry.closeCheckTimer = null
+    }
+    entriesByKey.delete(key)
+    entriesByWebContentsId.delete(webContentsId)
+    for (const waiter of entry.readyWaiters) {
+      clearTimeout(waiter.timer)
+      waiter.reject(new Error('Detached editor closed before it was ready.'))
+    }
+    entry.readyWaiters.clear()
+  })
+
+  loadEditorPopout(window)
+  return window
+}
+
+function waitForEditorPopoutReady(entry: EditorPopoutEntry): Promise<void> {
+  if (entry.ready) {
+    return Promise.resolve()
+  }
+  return new Promise<void>((resolve, reject) => {
+    const waiter: EditorPopoutReadyWaiter = {
+      resolve,
+      reject,
+      timer: setTimeout(() => {
+        entry.readyWaiters.delete(waiter)
+        if (!entry.window.isDestroyed()) {
+          entry.allowClose = true
+          entry.window.close()
+        }
+        reject(new Error('Detached editor did not become ready.'))
+      }, READY_TIMEOUT_MS)
+    }
+    entry.readyWaiters.add(waiter)
+  })
+}
+
+export async function openEditorPopout(
+  request: EditorPopoutOpenRequest
+): Promise<EditorPopoutOpenResult> {
+  const existing = entriesByKey.get(getRequestKey(request))
+  if (existing && !existing.window.isDestroyed()) {
+    createOrFocusEditorPopout(request)
+    return { created: false }
+  }
+  const window = createOrFocusEditorPopout(request)
+  const entry = entriesByWebContentsId.get(window.webContents.id)
+  if (!entry) {
+    throw new Error('Detached editor state was not registered.')
+  }
+  await waitForEditorPopoutReady(entry)
+  return { created: true }
+}
+
+export function reportEditorPopoutReady(sender: WebContents): void {
+  const entry = entriesByWebContentsId.get(sender.id)
+  if (!entry || entry.ready) {
+    return
+  }
+  entry.ready = true
+  for (const waiter of entry.readyWaiters) {
+    clearTimeout(waiter.timer)
+    waiter.resolve()
+  }
+  entry.readyWaiters.clear()
+}
+
+export function isEditorPopoutRenderer(sender: WebContents): boolean {
+  return !sender.isDestroyed() && entriesByWebContentsId.has(sender.id)
+}
+
+export function getEditorPopoutRequest(sender: WebContents): EditorPopoutOpenRequest | null {
+  return entriesByWebContentsId.get(sender.id)?.request ?? null
+}
+
+export function setEditorPopoutDirty(sender: WebContents, dirty: boolean): void {
+  const entry = entriesByWebContentsId.get(sender.id)
+  if (entry) {
+    entry.dirty = dirty
+  }
+}
+
+export function reportEditorPopoutCloseState(sender: WebContents, dirty: boolean): void {
+  const entry = entriesByWebContentsId.get(sender.id)
+  if (!entry || !entry.closeCheckPending) {
+    return
+  }
+  if (entry.closeCheckTimer) {
+    clearTimeout(entry.closeCheckTimer)
+    entry.closeCheckTimer = null
+  }
+  entry.closeCheckPending = false
+  entry.dirty = dirty
+  if (!dirty) {
+    entry.allowClose = true
+    entry.window.close()
+    return
+  }
+  entry.closeDialogOpen = true
+  void confirmDirtyClose(entry)
+}
+
+export function completeEditorPopoutSaveAndClose(sender: WebContents, saved: boolean): void {
+  const entry = entriesByWebContentsId.get(sender.id)
+  if (!entry) {
+    return
+  }
+  entry.closeDialogOpen = false
+  if (!saved) {
+    return
+  }
+  entry.dirty = false
+  entry.allowClose = true
+  entry.window.close()
+}
+
+export function closeAllEditorPopouts(onQuitAborted?: () => void): void {
+  for (const entry of entriesByKey.values()) {
+    if (!entry.window.isDestroyed()) {
+      entry.onQuitAborted = onQuitAborted
+      entry.window.close()
+    }
+  }
+}

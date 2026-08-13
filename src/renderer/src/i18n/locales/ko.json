@@ -14562,6 +14562,27 @@
       "showIdleCopy": "완료를 보고하지 않은 채 30분 동안 조용한 에이전트를 포함합니다. 기본적으로 숨겨집니다."
     }
   },
+  "editorPopout": {
+    "openInNewWindow": "새 창에서 열기",
+    "openFailed": "이 파일을 새 창에서 열 수 없습니다.",
+    "externalChange": "이 파일이 분리된 편집기 밖에서 변경되었습니다. 저장하기 전에 창을 다시 여세요.",
+    "binarySaveUnsupported": "바이너리 파일은 여기에서 저장할 수 없습니다.",
+    "binaryEditUnsupported": "바이너리 파일은 여기에서 편집할 수 없습니다.",
+    "saveFailed": "이 파일을 저장할 수 없습니다. 원격 연결이 변경되었다면 창을 다시 열고 다시 시도하세요.",
+    "reloadDirty": "이 파일을 다시 불러오기 전에 변경 사항을 저장하거나 버리세요.",
+    "reloadFailed": "이 파일을 다시 불러올 수 없습니다. 원격 연결이 변경되었다면 창을 다시 열고 다시 시도하세요.",
+    "save": "저장",
+    "discard": "저장하지 않음",
+    "cancel": "취소",
+    "unsavedChanges": "저장되지 않은 변경 사항",
+    "closeConfirmTitle": "{{name}} 변경 사항을 저장할까요?",
+    "closeConfirmMessage": "저장하지 않고 창을 닫으면 변경 사항이 사라집니다.",
+    "stateUnavailable": "분리된 편집기 상태를 사용할 수 없습니다.",
+    "recoverableError": {
+      "title": "Orca 편집기에서 오류가 발생했습니다.",
+      "description": "분리된 편집기 렌더링을 완료할 수 없습니다. 파일을 다시 열고 다시 시도하세요."
+    }
+  },
   "dashboard": {
     "sidebar": {
       "label": "에이전트 대시보드"
