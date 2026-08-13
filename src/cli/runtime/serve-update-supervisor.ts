@@ -97,142 +97,140 @@ export async function superviseForegroundServe(
     }
   }
 
-  while (true) {
-    const result = await waitForForegroundServeChild(
-      child,
-      args.handoffPath && expectedHandoff
-        ? {
-            targetVersion: expectedHandoff.targetVersion,
-            recordFailure: (reason) =>
-              recordServeUpdateHandoffFailure(args.handoffPath!, expectedHandoff!, reason),
-            complete: (runtimeId) =>
-              completeServeUpdateHandoff(args.handoffPath!, expectedHandoff!, runtimeId)
-          }
-        : null,
-      {
-        healthProbe: args.healthProbe,
-        onVerified: cleanupPendingSingletonQuarantine,
-        healthCheckIntervalMs: args.healthCheckIntervalMs ?? SERVE_HEALTH_CHECK_INTERVAL_MS,
-        healthProbeTimeoutMs: args.healthProbeTimeoutMs ?? SERVE_HEALTH_PROBE_TIMEOUT_MS,
-        healthFailureLimit: args.healthFailureLimit ?? SERVE_HEALTH_FAILURE_LIMIT
-      }
-    )
-
-    if (expectedHandoff && result.readiness === 'failed') {
-      return 1
-    }
-    if (expectedHandoff && result.readiness !== 'verified') {
-      if (args.handoffPath) {
-        await recordServeUpdateHandoffFailure(
-          args.handoffPath,
-          expectedHandoff,
-          `Replacement exited before serving version ${expectedHandoff.targetVersion}.`
-        )
-      }
-      return 1
-    }
-
-    const handoff = args.handoffPath ? await readServeUpdateHandoff(args.handoffPath) : null
-    if (
-      handoff?.phase === 'install-requested' &&
-      (child.pid === undefined || handoff.servingPid === child.pid)
-    ) {
-      const installed = await waitForMacBundleVersion(args.executable, handoff.targetVersion)
-      if (!installed) {
-        await recordServeUpdateHandoffFailure(
-          args.handoffPath!,
-          handoff,
-          `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
-        )
-        expectedHandoff = null
-      } else {
-        expectedHandoff = handoff
-      }
-      const replacement = await spawnRestartChild(args)
-      if (!replacement) {
-        return expectedHandoff ? 1 : SERVE_SUPERVISOR_STOP_EXIT_CODE
-      }
-      child = replacement
-      continue
-    }
-
-    if (expectedHandoff && result.readiness === 'verified') {
-      expectedHandoff = null
-    }
-    if (result.readiness === 'verified') {
-      singletonRetryUsed = false
-    }
-    if (result.terminationRequested) {
-      if (typeof result.code === 'number') {
-        return result.code
-      }
-      throw serveSignalExitError(result.signal)
-    }
-    if (!args.healthProbe && !args.recoverSingleton) {
-      if (typeof result.code === 'number') {
-        return result.code
-      }
-      throw serveSignalExitError(result.signal)
-    }
-    if (result.code === SERVE_SUPERVISOR_STOP_EXIT_CODE) {
-      return SERVE_SUPERVISOR_STOP_EXIT_CODE
-    }
-    if (result.code === SERVE_ALREADY_RUNNING_EXIT_CODE) {
-      if (singletonRetryUsed || !args.recoverSingleton) {
-        if (singletonRetryUsed && args.healthProbe) {
-          const health = await args.healthProbe().catch(() => null)
-          if (health?.healthy) {
-            await cleanupPendingSingletonQuarantine()
-          }
+  try {
+    while (true) {
+      const result = await waitForForegroundServeChild(
+        child,
+        args.handoffPath && expectedHandoff
+          ? {
+              targetVersion: expectedHandoff.targetVersion,
+              recordFailure: (reason) =>
+                recordServeUpdateHandoffFailure(args.handoffPath!, expectedHandoff!, reason),
+              complete: (runtimeId) =>
+                completeServeUpdateHandoff(args.handoffPath!, expectedHandoff!, runtimeId)
+            }
+          : null,
+        {
+          healthProbe: args.healthProbe,
+          onVerified: cleanupPendingSingletonQuarantine,
+          healthCheckIntervalMs: args.healthCheckIntervalMs ?? SERVE_HEALTH_CHECK_INTERVAL_MS,
+          healthProbeTimeoutMs: args.healthProbeTimeoutMs ?? SERVE_HEALTH_PROBE_TIMEOUT_MS,
+          healthFailureLimit: args.healthFailureLimit ?? SERVE_HEALTH_FAILURE_LIMIT
         }
-        return SERVE_ALREADY_RUNNING_EXIT_CODE
-      }
-      const recovery = await args.recoverSingleton()
-      if (recovery.state !== 'recovered') {
-        const reason =
-          recovery.state === 'active-owner'
-            ? 'active_owner'
-            : `${recovery.reason}${recovery.errorCode ? `:${recovery.errorCode}` : ''}`
-        process.stderr.write(
-          `[serve] singleton recovery refused (${reason}); leaving the profile unchanged.\n`
-        )
-        return SERVE_ALREADY_RUNNING_EXIT_CODE
-      }
-      singletonRetryUsed = true
-      pendingSingletonQuarantine.push(...recovery.quarantined)
-      process.stderr.write(
-        `[serve] quarantined stale Linux singleton artifacts for exited pid ${recovery.ownerPid}; retrying once.\n`
       )
+
+      if (expectedHandoff && result.readiness === 'failed') {
+        return 1
+      }
+      if (expectedHandoff && result.readiness !== 'verified') {
+        if (args.handoffPath) {
+          await recordServeUpdateHandoffFailure(
+            args.handoffPath,
+            expectedHandoff,
+            `Replacement exited before serving version ${expectedHandoff.targetVersion}.`
+          )
+        }
+        return 1
+      }
+
+      const handoff = args.handoffPath ? await readServeUpdateHandoff(args.handoffPath) : null
+      if (
+        handoff?.phase === 'install-requested' &&
+        (child.pid === undefined || handoff.servingPid === child.pid)
+      ) {
+        const installed = await waitForMacBundleVersion(args.executable, handoff.targetVersion)
+        if (!installed) {
+          await recordServeUpdateHandoffFailure(
+            args.handoffPath!,
+            handoff,
+            `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
+          )
+          expectedHandoff = null
+        } else {
+          expectedHandoff = handoff
+        }
+        const replacement = await spawnRestartChild(args)
+        if (!replacement) {
+          return expectedHandoff ? 1 : SERVE_SUPERVISOR_STOP_EXIT_CODE
+        }
+        child = replacement
+        continue
+      }
+
+      if (expectedHandoff && result.readiness === 'verified') {
+        expectedHandoff = null
+      }
+      if (result.readiness === 'verified') {
+        singletonRetryUsed = false
+      }
+      if (result.terminationRequested) {
+        if (typeof result.code === 'number') {
+          return result.code
+        }
+        throw serveSignalExitError(result.signal)
+      }
+      if (!args.healthProbe && !args.recoverSingleton) {
+        if (typeof result.code === 'number') {
+          return result.code
+        }
+        throw serveSignalExitError(result.signal)
+      }
+      if (result.code === SERVE_SUPERVISOR_STOP_EXIT_CODE) {
+        return SERVE_SUPERVISOR_STOP_EXIT_CODE
+      }
+      if (result.code === SERVE_ALREADY_RUNNING_EXIT_CODE) {
+        if (singletonRetryUsed || !args.recoverSingleton) {
+          return SERVE_ALREADY_RUNNING_EXIT_CODE
+        }
+        const recovery = await args.recoverSingleton()
+        if (recovery.state !== 'recovered') {
+          const reason =
+            recovery.state === 'active-owner'
+              ? 'active_owner'
+              : `${recovery.reason}${recovery.errorCode ? `:${recovery.errorCode}` : ''}`
+          process.stderr.write(
+            `[serve] singleton recovery refused (${reason}); leaving the profile unchanged.\n`
+          )
+          return SERVE_ALREADY_RUNNING_EXIT_CODE
+        }
+        singletonRetryUsed = true
+        pendingSingletonQuarantine.push(...recovery.quarantined)
+        process.stderr.write(
+          `[serve] quarantined stale Linux singleton artifacts for exited pid ${recovery.ownerPid}; retrying once.\n`
+        )
+        const replacement = await spawnRestartChild(args)
+        if (!replacement) {
+          return SERVE_SUPERVISOR_STOP_EXIT_CODE
+        }
+        child = replacement
+        continue
+      }
+
+      if (result.healthyDurationMs >= (args.stableRunResetMs ?? SERVE_CRASH_BUDGET_RESET_MS)) {
+        restartIndex = 0
+      }
+      if (restartIndex >= restartDelays.length) {
+        process.stderr.write(
+          `[serve] main-process recovery exhausted after ${restartDelays.length} restart attempts; exiting with code ${SERVE_SUPERVISOR_STOP_EXIT_CODE}.\n`
+        )
+        return SERVE_SUPERVISOR_STOP_EXIT_CODE
+      }
+
+      const delayMs = restartDelays[restartIndex]
+      restartIndex += 1
+      const healthDetail = result.healthFailureReason ? ` (${result.healthFailureReason})` : ''
+      process.stderr.write(
+        `[serve] main process became unavailable${healthDetail}; restarting in ${delayMs}ms (${restartIndex}/${restartDelays.length}).\n`
+      )
+      await sleep(delayMs)
       const replacement = await spawnRestartChild(args)
       if (!replacement) {
         return SERVE_SUPERVISOR_STOP_EXIT_CODE
       }
       child = replacement
-      continue
     }
-
-    if (result.healthyDurationMs >= (args.stableRunResetMs ?? SERVE_CRASH_BUDGET_RESET_MS)) {
-      restartIndex = 0
-    }
-    if (restartIndex >= restartDelays.length) {
-      process.stderr.write(
-        `[serve] main-process recovery exhausted after ${restartDelays.length} restart attempts; exiting with code ${SERVE_SUPERVISOR_STOP_EXIT_CODE}.\n`
-      )
-      return SERVE_SUPERVISOR_STOP_EXIT_CODE
-    }
-
-    const delayMs = restartDelays[restartIndex]
-    restartIndex += 1
-    const healthDetail = result.healthFailureReason ? ` (${result.healthFailureReason})` : ''
-    process.stderr.write(
-      `[serve] main process became unavailable${healthDetail}; restarting in ${delayMs}ms (${restartIndex}/${restartDelays.length}).\n`
-    )
-    await sleep(delayMs)
-    const replacement = await spawnRestartChild(args)
-    if (!replacement) {
-      return SERVE_SUPERVISOR_STOP_EXIT_CODE
-    }
-    child = replacement
+  } finally {
+    await cleanupPendingSingletonQuarantine()
   }
 }
 

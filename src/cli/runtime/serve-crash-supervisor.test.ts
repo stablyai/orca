@@ -259,12 +259,15 @@ describe('foreground serve crash supervisor', () => {
     expect(args.spawnChildMock).toHaveBeenCalledOnce()
   })
 
-  it('cleans exact quarantine when a concurrent owner wins after recovery', async () => {
+  it('cleans exact quarantine before a concurrent winner reports ready', async () => {
     const collision = new FakeChildProcess(4101)
     const retry = new FakeChildProcess(4102)
     const cleanupSingletonQuarantine = vi.fn(async () => undefined)
     const args = supervisorArgs(collision, {
-      healthProbe: vi.fn(async () => ({ healthy: true as const, runtimeId: 'runtime-winner' })),
+      healthProbe: vi.fn(async () => ({
+        healthy: false as const,
+        reason: 'metadata_missing' as const
+      })),
       recoverSingleton: vi.fn(async () => ({
         state: 'recovered' as const,
         ownerPid: 4000,
