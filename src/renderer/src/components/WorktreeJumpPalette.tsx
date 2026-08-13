@@ -185,11 +185,13 @@ import {
 } from '@/lib/new-workspace-composer-repo'
 import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupCmdJGitHubUrlWorkItem } from '@/lib/cmd-j-github-url-lookup'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
 import {
   getCmdJTaskUrlCreatePreview,
-  parseCmdJTaskSourceUrl
+  parseCmdJTaskSourceUrl,
+  withResolvedCmdJGitHubPreview
 } from '@/lib/worktree-palette-task-url-match'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
@@ -197,7 +199,7 @@ import {
   getSettingsFocusedExecutionHostId,
   isRuntimeOwnedSshTargetId
 } from '../../../shared/execution-host'
-import type { LinearIssue, TerminalTab, Worktree } from '../../../shared/types'
+import type { GitHubWorkItem, LinearIssue, TerminalTab, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import {
   buildTaskSourceContextFromRepo,
@@ -273,6 +275,12 @@ type CmdJLinearIssuePreview = {
   loading: boolean
   initialRepoId: string | null
   sourceContext: TaskSourceContext | null
+}
+
+type CmdJGitHubWorkItemPreview = {
+  query: string
+  item: GitHubWorkItem | null
+  loading: boolean
 }
 
 // Why: keep quick actions curated — Cmd+J is a fast intent surface, not a dump of every setup button.
@@ -678,12 +686,16 @@ function WorktreeJumpPaletteContent({
   liveQueryRef.current = query
   const taskSourceUrl = useMemo(() => parseCmdJTaskSourceUrl(query), [query])
   const linearIssueUrlIntent = taskSourceUrl?.provider === 'linear' ? taskSourceUrl.intent : null
-  const taskUrlCreatePreview = useMemo(
+  const githubUrlLink = taskSourceUrl?.provider === 'github' ? taskSourceUrl.link : null
+  const parsedTaskUrlCreatePreview = useMemo(
     () => (taskSourceUrl ? getCmdJTaskUrlCreatePreview(taskSourceUrl) : null),
     [taskSourceUrl]
   )
   const [selectedItemId, setSelectedItemId] = useState('')
   const [linearIssuePreview, setLinearIssuePreview] = useState<CmdJLinearIssuePreview | null>(null)
+  const [githubWorkItemPreview, setGithubWorkItemPreview] =
+    useState<CmdJGitHubWorkItemPreview | null>(null)
+  const githubLookupGenerationRef = useRef(0)
   const linearIssueLookupGenerationRef = useRef(0)
   const linearIssueLookupRef = useRef<{
     query: string
@@ -1733,6 +1745,64 @@ function WorktreeJumpPaletteContent({
       }
     }
   }, [createWorktreeName, linearIssueUrlIntent, visible])
+
+  useLayoutEffect(() => {
+    const generation = ++githubLookupGenerationRef.current
+    if (!visible || !githubUrlLink) {
+      setGithubWorkItemPreview(null)
+      return
+    }
+
+    const pendingPreview: CmdJGitHubWorkItemPreview = {
+      query: createWorktreeName,
+      item: null,
+      loading: true
+    }
+    setGithubWorkItemPreview(pendingPreview)
+
+    const state = useAppStore.getState()
+    const workspaceTarget = getComposerDefaultWorkspaceTarget(state)
+    const sourceContext = workspaceTarget
+      ? buildTaskSourceContextFromRepo({
+          provider: 'github',
+          projectId: workspaceTarget.projectId,
+          repo: workspaceTarget.repo,
+          projectHostSetupId: workspaceTarget.projectHostSetupId
+        })
+      : null
+    void lookupCmdJGitHubUrlWorkItem({
+      link: githubUrlLink,
+      repo: workspaceTarget?.repo ?? null,
+      sourceContext
+    }).then((item) => {
+      if (githubLookupGenerationRef.current === generation) {
+        setGithubWorkItemPreview({
+          query: createWorktreeName,
+          item,
+          loading: false
+        })
+      }
+    })
+
+    return () => {
+      if (githubLookupGenerationRef.current === generation) {
+        githubLookupGenerationRef.current += 1
+      }
+    }
+  }, [createWorktreeName, githubUrlLink, visible])
+
+  const taskUrlCreatePreview = useMemo(() => {
+    if (!parsedTaskUrlCreatePreview) {
+      return null
+    }
+    const preview =
+      githubWorkItemPreview?.query === createWorktreeName ? githubWorkItemPreview : null
+    return withResolvedCmdJGitHubPreview(
+      parsedTaskUrlCreatePreview,
+      preview?.item?.title ?? null,
+      preview?.loading === true
+    )
+  }, [createWorktreeName, githubWorkItemPreview, parsedTaskUrlCreatePreview])
 
   const currentLinearIssuePreview =
     linearIssuePreview?.query === createWorktreeName ? linearIssuePreview : null

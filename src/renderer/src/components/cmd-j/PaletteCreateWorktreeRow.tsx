@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Github, Gitlab, Plus } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -64,13 +64,23 @@ export function PaletteCreateWorktreeRow({
   const previewLabel = showLinearPreview
     ? linearPreviewLabel
     : (taskUrlPreview?.createLabel ?? undefined)
+  const [showTaskUrlLoadingFeedback, setShowTaskUrlLoadingFeedback] = useState(false)
+  useEffect(() => {
+    if (!taskUrlPreview?.loading) {
+      setShowTaskUrlLoadingFeedback(false)
+      return
+    }
+    setShowTaskUrlLoadingFeedback(false)
+    const timer = window.setTimeout(() => setShowTaskUrlLoadingFeedback(true), 200)
+    return () => window.clearTimeout(timer)
+  }, [taskUrlPreview?.identifier, taskUrlPreview?.loading])
 
   return (
     <CommandItem
       value={CREATE_WORKTREE_ITEM_ID}
       onSelect={onSelect}
       aria-label={previewLabel}
-      aria-busy={linearPending}
+      aria-busy={linearPending || Boolean(taskUrlPreview?.loading && !showLinearPreview)}
       data-cmd-j-linear-issue-preview={showLinearPreview ? 'true' : undefined}
       data-cmd-j-linear-issue-state={
         linearIssue ? 'resolved' : linearPending ? 'loading' : undefined
@@ -78,6 +88,13 @@ export function PaletteCreateWorktreeRow({
       data-cmd-j-task-url-preview={taskUrlPreview && !showLinearPreview ? 'true' : undefined}
       data-cmd-j-task-url-provider={
         taskUrlPreview && !showLinearPreview ? taskUrlPreview.provider : undefined
+      }
+      data-cmd-j-task-url-state={
+        taskUrlPreview && !showLinearPreview
+          ? taskUrlPreview.loading
+            ? 'loading'
+            : 'resolved'
+          : undefined
       }
       className={className}
     >
@@ -122,11 +139,15 @@ export function PaletteCreateWorktreeRow({
               </span>
             </div>
             <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
-              {translate(
-                'worktreeJumpPalette.taskUrl.createHint',
-                'Create worktree from {{value0}}',
-                { value0: taskUrlPreview.kindLabel }
-              )}
+              {taskUrlPreview.loading && showTaskUrlLoadingFeedback
+                ? translate('worktreeJumpPalette.taskUrl.loadingHint', 'Loading {{value0}}…', {
+                    value0: taskUrlPreview.kindLabel
+                  })
+                : translate(
+                    'worktreeJumpPalette.taskUrl.createHint',
+                    'Create worktree from {{value0}}',
+                    { value0: taskUrlPreview.kindLabel }
+                  )}
             </div>
           </div>
         </>

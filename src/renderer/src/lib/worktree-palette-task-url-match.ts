@@ -28,6 +28,26 @@ export type CmdJTaskUrlCreatePreview = {
   subtitle: string
   createLabel: string
   kindLabel: string
+  loading?: boolean
+}
+
+export function withResolvedCmdJGitHubPreview(
+  preview: CmdJTaskUrlCreatePreview,
+  resolvedTitle: string | null,
+  loading: boolean
+): CmdJTaskUrlCreatePreview {
+  if (preview.provider !== 'github') {
+    return preview
+  }
+  if (resolvedTitle) {
+    return {
+      ...preview,
+      subtitle: resolvedTitle,
+      createLabel: `${preview.createLabel}: ${resolvedTitle}`,
+      loading: false
+    }
+  }
+  return loading ? { ...preview, loading: true } : preview
 }
 
 function githubIdentityKey(slug: RepoSlug): string {
@@ -52,6 +72,20 @@ function parseOwnerRepoDisplayName(value: string | null | undefined): RepoSlug |
     return null
   }
   return { owner: match[1], repo: match[2] }
+}
+
+function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean | 'unknown' {
+  if (!repo) {
+    return 'unknown'
+  }
+  const fromName = parseOwnerRepoDisplayName(repo.displayName)
+  if (fromName) {
+    return githubIdentityKey({ ...fromName, host: slug.host }) === githubIdentityKey(slug)
+  }
+  if (repo.upstream?.owner && repo.upstream.repo) {
+    return githubIdentityKey(repo.upstream) === githubIdentityKey(slug)
+  }
+  return 'unknown'
 }
 
 export function parseCmdJTaskSourceUrl(query: string): CmdJTaskSourceUrl | null {
@@ -163,17 +197,19 @@ function worktreeMatchesGitHubUrl(
     return true
   }
 
+  const linkedItem = worktree.linkedWorkItem
+  const linkedItemMatches =
+    linkedItem?.provider === 'github' &&
+    linkedItem.type === link.type &&
+    linkedItem.number === link.number
   const numberMatches =
-    link.type === 'pr' ? worktree.linkedPR === link.number : worktree.linkedIssue === link.number
+    linkedItemMatches ||
+    (link.type === 'pr' ? worktree.linkedPR === link.number : worktree.linkedIssue === link.number)
   if (!numberMatches) {
     return false
   }
 
-  const repoSlug = parseOwnerRepoDisplayName(repo?.displayName)
-  if (!repoSlug) {
-    return true
-  }
-  return githubIdentityKey({ ...repoSlug, host: link.slug.host }) === githubIdentityKey(link.slug)
+  return repoMatchesGitHubSlug(repo, link.slug) !== false
 }
 
 function worktreeMatchesLinearUrl(worktree: Worktree, intent: LinearIssueUrlIntent): boolean {

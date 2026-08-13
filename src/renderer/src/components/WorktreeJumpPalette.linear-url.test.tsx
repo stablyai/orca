@@ -13,6 +13,15 @@ import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-tar
 import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '@/lib/worktree-palette-query-bounds'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeRecentTabState, makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import type { GitHubWorkItem } from '../../../shared/types'
+
+const { lookupCmdJGitHubUrlWorkItem } = vi.hoisted(() => ({
+  lookupCmdJGitHubUrlWorkItem: vi.fn(async () => null)
+}))
+
+vi.mock('@/lib/cmd-j-github-url-lookup', () => ({
+  lookupCmdJGitHubUrlWorkItem
+}))
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
@@ -221,6 +230,8 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
     requestCommandDialogClose = null
+    lookupCmdJGitHubUrlWorkItem.mockReset()
+    lookupCmdJGitHubUrlWorkItem.mockResolvedValue(null)
     useAppStore.setState(initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
@@ -632,8 +643,19 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     expect(testContainer.querySelector('[data-cmd-j-linear-issue-preview="true"]')).not.toBeNull()
   })
 
-  it('previews a pasted GitHub issue URL without resolving it', async () => {
+  it('resolves a pasted GitHub issue URL and still hands the raw URL to create', async () => {
     const githubIssueUrl = 'https://github.com/stablyai/orca/issues/14198'
+    lookupCmdJGitHubUrlWorkItem.mockResolvedValue({
+      id: 'issue-14198',
+      type: 'issue',
+      number: 14198,
+      title: 'Agent terminals disappearing randomly',
+      state: 'open',
+      url: githubIssueUrl,
+      labels: [],
+      updatedAt: '2026-08-12T12:00:00.000Z',
+      author: 'nwparker'
+    } satisfies GitHubWorkItem)
     await renderPalette({
       prefetchWorktreeCreateBase: vi.fn(async () => {})
     })
@@ -645,11 +667,18 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     expect(getRenderedRowIds().find(Boolean)).toBe('__create_worktree__')
     expect(getCommandValue()).toBe('__create_worktree__')
     expect(preview?.dataset.cmdJTaskUrlProvider).toBe('github')
+    expect(preview?.dataset.cmdJTaskUrlState).toBe('resolved')
     expect(preview?.getAttribute('aria-label')).toBe(
-      'Create worktree from GitHub issue stablyai/orca#14198'
+      'Create worktree from GitHub issue stablyai/orca#14198: Agent terminals disappearing randomly'
     )
     expect(preview?.textContent).toContain('#14198')
-    expect(preview?.textContent).toContain('stablyai/orca')
+    expect(preview?.textContent).toContain('Agent terminals disappearing randomly')
+    expect(lookupCmdJGitHubUrlWorkItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        link: expect.objectContaining({ type: 'issue', number: 14198 }),
+        repo: expect.objectContaining({ id: 'repo-1' })
+      })
+    )
 
     await act(async () => {
       preview?.click()

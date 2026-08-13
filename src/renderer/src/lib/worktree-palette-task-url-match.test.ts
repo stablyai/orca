@@ -3,7 +3,8 @@ import type { Repo, Worktree } from '../../../shared/types'
 import {
   getCmdJTaskUrlCreatePreview,
   matchWorktreePaletteTaskUrl,
-  parseCmdJTaskSourceUrl
+  parseCmdJTaskSourceUrl,
+  withResolvedCmdJGitHubPreview
 } from './worktree-palette-task-url-match'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -114,6 +115,25 @@ describe('matchWorktreePaletteTaskUrl', () => {
     ).toBeNull()
   })
 
+  it('matches a GitHub work-item number when the stored URL is missing', () => {
+    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+    expect(
+      matchWorktreePaletteTaskUrl({
+        worktree: makeWorktree({
+          linkedWorkItem: {
+            provider: 'github',
+            type: 'pr',
+            number: 12789,
+            title: 'Perf',
+            url: ''
+          }
+        }),
+        intent: intent!,
+        repo: orcaRepo
+      })
+    ).toMatchObject({ matchedField: 'pr' })
+  })
+
   it('matches a GitHub pull URL via the stored work-item URL', () => {
     const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
     expect(
@@ -195,5 +215,22 @@ describe('getCmdJTaskUrlCreatePreview', () => {
       identifier: 'ORCA-123',
       kindLabel: 'Jira issue'
     })
+  })
+
+  it('replaces the GitHub subtitle with the resolved issue title', () => {
+    const preview = getCmdJTaskUrlCreatePreview(
+      parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')!
+    )!
+    expect(
+      withResolvedCmdJGitHubPreview(preview, 'Agent terminals disappearing randomly', false)
+    ).toEqual(
+      expect.objectContaining({
+        subtitle: 'Agent terminals disappearing randomly',
+        createLabel:
+          'Create worktree from GitHub issue stablyai/orca#14198: Agent terminals disappearing randomly',
+        loading: false
+      })
+    )
+    expect(withResolvedCmdJGitHubPreview(preview, null, true).loading).toBe(true)
   })
 })
