@@ -76,6 +76,7 @@ import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-crea
 import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
 import {
   pauseAfterE2eWebRuntimeBrowserCreate,
+  throwIfE2eWebRuntimeBrowserCapabilityUnavailable,
   throwIfE2eWebRuntimeBrowserReconciliationFails
 } from './web-runtime-browser-creation-e2e-fault'
 
@@ -471,33 +472,35 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
-  assertRuntimeManagedBrowserCreationAvailable(useAppStore.getState(), environmentId)
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
   const shouldFocusOnCreate = args.focusOnCreate !== false
   const shouldSelectWorktree = args.selectWorktree !== false
   const provisionalPageId = createBrowserUuid()
-  if (args.clientTargetGroupId) {
-    recordWebSessionBrowserPlacement({
-      environmentId,
-      worktreeId: args.worktreeId,
-      remotePageId: provisionalPageId,
-      groupId: args.clientTargetGroupId
-    })
-  }
-  if (shouldSelectWorktree) {
-    selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
-  }
-  const initialFocusState = shouldFocusOnCreate ? useAppStore.getState() : null
-  const expectedActiveWorktreeId = initialFocusState?.activeWorktreeId
-  const expectedActiveWorkspaceExecutionHostId = initialFocusState?.activeWorkspaceExecutionHostId
-  const expectedCurrentLocalTabId = initialFocusState
-    ? resolveWebSessionVisibleTabId(initialFocusState, args.worktreeId)
-    : null
   let unsubscribeFocusGuard = (): void => {}
   let guardedPageId = provisionalPageId
   let createdPageId: string | null = null
+  let createAttempted = false
   try {
+    throwIfE2eWebRuntimeBrowserCapabilityUnavailable()
+    assertRuntimeManagedBrowserCreationAvailable(useAppStore.getState(), environmentId)
+    if (args.clientTargetGroupId) {
+      recordWebSessionBrowserPlacement({
+        environmentId,
+        worktreeId: args.worktreeId,
+        remotePageId: provisionalPageId,
+        groupId: args.clientTargetGroupId
+      })
+    }
+    if (shouldSelectWorktree) {
+      selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
+    }
+    const initialFocusState = shouldFocusOnCreate ? useAppStore.getState() : null
+    const expectedActiveWorktreeId = initialFocusState?.activeWorktreeId
+    const expectedActiveWorkspaceExecutionHostId = initialFocusState?.activeWorkspaceExecutionHostId
+    const expectedCurrentLocalTabId = initialFocusState
+      ? resolveWebSessionVisibleTabId(initialFocusState, args.worktreeId)
+      : null
     if (shouldFocusOnCreate && matchesWebSessionIntentOwner(intentOwner)) {
       recordWebSessionFocusIntent(
         intentOwner,
@@ -530,6 +533,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         unsubscribeFocusGuard()
       })
     }
+    createAttempted = true
     const created = unwrapRuntimeRpcResult(
       (await callEnvironment({
         method: 'browser.tabCreate',
@@ -683,6 +687,9 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       throw new Error('The paired runtime could not recover the failed browser creation.', {
         cause: recoveryError
       })
+    }
+    if (!createAttempted) {
+      throw error
     }
     if (createOutcomeUnknown) {
       throw new Error('The paired runtime did not confirm whether the browser tab was created.', {

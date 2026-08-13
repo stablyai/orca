@@ -3,12 +3,14 @@ import { e2eConfig } from '@/lib/e2e-config'
 
 type BrowserCreationFaultSnapshot = {
   armed: boolean
+  capabilityRejectionArmed: boolean
   createdPageId: string | null
   suppressedPageIds: string[]
 }
 
 type BrowserCreationFaultApi = {
   arm: () => void
+  armCapabilityRejection: () => void
   release: () => boolean
   reset: () => void
   snapshot: () => BrowserCreationFaultSnapshot
@@ -19,6 +21,7 @@ type BrowserCreationFaultWindow = Window & {
 }
 
 let armed = false
+let capabilityRejectionArmed = false
 let createdPageId: string | null = null
 let failNextReconciliation = false
 let releaseCreatedPage: (() => void) | null = null
@@ -29,6 +32,7 @@ const MAX_SUPPRESSED_PAGE_IDS = 128
 function resetFault(): void {
   releaseCreatedPage?.()
   armed = false
+  capabilityRejectionArmed = false
   createdPageId = null
   failNextReconciliation = false
   releaseCreatedPage = null
@@ -49,6 +53,10 @@ function exposeFaultApi(): void {
         releaseCreatedPage = resolve
       })
     },
+    armCapabilityRejection: () => {
+      resetFault()
+      capabilityRejectionArmed = true
+    },
     release: () => {
       if (!armed || !createdPageId || !releaseCreatedPage) {
         return false
@@ -62,6 +70,7 @@ function exposeFaultApi(): void {
     reset: resetFault,
     snapshot: () => ({
       armed,
+      capabilityRejectionArmed,
       createdPageId,
       suppressedPageIds: [...suppressedPageIds]
     })
@@ -69,6 +78,14 @@ function exposeFaultApi(): void {
 }
 
 exposeFaultApi()
+
+export function throwIfE2eWebRuntimeBrowserCapabilityUnavailable(): void {
+  if (!e2eConfig.exposeStore || !capabilityRejectionArmed) {
+    return
+  }
+  capabilityRejectionArmed = false
+  throw new Error('E2E forced browser capability rejection')
+}
 
 export async function pauseAfterE2eWebRuntimeBrowserCreate(remotePageId: string): Promise<void> {
   if (!e2eConfig.exposeStore || !armed || !createdPageBarrier) {

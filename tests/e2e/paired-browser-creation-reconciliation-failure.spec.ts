@@ -21,6 +21,7 @@ const FIXTURE_NAME = 'paired-browser-reconcile-failure.html'
 
 type FaultSnapshot = {
   armed: boolean
+  capabilityRejectionArmed: boolean
   createdPageId: string | null
   suppressedPageIds: string[]
 }
@@ -28,6 +29,7 @@ type FaultSnapshot = {
 type FaultWindow = Window & {
   __webRuntimeBrowserCreationFault?: {
     arm: () => void
+    armCapabilityRejection: () => void
     release: () => boolean
     reset: () => void
     snapshot: () => FaultSnapshot
@@ -225,6 +227,92 @@ async function runReconciliationFailureJourney(args: {
   }
 }
 
+async function runCapabilityFailureJourney(args: {
+  hostClient: RuntimeClient
+  offer: RuntimeDesktopPairingOffer
+  repoPath: string
+  testInfo: TestInfo
+  topology: 'headed' | 'headless'
+}): Promise<void> {
+  let client: PairedElectronClient | null = null
+  try {
+    client = await launchPairedElectronClient(
+      args.offer,
+      args.testInfo,
+      `${args.topology} browser capability failure`
+    )
+    await client.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show())
+    const page = client.page
+    const worktreeId = await expect
+      .poll(
+        () =>
+          page.evaluate((repoPath) => {
+            const state = window.__store?.getState()
+            return state?.allWorktrees().find((worktree) => worktree.path === repoPath)?.id ?? null
+          }, args.repoPath),
+        { timeout: 60_000, message: 'paired client never received the host worktree' }
+      )
+      .not.toBeNull()
+      .then(() =>
+        page.evaluate((repoPath) => {
+          const state = window.__store?.getState()
+          return state?.allWorktrees().find((worktree) => worktree.path === repoPath)?.id ?? null
+        }, args.repoPath)
+      )
+    if (!worktreeId) {
+      throw new Error('Paired client worktree disappeared after discovery')
+    }
+    await page.evaluate(
+      ({ environmentId, worktreeId }) => {
+        window.__store?.getState().setActiveWorktree(worktreeId, `runtime:${environmentId}`)
+      },
+      { environmentId: client.environmentId, worktreeId }
+    )
+    await expect
+      .poll(() => readClientTabs(page, worktreeId), {
+        timeout: 60_000,
+        message: 'paired client did not materialize the host terminal'
+      })
+      .toMatchObject({ terminalTabIds: expect.arrayContaining([expect.any(String)]) })
+
+    await openFileExplorer(page)
+    const fixtureRow = page.locator('[data-file-explorer-row]').filter({ hasText: FIXTURE_NAME })
+    await expect(fixtureRow).toBeVisible({ timeout: 30_000 })
+    await fixtureRow.click()
+    const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
+    await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
+    const baselineClient = await readClientTabs(page, worktreeId)
+    const baselineHost = await readHostTabs(args.hostClient, args.repoPath)
+
+    await page.evaluate(() => {
+      const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+      if (!fault) {
+        throw new Error('Browser capability E2E fault seam unavailable')
+      }
+      fault.armCapabilityRejection()
+    })
+    await openPreviewToSide.click()
+
+    await expect(page.getByText('Unable to open this file in Orca Browser.')).toBeVisible({
+      timeout: 30_000
+    })
+    await expect
+      .poll(() => readClientTabs(page, worktreeId), {
+        timeout: 30_000,
+        message: 'client split state did not settle after capability rejection'
+      })
+      .toEqual(baselineClient)
+    expect(await readHostTabs(args.hostClient, args.repoPath)).toEqual(baselineHost)
+    await page.screenshot({
+      path: args.testInfo.outputPath(`${args.topology}-browser-capability-rejected.png`),
+      fullPage: true
+    })
+    await page.evaluate(() => (window as FaultWindow).__webRuntimeBrowserCreationFault?.reset())
+  } finally {
+    await client?.dispose()
+  }
+}
+
 test('rolls back a headed-host browser when client reconciliation times out @headful', async ({
   electronApp,
   orcaPage,
@@ -265,6 +353,57 @@ test('keeps the same browser rollback contract on a headless host', async ({
       title: 'Browser rollback canary'
     })
     await runReconciliationFailureJourney({
+      hostClient: host.client,
+      offer: host.offer,
+      repoPath: testRepoPath,
+      testInfo,
+      topology: 'headless'
+    })
+  } finally {
+    await host.dispose()
+  }
+})
+
+test('cleans up a headed-host preview when capability rejects after preflight @headful', async ({
+  electronApp,
+  orcaPage,
+  testRepoPath
+}, testInfo) => {
+  test.setTimeout(300_000)
+  writeFileSync(
+    path.join(testRepoPath, FIXTURE_NAME),
+    '<!doctype html><html><body><h1>browser capability fault</h1></body></html>\n'
+  )
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  await runCapabilityFailureJourney({
+    hostClient: new RuntimeClient(userDataDir, 5_000),
+    offer,
+    repoPath: testRepoPath,
+    testInfo,
+    topology: 'headed'
+  })
+})
+
+test('keeps capability-rejection cleanup on a headless host', async ({
+  testRepoPath
+}, testInfo) => {
+  test.setTimeout(300_000)
+  writeFileSync(
+    path.join(testRepoPath, FIXTURE_NAME),
+    '<!doctype html><html><body><h1>headless capability fault</h1></body></html>\n'
+  )
+  const host: HeadlessPairedRuntimeHost = await launchHeadlessPairedRuntimeHost()
+  try {
+    await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
+    await host.client.call('terminal.create', {
+      worktree: `path:${testRepoPath}`,
+      title: 'Browser capability cleanup canary'
+    })
+    await runCapabilityFailureJourney({
       hostClient: host.client,
       offer: host.offer,
       repoPath: testRepoPath,
