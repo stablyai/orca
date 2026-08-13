@@ -1,4 +1,5 @@
 import type { Repo, Worktree } from '../../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
@@ -139,6 +140,12 @@ export function isKnownAiVaultResumeWorkspaceTarget(
   }
 
   const workspaceKey = parseWorkspaceKey(workspaceId)
+  if (
+    workspaceId === FLOATING_TERMINAL_WORKTREE_ID ||
+    (workspaceKey?.type === 'worktree' && workspaceKey.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
+  ) {
+    return true
+  }
   if (workspaceKey?.type === 'folder') {
     return state.folderWorkspaces.some(
       (workspace) => workspace.id === workspaceKey.folderWorkspaceId
