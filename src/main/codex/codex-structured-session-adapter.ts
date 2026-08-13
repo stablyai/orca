@@ -264,6 +264,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     this.control.bindPromptItemId(...args)
   dispatch = (...args: Parameters<CodexStructuredSessionControl['dispatch']>) =>
     this.control.dispatch(...args)
+  invalidateEffectAuthorityForTrustedUserTurn = (
+    ...args: Parameters<
+      CodexStructuredSessionControl['invalidateEffectAuthorityForTrustedUserTurn']
+    >
+  ) => this.control.invalidateEffectAuthorityForTrustedUserTurn(...args)
   cancelTurn = (...args: Parameters<CodexStructuredSessionControl['cancelTurn']>) =>
     this.control.cancelTurn(...args)
   answerPrompt = (...args: Parameters<CodexStructuredSessionControl['answerPrompt']>) =>

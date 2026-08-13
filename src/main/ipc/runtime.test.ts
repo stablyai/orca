@@ -118,6 +118,29 @@ describe('registerRuntimeHandlers', () => {
     expect(isTrustedUIRendererMock).toHaveBeenCalledWith(sender)
   })
 
+  it('rejects a local structured user turn from an untrusted renderer without effect authority', async () => {
+    const runtime = {
+      syncWindowGraph: vi.fn(),
+      getStatus: vi.fn(),
+      getRuntimeId: vi.fn().mockReturnValue('runtime-1')
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')![1]
+    const sender = { id: 100 }
+    isTrustedUIRendererMock.mockReturnValue(false)
+
+    await expect(
+      handler(
+        { sender },
+        {
+          method: 'agentSession.send',
+          params: {}
+        }
+      )
+    ).rejects.toThrow('runtime_agent_session_send_requires_trusted_ui_renderer')
+    expect(isTrustedUIRendererMock).toHaveBeenCalledWith(sender)
+  })
+
   it('registers project group runtime RPC methods for local desktop callers', async () => {
     const runtime = {
       syncWindowGraph: vi.fn(),

@@ -59,6 +59,8 @@ import type {
 } from './structured-agent-session-host-types'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
+type AttachResult = Promise<AgentSessionMutationResult<AgentSessionAttachResult>>
+
 export class StructuredAgentSessionHost {
   private readonly sessions = new Map<string, StructuredAgentSessionHostSession>()
   private readonly subscribers = new AgentSessionSubscribers()
@@ -138,10 +140,7 @@ export class StructuredAgentSessionHost {
     })
   }
 
-  attach(
-    caller: StructuredAgentSessionCaller,
-    params: AgentSessionAttachParams
-  ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  attach(caller: StructuredAgentSessionCaller, params: AgentSessionAttachParams): AttachResult {
     const attaching = this.serialize(params.envelope.sessionId, async () => {
       const sessionId = params.envelope.sessionId
       const unreconciled = await this.reconcileLeases(sessionId)
@@ -218,6 +217,10 @@ export class StructuredAgentSessionHost {
     }
   ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
     return this.mutate(caller, params.envelope, sendPlan(params))
+  }
+
+  async invalidateEffectAuthorityForTrustedUserTurn(sourceSessionId: string): Promise<void> {
+    await this.deps.adapter.invalidateEffectAuthorityForTrustedUserTurn?.({ sourceSessionId })
   }
 
   cancel(

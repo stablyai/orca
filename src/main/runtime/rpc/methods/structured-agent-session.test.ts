@@ -90,6 +90,7 @@ function hostStub(): StructuredAgentSessionHost {
       params.beforeRun?.()
       return { ok: true, replayed: false }
     }),
+    invalidateEffectAuthorityForTrustedUserTurn: vi.fn(async () => undefined),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
@@ -255,6 +256,19 @@ describe('capability gating', () => {
   it('serves an in-process caller, which negotiates no capabilities at all', async () => {
     const response = await call('agentSession.send', sendParams())
     expect(response).toMatchObject({ ok: true })
+  })
+
+  it('invalidates writer authority only for a trusted local desktop user turn', async () => {
+    await call('agentSession.send', sendParams(), DESKTOP_CLIENT)
+
+    expect(hostCalls.invalidateEffectAuthorityForTrustedUserTurn).toHaveBeenCalledWith(SESSION)
+    expect(
+      hostCalls.invalidateEffectAuthorityForTrustedUserTurn.mock.invocationCallOrder[0]
+    ).toBeLessThan(hostCalls.send.mock.invocationCallOrder[0])
+
+    await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
+    await call('agentSession.send', sendParams())
+    expect(hostCalls.invalidateEffectAuthorityForTrustedUserTurn).toHaveBeenCalledOnce()
   })
 
   it('reports the surface as absent when no host is installed', async () => {

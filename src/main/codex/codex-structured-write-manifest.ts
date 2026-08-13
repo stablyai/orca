@@ -12,6 +12,11 @@ export type CodexStructuredFileManifestEntry = {
   bytes: number | null
 }
 
+export type CodexStructuredWorktreeSnapshot = {
+  root: string
+  identity: string
+}
+
 const MAX_FILE_CHANGE_COUNT = 128
 const MAX_FILE_CHANGE_PATH_BYTES = 4_096
 const MAX_CHANGE_PLAN_DIFF_BYTES = 1024 * 1024
@@ -19,13 +24,20 @@ const MAX_MANIFEST_FILE_BYTES = 16 * 1024 * 1024
 const MAX_MANIFEST_TOTAL_BYTES = 32 * 1024 * 1024
 
 export async function validateLinkedWorktreeRoot(input: string): Promise<string> {
+  return (await snapshotLinkedWorktreeRoot(input)).root
+}
+
+export async function snapshotLinkedWorktreeRoot(
+  input: string
+): Promise<CodexStructuredWorktreeSnapshot> {
   const root = await realpath(input)
-  if (!(await stat(root)).isDirectory()) {
+  const rootMetadata = await stat(root)
+  if (!rootMetadata.isDirectory()) {
     throw new Error('writable worktree root is not a directory')
   }
   const dotGit = resolve(root, '.git')
-  const marker = await lstat(dotGit)
-  if (!marker.isFile() || marker.isSymbolicLink()) {
+  const markerMetadata = await lstat(dotGit)
+  if (!markerMetadata.isFile() || markerMetadata.isSymbolicLink()) {
     throw new Error('structured writer requires a linked Git worktree, not a canonical clone')
   }
   const line = (await readFile(dotGit, 'utf8')).trim()
@@ -33,7 +45,8 @@ export async function validateLinkedWorktreeRoot(input: string): Promise<string>
     throw new Error('linked worktree .git marker is invalid')
   }
   const gitDir = await realpath(resolve(root, line.slice('gitdir:'.length).trim()))
-  if (!(await stat(gitDir)).isDirectory()) {
+  const gitDirMetadata = await stat(gitDir)
+  if (!gitDirMetadata.isDirectory()) {
     throw new Error('linked worktree Git directory is unavailable')
   }
   if (basename(dirname(gitDir)) !== 'worktrees') {
@@ -47,7 +60,18 @@ export async function validateLinkedWorktreeRoot(input: string): Promise<string>
   if (resolvedBacklink !== (await realpath(dotGit))) {
     throw new Error('linked worktree Git backlink does not name the selected worktree')
   }
-  return root
+  return {
+    root,
+    identity: [
+      rootMetadata.dev,
+      rootMetadata.ino,
+      markerMetadata.dev,
+      markerMetadata.ino,
+      gitDirMetadata.dev,
+      gitDirMetadata.ino,
+      gitDir
+    ].join(':')
+  }
 }
 
 export async function snapshotChanges(
@@ -139,7 +163,22 @@ async function readBoundedRegularFile(
       offset += bytesRead
     }
     const after = await handle.stat()
-    if (after.size !== offset) {
+    const currentPath = await lstat(absolute)
+    const currentCanonicalPath = await realpath(absolute)
+    if (
+      after.dev !== metadata.dev ||
+      after.ino !== metadata.ino ||
+      after.nlink !== 1 ||
+      after.size !== offset ||
+      after.mtimeMs !== metadata.mtimeMs ||
+      after.ctimeMs !== metadata.ctimeMs ||
+      !currentPath.isFile() ||
+      currentPath.isSymbolicLink() ||
+      currentPath.dev !== after.dev ||
+      currentPath.ino !== after.ino ||
+      currentPath.nlink !== 1 ||
+      currentCanonicalPath !== absolute
+    ) {
       throw new Error(`structured writer target changed while being manifested: ${path}`)
     }
     return offset === bytes.byteLength ? bytes : bytes.subarray(0, offset)

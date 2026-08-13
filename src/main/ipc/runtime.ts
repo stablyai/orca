@@ -18,6 +18,10 @@ function requestsEffectAuthority(params: unknown): boolean {
   return typeof params === 'object' && params !== null && 'effectAuthority' in params
 }
 
+function isTrustedLocalUserTurnMethod(method: string): boolean {
+  return method === 'agentSession.send'
+}
+
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<boolean>((resolve) => {
@@ -57,8 +61,14 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       event,
       args: { method: string; params?: unknown }
     ): Promise<RuntimeRpcResponse<unknown>> => {
-      if (requestsEffectAuthority(args.params) && !isTrustedUIRenderer(event.sender)) {
+      const requestsAuthority = requestsEffectAuthority(args.params)
+      const requiresTrustedRenderer = requestsAuthority || isTrustedLocalUserTurnMethod(args.method)
+      const trustedRenderer = requiresTrustedRenderer && isTrustedUIRenderer(event.sender)
+      if (requestsAuthority && !trustedRenderer) {
         throw new Error('runtime_effect_authority_requires_trusted_ui_renderer')
+      }
+      if (isTrustedLocalUserTurnMethod(args.method) && !trustedRenderer) {
+        throw new Error('runtime_agent_session_send_requires_trusted_ui_renderer')
       }
       return (await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {

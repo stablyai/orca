@@ -90,6 +90,14 @@ function assertLocalEffectAuthority(ctx: RpcContext, effectAuthority: unknown): 
   }
 }
 
+function isTrustedLocalUserTurn(ctx: RpcContext): boolean {
+  return (
+    ctx.clientKind === 'runtime' &&
+    ctx.clientId === 'desktop-renderer' &&
+    ctx.connectionId === undefined
+  )
+}
+
 /** Attach is the only way a session comes into being, so it is the only call
  *  that builds the host. Every other method addresses a session that must
  *  already be attached, and correctly reports absent when none is. */
@@ -206,6 +214,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     handler: async (params, ctx) => {
       const host = requireHost(ctx)
       assertLocalEffectAuthority(ctx, params.effectAuthority)
+      if (isTrustedLocalUserTurn(ctx)) {
+        await host.invalidateEffectAuthorityForTrustedUserTurn(params.envelope.sessionId)
+      }
       return host.send(callerFor(ctx), {
         ...params,
         beforeRun: () => assertMobileImageProvenance(ctx, params.body)

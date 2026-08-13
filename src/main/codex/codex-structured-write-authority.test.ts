@@ -3,13 +3,14 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import {
   CodexStructuredWriteAuthority,
@@ -180,6 +181,89 @@ describe('CodexStructuredWriteAuthority', () => {
     await expect(
       gate.reviewServerRequest(SESSION, 'item/fileChange/requestApproval', approval())
     ).resolves.toEqual({ handled: true, result: { decision: 'decline' } })
+  })
+
+  it('keeps an admitted change when item started is replayed before completion', async () => {
+    const fixture = linkedWorktree()
+    const target = join(fixture.root, 'source.txt')
+    writeFileSync(target, 'before\n')
+    const receipts: CodexStructuredWriteReceipt[] = []
+    const gate = authority({ receipts })
+    await issue(gate, fixture.root)
+    gate.observeNotification(SESSION, 'item/started', item('source.txt'))
+    await gate.reviewServerRequest(SESSION, 'item/fileChange/requestApproval', approval())
+
+    gate.observeNotification(SESSION, 'item/started', item('source.txt'))
+    writeFileSync(target, 'after\n')
+    gate.observeNotification(SESSION, 'item/completed', {
+      ...item('source.txt'),
+      item: { ...(item('source.txt').item as object), status: 'completed' }
+    })
+    await gate.flushReceipts()
+
+    expect(receipts).toHaveLength(1)
+    expect(receipts[0]).toMatchObject({ toolUseId: 'item-1', outcome: 'completed' })
+  })
+
+  it('revokes admission when the same item id is reused for another change plan', async () => {
+    const fixture = linkedWorktree()
+    const gate = authority({})
+    await issue(gate, fixture.root)
+    gate.observeNotification(SESSION, 'item/started', item('first.txt'))
+    gate.observeNotification(SESSION, 'item/started', item('second.txt'))
+
+    await expect(
+      gate.reviewServerRequest(SESSION, 'item/fileChange/requestApproval', approval())
+    ).resolves.toEqual({ handled: true, result: { decision: 'decline' } })
+    expect(gate.activeTurn(SESSION)).toBeNull()
+  })
+
+  it('atomically accepts only one of two concurrent approvals', async () => {
+    const fixture = linkedWorktree()
+    const consumeLease = vi.fn(async () => {})
+    const gate = new CodexStructuredWriteAuthority({
+      authorizeTurn: ({ writableRoot }) => ({
+        requestReceiptId: 'host-request-1',
+        writableRoot,
+        capabilityHandle: 'host-handle-1'
+      }),
+      consumeLease,
+      onReceipt: () => {}
+    })
+    await issue(gate, fixture.root)
+    gate.observeNotification(SESSION, 'item/started', item('source.txt'))
+
+    const decisions = await Promise.all([
+      gate.reviewServerRequest(SESSION, 'item/fileChange/requestApproval', approval()),
+      gate.reviewServerRequest(SESSION, 'item/fileChange/requestApproval', approval())
+    ])
+
+    expect(decisions).toEqual([
+      { handled: true, result: { decision: 'accept' } },
+      { handled: true, result: { decision: 'decline' } }
+    ])
+    expect(consumeLease).toHaveBeenCalledOnce()
+  })
+
+  it('fails an admitted receipt when its item id is replayed with another plan', async () => {
+    const fixture = linkedWorktree()
+    const receipts: CodexStructuredWriteReceipt[] = []
+    const gate = authority({ receipts })
+    await issue(gate, fixture.root)
+    gate.observeNotification(SESSION, 'item/started', item('first.txt'))
+    await gate.reviewServerRequest(SESSION, 'item/fileChange/requestApproval', approval())
+
+    gate.observeNotification(SESSION, 'item/started', item('second.txt'))
+    await gate.flushReceipts()
+    expect(receipts).toHaveLength(1)
+    expect(receipts[0]).toMatchObject({ toolUseId: 'item-1', outcome: 'failed' })
+
+    gate.observeNotification(SESSION, 'item/completed', {
+      ...item('first.txt'),
+      item: { ...(item('first.txt').item as object), status: 'completed' }
+    })
+    await gate.flushReceipts()
+    expect(receipts).toHaveLength(1)
   })
 
   it('revokes the old lease when a new trusted user turn starts', async () => {
@@ -358,6 +442,29 @@ describe('CodexStructuredWriteAuthority', () => {
     ).resolves.toEqual({ handled: true, result: { decision: 'accept' } })
   })
 
+  it('revokes the old writer before a replacement worktree is validated', async () => {
+    const fixture = linkedWorktree()
+    const gate = authority({})
+    await issue(gate, fixture.root)
+    expect(gate.activeTurn(SESSION)).toEqual({ threadId: THREAD, turnId: TURN })
+
+    const invalidReplacement = join(fixture.root, 'canonical')
+    mkdirSync(join(invalidReplacement, '.git'), { recursive: true })
+    await expect(gate.bindSession(SESSION, invalidReplacement)).rejects.toThrow(
+      'linked Git worktree'
+    )
+
+    expect(gate.activeTurn(SESSION)).toBeNull()
+    await expect(
+      gate.openTurn({
+        sessionId: SESSION,
+        clientMessageId: 'client-after-failed-rebind',
+        body: BODY,
+        fence: 8
+      })
+    ).rejects.toThrow('no host-selected writable worktree')
+  })
+
   it('keeps enforcement evidence after a new turn or process exit revokes mutation', async () => {
     const fixture = linkedWorktree()
     const receipts: CodexStructuredWriteReceipt[] = []
@@ -492,6 +599,24 @@ describe('CodexStructuredWriteAuthority', () => {
     const marker = readFileSync(join(fixture.root, '.git'), 'utf8').trim()
     const gitDir = marker.slice('gitdir:'.length).trim()
     writeFileSync(join(gitDir, 'gitdir'), `${join(fixture.root, 'different', '.git')}\n`)
+
+    await expect(
+      gate.reviewServerRequest(SESSION, 'item/fileChange/requestApproval', approval())
+    ).resolves.toEqual({ handled: true, result: { decision: 'decline' } })
+  })
+
+  it('rejects a worktree root replaced after the host bound the session', async () => {
+    const fixture = linkedWorktree()
+    const gate = authority({})
+    await issue(gate, fixture.root)
+    gate.observeNotification(SESSION, 'item/started', item('new.txt'))
+    const displaced = join(fixture.root, '..', 'displaced-worktree')
+    const marker = readFileSync(join(fixture.root, '.git'), 'utf8').trim()
+    const gitDir = marker.slice('gitdir:'.length).trim()
+    renameSync(fixture.root, displaced)
+    mkdirSync(fixture.root)
+    writeFileSync(join(fixture.root, '.git'), `gitdir: ${gitDir}\n`)
+    writeFileSync(join(gitDir, 'gitdir'), `${join(fixture.root, '.git')}\n`)
 
     await expect(
       gate.reviewServerRequest(SESSION, 'item/fileChange/requestApproval', approval())

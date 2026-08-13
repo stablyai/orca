@@ -83,6 +83,8 @@ export type StructuredAgentSessionAdapter = {
       requestReceiptId: string
     }
   }): Promise<AgentSessionDispatchOutcome>
+  /** A host-authenticated local user turn supersedes mutation authority globally. */
+  invalidateEffectAuthorityForTrustedUserTurn?(input: { sourceSessionId: string }): Promise<void>
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
    *  a turn the client never asked to stop. */
   cancelTurn(input: {

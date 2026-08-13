@@ -16,6 +16,7 @@ import {
   applyCodexStructuredSessionOption,
   readLiveCodexSessionOptions
 } from './codex-structured-session-options'
+import { invalidateTrustedUserTurnWriters } from './codex-structured-user-turn-invalidation'
 import type {
   CodexSession,
   CodexStructuredSessionAdapterDeps,
@@ -167,6 +168,9 @@ export class CodexStructuredSessionControl {
     }
     return outcome
   }
+
+  invalidateEffectAuthorityForTrustedUserTurn = (input: { sourceSessionId: string }) =>
+    invalidateTrustedUserTurnWriters(input, this.sessions, this.deps, this.terminateSession)
 
   cancelTurn = async (input: {
     sessionId: string

@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import { observeStructuredFileChangeStart } from './codex-structured-file-change-start'
 import { admitStructuredFileChange } from './codex-structured-write-admission'
-import { parseFileChanges, validateLinkedWorktreeRoot } from './codex-structured-write-manifest'
-import { digestRequest, digestStructuredValue } from './codex-structured-write-digest'
+import { digestRequest } from './codex-structured-write-digest'
+import { CodexStructuredWriteSessionRoots } from './codex-structured-write-session-roots'
 import {
   LOCAL_STRUCTURED_WRITE_EFFECT,
   type CodexObservedFileChange,
@@ -33,7 +34,7 @@ const FILE_CHANGE_APPROVAL = 'item/fileChange/requestApproval'
 const PERMISSIONS_APPROVAL = 'item/permissions/requestApproval'
 
 export class CodexStructuredWriteAuthority {
-  private readonly roots = new Map<string, string>()
+  private readonly sessionRoots = new CodexStructuredWriteSessionRoots()
   private readonly epochs = new Map<string, number>()
   private readonly leases = new Map<string, CodexStructuredWriteLease>()
   private readonly fileChanges = new Map<string, CodexObservedFileChange>()
@@ -49,10 +50,7 @@ export class CodexStructuredWriteAuthority {
   }
 
   async bindSession(sessionId: string, worktreeRoot: string): Promise<void> {
-    if (this.roots.has(sessionId)) {
-      this.epochs.set(sessionId, (this.epochs.get(sessionId) ?? 0) + 1)
-    }
-    this.roots.set(sessionId, await validateLinkedWorktreeRoot(worktreeRoot))
+    await this.sessionRoots.bind(sessionId, worktreeRoot, () => this.revokeSession(sessionId))
     this.revokeTurn(sessionId)
   }
 
@@ -85,7 +83,7 @@ export class CodexStructuredWriteAuthority {
     }
     if (
       this.epochs.get(input.sessionId) !== turnEpoch ||
-      this.roots.get(input.sessionId) !== worktreeRoot
+      !this.sessionRoots.isBoundTo(input.sessionId, worktreeRoot)
     ) {
       return null
     }
@@ -100,7 +98,7 @@ export class CodexStructuredWriteAuthority {
     }
     if (
       this.epochs.get(input.sessionId) !== turnEpoch ||
-      this.roots.get(input.sessionId) !== worktreeRoot
+      !this.sessionRoots.isBoundTo(input.sessionId, worktreeRoot)
     ) {
       return null
     }
@@ -141,27 +139,18 @@ export class CodexStructuredWriteAuthority {
       return
     }
     if (method === 'item/started') {
-      const record = asRecord(params)
-      const item = asRecord(record.item)
-      if (item.type !== 'fileChange' || typeof item.id !== 'string') {
-        return
-      }
-      const threadId = readString(record, 'threadId')
-      const turnId = readString(record, 'turnId')
-      const changes = parseFileChanges(item.changes)
-      if (!threadId || !turnId || !changes) {
-        return
-      }
-      this.fileChanges.set(structuredWriteItemKey(sessionId, item.id), {
+      const conflict = observeStructuredFileChangeStart({
         sessionId,
-        threadId,
-        turnId,
-        itemId: item.id,
-        changes,
-        changePlanDigest: digestStructuredValue(changes),
-        before: null,
-        admission: null
+        params,
+        lease: this.leases.get(sessionId),
+        fileChanges: this.fileChanges
       })
+      if (conflict?.admission && conflict.before) {
+        this.failAdmittedChanges(sessionId)
+      }
+      if (conflict) {
+        this.revokeTurn(sessionId)
+      }
       return
     }
     if (method === 'item/completed') {
@@ -212,6 +201,7 @@ export class CodexStructuredWriteAuthority {
       threadId,
       turnId,
       grantRoot: readString(request, 'grantRoot'),
+      expectedWorktreeIdentity: this.sessionRoots.requireIdentity(sessionId),
       lease,
       observed,
       authorization: this.authorization,
@@ -223,11 +213,16 @@ export class CodexStructuredWriteAuthority {
   revokeSession(sessionId: string): void {
     this.failAdmittedChanges(sessionId)
     this.revokeTurn(sessionId)
-    this.roots.delete(sessionId)
+    this.sessionRoots.delete(sessionId)
     this.epochs.set(sessionId, (this.epochs.get(sessionId) ?? 0) + 1)
   }
 
   revokePendingTurn(sessionId: string): void {
+    this.revokeTurn(sessionId)
+  }
+
+  invalidateTurnEpoch(sessionId: string): void {
+    this.epochs.set(sessionId, (this.epochs.get(sessionId) ?? 0) + 1)
     this.revokeTurn(sessionId)
   }
 
@@ -271,11 +266,7 @@ export class CodexStructuredWriteAuthority {
   }
 
   private requireRoot(sessionId: string): string {
-    const root = this.roots.get(sessionId)
-    if (!root) {
-      throw new Error(`no host-selected writable worktree for ${sessionId}`)
-    }
-    return root
+    return this.sessionRoots.requireRoot(sessionId)
   }
 
   private revokeTurn(sessionId: string): void {

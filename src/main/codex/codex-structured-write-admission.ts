@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises'
 import { sha256 } from './codex-structured-write-digest'
-import { snapshotChanges, validateLinkedWorktreeRoot } from './codex-structured-write-manifest'
+import { snapshotChanges, snapshotLinkedWorktreeRoot } from './codex-structured-write-manifest'
 import {
   LOCAL_STRUCTURED_WRITE_EFFECT,
   type CodexObservedFileChange,
@@ -15,6 +15,7 @@ export async function admitStructuredFileChange(input: {
   threadId: string
   turnId: string
   grantRoot: string | null
+  expectedWorktreeIdentity: string
   lease: CodexStructuredWriteLease
   observed: CodexObservedFileChange
   authorization: CodexStructuredWriteAuthorization
@@ -24,14 +25,22 @@ export async function admitStructuredFileChange(input: {
   const { lease, observed } = input
   lease.state = 'reserved'
   try {
-    if ((await validateLinkedWorktreeRoot(lease.worktreeRoot)) !== lease.worktreeRoot) {
+    const initialWorktree = await snapshotLinkedWorktreeRoot(lease.worktreeRoot)
+    if (
+      initialWorktree.root !== lease.worktreeRoot ||
+      initialWorktree.identity !== input.expectedWorktreeIdentity
+    ) {
       throw new Error('host-selected worktree changed before file admission')
     }
     if (input.grantRoot && (await realpath(input.grantRoot)) !== lease.worktreeRoot) {
       throw new Error('file change requested a different grant root')
     }
     observed.before = await snapshotChanges(lease.worktreeRoot, observed.changes)
-    if ((await validateLinkedWorktreeRoot(lease.worktreeRoot)) !== lease.worktreeRoot) {
+    const admittedWorktree = await snapshotLinkedWorktreeRoot(lease.worktreeRoot)
+    if (
+      admittedWorktree.root !== lease.worktreeRoot ||
+      admittedWorktree.identity !== initialWorktree.identity
+    ) {
       throw new Error('host-selected worktree changed during file admission')
     }
     if (!input.isCurrent()) {
