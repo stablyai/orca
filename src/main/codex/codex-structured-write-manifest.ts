@@ -120,6 +120,9 @@ async function readBoundedRegularFile(
     if (!metadata.isFile()) {
       throw new Error(`structured writer target is not a regular file: ${path}`)
     }
+    if (metadata.nlink !== 1) {
+      throw new Error(`structured writer target has multiple hard links: ${path}`)
+    }
     if (metadata.size > MAX_MANIFEST_FILE_BYTES) {
       throw new Error(`structured writer target is too large to manifest: ${path}`)
     }

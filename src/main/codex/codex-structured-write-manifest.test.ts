@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { linkSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -47,6 +47,19 @@ describe('Codex structured write manifest bounds', () => {
         { path: 'source/large.bin', diff: '@@ -1 +1 @@', kind: { type: 'update' } }
       ])
     ).rejects.toThrow('too large to manifest')
+  })
+
+  it('rejects a hard link whose inode can also be mutated outside the bounded root', async () => {
+    const root = fixtureRoot()
+    const outside = join(root, '..', 'outside.txt')
+    writeFileSync(outside, 'outside\n')
+    linkSync(outside, join(root, 'source', 'linked.txt'))
+
+    await expect(
+      snapshotChanges(root, [
+        { path: 'source/linked.txt', diff: '@@ -1 +1 @@', kind: { type: 'update' } }
+      ])
+    ).rejects.toThrow('multiple hard links')
   })
 
   it('bounds aggregate bytes across an otherwise valid multi-file manifest', async () => {
