@@ -274,6 +274,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
+    sourceControlCombineUntrackedChanges: false,
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,

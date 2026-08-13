@@ -2975,6 +2975,8 @@ export type GlobalSettings = {
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */
   sourceControlGroupOrder: SourceControlGroupOrder
+  /** Merges Untracked Files into the Changes section. Per-user. */
+  sourceControlCombineUntrackedChanges: boolean
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */

@@ -34,6 +34,20 @@ export function resolveSourceControlGroupOrder(
   return ORDER_BY_PRESET[normalizeSourceControlGroupOrder(value)]
 }
 
+export function mergeUntrackedIntoChanges(
+  groups: SourceControlEntryGroups,
+  combine: boolean
+): SourceControlEntryGroups {
+  if (!combine || groups.untracked.length === 0) {
+    return groups
+  }
+  return {
+    staged: groups.staged,
+    unstaged: [...groups.unstaged, ...groups.untracked],
+    untracked: []
+  }
+}
+
 export function isPinnedConflictEntry(entry: GitStatusEntry): boolean {
   return entry.conflictStatus === 'unresolved' || entry.conflictStatus === 'resolved_locally'
 }

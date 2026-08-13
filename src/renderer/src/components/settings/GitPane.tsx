@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings, SourceControlGroupOrder } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
-import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../../shared/source-control-group-order'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
@@ -15,13 +14,20 @@ import {
   CompareAgainstUpstreamSetting,
   compareAgainstUpstreamMatchesSearch
 } from './CompareAgainstUpstreamSetting'
+import {
+  CombineUntrackedWithChangesSetting,
+  combineUntrackedChangesMatchesSearch
+} from './CombineUntrackedWithChangesSetting'
+import {
+  SourceControlGroupOrderSetting,
+  sourceControlGroupOrderMatchesSearch
+} from './SourceControlGroupOrderSetting'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
 } from './keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
 export { getGitPaneSearchEntries }
 
@@ -41,15 +47,6 @@ const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
   'safely',
   'worktree'
 ]
-const SOURCE_CONTROL_GROUP_ORDER_KEYWORDS = [
-  'group order',
-  'changes first',
-  'staged first',
-  'untracked first',
-  'source control',
-  'git changes'
-]
-
 export function shouldShowAutoRenameBranchSetting(
   searchQuery: string,
   hasUnsavedBranchPromptChanges: boolean
@@ -69,68 +66,6 @@ type GitPaneProps = {
   onBranchPromptDirtyChange?: (dirty: boolean) => void
   branchPromptDiscardSignal?: number
   settingsSearchQuery?: string
-}
-
-export function SourceControlGroupOrderSetting({
-  settings,
-  updateSettings
-}: {
-  settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-}): React.JSX.Element {
-  const value = settings.sourceControlGroupOrder ?? DEFAULT_SOURCE_CONTROL_GROUP_ORDER
-  const title = translate(
-    'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-    'Source Control Group Order'
-  )
-  const description = translate(
-    'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
-    'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
-  )
-
-  return (
-    <SearchableSetting
-      title={title}
-      description={description}
-      keywords={SOURCE_CONTROL_GROUP_ORDER_KEYWORDS}
-      className="max-w-none"
-    >
-      <SettingsRow
-        label={title}
-        description={description}
-        alignTop
-        control={
-          <SettingsSegmentedControl<SourceControlGroupOrder>
-            value={value}
-            onChange={(nextValue) => {
-              if (nextValue !== value) {
-                void updateSettings({ sourceControlGroupOrder: nextValue })
-              }
-            }}
-            ariaLabel={title}
-            size="sm"
-            options={[
-              {
-                value: 'changes-first',
-                label: translate('auto.components.settings.GitPane.changesFirst', 'Changes first')
-              },
-              {
-                value: 'staged-first',
-                label: translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
-              },
-              {
-                value: 'untracked-first',
-                label: translate(
-                  'auto.components.settings.GitPane.untrackedFirst',
-                  'Untracked first'
-                )
-              }
-            ]}
-          />
-        }
-      />
-    </SearchableSetting>
-  )
 }
 
 export function GitPane({
@@ -287,19 +222,16 @@ export function GitPane({
         />
       </SearchableSetting>
     ) : null,
-    matchesSettingsSearch(searchQuery, {
-      title: translate(
-        'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-        'Source Control Group Order'
-      ),
-      description: translate(
-        'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
-        'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
-      ),
-      keywords: SOURCE_CONTROL_GROUP_ORDER_KEYWORDS
-    }) ? (
+    sourceControlGroupOrderMatchesSearch(searchQuery) ? (
       <SourceControlGroupOrderSetting
         key="source-control-group-order"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
+    combineUntrackedChangesMatchesSearch(searchQuery) ? (
+      <CombineUntrackedWithChangesSetting
+        key="combine-untracked-changes"
         settings={settings}
         updateSettings={updateSettings}
       />

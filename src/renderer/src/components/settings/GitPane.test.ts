@@ -6,16 +6,12 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { shouldOpenAutoRenameBranchAdvanced } from './AutoRenameBranchFromWorkSetting'
-import {
-  GitPane,
-  SourceControlGroupOrderSetting,
-  getGitPaneSearchEntries,
-  shouldShowAutoRenameBranchSetting
-} from './GitPane'
+import { GitPane, getGitPaneSearchEntries, shouldShowAutoRenameBranchSetting } from './GitPane'
 import { TooltipProvider } from '../ui/tooltip'
 import { matchesSettingsSearch } from './settings-search'
 import { SettingsSegmentedControl } from './SettingsFormControls'
 import { CompareAgainstUpstreamSetting } from './CompareAgainstUpstreamSetting'
+import { SourceControlGroupOrderSetting } from './SourceControlGroupOrderSetting'
 
 type ReactElementLike = {
   type: unknown

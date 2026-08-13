@@ -4,6 +4,7 @@ import {
   buildSourceControlDisplaySections,
   getConflictReviewEntries,
   getSourceControlSectionViewAction,
+  mergeUntrackedIntoChanges,
   resolveSourceControlGroupOrder,
   splitPinnedSourceControlConflicts,
   type SourceControlEntryGroups
@@ -42,6 +43,42 @@ describe('resolveSourceControlGroupOrder', () => {
       'unstaged',
       'staged'
     ])
+  })
+})
+
+describe('mergeUntrackedIntoChanges', () => {
+  it('leaves groups untouched when combine is off', () => {
+    const input = groups({
+      unstaged: [entry({ area: 'unstaged', path: 'changed.ts' })],
+      untracked: [entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })]
+    })
+    expect(mergeUntrackedIntoChanges(input, false)).toBe(input)
+  })
+
+  it('folds untracked entries into unstaged and empties untracked when combine is on', () => {
+    const unstagedEntry = entry({ area: 'unstaged', path: 'changed.ts' })
+    const untrackedEntry = entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })
+    const merged = mergeUntrackedIntoChanges(
+      groups({ unstaged: [unstagedEntry], untracked: [untrackedEntry] }),
+      true
+    )
+    expect(merged.unstaged).toEqual([unstagedEntry, untrackedEntry])
+    expect(merged.untracked).toEqual([])
+  })
+
+  it('produces a single Changes section with mixed-area items via buildSourceControlDisplaySections', () => {
+    const unstagedEntry = entry({ area: 'unstaged', path: 'changed.ts' })
+    const untrackedEntry = entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })
+    const merged = mergeUntrackedIntoChanges(
+      groups({ unstaged: [unstagedEntry], untracked: [untrackedEntry] }),
+      true
+    )
+    const sections = buildSourceControlDisplaySections(
+      merged,
+      resolveSourceControlGroupOrder(undefined)
+    )
+    expect(sections.map((section) => section.id)).toEqual(['unstaged'])
+    expect(sections[0]?.items).toEqual([unstagedEntry, untrackedEntry])
   })
 })
 
