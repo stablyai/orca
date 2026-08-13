@@ -858,14 +858,14 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it.each<[string, Parameters<typeof createHarness>[0], unknown]>([
     ['omp kind without willContinue', { kind: 'omp' }, undefined],
+    ['omp kind with willContinue false', { kind: 'omp' }, { willContinue: false }],
     ['runtime-detected omp', { kind: 'pi', argv: ['node', '/usr/bin/omp'] }, undefined]
   ])(
     'posts a terminal agent_end for %s while isIdle stays false',
     async (_label, harnessArgs, event) => {
       // Why: OMP signals its settle via willContinue; isIdle can stay false through completion.
       const harness = createHarness(harnessArgs)
-      const context = { isIdle: vi.fn(() => false) }
-      await harness.callHook('agent_end', event, context)
+      await harness.callHook('agent_end', event, { isIdle: () => false })
       await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
       expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
         hook_event_name: 'agent_end'
@@ -877,15 +877,14 @@ describe('getPiAgentStatusExtensionSource', () => {
     vi.useFakeTimers()
     try {
       const harness = createHarness({ kind: 'omp' })
-      const context = { isIdle: vi.fn(() => false) }
-
-      await harness.callHook('agent_end', { willContinue: true }, context)
+      await harness.callHook('agent_end', { willContinue: true }, { isIdle: () => false })
       await vi.advanceTimersByTimeAsync(2_000)
       expect(vi.getTimerCount()).toBe(0)
+      expect(harness.fetchMock).not.toHaveBeenCalled()
 
       // The continuation's next loop re-arms working via agent_start; its terminal settle posts once.
       await harness.callHook('agent_start')
-      await harness.callHook('agent_end', { willContinue: false }, context)
+      await harness.callHook('agent_end', { willContinue: false }, { isIdle: () => false })
       await vi.advanceTimersByTimeAsync(0)
       const events = harness.fetchMock.mock.calls.map(
         (call) => JSON.parse(String(call[1]?.body)).payload.hook_event_name
