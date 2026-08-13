@@ -40,7 +40,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const showCli = foundation.cardProps.includes('cli')
   const showComment = foundation.cardProps.includes('comment')
   const showPorts = foundation.cardProps.includes('ports')
-  const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus : showPR
+  const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus || showPR : showPR
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
