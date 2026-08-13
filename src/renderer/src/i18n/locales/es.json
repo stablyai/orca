@@ -5486,7 +5486,9 @@
           "showPinnedWorktreesInGroups": {
             "title": "Mostrar también los worktrees fijados en sus listas originales",
             "description": "Los worktrees fijados permanecen en Fijados y también aparecen en Todos, Proyecto, Estado y PR."
-          }
+          },
+          "bff865af14": "Grosor de fuente del IDE",
+          "bec3447ccd": "Ajusta el grosor base del texto de la interfaz."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -7791,7 +7793,12 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Porcentajes de uso",
-            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
+            "0844df8fee": "grosor",
+            "1a0dc227b5": "fino",
+            "e0007a5bca": "negrita",
+            "bff865af14": "Grosor de fuente del IDE",
+            "bec3447ccd": "Ajusta el grosor base del texto de la interfaz."
           }
         },
         "auto": {

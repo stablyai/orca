@@ -10,6 +10,7 @@ import {
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
 import { buildAppFontFamily } from './lib/app-font-family'
+import { normalizeAppFontWeight } from '../../shared/app-fonts'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
@@ -28,6 +29,10 @@ function applyPopoutAppearance(settings: GlobalSettings | null): void {
   document.documentElement.style.setProperty(
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)
+  )
+  document.documentElement.style.setProperty(
+    '--app-font-weight',
+    String(normalizeAppFontWeight(settings?.appFontWeight))
   )
 }
 

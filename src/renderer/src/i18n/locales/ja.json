@@ -5471,7 +5471,9 @@
           "showPinnedWorktreesInGroups": {
             "title": "ピン留めしたワークツリーを元のリストにも表示",
             "description": "ピン留めしたワークツリーを Pinned に残したまま、すべて、プロジェクト、ステータス、PR にも表示します。"
-          }
+          },
+          "bff865af14": "IDE フォントの太さ",
+          "bec3447ccd": "インターフェイステキストの基本の太さを調整します。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -7813,7 +7815,12 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "使用率",
-            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。",
+            "0844df8fee": "太さ",
+            "1a0dc227b5": "細い",
+            "e0007a5bca": "太い",
+            "bff865af14": "IDE フォントの太さ",
+            "bec3447ccd": "インターフェイステキストの基本の太さを調整します。"
           }
         },
         "auto": {

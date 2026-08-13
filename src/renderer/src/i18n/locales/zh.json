@@ -5483,7 +5483,9 @@
           "showPinnedWorktreesInGroups": {
             "title": "也在原来的列表中显示已固定的工作树",
             "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"
-          }
+          },
+          "bff865af14": "IDE 字体粗细",
+          "bec3447ccd": "调整界面文本的基础粗细。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -7788,7 +7790,12 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "用量百分比",
-            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。"
+            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。",
+            "0844df8fee": "粗细",
+            "1a0dc227b5": "细",
+            "e0007a5bca": "粗",
+            "bff865af14": "IDE 字体粗细",
+            "bec3447ccd": "调整界面文本的基础粗细。"
           }
         },
         "auto": {

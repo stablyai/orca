@@ -112,6 +112,25 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
       ...translateSearchKeyword('auto.components.settings.appearance.search.36e006efc1', 'app'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.2f12e1aa3a', 'ui')
     ]
+  },
+  {
+    title: translate('auto.components.settings.appearance.search.bff865af14', 'IDE Font Weight'),
+    description: translate(
+      'auto.components.settings.appearance.search.bec3447ccd',
+      'Adjust the base weight of interface text.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.appearance.search.24094af355', 'font'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.0844df8fee', 'weight'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.1a0dc227b5', 'thin'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.e0007a5bca', 'bold'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.8b36fb3f64',
+        'typography'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.fab91464dd', 'ide'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.2f12e1aa3a', 'ui')
+    ]
   }
 ])
 

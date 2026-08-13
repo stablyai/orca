@@ -125,6 +125,7 @@
 
 :root {
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --app-font-weight: 400;
   --font-sans: var(--app-font-family);
   --font-mono:
     'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
@@ -460,6 +461,7 @@
       'Segoe UI',
       sans-serif
     );
+    font-weight: var(--app-font-weight, 400);
     letter-spacing: 0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

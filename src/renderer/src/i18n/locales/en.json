@@ -5789,7 +5789,9 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
-          }
+          },
+          "bff865af14": "IDE Font Weight",
+          "bec3447ccd": "Adjust the base weight of interface text."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -8194,7 +8196,12 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "0844df8fee": "weight",
+            "1a0dc227b5": "thin",
+            "e0007a5bca": "bold",
+            "bff865af14": "IDE Font Weight",
+            "bec3447ccd": "Adjust the base weight of interface text."
           }
         },
         "auto": {

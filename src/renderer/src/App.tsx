@@ -32,6 +32,7 @@ import {
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import { normalizeAppFontWeight } from '../../shared/app-fonts'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -1495,7 +1496,11 @@ function App(): React.JSX.Element {
       '--app-font-family',
       buildAppFontFamily(settings?.appFontFamily)
     )
-  }, [settings?.appFontFamily])
+    document.documentElement.style.setProperty(
+      '--app-font-weight',
+      String(normalizeAppFontWeight(settings?.appFontWeight))
+    )
+  }, [settings?.appFontFamily, settings?.appFontWeight])
 
   // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {

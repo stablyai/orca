@@ -304,6 +304,52 @@ describe('AppearancePane', () => {
     expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'zh' })
   })
 
+  it('commits a normalized app font weight from the interface typography setting', async () => {
+    mocks.state.settingsSearchQuery = 'IDE Font Weight'
+    const updateSettings = vi.fn()
+
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const weightInput = container.querySelector<HTMLInputElement>('input[type="number"]')
+    if (!weightInput) {
+      throw new Error('IDE Font Weight input was not rendered')
+    }
+    expect(weightInput.value).toBe('400')
+
+    await act(async () => {
+      // Why: React reads controlled-input changes through the native value setter.
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setValue?.call(weightInput, '350')
+      weightInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      weightInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ appFontWeight: 350 })
+  })
+
+  it('clamps out-of-range app font weights before persisting', async () => {
+    mocks.state.settingsSearchQuery = 'IDE Font Weight'
+    const updateSettings = vi.fn()
+
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const weightInput = container.querySelector<HTMLInputElement>('input[type="number"]')
+    if (!weightInput) {
+      throw new Error('IDE Font Weight input was not rendered')
+    }
+
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setValue?.call(weightInput, '1200')
+      weightInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      weightInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ appFontWeight: 900 })
+  })
+
   it('includes the selected language in the collapsed Interface summary', async () => {
     mocks.state.settingsSearchQuery = ''
     const settings = {

@@ -10,11 +10,19 @@ import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutHintList } from './AppearanceShortcutHintList'
 import {
   FontAutocomplete,
+  NumberField,
   SettingsRow,
   SettingsSegmentedControl,
   SettingsSwitchRow
 } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
+import {
+  APP_FONT_WEIGHT_MAX,
+  APP_FONT_WEIGHT_MIN,
+  APP_FONT_WEIGHT_STEP,
+  DEFAULT_APP_FONT_WEIGHT,
+  normalizeAppFontWeight
+} from '../../../../shared/app-fonts'
 import {
   getLanguageEntries,
   getMenuBarIconEntries,
@@ -67,6 +75,7 @@ export function AppearanceInterfaceSection({
   const themeLabel = translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
+  const typographyWeightEntry = getTypographyEntries()[1]
   const zoomEntry = getZoomEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
@@ -192,6 +201,28 @@ export function AppearanceInterfaceSection({
               }
             />
           }
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate('auto.components.settings.AppearancePane.bff865af14', 'IDE Font Weight')}
+        description={typographyWeightEntry?.description}
+        keywords={typographyWeightEntry?.keywords ?? ['font', 'weight', 'typography']}
+        forceVisible={forceVisiblePrimary}
+      >
+        <NumberField
+          label={translate('auto.components.settings.AppearancePane.bff865af14', 'IDE Font Weight')}
+          description={translate(
+            'auto.components.settings.AppearancePane.bec3447ccd',
+            'Adjust the base weight of interface text.'
+          )}
+          value={normalizeAppFontWeight(settings.appFontWeight)}
+          defaultValue={DEFAULT_APP_FONT_WEIGHT}
+          min={APP_FONT_WEIGHT_MIN}
+          max={APP_FONT_WEIGHT_MAX}
+          step={APP_FONT_WEIGHT_STEP}
+          suffix={`${APP_FONT_WEIGHT_MIN}-${APP_FONT_WEIGHT_MAX}`}
+          onChange={(value) => updateSettings({ appFontWeight: normalizeAppFontWeight(value) })}
         />
       </SearchableSetting>
 
