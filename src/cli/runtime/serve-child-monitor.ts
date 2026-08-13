@@ -124,6 +124,12 @@ export function waitForForegroundServeChild(
         scheduleHealthCheck(runtimeId)
         return
       }
+      if (!health.healthy && health.reason === 'graph_not_ready') {
+        // A promoted serve may be windowless while its runtime remains healthy.
+        consecutiveHealthFailures = 0
+        scheduleHealthCheck(runtimeId)
+        return
+      }
       consecutiveHealthFailures += 1
       if (consecutiveHealthFailures < options.healthFailureLimit) {
         scheduleHealthCheck(runtimeId)

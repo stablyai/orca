@@ -64,7 +64,7 @@ describe('foreground serve crash supervisor', () => {
     const healthProbe = vi
       .fn()
       .mockResolvedValueOnce({ healthy: true, runtimeId: 'runtime-ready' })
-      .mockResolvedValue({ healthy: false, reason: 'graph_not_ready' })
+      .mockResolvedValue({ healthy: false, reason: 'runtime_unreachable' })
     try {
       const result = waitForForegroundServeChild(child as never, null, {
         healthProbe,
@@ -106,29 +106,24 @@ describe('foreground serve crash supervisor', () => {
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
   })
 
-  it('restarts after renderer graph health is lost without touching daemon sessions', async () => {
-    const first = new FakeChildProcess(4101)
-    const replacement = new FakeChildProcess(4102)
+  it('keeps a reachable main alive while its promoted desktop is windowless', async () => {
+    const child = new FakeChildProcess(4101)
     const healthProbe = vi
       .fn()
       .mockResolvedValueOnce({ healthy: true, runtimeId: 'runtime-ready' })
-      .mockResolvedValueOnce({ healthy: false, reason: 'graph_not_ready' })
-      .mockResolvedValue({ healthy: true, runtimeId: 'runtime-ready' })
-    const args = supervisorArgs(first, {
+      .mockResolvedValue({ healthy: false, reason: 'graph_not_ready' })
+    const args = supervisorArgs(child, {
       healthProbe,
       healthCheckIntervalMs: 1,
-      healthFailureLimit: 1
+      healthFailureLimit: 3
     })
-    args.spawnChildMock.mockReturnValue(replacement as never)
 
     const result = superviseForegroundServe(args)
-    first.emit('message', readyMessage)
-    await vi.waitFor(() => expect(first.kill).toHaveBeenCalledWith('SIGTERM'))
-    first.emit('exit', 0, null)
-    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledOnce())
-    replacement.emit('message', readyMessage)
-    await vi.waitFor(() => expect(healthProbe).toHaveBeenCalledTimes(3))
-    replacement.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
+    child.emit('message', readyMessage)
+    await vi.waitFor(() => expect(healthProbe.mock.calls.length).toBeGreaterThanOrEqual(4))
+    expect(child.kill).not.toHaveBeenCalled()
+    expect(args.spawnChildMock).not.toHaveBeenCalled()
+    child.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
 
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
   })
