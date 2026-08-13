@@ -129,6 +129,8 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.branchDiff')
     expect(methods).toContain('git.listWorktrees')
     expect(methods).toContain('git.addWorktree')
+    expect(methods).toContain('git.addWorktreeWithCleanup')
+    expect(methods).toContain('git.addWorktreeWithCleanupSettlement')
     expect(methods).toContain('git.removeWorktree')
     expect(methods).toContain('git.worktreeIsClean')
     expect(methods).toContain('git.refreshLocalBaseRefForWorktreeCreate')
@@ -2497,7 +2499,15 @@ describe('GitHandler', () => {
             opts?: { maxBuffer?: number }
           ) => Promise<{ stdout: string; stderr: string }>
         >()
-      ;(handler as unknown as { git: typeof gitMock }).git = gitMock
+      const routedGit = vi.fn(
+        async (args: string[], cwd: string, opts?: { maxBuffer?: number }) => {
+          if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+            return { stdout: '/relay/repo/.git\n', stderr: '' }
+          }
+          return gitMock(args, cwd, opts)
+        }
+      )
+      ;(handler as unknown as { git: typeof routedGit }).git = routedGit
       return { localDispatcher, gitMock }
     }
 
@@ -2646,8 +2656,8 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls[1]?.[0]).toEqual([
         'worktree',
         'add',
-        '--no-track',
         '--no-checkout',
+        '--no-track',
         '-b',
         'feature/sparse',
         '/relay/wt',

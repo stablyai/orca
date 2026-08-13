@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this suite covers the SSH git provider's one-RPC-per-method contract; splitting it would duplicate the shared mux fixture. */
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
 
 type MockMultiplexer = {
@@ -48,8 +48,14 @@ describe('SshGitProvider', () => {
   let provider: SshGitProvider
 
   beforeEach(() => {
+    vi.stubEnv('ORCA_WORKTREE_ADD_TIMEOUT_MS', undefined)
     mux = createMockMux()
     provider = new SshGitProvider('conn-1', mux as never)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
   })
 
   it('returns the connectionId', () => {
@@ -1551,17 +1557,98 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(worktrees)
   })
 
-  it('addWorktree sends git.addWorktree request', async () => {
+  it('addWorktree uses the cleanup-aware relay request', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
     await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
       base: 'main',
       noCheckout: true
     })
-    expect(mux.request).toHaveBeenCalledWith('git.addWorktree', {
-      repoPath: '/home/user/repo',
-      branchName: 'feature',
-      targetDir: '/home/user/feat',
-      base: 'main',
-      noCheckout: true
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktreeWithCleanupSettlement',
+      {
+        repoPath: '/home/user/repo',
+        branchName: 'feature',
+        targetDir: '/home/user/feat',
+        base: 'main',
+        noCheckout: true,
+        timeoutMs: 180_000
+      },
+      { signal: undefined, timeoutMs: 215_000, waitForRemoteCancellation: true }
+    )
+  })
+
+  it('aligns cancellation and the slow-checkout override with the relay deadline', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    vi.stubEnv('ORCA_WORKTREE_ADD_TIMEOUT_MS', '600000')
+    const controller = new AbortController()
+
+    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+      signal: controller.signal
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktreeWithCleanupSettlement',
+      {
+        repoPath: '/home/user/repo',
+        branchName: 'feature',
+        targetDir: '/home/user/feat',
+        timeoutMs: 600_000
+      },
+      {
+        signal: controller.signal,
+        timeoutMs: 635_000,
+        waitForRemoteCancellation: true
+      }
+    )
+  })
+
+  it('subtracts elapsed queue time from relay and SSH transport budgets', async () => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValue(1_025)
+
+    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+      timeoutMs: 200
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktreeWithCleanupSettlement',
+      expect.objectContaining({ timeoutMs: 175 }),
+      expect.objectContaining({ timeoutMs: 35_175 })
+    )
+  })
+
+  it('fails safely before mutation when an old relay lacks cleanup-aware creation', async () => {
+    mux.request.mockRejectedValue(
+      Object.assign(new Error('Method not found: git.addWorktreeWithCleanupSettlement'), {
+        code: -32601
+      })
+    )
+
+    await expect(
+      provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat')
+    ).rejects.toThrow('Reconnect to deploy the latest relay')
+
+    expect(mux.request).toHaveBeenCalledOnce()
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktreeWithCleanupSettlement',
+      expect.any(Object),
+      expect.any(Object)
+    )
+  })
+
+  it('reports cancellation only after the relay returns its cleanup result', async () => {
+    const controller = new AbortController()
+    mux.request.mockImplementation(async () => {
+      controller.abort()
+      throw new Error('cancelled; cleanup also failed')
+    })
+
+    await expect(
+      provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({
+      name: 'AbortError',
+      message: 'cancelled; cleanup also failed'
     })
   })
 

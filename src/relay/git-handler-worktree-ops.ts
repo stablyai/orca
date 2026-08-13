@@ -1,8 +1,65 @@
 import * as path from 'node:path'
+import {
+  findGitCryptStateDirectory,
+  shareGitCryptStateWithWorktree
+} from '../shared/git-crypt-worktree-state'
+import {
+  clampGitWorktreeCreateTimeoutMs,
+  createGitWorktreeCleanupDeadline,
+  createGitWorktreeDeadline,
+  remainingGitWorktreeCreateMs,
+  type GitWorktreeCreateDeadline
+} from '../shared/git-worktree-create-timeout'
+import {
+  resolveGitWorktreeCreateLockIdentity,
+  withGitWorktreeCreateLock
+} from '../shared/git-worktree-create-lock'
+import {
+  captureGitWorktreeCreateAttempt,
+  gitWorktreeCreateAttemptMatches,
+  type GitWorktreeCreateAttempt
+} from '../shared/git-worktree-create-attempt'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
 export { readRelayWorktreeList } from './git-handler-worktree-list'
+
+async function rollbackRelayWorktreeCreate(
+  git: GitExec,
+  repoPath: string,
+  targetDir: string,
+  attempt: GitWorktreeCreateAttempt,
+  deleteBranch: boolean,
+  error: unknown
+): Promise<never> {
+  const wrapped = error instanceof Error ? error : new Error(String(error))
+  let worktreeRemoved = false
+  try {
+    if (!(await gitWorktreeCreateAttemptMatches(git, targetDir, attempt))) {
+      wrapped.message = `${wrapped.message} (cleanup skipped — the created worktree no longer matches this attempt)`
+      throw wrapped
+    }
+    try {
+      await git(['worktree', 'remove', '--force', targetDir], repoPath)
+    } catch {
+      // Why: add may fail after creating only a branch or a stale registration; prune and verify below.
+    }
+    await git(['worktree', 'prune'], repoPath)
+    const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+    worktreeRemoved = !stdout
+      .split(/\n(?=worktree )/)
+      .map((entry) => entry.match(/^worktree (.+)$/m)?.[1])
+      .some((candidate) => candidate && areRelayWorktreePathsEqual(candidate, targetDir))
+    if (deleteBranch) {
+      await git(['update-ref', '-d', attempt.branchRef, attempt.branchOid], repoPath)
+    }
+  } catch (cleanupError) {
+    if (cleanupError !== wrapped || !worktreeRemoved) {
+      wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${targetDir}" may need manual removal)`
+    }
+  }
+  throw wrapped
+}
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
@@ -28,10 +85,14 @@ async function persistRelayWorktreeCreationBase(
   }
 }
 
-export async function addWorktreeOp(git: GitExec, params: Record<string, unknown>): Promise<void> {
+export async function addWorktreeOp(
+  git: GitExec,
+  params: Record<string, unknown>,
+  request: { signal?: AbortSignal } = {}
+): Promise<void> {
   const repoPath = params.repoPath as string
   const branchName = params.branchName as string
-  const targetDir = params.targetDir as string
+  let targetDir = params.targetDir as string
   const base = params.base as string | undefined
   const checkoutExistingBranch = params.checkoutExistingBranch === true
   const noCheckout = params.noCheckout === true
@@ -42,73 +103,153 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
     throw new Error('Branch name and base ref must not start with "-"')
   }
 
-  // Why: --no-track + push.autoSetupRemote=true mirrors the local
-  // addWorktree path (src/main/git/worktree.ts). Keeping the SSH path in
-  // sync prevents a transport-only divergence where "Orca creates a
-  // worktree" produces a different `git status` / `git push` UX based on
-  // whether the repo is local or SSH-mounted. See full design rationale
-  // (state machine, common-dir scope, old-git fallback) in the comments
-  // around src/main/git/worktree.ts addWorktree — those invariants apply
-  // identically here.
-  const effectiveBase =
-    base && !checkoutExistingBranch
-      ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
-          try {
-            await git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], repoPath)
-            return true
-          } catch {
-            return false
-          }
-        })
-      : undefined
+  const timeoutMs = clampGitWorktreeCreateTimeoutMs(params.timeoutMs)
+  const deadline = createGitWorktreeDeadline(timeoutMs, request.signal)
+  const runWithDeadline =
+    (operationDeadline: GitWorktreeCreateDeadline): GitExec =>
+    (args, cwd, options) =>
+      git(args, cwd, {
+        ...options,
+        signal: operationDeadline.signal,
+        timeout: remainingGitWorktreeCreateMs(operationDeadline, `Git ${args.join(' ')}`)
+      })
+  const runWorktreeGit = runWithDeadline(deadline)
+  const identity = await resolveGitWorktreeCreateLockIdentity(
+    runWorktreeGit,
+    repoPath,
+    targetDir,
+    deadline
+  )
+  targetDir = identity.target
 
-  const args = checkoutExistingBranch
-    ? ['worktree', 'add', targetDir, branchName]
-    : ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
-  if (!checkoutExistingBranch && noCheckout) {
-    args.splice(3, 0, '--no-checkout')
-  }
-  if (effectiveBase) {
-    args.push(effectiveBase)
-  }
+  return withGitWorktreeCreateLock(identity, deadline, async (lockedIdentity) => {
+    targetDir = lockedIdentity.target
+    // Why: mirror local --no-track semantics so create has the same push UX over SSH.
+    const effectiveBase =
+      base && !checkoutExistingBranch
+        ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
+            try {
+              await runWorktreeGit(
+                ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
+                repoPath
+              )
+              return true
+            } catch {
+              return false
+            }
+          })
+        : undefined
 
-  await git(args, repoPath)
+    // Why: git-crypt resolves state through each worktree's private Git dir;
+    // defer checkout until that dir references the repository-wide state.
+    const gitCryptDir = await findGitCryptStateDirectory(
+      runWorktreeGit,
+      repoPath,
+      undefined,
+      deadline,
+      identity.repository
+    )
+    const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
 
-  if (checkoutExistingBranch) {
-    return
-  }
+    const args = ['worktree', 'add']
+    if (noCheckout || deferCheckoutForGitCrypt) {
+      args.push('--no-checkout')
+    }
+    if (checkoutExistingBranch) {
+      args.push(targetDir, branchName)
+    } else {
+      args.push('--no-track', '-b', branchName, targetDir)
+    }
+    if (effectiveBase) {
+      args.push(effectiveBase)
+    }
 
-  if (effectiveBase) {
-    await persistRelayWorktreeCreationBase(git, targetDir, branchName, effectiveBase)
-  }
-
-  // Why: best-effort write so a deliberate user value (any scope) is
-  // preserved and a real read failure is not silently overwritten. Final
-  // catch is warn-only — if the remote host's git is <2.37 the value is
-  // ignored at push time and the user falls back to `git push -u` once.
-  // (Note: it is the SSH host's git that matters here, not the client's.)
-  // Mirrors local addWorktree exactly.
-  try {
-    let alreadySet = false
-    try {
-      await git(['config', '--get', 'push.autoSetupRemote'], targetDir)
-      alreadySet = true
-    } catch (readError) {
-      // Why: `git config --get` exits 1 only when the key is unset at every
-      // scope. Any other code is a real read failure (corrupt config,
-      // locked file) — surface it via the outer catch instead of falling
-      // through to overwrite the user's actual value.
-      const code = (readError as { code?: unknown })?.code
-      if (code !== 1) {
-        throw readError
+    if (gitCryptDir) {
+      let attempt: GitWorktreeCreateAttempt | undefined
+      try {
+        const branchRef = `refs/heads/${branchName.replace(/^refs\/heads\//, '')}`
+        const rollbackBranchOid = (
+          await runWorktreeGit(
+            [
+              'rev-parse',
+              '--verify',
+              `${checkoutExistingBranch ? branchRef : (effectiveBase ?? 'HEAD')}^{commit}`
+            ],
+            repoPath
+          )
+        ).stdout.trim()
+        await runWorktreeGit(args, repoPath)
+        attempt = await captureGitWorktreeCreateAttempt(
+          runWorktreeGit,
+          targetDir,
+          branchName,
+          rollbackBranchOid
+        )
+        await shareGitCryptStateWithWorktree(
+          runWorktreeGit,
+          gitCryptDir,
+          targetDir,
+          undefined,
+          deadline,
+          attempt.gitDir
+        )
+        if (deferCheckoutForGitCrypt) {
+          await runWorktreeGit(['checkout'], targetDir)
+        }
+      } catch (error) {
+        if (!attempt) {
+          throw error
+        }
+        const cleanupGit = runWithDeadline(createGitWorktreeCleanupDeadline())
+        return rollbackRelayWorktreeCreate(
+          cleanupGit,
+          repoPath,
+          targetDir,
+          attempt,
+          !checkoutExistingBranch,
+          error
+        )
       }
+    } else {
+      await runWorktreeGit(args, repoPath)
     }
-    if (!alreadySet) {
-      await git(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
+
+    if (checkoutExistingBranch) {
+      return
     }
-  } catch (error) {
-    console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
-  }
+
+    if (effectiveBase) {
+      await persistRelayWorktreeCreationBase(runWorktreeGit, targetDir, branchName, effectiveBase)
+    }
+
+    // Why: best-effort write so a deliberate user value (any scope) is
+    // preserved and a real read failure is not silently overwritten. Final
+    // catch is warn-only — if the remote host's git is <2.37 the value is
+    // ignored at push time and the user falls back to `git push -u` once.
+    // (Note: it is the SSH host's git that matters here, not the client's.)
+    // Mirrors local addWorktree exactly.
+    try {
+      let alreadySet = false
+      try {
+        await runWorktreeGit(['config', '--get', 'push.autoSetupRemote'], targetDir)
+        alreadySet = true
+      } catch (readError) {
+        // Why: `git config --get` exits 1 only when the key is unset at every
+        // scope. Any other code is a real read failure (corrupt config,
+        // locked file) — surface it via the outer catch instead of falling
+        // through to overwrite the user's actual value.
+        const code = (readError as { code?: unknown })?.code
+        if (code !== 1) {
+          throw readError
+        }
+      }
+      if (!alreadySet) {
+        await runWorktreeGit(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
+      }
+    } catch (error) {
+      console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
+    }
+  })
 }
 
 function isPosixAbsolutePath(value: string): boolean {

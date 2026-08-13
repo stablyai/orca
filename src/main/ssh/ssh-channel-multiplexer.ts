@@ -35,6 +35,7 @@ export type SshMultiplexerRequestOptions = {
   signal?: AbortSignal
   timeoutMs?: number
   beforeResolve?: (result: unknown) => void
+  waitForRemoteCancellation?: boolean
 }
 
 export type NotificationHandler = (method: string, params: Record<string, unknown>) => void
@@ -253,11 +254,17 @@ export class SshChannelMultiplexer {
         if (!pending) {
           return
         }
-        pending.cleanup()
-        this.pendingRequests.delete(id)
         // Why: Space scans can run long on SSH hosts. Let the relay stop its
         // local filesystem work instead of only dropping the client promise.
-        this.notify('rpc.cancel', { id })
+        this.notify('rpc.cancel', {
+          id,
+          ...(options?.waitForRemoteCancellation ? { awaitSettlement: true } : {})
+        })
+        if (options?.waitForRemoteCancellation) {
+          return
+        }
+        pending.cleanup()
+        this.pendingRequests.delete(id)
         const error = new Error(`Request "${method}" was cancelled`) as Error & { name: string }
         error.name = 'AbortError'
         pending.reject(error)
@@ -268,7 +275,10 @@ export class SshChannelMultiplexer {
           pending.cleanup()
           // Why: request timeouts should stop relay-side long-running work,
           // not just detach the client from the eventual response.
-          this.notify('rpc.cancel', { id })
+          this.notify('rpc.cancel', {
+            id,
+            ...(options?.waitForRemoteCancellation ? { abandonSettlement: true } : {})
+          })
         }
         this.pendingRequests.delete(id)
         reject(sshMuxRequestTimeoutError(method, timeoutMs))

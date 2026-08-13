@@ -32,6 +32,12 @@ import {
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
+import {
+  createGitWorktreeDeadline,
+  gitWorktreeCreateTransportTimeoutMs,
+  remainingGitWorktreeCreateMs,
+  resolveGitWorktreeCreateTimeoutMs
+} from '../../shared/git-worktree-create-timeout'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -725,15 +731,51 @@ export class SshGitProvider implements IGitProvider {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
+    options?: {
+      base?: string
+      checkoutExistingBranch?: boolean
+      noCheckout?: boolean
+      signal?: AbortSignal
+      timeoutMs?: number
+    }
   ): Promise<void> {
+    const operationTimeoutMs = options?.timeoutMs ?? resolveGitWorktreeCreateTimeoutMs()
+    const deadline = createGitWorktreeDeadline(operationTimeoutMs, options?.signal)
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.addWorktree', {
-        repoPath,
-        branchName,
-        targetDir,
-        ...options
-      })
+      const timeoutMs = remainingGitWorktreeCreateMs(deadline, 'SSH transport queue')
+      const transportTimeoutMs = gitWorktreeCreateTransportTimeoutMs(timeoutMs)
+      const signal = options?.signal
+      const params = {
+        ...(options?.base !== undefined ? { base: options.base } : {}),
+        ...(options?.checkoutExistingBranch !== undefined
+          ? { checkoutExistingBranch: options.checkoutExistingBranch }
+          : {}),
+        ...(options?.noCheckout !== undefined ? { noCheckout: options.noCheckout } : {})
+      }
+      try {
+        // Why: the versioned method proves the relay can publish post-cancel cleanup settlement.
+        await this.mux.request(
+          'git.addWorktreeWithCleanupSettlement',
+          {
+            repoPath,
+            branchName,
+            targetDir,
+            ...params,
+            timeoutMs
+          },
+          { signal, timeoutMs: transportTimeoutMs, waitForRemoteCancellation: true }
+        )
+      } catch (error) {
+        if (isJsonRpcMethodNotFoundError(error)) {
+          throw new Error(
+            'This SSH host cannot guarantee bounded worktree rollback. Reconnect to deploy the latest relay, then try again.'
+          )
+        }
+        if (signal?.aborted && error instanceof Error) {
+          error.name = 'AbortError'
+        }
+        throw error
+      }
     })
   }
 

@@ -1,37 +1,63 @@
 export class ClientRequestAborts {
-  private readonly controllers = new Map<string, AbortController>()
+  private readonly requests = new Map<
+    string,
+    { controller: AbortController; publishCancellationSettlement: boolean }
+  >()
 
   create(clientId: number, requestId: number): { key: string; controller: AbortController } {
     const key = this.key(clientId, requestId)
     const controller = new AbortController()
-    this.controllers.set(key, controller)
+    this.requests.set(key, { controller, publishCancellationSettlement: false })
     return { key, controller }
   }
 
-  get(clientId: number, requestId: number): AbortController | undefined {
-    return this.controllers.get(this.key(clientId, requestId))
+  cancel(
+    clientId: number,
+    requestId: number,
+    publishSettlement: boolean,
+    abandonSettlement: boolean
+  ): void {
+    const request = this.requests.get(this.key(clientId, requestId))
+    if (!request) {
+      return
+    }
+    request.publishCancellationSettlement = abandonSettlement
+      ? false
+      : request.publishCancellationSettlement || publishSettlement
+    request.controller.abort()
+  }
+
+  shouldPublishCancellationSettlement(key: string): boolean {
+    return this.requests.get(key)?.publishCancellationSettlement === true
+  }
+
+  allowCancellationSettlement(key: string): void {
+    const request = this.requests.get(key)
+    if (request) {
+      request.publishCancellationSettlement = true
+    }
   }
 
   delete(key: string): void {
-    this.controllers.delete(key)
+    this.requests.delete(key)
   }
 
   abortClient(clientId: number): void {
     const prefix = `${clientId}:`
-    for (const [key, controller] of this.controllers) {
+    for (const [key, request] of this.requests) {
       if (!key.startsWith(prefix)) {
         continue
       }
-      controller.abort()
-      this.controllers.delete(key)
+      request.controller.abort()
+      this.requests.delete(key)
     }
   }
 
   abortAll(): void {
-    for (const [, controller] of this.controllers) {
-      controller.abort()
+    for (const [, request] of this.requests) {
+      request.controller.abort()
     }
-    this.controllers.clear()
+    this.requests.clear()
   }
 
   private key(clientId: number, requestId: number): string {

@@ -39,6 +39,7 @@ describe('addWorktreeOp', () => {
     })
 
     expect(git.mock.calls.map((call) => call[0])).toEqual([
+      ['rev-parse', '--git-common-dir'],
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
       [
         'worktree',
@@ -84,6 +85,7 @@ describe('addWorktreeOp', () => {
     })
 
     expect(git.mock.calls.map((call) => call[0])).toEqual([
+      ['rev-parse', '--git-common-dir'],
       ['worktree', 'add', '/repo-feature', 'feature/test']
     ])
   })
@@ -98,6 +100,7 @@ describe('addWorktreeOp', () => {
     })
 
     expect(git.mock.calls.map((call) => call[0])).toEqual([
+      ['rev-parse', '--git-common-dir'],
       ['worktree', 'add', '--no-track', '-b', 'feature/no-base', '/repo-feature'],
       ['config', '--get', 'push.autoSetupRemote']
     ])

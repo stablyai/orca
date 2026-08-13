@@ -190,6 +190,39 @@ describe('SshChannelMultiplexer', () => {
       await expect(promise).rejects.toThrow('timed out after 60000ms')
     })
 
+    it('waits for the relay cleanup response after forwarding cancellation', async () => {
+      const controller = new AbortController()
+      const promise = mux.request(
+        'git.addWorktreeWithCleanupSettlement',
+        {},
+        { signal: controller.signal, waitForRemoteCancellation: true }
+      )
+      let settled = false
+      void promise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      controller.abort()
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      const cancelFrame = transport.written.at(-1)!
+      const cancelPayload = JSON.parse(
+        cancelFrame.subarray(HEADER_LENGTH, HEADER_LENGTH + cancelFrame.readUInt32BE(9)).toString()
+      )
+      expect(cancelPayload).toMatchObject({
+        method: 'rpc.cancel',
+        params: { id: 1, awaitSettlement: true }
+      })
+
+      transport.dataCallbacks[0](makeErrorResponseFrame(1, -32000, 'cleanup complete', 1))
+      await expect(promise).rejects.toThrow('cleanup complete')
+    })
+
     it('assigns unique request IDs', async () => {
       void mux.request('method1').catch(() => {})
       void mux.request('method2').catch(() => {})

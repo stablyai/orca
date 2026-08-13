@@ -150,6 +150,47 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
   })
 
+  it('creates a deferred-checkout worktree on the Git 2.25 baseline', async () => {
+    const incarnationMarker = 'ORCA_WORKTREE_INCARNATION_ABCDEFGHIJKLMNOPABCDEFGHIJKLMNOP'
+    await runGit([
+      'worktree',
+      'add',
+      '--no-checkout',
+      '--no-track',
+      '-b',
+      'compat-deferred-add',
+      'deferred-add-wt'
+    ])
+    await expect(
+      runGit([
+        '-C',
+        'deferred-add-wt',
+        'symbolic-ref',
+        incarnationMarker,
+        'refs/heads/compat-deferred-add'
+      ])
+    ).resolves.toBeDefined()
+    await expect(
+      runGit(['-C', 'deferred-add-wt', 'symbolic-ref', '--quiet', incarnationMarker])
+    ).resolves.toMatchObject({ stdout: 'refs/heads/compat-deferred-add\n' })
+    await expect(runGit(['-C', 'deferred-add-wt', 'checkout'])).resolves.toBeDefined()
+
+    const remaining = await runGit(['worktree', 'list', '--porcelain'])
+    expect(remaining.stdout).toContain('deferred-add-wt')
+  })
+
+  it('compare-deletes a failed-create branch on the Git 2.25 baseline', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['update-ref', 'refs/heads/compat-create-rollback', head])
+
+    await expect(
+      runGit(['update-ref', '-d', 'refs/heads/compat-create-rollback', head])
+    ).resolves.toBeDefined()
+    await expect(
+      runGit(['show-ref', '--verify', 'refs/heads/compat-create-rollback'])
+    ).rejects.toBeDefined()
+  })
+
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['for-each-ref', '--format=%(refname)', '--exclude=refs/remotes/**/HEAD', '--count=10'],
