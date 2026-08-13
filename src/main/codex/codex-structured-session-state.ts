@@ -5,6 +5,7 @@ import type {
 } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
+import type { CodexStructuredWriteAuthority } from './codex-structured-write-authority'
 
 export type CodexStructuredLaunch = {
   command: string
@@ -13,6 +14,8 @@ export type CodexStructuredLaunch = {
   codexHome: string | null
   resumeThreadId: string | null
   env?: Record<string, string>
+  effectIsolation?: 'local-structured-write'
+  isolatedHomePath?: string
 }
 
 export type CodexStructuredSessionEvent =
@@ -40,6 +43,10 @@ export type CodexStructuredSessionAdapterDeps = {
   mintLinkId?: () => string
   now?: () => number
   requestTimeoutMs?: number
+  /** Opt-in host admission. Absent means the existing structured session behavior is unchanged. */
+  writeAuthority?: CodexStructuredWriteAuthority
+  releaseStructuredWriteHome?: (sessionId: string, isolatedHomePath: string) => Promise<void>
+  onStructuredWriteHomeError?: (input: { sessionId: string; error: unknown }) => void
 }
 
 export type CodexSession = {
@@ -51,6 +58,7 @@ export type CodexSession = {
   reportedOptions: { model?: string; effort?: string }
   turnIdWaiters: ((turnId: string) => void)[]
   translator: CodexJournalTranslator | null
+  isolatedHomePath: string | null
 }
 
 export type CodexAcquisitionAttempt = {

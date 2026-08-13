@@ -1,13 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, onMock, removeAllListenersMock, removeHandlerMock, fromWebContentsMock } =
-  vi.hoisted(() => ({
-    handleMock: vi.fn(),
-    onMock: vi.fn(),
-    removeAllListenersMock: vi.fn(),
-    removeHandlerMock: vi.fn(),
-    fromWebContentsMock: vi.fn()
-  }))
+const {
+  handleMock,
+  onMock,
+  removeAllListenersMock,
+  removeHandlerMock,
+  fromWebContentsMock,
+  isTrustedUIRendererMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  onMock: vi.fn(),
+  removeAllListenersMock: vi.fn(),
+  removeHandlerMock: vi.fn(),
+  fromWebContentsMock: vi.fn(),
+  isTrustedUIRendererMock: vi.fn(() => true)
+}))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
@@ -21,6 +28,8 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('./ui', () => ({ isTrustedUIRenderer: isTrustedUIRendererMock }))
+
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 
@@ -31,6 +40,7 @@ describe('registerRuntimeHandlers', () => {
     removeAllListenersMock.mockReset()
     removeHandlerMock.mockReset()
     fromWebContentsMock.mockReset()
+    isTrustedUIRendererMock.mockReset().mockReturnValue(true)
   })
 
   it('routes sync requests through the authoritative browser window id', () => {
@@ -83,6 +93,29 @@ describe('registerRuntimeHandlers', () => {
       result: { runtimeId: 'runtime-1', graphStatus: 'ready' },
       _meta: { runtimeId: 'runtime-1' }
     })
+  })
+
+  it('rejects effect authority from any renderer other than the trusted main UI', async () => {
+    const runtime = {
+      syncWindowGraph: vi.fn(),
+      getStatus: vi.fn(),
+      getRuntimeId: vi.fn().mockReturnValue('runtime-1')
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')![1]
+    const sender = { id: 99 }
+    isTrustedUIRendererMock.mockReturnValue(false)
+
+    await expect(
+      handler(
+        { sender },
+        {
+          method: 'agentSession.send',
+          params: { effectAuthority: 'local_structured_write' }
+        }
+      )
+    ).rejects.toThrow('runtime_effect_authority_requires_trusted_ui_renderer')
+    expect(isTrustedUIRendererMock).toHaveBeenCalledWith(sender)
   })
 
   it('registers project group runtime RPC methods for local desktop callers', async () => {

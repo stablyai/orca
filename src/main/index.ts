@@ -2554,6 +2554,8 @@ void app.whenReady().then(async () => {
       }),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
+    // Canary-only until the one-writer E2E is qualified against the installed host.
+    codexStructuredWriteEnabled: process.env.ORCA_CODEX_LOCAL_STRUCTURED_WRITE === '1',
     orchestrationEnvironmentTransport
   })
   runtime = runtimeService

@@ -13,8 +13,10 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { decodeCodexQuestionOptionId } from '../../codex/codex-structured-prompt-replies'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionCancelResult,
+  AgentSessionEffectAuthority,
   AgentSessionOptionResult,
   AgentSessionPromptResult,
   AgentSessionSendResult,
@@ -53,18 +55,46 @@ function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal
 async function dispatchSafely(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  effectAuthority?: AgentSessionEffectAuthority
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
-      fence: ctx.fence
+      fence: ctx.fence,
+      ...(effectAuthority
+        ? {
+            requestAuthority: {
+              effectAuthority,
+              requestReceiptId: hostRequestReceiptId(ctx, clientMessageId, body, effectAuthority)
+            }
+          }
+        : {})
     })
   } catch (error) {
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
+}
+
+function hostRequestReceiptId(
+  ctx: AgentSessionTurnContext,
+  clientMessageId: string,
+  body: AgentJournalMessageItem,
+  effectAuthority: AgentSessionEffectAuthority
+): string {
+  return computeAgentSessionPayloadFingerprint({
+    method: 'host.agentSession.effectAuthority',
+    sessionId: ctx.sessionId,
+    fields: {
+      callerKey: ctx.resolvedBy,
+      clientMessageId,
+      fence: ctx.fence,
+      body,
+      effectAuthority
+    }
+  })
 }
 
 async function appendStatus(
@@ -86,6 +116,7 @@ export async function performSend(
     clientMessageId: string
     payloadFingerprint: string
     body: AgentJournalMessageItem
+    effectAuthority?: AgentSessionEffectAuthority
     retryUnknown?: true
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
@@ -97,7 +128,12 @@ export async function performSend(
     ctx.publish()
   }
 
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+  const outcome = await dispatchSafely(
+    ctx,
+    input.clientMessageId,
+    input.body,
+    input.effectAuthority
+  )
   await ctx.journal.resolveDispatch(
     outcome.state === 'accepted'
       ? {

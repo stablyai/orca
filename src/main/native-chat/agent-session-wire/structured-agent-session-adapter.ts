@@ -16,7 +16,10 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity
 } from '../../../shared/agent-session-record'
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionEffectAuthority,
+  AgentSessionOptionsResult
+} from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 
 /** What a reservation turns into once something is actually running under it:
@@ -75,6 +78,10 @@ export type StructuredAgentSessionAdapter = {
     clientMessageId: string
     body: AgentJournalMessageItem
     fence: number
+    requestAuthority?: {
+      effectAuthority: AgentSessionEffectAuthority
+      requestReceiptId: string
+    }
   }): Promise<AgentSessionDispatchOutcome>
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
    *  a turn the client never asked to stop. */

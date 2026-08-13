@@ -10,6 +10,7 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session-jour
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
+  AgentSessionEffectAuthority,
   AgentSessionMutationEnvelope,
   AgentSessionOptionResult,
   AgentSessionPromptResult,
@@ -37,6 +38,7 @@ export function sendPlan(params: {
   envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem
   retryUnknown?: true
+  effectAuthority?: AgentSessionEffectAuthority
   beforeRun?: () => void
 }): MutationPlan<AgentSessionSendResult> {
   // The operation id IS the client message id: one send, one durable row, one
@@ -45,7 +47,10 @@ export function sendPlan(params: {
   return {
     method: 'agentSession.send',
     // A control signal is not payload; only the matching durable unknown unlocks redispatch.
-    fields: { body: params.body },
+    fields: {
+      body: params.body,
+      ...(params.effectAuthority ? { effectAuthority: params.effectAuthority } : {})
+    },
     ...(params.beforeRun ? { beforeRun: params.beforeRun } : {}),
     rerunWhenReplayMissing: (ctx) =>
       params.retryUnknown === true &&
@@ -59,6 +64,7 @@ export function sendPlan(params: {
         clientMessageId,
         payloadFingerprint: params.envelope.payloadFingerprint,
         body: params.body,
+        ...(params.effectAuthority ? { effectAuthority: params.effectAuthority } : {}),
         retryUnknown: params.retryUnknown
       }),
     replay: (ctx) => {

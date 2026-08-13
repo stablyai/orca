@@ -12,6 +12,11 @@ import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-rest
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
+import { isTrustedUIRenderer } from './ui'
+
+function requestsEffectAuthority(params: unknown): boolean {
+  return typeof params === 'object' && params !== null && 'effectAuthority' in params
+}
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -49,9 +54,12 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.handle(
     'runtime:call',
     async (
-      _event,
+      event,
       args: { method: string; params?: unknown }
     ): Promise<RuntimeRpcResponse<unknown>> => {
+      if (requestsEffectAuthority(args.params) && !isTrustedUIRenderer(event.sender)) {
+        throw new Error('runtime_effect_authority_requires_trusted_ui_renderer')
+      }
       return (await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {
           id: 'desktop-ipc',

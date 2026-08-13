@@ -77,6 +77,19 @@ function assertMobileImageProvenance(
   }
 }
 
+function assertLocalEffectAuthority(ctx: RpcContext, effectAuthority: unknown): void {
+  if (!effectAuthority) {
+    return
+  }
+  if (
+    ctx.clientKind !== 'runtime' ||
+    ctx.clientId !== 'desktop-renderer' ||
+    ctx.connectionId !== undefined
+  ) {
+    throw new Error('local_structured_write_requires_local_desktop_renderer')
+  }
+}
+
 /** Attach is the only way a session comes into being, so it is the only call
  *  that builds the host. Every other method addresses a session that must
  *  already be attached, and correctly reports absent when none is. */
@@ -181,6 +194,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     params: SendParams,
     handler: async (params, ctx) => {
       const host = requireHost(ctx)
+      assertLocalEffectAuthority(ctx, params.effectAuthority)
       return host.send(callerFor(ctx), {
         ...params,
         beforeRun: () => assertMobileImageProvenance(ctx, params.body)

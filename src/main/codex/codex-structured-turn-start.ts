@@ -65,7 +65,12 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
  */
 export async function startCodexTurn(
   host: CodexTurnHost,
-  input: { clientMessageId: string; body: AgentJournalMessageItem; timeoutMs?: number }
+  input: {
+    clientMessageId: string
+    body: AgentJournalMessageItem
+    timeoutMs?: number
+    enforcedOptions?: Record<string, unknown>
+  }
 ): Promise<string | null> {
   // Registered BEFORE the call: on builds that ack first, `turn/started` can
   // land while the response is still in flight.
@@ -82,7 +87,8 @@ export async function startCodexTurn(
         threadId: host.threadId,
         clientUserMessageId: input.clientMessageId,
         input: turnInputFor(input.body),
-        ...Object.fromEntries(host.options)
+        ...Object.fromEntries(host.options),
+        ...input.enforcedOptions
       },
       { timeoutMs: input.timeoutMs }
     )
@@ -103,11 +109,12 @@ export async function startCodexTurn(
 export async function dispatchCodexTurn(
   session: CodexTurnHost,
   input: { clientMessageId: string; body: AgentJournalMessageItem },
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  enforcedOptions?: Record<string, unknown>
 ): Promise<AgentSessionDispatchOutcome> {
   let turnId: string | null
   try {
-    turnId = await startCodexTurn(session, { ...input, timeoutMs })
+    turnId = await startCodexTurn(session, { ...input, timeoutMs, enforcedOptions })
   } catch (error) {
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       return { state: 'rejected', reason: (error as Error).message }

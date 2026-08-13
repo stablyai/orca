@@ -73,6 +73,7 @@ import {
   type AgentSessionClaimSigner
 } from './agent-session-claim-identity'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
+import type { CodexStructuredWriteAuthority } from '../codex/codex-structured-write-authority'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
@@ -3273,6 +3274,8 @@ export class OrcaRuntimeService {
     | ((input: { workspacePath: string; launchEnv: NodeJS.ProcessEnv }) => string | null)
     | null
   private readonly agentSessionClaimSigner: AgentSessionClaimSigner
+  private readonly codexStructuredWriteAuthority: CodexStructuredWriteAuthority | null
+  private readonly codexStructuredWriteEnabled: boolean
   private readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()
   private readonly orchestrationCompatibilitySshAttachments = new Map<
     string,
@@ -3356,6 +3359,9 @@ export class OrcaRuntimeService {
       buildAgentHookPtyEnv?: () => Record<string, string>
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
+      /** Explicit host-owned admission for the local structured-writer spike. */
+      codexStructuredWriteAuthority?: CodexStructuredWriteAuthority
+      codexStructuredWriteEnabled?: boolean
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
     }
   ) {
@@ -3406,6 +3412,8 @@ export class OrcaRuntimeService {
     this.prepareCodexStructuredLaunchFn = deps?.prepareCodexStructuredLaunch ?? null
     this.agentSessionClaimSigner =
       deps?.agentSessionClaimSigner ?? createEphemeralAgentSessionClaimSigner(this.runtimeId)
+    this.codexStructuredWriteAuthority = deps?.codexStructuredWriteAuthority ?? null
+    this.codexStructuredWriteEnabled = deps?.codexStructuredWriteEnabled === true
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
     // Why: the ConPTY spawn mark can land after daemon stream data already
     // created this PTY's emulator; the mark retrofits the DA1 override here
@@ -9120,6 +9128,13 @@ export class OrcaRuntimeService {
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
+      ...(this.codexStructuredWriteAuthority
+        ? {
+            codexStructuredWriteAuthority: this.codexStructuredWriteAuthority,
+            resolveCodexStructuredWriteSourceHome: () => getSystemCodexHomePath()
+          }
+        : {}),
+      ...(this.codexStructuredWriteEnabled ? { codexStructuredWriteEnabled: true } : {}),
       handoffTransport: this.createStructuredAgentSessionHandoffTransport()
     })
   }

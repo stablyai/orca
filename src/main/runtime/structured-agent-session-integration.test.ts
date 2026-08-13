@@ -54,6 +54,11 @@ const CLIENT = {
   clientKind: 'mobile' as const,
   clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
 }
+const DESKTOP_CLIENT = {
+  clientId: 'desktop-renderer',
+  clientKind: 'runtime' as const,
+  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+}
 
 // ─── the fake `codex app-server` ────────────────────────────────────────────
 
@@ -214,11 +219,63 @@ let root: string
 let dispatcher: RpcDispatcher
 let cleanups: Map<string, () => void>
 
+function createDispatcher(): RpcDispatcher {
+  const runtime = {
+    getRuntimeId: () => 'runtime-1',
+    getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
+    resolveStructuredAgentSessionCreateIntent: async () => {
+      const {
+        envelope: _envelope,
+        providerHandle: _providerHandle,
+        ...resolved
+      } = attachParams(null)
+      return resolved
+    },
+    publishStructuredAgentSessionTab: () => {},
+    ensureStructuredAgentSessionHost: () =>
+      ensureStructuredAgentSessionHost({
+        stateDirectory: root,
+        hostId: 'local',
+        claimKeyId: 'key-1',
+        resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
+        resolveCodexCommand: () => '/usr/local/bin/codex',
+        resolveLaunchEnv: async () => ({
+          EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
+          CODEX_HOME: '/shell/home'
+        }),
+        openCodexConnection: codex.openConnection
+      }).then(() => undefined),
+    registerSubscriptionCleanup: vi.fn((id: string, dispose: () => void) =>
+      cleanups.set(id, dispose)
+    ),
+    cleanupSubscription: vi.fn((id: string) => {
+      cleanups.get(id)?.()
+      cleanups.delete(id)
+    }),
+    cleanupSubscriptionsByPrefix: vi.fn((prefix: string) => {
+      for (const [id, dispose] of cleanups) {
+        if (id.startsWith(prefix)) {
+          dispose()
+          cleanups.delete(id)
+        }
+      }
+    })
+  }
+  return new RpcDispatcher({
+    runtime: runtime as unknown as OrcaRuntimeService,
+    methods: STRUCTURED_AGENT_SESSION_METHODS
+  })
+}
+
 /** Runs a one-shot method and returns its decoded reply. */
-async function call(method: string, params: unknown): Promise<RpcResponse> {
+async function call(
+  method: string,
+  params: unknown,
+  client: typeof CLIENT | typeof DESKTOP_CLIENT = CLIENT
+): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
   const request: RpcRequest = { id: `req-${operations}`, authToken: 'token', method, params }
-  await dispatcher.dispatchStreaming(request, (raw) => replies.push(JSON.parse(raw)), CLIENT)
+  await dispatcher.dispatchStreaming(request, (raw) => replies.push(JSON.parse(raw)), client)
   const first = replies[0]
   if (!first) {
     throw new Error(`no reply for ${method}`)
@@ -227,8 +284,12 @@ async function call(method: string, params: unknown): Promise<RpcResponse> {
 }
 
 /** Asserts success and unwraps the host's `{ok:true, value}` mutation result. */
-async function ok<T>(method: string, params: unknown): Promise<T> {
-  const response = await call(method, params)
+async function ok<T>(
+  method: string,
+  params: unknown,
+  client: typeof CLIENT | typeof DESKTOP_CLIENT = CLIENT
+): Promise<T> {
+  const response = await call(method, params, client)
   expect(response, `${method} failed: ${JSON.stringify(response)}`).toMatchObject({ ok: true })
   const result = (response as { result: { ok: boolean; value?: T; refusal?: unknown } }).result
   expect(result, `${method} refused: ${JSON.stringify(result.refusal)}`).toMatchObject({ ok: true })
@@ -290,51 +351,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-structured-integration-'))
   codex = fakeCodex()
   cleanups = new Map()
-  const runtime = {
-    getRuntimeId: () => 'runtime-1',
-    getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
-    resolveStructuredAgentSessionCreateIntent: async () => {
-      const {
-        envelope: _envelope,
-        providerHandle: _providerHandle,
-        ...resolved
-      } = attachParams(null)
-      return resolved
-    },
-    publishStructuredAgentSessionTab: () => {},
-    ensureStructuredAgentSessionHost: () =>
-      ensureStructuredAgentSessionHost({
-        stateDirectory: root,
-        hostId: 'local',
-        claimKeyId: 'key-1',
-        resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-        resolveCodexCommand: () => '/usr/local/bin/codex',
-        resolveLaunchEnv: async () => ({
-          EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
-          CODEX_HOME: '/shell/home'
-        }),
-        openCodexConnection: codex.openConnection
-      }).then(() => undefined),
-    registerSubscriptionCleanup: vi.fn((id: string, dispose: () => void) =>
-      cleanups.set(id, dispose)
-    ),
-    cleanupSubscription: vi.fn((id: string) => {
-      cleanups.get(id)?.()
-      cleanups.delete(id)
-    }),
-    cleanupSubscriptionsByPrefix: vi.fn((prefix: string) => {
-      for (const [id, dispose] of cleanups) {
-        if (id.startsWith(prefix)) {
-          dispose()
-          cleanups.delete(id)
-        }
-      }
-    })
-  }
-  dispatcher = new RpcDispatcher({
-    runtime: runtime as unknown as OrcaRuntimeService,
-    methods: STRUCTURED_AGENT_SESSION_METHODS
-  })
+  dispatcher = createDispatcher()
 })
 
 afterEach(async () => {
@@ -427,6 +444,46 @@ describe('a structured codex session over agentSession.*', () => {
     await drainStreamedEvents()
 
     expect(itemsOf(stream).map(textOf).filter(Boolean)).toEqual(['hi', 'Hello.'])
+  })
+
+  it('rejects explicit write authority when the host feature is disabled', async () => {
+    const created = await ok<{ fence: number }>(
+      'agentSession.create',
+      createIntentParams(),
+      DESKTOP_CLIENT
+    )
+    const body = {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'change one file' }]
+    }
+    const effectAuthority = 'local_structured_write'
+    const sent = await ok<{ submission: { dispatchState: string; reason: string | null } }>(
+      'agentSession.send',
+      {
+        envelope: envelope('agentSession.send', { body, effectAuthority }, created.fence),
+        body,
+        effectAuthority
+      },
+      DESKTOP_CLIENT
+    )
+    expect(sent.submission).toMatchObject({
+      dispatchState: 'rejected',
+      reason: 'local structured write is not enabled on this execution host'
+    })
+    const remote = await call(
+      'agentSession.send',
+      {
+        envelope: envelope('agentSession.send', { body, effectAuthority }, created.fence),
+        body,
+        effectAuthority
+      },
+      CLIENT
+    )
+    expect(remote).toMatchObject({
+      ok: false,
+      error: { message: 'local_structured_write_requires_local_desktop_renderer' }
+    })
   })
 
   it('runs create → send → stream → approval → cancel → reconnect → page history', async () => {

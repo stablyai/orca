@@ -212,6 +212,7 @@ export class StructuredAgentSessionHost {
       envelope: AgentSessionMutationEnvelope
       body: AgentJournalMessageItem
       retryUnknown?: true
+      effectAuthority?: 'local_structured_write'
       beforeRun?: () => void
     }
   ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {

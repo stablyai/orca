@@ -6,6 +6,7 @@
 import { z } from 'zod'
 import { isAgentSessionId } from '../../../../shared/agent-session-record'
 import {
+  AGENT_SESSION_EFFECT_AUTHORITIES,
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../../../../shared/agent-session-wire'
@@ -134,6 +135,7 @@ export const SendParams = z
   .object({
     envelope: MutationEnvelope,
     retryUnknown: z.literal(true).optional(),
+    effectAuthority: z.enum(AGENT_SESSION_EFFECT_AUTHORITIES).optional(),
     body: z
       .object({
         kind: z.literal('message'),
