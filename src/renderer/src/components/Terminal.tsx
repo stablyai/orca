@@ -172,6 +172,7 @@ import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-p
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
+import { requestActiveTabMoveToSplit } from './tab-bar/request-active-tab-move-to-split'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -2064,6 +2065,16 @@ function Terminal(): React.JSX.Element | null {
           useAppStore.getState().reopenClosedTab(activeWorktreeId)
         } catch (error) {
           showClientCreationActionError(error)
+        }
+        return
+      }
+
+      // Mod+\ — move active tab into a new pane column to the right (any tab type; not terminal-only pane split).
+      // Why: only preventDefault when the move applies so sole-tab groups leave the chord free for other handlers.
+      if (!e.repeat && matchShortcut('tab.moveToSplitRight')) {
+        if (requestActiveTabMoveToSplit('right')) {
+          e.preventDefault()
+          notifyTerminalCapture('tab.moveToSplitRight')
         }
         return
       }
