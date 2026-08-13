@@ -259,7 +259,9 @@ describe('fetchClinePassRateLimits', () => {
     const result = await fetchClinePassRateLimits(API_KEY, { signal: controller.signal })
 
     expect(timeoutSpy).toHaveBeenCalledWith(15_000)
-    expect(anySpy).toHaveBeenCalled()
+    expect(anySpy.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining([controller.signal, timeoutSignal])
+    )
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('network')
   })
