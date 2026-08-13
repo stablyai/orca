@@ -113,6 +113,55 @@ export function invalidateGitReadCaches(): void {
   resolvedUpstreamNameCache.clear()
 }
 
+/**
+ * Drop every cache entry whose worktree path matches one of the given paths (substring match
+ * against the cache key, which is `[worktreePath, ...runtimeOptions].join('\0')`). WSL and SSH
+ * runtimes only key on `wslDistro` / `connectionId`, so the path portion is always present.
+ * Cheap relative to a full cache clear; intended for repo-removal teardown so stale entries do
+ * not linger up to SUBMODULE_PATHS_CACHE_TTL_MS / RESOLVED_UPSTREAM_NAME_CACHE_TTL_MS.
+ */
+export function clearGitReadCachesForPaths(paths: readonly string[]): void {
+  if (paths.length === 0) {
+    return
+  }
+  const matches = (key: string): boolean => {
+    // Why: cache keys are `[path, wslDistro].join('\0')`. A naive startsWith matches
+    // siblings (`/worktrees/repo-a` would also clear `/worktrees/repo-ab`). Compare the
+    // path component up to the first `\0`, then require either an exact match or a path
+    // separator so descendants match and siblings do not.
+    const separatorIdx = key.indexOf('\0')
+    const keyPath = separatorIdx === -1 ? key : key.slice(0, separatorIdx)
+    for (const path of paths) {
+      if (keyPath === path) {
+        return true
+      }
+      if (
+        keyPath.length > path.length &&
+        (keyPath[path.length] === '/' || keyPath[path.length] === '\\') &&
+        keyPath.startsWith(path)
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+  for (const [key] of submodulePathsCache) {
+    if (matches(key)) {
+      submodulePathsCache.delete(key)
+    }
+  }
+  for (const [key] of resolvedUpstreamNameCache) {
+    if (matches(key)) {
+      resolvedUpstreamNameCache.delete(key)
+    }
+  }
+  for (const [key] of effectiveUpstreamStatusCache) {
+    if (matches(key)) {
+      effectiveUpstreamStatusCache.delete(key)
+    }
+  }
+}
+
 export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>): Promise<T> {
   invalidateGitReadCaches()
   try {
@@ -135,6 +184,33 @@ function clearSubmodulePathsCache(): void {
 
 export function getSubmodulePathsCacheCountForTests(): number {
   return submodulePathsCache.size
+}
+
+/**
+ * Test-only: prime the submodule, resolved-upstream-name, and effective-upstream-status caches
+ * with the given worktree-path keys. Returns the counts so callers can assert eviction behavior.
+ * Keys use the same `[path, wslDistro].join('\0')` shape as production writes.
+ */
+export function primeGitReadCachesForTests(
+  paths: readonly string[],
+  wslDistro: string | null = null
+): { submodule: number; upstreamName: number; effectiveStatus: number } {
+  for (const path of paths) {
+    const key = [path, wslDistro ?? null].join('\0')
+    const farFuture = Date.now() + 60 * 60 * 1000
+    submodulePathsCache.set(key, { paths: [], expiresAt: farFuture })
+    resolvedUpstreamNameCache.set(key, { upstreamName: 'origin', expiresAt: farFuture })
+    effectiveUpstreamStatusCache.set(key, {
+      status: { kind: 'unset' },
+      expiresAt: farFuture,
+      writeGeneration: 0
+    } as unknown as EffectiveUpstreamStatusCacheEntry)
+  }
+  return {
+    submodule: submodulePathsCache.size,
+    upstreamName: resolvedUpstreamNameCache.size,
+    effectiveStatus: effectiveUpstreamStatusCache.size
+  }
 }
 
 function gitRuntimeOptionsKey(options: GitRuntimeOptions): readonly unknown[] {

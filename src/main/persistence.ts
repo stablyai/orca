@@ -95,7 +95,9 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../shared/workspace-lin
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
+import { BoundedMap } from '../shared/bounded-map'
 import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
+import { clearGitReadCachesForPaths } from './git/status'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -2814,7 +2816,7 @@ export class Store {
   private githubCacheGeneration = 0
   private pendingGithubCacheWrite: Promise<void> | null = null
   private readonly staleGithubCacheTempCleanup: Promise<void>
-  private gitUsernameCache = new Map<string, string>()
+  private gitUsernameCache = new BoundedMap<string, string>({ maxEntries: 5000 })
   private readonly protectedSecrets = new ProtectedSecretPersistence()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
@@ -4738,6 +4740,11 @@ export class Store {
   }
 
   removeProject(id: string): void {
+    // Why: capture the repo's path + worktree paths before the repos array shrinks so we can prune
+    // git read caches that key by worktree path. Without this, stale entries linger until TTL.
+    const removedRepoPaths = this.state.repos
+      .filter((r) => r.id === id)
+      .flatMap((repo) => [repo.path, ...this.worktreeMetaPathsForRepo(repo.id)])
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
     this.syncProjectHostSetupCompatibilityState()
     // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
@@ -4748,11 +4755,23 @@ export class Store {
       this.state.workspaceSessionsByHostId,
       id
     )
+    if (removedRepoPaths.length > 0) {
+      clearGitReadCachesForPaths(removedRepoPaths)
+      for (const path of removedRepoPaths) {
+        this.gitUsernameCache.delete(path)
+      }
+    }
     this.scheduleSave()
   }
 
   // Why: the same repo id can exist on multiple execution hosts; remove only this host's row and metadata, never another host's.
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
+    // Why: capture paths from the matching repo before the repos array shrinks so cache cleanup
+    // can run when the id is fully gone. If another host still holds the same repo id, the path
+    // is shared — leaving the cache keeps the surviving host's reads warm.
+    const removedRepoPaths = this.state.repos
+      .filter((r) => r.id === id && getRepoExecutionHostId(r) === hostId)
+      .flatMap((repo) => [repo.path, ...this.worktreeMetaPathsForRepo(repo.id)])
     this.state.repos = this.state.repos.filter(
       (r) => !(r.id === id && getRepoExecutionHostId(r) === hostId)
     )
@@ -4770,6 +4789,12 @@ export class Store {
         this.state.workspaceSessionsByHostId,
         id
       )
+      if (removedRepoPaths.length > 0) {
+        clearGitReadCachesForPaths(removedRepoPaths)
+        for (const path of removedRepoPaths) {
+          this.gitUsernameCache.delete(path)
+        }
+      }
     } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
       const session = this.state.workspaceSessionsByHostId?.[hostId]
       if (session) {
@@ -5463,6 +5488,22 @@ export class Store {
 
   getWorktreeMeta(worktreeId: string): WorktreeMeta | undefined {
     return this.state.worktreeMeta[worktreeId]
+  }
+
+  // Why: repo removal needs to evict git read caches keyed by worktree path. The id format
+  // `${repoId}::${path}` (types.ts:487) embeds the path, so scan for keys with this repo's prefix.
+  // Stale entries from deleted-but-not-fully-pruned metas are harmless — the caches will simply miss
+  // and re-resolve on next read.
+  private worktreeMetaPathsForRepo(repoId: string): string[] {
+    const prefix = `${repoId}::`
+    const paths: string[] = []
+    for (const key of Object.keys(this.state.worktreeMeta)) {
+      if (!key.startsWith(prefix)) {
+        continue
+      }
+      paths.push(key.slice(prefix.length))
+    }
+    return paths
   }
 
   getAllWorktreeMeta(): Record<string, WorktreeMeta> {

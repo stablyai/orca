@@ -27,6 +27,13 @@ export type HeadlessEmulatorOptions = {
   cols: number
   rows: number
   scrollback?: number
+  /**
+   * Override the default scrollback when `scrollback` is not provided. The default is 5000, but
+   * long-lived `orca serve` deployments allocate one HeadlessEmulator per PTY and the scrollback
+   * dominates per-PTY memory (~1-3 MB each). Serve callers can pass a smaller value (e.g. 1000)
+   * to trade retained history for lower RSS; mobile clients can re-pull via `terminal-snapshot`.
+   */
+  defaultScrollback?: number
   /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes emit here. The daemon Session must never pass this. */
   onQueryReply?: (reply: string) => void
   pathFlavor?: 'posix' | 'win32'
@@ -81,7 +88,7 @@ export class HeadlessEmulator {
     this.terminal = new Terminal({
       cols: opts.cols,
       rows: opts.rows,
-      scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
+      scrollback: opts.scrollback ?? opts.defaultScrollback ?? DEFAULT_SCROLLBACK,
       allowProposedApi: true,
       logLevel: 'off',
       // Why: parse CSI =/>/< u pushes so CSI ? u answers with the flags the hidden app pushed (renderer parity).

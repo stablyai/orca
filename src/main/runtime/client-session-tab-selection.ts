@@ -3,6 +3,7 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
 import type { PersistedMobileClientTabSelections } from '../../shared/types'
+import { BoundedMap } from '../../shared/bounded-map'
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
 
 export type ClientSessionTabSelection = {
@@ -128,8 +129,18 @@ export function projectClientSessionTabSelection(
   }
 }
 
+// Why: long-lived `orca serve` clients rotate (phone reconnects with a new navigation id) and a
+// buggy or crashed client can leave stale `statesByClient` entries forever. The shared BoundedMap
+// (src/shared/bounded-map.ts) caps the outer map; every `project()` / `activate()` call goes
+// through `getStatesByWorktree()` which calls BoundedMap.get() and refreshes LRU position, so the
+// active set survives while idle clients are evicted. Inner worktree state is a plain Map (bounded
+// by worktree count, much smaller than the client set).
+const CLIENT_SELECTION_LRU_CAP = 256
+
 export class ClientSessionTabSelectionStore {
-  private statesByClient = new Map<string, Map<string, StoredClientSessionTabSelection>>()
+  private statesByClient = new BoundedMap<string, Map<string, StoredClientSessionTabSelection>>({
+    maxEntries: CLIENT_SELECTION_LRU_CAP
+  })
   private persistListener: ((state: PersistedMobileClientTabSelections) => void) | null = null
 
   // Why: selections previously died with the process, so a host restart snapped every phone back to the first tab (deterministic-topology fallback).
@@ -150,7 +161,7 @@ export class ClientSessionTabSelectionStore {
 
   serialize(): PersistedMobileClientTabSelections {
     const persisted: PersistedMobileClientTabSelections = {}
-    for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
+    for (const [clientNavigationId, statesByWorktree] of this.statesByClient.entries()) {
       const entries: Record<string, ClientSessionTabSelection> = {}
       for (const [worktreeId, state] of statesByWorktree) {
         if (state.shouldPersist) {
@@ -266,7 +277,7 @@ export class ClientSessionTabSelectionStore {
 
   forgetWorktree(worktreeId: string): void {
     let changed = false
-    for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
+    for (const [clientNavigationId, statesByWorktree] of this.statesByClient.entries()) {
       const state = statesByWorktree.get(worktreeId)
       changed = Boolean(state?.shouldPersist) || changed
       statesByWorktree.delete(worktreeId)

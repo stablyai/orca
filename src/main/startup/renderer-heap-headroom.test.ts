@@ -118,4 +118,16 @@ describe('enableRendererHeapHeadroom', () => {
       '--no-opt --max-old-space-size=4096'
     )
   })
+
+  it('skips js-flags entirely in serve mode (no renderer V8 isolate exists)', async () => {
+    const { app } = await import('electron')
+    const { enableRendererHeapHeadroom } = await import('./renderer-heap-headroom')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('')
+
+    enableRendererHeapHeadroom({ totalMemoryBytes: 16 * GIB, env: {}, isServeMode: true })
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('js-flags', expect.anything())
+  })
 })

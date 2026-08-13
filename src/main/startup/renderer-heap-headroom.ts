@@ -80,9 +80,20 @@ export function computeRendererHeapCeilingMb(
   return Math.min(RENDERER_HEAP_CAP_MB, Math.max(RENDERER_HEAP_FLOOR_MB, targetMb))
 }
 
-export function enableRendererHeapHeadroom(
-  options: { totalMemoryBytes?: number; env?: NodeJS.ProcessEnv } = {}
-): void {
+export type EnableRendererHeapHeadroomOptions = {
+  totalMemoryBytes?: number
+  env?: NodeJS.ProcessEnv
+  // Why: `orca serve` skips `openMainWindow()`, so no renderer V8 isolate exists
+  // to receive --max-old-space-size. The flag is js-flags (process-wide) so it
+  // would still apply to utility processes; setting it anyway is misleading intent
+  // and useless work. Caller passes true for serve, false (default) for desktop.
+  isServeMode?: boolean
+}
+
+export function enableRendererHeapHeadroom(options: EnableRendererHeapHeadroomOptions = {}): void {
+  if (options.isServeMode === true) {
+    return
+  }
   const totalMemoryBytes = options.totalMemoryBytes ?? totalmem()
   const envOverride = (options.env ?? process.env)[RENDERER_HEAP_ENV_VAR]
   const ceilingMb = computeRendererHeapCeilingMb(totalMemoryBytes, envOverride)

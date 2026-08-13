@@ -3222,6 +3222,7 @@ export class OrcaRuntimeService {
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
   private readonly onPtyStopped: ((ptyId: string) => void) | null
+  private readonly headlessEmulatorScrollback: number | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
   private terminalSideEffectLocalConsumerAvailable = false
@@ -3314,6 +3315,10 @@ export class OrcaRuntimeService {
         terminalProvenance: 'current_runtime' | 'restored'
       }) => AgentHookAuthorityAttestation | null
       retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+      // Why: `orca serve` allocates one HeadlessEmulator per PTY and the scrollback
+      // dominates the per-PTY footprint (~1-3 MB). 1000 retains typical agent output
+      // while cutting that line item ~5x; mobile clients re-pull via terminal-snapshot.
+      headlessEmulatorScrollback?: number
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: codex-home paths for the Agent Session History scan must be sourced
       // here, not via the window-only registerCoreHandlers path — that path never
@@ -3369,6 +3374,7 @@ export class OrcaRuntimeService {
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
     this.getSshProviderFn = deps?.getSshProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
+    this.headlessEmulatorScrollback = deps?.headlessEmulatorScrollback ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
@@ -11475,6 +11481,9 @@ export class OrcaRuntimeService {
       pathFlavor,
       remotePosixFileUriAuthority:
         !!this.ptysById.get(ptyId)?.connectionId && pathFlavor !== 'win32',
+      // Why: serve callers pass a smaller default via deps.headlessEmulatorScrollback; only set it
+      // when the caller didn't override opts.scrollback at line 11394 below (the snapshot path).
+      defaultScrollback: this.headlessEmulatorScrollback ?? undefined,
       wslDistro: this.ptysById.get(ptyId)?.connectionId
         ? undefined
         : (this.wslDistroByPtyId.get(ptyId) ?? this.ptysById.get(ptyId)?.wslDistro ?? undefined),
