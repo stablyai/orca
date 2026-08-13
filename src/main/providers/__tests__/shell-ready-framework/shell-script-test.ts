@@ -3,7 +3,7 @@ import { join, basename } from 'node:path'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { getShellReadyLaunchConfig } from '../../local-pty-shell-ready'
-import { escapeRegex } from '../../../../shared/string-utils'
+import { escapeRegex } from '../../../../shared/regex-escaping'
 
 const RUN_MARKER = /^[ \t]*#[ \t]*Run:.*$/m
 
