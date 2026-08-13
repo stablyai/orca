@@ -361,7 +361,11 @@ function NativeChatResolvedView({
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
   const fontScale = useNativeChatFontScale(isConversation)
-  const onReauthenticateAccount = useNativeChatAccountReauth(agent, worktreeId)
+  const onReauthenticateAccount = useNativeChatAccountReauth(
+    agent,
+    worktreeId,
+    runtimeEnvironmentId
+  )
 
   return (
     <div

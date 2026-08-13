@@ -153,11 +153,17 @@ export class ClaudeAccountService {
   async reauthenticateAccountForTarget(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
-    const accountId = getSelectedClaudeAccountIdForTarget(this.store.getSettings(), target)
-    if (!accountId) {
-      throw new Error('No Claude account is configured for this pane yet.')
-    }
-    return this.reauthenticateAccount(accountId)
+    // Why: resolve the selection inside the queued callback, not before it —
+    // reading it here would race a queued `selectAccountForTarget` and could
+    // reauthenticate whichever account was selected before this call, not the
+    // one active by the time this mutation actually runs.
+    return this.serializeMutation(() => {
+      const accountId = getSelectedClaudeAccountIdForTarget(this.store.getSettings(), target)
+      if (!accountId) {
+        throw new Error('No Claude account is configured for this pane yet.')
+      }
+      return this.doReauthenticateAccount(accountId)
+    })
   }
 
   cancelPendingLogin(): boolean {
