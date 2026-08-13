@@ -2711,6 +2711,28 @@ export function useIpcEvents(): void {
       origin: DirectSshConnectedStateOrigin
     ) => void
 
+    // Why: subscribe before the pull below so an authority rotation mid-hydration is never dropped.
+    unsubs.push(
+      window.api.ssh.onRuntimeOwnedAuthorityChanged(({ targetId, connectionGeneration }) => {
+        useAppStore
+          .getState()
+          .setRuntimeOwnedSshConnectionGeneration(targetId, connectionGeneration)
+      })
+    )
+
+    // Why: kept out of the listTargets() block below — a recipe-VM user often has zero user-facing
+    // SSH targets, and that block's shared catch would swallow this pull with it (#11762).
+    void (async () => {
+      try {
+        const authorities = await window.api.ssh.listRuntimeOwnedAuthorities()
+        if (!directSshEffectStopped) {
+          useAppStore.getState().seedRuntimeOwnedSshConnectionGenerations(authorities)
+        }
+      } catch {
+        // No runtime-owned VMs, or an older main process — mutations stay fail-closed.
+      }
+    })()
+
     // Why: hydrate initial SSH state for all targets so worktree cards show correct connect state on launch.
     void (async () => {
       try {

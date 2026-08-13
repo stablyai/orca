@@ -499,4 +499,50 @@ describe('createSshSlice', () => {
     expect(state.sshCredentialQueue).toBe(sshCredentialQueue)
     expect(state.deferredSshSessionIdsByTabId).toBe(deferredSshSessionIdsByTabId)
   })
+
+  it('keeps runtime-owned authorities out of the user-facing host registry', () => {
+    const store = createTestStore()
+
+    store.getState().setRuntimeOwnedSshConnectionGeneration('runtime-ssh-vm-1', 7)
+
+    expect(store.getState().runtimeOwnedSshConnectionGenerations.get('runtime-ssh-vm-1')).toBe(7)
+    expect(store.getState().sshConnectionStates.size).toBe(0)
+    expect(store.getState().sshTargetLabels.size).toBe(0)
+  })
+
+  it('does not notify subscribers when a pushed authority is unchanged', () => {
+    const store = createTestStore()
+    store.getState().setRuntimeOwnedSshConnectionGeneration('runtime-ssh-vm-1', 7)
+    const before = store.getState().runtimeOwnedSshConnectionGenerations
+
+    store.getState().setRuntimeOwnedSshConnectionGeneration('runtime-ssh-vm-1', 7)
+
+    expect(store.getState().runtimeOwnedSshConnectionGenerations).toBe(before)
+  })
+
+  it('lets a push during hydration win over the boot-time snapshot', () => {
+    const store = createTestStore()
+    store.getState().setRuntimeOwnedSshConnectionGeneration('runtime-ssh-vm-1', 8)
+
+    store.getState().seedRuntimeOwnedSshConnectionGenerations([
+      { targetId: 'runtime-ssh-vm-1', connectionGeneration: 7 },
+      { targetId: 'runtime-ssh-vm-2', connectionGeneration: 3 }
+    ])
+
+    expect([...store.getState().runtimeOwnedSshConnectionGenerations]).toEqual([
+      ['runtime-ssh-vm-1', 8],
+      ['runtime-ssh-vm-2', 3]
+    ])
+  })
+
+  it('revokes a torn-down VM authority so a dead relay cannot authorize writes', () => {
+    const store = createTestStore()
+    store.getState().setRuntimeOwnedSshConnectionGeneration('runtime-ssh-vm-1', 7)
+
+    store.getState().clearRemovedSshTargetState('runtime-ssh-vm-1')
+
+    expect(store.getState().runtimeOwnedSshConnectionGenerations.has('runtime-ssh-vm-1')).toBe(
+      false
+    )
+  })
 })

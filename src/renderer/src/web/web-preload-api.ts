@@ -3394,6 +3394,10 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
         error: translate('auto.web.web.preload.api.31bfe8ae1a', 'Unavailable in the web client.')
       }),
     onStateChanged: () => noopUnsubscribe,
+    // Why: runtime-owned VMs belong to the paired host, so web mutations authorize off
+    // sshStateByEnvironment instead of this desktop-only local-authority channel.
+    onRuntimeOwnedAuthorityChanged: () => noopUnsubscribe,
+    listRuntimeOwnedAuthorities: () => Promise.resolve([]),
     addPortForward: () =>
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
     updatePortForward: () =>

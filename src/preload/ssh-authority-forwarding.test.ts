@@ -185,4 +185,43 @@ describe('native preload SSH authority forwarding', () => {
 
     expect(onStateChanged).not.toHaveBeenCalled()
   })
+
+  it('forwards runtime-owned authorities and drops malformed ones', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const onAuthority = vi.fn()
+    const unsubscribe = api.ssh.onRuntimeOwnedAuthorityChanged(onAuthority)
+    const listener = on.mock.calls.find(
+      ([channel]) => channel === 'ssh:runtime-owned-authority-changed'
+    )?.[1] as (event: unknown, data: unknown) => void
+
+    listener({}, { targetId: 'runtime-ssh-vm-1', connectionGeneration: 12 })
+    listener({}, { targetId: 'plain-host', connectionGeneration: 12 })
+    listener({}, { targetId: 'runtime-ssh-vm-1' })
+
+    expect(onAuthority.mock.calls).toEqual([
+      [{ targetId: 'runtime-ssh-vm-1', connectionGeneration: 12 }]
+    ])
+
+    unsubscribe()
+    expect(removeListener).toHaveBeenCalledWith(
+      'ssh:runtime-owned-authority-changed',
+      expect.any(Function)
+    )
+  })
+
+  it('admits each pulled runtime-owned authority independently', async () => {
+    invoke.mockResolvedValueOnce([
+      { targetId: 'runtime-ssh-vm-1', connectionGeneration: 4 },
+      { targetId: 'plain-host', connectionGeneration: 4 },
+      'not-an-authority'
+    ])
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+
+    await expect(api.ssh.listRuntimeOwnedAuthorities()).resolves.toEqual([
+      { targetId: 'runtime-ssh-vm-1', connectionGeneration: 4 }
+    ])
+    expect(invoke).toHaveBeenCalledWith('ssh:listRuntimeOwnedAuthorities')
+  })
 })

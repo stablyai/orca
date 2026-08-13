@@ -5,6 +5,10 @@ import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from './editor-file-operation-owner'
+import {
+  captureFileExplorerOperationGuard,
+  getFileExplorerOperationOwner
+} from '@/components/right-sidebar/file-explorer-operation-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const worktreeId = 'repo::/remote/repo'
@@ -289,5 +293,165 @@ describe('editor file operation owner', () => {
         assertEditorFileOperationCurrent(useAppStore.getState(), folderKey, provenance)
       ).toThrow('Reopen the file')
     })
+  })
+})
+
+// #11762: a per-workspace environment recipe with connection.type "ssh" registers a runtime-owned
+// target (`runtime-ssh-<runtimeId>`) that main deliberately keeps out of ssh:state-changed, so its
+// write-authorization generation arrives on a dedicated channel instead.
+describe('runtime-owned SSH host (per-workspace environment)', () => {
+  const recipeWorktreeId = 'recipe-repo::/workspace/repo'
+  const runtimeOwnedTargetId = 'runtime-ssh-vm-1'
+
+  beforeEach(() => {
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'recipe-repo',
+          connectionId: runtimeOwnedTargetId,
+          executionHostId: `ssh:${runtimeOwnedTargetId}`
+        } as never
+      ],
+      worktreesByRepo: {
+        'recipe-repo': [
+          {
+            id: recipeWorktreeId,
+            repoId: 'recipe-repo',
+            path: '/workspace/repo',
+            hostId: `ssh:${runtimeOwnedTargetId}`
+          } as never
+        ]
+      },
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      sshConnectionStates: new Map(),
+      runtimeOwnedSshConnectionGenerations: new Map([[runtimeOwnedTargetId, 7]])
+    })
+  })
+
+  it('authorizes a save with the published runtime-owned generation', () => {
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      recipeWorktreeId,
+      undefined,
+      false
+    )
+
+    expect(
+      getEditorFileOperationContext(
+        useAppStore.getState(),
+        { worktreeId: recipeWorktreeId, operationProvenance: provenance },
+        '/workspace/repo'
+      )
+    ).toMatchObject({
+      expectedExecutionHostId: `ssh:${runtimeOwnedTargetId}`,
+      connectionId: runtimeOwnedTargetId,
+      expectedSshTargetId: runtimeOwnedTargetId,
+      expectedSshConnectionGeneration: 7
+    })
+  })
+
+  it('authorizes file-tree mutations in the same workspace', () => {
+    const owner = getFileExplorerOperationOwner(recipeWorktreeId)
+    expect(owner).toEqual({ kind: 'ssh', connectionId: runtimeOwnedTargetId })
+
+    expect(captureFileExplorerOperationGuard(recipeWorktreeId, owner).route).toMatchObject({
+      expectedExecutionHostId: `ssh:${runtimeOwnedTargetId}`,
+      expectedSshTargetId: runtimeOwnedTargetId,
+      expectedSshConnectionGeneration: 7
+    })
+  })
+
+  it('still fails closed while the authority is unknown', () => {
+    useAppStore.setState({ runtimeOwnedSshConnectionGenerations: new Map() })
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      recipeWorktreeId,
+      undefined,
+      false
+    )
+
+    expect(() =>
+      getEditorFileOperationContext(
+        useAppStore.getState(),
+        { worktreeId: recipeWorktreeId, operationProvenance: provenance },
+        '/workspace/repo'
+      )
+    ).toThrow('Reopen the file')
+    expect(() =>
+      captureFileExplorerOperationGuard(
+        recipeWorktreeId,
+        getFileExplorerOperationOwner(recipeWorktreeId)
+      )
+    ).toThrow("Couldn't determine which host owns this workspace")
+  })
+
+  it('fails closed when the relay rotates between capture and assert', () => {
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      recipeWorktreeId,
+      undefined,
+      false
+    )
+    useAppStore.setState({
+      runtimeOwnedSshConnectionGenerations: new Map([[runtimeOwnedTargetId, 8]])
+    })
+
+    expect(() =>
+      assertEditorFileOperationCurrent(useAppStore.getState(), recipeWorktreeId, provenance)
+    ).toThrow('Reopen the file')
+  })
+
+  it('never lends the local authority to the same target reached through a HUB', () => {
+    useAppStore.setState({
+      worktreesByRepo: {
+        'recipe-repo': [
+          {
+            id: recipeWorktreeId,
+            repoId: 'recipe-repo',
+            path: '/workspace/repo',
+            hostId: `ssh:${runtimeOwnedTargetId}`,
+            runtimeOwnerEnvironmentId: 'hub-a'
+          } as never
+        ]
+      },
+      runtimeEnvironments: [runtimeEnvironment('hub-a', 1)] as never
+    })
+    const contextForHub = () =>
+      getEditorFileOperationContext(
+        useAppStore.getState(),
+        {
+          worktreeId: recipeWorktreeId,
+          runtimeEnvironmentId: 'hub-a',
+          operationProvenance: captureEditorFileOperationProvenance(
+            useAppStore.getState(),
+            recipeWorktreeId,
+            'hub-a',
+            true
+          )
+        },
+        '/workspace/repo'
+      )
+
+    expect(contextForHub).toThrow('Reopen the file')
+
+    // The route is genuinely HUB-scoped, so only the HUB's own publication may authorize it.
+    useAppStore.setState({
+      sshStateByEnvironment: new Map([
+        [
+          'hub-a',
+          {
+            connectionStates: new Map([
+              [runtimeOwnedTargetId, { connectionGeneration: 5 } as never]
+            ]),
+            targets: [],
+            targetLabels: new Map(),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ]) as never
+    })
+
+    expect(contextForHub()).toMatchObject({ expectedSshConnectionGeneration: 5 })
   })
 })

@@ -1,13 +1,54 @@
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import type { AppState } from '@/store/types'
-import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
-import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+import {
+  isRuntimeOwnedSshTargetId,
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host'
+import {
+  resolveWorktreeOperationRoute,
+  type WorktreeOperationRoute
+} from './worktree-operation-route'
 
 const SSH_OWNER_CHANGED_MESSAGE =
   "Couldn't verify the SSH connection. Reconnect the host and try again."
 
-type DirectSshMutationState = Pick<AppState, 'sshConnectionStates'> &
-  Partial<Pick<AppState, 'sshStateByEnvironment'>>
+// Partial on everything but sshConnectionStates: callers range from full AppState to hand-built literals.
+export type SshConnectionGenerationLookupState = Pick<AppState, 'sshConnectionStates'> &
+  Partial<Pick<AppState, 'sshStateByEnvironment' | 'runtimeOwnedSshConnectionGenerations'>>
+
+export function getExpectedSshConnectionGenerationForTarget(
+  state: SshConnectionGenerationLookupState,
+  targetId: string,
+  runtimeEnvironmentId: string | null | undefined
+): number | undefined {
+  if (runtimeEnvironmentId) {
+    return state.sshStateByEnvironment?.get(runtimeEnvironmentId)?.connectionStates.get(targetId)
+      ?.connectionGeneration
+  }
+  const published = state.sshConnectionStates.get(targetId)?.connectionGeneration
+  if (published !== undefined || !isRuntimeOwnedSshTargetId(targetId)) {
+    return published
+  }
+  // Why: runtime-owned (ephemeral-VM) targets are suppressed from ssh:state-changed, so their
+  // authority arrives on a dedicated channel. Only ever consult it for a locally-owned route (#11762).
+  return state.runtimeOwnedSshConnectionGenerations?.get(targetId)
+}
+
+export function getExpectedSshConnectionGeneration(
+  state: SshConnectionGenerationLookupState,
+  route: WorktreeOperationRoute
+): number | undefined {
+  const host = parseExecutionHostId(route.executionHostId)
+  if (host?.kind !== 'ssh') {
+    return undefined
+  }
+  return getExpectedSshConnectionGenerationForTarget(
+    state,
+    host.targetId,
+    route.runtimeEnvironmentId
+  )
+}
 
 export type DirectSshMutationExpectation = {
   expectedExecutionHostId: `ssh:${string}`
@@ -16,14 +57,15 @@ export type DirectSshMutationExpectation = {
 }
 
 export function captureDirectSshMutationExpectation(
-  state: DirectSshMutationState,
+  state: SshConnectionGenerationLookupState,
   connectionId: string,
   runtimeEnvironmentId?: string | null
 ): DirectSshMutationExpectation {
-  const generation = runtimeEnvironmentId
-    ? state.sshStateByEnvironment?.get(runtimeEnvironmentId)?.connectionStates.get(connectionId)
-        ?.connectionGeneration
-    : state.sshConnectionStates.get(connectionId)?.connectionGeneration
+  const generation = getExpectedSshConnectionGenerationForTarget(
+    state,
+    connectionId,
+    runtimeEnvironmentId
+  )
   if (generation === undefined) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
@@ -46,11 +88,11 @@ export function captureWorktreeSshMutationExpectation(
   if (host?.kind !== 'ssh') {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
-  const generation = route?.runtimeEnvironmentId
-    ? state.sshStateByEnvironment
-        .get(route.runtimeEnvironmentId)
-        ?.connectionStates.get(host.targetId)?.connectionGeneration
-    : state.sshConnectionStates.get(host.targetId)?.connectionGeneration
+  const generation = getExpectedSshConnectionGenerationForTarget(
+    state,
+    host.targetId,
+    route?.runtimeEnvironmentId
+  )
   if (generation === undefined) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }

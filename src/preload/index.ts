@@ -44,8 +44,10 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import {
+  admitRuntimeOwnedSshAuthority,
   admitSshConnectionStateForAuthorityReconciliation,
-  admitSshDetectedPorts
+  admitSshDetectedPorts,
+  type RuntimeOwnedSshAuthority
 } from '../shared/ssh-retained-payload-admission'
 import type {
   HostRepoCatalogSnapshot,
@@ -4559,6 +4561,30 @@ const api = {
       }
       ipcRenderer.on('ssh:state-changed', listener)
       return () => ipcRenderer.removeListener('ssh:state-changed', listener)
+    },
+
+    onRuntimeOwnedAuthorityChanged: (
+      callback: (authority: RuntimeOwnedSshAuthority) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: unknown): void => {
+        const authority = admitRuntimeOwnedSshAuthority(data)
+        if (authority) {
+          callback(authority)
+        }
+      }
+      ipcRenderer.on('ssh:runtime-owned-authority-changed', listener)
+      return () => ipcRenderer.removeListener('ssh:runtime-owned-authority-changed', listener)
+    },
+
+    listRuntimeOwnedAuthorities: async (): Promise<RuntimeOwnedSshAuthority[]> => {
+      const authorities: unknown = await ipcRenderer.invoke('ssh:listRuntimeOwnedAuthorities')
+      if (!Array.isArray(authorities)) {
+        return []
+      }
+      return authorities.flatMap((entry) => {
+        const authority = admitRuntimeOwnedSshAuthority(entry)
+        return authority ? [authority] : []
+      })
     },
 
     addPortForward: (args: {

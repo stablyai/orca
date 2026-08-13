@@ -80,6 +80,7 @@ import type {
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
+import type { RuntimeOwnedSshAuthority } from '../shared/ssh-retained-payload-admission'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -3480,6 +3481,11 @@ export type PreloadApi = {
     onStateChanged: (
       callback: (data: { targetId: string; state: SshConnectionState }) => void
     ) => () => void
+    // Runtime-owned (ephemeral-VM) targets are excluded from onStateChanged; this carries only their write-authorization token.
+    onRuntimeOwnedAuthorityChanged: (
+      callback: (authority: RuntimeOwnedSshAuthority) => void
+    ) => () => void
+    listRuntimeOwnedAuthorities: () => Promise<RuntimeOwnedSshAuthority[]>
     addPortForward: (args: {
       targetId: string
       localPort: number

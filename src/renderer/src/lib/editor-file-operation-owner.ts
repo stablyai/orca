@@ -13,6 +13,7 @@ import {
   settingsForWorktreeOperationRoute,
   type WorktreeOperationRoute
 } from './worktree-operation-route'
+import { getExpectedSshConnectionGeneration } from './ssh-mutation-expectation'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
@@ -34,6 +35,7 @@ type EditorOwnerState = Pick<
   | 'removedRuntimeEnvironmentIds'
   | 'sshConnectionStates'
   | 'sshStateByEnvironment'
+  | 'runtimeOwnedSshConnectionGenerations'
 >
 
 const OWNER_CHANGED_MESSAGE =
@@ -198,19 +200,4 @@ export function getEditorFileOperationContext(
       ? {}
       : { expectedSshConnectionGeneration: provenance.expectedSshConnectionGeneration })
   }
-}
-
-function getExpectedSshConnectionGeneration(
-  state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
-  route: WorktreeOperationRoute
-): number | undefined {
-  const host = parseExecutionHostId(route.executionHostId)
-  if (host?.kind !== 'ssh') {
-    return undefined
-  }
-  return route.runtimeEnvironmentId
-    ? state.sshStateByEnvironment
-        .get(route.runtimeEnvironmentId)
-        ?.connectionStates.get(host.targetId)?.connectionGeneration
-    : state.sshConnectionStates.get(host.targetId)?.connectionGeneration
 }

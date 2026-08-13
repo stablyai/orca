@@ -5,6 +5,7 @@ import type {
   SshConnectionStatus,
   SshProviderEpoch
 } from './ssh-types'
+import { isRuntimeOwnedSshTargetId } from './execution-host'
 import { clampUtf8TextPrefix, measureUtf8ByteLength } from './utf8-byte-limits'
 
 export const SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES = 1024
@@ -46,6 +47,28 @@ export function isAdmissibleDirectSshAuthority(value: unknown): value is DirectS
     isSshProviderEpoch(authority.providerEpoch) &&
     isNonNegativeSafeInteger(authority.connectionGeneration)
   )
+}
+
+/** Write-authorization token for a runtime-owned (ephemeral-VM) SSH target, which is
+ * deliberately absent from the user-facing ssh:state-changed stream. */
+export type RuntimeOwnedSshAuthority = {
+  targetId: string
+  connectionGeneration: number
+}
+
+export function admitRuntimeOwnedSshAuthority(value: unknown): RuntimeOwnedSshAuthority | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const { targetId, connectionGeneration } = value as Record<string, unknown>
+  if (
+    !isSshRetainedIdentifier(targetId) ||
+    !isRuntimeOwnedSshTargetId(targetId) ||
+    !isNonNegativeSafeInteger(connectionGeneration)
+  ) {
+    return null
+  }
+  return { targetId, connectionGeneration }
 }
 
 export function admitSshConnectionState(

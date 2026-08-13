@@ -30,6 +30,11 @@ export type SshCredentialRequest = {
 
 export type SshSlice = {
   sshConnectionStates: Map<string, SshConnectionState>
+  /** Write-authorization generations for runtime-owned (ephemeral-VM) SSH targets.
+   * Why separate from sshConnectionStates: that map is the user-facing host registry
+   * (status bar, jump palette, worktree cards, startup auto-reconnect), all of which
+   * assume runtime-owned ids never appear in it. */
+  runtimeOwnedSshConnectionGenerations: Map<string, number>
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
@@ -58,6 +63,10 @@ export type SshSlice = {
    *  connection ID. Updated from SSH IPC snapshots and push events. */
   detectedPortsByConnection: Record<string, EnrichedDetectedPort[]>
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
+  setRuntimeOwnedSshConnectionGeneration: (targetId: string, generation: number) => void
+  seedRuntimeOwnedSshConnectionGenerations: (
+    entries: { targetId: string; connectionGeneration: number }[]
+  ) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
   setRemovedSshTargetLabels: (labels: Record<string, string>) => void
   setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
@@ -84,6 +93,7 @@ function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
+  runtimeOwnedSshConnectionGenerations: new Map(),
   sshTargetLabels: new Map(),
   removedSshTargetLabels: new Map(),
   sshTargetsHydrated: false,
@@ -116,6 +126,30 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
           : s.sshConnectedGeneration,
         transientClearedAgentStatusConnectionIds: blockedConnections
       }
+    }),
+
+  setRuntimeOwnedSshConnectionGeneration: (targetId, generation) =>
+    set((s) => {
+      if (s.runtimeOwnedSshConnectionGenerations.get(targetId) === generation) {
+        return s
+      }
+      const next = new Map(s.runtimeOwnedSshConnectionGenerations)
+      next.set(targetId, generation)
+      return { runtimeOwnedSshConnectionGenerations: next }
+    }),
+
+  seedRuntimeOwnedSshConnectionGenerations: (entries) =>
+    set((s) => {
+      const next = new Map(s.runtimeOwnedSshConnectionGenerations)
+      for (const entry of entries) {
+        // Why: a push that landed during hydration is newer than this snapshot, so never overwrite it.
+        if (!next.has(entry.targetId)) {
+          next.set(entry.targetId, entry.connectionGeneration)
+        }
+      }
+      return next.size === s.runtimeOwnedSshConnectionGenerations.size
+        ? s
+        : { runtimeOwnedSshConnectionGenerations: next }
     }),
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),

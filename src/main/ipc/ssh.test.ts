@@ -283,7 +283,10 @@ import {
   getSshPtyProvider,
   getPtyIdsForConnection
 } from './pty'
-import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
+import {
+  assertSshMutationExpectation,
+  getSshConnectionGeneration
+} from '../ssh/ssh-connection-generation'
 import { getSshPtyConsumerRecovery } from '../ssh/ssh-pty-consumer-recovery'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 
@@ -1791,6 +1794,59 @@ describe('SSH IPC handlers', () => {
     )
     expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
     expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
+    // Why: the renderer still needs the write-authorization token it can't get from ssh:state-changed (#11762).
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+      'ssh:runtime-owned-authority-changed',
+      {
+        targetId: 'runtime-ssh-1',
+        connectionGeneration: getSshConnectionGeneration('runtime-ssh-1')
+      }
+    )
+  })
+
+  it('publishes no runtime-owned authority for an ordinary target', () => {
+    registerSshHandlers(mockStore as never, () => mockWindow as never)
+    const callbacks = mockConnectionManager.callbacksRef.current as {
+      onStateChange: (targetId: string, state: SshConnectionState) => void
+    }
+
+    callbacks.onStateChange('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', expect.anything())
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+      'ssh:runtime-owned-authority-changed',
+      expect.anything()
+    )
+  })
+
+  it('publishes no runtime-owned authority once the window is destroyed', () => {
+    const destroyedWindow = { isDestroyed: () => true, webContents: { send: vi.fn() } }
+    registerSshHandlers(mockStore as never, () => destroyedWindow as never)
+    const callbacks = mockConnectionManager.callbacksRef.current as {
+      onStateChange: (targetId: string, state: SshConnectionState) => void
+    }
+
+    callbacks.onStateChange('runtime-ssh-1', {
+      targetId: 'runtime-ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    expect(destroyedWindow.webContents.send).not.toHaveBeenCalled()
+  })
+
+  it('re-registers the runtime-owned authority pull handler on every registration', () => {
+    registerSshHandlers(mockStore as never, () => mockWindow as never, undefined as never)
+
+    expect(handlers.has('ssh:listRuntimeOwnedAuthorities')).toBe(true)
+    // No sessions in this harness, so the pull is empty rather than guessing at authorities.
+    expect(handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, undefined)).toEqual([])
   })
 
   it('invalidates runtime scans from hidden SSH state broadcasts', () => {
@@ -1817,6 +1873,13 @@ describe('SSH IPC handlers', () => {
     expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
       'ssh:state-changed',
       expect.anything()
+    )
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+      'ssh:runtime-owned-authority-changed',
+      {
+        targetId: 'runtime-ssh-1',
+        connectionGeneration: getSshConnectionGeneration('runtime-ssh-1')
+      }
     )
   })
 

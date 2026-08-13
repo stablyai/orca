@@ -52,6 +52,7 @@ import {
 } from './pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
+  getSshConnectionGeneration,
   initializeSshConnectionGenerationSession,
   resetSshConnectionGenerations
 } from '../ssh/ssh-connection-generation'
@@ -93,7 +94,8 @@ const SSH_IPC_CHANNELS = [
   'ssh:updatePortForward',
   'ssh:removePortForward',
   'ssh:listPortForwards',
-  'ssh:listDetectedPorts'
+  'ssh:listDetectedPorts',
+  'ssh:listRuntimeOwnedAuthorities'
 ] as const
 
 // Why: keep this outside registerSshHandlers so a BrowserWindow recreation mid-connect doesn't split credential tracking.
@@ -419,6 +421,14 @@ function broadcastSshState(
   // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, so broadcasting their state only triggers wasted listTargets() lookups.
   if (isRuntimeOwnedSshTargetId(targetId)) {
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
+    // Why: the renderer still needs their write-authorization token, or every file mutation on a recipe VM fails closed (#11762).
+    const hiddenWin = getMainWindow()
+    if (hiddenWin && !hiddenWin.isDestroyed()) {
+      hiddenWin.webContents.send('ssh:runtime-owned-authority-changed', {
+        targetId,
+        connectionGeneration: getSshConnectionGeneration(targetId)
+      })
+    }
     return
   }
   const enrichedState = withSshRemotePlatform(targetId, state)
@@ -1600,6 +1610,14 @@ export function registerSshHandlers(
     const ports = session?.getPortScanner()?.getDetectedPorts(args.targetId) ?? []
     return enrichDetected(args.targetId, ports)
   })
+
+  // Why: pull path for a renderer reload, or a recipe VM connected before the window subscribed.
+  ipcMain.handle('ssh:listRuntimeOwnedAuthorities', () =>
+    [...activeSessions.keys()].filter(isRuntimeOwnedSshTargetId).map((targetId) => ({
+      targetId,
+      connectionGeneration: getSshConnectionGeneration(targetId)
+    }))
+  )
 
   return { connectionManager, sshStore }
 }

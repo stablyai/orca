@@ -14,6 +14,7 @@ import {
   type WorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
+import { getExpectedSshConnectionGeneration } from '@/lib/ssh-mutation-expectation'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type FileExplorerOperationRoute = {
@@ -195,21 +196,6 @@ export function captureFileExplorerOperationGuard(
       return guardedRoute
     }
   }
-}
-
-function getExpectedSshConnectionGeneration(
-  state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
-  route: WorktreeOperationRoute
-): number | undefined {
-  const host = parseExecutionHostId(route.executionHostId)
-  if (host?.kind !== 'ssh') {
-    return undefined
-  }
-  return route.runtimeEnvironmentId
-    ? state.sshStateByEnvironment
-        .get(route.runtimeEnvironmentId)
-        ?.connectionStates.get(host.targetId)?.connectionGeneration
-    : state.sshConnectionStates.get(host.targetId)?.connectionGeneration
 }
 
 function getFileExplorerGenerationRoute(

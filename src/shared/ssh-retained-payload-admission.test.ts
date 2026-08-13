@@ -9,6 +9,7 @@ import {
   SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES,
   SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES,
   SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES,
+  admitRuntimeOwnedSshAuthority,
   admitSshConnectionStateForAuthorityReconciliation,
   isAdmissibleDirectSshAuthority
 } from './ssh-retained-payload-admission'
@@ -201,5 +202,33 @@ describe('SSH retained payload admission', () => {
         { port: 3001, host: '127.0.0.1', processName: 'node' }
       ])
     ).toEqual([{ port: 3001, host: '127.0.0.1', processName: 'node' }])
+  })
+
+  it('keeps a runtime-owned authority at full session-scope width', () => {
+    // The session generation base is randomBytes(5) << 13, so legitimate values reach ~2^53.
+    expect(
+      admitRuntimeOwnedSshAuthority({
+        targetId: 'runtime-ssh-vm-1',
+        connectionGeneration: Number.MAX_SAFE_INTEGER - 1,
+        status: 'connected'
+      })
+    ).toEqual({ targetId: 'runtime-ssh-vm-1', connectionGeneration: Number.MAX_SAFE_INTEGER - 1 })
+  })
+
+  it('rejects runtime-owned authorities that could not have come from main', () => {
+    expect(admitRuntimeOwnedSshAuthority({ connectionGeneration: 3 })).toBeNull()
+    expect(
+      admitRuntimeOwnedSshAuthority({ targetId: 'plain-host', connectionGeneration: 3 })
+    ).toBeNull()
+    expect(
+      admitRuntimeOwnedSshAuthority({ targetId: 'runtime-ssh-vm-1', connectionGeneration: -1 })
+    ).toBeNull()
+    expect(
+      admitRuntimeOwnedSshAuthority({ targetId: 'runtime-ssh-vm-1', connectionGeneration: 1.5 })
+    ).toBeNull()
+    expect(
+      admitRuntimeOwnedSshAuthority({ targetId: 'runtime-ssh-vm-1', connectionGeneration: '3' })
+    ).toBeNull()
+    expect(admitRuntimeOwnedSshAuthority(null)).toBeNull()
   })
 })

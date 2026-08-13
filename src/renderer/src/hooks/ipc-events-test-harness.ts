@@ -235,6 +235,8 @@ export async function loadIpcEventsHarness(
           listPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           listRemovedTargetLabels: () => Promise.resolve([]),
+          listRuntimeOwnedAuthorities: () => Promise.resolve([]),
+          onRuntimeOwnedAuthorityChanged: () => () => {},
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
