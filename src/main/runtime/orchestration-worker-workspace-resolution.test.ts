@@ -196,6 +196,41 @@ describe('orchestration worker workspace resolution', () => {
     )
   })
 
+  it('rejects the same worktree path on different execution hosts', async () => {
+    const remoteRepo = {
+      id: 'repo-remote',
+      path: '/remote-repo',
+      displayName: 'Remote app',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    } satisfies Repo
+    getSshGitProvider.mockReturnValue({
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: WORKTREE_PATH,
+          head: 'remote',
+          branch: 'remote-feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    })
+    const runtime = new OrcaRuntimeService(
+      makeStore({
+        repos: [makeStore().getRepos()[0], remoteRepo],
+        meta: {
+          [WORKTREE_ID]: makeMeta('Local feature'),
+          [`${remoteRepo.id}::${WORKTREE_PATH}`]: makeMeta('Remote feature')
+        }
+      }) as never
+    )
+
+    await expect(runtime.showManagedTerminalWorkspace(`path:${WORKTREE_PATH}`)).rejects.toThrow(
+      'selector_ambiguous'
+    )
+  })
+
   it('resolves local and SSH folder workspaces without a Git catalog scan', async () => {
     const localPath = await mkdtemp(join(tmpdir(), 'orca-worker-local-folder-'))
     tempPaths.push(localPath)
