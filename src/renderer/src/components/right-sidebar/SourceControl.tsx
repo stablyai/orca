@@ -6856,28 +6856,30 @@ export function CommitArea({
           <DropdownMenu>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="inline-flex shrink-0">
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      className={cn(
-                        'rounded-l-none border-l border-border px-1.5 shrink-0',
-                        // Why: mirror the primary's disabled dimming for a unified look, but the chevron stays clickable (its push/fetch/pull stay valid when Commit is disabled).
-                        primaryAction.disabled && 'opacity-50'
-                      )}
-                      aria-label={moreCommitAndRemoteActionsLabel}
-                      title={moreActionsLabel}
-                    >
-                      {showChevronSpinner ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <ChevronDown className="size-3.5" />
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                </span>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    className={cn(
+                      'rounded-l-none border-l border-border px-1.5 shrink-0',
+                      // Why: mirror the primary's disabled dimming so the split
+                      // button reads as one unit when Commit is unavailable. The
+                      // chevron itself stays clickable — its dropdown exposes
+                      // independently-gated remote actions (push / fetch / pull)
+                      // that are still valid when the primary is disabled.
+                      primaryAction.disabled && 'opacity-50'
+                    )}
+                    aria-label={moreCommitAndRemoteActionsLabel}
+                    title={moreActionsLabel}
+                  >
+                    {showChevronSpinner ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <ChevronDown className="size-3.5" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
                 {moreCommitAndRemoteActionsLabel}

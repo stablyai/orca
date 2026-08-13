@@ -888,23 +888,20 @@ export function ActivityThreadOptionsMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* Why: keep Tooltip and Dropdown from composing refs onto the same button (Radix setRef crash loop). */}
-          <span className="inline-flex shrink-0">
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.db8a1878b5',
-                  'Thread list options'
-                )}
-              >
-                <MoreVertical className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </span>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
+              aria-label={translate(
+                'auto.components.activity.ActivityPrototypePage.db8a1878b5',
+                'Thread list options'
+              )}
+            >
+              <MoreVertical className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom">
           {translate('auto.components.activity.ActivityPrototypePage.a472a14700', 'More options')}

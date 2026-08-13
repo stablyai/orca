@@ -44,7 +44,7 @@ describe('ActivityThreadOptionsMenu', () => {
     document.body.replaceChildren()
   })
 
-  it('opens without recursively updating composed Radix trigger refs', async () => {
+  it('opens with direct composed Tooltip and Dropdown triggers', async () => {
     await act(async () => {
       root.render(<Harness />)
     })
@@ -54,7 +54,7 @@ describe('ActivityThreadOptionsMenu', () => {
     )
 
     expect(trigger).not.toBeNull()
-    expect(trigger?.parentElement?.tagName).toBe('SPAN')
+    expect(trigger?.parentElement?.tagName).not.toBe('SPAN')
 
     await act(async () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
