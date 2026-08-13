@@ -12,7 +12,7 @@ import {
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { createManagedCommandMatcher, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
@@ -274,11 +274,12 @@ describe('CodexHookService', () => {
     }
   )
 
-  // Why: the common case — a profile path with no spaces or cmd metacharacters
-  // — must launch the .cmd directly with no PowerShell, restoring the pre-#6078
-  // speed that Codex 0.140's synchronous "Running <event> hook" rows expose.
+  // Why: Codex executes hooks through the active turn shell, which can be
+  // Windows PowerShell or PowerShell 7 for native Windows sessions, and falls
+  // back to cmd.exe when no turn shell is available. The managed command must
+  // survive every available Windows shell without requiring optional pwsh.
   it.skipIf(process.platform !== 'win32')(
-    'launches the managed .cmd directly when the profile path is cmd-safe',
+    'runs the managed command from Codex Windows shells',
     () => {
       const status = new CodexHookService().install()
       expect(status.state).toBe('installed')
@@ -288,15 +289,49 @@ describe('CodexHookService', () => {
         readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
       ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
 
-      // Why: the temp home is normally cmd-safe; guard so a runner whose tmpdir
-      // holds an exotic character still asserts the correct (fallback) branch.
       const command = hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command ?? ''
-      const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(tmpHome, '.orca', 'agent-hooks'))
-      if (cmdSafe) {
-        expect(command).not.toMatch(/powershell/i)
-        expect(command).toMatch(/\\agent-hooks\\codex-hook\.cmd$/)
-      } else {
-        expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+      expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+
+      const cleanEnv = { ...process.env }
+      for (const key of Object.keys(cleanEnv)) {
+        if (key.toUpperCase().startsWith('ORCA_')) {
+          delete cleanEnv[key]
+        }
+      }
+
+      const powershellPath = join(
+        process.env.SystemRoot ?? 'C:\\Windows',
+        'System32',
+        'WindowsPowerShell',
+        'v1.0',
+        'powershell.exe'
+      )
+      const pwshPath = join(
+        process.env.ProgramFiles ?? 'C:\\Program Files',
+        'PowerShell',
+        '7',
+        'pwsh.exe'
+      )
+      const cmdPath = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe')
+      const shellCases = [
+        { name: 'PowerShell', executable: powershellPath, args: ['-NoProfile', '-Command'] },
+        { name: 'cmd.exe', executable: cmdPath, args: ['/d', '/c'] }
+      ]
+      if (existsSync(pwshPath)) {
+        shellCases.splice(1, 0, {
+          name: 'PowerShell 7',
+          executable: pwshPath,
+          args: ['-NoProfile', '-Command']
+        })
+      }
+      for (const shellCase of shellCases) {
+        const result = spawnSync(shellCase.executable, [...shellCase.args, command], {
+          env: cleanEnv,
+          input: Buffer.from('{}')
+        })
+
+        expect(result.error, `${shellCase.name} spawn error`).toBeUndefined()
+        expect(result.status, `${shellCase.name} exit code`).toBe(0)
       }
     }
   )

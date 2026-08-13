@@ -14,7 +14,7 @@ import {
   readHooksJsonWithRaw,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -146,7 +146,7 @@ function getManagedScriptPath(): string {
 
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
-    ? wrapWindowsCmdHookCommand(scriptPath)
+    ? wrapWindowsHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 
