@@ -1,13 +1,5 @@
-/**
- * zh-TW was seeded by converting zh.json, so the two failure modes are
- * script (Simplified glyphs surviving) and vocabulary (Mainland wording, or an
- * OpenCC phrase table over-converting 权限 into 許可權). Neither shows up in
- * verify-localization-catalog, which only checks key parity and interpolation.
- *
- * A failure here is not a false alarm: pick the Taiwan form listed beside the
- * term. If a new string genuinely needs a listed word, narrow the entry rather
- * than deleting the gate.
- */
+// Script and vocabulary regressions in a converted catalog are invisible to
+// verify-localization-catalog, which only checks key parity and interpolation.
 import { describe, expect, it } from 'vitest'
 import en from './locales/en.json'
 import zhTW from './locales/zh-TW.json'
@@ -48,6 +40,7 @@ const FORBIDDEN_TERMS: Record<string, string> = {
   選項卡: '分頁',
   標籤頁: '分頁',
   倉庫: '存放庫',
+  儲存庫: '存放庫',
   配置: '設定',
   本地: '本機',
   計算機: '電腦',

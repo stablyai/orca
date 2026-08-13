@@ -379,6 +379,14 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /注解/g, replacement: '批注', whenEnIncludes: 'Annotation' },
     ...ZH_PHRASE_FIXES_ROUND5
   ],
+  // Why: 倉庫/儲存庫 stay in the Repo generic renderings so the brand revert leaves them
+  // translated rather than rewriting them to Latin, and these fixes then normalize them to
+  // the 存放庫 the zh-TW catalog uses. Without them a repair run would preserve the
+  // Mainland wording that zh-tw-traditional-usage.test.ts rejects.
+  'zh-TW': [
+    { pattern: /倉庫/g, replacement: '存放庫', whenEnMatches: /repo/i },
+    { pattern: /儲存庫/g, replacement: '存放庫', whenEnMatches: /repo/i }
+  ],
   ja: JA_PHRASE_FIXES,
   es: [
     // Why: machine translation renders the abbreviation "PR" (pull request) as
