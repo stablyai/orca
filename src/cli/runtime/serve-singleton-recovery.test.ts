@@ -297,4 +297,37 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
     expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-987654`)
     expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
   })
+
+  it('lets only one concurrent recovery quarantine a stale owner', async () => {
+    const root = await createProfile(987_654)
+    let waiters = 0
+    let releaseWaiters!: () => void
+    const bothWaiting = new Promise<void>((resolve) => {
+      releaseWaiters = resolve
+    })
+    const wait = async (): Promise<void> => {
+      waiters += 1
+      if (waiters === 2) {
+        releaseWaiters()
+      }
+      await bothWaiting
+    }
+    const options = {
+      platform: 'linux' as const,
+      probeHealth: async () => ({ healthy: false as const, reason: 'metadata_missing' as const }),
+      isProcessAlive: (pid: number) => pid === process.pid,
+      wait
+    }
+
+    const results = await Promise.all([
+      recoverStaleServeSingleton(root, { ...options, quarantineSuffix: 'concurrent-one' }),
+      recoverStaleServeSingleton(root, { ...options, quarantineSuffix: 'concurrent-two' })
+    ])
+
+    expect(results.filter((result) => result.state === 'recovered')).toHaveLength(1)
+    expect(results.filter((result) => result.state === 'not-recoverable')).toHaveLength(1)
+    expect(results).toContainEqual({ state: 'not-recoverable', reason: 'recovery_in_progress' })
+    expect(await pathExists(join(root, 'SingletonRecoveryLock'))).toBe(false)
+    expect(await pathExists(join(root, 'SingletonLock'))).toBe(false)
+  })
 })
