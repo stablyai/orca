@@ -369,7 +369,12 @@ set -euo pipefail
 vercel_args=(); [ -n "$scope" ] && vercel_args+=(--scope "$scope"); [ -n "$project" ] && vercel_args+=(--project "$project")
 [ -n "$snapshot_id" ] || { echo "snapshotId missing — run Phases 2–3 first" >&2; exit 1; }
 gh_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(command -v gh >/dev/null 2>&1 && gh auth token 2>/dev/null || true)}}"
-name="orca-${ORCA_RECIPE_ID:-vercel-sandbox}-${ORCA_VM_INSTANCE_ID:-$(date +%s)}"  # sanitize+cap to 63 chars
+recipe_id="${ORCA_RECIPE_ID:-vercel-sandbox}"
+recipe_id="${recipe_id//./-}"  # Vercel names forbid dots.
+instance_id="${ORCA_VM_INSTANCE_ID:-$(date +%s)}"
+max_recipe_id_length=$((128 - ${#instance_id} - 6))  # Preserve the unique instance suffix.
+[ "$max_recipe_id_length" -gt 0 ] || { echo "ORCA_VM_INSTANCE_ID is too long for a Vercel sandbox name" >&2; exit 1; }
+name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"
 
 # Arm cleanup BEFORE create so a failing create can't leak a half-built paid sandbox.
 cleanup_on_error() { [ "$?" -ne 0 ] && vercel sandbox remove "$name" "${vercel_args[@]}" >/dev/null 2>&1 || true; }
