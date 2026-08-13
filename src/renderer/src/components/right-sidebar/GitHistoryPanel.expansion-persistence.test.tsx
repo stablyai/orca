@@ -60,11 +60,13 @@ const fileEntries: GitBranchChangeEntry[] = [
 
 function renderPanel(
   result: GitHistoryResult,
-  onLoadCommitFiles: () => Promise<GitBranchChangeEntry[]>
+  onLoadCommitFiles: () => Promise<GitBranchChangeEntry[]>,
+  worktreeId = 'wt-a'
 ): React.JSX.Element {
   return (
     <GitHistoryPanel
       state={{ status: 'ready', result }}
+      worktreeId={worktreeId}
       collapsed={false}
       onToggle={vi.fn()}
       onRefresh={vi.fn()}
@@ -116,6 +118,29 @@ describe('GitHistoryPanel expansion persistence', () => {
     })
 
     view.rerender(renderPanel(makeHistoryResult(3), onLoadCommitFiles))
+    fireEvent.click(screen.getByRole('button', { name: expandLabelFor(0) }))
+    expect(await screen.findByText('app.ts')).toBeTruthy()
+    expect(onLoadCommitFiles).toHaveBeenCalledTimes(2)
+  })
+
+  // Sibling worktrees of one repo share almost all history, so a commit can survive the switch.
+  // useGitHistoryCommitActions drops its commit-compare cache per worktree, so a row retained
+  // across the switch would look expanded while every file click resolved to nothing.
+  it('drops expansion and cached files when the worktree changes, even if the commit survives', async () => {
+    const onLoadCommitFiles = vi.fn(async () => fileEntries)
+    const view = render(renderPanel(makeHistoryResult(3), onLoadCommitFiles, 'wt-a'))
+
+    fireEvent.click(screen.getByRole('button', { name: expandLabelFor(0) }))
+    expect(await screen.findByText('app.ts')).toBeTruthy()
+    expect(onLoadCommitFiles).toHaveBeenCalledTimes(1)
+
+    view.rerender(renderPanel(makeHistoryResult(3), onLoadCommitFiles, 'wt-b'))
+
+    await waitFor(() => {
+      expect(screen.queryByText('app.ts')).toBeNull()
+    })
+
+    // Re-expanding must refetch so the sibling commit-compare cache is repopulated.
     fireEvent.click(screen.getByRole('button', { name: expandLabelFor(0) }))
     expect(await screen.findByText('app.ts')).toBeTruthy()
     expect(onLoadCommitFiles).toHaveBeenCalledTimes(2)

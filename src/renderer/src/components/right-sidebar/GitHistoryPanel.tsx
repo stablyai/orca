@@ -15,7 +15,8 @@ import {
   buildGitHistoryViewModels
 } from '../../../../shared/git-history-graph'
 import { GitHistoryRow } from './GitHistoryRow'
-import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './GitHistoryCommitFiles'
+import { GitHistoryCommitFiles } from './GitHistoryCommitFiles'
+import { useGitHistoryCommitExpansion } from './useGitHistoryCommitExpansion'
 import {
   GitHistoryCommitContextMenu,
   type GitHistoryCommitAction
@@ -46,6 +47,7 @@ function clampGitHistoryPanelHeight(height: number): number {
 
 export function GitHistoryPanel({
   state,
+  worktreeId,
   collapsed,
   onToggle,
   onRefresh,
@@ -56,6 +58,8 @@ export function GitHistoryPanel({
   onCommitAction
 }: {
   state: GitHistoryPanelState
+  // The worktree this history belongs to; scopes the per-commit expansion/file caches.
+  worktreeId?: string
   collapsed: boolean
   onToggle: () => void
   onRefresh: () => void
@@ -93,67 +97,11 @@ export function GitHistoryPanel({
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
-  // Tracks commits whose files have been loaded (or are in flight) so re-expanding
-  // never refetches; an entry is cleared on error to allow a retry.
-  const loadedCommitsRef = useRef<Set<string>>(new Set())
-
-  // Prune expansion and cached file lists to the commits that survived the new result.
-  // Clearing wholesale would collapse every expanded row on Load more, which only appends;
-  // file lists are keyed by immutable commit id, so a surviving id cannot show stale files.
-  useEffect(() => {
-    const liveIds = new Set(result?.items.map((item) => item.id) ?? [])
-    setExpanded((prev) => new Set([...prev].filter((id) => liveIds.has(id))))
-    setFilesByCommit((prev) =>
-      Object.fromEntries(Object.entries(prev).filter(([id]) => liveIds.has(id)))
-    )
-    loadedCommitsRef.current = new Set(
-      [...loadedCommitsRef.current].filter((id) => liveIds.has(id))
-    )
-  }, [result])
-
-  const handleToggleExpand = useCallback(
-    (item: GitHistoryItem): void => {
-      const id = item.id
-      const willExpand = !expanded.has(id)
-      setExpanded((prev) => {
-        const next = new Set(prev)
-        if (willExpand) {
-          next.add(id)
-        } else {
-          next.delete(id)
-        }
-        return next
-      })
-      if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.has(id)) {
-        return
-      }
-      loadedCommitsRef.current.add(id)
-      setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'loading' } }))
-      onLoadCommitFiles(item)
-        .then((entries) => {
-          setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'ready', entries } }))
-        })
-        .catch((error: unknown) => {
-          loadedCommitsRef.current.delete(id)
-          setFilesByCommit((prev) => ({
-            ...prev,
-            [id]: {
-              status: 'error',
-              error:
-                error instanceof Error
-                  ? error.message
-                  : translate(
-                      'auto.components.right.sidebar.GitHistoryPanel.6d1e0a7c3b',
-                      'Failed to load commit files'
-                    )
-            }
-          }))
-        })
-    },
-    [expanded, onLoadCommitFiles]
-  )
+  const { expanded, filesByCommit, toggleExpand } = useGitHistoryCommitExpansion({
+    result,
+    worktreeId,
+    onLoadCommitFiles
+  })
 
   const stopResize = useCallback((): void => {
     const session = resizeSessionRef.current
@@ -368,7 +316,7 @@ export function GitHistoryPanel({
                 expanded={isExpanded}
                 preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
                 onOpenCommit={onOpenCommit}
-                onToggleExpand={canExpand ? handleToggleExpand : undefined}
+                onToggleExpand={canExpand ? toggleExpand : undefined}
               />
             )
             return (
