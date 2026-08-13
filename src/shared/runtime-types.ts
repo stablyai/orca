@@ -152,6 +152,11 @@ export type RuntimeSyncWindowGraph = {
   unchangedMobileSessionWorktrees?: string[]
 }
 
+export type RuntimeRendererSyncWindowGraph = RuntimeSyncWindowGraph & {
+  /** Unique to one renderer document; a reload must publish from a new generation. */
+  rendererGeneration: string
+}
+
 export type RuntimeNativeChatLaunchDraftResolution = {
   tabId: string
   text: string

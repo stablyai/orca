@@ -2595,17 +2595,65 @@ describe('OrcaRuntimeService', () => {
       runtime.markRendererReloading(TEST_WINDOW_ID)
       await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS / 2)
       runtime.markRendererReloading(TEST_WINDOW_ID)
-      runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
 
-      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS / 2)
 
       expect(runtime.getStatus()).toMatchObject({
         authoritativeWindowId: TEST_WINDOW_ID,
-        graphStatus: 'ready'
+        graphStatus: 'reloading'
+      })
+
+      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS / 2)
+
+      expect(runtime.getStatus()).toMatchObject({
+        authoritativeWindowId: TEST_WINDOW_ID,
+        graphStatus: 'unavailable'
       })
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('rejects a same-frame graph publication from the superseded renderer generation', () => {
+    const runtime = createRuntime()
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [],
+      leaves: [],
+      rendererGeneration: 'renderer-a'
+    })
+    runtime.markRendererReloading(TEST_WINDOW_ID)
+
+    expect(() =>
+      runtime.syncWindowGraph(TEST_WINDOW_ID, {
+        tabs: [],
+        leaves: [],
+        rendererGeneration: 'renderer-a'
+      })
+    ).toThrow('Runtime graph publisher belongs to a superseded renderer generation')
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: TEST_WINDOW_ID,
+      graphStatus: 'reloading'
+    })
+  })
+
+  it('keeps a restored headless graph pinned to the failed promotion window', () => {
+    const runtime = createRuntime()
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReloadFailed(TEST_WINDOW_ID, 'renderer-process-gone')
+
+    expect(() =>
+      runtime.syncWindowGraph(2, {
+        tabs: [],
+        leaves: [],
+        rendererGeneration: 'renderer-b'
+      })
+    ).toThrow('Runtime graph publisher does not match the pending desktop promotion')
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
+      graphStatus: 'ready'
+    })
   })
 
   it('stays unavailable during initial loads before a graph is published', () => {

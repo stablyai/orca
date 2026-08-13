@@ -70,9 +70,15 @@ describe('runtime renderer notification sender', () => {
 
     fixture.sender.onRendererProcessGone()
     fixture.sender.onRendererProcessGone()
+    fixture.sender.onMainFrameReloadStarted()
+    fixture.sender.onMainFrameLoadFinished()
+    fixture.sender.onRendererProcessGone()
+    fixture.sender.onRendererProcessGone()
 
-    expect(fixture.warn).toHaveBeenCalledOnce()
-    expect(fixture.onFailure).toHaveBeenCalledExactlyOnceWith('renderer-process-gone')
+    expect(fixture.warn).toHaveBeenCalledTimes(2)
+    expect(fixture.onFailure).toHaveBeenCalledTimes(2)
+    expect(fixture.onFailure).toHaveBeenNthCalledWith(1, 'renderer-process-gone')
+    expect(fixture.onFailure).toHaveBeenNthCalledWith(2, 'renderer-process-gone')
   })
 
   it('keeps close terminal when renderer lifecycle events arrive late', () => {

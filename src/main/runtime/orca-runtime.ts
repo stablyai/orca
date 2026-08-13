@@ -2712,6 +2712,8 @@ export class OrcaRuntimeService {
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
   private headlessGraphFallbackAvailable = false
+  private pendingHeadlessPromotionWindowId: number | null = null
+  private rendererGeneration: string | null = null
   private readonly graphReloadLifecycle = new RuntimeGraphReloadLifecycle({
     timeoutMs: RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
     onSettled: ({ revision, windowId, outcome, durationMs }) => {
@@ -5412,9 +5414,16 @@ export class OrcaRuntimeService {
 
   attachWindow(windowId: number): void {
     if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {
+      if (
+        this.pendingHeadlessPromotionWindowId !== null &&
+        windowId !== this.pendingHeadlessPromotionWindowId
+      ) {
+        return
+      }
       // Why: promotion is a renderer reload of the same graph owner, not a new
       // runtime; stale handles must transition before the real window publishes.
       this.persistWindowlessPtyBindingsForDesktopAttach()
+      this.pendingHeadlessPromotionWindowId = windowId
       this.authoritativeWindowId = windowId
       this.beginGraphReload(windowId)
       return
@@ -5499,6 +5508,9 @@ export class OrcaRuntimeService {
       this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
       this.headlessGraphFallbackAvailable
     ) {
+      if (windowId !== this.pendingHeadlessPromotionWindowId) {
+        throw new Error('Runtime graph publisher does not match the pending desktop promotion')
+      }
       // Why: a renderer may publish after a failed promotion was restored to
       // headless authority; accepting that late healthy graph is self-healing.
       this.attachWindow(windowId)
@@ -5509,8 +5521,22 @@ export class OrcaRuntimeService {
     if (windowId !== this.authoritativeWindowId) {
       throw new Error('Runtime graph publisher does not match the authoritative window')
     }
+    const rendererGeneration =
+      windowId === HEADLESS_RUNTIME_WINDOW_ID
+        ? null
+        : 'rendererGeneration' in graph && typeof graph.rendererGeneration === 'string'
+          ? graph.rendererGeneration
+          : undefined
+    if (
+      typeof rendererGeneration === 'string' &&
+      rendererGeneration === this.rendererGeneration &&
+      this.graphStatus !== 'ready'
+    ) {
+      throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
+    }
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
+      this.rendererGeneration = null
     }
 
     const previousTabs = this.tabs
@@ -5679,6 +5705,9 @@ export class OrcaRuntimeService {
       }
     }
     this.markGraphReady(windowId)
+    if (rendererGeneration !== undefined) {
+      this.rendererGeneration = rendererGeneration
+    }
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
     }
@@ -28336,6 +28365,7 @@ export class OrcaRuntimeService {
     this.graphReloadLifecycle.settleActive('success')
     if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = false
+      this.pendingHeadlessPromotionWindowId = null
     }
     this.graphStatus = 'ready'
     this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
@@ -28357,11 +28387,19 @@ export class OrcaRuntimeService {
   }
 
   markGraphUnavailable(windowId: number): void {
+    if (
+      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
+      windowId === this.pendingHeadlessPromotionWindowId
+    ) {
+      this.pendingHeadlessPromotionWindowId = null
+      return
+    }
     if (windowId !== this.authoritativeWindowId) {
       return
     }
     this.graphReloadLifecycle.settleActive('cancelled')
     if (this.shouldRestoreHeadlessGraph(windowId)) {
+      this.pendingHeadlessPromotionWindowId = null
       this.restoreHeadlessGraphAuthority()
       return
     }
@@ -28414,6 +28452,7 @@ export class OrcaRuntimeService {
     this.rendererGraphEpoch += 1
     this.authoritativeWindowId = HEADLESS_RUNTIME_WINDOW_ID
     this.graphStatus = 'ready'
+    this.rendererGeneration = null
     this.setTerminalSideEffectConsumerAvailable(false)
     this.tabs.clear()
     this.leaves.clear()

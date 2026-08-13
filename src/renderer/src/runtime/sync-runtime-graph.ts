@@ -20,7 +20,7 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileTerminalTheme,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeSyncWindowGraph
+  RuntimeRendererSyncWindowGraph
 } from '../../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -723,9 +723,10 @@ async function syncRuntimeGraph(): Promise<void> {
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const mobileSessionTabs = buildMobileSessionTabSnapshots(state, systemPrefersDark)
   const publication = partitionMobileSessionPublication(mobileSessionTabs)
-  const graph: RuntimeSyncWindowGraph = {
+  const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
+    rendererGeneration: mobileSessionPublicationEpoch,
     mobileSessionTabs: publication.changed,
     unchangedMobileSessionWorktrees: publication.unchangedWorktrees
   }

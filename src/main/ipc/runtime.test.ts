@@ -45,9 +45,10 @@ describe('registerRuntimeHandlers', () => {
     const currentMainFrame = {}
     const sender = { mainFrame: currentMainFrame }
     const handler = syncRegistration![1]
-    const result = handler({ sender, senderFrame: currentMainFrame }, { tabs: [], leaves: [] })
+    const graph = { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
+    const result = handler({ sender, senderFrame: currentMainFrame }, graph)
 
-    expect(runtime.syncWindowGraph).toHaveBeenCalledWith(17, { tabs: [], leaves: [] })
+    expect(runtime.syncWindowGraph).toHaveBeenCalledWith(17, graph)
     expect(result).toEqual({ graphStatus: 'ready' })
   })
 
@@ -67,6 +68,22 @@ describe('registerRuntimeHandlers', () => {
     expect(() =>
       handler({ sender, senderFrame: { generation: 1 } }, { tabs: [], leaves: [] })
     ).toThrow('Runtime graph sync must originate from the current main frame')
+    expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
+  })
+
+  it('rejects graph publications without a renderer generation', () => {
+    const runtime = { syncWindowGraph: vi.fn() }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    const currentMainFrame = {}
+    const sender = { mainFrame: currentMainFrame }
+    fromWebContentsMock.mockReturnValue({ id: 17 })
+
+    expect(() =>
+      handler({ sender, senderFrame: currentMainFrame }, { tabs: [], leaves: [] })
+    ).toThrow('Runtime graph sync requires a renderer generation')
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
   })
 
