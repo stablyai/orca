@@ -13,11 +13,11 @@ The official beta build of the opencode CLI, version 2, which installs and runs 
 _Avoid_: opencode v2 (when the binary identity matters — they live in separate registries)
 
 **opencode service (daemon)**:
-The shared background server process that opencode2 uses to own sessions, plugins, and permissions. Multiple opencode2 invocations (TUIs, `run`, other tools) connect to it. Its state is registered in `~/.local/state/opencode/service.json`.
+The shared background server process that opencode2 uses to own sessions, plugins, and permissions. Multiple opencode2 invocations (TUIs, `run`, other tools) connect to it. Its state is registered at `~/.local/state/opencode/service.json` on Linux/macOS and `%LOCALAPPDATA%\opencode\service.json` on Windows; `XDG_STATE_HOME` overrides both.
 _Avoid_: opencode server (that is the v1 foreground server, which owns its session only while the TUI runs)
 
 **Agent session ownership**:
-Where a running agent conversation lives after the terminal that started it is gone. opencode v1 sessions are owned by the TUI's in-terminal server and die with the terminal; opencode2 sessions are owned by the opencode service and survive terminal close.
+Where a running agent conversation lives after the terminal that started it is gone. opencode v1 sessions are owned by the TUI's in-terminal server and die with the terminal; opencode2 sessions are owned by the opencode service and remain active after the terminal closes.
 _Avoid_: session lifecycle (vague — ownership is the deciding property)
 
 **Agent hook source**:
