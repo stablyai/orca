@@ -12825,7 +12825,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "選択したテキストにメモを追加する",
           "fd68ae03b3": "ファイル内を検索",
-          "largePasteTooLarge": "貼り付け内容が大きすぎます。"
+          "largePasteTooLarge": "貼り付け内容が大きすぎます。",
+          "selectionCount": "{{chars}} chars, {{words}} words selected"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "リモート URL をコピー",

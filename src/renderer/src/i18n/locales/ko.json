@@ -12825,7 +12825,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "선택한 텍스트에 메모 추가",
           "fd68ae03b3": "파일에서 검색",
-          "largePasteTooLarge": "붙여넣기 내용이 너무 큽니다."
+          "largePasteTooLarge": "붙여넣기 내용이 너무 큽니다.",
+          "selectionCount": "{{chars}} chars, {{words}} words selected"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "원격 URL 복사",

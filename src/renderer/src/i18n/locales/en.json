@@ -13535,7 +13535,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "Add note on selected text",
           "fd68ae03b3": "Search in Files",
-          "largePasteTooLarge": "Paste is too large."
+          "largePasteTooLarge": "Paste is too large.",
+          "selectionCount": "{{chars}} chars, {{words}} words selected"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "Copy Remote URL",

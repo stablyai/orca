@@ -2698,6 +2698,27 @@ html.native-shell .app-layout {
   outline-offset: 1px;
 }
 
+.orca-editor-selection-count {
+  position: absolute;
+  bottom: 6px;
+  right: 16px;
+  z-index: 5;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--popover) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
 .orca-diff-comment-range-highlight {
   background: rgba(59, 130, 246, 0.14);
 }

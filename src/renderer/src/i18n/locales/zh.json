@@ -12845,7 +12845,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "在选定的文本上添加注释",
           "fd68ae03b3": "在文件中搜索",
-          "largePasteTooLarge": "粘贴内容过大。"
+          "largePasteTooLarge": "粘贴内容过大。",
+          "selectionCount": "{{chars}} chars, {{words}} words selected"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "复制远程 URL",

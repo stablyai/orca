@@ -12825,7 +12825,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "Agregar nota sobre el texto seleccionado",
           "fd68ae03b3": "Buscar en archivos",
-          "largePasteTooLarge": "El contenido pegado es demasiado grande."
+          "largePasteTooLarge": "El contenido pegado es demasiado grande.",
+          "selectionCount": "{{chars}} chars, {{words}} words selected"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "Copiar URL remota",

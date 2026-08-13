@@ -55,6 +55,7 @@ import {
   getMonacoMarkdownSelectionAnnotationTarget,
   type MonacoMarkdownSelectionAnnotationTarget
 } from './monaco-markdown-selection-annotation'
+import { getMonacoSelectionStats, type MonacoSelectionStats } from './monaco-selection-stats'
 import { translate } from '@/i18n/i18n'
 import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
@@ -188,6 +189,8 @@ export default function MonacoEditor({
   const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
+  const showSelectionCount = !autoHeight
+  const [selectionStats, setSelectionStats] = useState<MonacoSelectionStats | null>(null)
   // Why: claim drafts synchronously so a same-tick second chord can't remount the composer before React commits state.
   const commentPopoverRef = useRef<MarkdownCommentPopoverState | null>(null)
   useEffect(() => {
@@ -636,6 +639,23 @@ export default function MonacoEditor({
     }
   }, [commentPopover, mountedEditor, shouldShowMarkdownAnnotations])
 
+  useEffect(() => {
+    if (!mountedEditor || !showSelectionCount) {
+      setSelectionStats(null)
+      return
+    }
+    const update = (): void => {
+      setSelectionStats(
+        getMonacoSelectionStats(mountedEditor.getModel(), mountedEditor.getSelections())
+      )
+    }
+    update()
+    const selectionSub = mountedEditor.onDidChangeCursorSelection(update)
+    return () => {
+      selectionSub.dispose()
+    }
+  }, [mountedEditor, showSelectionCount])
+
   const handleSubmitMarkdownComment = async (body: string): Promise<void> => {
     if (!commentPopover || !worktreeId) {
       return
@@ -872,6 +892,16 @@ export default function MonacoEditor({
         saveViewState={false}
         keepCurrentModel
       />
+
+      {showSelectionCount && selectionStats ? (
+        <div className="orca-editor-selection-count" aria-hidden="true">
+          {translate(
+            'auto.components.editor.MonacoEditor.selectionCount',
+            '{{chars}} chars, {{words}} words selected',
+            { chars: selectionStats.chars, words: selectionStats.words }
+          )}
+        </div>
+      ) : null}
 
       {toastNode}
       <MonacoGutterContextMenu
