@@ -161,6 +161,28 @@ describe('prunePendingSends', () => {
     ).toEqual([])
   })
 
+  it('prunes glued sends the input line kept a separator between', () => {
+    const pending = [pendingOf('p1', 'tell me a joke'), pendingOf('p2', 'continue')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'tell me a joke continue'),
+        assistantMessage('a1', 'a joke')
+      ])
+    ).toEqual([])
+  })
+
+  // Why: the composer writes the raw draft to the pty, so a trailing space the
+  // match key trims away still sits on the input line the next body glues onto.
+  it('prunes glued sends whose first draft carried a trailing space', () => {
+    const pending = [pendingOf('p1', 'tell me a joke '), pendingOf('p2', 'continue')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'tell me a joke continue'),
+        assistantMessage('a1', 'a joke')
+      ])
+    ).toEqual([])
+  })
+
   it('does not treat an unrelated longer user turn as a glued match', () => {
     const pending = [pendingOf('p1', 'hi')]
     expect(
@@ -225,6 +247,19 @@ describe('pendingSendsAsMessages', () => {
     expect(pendingSendsAsMessages(pending, [userMessage('u1', 'tell me a jokecontinue')])).toEqual(
       []
     )
+  })
+
+  // Why: an echo that outlives its glued turn keeps `sentAt`, so it sorts past
+  // the newest real turn and reads as the conversation reordering.
+  it('hides separator-glued sends instead of pinning them after the newest turn', () => {
+    const pending = [pendingOf('p1', 'tell me a joke'), pendingOf('p2', 'continue')]
+    const transcript = [
+      userMessage('u1', 'tell me a joke continue'),
+      assistantMessage('a1', 'a joke'),
+      assistantMessage('a2', 'newest real turn')
+    ]
+
+    expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
   })
 
   it('keeps a repeated prompt visible when its only match predates the send boundary', () => {

@@ -128,9 +128,10 @@ export function matchingNativeChatUserTexts(
 }
 
 /**
- * How many leading pending texts concatenate exactly to `userText`.
- * Covers rapid-send glue ("joke"+"continue" → "jokecontinue") without matching
- * unrelated prefixes ("hi" ↛ "history").
+ * How many leading pending texts concatenate exactly to `userText`, allowing a
+ * single separator between bodies. Covers rapid-send glue both ways the TUI
+ * lands it ("joke"+"continue" → "jokecontinue" or "joke continue") without
+ * matching unrelated prefixes ("hi" ↛ "history").
  */
 export function countLeadingPendingTextsGluedToUserText(
   pendingTexts: readonly string[],
@@ -139,18 +140,23 @@ export function countLeadingPendingTextsGluedToUserText(
   if (pendingTexts.length === 0 || userText.length === 0) {
     return 0
   }
-  let combined = ''
+  let cursor = 0
   for (let index = 0; index < pendingTexts.length; index += 1) {
     const piece = pendingTexts[index]
     if (!piece) {
       return 0
     }
-    combined += piece
-    if (combined === userText) {
-      return index + 1
+    // Why: an unsubmitted input line can keep the separator that sat between the
+    // two bodies, so the glued row reads "joke continue" and never matched.
+    if (cursor > 0 && userText.startsWith(' ', cursor)) {
+      cursor += 1
     }
-    if (!userText.startsWith(combined)) {
+    if (!userText.startsWith(piece, cursor)) {
       return 0
+    }
+    cursor += piece.length
+    if (cursor === userText.length) {
+      return index + 1
     }
   }
   return 0
