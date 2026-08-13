@@ -14,12 +14,8 @@ const { execFileMock, execFileSyncMock, psCommandLine, psError } = vi.hoisted(()
       _file: string,
       _args: readonly string[],
       _options: unknown,
-      callback: (error: Error | null, result: { stdout: string; stderr: string }) => void
-    ) =>
-      callback(psError.value, {
-        stdout: psError.value ? '' : `${PS_START} ${psCommandLine.value}\n`,
-        stderr: ''
-      })
+      callback: (error: Error | null, stdout: string, stderr: string) => void
+    ) => callback(psError.value, psError.value ? '' : `${PS_START} ${psCommandLine.value}\n`, '')
   ),
   execFileSyncMock: vi.fn(() => ''),
   psCommandLine: { value: '' },

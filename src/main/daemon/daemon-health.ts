@@ -462,14 +462,23 @@ function getPsProcessIdentity(pid: number): PsProcessIdentity | null {
 
 async function getPsProcessIdentityAsync(pid: number): Promise<PsProcessIdentity | null> {
   try {
-    const { stdout } = await execFileAsync(
-      'ps',
-      ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
-      {
-        encoding: 'utf8',
-        timeout: PS_IDENTITY_TIMEOUT_MS
-      }
-    )
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        'ps',
+        ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
+        {
+          encoding: 'utf8',
+          timeout: PS_IDENTITY_TIMEOUT_MS
+        },
+        (error, output) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve(output)
+        }
+      )
+    })
     return parsePsProcessIdentity(stdout)
   } catch {
     return null
