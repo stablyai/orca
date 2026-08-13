@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { GitStatusEntry } from '../../../../shared/types'
 import type { SourceControlRowOpenEvent } from './source-control-split-open'
 
@@ -91,25 +91,15 @@ export function useSourceControlSelection({
   const onOpenDiffRef = useRef(onOpenDiff)
   const shouldOpenAsSplitRef = useRef(shouldOpenAsSplit)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Why: stable row handlers must read one committed selection/worktree
+    // snapshot; render-time writes can leak values from an interrupted render.
     flatEntriesRef.current = flatEntries
-  }, [flatEntries])
-
-  useEffect(() => {
     anchorKeyRef.current = anchorKey
-  }, [anchorKey])
-
-  useEffect(() => {
     selectedKeysRef.current = selectedKeys
-  }, [selectedKeys])
-
-  useEffect(() => {
     onOpenDiffRef.current = onOpenDiff
-  }, [onOpenDiff])
-
-  useEffect(() => {
     shouldOpenAsSplitRef.current = shouldOpenAsSplit
-  }, [shouldOpenAsSplit])
+  }, [flatEntries, anchorKey, selectedKeys, onOpenDiff, shouldOpenAsSplit])
 
   const reconciledSelection = reconcileSourceControlSelectionState({
     selectedKeys,
