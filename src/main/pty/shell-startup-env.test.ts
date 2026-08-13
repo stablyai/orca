@@ -387,6 +387,75 @@ describe('readShellStartupEnvVar', () => {
       expect(readShellStartupEnvVar('CODEX_HOME', '/home/alice', FISH)).toBe('/from/zzz')
     })
 
+    it('reads startup files once for agent homes without caching unrelated exports', () => {
+      mockFishFiles(
+        {
+          '/home/alice/.config/fish/conf.d/10-agents.fish':
+            'set -gx CODEX_HOME /from/confd\nset -gx UNQUERIED_SECRET old-secret\n',
+          '/home/alice/.config/fish/config.fish':
+            'set -gx CODEX_HOME /from/config\nset -gx OPENCODE_CONFIG_DIR /from/config-opencode\n'
+        },
+        ['10-agents.fish']
+      )
+
+      expect(readShellStartupEnvVar('CODEX_HOME', '/home/alice', FISH)).toBe('/from/config')
+      expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice', FISH)).toBe(
+        '/from/config-opencode'
+      )
+      expect(readdirSyncMock).toHaveBeenCalledTimes(1)
+      expect(readFileSyncMock).toHaveBeenCalledTimes(2)
+
+      mockFishFiles(
+        {
+          '/home/alice/.config/fish/conf.d/10-agents.fish': 'set -gx UNQUERIED_SECRET new-secret\n',
+          '/home/alice/.config/fish/config.fish': 'set -gx CODEX_HOME /changed\n'
+        },
+        ['10-agents.fish']
+      )
+      expect(readShellStartupEnvVar('UNQUERIED_SECRET', '/home/alice', FISH)).toBe('new-secret')
+      expect(readdirSyncMock).toHaveBeenCalledTimes(2)
+      expect(readFileSyncMock).toHaveBeenCalledTimes(4)
+    })
+
+    it('isolates snapshots for distinct startup contexts', () => {
+      readdirSyncMock.mockReturnValue([])
+      mockStartupFiles({
+        '/cfg-a/fish/config.fish':
+          'set -gx CODEX_HOME /from/a\nset -gx OPENCODE_CONFIG_DIR /opencode/a\n',
+        '/cfg-b/fish/config.fish':
+          'set -gx CODEX_HOME /from/b\nset -gx OPENCODE_CONFIG_DIR /opencode/b\n'
+      })
+
+      expect(readShellStartupEnvVar('CODEX_HOME', '/home/alice', FISH, '/cfg-a')).toBe('/from/a')
+      expect(readShellStartupEnvVar('CODEX_HOME', '/home/alice', FISH, '/cfg-b')).toBe('/from/b')
+      expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice', FISH, '/cfg-a')).toBe(
+        '/opencode/a'
+      )
+      expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice', FISH, '/cfg-b')).toBe(
+        '/opencode/b'
+      )
+      expect(readdirSyncMock).toHaveBeenCalledTimes(2)
+      expect(readFileSyncMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('evicts the oldest Fish startup context after the bounded cache fills', () => {
+      readdirSyncMock.mockReturnValue([])
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockImplementation(
+        (path: string) => `set -gx CODEX_HOME ${path.replace('/fish/config.fish', '')}\n`
+      )
+
+      for (let index = 0; index < 33; index += 1) {
+        expect(readShellStartupEnvVar('CODEX_HOME', '/home/alice', FISH, `/cfg-${index}`)).toBe(
+          `/cfg-${index}`
+        )
+      }
+      expect(readFileSyncMock).toHaveBeenCalledTimes(33)
+
+      expect(readShellStartupEnvVar('CODEX_HOME', '/home/alice', FISH, '/cfg-0')).toBe('/cfg-0')
+      expect(readFileSyncMock).toHaveBeenCalledTimes(34)
+    })
+
     it('honors XDG_CONFIG_HOME', () => {
       mockFishFiles({ '/cfg/fish/config.fish': 'set -gx CODEX_HOME /from/xdg\n' })
       expect(readShellStartupEnvVar('CODEX_HOME', '/home/alice', FISH, '/cfg')).toBe('/from/xdg')

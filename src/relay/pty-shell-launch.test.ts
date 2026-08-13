@@ -1,9 +1,12 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { getFishInitCommand } from '../main/shell-templates'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
+
+const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
@@ -120,6 +123,42 @@ describe('getRelayShellLaunchConfig', () => {
       args: ['-l'],
       env: {}
     })
+  })
+
+  it('restores agent homes and the shim PATH entry on a remote whose shell is fish', () => {
+    // Why: fish fell through to a bare `-l` here, so an SSH host on fish kept none of the
+    // overlay env the relay planted — the account switcher looked like a no-op remotely
+    // and remote commits lost the Orca trailer.
+    const config = getRelayShellLaunchConfig(
+      '/usr/bin/fish',
+      { HOME: homeDir, ORCA_REMOTE_CLI_BIN_DIR: '/tmp/orca-relay-bin' },
+      'linux'
+    )
+
+    expect(config.args.slice(0, 2)).toEqual(['-l', '-C'])
+    expect(config.args[2]).toBe(getFishInitCommand(SHELL_READY_MARKER_ESCAPED))
+    expect(config.env).toEqual({ ORCA_SHELL_READY_MARKER: '0' })
+  })
+
+  it('arms the fish ready marker only when the caller asks for it', () => {
+    const args = ['/usr/bin/fish', { HOME: homeDir }, 'linux'] as const
+    expect(
+      getRelayShellLaunchConfig(...args, { emitReadyMarker: true }).env.ORCA_SHELL_READY_MARKER
+    ).toBe('1')
+    // Markerless is still wrapped: that is the pane where a user types `git commit`.
+    const markerless = getRelayShellLaunchConfig(...args, { emitReadyMarker: false })
+    expect(markerless.env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(markerless.args).toHaveLength(3)
+  })
+
+  it('writes no persistent wrapper files for fish', () => {
+    // Why: fish carries everything on `-C`, so it must not create ~/.orca-relay on a
+    // remote or leave stale rc files behind for a shell that never reads them.
+    getRelayShellLaunchConfig('/usr/bin/fish', { HOME: homeDir }, 'linux', {
+      emitReadyMarker: true
+    })
+
+    expect(existsSync(join(homeDir, '.orca-relay'))).toBe(false)
   })
 
   it.skipIf(process.platform === 'win32')('rewrites stale persistent wrapper files', () => {

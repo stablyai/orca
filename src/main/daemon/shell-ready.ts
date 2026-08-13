@@ -12,7 +12,7 @@ import {
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import {
-  getFishShellReadyInitCommand,
+  getFishInitCommand,
   getZshEnvTemplate,
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
@@ -419,12 +419,14 @@ function getWrappedShellLaunchConfig(
     }
   }
 
-  // Why: mirrors local-pty-shell-ready.ts; attribution-only fish stays unwrapped.
-  if (shellName === 'fish' && options.emitReadyMarker) {
+  // Why: mirrors local-pty-shell-ready.ts. Markerless fish still needs the init command —
+  // that is the pane where the user types commits by hand, so the shim and agent homes
+  // must survive config.fish there too; only the marker itself stays gated.
+  if (shellName === 'fish') {
     return {
-      args: ['-l', '-C', getFishShellReadyInitCommand(SHELL_READY_MARKER)],
-      env: { ORCA_SHELL_READY_MARKER: '1' },
-      supportsReadyMarker: true
+      args: ['-l', '-C', getFishInitCommand(SHELL_READY_MARKER)],
+      env: { ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0' },
+      supportsReadyMarker: options.emitReadyMarker
     }
   }
 

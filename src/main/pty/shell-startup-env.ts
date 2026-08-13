@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { posix } from 'node:path'
+import { BoundedMap } from '../../shared/bounded-map'
 
 // Why: only files the user's actual shell would source. Mixing zsh and bash
 // files breaks the "last assignment wins matches the live shell" guarantee —
@@ -16,6 +17,14 @@ const BASH_LOGIN_FILES = ['.bash_profile', '.bash_login', '.profile']
 const FISH_SNIPPET_DIR = 'conf.d'
 const FISH_SNIPPET_SUFFIX = '.fish'
 const FISH_CONFIG_FILE = 'config.fish'
+const FISH_AGENT_PATH_CONTEXT_LIMIT = 32
+const FISH_AGENT_PATH_NAMES = new Set([
+  'CODEX_HOME',
+  'GROK_HOME',
+  'OPENCODE_CONFIG_DIR',
+  'PI_CODING_AGENT_DIR',
+  'PRIME_AGENT_CODING_AGENT_DIR'
+])
 
 /** Assignment grammar of a startup file: `export NAME=value` vs fish `set -gx NAME value`. */
 type StartupFileSyntax = 'export' | 'fish-set'
@@ -194,6 +203,37 @@ function expandHome(value: string, home: string): string {
 }
 
 const cache = new Map<string, string | undefined>()
+const fishAgentPathCache = new BoundedMap<string, ReadonlyMap<string, string>>({
+  maxEntries: FISH_AGENT_PATH_CONTEXT_LIMIT
+})
+
+function readFishAgentPaths(
+  home: string,
+  shell: string,
+  configHome: string | undefined
+): ReadonlyMap<string, string> {
+  const cacheKey = `${home}\0${shell}\0${configHome ?? ''}`
+  const cached = fishAgentPathCache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  const values = new Map<string, string>()
+  for (const path of fishStartupFilePaths(home, configHome)) {
+    const content = readStartupFile(path)
+    if (content === null) {
+      continue
+    }
+    for (const name of FISH_AGENT_PATH_NAMES) {
+      const match = parseAssignedValue(content, name, home, 'fish-set')
+      if (match !== undefined) {
+        values.set(name, match)
+      }
+    }
+  }
+  fishAgentPathCache.set(cacheKey, values)
+  return values
+}
 
 /**
  * Best-effort static read of a single env-var assignment from the user's
@@ -214,11 +254,13 @@ const cache = new Map<string, string | undefined>()
  *   nothing. LAST matching assignment wins.
  * - fish universal variables (`set -Ux` stored in fish_variables) are only
  *   seen when the assignment is also written in a config file.
+ * - Fish shares one scan only for the agent-path variables Orca consumes;
+ *   arbitrary requested names retain the generic per-name behavior.
  * - Windows is unsupported (PowerShell profile parsing is out of scope).
  *
- * Results are memoized per (name, home, shell, configHome) for the process
- * lifetime — shell startup files do not change mid-session in any practical
- * scenario, and PTY spawn is on the hot path.
+ * Results are memoized per variable for the process lifetime. Fish caches the
+ * Orca-consumed set in bounded startup contexts, so those lookups avoid later
+ * filesystem I/O without retaining unrelated exports or source text.
  */
 export function readShellStartupEnvVar(
   name: string,
@@ -235,20 +277,22 @@ export function readShellStartupEnvVar(
     return undefined
   }
 
+  if (shell && posix.basename(shell).toLowerCase() === 'fish' && FISH_AGENT_PATH_NAMES.has(name)) {
+    return readFishAgentPaths(home, shell, configHome).get(name)
+  }
+
   const cacheKey = `${name}\0${home}\0${shell ?? ''}\0${configHome ?? ''}`
   if (cache.has(cacheKey)) {
     return cache.get(cacheKey)
   }
 
   let lastMatch: string | undefined
-
   const { paths, syntax } = shellStartupFiles(home, shell, configHome)
   for (const path of paths) {
     const content = readStartupFile(path)
     if (content === null) {
       continue
     }
-
     const match = parseAssignedValue(content, name, home, syntax)
     if (match !== undefined) {
       lastMatch = match
@@ -294,4 +338,5 @@ export function readSessionShellStartupEnvVar(
  */
 export function __resetShellStartupEnvCache(): void {
   cache.clear()
+  fishAgentPathCache.clear()
 }

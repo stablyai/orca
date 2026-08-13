@@ -380,12 +380,20 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps attribution-only fish spawns unwrapped', async () => {
+  it('gives attribution-only fish the shim/agent-home init command without the marker', async () => {
+    // Why: the markerless pane is where the user types commits by hand, so it needs the
+    // PATH shim most; only the marker stays gated so nothing is emitted into the pane.
     const { getAttributionShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
     const config = getAttributionShellLaunchConfig('/opt/homebrew/bin/fish')
 
-    expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
+    expect(config.supportsReadyMarker).toBe(false)
+    expect(config.env).toEqual({ ORCA_SHELL_READY_MARKER: '0' })
+    expect(config.args?.slice(0, 2)).toEqual(['-l', '-C'])
+    const init = config.args?.[2] ?? ''
+    expect(init).toContain('set -gx PATH "$__orca_shim_dir" $__orca_kept_path')
+    expect(init).toContain('set -gx CODEX_HOME "$ORCA_CODEX_HOME"')
+    expect(init).toContain('if test "$ORCA_SHELL_READY_MARKER" = 1')
   })
 
   it('falls back to HOME for ORCA_ORIG_ZDOTDIR when inherited ZDOTDIR points at a wrapper dir', async () => {

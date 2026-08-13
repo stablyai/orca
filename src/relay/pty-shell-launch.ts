@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
+  getFishInitCommand,
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
@@ -285,6 +286,18 @@ export function getRelayShellLaunchConfig(
           terminalWindowsWslDistro: options.terminalWindowsWslDistro
         }) ?? [],
       env: {}
+    }
+  }
+
+  // Why: mirrors src/main/daemon/shell-ready.ts and providers/local-pty-shell-ready.ts.
+  // A remote whose login shell is fish gets no wrapper rc file, so `-C` is the only hook
+  // that runs after the remote's config.fish — without it the routed agent homes and the
+  // shim PATH entry the relay planted are silently lost on this host. Ungated like the
+  // local sites: the markerless pane is where the user types `git commit` by hand.
+  if (shellName === 'fish') {
+    return {
+      args: [...POSIX_LOGIN_ARGS, '-C', getFishInitCommand(SHELL_READY_MARKER_ESCAPED)],
+      env: { ORCA_SHELL_READY_MARKER: emitReadyMarker ? '1' : '0' }
     }
   }
 
