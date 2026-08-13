@@ -89,18 +89,35 @@ describe('shouldSkipAltFrameForWidthMismatch', () => {
     expect(shouldSkipAltFrameForWidthMismatch(Number.NaN, 128)).toBe(false)
     expect(shouldSkipAltFrameForWidthMismatch(Number.POSITIVE_INFINITY, 128)).toBe(false)
   })
-
-  it('can conservatively skip a live frame until a hidden pane has a final grid', () => {
-    expect(shouldSkipAltFrameForWidthMismatch(135, undefined, { skipIfTargetUnknown: true })).toBe(
-      true
-    )
-    expect(
-      shouldSkipAltFrameForWidthMismatch(undefined, undefined, { skipIfTargetUnknown: true })
-    ).toBe(false)
-  })
 })
 
 describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
+  it('restores the exact capture-grid alt frame while the target grid is unknown', async () => {
+    const terminal = new Terminal({ cols: 12, rows: 5, scrollback: 20 })
+    const snapshot = {
+      data: '\x1b[1;1HTOP---------\x1b[2;1HMIDDLE------\x1b[3;1HBOTTOM------',
+      frameRestoreAnsi: '\x1b[?25l',
+      alternateScreen: true,
+      scrollbackAnsi: 'history'
+    }
+
+    try {
+      const skipAltFrame = shouldSkipAltFrameForWidthMismatch(12, undefined)
+      for (const chunk of buildMainModelSnapshotReplayWrites(snapshot, { skipAltFrame })) {
+        await writeTerminal(terminal, chunk)
+      }
+
+      expect(
+        Array.from({ length: 3 }, (_, row) =>
+          terminal.buffer.active.getLine(row)?.translateToString(true)
+        )
+      ).toEqual(['TOP---------', 'MIDDLE------', 'BOTTOM------'])
+      expect(terminal.buffer.normal.getLine(0)?.translateToString(true)).toBe('history')
+    } finally {
+      terminal.dispose()
+    }
+  })
+
   it('keeps normal history and a clean alt grid through the real resize path', async () => {
     const terminal = new Terminal({ cols: 12, rows: 5, scrollback: 20 })
     const snapshot = {

@@ -21,7 +21,7 @@ export async function discoverAiVaultSessionSources(args: {
     // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
     // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
     // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
-    ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...(await opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues)),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
       source

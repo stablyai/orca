@@ -45,6 +45,7 @@ const SNAPSHOT = {
       worktreeName: 'Dashboard',
       hostKind: 'ssh',
       executionHostId: 'ssh:build-box',
+      hostLabel: 'Build box',
       workspaceKind: 'worktree',
       workspaceStatusId: 'in-review',
       workspaceStatusLabel: 'In review',
@@ -68,6 +69,7 @@ const SNAPSHOT = {
       parentWorktreeId: 'parent-worktree-1',
       hostKind: 'ssh',
       executionHostId: 'ssh:build-box',
+      hostLabel: 'Build box',
       workspaceKind: 'worktree',
       workspaceStatusId: 'in-review',
       workspaceStatusLabel: 'In review',
@@ -141,6 +143,12 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], executionHostId: `ssh:${'x'.repeat(4_097)}` }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], hostLabel: 'x'.repeat(1_025) }]
       })
     ).toBe(false)
     expect(
@@ -234,6 +242,12 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         workspaces: [{ ...SNAPSHOT.workspaces[0], worktreeName: 'x'.repeat(1_025) }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [{ ...SNAPSHOT.workspaces[0], hostLabel: 'x'.repeat(1_025) }]
       })
     ).toBe(false)
   })

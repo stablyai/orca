@@ -13,6 +13,7 @@ import {
   dismissRuntimeDisconnectedToast,
   showRuntimeDisconnectedToast
 } from './runtime-environment-disconnect-toast'
+import { reconcileCatalogRows } from './repo-identity-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 
@@ -31,7 +32,7 @@ export type RuntimeEnvironmentStatus = {
 export type RuntimeStatusSlice = {
   /** Saved remote Orca servers. Host pickers use this to show user-chosen names
    * instead of opaque runtime ids. */
-  runtimeEnvironments: PublicKnownRuntimeEnvironment[]
+  runtimeEnvironments: readonly PublicKnownRuntimeEnvironment[]
   /** True only after the saved-runtime catalog has loaded successfully. Gates
    * fail-closed host routing, so a failed read must NOT flip it. */
   runtimeEnvironmentCatalogHydrated: boolean
@@ -51,7 +52,7 @@ export type RuntimeStatusSlice = {
   removedRuntimeEnvironmentIds: ReadonlySet<string>
   /** Replaces the saved-environment list, trims stale status entries, and
    * retires state owned by any environment that just left the saved list. */
-  setRuntimeEnvironments: (environments: PublicKnownRuntimeEnvironment[]) => void
+  setRuntimeEnvironments: (environments: readonly PublicKnownRuntimeEnvironment[]) => void
   /** Merges one environment's status. Replaces the prior entry for that id. */
   setRuntimeEnvironmentStatus: (
     environmentId: string,
@@ -151,8 +152,25 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           removedChanged = true
         }
       }
+      // Why: list()/hydrate always allocate (IPC structuredClone + redact remaps
+      // endpoints[]). Reuse equal rows so Object.is subscribers don't miss 100%.
+      const reconciled = reconcileCatalogRows(
+        s.runtimeEnvironments,
+        environments,
+        (environment) => environment.id
+      )
+      const catalogUnchanged = reconciled === s.runtimeEnvironments
+      if (
+        catalogUnchanged &&
+        s.runtimeEnvironmentCatalogHydrated &&
+        s.runtimeEnvironmentCatalogSettled &&
+        !statusesChanged &&
+        !removedChanged
+      ) {
+        return s
+      }
       return {
-        runtimeEnvironments: environments,
+        runtimeEnvironments: catalogUnchanged ? s.runtimeEnvironments : reconciled,
         runtimeEnvironmentCatalogHydrated: true,
         runtimeEnvironmentCatalogSettled: true,
         ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {}),

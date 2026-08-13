@@ -126,7 +126,7 @@ jobs:
       # scripts still need the Linux toolchain even though this shard reuses
       # the prebuilt Electron output.
       - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 zsh
 
       # Why: Electron on Linux needs an X display even when the app
       # suppresses mainWindow.show() via ORCA_E2E_HEADLESS. xvfb provides a
@@ -174,7 +174,7 @@ jobs:
       # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
       # launches but never creates a BrowserWindow.
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e --shard=${{ matrix.shard }}
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 pnpm run test:e2e --shard=${{ matrix.shard }}
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without
@@ -202,7 +202,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb zsh
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -232,8 +232,15 @@ jobs:
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
         run: |
-          mapfile -t TEST_FILES < <(jq -r '.[]' <<<"$TEST_FILES_JSON")
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 \
+          mapfile -t TEST_FILES < <(jq -r '.[] | select(
+            . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
+            . != "tests/e2e/paired-startup-exec-readiness.spec.ts"
+          )' <<<"$TEST_FILES_JSON")
+          if [ "${#TEST_FILES[@]}" -eq 0 ]; then
+            echo "Changed startup-readiness specs are owned by the dedicated live lane."
+            exit 0
+          fi
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 \
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1
 
       - name: Upload Playwright traces
@@ -248,10 +255,13 @@ jobs:
   ssh-docker-watcher-isolation:
     name: ssh docker watcher isolation
     needs: build
-    if: inputs.test_files == ''
+    if: >-
+      inputs.test_files == '' ||
+      contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
     runs-on: ubuntu-latest
-    # Why 35: the terminal parking + retention specs below add two more
-    # docker-rig tests capped at 240s each on top of the watcher isolation pair.
+    # Why 35: the parking, retention, startup-exec, and paired parity specs run
+    # serially on isolated Electron/SSH fixtures after watcher isolation.
     timeout-minutes: 35
 
     steps:
@@ -261,7 +271,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 xvfb
+        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 xvfb zsh
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -295,10 +305,9 @@ jobs:
       - name: Run Docker SSH watcher isolation E2E
         run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
 
-      # Why always(): these specs gate the C1 terminal parking/retention budget
-      # over a real SSH host and run in no other lane, so a watcher-isolation
-      # failure above must not silently skip them.
-      - name: Run Docker SSH terminal parking + retention E2E
+      # Why always(): this lane gates SSH parking/retention plus startup-exec
+      # readiness across live SSH, headed paired, and headless serve topologies.
+      - name: Run Docker SSH terminal parking + startup readiness E2E
         if: always()
         run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
 

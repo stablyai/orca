@@ -791,6 +791,26 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().activeView).toBe('terminal')
   })
 
+  // Why: the Skills page was removed after being unreachable since #4535, so a
+  // profile written before then can still carry `activeView: 'skills'` on disk.
+  // Dropping it from TopLevelView is what demotes it — this pins that the removal
+  // is a migration and not a blank main surface on next launch.
+  it('demotes a persisted skills view to terminal now that the page is gone', () => {
+    const store = createUIStore()
+    // Why: the default is already 'terminal', so seed a different view first —
+    // otherwise this passes whether hydration demoted the value or never ran.
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'skills' as unknown as PersistedUIState['activeView']
+      }),
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
   it('falls back to terminal when the persisted active view is not a known view', () => {
     const store = createUIStore()
 

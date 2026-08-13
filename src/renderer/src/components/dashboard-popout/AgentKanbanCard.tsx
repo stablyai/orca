@@ -20,6 +20,7 @@ import {
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
+import { DashboardHostBadge } from './DashboardHostBadge'
 
 /** Compact "started N ago" (the card is glanceable — coarse units are fine). */
 function formatStartedAgo(startedAt: number, now: number): string {
@@ -95,6 +96,9 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.leafId === b.leafId &&
     a.repoName === b.repoName &&
     a.worktreeName === b.worktreeName &&
+    a.hostKind === b.hostKind &&
+    a.executionHostId === b.executionHostId &&
+    a.hostLabel === b.hostLabel &&
     a.hasReview === b.hasReview &&
     a.review?.number === b.review?.number &&
     a.review?.state === b.review?.state &&
@@ -327,6 +331,12 @@ export const AgentKanbanCard = memo(
               {card.repoName}
             </TooltipContent>
           </Tooltip>
+          <DashboardHostBadge
+            hostKind={card.hostKind}
+            executionHostId={card.executionHostId}
+            hostLabel={card.hostLabel}
+            className="size-[18px] rounded-[5px] bg-muted-foreground/10 transition-colors group-hover:text-foreground"
+          />
           {worktreeInFooter ? <span className="truncate">{card.worktreeName}</span> : null}
           <ReviewPill card={card} />
           {displayTimestamp(card) > 0 ? (

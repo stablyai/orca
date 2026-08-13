@@ -13,6 +13,7 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { SSH_SESSION_EXPIRED_ERROR } from '../../../../shared/ssh-pty-failure-tokens'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -128,7 +129,6 @@ import {
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
-import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
@@ -280,7 +280,6 @@ import {
   setCommandCodeDoneSettleExecutor
 } from './command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
-import { isTerminalTabParked } from './terminal-parked-watcher-registry'
 import {
   getExecutionHostIdForWorktree,
   getSettingsForWorktreeRuntimeOwner
@@ -338,14 +337,14 @@ import {
 } from './renderer-owned-agent-status-registry'
 import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
 import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
+import { isProvenSshSessionGoneError } from './reattach-failure-classification'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
-const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+
 // Why: relay requests expire at 30s; leave one second for their fallback before re-arming locally.
 const DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS = 31_000
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const PTY_CONNECT_DIAG_LIMIT = 200
-const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
 // Why: the notice deliberately omits the rejected path — saved cwds can
@@ -551,6 +550,12 @@ type PendingStartupCommand = {
 
 type FreshSpawnOptions = {
   forceBlankRestoredViewport?: boolean
+  /** Ignore the startup this transport was constructed with. Omitting the fields is not enough:
+   *  connect falls back to its constructor values, so a "fresh" shell would resume the saved agent
+   *  session — the duplicate transcript the disconnected pane exists to prevent. */
+  suppressSavedStartup?: boolean
+  /** Refuse adoption of the pane's recorded shell; see the unreachable-pane action. */
+  createFreshShellForUnreachablePane?: boolean
 }
 
 type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
@@ -1082,6 +1087,25 @@ function isSetupSplitGeometryReady(
   )
 }
 
+/** Start time of the newest completed turn, counting turns already folded into history.
+ *  Why: batched publications coalesce done→working→done into a single store notification,
+ *  so the done EDGE survives only in stateHistory; comparing `state` alone misses it. */
+function resolveLatestAgentDoneStartedAt(entry: AgentStatusEntry | undefined): number | undefined {
+  if (!entry) {
+    return undefined
+  }
+  if (entry.state === 'done') {
+    return entry.stateStartedAt
+  }
+  const history = entry.stateHistory ?? []
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index].state === 'done') {
+      return history[index].startedAt
+    }
+  }
+  return undefined
+}
+
 /**
  * Establishes a binding between a terminal pane and its corresponding PTY stream,
  * managing input, output, title synchronization, and agent status tracking.
@@ -1096,10 +1120,7 @@ export function connectPanePty(
   // settles after remount must not remount its already-replaced successor.
   const terminalRecoveryGeneration = captureTerminalPaneRecoveryGeneration(deps.tabId)
   const terminalRecoveryInstance = registerTerminalPaneRecoveryInstance(deps.tabId)
-  // Why sampled here: the host disposes this tab's park watcher in the effect
-  // that follows this mount, so connect time is the only moment a pane can tell
-  // a reveal remount from an in-place reattach.
-  let mountFollowsTerminalPark = isTerminalTabParked(deps.tabId)
+  let mountFollowsTerminalPark = deps.mountFollowsTerminalPark
   let authoritativeReattachGeneration = 0
   exposeE2eTerminalPtyOutputDebug()
   let disposed = false
@@ -1122,7 +1143,6 @@ export function connectPanePty(
   let cleanupStartupDraftPasteTimers = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
-  let sshShellReadyFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationMaxTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteStatusUnsubscribe: (() => void) | null = null
@@ -3599,10 +3619,10 @@ export function connectPanePty(
   const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
   const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
-  let lastAgentStatusState = state.agentStatusByPaneKey[cacheKey]?.state
   let unsubscribeWindowsDoneTerminalModeReset: (() => void) | null = null
   if (isNativeWindowsConpty) {
     const initialAgentStatus = state.agentStatusByPaneKey[cacheKey]
+    let lastAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(initialAgentStatus)
     if (
       !initialAgentStatus &&
       paneStartup?.telemetry?.launch_source === 'sidebar' &&
@@ -3621,13 +3641,18 @@ export function connectPanePty(
       const nextAgentStatusState = nextAgentStatus?.state
       if (nextAgentStatusState === 'done') {
         setFocusReportSuppressionForAgentCompletion(undefined, nextAgentStatus.agentType)
-        if (lastAgentStatusState !== 'done') {
-          queueAgentIdleTerminalModeReset()
-        }
       } else if (nextAgentStatusState) {
         suppressNativeWindowsIdleCodexFocusReports = false
       }
-      lastAgentStatusState = nextAgentStatusState
+      const nextAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(nextAgentStatus)
+      // Why: a NEW completed turn — same-state `done` pings keep stateStartedAt, so they no-op.
+      if (
+        nextAgentDoneStartedAt !== undefined &&
+        nextAgentDoneStartedAt !== lastAgentDoneStartedAt
+      ) {
+        queueAgentIdleTerminalModeReset()
+      }
+      lastAgentDoneStartedAt = nextAgentDoneStartedAt
     })
   }
 
@@ -3736,6 +3761,8 @@ export function connectPanePty(
         onDone: scheduleCommandCodeOutputDoneStatus
       })
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
+  const shouldUseProviderSshStartupDelivery =
+    Boolean(connectionId) && !shouldDeliverStartupViaTerminalPaste
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   let hasReceivedPtyOutput = false
@@ -3789,6 +3816,7 @@ export function connectPanePty(
     env: paneEnv,
     ...(paneStartup?.envToDelete ? { envToDelete: paneStartup.envToDelete } : {}),
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
+    ...(shouldUseProviderSshStartupDelivery ? { commandDelivery: 'provider' as const } : {}),
     startupCommandDelivery: shouldDeliverStartupViaTerminalPaste
       ? undefined
       : connectionId && paneStartup?.command
@@ -4806,51 +4834,13 @@ export function connectPanePty(
         .catch(() => {})
     }
 
-    // Why: for ordinary local startup commands, the local PTY provider already
-    // writes via the shell-ready barrier. terminal-paste and SSH startup
-    // commands stay renderer-delivered so xterm/relay can apply their handling.
-    let pendingStartupCommand: PendingStartupCommand | null =
-      shouldDeliverStartupViaTerminalPaste || connectionId
-        ? paneStartup?.command
-          ? { command: paneStartup.command }
-          : null
+    // Why: local and ordinary SSH startup commands are provider-owned so delivery
+    // survives renderer replacement. Only explicit terminal-paste stays renderer-owned.
+    let pendingStartupCommand: PendingStartupCommand | null = shouldDeliverStartupViaTerminalPaste
+      ? paneStartup?.command
+        ? { command: paneStartup.command }
         : null
-    // Why: every renderer-delivered SSH command needs the relay's readiness marker;
-    // the existing fallback preserves shells that cannot emit it.
-    const shouldWaitForSshShellReady =
-      Boolean(connectionId) &&
-      Boolean(pendingStartupCommand) &&
-      !shouldDeliverStartupViaTerminalPaste
-    let sshShellReadyMarkerScan = shouldWaitForSshShellReady
-      ? createShellReadyMarkerScanState()
       : null
-    let sshStartupShellReady = !shouldWaitForSshShellReady
-    const armSshStartupShellReady = (): void => {
-      if (!connectionId || !pendingStartupCommand || shouldDeliverStartupViaTerminalPaste) {
-        return
-      }
-      if (startupInjectTimer !== null) {
-        clearTimeout(startupInjectTimer)
-        startupInjectTimer = null
-      }
-      if (sshShellReadyFallbackTimer !== null) {
-        clearTimeout(sshShellReadyFallbackTimer)
-        sshShellReadyFallbackTimer = null
-      }
-      sshShellReadyMarkerScan = createShellReadyMarkerScanState()
-      sshStartupShellReady = false
-    }
-    const markSshStartupShellReady = (): void => {
-      if (sshStartupShellReady) {
-        return
-      }
-      sshStartupShellReady = true
-      if (sshShellReadyFallbackTimer !== null) {
-        clearTimeout(sshShellReadyFallbackTimer)
-        sshShellReadyFallbackTimer = null
-      }
-      schedulePendingStartupCommandDelivery()
-    }
     const startupDraftReadyScanner = ownsStartupDraftPaste
       ? createDraftPasteReadyScanner(
           startupDraftAgentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
@@ -5122,6 +5112,97 @@ export function connectPanePty(
       applyColdRestoreAgentResumeStartup(startup)
       return startFreshSpawn(startup, options)
     }
+    /**
+     * A reattach failed without proving the shell is gone. Show the pane as disconnected with two
+     * explicit actions instead of leaving it frozen behind a raw error toast — the user decides,
+     * because nothing here knows whether the shell died.
+     *
+     * Returns whether the caller may stop. False means this pane cannot be surfaced that way and
+     * the caller must run its own handling: a local/daemon/runtime pane has no connection to be
+     * unreachable ON, and its provider IS authoritative about its own ptys, so it keeps replacing
+     * in place. Reporting that is the whole point of the return value — an earlier revision guarded
+     * in here but returned void, so four callers paired a conditional publish with an unconditional
+     * `return` and left local panes with neither the card nor the replacement they had before.
+     */
+    const divertToUnreachableCard = (sessionId: string): boolean => {
+      // Guards live HERE, not at the eight call sites. They are identical at every one, and the
+      // review found three separate sites that had each forgotten a different one — a local pane
+      // shown an SSH-specific card it can never clear, and a disposed pane republishing state onto
+      // a reused numeric pane id. Centralising them makes the next call site correct by default.
+      if (disposed) {
+        // Stop, but not because the card is up: a disposed pane must not respawn or report either.
+        return true
+      }
+      if (!connectionId) {
+        return false
+      }
+      // Both actions clear the banner before acting: nothing else retracts it. The app-SSH
+      // transport does not publish recovery states, so a card left up would sit over a live shell
+      // with armed buttons.
+      const clearBanner = (): void => deps.onPtyRecoveryStateRef?.current?.(pane.id, null)
+      deps.onPtyRecoveryStateRef?.current?.(pane.id, {
+        phase: 'disconnected',
+        epoch: 0,
+        attempt: 0,
+        unreachablePane: {
+          onRetry: () => {
+            clearBanner()
+            // Put the card back if the remount never happens. A stale generation, a refused remount
+            // or a throw all return false without scheduling anything, and swallowing that leaves
+            // the pane with no shell AND no action surface — worse than the toast this replaced.
+            const republishIfDeclined = (scheduled: boolean): void => {
+              if (!scheduled) {
+                divertToUnreachableCard(sessionId)
+              }
+            }
+            // Why the generation and instance: a recovery declined by the cooldown only schedules
+            // a deferred retry when it can identify the generation to remount. Without them a
+            // second click inside the window is refused silently, which on a surface whose whole
+            // purpose is to let the user act reads as a dead button.
+            void requestTerminalPaneRecovery({
+              tabId: deps.tabId,
+              ptyId: sessionId,
+              reason: 'restore-blocked',
+              terminalRecoveryGeneration,
+              terminalRecoveryInstanceId: terminalRecoveryInstance.id
+            }).then(republishIfDeclined, () => republishIfDeclined(false))
+          },
+          onStartNewTerminal: () => {
+            clearBanner()
+            // A NEW shell, not a resumed one. The automatic respawn this replaced passed the
+            // cold-restore startup, which carries the agent's providerSession — correct there,
+            // because it only ran on proof the shell was gone. Here the shell is probably still
+            // alive, so resuming would put a second agent process on one transcript. `null` alone
+            // does not achieve that: connect falls back to the startup this transport was built
+            // with, so the suppression has to be explicit.
+            void startFreshSpawn(null, {
+              forceBlankRestoredViewport: true,
+              suppressSavedStartup: true,
+              // Refuse adoption. This pane's recorded shell is the one we could not reach, so
+              // attaching it first only fails again and creates nothing — which left this button
+              // doing nothing at all in the one state it is offered in.
+              createFreshShellForUnreachablePane: true
+            }).then((freshPtyId) => {
+              if (!freshPtyId) {
+                // The replacement never started. Keep the old binding and put the card back, or the
+                // pane is left blank and unbound with no way back to a shell that may still be up.
+                divertToUnreachableCard(sessionId)
+                return
+              }
+              if (freshPtyId === sessionId) {
+                // Same id, different shell: adoption is refused now, so this is a NEW shell that a
+                // reset relay happened to reissue the old id to. Main has already bound the pane to
+                // it, and clearing by that id below would unbind the very shell just created.
+                return
+              }
+              deps.clearExitedPanePtyLayoutBinding(pane.id, sessionId)
+              deps.clearTabPtyId(deps.tabId, sessionId)
+            })
+          }
+        }
+      })
+      return true
+    }
     // Why: the hibernation wake fires from noteVisibilityResume in the outer
     // connection scope, long after this deferred-connect closure has run.
     wakeHibernatedAgentPane = () => startFreshColdRestoreAgentResume()
@@ -5154,18 +5235,6 @@ export function connectPanePty(
     const schedulePendingStartupCommandDelivery = (): void => {
       const startup = pendingStartupCommand
       if (!startup) {
-        return
-      }
-      if (!sshStartupShellReady) {
-        if (sshShellReadyFallbackTimer === null) {
-          // Why: some SSH shells cannot emit Orca's ready marker. Prefer the
-          // marker when available, but fall back to the old renderer delivery
-          // behavior instead of dropping the startup command forever.
-          sshShellReadyFallbackTimer = setTimeout(() => {
-            sshShellReadyFallbackTimer = null
-            markSshStartupShellReady()
-          }, SSH_SHELL_READY_STARTUP_FALLBACK_MS)
-        }
         return
       }
       if (startupInjectTimer !== null) {
@@ -5268,12 +5337,6 @@ export function connectPanePty(
       // a restart-in-place would leak the old TUI's flags into a fresh shell.
       kittyKeyboardModes.reset()
       prepareFreshShellViewportForSpawn(options)
-      if (connectionId && startupOverride?.command) {
-        // Why: SSH providers use `command` only as spawn metadata; the renderer
-        // must still submit the resume command to the fresh remote shell.
-        pendingStartupCommand = { command: startupOverride.command }
-      }
-      armSshStartupShellReady()
       const coldRestoreOverride =
         startupOverride && 'launchConfig' in startupOverride
           ? (startupOverride as ColdRestoreAgentResumeStartup)
@@ -5292,10 +5355,17 @@ export function connectPanePty(
       transportConnectInFlightSince = Date.now()
       const outputCallbacks = captureTransportOutputCallbacks(reportError)
       const spawnedRaw = transport.connect({
+        ...(options.suppressSavedStartup ? { suppressSavedStartup: true } : {}),
+        ...(options.createFreshShellForUnreachablePane
+          ? { createFreshShellForUnreachablePane: true }
+          : {}),
         url: '',
         cols,
         rows,
         ...(startupOverride?.command ? { command: startupOverride.command } : {}),
+        ...(connectionId && startupOverride?.command && !shouldDeliverStartupViaTerminalPaste
+          ? { commandDelivery: 'provider' as const }
+          : {}),
         ...(connectionId && startupOverride?.command
           ? { startupCommandDelivery: 'shell-ready' as const }
           : {}),
@@ -5425,6 +5495,12 @@ export function connectPanePty(
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
           }
           if (resolvedPtyId && connectionId) {
+            if (
+              shouldUseProviderSshStartupDelivery &&
+              (startupOverride?.command || paneStartup?.command)
+            ) {
+              armStartupDraftReadinessObservation()
+            }
             schedulePendingStartupCommandDelivery()
           }
           finishReattachLiveDataDeferral(Boolean(resolvedPtyId), outputCallbacks.generation)
@@ -5806,6 +5882,11 @@ export function connectPanePty(
           onConnect: (): void => {
             if (isCurrent()) {
               reportRemoteRendererSerializerReady()
+            }
+          },
+          onStreamRecovered: (): void => {
+            if (isCurrent()) {
+              markHiddenOutputRestoreNeeded()
             }
           },
           onData: (data: string, meta?: PtyDataMeta): void => {
@@ -7303,13 +7384,16 @@ export function connectPanePty(
             skippedAltFrame =
               snapshot.alternateScreen === true &&
               snapshot.frameRestoreAnsi !== undefined &&
-              shouldSkipAltFrameForWidthMismatch(snapshot.cols, readProposedTerminalCols(pane), {
-                skipIfTargetUnknown: true
-              })
-            for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
-              skipAltFrame: skippedAltFrame
-            })) {
-              writeReplayData(replayChunk)
+              shouldSkipAltFrameForWidthMismatch(snapshot.cols, readProposedTerminalCols(pane))
+            // Why: an imageless success is not proof the pane is empty; normal replay clears screen and scrollback.
+            const snapshotCarriesNoImage =
+              snapshot.alternateScreen !== true && snapshot.data === '' && !snapshot.scrollbackAnsi
+            if (!snapshotCarriesNoImage) {
+              for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
+                skipAltFrame: skippedAltFrame
+              })) {
+                writeReplayData(replayChunk)
+              }
             }
             // Why: live agents own ?25l/?1004h; a forced ?1004l here would silence focus events until restart (agents enable focus reporting only at startup).
             writeReplayData(
@@ -7699,13 +7783,6 @@ export function connectPanePty(
         // Why: output is the agent-start signal that ends the relaxed no-evidence process-scan cadence (a starting agent always prints).
         agentCompletionCoordinator.observeOutputActivity()
       }
-      if (sshShellReadyMarkerScan) {
-        const scanned = scanForShellReadyMarker(sshShellReadyMarkerScan, data)
-        if (scanned.matched) {
-          markSshStartupShellReady()
-        }
-        data = scanned.output
-      }
       observeStartupDraftPasteReadiness(data)
       resetHiddenOutputRestoreIfPtyChanged()
       observeLiveMode2031Chunk(data)
@@ -8082,14 +8159,19 @@ export function connectPanePty(
           paneId: pane.id,
           ptyId: staleSessionId ?? null
         })
-        // Why: a stale restored session can fail reattach after mount; don't leave xterm alive without a backing PTY.
-        if (staleSessionId) {
-          deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
-        } else {
-          deps.syncPanePtyLayoutBinding(pane.id, null)
+        // For an SSH pane a missing id says the reattach could not answer, not that the shell
+        // exited — a replaced relay reports that for shells still running under its predecessor —
+        // so surface it and let the user choose. A daemon/local pane is not ambiguous that way: its
+        // provider is authoritative about its own ptys, and it keeps replacing in place.
+        if (connectionId && staleSessionId) {
+          divertToUnreachableCard(staleSessionId)
+          return false
         }
         if (staleSessionId) {
+          deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
           deps.clearTabPtyId(deps.tabId, staleSessionId)
+        } else {
+          deps.syncPanePtyLayoutBinding(pane.id, null)
         }
         startFreshColdRestoreAgentResume(coldRestoreStartup, {
           forceBlankRestoredViewport: true
@@ -8105,15 +8187,18 @@ export function connectPanePty(
             : {})
       })
       if (connectResult?.sessionExpired) {
+        // For SSH, `sessionExpired` traces back to the relay's not-found, which it also answers for
+        // shells still running under a relay process it replaced — not proof the shell exited.
+        if (connectionId && staleSessionId) {
+          divertToUnreachableCard(staleSessionId)
+          return false
+        }
         if (staleSessionId) {
           deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
+          deps.clearTabPtyId(deps.tabId, staleSessionId)
         } else {
           deps.syncPanePtyLayoutBinding(pane.id, null)
         }
-        if (staleSessionId) {
-          deps.clearTabPtyId(deps.tabId, staleSessionId)
-        }
-        // Why: SSH sleep/reconnect can invalidate the relay PTY while the tab stays mounted; replace the dead lease in-place, not a stale overlay.
         startFreshColdRestoreAgentResume(coldRestoreStartup, {
           forceBlankRestoredViewport: true
         })
@@ -8256,8 +8341,7 @@ export function connectPanePty(
             typeof snapshotFrameRestoreAnsi === 'string' &&
             shouldSkipAltFrameForWidthMismatch(
               connectResult.snapshotCols,
-              readProposedTerminalCols(pane),
-              { skipIfTargetUnknown: true }
+              readProposedTerminalCols(pane)
             )
           writeReplayData(
             daemonAltFrameSkippable
@@ -8326,10 +8410,7 @@ export function connectPanePty(
             for (const replayChunk of buildMainModelSnapshotReplayWrites(modelSnapshot, {
               skipAltFrame: shouldSkipAltFrameForWidthMismatch(
                 modelCols,
-                readProposedTerminalCols(pane),
-                {
-                  skipIfTargetUnknown: true
-                }
+                readProposedTerminalCols(pane)
               )
             })) {
               writeReplayData(replayChunk)
@@ -8761,11 +8842,7 @@ export function connectPanePty(
                   if (rejectObsoleteDirectSshReattach(pendingSessionId)) {
                     return
                   }
-                  deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
-                  deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  startFreshColdRestoreAgentResume(coldRestoreStartup, {
-                    forceBlankRestoredViewport: true
-                  })
+                  divertToUnreachableCard(pendingSessionId)
                   return
                 }
                 const accepted = await handleReattachResult(
@@ -8807,14 +8884,18 @@ export function connectPanePty(
                 if (rejectObsoleteDirectSshReattach(pendingSessionId)) {
                   return
                 }
-                if (isSshSessionExpiredError(err)) {
-                  deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
-                  deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  startFreshColdRestoreAgentResume(coldRestoreStartup, {
-                    forceBlankRestoredViewport: true
-                  })
+                // Why: only proof that the session is gone may respawn. Anything
+                // else leaves the shell running, because respawning with the
+                // restored id resumes the same agent session a second time.
+                // Nothing proves it yet (see reattach-failure-classification), and this flow is
+                // nested under `connectionId`, so the respawn below is unreachable today. It is
+                // the shape the proof capability plugs into, not forgotten code.
+                if (!isProvenSshSessionGoneError(err)) {
+                  divertToUnreachableCard(pendingSessionId)
                   return
                 }
+                deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
+                deps.clearTabPtyId(deps.tabId, pendingSessionId)
                 startFreshColdRestoreAgentResume(coldRestoreStartup, {
                   forceBlankRestoredViewport: true
                 })
@@ -8998,6 +9079,16 @@ export function connectPanePty(
             if (rejectObsoleteDirectSshReattach(deferredReattachSessionId)) {
               return
             }
+            if (divertToUnreachableCard(deferredReattachSessionId)) {
+              return
+            }
+            // Unlike the direct-SSH flow above, this path is not nested under `connectionId`: a
+            // local pane with a restored id and a runtime-host wake both reach it, and neither can
+            // be shown an SSH card. A local provider is authoritative about its own ptys, so
+            // replacing in place is right for it. A remote runtime shares SSH's ambiguity and is
+            // NOT — but the card is SSH-scoped (its retry dials an SSH target), so serving one is
+            // its own design, not something to graft on here. This keeps the behaviour it has
+            // today rather than quietly changing it.
             deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
             deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
             startFreshColdRestoreAgentResume(coldRestoreStartup, {
@@ -9052,15 +9143,23 @@ export function connectPanePty(
             ptyId: deferredReattachSessionId,
             reason: message
           })
-          deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
-          deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
-          if (connectionId && isSshSessionExpiredError(err)) {
-            startFreshColdRestoreAgentResume(coldRestoreStartup, {
-              forceBlankRestoredViewport: true
-            })
+          // Why: only proof that the session is gone may respawn. A transport
+          // fault, a wedged call, or a source that merely needs re-establishing
+          // leaves the shell running, and respawning there resumes the same
+          // agent session a second time into one transcript. A pane with no card
+          // to show falls through to the replace-in-place below — this path, unlike
+          // the direct-SSH one, is not nested under `connectionId`.
+          if (
+            !isProvenSshSessionGoneError(err) &&
+            divertToUnreachableCard(deferredReattachSessionId)
+          ) {
             return
           }
-          reportError(message)
+          deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
+          deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
+          if (!(connectionId && isSshSessionExpiredError(err))) {
+            reportError(message)
+          }
           startFreshColdRestoreAgentResume(coldRestoreStartup, {
             forceBlankRestoredViewport: true
           })
@@ -9389,10 +9488,6 @@ export function connectPanePty(
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
-      }
-      if (sshShellReadyFallbackTimer !== null) {
-        clearTimeout(sshShellReadyFallbackTimer)
-        sshShellReadyFallbackTimer = null
       }
       cleanupStartupDraftPasteTimers()
       releaseUnattemptedStartupDraftPasteDelivery()

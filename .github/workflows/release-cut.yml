@@ -783,7 +783,7 @@ jobs:
           {
             echo "## Release E2E Signal"
             echo ""
-            echo "- Terminal rendering golden is release-blocking."
+            echo "- Platform golden E2E is release-blocking: terminal rendering and restrictive-umask profile writes on Linux/macOS, plus fresh startup on Windows."
             echo "- Full E2E runs separately after publication and cannot change the release result."
             echo "- Terminal rendering release evidence is diagnostic/non-blocking."
             echo ""
@@ -817,7 +817,7 @@ jobs:
   terminal-rendering-golden:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
-    name: terminal rendering golden ${{ matrix.platform }}
+    name: golden e2e ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -830,10 +830,10 @@ jobs:
             platform: linux
           - os: macos-15
             platform: mac
-          # Why: Windows terminal rendering golden is temporarily disabled on
-          # CI while its flaky runner-only failures are investigated.
-          # - os: windows-latest
-          #   platform: windows
+          # Windows terminal rendering remains flaky; keep its blocking signal
+          # scoped to the fresh-profile startup regression from #14130.
+          - os: windows-2022
+            platform: windows
 
     steps:
       - name: Checkout
@@ -866,22 +866,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Electron app for terminal rendering golden
+      - name: Build Electron app for platform golden
         run: npx electron-vite build --mode e2e
 
+      # Why: this job is defined on the dispatch ref (usually main) but checks
+      # out the release tag. Cherry-pick / hotfix tags can predate a golden
+      # script that main already calls; --if-present keeps those cuts green
+      # instead of failing with ERR_PNPM_NO_SCRIPT.
       - name: Run terminal rendering golden on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+        run: |
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
 
       - name: Run terminal rendering golden on macOS
         if: runner.os == 'macOS'
-        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+        run: |
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
+
+      - name: Run fresh-startup golden on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:SKIP_BUILD = '1'
+          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          pnpm run --if-present test:e2e:windows-fresh-startup-golden
 
       - name: Upload Playwright traces
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: terminal-rendering-golden-${{ matrix.platform }}-playwright-traces
+          name: golden-e2e-${{ matrix.platform }}-playwright-traces
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore

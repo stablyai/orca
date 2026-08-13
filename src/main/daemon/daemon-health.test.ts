@@ -23,6 +23,8 @@ import {
 } from './daemon-health'
 import type { SubprocessHandle } from './session'
 
+// Why: the veto's production default is otherwise never exercised — every other test injects it.
+
 function createMockSubprocess(): SubprocessHandle {
   return {
     pid: 55555,

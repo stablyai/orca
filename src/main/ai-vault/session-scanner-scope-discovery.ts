@@ -1,13 +1,18 @@
-import { createReadStream } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import { extname, join } from 'node:path'
+import {
+  openTranscriptReadStream,
+  wslGatedReaddir,
+  wslGatedStat
+} from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathSeparators
 } from '../../shared/cross-platform-path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage, extractString, parseJsonObject } from './session-scanner-values'
 
@@ -26,7 +31,18 @@ export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
 }
 
-async function cachedProjectDirCwd(projectDir: string): Promise<string | null> {
+// A gate refusal is a stalled WSL root, not an empty one: keep the existing
+// degrade-to-empty containment but make the gap visible in the scan issues.
+function recordRefusal(issues: AiVaultScanIssue[], path: string, error: unknown): void {
+  if (error instanceof WslTranscriptFsError) {
+    recordSessionScanIssue(issues, { agent: 'claude', path, message: error.message })
+  }
+}
+
+async function cachedProjectDirCwd(
+  projectDir: string,
+  issues: AiVaultScanIssue[]
+): Promise<string | null> {
   const cached = projectDirCwdCache.get(projectDir)
   if (cached !== undefined) {
     // Refresh recency so hot in-scope dirs outlive one-off ones at the cap.
@@ -34,7 +50,7 @@ async function cachedProjectDirCwd(projectDir: string): Promise<string | null> {
     projectDirCwdCache.set(projectDir, cached)
     return cached
   }
-  const cwd = await readProjectDirCwd(projectDir)
+  const cwd = await readProjectDirCwd(projectDir, issues)
   if (cwd) {
     if (projectDirCwdCache.size >= PROJECT_DIR_CWD_CACHE_MAX) {
       const oldest = projectDirCwdCache.keys().next()
@@ -70,8 +86,8 @@ export async function discoverInScopeClaudeFiles(args: {
   const scopeProjectPrefixes = claudeProjectScopePrefixes(args.scopePaths)
   const collected = new Map<string, FileWithMtime>()
   for (const rootDir of args.rootDirs) {
-    for (const projectDir of await listProjectDirs(rootDir, scopeProjectPrefixes)) {
-      const cwd = await cachedProjectDirCwd(projectDir)
+    for (const projectDir of await listProjectDirs(rootDir, scopeProjectPrefixes, args.issues)) {
+      const cwd = await cachedProjectDirCwd(projectDir, args.issues)
       if (!cwd || !args.scopePaths.some((scopePath) => isCwdInsideScopePath(scopePath, cwd))) {
         continue
       }
@@ -148,12 +164,14 @@ function isCwdInsideScopePath(scopePath: string, cwd: string): boolean {
 
 async function listProjectDirs(
   rootDir: string,
-  scopeProjectPrefixes: ReadonlySet<string>
+  scopeProjectPrefixes: ReadonlySet<string>,
+  issues: AiVaultScanIssue[]
 ): Promise<string[]> {
   let entries
   try {
-    entries = await readdir(rootDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(rootDir, 'scan')
+  } catch (err) {
+    recordRefusal(issues, rootDir, err)
     return []
   }
   return entries
@@ -163,10 +181,13 @@ async function listProjectDirs(
     .map((entry) => join(rootDir, entry.name))
 }
 
-async function readProjectDirCwd(projectDir: string): Promise<string | null> {
-  const files = await newestClaudeFilesInDir(projectDir)
+async function readProjectDirCwd(
+  projectDir: string,
+  issues: AiVaultScanIssue[]
+): Promise<string | null> {
+  const files = await newestClaudeFilesInDir(projectDir, issues)
   for (const file of files.slice(0, REPRESENTATIVE_FILE_LIMIT)) {
-    const cwd = await readFirstCwd(file)
+    const cwd = await readFirstCwd(file, issues)
     if (cwd) {
       return cwd
     }
@@ -174,11 +195,15 @@ async function readProjectDirCwd(projectDir: string): Promise<string | null> {
   return null
 }
 
-async function newestClaudeFilesInDir(projectDir: string): Promise<string[]> {
+async function newestClaudeFilesInDir(
+  projectDir: string,
+  issues: AiVaultScanIssue[]
+): Promise<string[]> {
   let entries
   try {
-    entries = await readdir(projectDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(projectDir, 'scan')
+  } catch (err) {
+    recordRefusal(issues, projectDir, err)
     return []
   }
   const newest: { path: string; mtimeMs: number }[] = []
@@ -190,18 +215,19 @@ async function newestClaudeFilesInDir(projectDir: string): Promise<string[]> {
     try {
       addBoundedPath(newest, REPRESENTATIVE_FILE_LIMIT, {
         path,
-        mtimeMs: (await stat(path)).mtimeMs
+        mtimeMs: (await wslGatedStat(path, 'scan')).mtimeMs
       })
-    } catch {
+    } catch (err) {
       // Best effort: unreadable candidates are ignored here and reported during
       // full collection if the project directory proves in-scope.
+      recordRefusal(issues, path, err)
     }
   }
   return newest.sort((left, right) => right.mtimeMs - left.mtimeMs).map((value) => value.path)
 }
 
-async function readFirstCwd(filePath: string): Promise<string | null> {
-  const input = createReadStream(filePath, { encoding: 'utf-8' })
+async function readFirstCwd(filePath: string, issues: AiVaultScanIssue[]): Promise<string | null> {
+  const input = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
   let read = 0
   try {
@@ -214,7 +240,8 @@ async function readFirstCwd(filePath: string): Promise<string | null> {
         return cwd
       }
     }
-  } catch {
+  } catch (err) {
+    recordRefusal(issues, filePath, err)
     return null
   } finally {
     // readline.close() leaves the underlying stream open; destroy it so the early
@@ -234,8 +261,9 @@ async function collectClaudeFiles(args: {
 }): Promise<void> {
   let entries
   try {
-    entries = await readdir(args.projectDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(args.projectDir, 'scan')
+  } catch (err) {
+    recordRefusal(args.issues, args.projectDir, err)
     return
   }
   for (const entry of entries) {
@@ -247,7 +275,7 @@ async function collectClaudeFiles(args: {
       continue
     }
     try {
-      const fileStat = await stat(path)
+      const fileStat = await wslGatedStat(path, 'scan')
       addBoundedFile(args.collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,
@@ -255,7 +283,7 @@ async function collectClaudeFiles(args: {
         sizeBytes: fileStat.size
       })
     } catch (err) {
-      args.issues.push({ agent: 'claude', path, message: errorMessage(err) })
+      recordSessionScanIssue(args.issues, { agent: 'claude', path, message: errorMessage(err) })
     }
   }
 }

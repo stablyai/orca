@@ -1,0 +1,324 @@
+query TerminalSessionCorrectnessRelatedWork {
+  repository(owner: "stablyai", name: "orca") {
+    n8129: issueOrPullRequest(number: 8129) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n8275: issueOrPullRequest(number: 8275) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n8585: issueOrPullRequest(number: 8585) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n8618: issueOrPullRequest(number: 8618) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9034: issueOrPullRequest(number: 9034) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9092: issueOrPullRequest(number: 9092) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9093: issueOrPullRequest(number: 9093) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9138: issueOrPullRequest(number: 9138) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9562: issueOrPullRequest(number: 9562) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9585: issueOrPullRequest(number: 9585) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9819: issueOrPullRequest(number: 9819) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9820: issueOrPullRequest(number: 9820) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9827: issueOrPullRequest(number: 9827) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n9833: issueOrPullRequest(number: 9833) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n10118: issueOrPullRequest(number: 10118) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n10208: issueOrPullRequest(number: 10208) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n10235: issueOrPullRequest(number: 10235) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n10385: issueOrPullRequest(number: 10385) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n10415: issueOrPullRequest(number: 10415) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n10744: issueOrPullRequest(number: 10744) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11006: issueOrPullRequest(number: 11006) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11265: issueOrPullRequest(number: 11265) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11339: issueOrPullRequest(number: 11339) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11342: issueOrPullRequest(number: 11342) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11495: issueOrPullRequest(number: 11495) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11574: issueOrPullRequest(number: 11574) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11575: issueOrPullRequest(number: 11575) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11596: issueOrPullRequest(number: 11596) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11622: issueOrPullRequest(number: 11622) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11729: issueOrPullRequest(number: 11729) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11800: issueOrPullRequest(number: 11800) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11801: issueOrPullRequest(number: 11801) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11803: issueOrPullRequest(number: 11803) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11804: issueOrPullRequest(number: 11804) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n11904: issueOrPullRequest(number: 11904) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12036: issueOrPullRequest(number: 12036) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12134: issueOrPullRequest(number: 12134) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12140: issueOrPullRequest(number: 12140) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12220: issueOrPullRequest(number: 12220) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12241: issueOrPullRequest(number: 12241) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12264: issueOrPullRequest(number: 12264) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12339: issueOrPullRequest(number: 12339) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12447: issueOrPullRequest(number: 12447) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12448: issueOrPullRequest(number: 12448) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12456: issueOrPullRequest(number: 12456) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12474: issueOrPullRequest(number: 12474) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12477: issueOrPullRequest(number: 12477) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12568: issueOrPullRequest(number: 12568) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12600: issueOrPullRequest(number: 12600) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12634: issueOrPullRequest(number: 12634) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12683: issueOrPullRequest(number: 12683) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12699: issueOrPullRequest(number: 12699) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12702: issueOrPullRequest(number: 12702) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12743: issueOrPullRequest(number: 12743) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12749: issueOrPullRequest(number: 12749) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12751: issueOrPullRequest(number: 12751) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12760: issueOrPullRequest(number: 12760) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12768: issueOrPullRequest(number: 12768) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12798: issueOrPullRequest(number: 12798) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12882: issueOrPullRequest(number: 12882) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12903: issueOrPullRequest(number: 12903) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n12987: issueOrPullRequest(number: 12987) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n13013: issueOrPullRequest(number: 13013) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n13110: issueOrPullRequest(number: 13110) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    n13111: issueOrPullRequest(number: 13111) {
+      ...IssueDetails
+      ...PullRequestDetails
+    }
+    p13110: pullRequest(number: 13110) {
+      ...ReviewDetails
+    }
+    p13111: pullRequest(number: 13111) {
+      ...ReviewDetails
+    }
+  }
+}
+
+fragment IssueDetails on Issue {
+  number
+  title
+  url
+  state
+  stateReason
+  updatedAt
+}
+
+fragment PullRequestDetails on PullRequest {
+  number
+  title
+  url
+  state
+  isDraft
+  merged
+  reviewDecision
+  mergeable
+  mergeStateStatus
+  headRefName
+  baseRefName
+  additions
+  deletions
+  changedFiles
+  updatedAt
+  commits(last: 1) {
+    nodes {
+      commit {
+        oid
+        statusCheckRollup {
+          state
+        }
+      }
+    }
+  }
+}
+
+fragment ReviewDetails on PullRequest {
+  reviewThreads(first: 100) {
+    nodes {
+      isResolved
+      isOutdated
+      comments(last: 1) {
+        nodes {
+          url
+          author {
+            login
+          }
+        }
+      }
+    }
+  }
+}

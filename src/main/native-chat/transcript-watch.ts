@@ -11,6 +11,7 @@ import type {
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 export { getActiveNativeChatWatcherCount } from './transcript-watch-engine'
@@ -32,7 +33,7 @@ async function attemptInstall(
   if (!filePath) {
     return null
   }
-  const installed = await installTranscriptWatcher(filePath, decode, args)
+  const installed = await installTranscriptWatcher(filePath, decode, args, signal)
   if (signal?.aborted) {
     installed?.unsubscribe()
     signal.throwIfAborted()
@@ -77,6 +78,9 @@ function subscribeViaResolvePoll(
   // the exact-path install doesn't wait on the slower id-glob (#10326).
   let hostReadableExactPath: string | null = null
   let lastWslTranslateAt = 0
+  // Latches only once a frame was actually emitted, so a subscriber without the
+  // callback can't suppress it for a later one.
+  let gateErrorEmitted = false
   const resolveController = new AbortController()
 
   function scheduleAttempt(): void {
@@ -140,9 +144,18 @@ function subscribeViaResolvePoll(
         lastFallbackResolveAt = Date.now()
         result = await attemptInstall(args, decode, resolveController.signal)
       }
-    } catch {
+    } catch (error) {
       // Why: a transient resolve failure (EACCES/EIO during the glob) must not
-      // kill the poll loop with an unhandled rejection — retry like a miss.
+      // kill the poll loop with an unhandled rejection — retry like a miss. A
+      // stalled WSL distro would otherwise poll silently forever, leaving the
+      // client at 'loading'; emit its retryable message once and keep polling,
+      // so a later tick's real snapshot still replaces it. Narrowed with a bare
+      // instanceof, never wslTranscriptFsRefusal — that helper rethrows, and
+      // runAttempt is invoked as `void runAttempt()`.
+      if (error instanceof WslTranscriptFsError && !gateErrorEmitted && args.onInitialSnapshot) {
+        gateErrorEmitted = true
+        args.onInitialSnapshot([], false, 0, error.message)
+      }
       result = null
     }
     if (closed) {
@@ -207,7 +220,16 @@ export async function subscribeNativeChatTranscript(
     return { unsubscribe: () => {}, watching: false }
   }
 
-  const installed = await attemptInstall(args, decode, setupSignal)
+  let installed: NativeChatTranscriptSubscription | null
+  try {
+    installed = await attemptInstall(args, decode, setupSignal)
+  } catch (error) {
+    setupSignal?.throwIfAborted()
+    // Why: a gate-refused resolve (stalled WSL distro) must degrade to the
+    // resolve-poll fallback below, not fail the subscribe outright.
+    void wslTranscriptFsRefusal(error) // rethrows anything that is not a gate refusal
+    installed = null
+  }
   if (installed) {
     return installed
   }

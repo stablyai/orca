@@ -917,6 +917,9 @@ export default function SessionScreen() {
   } | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
+  // Why: a lease-only subscribe never renders, so the reconciler needs to tell it apart
+  // from a stream that does — an uncovered handle holding one is a blank terminal.
+  const leaseOnlyHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
   const terminalDiagnosticsRef = useRef(new MobileTerminalDiagnostics())
   // Why: bounds the scrollback→resubscribe fit loop per handle (STA-3337).
@@ -1233,6 +1236,7 @@ export default function SessionScreen() {
       terminalUnsubsRef.current.get(handle)?.()
       terminalUnsubsRef.current.delete(handle)
       subscribingHandlesRef.current.delete(handle)
+      leaseOnlyHandlesRef.current.delete(handle)
       terminalDiagnosticsRef.current.terminalUnsubscribed(handle)
       subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
       // Why: reset the high-water mark so a fresh subscription's first scrollback isn't dropped as stale.
@@ -1265,6 +1269,7 @@ export default function SessionScreen() {
     clearNativeChatInputLease()
     terminalUnsubsRef.current.clear()
     subscribingHandlesRef.current.clear()
+    leaseOnlyHandlesRef.current.clear()
     initializedHandlesRef.current.clear()
     terminalDiagnosticsRef.current.clearTerminalCache()
     viewportResubscribeBudgetRef.current.clear()
@@ -1331,6 +1336,11 @@ export default function SessionScreen() {
       }
 
       subscribingHandlesRef.current.add(handle)
+      if (covered) {
+        leaseOnlyHandlesRef.current.add(handle)
+      } else {
+        leaseOnlyHandlesRef.current.delete(handle)
+      }
       const seq = (subscribeSeqRef.current.get(handle) ?? 0) + 1
       subscribeSeqRef.current.set(handle, seq)
       diagnostics.streamArmed(handle, seq, viewportRef.current)
@@ -1519,6 +1529,7 @@ export default function SessionScreen() {
     streamRevision: coveredStreamRevision,
     subscriptionsRef: terminalUnsubsRef,
     subscribingRef: subscribingHandlesRef,
+    leaseOnlyRef: leaseOnlyHandlesRef,
     webReadyRef: webReadyHandlesRef,
     initializedRef: initializedHandlesRef,
     subscribe: subscribeToTerminal,
@@ -3085,6 +3096,10 @@ export default function SessionScreen() {
     hostId,
     worktreeId,
     worktreeName: routeWorktreeName,
+    nativeChatSessionId:
+      activeSessionTab?.type === 'terminal'
+        ? (activeSessionTab.agentStatus?.providerSession?.id ?? null)
+        : null,
     activeHandleRef,
     terminalCwdRef,
     openBrowser: (url) => void handleCreateBrowserRef.current?.(url),

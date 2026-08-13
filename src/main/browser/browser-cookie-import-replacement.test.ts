@@ -168,7 +168,7 @@ describe('validated cookie replacement', () => {
 })
 
 describe('native Chromium integrity-cookie accounting', () => {
-  let clearStorageDataMock: ReturnType<typeof vi.fn>
+  let clearDataMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
   let tmpDir: string
 
@@ -180,7 +180,7 @@ describe('native Chromium integrity-cookie accounting', () => {
     })
     clearPendingCookieImportMock.mockClear()
     setPendingCookieImportMock.mockClear()
-    clearStorageDataMock = vi.fn().mockResolvedValue(undefined)
+    clearDataMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset().mockReturnValue({
       cookies: {
@@ -189,7 +189,7 @@ describe('native Chromium integrity-cookie accounting', () => {
         remove: vi.fn().mockResolvedValue(undefined),
         set: cookiesSetMock
       },
-      clearStorageData: clearStorageDataMock
+      clearData: clearDataMock
     })
   })
 
@@ -252,7 +252,7 @@ describe('native Chromium integrity-cookie accounting', () => {
         googleCookiesSkipped: 2,
         domains: []
       })
-      expect(clearStorageDataMock).not.toHaveBeenCalled()
+      expect(clearDataMock).not.toHaveBeenCalled()
       expect(cookiesSetMock).not.toHaveBeenCalled()
       expect(setPendingCookieImportMock).not.toHaveBeenCalled()
       expect(clearPendingCookieImportMock).not.toHaveBeenCalled()

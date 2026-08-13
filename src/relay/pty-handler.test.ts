@@ -11,9 +11,11 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
+import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 
-const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
+const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
+  mockCreateShellPromptReadinessProbe: vi.fn(),
   mockPtyInstance: {
     // Why: attach now proves the backing pid is alive before replaying, so the
     // default managed PTY must report a live pid. Reuse the test runner's own
@@ -38,11 +40,14 @@ vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
 }))
 
+vi.mock('../main/shell-prompt-readiness-probe', () => ({
+  createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
+}))
+
 import {
   IMMEDIATE_PTY_EXIT_TIMEOUT_MS,
   MAX_RELAY_PTY_SESSIONS,
   PtyHandler,
-  attachIdentityMismatches,
   formatNodePtyUnavailableMessage
 } from './pty-handler'
 import { RelayDispatcher } from './dispatcher'
@@ -139,6 +144,11 @@ describe('PtyHandler', () => {
     mockPtyInstance.clear.mockReset()
     mockPtyInstance.pause.mockReset()
     mockPtyInstance.resume.mockReset()
+    mockCreateShellPromptReadinessProbe.mockReset()
+    mockCreateShellPromptReadinessProbe.mockReturnValue({
+      notifyOutput: vi.fn(),
+      dispose: vi.fn()
+    })
     vi.spyOn(ptyShellUtils, 'processHasChildren').mockResolvedValue(false)
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
@@ -298,7 +308,56 @@ describe('PtyHandler', () => {
 
     const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(spawnOptions.env.NODE_ENV).toBeUndefined()
-    expect(spawnOptions.env.PATH).toBe(process.env.PATH)
+    const expectedEnv = { PATH: process.env.PATH ?? '' }
+    stripLegacyTerminalShimEnv(expectedEnv, process.platform)
+    expect(spawnOptions.env.PATH).toBe(expectedEnv.PATH)
+  })
+
+  it('does not inherit legacy attribution state from the relay process', async () => {
+    const keys = ['ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_ATTRIBUTION_SHIM_DIR', 'PATH'] as const
+    const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+    process.env.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
+    process.env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-terminal-attribution/posix'
+    process.env.PATH = '/tmp/orca-terminal-attribution/posix:/usr/bin'
+
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+      const spawnedEnv = mockPtySpawn.mock.calls.at(-1)?.[2] as {
+        env: Record<string, string>
+      }
+      expect(spawnedEnv.env.PATH).toBe('/usr/bin')
+      expect(spawnedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+      expect(spawnedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+
+      const state = (await dispatcher.callRequest('pty.serialize', {
+        ids: ['pty-1']
+      })) as string
+      await handler.dispose({ waitForPhysicalExit: false })
+      mockPtySpawn.mockClear()
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+
+      const revivedEnv = mockPtySpawn.mock.calls.at(-1)?.[2] as {
+        env: Record<string, string>
+      }
+      expect(revivedEnv.env.PATH).toBe('/usr/bin')
+      expect(revivedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+      expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
   })
 
   it('keeps a renderer-supplied NODE_ENV for the spawned shell', async () => {
@@ -829,6 +888,7 @@ describe('PtyHandler', () => {
     vi.advanceTimersByTime(49)
     const term = mockPtySpawn.mock.results[0]?.value
     expect(handler.retainedStartupCommandCount).toBe(1)
+    expect(handler.retainedStartupCommandBytes).toBe('echo provider-owned'.length)
     expect(term.write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
@@ -870,6 +930,9 @@ describe('PtyHandler', () => {
         | { env?: Record<string, string> }
         | undefined
       expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(handler.retainedStartupCommandCount).toBe(1)
+      expect(handler.retainedStartupCommandBytes).toBe(0)
+      vi.advanceTimersByTime(15_000)
       expect(handler.retainedStartupCommandCount).toBe(0)
     }
   )
@@ -906,7 +969,7 @@ describe('PtyHandler', () => {
         | { env?: Record<string, string> }
         | undefined
       expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
-      expect(handler.retainedStartupCommandCount).toBe(0)
+      expect(handler.retainedStartupCommandCount).toBe(1)
     }
   )
 
@@ -1044,6 +1107,224 @@ describe('PtyHandler', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'recovers provider delivery when startup exec replaces the relay wrapper',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-provider-exec-spawn-'))
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/bash'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-exec',
+          commandDelivery: 'provider',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
+      await vi.advanceTimersByTimeAsync(8)
+
+      const promptOptions = mockCreateShellPromptReadinessProbe.mock.calls[0]?.[0] as {
+        onPromptReady: () => void
+      }
+      expect(
+        mockCreateShellPromptReadinessProbe.mock.results[0]?.value.notifyOutput
+      ).toHaveBeenCalledWith('\x1b[?2004hremote $ ')
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b[?2004hremote $ '
+      })
+      promptOptions.onPromptReady()
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(term.write).toHaveBeenCalledWith('echo after-exec\n')
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'signals renderer delivery when startup exec replaces the relay wrapper',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-exec-spawn-'))
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/bash'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-exec',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
+      await vi.advanceTimersByTimeAsync(8)
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b[?2004hremote $ '
+      })
+
+      const promptOptions = mockCreateShellPromptReadinessProbe.mock.calls[0]?.[0] as {
+        onPromptReady: () => void
+      }
+      promptOptions.onPromptReady()
+      await vi.advanceTimersByTimeAsync(8)
+
+      expect(term.write).not.toHaveBeenCalled()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]777;orca-shell-ready\x07'
+      })
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'forwards the supported ready marker to renderer delivery',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-ready-spawn-'))
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/bash'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-ready',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.(
+        `\x1b]777;orca-shell-start:${process.pid}\x07\x1b]777;orca-shell-ready\x07remote $ `
+      )
+      await vi.advanceTimersByTimeAsync(8)
+
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]777;orca-shell-ready\x07remote $ '
+      })
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'releases split renderer readiness through one completed path',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-split-ready-spawn-'))
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/bash'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-ready',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b]777;orca-shell-ready`)
+      dataCallback?.('\x07remote $ ')
+      await vi.advanceTimersByTimeAsync(8)
+
+      const probe = mockCreateShellPromptReadinessProbe.mock.results[0]?.value
+      expect(probe.notifyOutput).not.toHaveBeenCalled()
+      expect(probe.dispose).toHaveBeenCalledOnce()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]777;orca-shell-ready\x07remote $ '
+      })
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not retain renderer readiness state for unsupported shells',
+    async () => {
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/sh'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          command: 'x'.repeat(256 * 1024),
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('0')
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'flushes held shell-ready marker bytes when provider delivery falls back',
     async () => {
       let dataCallback: ((data: string) => void) | undefined
@@ -1104,10 +1385,10 @@ describe('PtyHandler', () => {
     }
   )
 
-  it('reports not-found and reaps a reattach whose backing shell is dead', async () => {
+  it('proves the exit and reaps a reattach whose backing shell is dead', async () => {
     // Why: a lingering managed entry whose child died without an onExit would
     // otherwise attach-succeed with an empty replay and strand the pane on a
-    // black shell. A provably-dead pid must surface as not-found so the SSH
+    // black shell. A provably-dead pid must surface as a PROVEN exit so the SSH
     // provider maps it to SSH_SESSION_EXPIRED and the pane respawns fresh.
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     mockPtySpawn.mockReturnValue({
@@ -1120,15 +1401,25 @@ describe('PtyHandler', () => {
     const exits: { id: string; paneKey?: string }[] = []
     handler.setExitListener((evt) => exits.push(evt))
 
-    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dead:0' } })
+    const spawned = (await dispatcher.callRequest('pty.spawn', {
+      env: { ORCA_PANE_KEY: 'tab-dead:0' }
+    })) as { id: string; incarnationId: string }
     expect(handler.activePtyCount).toBe(1)
     expect(onExitCb).toBeDefined()
 
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
     try {
+      // INVERTED: the reap is unchanged, but its answer is no longer the ordinary unknown. The
+      // relay held this shell and found its pid gone, which is first-hand proof of death — the
+      // one observation that separates a dead shell from one a replacement relay never knew.
       await expect(
-        dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
-      ).rejects.toThrow('PTY "pty-1" not found')
+        dispatcher.callRequest('pty.attach', {
+          id: 'pty-1',
+          suppressReplayNotification: true,
+          exitProofSupported: true,
+          expectedIncarnationId: spawned.incarnationId
+        })
+      ).rejects.toThrow(/SSH_PTY_EXITED/)
     } finally {
       aliveSpy.mockRestore()
     }
@@ -1137,10 +1428,61 @@ describe('PtyHandler', () => {
     // is freed so a later attach also cleanly reports not-found.
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-dead:0' }])
     expect(handler.activePtyCount).toBe(0)
+    // INVERTED: a LATER attach still answers, and now answers with what this process observed —
+    // the remembered exit outlives the reap, which is the whole point of remembering it.
     await expect(
-      dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
-    ).rejects.toThrow('PTY "pty-1" not found')
+      dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        suppressReplayNotification: true,
+        exitProofSupported: true,
+        expectedIncarnationId: spawned.incarnationId
+      })
+    ).rejects.toThrow(/SSH_PTY_EXITED/)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'releases renderer readiness state when attach reaps a dead shell',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-dead-shell-ready-spawn-'))
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'x'.repeat(256 * 1024),
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+      expect(handler.retainedStartupCommandCount).toBe(1)
+
+      const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+      try {
+        await expect(dispatcher.callRequest('pty.attach', { id: 'pty-1' })).rejects.toThrow(
+          'PTY "pty-1" not found'
+        )
+      } finally {
+        aliveSpy.mockRestore()
+      }
+
+      expect(handler.retainedStartupCommandCount).toBe(0)
+      vi.advanceTimersByTime(15_000)
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
 
   it('settles concurrent immediate shutdown when attach proves the shell exited', async () => {
     const mockKill = vi.fn()
@@ -1150,7 +1492,10 @@ describe('PtyHandler', () => {
       onData: vi.fn(),
       onExit: vi.fn()
     })
-    await dispatcher.callRequest('pty.spawn', {})
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as {
+      id: string
+      incarnationId: string
+    }
 
     let shutdown: Promise<unknown> | undefined
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockImplementation(() => {
@@ -1158,9 +1503,14 @@ describe('PtyHandler', () => {
       return false
     })
     try {
-      await expect(dispatcher.callRequest('pty.attach', { id: 'pty-1' })).rejects.toThrow(
-        'PTY "pty-1" not found'
-      )
+      // INVERTED with the reap above: proof of exit, not an unknown id.
+      await expect(
+        dispatcher.callRequest('pty.attach', {
+          id: 'pty-1',
+          exitProofSupported: true,
+          expectedIncarnationId: spawned.incarnationId
+        })
+      ).rejects.toThrow(/SSH_PTY_EXITED/)
       await expect(shutdown).resolves.toBeUndefined()
     } finally {
       aliveSpy.mockRestore()
@@ -1168,6 +1518,173 @@ describe('PtyHandler', () => {
 
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  // A relay that never knew an id may be a replacement whose predecessor's shells are still
+  // running, so "not found" proves nothing. A relay that WATCHED the shell exit knows first-hand.
+  // Keeping that observation is what lets the client tell a dead shell from an unknown one, and
+  // therefore what lets it respawn without risking a second agent on a live transcript.
+  // What the host answers reaches clients that predate the reply, and one of those reads an
+  // unrecognized attach error as neither death nor recovery — a stranded pane. So the proof is
+  // offered only to a client that says it can act on it.
+  /** `toThrow(expect.not.stringMatching(...))` passes whenever ANYTHING throws, so a negative
+   *  claim about the wording has to read the message itself. */
+  async function attachRejectionMessage(params: Record<string, unknown>): Promise<string> {
+    const error = await dispatcher.callRequest('pty.attach', params).then(
+      () => null,
+      (thrown: unknown) => thrown as Error
+    )
+    expect(error, 'attach unexpectedly succeeded').toBeInstanceOf(Error)
+    return (error as Error).message
+  }
+
+  it('keeps the older wording for a client that has not declared it understands exit proof', async () => {
+    const spawned = await spawnPty({})
+    const onExitCb = mockPtyInstance.onExit.mock.calls.at(-1)?.[0] as
+      | ((evt: { exitCode: number }) => void)
+      | undefined
+    onExitCb?.({ exitCode: 3 })
+
+    await expect(dispatcher.callRequest('pty.attach', { id: spawned.id })).rejects.toThrow(
+      `PTY "${'pty-1'}" not found`
+    )
+  })
+
+  // The sharpest edge in the whole change. A caller that names no shell is not asking about this
+  // one, so a remembered exit is not an answer to it: relay A is killed leaving pty-1 alive and
+  // orphaned, relay B mints its own pty-1 and THAT one exits. A pane carrying no recorded identity
+  // must not be told its shell is gone, because the reply authorizes replacing a process that is
+  // still running — the double agent resume this whole change exists to prevent.
+  it('does not prove an exit to a caller that names no shell', async () => {
+    const spawned = await spawnPty({})
+    const onExitCb = mockPtyInstance.onExit.mock.calls.at(-1)?.[0] as
+      | ((evt: { exitCode: number }) => void)
+      | undefined
+    onExitCb?.({ exitCode: 3 })
+
+    expect(await attachRejectionMessage({ id: spawned.id, exitProofSupported: true })).not.toMatch(
+      /SSH_PTY_EXITED/
+    )
+  })
+
+  // The same rule on the other proof route. A replacement relay can hold a DIFFERENT shell under
+  // this id; if that one dies, its death is not evidence about the caller's, which may be running
+  // orphaned under the relay this one replaced. The reap still happens — a dead shell should be
+  // cleared whoever asked — but the answer must not authorize replacing a live process.
+  it('does not prove a reaped shell to a caller that named a different one', async () => {
+    const spawned = await spawnPty({})
+    const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+    try {
+      const message = await attachRejectionMessage({
+        id: spawned.id,
+        exitProofSupported: true,
+        expectedIncarnationId: 'a-shell-from-a-previous-relay'
+      })
+      expect(message).not.toMatch(/SSH_PTY_EXITED/)
+      expect(message).toMatch(/identity mismatch/i)
+    } finally {
+      aliveSpy.mockRestore()
+    }
+    // The reap still ran: the dead entry is gone regardless of who asked.
+    expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('answers a later attach with the exit it observed, not an unknown id', async () => {
+    const spawned = await spawnPty({})
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    // The exit listener was captured at spawn by the shared mock; drive a real exit through it.
+    onExitCb = mockPtyInstance.onExit.mock.calls.at(-1)?.[0] as typeof onExitCb
+    expect(onExitCb).toBeDefined()
+    onExitCb!({ exitCode: 3 })
+
+    const asking = {
+      id: spawned.id,
+      exitProofSupported: true,
+      expectedIncarnationId: spawned.incarnationId
+    }
+    await expect(attachPty(asking)).rejects.toThrow(/SSH_PTY_EXITED/)
+    await expect(attachPty(asking)).rejects.toThrow(/code=3/)
+  })
+
+  // The dangerous shape: a replaced relay hands pty-1 to a new shell, that one exits, and the
+  // pane still bound to the ORIGINAL pty-1 asks about its own. Reporting the stranger's death as
+  // proof would authorize a respawn onto a shell that may still be running.
+  it('does not report a remembered exit for a shell the caller did not ask about', async () => {
+    const spawned = await spawnPty({})
+    const onExitCb = mockPtyInstance.onExit.mock.calls.at(-1)?.[0] as
+      | ((evt: { exitCode: number }) => void)
+      | undefined
+    onExitCb?.({ exitCode: 3 })
+
+    expect(
+      await attachRejectionMessage({
+        id: spawned.id,
+        exitProofSupported: true,
+        expectedIncarnationId: 'a-different-shell'
+      })
+    ).not.toMatch(/SSH_PTY_EXITED/)
+  })
+
+  // INVERTED from the deleted `attachIdentityMismatches` suite. That guard compared the paneKey and
+  // tabId frozen at spawn; it caught a recycled id, but it also refused a pane that had merely moved
+  // to another tab — and refused as "not found", which the client read as death and answered by
+  // resuming the agent a second time. The property worth keeping is "a recycled id must not attach";
+  // the property that had to go is "identity is where the pane lives". Both are pinned below, now
+  // against the shell's own incarnation.
+  it('refuses an attach whose expected incarnation names a different shell', async () => {
+    const first = await spawnPty({})
+
+    await expect(
+      dispatcher.callRequest('pty.attach', {
+        id: first.id,
+        expectedIncarnationId: 'incarnation-from-a-previous-relay'
+      })
+    ).rejects.toThrow(/identity mismatch/i)
+  })
+
+  // The wording matters as much as the refusal: "not found" is what the client maps to an expired
+  // session, and expiry authorizes a respawn onto the very shell this branch proved is alive.
+  it('does not word an incarnation refusal as not-found', async () => {
+    const first = await spawnPty({})
+
+    expect(
+      await attachRejectionMessage({
+        id: first.id,
+        expectedIncarnationId: 'incarnation-from-a-previous-relay'
+      })
+    ).not.toMatch(/not found/i)
+  })
+
+  it('attaches when the expected incarnation is the shell it names', async () => {
+    const first = await spawnPty({})
+
+    await expect(
+      attachPty({ id: first.id, expectedIncarnationId: first.incarnationId })
+    ).resolves.toMatchObject({ incarnationId: first.incarnationId })
+  })
+
+  // An older client sends no expectation. Refusing there would strand every pane it owns.
+  it('stays permissive when the caller supplies no expected incarnation', async () => {
+    const first = await spawnPty({})
+
+    await expect(attachPty({ id: first.id })).resolves.toMatchObject({
+      incarnationId: first.incarnationId
+    })
+  })
+
+  // The regression the old tab-keyed guard caused. A pane carries its shell to a new tab; the
+  // relay still holds the paneKey/tabId frozen at spawn. That must not refuse the attach.
+  it('attaches a pane that has moved to another tab', async () => {
+    const first = await spawnPty({ paneKey: 'tab-a:0', tabId: 'tab-a' })
+
+    await expect(
+      attachPty({
+        id: first.id,
+        expectedIncarnationId: first.incarnationId,
+        expectedPaneKey: 'tab-b:0',
+        expectedTabId: 'tab-b'
+      })
+    ).resolves.toMatchObject({ incarnationId: first.incarnationId })
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -1876,13 +2393,17 @@ describe('PtyHandler', () => {
     expect(spawnOptions.env.ORCA_PANE_KEY).toBeUndefined()
     expect(spawnOptions.env.ORCA_TAB_ID).toBeUndefined()
 
+    // A caller that names no incarnation is an older client, and pane identity is the only fence
+    // it can be given — so it still applies, and still refuses. A caller that CAN name the shell is
+    // fenced on that instead and attaches regardless of which tab it now lives in; that is pinned
+    // by "attaches a pane that has moved to another tab".
     await expect(
       attachPty({
         id: 'pty-1',
         expectedPaneKey: 'tab-b:leaf-b',
         expectedTabId: 'tab-b'
       })
-    ).rejects.toThrow('PTY "pty-1" not found')
+    ).rejects.toThrow(/identity mismatch/i)
 
     await expect(
       attachPty({
@@ -2523,16 +3044,16 @@ describe('PtyHandler', () => {
     handler.addEnvAugmenter(() => ({
       TERM: 'augmenter-term',
       TERM_PROGRAM: 'augmenter-terminal',
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/augmenter-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/augmenter-stale'
     }))
 
     await dispatcher.callRequest('pty.spawn', {
       env: {
         TERM: 'screen-256color',
         TERM_PROGRAM: 'renderer-terminal',
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/renderer-attribution'
+        ORCA_STALE_TEST_ENV: '/tmp/renderer-stale'
       },
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      envToDelete: ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
     })
 
     const spawnEnv = mockPtySpawn.mock.calls[0][2] as {
@@ -2544,7 +3065,7 @@ describe('PtyHandler', () => {
     expect(spawnEnv.env.COLORTERM).toBe('truecolor')
     expect(spawnEnv.env.FORCE_HYPERLINK).toBe('1')
     expect(spawnEnv.env.TERM_PROGRAM).toBeUndefined()
-    expect(spawnEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(spawnEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('replaces an ambient TERM=dumb when no explicit TERM is supplied', async () => {
@@ -2734,9 +3255,16 @@ describe('PtyHandler', () => {
       ORCA_AGENT_HOOK_TOKEN: 'abc-uuid'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const oldStartupIdentity = process.env.ORCA_SHELL_STARTUP_IDENTITY
+    process.env.ORCA_SHELL_STARTUP_IDENTITY = '1'
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
+      if (oldStartupIdentity === undefined) {
+        delete process.env.ORCA_SHELL_STARTUP_IDENTITY
+      } else {
+        process.env.ORCA_SHELL_STARTUP_IDENTITY = oldStartupIdentity
+      }
       killSpy.mockRestore()
     }
 
@@ -2749,6 +3277,8 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
     expect(callArgs.env.TERM).toBe('xterm-256color')
     expect(callArgs.env.TERM_PROGRAM).toBe('Orca')
+    expect(callArgs.env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(callArgs.env.ORCA_SHELL_STARTUP_IDENTITY).toBe('0')
   })
 
   it('fences both revived worktree identity and cwd with rollback', async () => {
@@ -2900,7 +3430,7 @@ describe('PtyHandler', () => {
   it('normalizes an explicit empty TERM and preserves sanitized env deletions on revive', async () => {
     await dispatcher.callRequest('pty.spawn', {
       env: { TERM: '' },
-      envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR', '', 42]
+      envToDelete: ['ORCA_STALE_TEST_ENV', '', 42]
     })
 
     const initialEnv = mockPtySpawn.mock.calls[0][2] as {
@@ -2916,14 +3446,14 @@ describe('PtyHandler', () => {
       envToDelete?: string[]
     }[]
     expect(serialized.explicitTerm).toBeUndefined()
-    expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
+    expect(serialized.envToDelete).toEqual(['ORCA_STALE_TEST_ENV'])
 
     await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
     handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/revived-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/revived-stale'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
@@ -2938,7 +3468,7 @@ describe('PtyHandler', () => {
     }
     expect(revivedEnv.name).toBe('xterm-256color')
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('drops legacy empty explicit TERM metadata after revive', async () => {
@@ -2950,11 +3480,11 @@ describe('PtyHandler', () => {
         rows: 24,
         cwd: process.cwd(),
         explicitTerm: '',
-        envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+        envToDelete: ['ORCA_STALE_TEST_ENV']
       }
     ])
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/legacy-empty-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/legacy-empty-stale'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
@@ -2969,7 +3499,7 @@ describe('PtyHandler', () => {
     }
     expect(revivedEnv.name).toBe('xterm-256color')
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
 
     const serializedState = (await dispatcher.callRequest('pty.serialize', {
       ids: ['pty-8']
@@ -2979,13 +3509,13 @@ describe('PtyHandler', () => {
       envToDelete?: string[]
     }[]
     expect(serialized.explicitTerm).toBeUndefined()
-    expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
+    expect(serialized.envToDelete).toEqual(['ORCA_STALE_TEST_ENV'])
   })
 
   it('preserves explicit TERM and env deletions through repeated revive cycles', async () => {
     await dispatcher.callRequest('pty.spawn', {
       env: { TERM: 'screen-256color' },
-      envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+      envToDelete: ['ORCA_STALE_TEST_ENV']
     })
     let state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
 
@@ -2996,7 +3526,7 @@ describe('PtyHandler', () => {
       dispatcher = createMockDispatcher()
       handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
       handler.addEnvAugmenter(() => ({
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/first-revive'
+        ORCA_STALE_TEST_ENV: '/tmp/first-revive'
       }))
       await dispatcher.callRequest('pty.revive', { state })
 
@@ -3006,12 +3536,12 @@ describe('PtyHandler', () => {
       }
       expect(firstRevivedEnv.name).toBe('screen-256color')
       expect(firstRevivedEnv.env.TERM).toBe('screen-256color')
-      expect(firstRevivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      expect(firstRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
       state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
       expect(JSON.parse(state)).toMatchObject([
         {
           explicitTerm: 'screen-256color',
-          envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+          envToDelete: ['ORCA_STALE_TEST_ENV']
         }
       ])
 
@@ -3020,7 +3550,7 @@ describe('PtyHandler', () => {
       dispatcher = createMockDispatcher()
       handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
       handler.addEnvAugmenter(() => ({
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/second-revive'
+        ORCA_STALE_TEST_ENV: '/tmp/second-revive'
       }))
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -3033,12 +3563,12 @@ describe('PtyHandler', () => {
     }
     expect(secondRevivedEnv.name).toBe('screen-256color')
     expect(secondRevivedEnv.env.TERM).toBe('screen-256color')
-    expect(secondRevivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(secondRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('revives legacy serialized entries with default TERM and no env deletions', async () => {
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/legacy-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/legacy-stale'
     }))
     const state = JSON.stringify([
       {
@@ -3058,7 +3588,7 @@ describe('PtyHandler', () => {
 
     const revivedEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBe('/tmp/legacy-attribution')
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBe('/tmp/legacy-stale')
   })
 
   it('revive preserves attach identity metadata without exporting hook identity env', async () => {
@@ -3116,13 +3646,15 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_PANE_KEY).toBeUndefined()
     expect(callArgs.env.ORCA_TAB_ID).toBeUndefined()
 
+    // Revive preserves the serialized pane identity, and for a caller that names no incarnation
+    // that identity is still the fence.
     await expect(
       dispatcher.callRequest('pty.attach', {
         id: 'pty-1',
         expectedPaneKey: 'tab-other:leaf',
         expectedTabId: 'tab-other'
       })
-    ).rejects.toThrow('PTY "pty-1" not found')
+    ).rejects.toThrow(/identity mismatch/i)
   })
 
   it('invokes the exit listener with the spawn-time paneKey', async () => {
@@ -3434,13 +3966,19 @@ describe('PtyHandler', () => {
       mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
       const poolEmpty = vi.fn()
       handler.onPtyPoolEmpty(poolEmpty)
-      await spawnPty()
+      const spawned = await spawnPty()
 
       const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
       try {
-        await expect(attachPty({ id: 'pty-1', suppressReplayNotification: true })).rejects.toThrow(
-          'PTY "pty-1" not found'
-        )
+        // INVERTED with the reap above: proof of exit, not an unknown id.
+        await expect(
+          attachPty({
+            id: 'pty-1',
+            suppressReplayNotification: true,
+            exitProofSupported: true,
+            expectedIncarnationId: spawned.incarnationId
+          })
+        ).rejects.toThrow(/SSH_PTY_EXITED/)
       } finally {
         aliveSpy.mockRestore()
       }
@@ -3591,41 +4129,5 @@ describe('PtyHandler', () => {
     await pending
     expect(handler.activePtyCount).toBe(1)
     expect(handler.pendingPtyCreationCount).toBe(0)
-  })
-})
-
-describe('attachIdentityMismatches', () => {
-  it('rejects a paneKey collision across relay generations', () => {
-    // Old lease expects tab-a's pane; the reset relay's pty-1 belongs to tab-b.
-    expect(
-      attachIdentityMismatches({ paneKey: 'tab-a:0' }, { paneKey: 'tab-b:0', tabId: 'tab-b' })
-    ).toBe(true)
-  })
-
-  it('rejects a tabId collision when only tab identity is known', () => {
-    expect(attachIdentityMismatches({ tabId: 'tab-a' }, { tabId: 'tab-b' })).toBe(true)
-  })
-
-  it('accepts a matching identity', () => {
-    expect(
-      attachIdentityMismatches(
-        { paneKey: 'tab-a:0', tabId: 'tab-a' },
-        { paneKey: 'tab-a:0', tabId: 'tab-a' }
-      )
-    ).toBe(false)
-  })
-
-  it('stays permissive when the caller supplies no identity', () => {
-    expect(attachIdentityMismatches({}, { paneKey: 'tab-a:0', tabId: 'tab-a' })).toBe(false)
-  })
-
-  it('stays permissive when the managed PTY predates identity capture', () => {
-    expect(attachIdentityMismatches({ paneKey: 'tab-a:0', tabId: 'tab-a' }, {})).toBe(false)
-  })
-
-  it('does not reject on tabId when paneKey matches (split panes share a tab)', () => {
-    expect(
-      attachIdentityMismatches({ paneKey: 'tab-a:1' }, { paneKey: 'tab-a:1', tabId: 'tab-a' })
-    ).toBe(false)
   })
 })

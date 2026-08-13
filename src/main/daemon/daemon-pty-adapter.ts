@@ -940,8 +940,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return providerSequence ? { providerSequence } : undefined
   }
 
-  hasPty(id: string): boolean {
-    return this.activeSessionIds.has(id)
+  hasPty(id: string): boolean | null {
+    // Why null off-socket: the cache only tracks exits it received, so a miss while
+    // disconnected (or before the first listSessions) is ignorance, not absence.
+    return this.activeSessionIds.has(id) ? true : this.client.isConnected() ? false : null
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
@@ -1473,8 +1475,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       )
       return processes
     } catch (error) {
-      const missingAuthenticatedToken =
-        isMissingTokenFileError(error) && this.client.hasObservedAuthenticatedDisconnect()
+      const missingAuthenticatedToken = this.isRetiredEndpointTokenMissing()
       const missingNamedPipe = isMissingWindowsNamedPipeError(error)
       this.observeAuditFailure(
         missingAuthenticatedToken
@@ -1958,7 +1959,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
   }
 
-  // Why final=true not teardown: clean disconnect needs the full-depth snapshot as the restore source, but the
+  // Why final=true not teardown: clean disconnect needs the full daemon-window snapshot as the restore source, but the
   // detached daemon's PTYs keep running for warm reattach, so shell-ready scanner state must stay intact.
   private async checkpointAllSessions(): Promise<void> {
     const completed = await this.checkpointSessions(this.activeSessionIds, { final: true })
@@ -2120,14 +2121,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return 'unavailable'
   }
 
-  // Why: on daemon-death errors, respawn a fresh daemon and retry once rather than leaving terminals broken until app restart.
+  // Why: the token read no longer throws, so audit its absence directly after an authenticated drop.
+  private isRetiredEndpointTokenMissing(): boolean {
+    return this.client.hasObservedAuthenticatedDisconnect() && !existsSync(this.tokenPath)
+  }
+
   private async withDaemonRetry<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn()
     } catch (err) {
-      // Why: the token is removed only after an authenticated drop; an initial missing token may still hide a live daemon.
-      const missingRetiredEndpointToken =
-        isMissingTokenFileError(err) && this.client.hasObservedAuthenticatedDisconnect()
+      const missingRetiredEndpointToken = this.isRetiredEndpointTokenMissing()
       if (missingRetiredEndpointToken) {
         this.observeAuditFailure(
           'token_missing_after_authenticated_disconnect',
@@ -2135,11 +2138,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
           ['token_file']
         )
       }
-      if (
-        this.respawnAdoptionClosed ||
-        !this.respawnFn ||
-        (!isDaemonGoneError(err) && !missingRetiredEndpointToken)
-      ) {
+      if (this.respawnAdoptionClosed || !this.respawnFn || !isDaemonGoneError(err)) {
         throw err
       }
       if (!this.respawnPromise) {
@@ -2531,14 +2530,6 @@ export function isDaemonGoneError(err: unknown): boolean {
     // reaches whoever owns it; surfacing this to the user would strand the request instead.
     msg === DAEMON_ENDPOINT_LOST_MESSAGE
   )
-}
-
-function isMissingTokenFileError(err: unknown): boolean {
-  if (!(err instanceof Error)) {
-    return false
-  }
-  const errno = err as NodeJS.ErrnoException
-  return errno.code === 'ENOENT' && errno.syscall === 'open'
 }
 
 function isMissingWindowsNamedPipeError(err: unknown): boolean {

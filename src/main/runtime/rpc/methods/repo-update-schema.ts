@@ -54,6 +54,7 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),
       externalWorktreeInboxBaselinePaths: z.array(z.string()).optional(),
       importedExternalWorktreePaths: z.array(z.string()).optional(),
+      agentWorktreeVisibility: z.enum(['hide', 'show']).optional(),
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber,

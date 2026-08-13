@@ -142,6 +142,25 @@ describe('agent map layout', () => {
     )
   })
 
+  it('preserves remote host presentation on its workspace ring', () => {
+    const layout = deriveAgentMapLayout(
+      [
+        card({
+          executionHostId: 'ssh:opaque-target',
+          hostKind: 'ssh',
+          hostLabel: 'openclaw'
+        })
+      ],
+      NOW
+    )
+
+    expect(layout.projects[0].worktrees[0]).toMatchObject({
+      executionHostId: 'ssh:opaque-target',
+      hostKind: 'ssh',
+      hostLabel: 'openclaw'
+    })
+  })
+
   it('reserves project and workspace header bands above dense ring contents', () => {
     const layout = deriveAgentMapLayout(
       Array.from({ length: 24 }, (_unused, index) =>
@@ -446,6 +465,38 @@ describe('agent map layout', () => {
     expect(topologyChanged.cache).not.toBe(updated.cache)
     expect(packWorktrees).toHaveBeenCalled()
     expect(topologyChanged.cache.packingGeneration).toBe(2)
+  })
+
+  it('refreshes saved host labels without repacking geometry', () => {
+    const cards = [
+      card({
+        executionHostId: 'ssh:builder',
+        hostKind: 'ssh',
+        hostLabel: 'Builder'
+      })
+    ]
+    const workspaces = [
+      workspace({
+        worktreeId: 'worktree-1',
+        executionHostId: 'ssh:builder',
+        hostKind: 'ssh',
+        hostLabel: 'Builder'
+      })
+    ]
+    const initial = updateAgentMapLayout(null, cards, NOW, workspaces)
+    packWorktrees.mockClear()
+
+    const updated = updateAgentMapLayout(
+      initial.cache,
+      cards.map((candidate) => ({ ...candidate, hostLabel: 'CI Builder' })),
+      NOW,
+      workspaces.map((candidate) => ({ ...candidate, hostLabel: 'CI Builder' }))
+    )
+
+    expect(updated.cache).toBe(initial.cache)
+    expect(updated.cache.packingGeneration).toBe(1)
+    expect(packWorktrees).not.toHaveBeenCalled()
+    expect(updated.layout.projects[0].worktrees[0].hostLabel).toBe('CI Builder')
   })
 
   it('packs worktree rings tightly without a square grid', () => {

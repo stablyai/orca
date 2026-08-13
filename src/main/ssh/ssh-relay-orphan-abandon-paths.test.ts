@@ -69,6 +69,7 @@ vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
 vi.mock('../ipc/pty', () => ({
+  resolvePaneShellTabId: vi.fn(() => undefined),
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
   getSshPtyProvider: vi.fn(),
@@ -186,24 +187,24 @@ describe('SshRelaySession abandoned remote PTYs', () => {
     expect(clearProviderPtyState).not.toHaveBeenCalledWith(APP_PTY_ID)
   })
 
-  it('retires the lease without a kill when the relay proves the PTY is gone', async () => {
-    // pty.attach verifies process liveness before answering not-found, so this is the one branch
-    // with positive proof of death — and a dead process needs no shutdown request.
+  // INVERTED for STA-3077 step E-0. This case previously asserted that a bare not-found retires the
+  // lease and reports `pty:exit { code: -1 }`, on the premise that attach proves liveness before
+  // answering not-found. It does not: the relay answers not-found for a pane-identity mismatch and
+  // for any id it merely cannot hand back, so the premise licensed a fabricated death certificate.
+  // The clause is kept — inverted — so the new intent stays covered rather than silently dropped.
+  it('leaves the shell running when the relay only reports the PTY as not found', async () => {
     const { deps, shutdown } = await establishWithFailingReattach(
       new Error('PTY "pty-live" not found')
     )
 
     expect(shutdown).not.toHaveBeenCalled()
-    expect(deps.mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
+    expect(deps.mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
       'target-1',
       'pty-live',
       'expired'
     )
-    expect(clearProviderPtyState).toHaveBeenCalledWith(APP_PTY_ID)
-    expect(deps.mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
-      id: APP_PTY_ID,
-      code: -1
-    })
+    expect(clearProviderPtyState).not.toHaveBeenCalledWith(APP_PTY_ID)
+    expect(deps.mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', expect.anything())
   })
 
   it('keeps a recovered session attached when reattach succeeds after an earlier drop', async () => {

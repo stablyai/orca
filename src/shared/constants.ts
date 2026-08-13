@@ -182,7 +182,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     autoRenameBranchFromWorkDefaultedOn: true,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
-    enableGitHubAttribution: false,
     theme: 'system',
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,

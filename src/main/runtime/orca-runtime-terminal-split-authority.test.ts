@@ -69,35 +69,69 @@ function remoteSnapshot(): RuntimeMobileSessionTabsSnapshot {
   }
 }
 
-function createHarness(includeSource = true) {
+function createHarness(
+  includeSource = true,
+  options: {
+    connectionId?: string | null
+    deferReveal?: boolean
+    deferSpawn?: boolean
+    includePairedSnapshot?: boolean
+    rendererMounted?: boolean
+    sourceIncarnationId?: string
+    stopAndWaitResult?: boolean
+  } = {}
+) {
   let session = persistedSession(includeSource)
+  const connectionId = options.connectionId ?? null
+  const ownerHostId = connectionId ? `ssh:${connectionId}` : 'local'
+  const requestedSessionHostIds: (string | undefined)[] = []
   const repo = {
     id: REPO_ID,
     path: '/workspace',
     displayName: 'repo',
     badgeColor: 'blue',
-    addedAt: 1
+    addedAt: 1,
+    ...(connectionId ? { connectionId } : {})
   }
   const store = {
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
-    getWorkspaceSession: () => session,
+    getWorkspaceSession: (hostId?: string) => {
+      requestedSessionHostIds.push(hostId)
+      return hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession()
+    },
     setWorkspaceSession: (next: WorkspaceSessionState) => {
       session = next
     },
     persistPtyBinding: () => true
   }
-  const spawn = vi.fn(async () => ({ id: SPLIT_PTY_ID }))
+  let resolveSpawn: ((result: { id: string }) => void) | undefined
+  const spawn = options.deferSpawn
+    ? vi.fn(
+        () =>
+          new Promise<{ id: string }>((resolve) => {
+            resolveSpawn = resolve
+          })
+      )
+    : vi.fn(async () => ({ id: SPLIT_PTY_ID }))
   const kill = vi.fn(() => true)
-  const revealTerminalSession = vi
-    .fn()
-    .mockRejectedValue(new Error(`Terminal tab ${TAB_ID} not found`))
+  const retireRejectedPty = vi.fn()
+  const stopAndWait = vi.fn(async () => options.stopAndWaitResult ?? true)
+  let resolveReveal: ((result: { tabId: string }) => void) | undefined
+  const revealTerminalSession = options.deferReveal
+    ? vi.fn(
+        () =>
+          new Promise<{ tabId: string }>((resolve) => {
+            resolveReveal = resolve
+          })
+      )
+    : vi.fn().mockRejectedValue(new Error(`Terminal tab ${TAB_ID} not found`))
   const runtime = new OrcaRuntimeService(store as never)
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: vi.fn(async () => ({
       id: WORKTREE_ID,
       path: '/workspace',
-      connectionId: null,
+      connectionId,
       repo,
       folderWorkspace: null
     }))
@@ -106,35 +140,77 @@ function createHarness(includeSource = true) {
     spawn,
     write: () => true,
     kill,
+    retireRejectedPty,
+    ...(options.stopAndWaitResult !== undefined ? { stopAndWait } : {}),
     getForegroundProcess: async () => null
   })
   runtime.setNotifier({ revealTerminalSession } as never)
   runtime.syncWindowGraph(1, {
-    tabs: [],
-    leaves: [],
-    mobileSessionTabs: includeSource ? [remoteSnapshot()] : []
+    tabs:
+      includeSource && options.rendererMounted
+        ? [
+            {
+              tabId: TAB_ID,
+              worktreeId: WORKTREE_ID,
+              title: 'Restored terminal',
+              activeLeafId: SOURCE_LEAF_ID,
+              layout: { type: 'leaf', leafId: SOURCE_LEAF_ID } as const
+            }
+          ]
+        : [],
+    leaves:
+      includeSource && options.rendererMounted
+        ? [
+            {
+              tabId: TAB_ID,
+              worktreeId: WORKTREE_ID,
+              leafId: SOURCE_LEAF_ID,
+              paneRuntimeId: 1,
+              ptyId: SOURCE_PTY_ID
+            }
+          ]
+        : [],
+    mobileSessionTabs: (options.includePairedSnapshot ?? includeSource) ? [remoteSnapshot()] : []
   })
-  runtime.registerPty(SOURCE_PTY_ID, WORKTREE_ID, null, {
+  runtime.registerPty(SOURCE_PTY_ID, WORKTREE_ID, connectionId, {
     tabId: TAB_ID,
-    leafId: SOURCE_LEAF_ID
+    leafId: SOURCE_LEAF_ID,
+    ...(options.sourceIncarnationId ? { incarnationId: options.sourceIncarnationId } : {})
   })
   const internals = runtime as unknown as {
-    getTerminalHandleForPaneKey: (paneKey: string) => string | null
     issuePtyHandle: (pty: unknown) => string
     mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
     ptysById: Map<string, unknown>
   }
-  const handle =
-    internals.getTerminalHandleForPaneKey(makePaneKey(TAB_ID, SOURCE_LEAF_ID)) ??
-    internals.issuePtyHandle(internals.ptysById.get(SOURCE_PTY_ID))
+  const handle = internals.issuePtyHandle(internals.ptysById.get(SOURCE_PTY_ID))
   return {
     runtime,
     handle,
     spawn,
     kill,
+    retireRejectedPty,
+    stopAndWait,
     revealTerminalSession,
     getSession: () => session,
-    getSnapshot: () => internals.mobileSessionTabsByWorktree.get(WORKTREE_ID)
+    getSnapshot: () => internals.mobileSessionTabsByWorktree.get(WORKTREE_ID),
+    requestedSessionHostIds,
+    replaceSourceIncarnation: (incarnationId: string) =>
+      runtime.registerPty(SOURCE_PTY_ID, WORKTREE_ID, connectionId, {
+        tabId: TAB_ID,
+        leafId: SOURCE_LEAF_ID,
+        incarnationId
+      }),
+    replacePersistedSourceIncarnation: (incarnationId: string) => {
+      session = {
+        ...session,
+        terminalPtyIncarnationsByPaneKey: {
+          ...session.terminalPtyIncarnationsByPaneKey,
+          [makePaneKey(TAB_ID, SOURCE_LEAF_ID)]: incarnationId
+        }
+      }
+    },
+    resolveReveal: () => resolveReveal?.({ tabId: TAB_ID }),
+    resolveSpawn: () => resolveSpawn?.({ id: SPLIT_PTY_ID })
   }
 }
 
@@ -184,5 +260,119 @@ describe('remote runtime terminal split authority', () => {
     expect.soft(harness.spawn).not.toHaveBeenCalled()
     expect.soft(harness.kill).not.toHaveBeenCalled()
     expect.soft(harness.revealTerminalSession).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { label: 'local', connectionId: null, expectedHostId: 'local' },
+    { label: 'SSH', connectionId: 'ssh-1', expectedHostId: 'ssh:ssh-1' }
+  ])(
+    'rejects a same-ID $label source replacement when restored persistence lacks an incarnation',
+    async ({ connectionId, expectedHostId }) => {
+      const harness = createHarness(true, {
+        connectionId,
+        deferSpawn: true,
+        includePairedSnapshot: false,
+        rendererMounted: true,
+        sourceIncarnationId: 'source-before'
+      })
+
+      const split = harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
+      await vi.waitFor(() => expect(harness.spawn).toHaveBeenCalledOnce())
+
+      expect(
+        harness.getSession().terminalPtyIncarnationsByPaneKey?.[makePaneKey(TAB_ID, SOURCE_LEAF_ID)]
+      ).toBeUndefined()
+      expect(harness.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expectedSourceBinding: expect.objectContaining({ ptyId: SOURCE_PTY_ID })
+        })
+      )
+      // Why: persistence never recorded this incarnation, so sending it would make the store
+      // reject every split from a restored pane; the live id is fenced in-runtime instead.
+      expect(harness.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expectedSourceBinding: expect.not.objectContaining({ incarnationId: expect.anything() })
+        })
+      )
+
+      harness.replaceSourceIncarnation('source-after')
+      harness.resolveSpawn()
+
+      await expect(split).rejects.toThrow('terminal_split_source_not_found')
+      expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
+      expect(harness.requestedSessionHostIds).toContain(expectedHostId)
+    }
+  )
+
+  it('rejects a same-ID paired-runtime source replacement recovered without an incarnation map', async () => {
+    const harness = createHarness(true, {
+      deferSpawn: true,
+      includePairedSnapshot: true,
+      rendererMounted: false,
+      sourceIncarnationId: 'remote-before'
+    })
+
+    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
+    await vi.waitFor(() => expect(harness.spawn).toHaveBeenCalledOnce())
+    expect(harness.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedSourceBinding: expect.not.objectContaining({ incarnationId: expect.anything() })
+      })
+    )
+
+    harness.replaceSourceIncarnation('remote-after')
+    harness.resolveSpawn()
+
+    await expect(split).rejects.toThrow('terminal_split_source_not_found')
+    expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
+    expect(harness.revealTerminalSession).not.toHaveBeenCalled()
+  })
+
+  it('rejects a persisted-only source incarnation change during spawn', async () => {
+    const harness = createHarness(true, {
+      deferSpawn: true,
+      includePairedSnapshot: false,
+      stopAndWaitResult: true
+    })
+    harness.replacePersistedSourceIncarnation('persisted-before')
+
+    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
+    await vi.waitFor(() => expect(harness.spawn).toHaveBeenCalledOnce())
+    harness.replacePersistedSourceIncarnation('persisted-after')
+    harness.resolveSpawn()
+
+    await expect(split).rejects.toThrow('terminal_split_source_not_found')
+    expect(harness.stopAndWait).toHaveBeenCalledWith(
+      SPLIT_PTY_ID,
+      expect.objectContaining({ deadlineMs: expect.any(Number) })
+    )
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID)
+  })
+
+  it('revalidates a projected paired-runtime source after renderer adoption', async () => {
+    const harness = createHarness(false, {
+      deferReveal: true,
+      includePairedSnapshot: true,
+      sourceIncarnationId: 'projected-before',
+      stopAndWaitResult: false
+    })
+
+    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
+    await vi.waitFor(() => expect(harness.revealTerminalSession).toHaveBeenCalledOnce())
+    expect(harness.spawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ expectedSourceBinding: expect.anything() })
+    )
+
+    harness.replaceSourceIncarnation('projected-after')
+    harness.resolveReveal()
+
+    await expect(split).rejects.toThrow('terminal_split_source_not_found')
+    expect(harness.stopAndWait).toHaveBeenCalledWith(
+      SPLIT_PTY_ID,
+      expect.objectContaining({ deadlineMs: expect.any(Number) })
+    )
+    expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID)
   })
 })

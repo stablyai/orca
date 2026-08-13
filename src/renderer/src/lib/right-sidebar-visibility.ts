@@ -9,7 +9,6 @@ const RIGHT_SIDEBAR_SUPPRESSED_VIEWS = new Set<ActiveView>([
   'activity',
   'automations',
   'space',
-  'skills',
   'artifacts',
   'mobile'
 ])
