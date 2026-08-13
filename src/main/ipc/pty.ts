@@ -1858,9 +1858,6 @@ export function buildPtyHostEnv(
     }
     delete baseEnv.ORCA_CLI_COMMAND
   }
-  // Why: scrub before the PATH prepends below so a stale entry inherited from a
-  // pre-upgrade daemon or parent pane cannot survive into the spawned pane.
-  stripLegacyTerminalShimEnv(baseEnv, process.platform)
   // Why: dev mode needs the launcher PATH override so `orca` resolves to the dev build instead of the production binary at /usr/local/bin/orca.
   if (!opts.isPackaged) {
     const devCliBin = join(opts.userDataPath, 'cli', 'bin')
@@ -1889,6 +1886,10 @@ export function buildPtyHostEnv(
       ? `${bundledCliBin}${delimiter}${inheritedPath}`
       : bundledCliBin
   }
+
+  // Why: must run after the prepends above — they re-read PATH from the unscrubbed
+  // process.env when baseEnv carries none, which is the daemon path's normal shape.
+  stripLegacyTerminalShimEnv(baseEnv, process.platform)
 
   return baseEnv
 }

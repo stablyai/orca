@@ -67,6 +67,28 @@ describe('legacy terminal shim removal', () => {
     expect(env.Path).toBe('C:\\Windows\\System32')
   })
 
+  it('matches a re-cased shim entry on case-insensitive filesystems', () => {
+    const env: Record<string, string> = {
+      Path: `C:\\Users\\u\\AppData\\Roaming\\Orca\\Orca-Terminal-Attribution\\win32;C:\\Windows\\System32`
+    }
+
+    stripLegacyTerminalShimEnv(env, 'win32')
+
+    expect(env.Path).toBe('C:\\Windows\\System32')
+  })
+
+  it('keeps neighbouring directories that merely share the name prefix', () => {
+    const env: Record<string, string> = {
+      PATH: '/opt/orca-terminal-attribution:/home/u/orca-terminal-attribution-notes/bin:/usr/bin'
+    }
+
+    stripLegacyTerminalShimEnv(env, 'linux')
+
+    expect(env.PATH).toBe(
+      '/opt/orca-terminal-attribution:/home/u/orca-terminal-attribution-notes/bin:/usr/bin'
+    )
+  })
+
   it('leaves an unrelated PATH untouched', () => {
     const env: Record<string, string> = { PATH: '/usr/local/bin:/usr/bin' }
     stripLegacyTerminalShimEnv(env, 'linux')

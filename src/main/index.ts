@@ -1307,8 +1307,6 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     throw new Error('Keybinding service must be initialized before opening the main window')
   }
 
-  removeLegacyTerminalShimDir(app.getPath('userData'))
-
   // Why: Chromium's BrowserWindow ctor resets userData to a Protected DACL, breaking writes; re-grant ACEs (marker-gated to avoid a ~60s startup stall).
   if (process.platform === 'win32') {
     logStartupMilestone('acl-grant-start')
@@ -2173,6 +2171,8 @@ void app.whenReady().then(async () => {
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  // Why: must precede PTY handler registration and run in headless serve too, which returns before openMainWindow.
+  removeLegacyTerminalShimDir(app.getPath('userData'))
   const windowsShellPathHydration = createWindowsShellPathHydration()
   configureWindowsHostGitEnvironmentReadiness(
     process.platform === 'win32' ? windowsShellPathHydration.whenReady : null

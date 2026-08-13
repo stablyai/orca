@@ -22,11 +22,18 @@ export function removeLegacyTerminalShimDir(userDataPath: string): void {
   if (removed) {
     return
   }
-  removed = true
   try {
-    rmSync(join(userDataPath, LEGACY_SHIM_ROOT_DIR), { recursive: true, force: true })
+    // Why: a surviving pre-upgrade pane can hold the wrapper open on Windows; retry like
+    // the other userData removals rather than forfeiting cleanup for the whole run.
+    rmSync(join(userDataPath, LEGACY_SHIM_ROOT_DIR), {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 50
+    })
+    removed = true
   } catch {
-    // Best-effort: a locked file must not block startup.
+    // Best-effort: a locked file must not block startup, and the next launch retries.
   }
 }
 
@@ -45,7 +52,12 @@ export function stripLegacyTerminalShimEnv(
   const delimiter = platform === 'win32' ? ';' : ':'
   const cleaned = current
     .split(delimiter)
-    .filter((entry) => entry && !entry.replaceAll('\\', '/').includes(`/${LEGACY_SHIM_ROOT_DIR}/`))
+    // Why: lowercase before matching — Windows/macOS PATH entries can arrive re-cased and
+    // still resolve to the same directory.
+    .filter(
+      (entry) =>
+        entry && !entry.replaceAll('\\', '/').toLowerCase().includes(`/${LEGACY_SHIM_ROOT_DIR}/`)
+    )
     .join(delimiter)
   if (cleaned) {
     env[pathKey] = cleaned
@@ -53,8 +65,6 @@ export function stripLegacyTerminalShimEnv(
     delete env[pathKey]
   }
 }
-
-export const LEGACY_TERMINAL_SHIM_ENV_KEYS = LEGACY_SHIM_ENV_KEYS
 
 /** Test-only: the module-level once-guard would otherwise leak across cases. */
 export function __resetLegacyTerminalShimRemovalForTests(): void {

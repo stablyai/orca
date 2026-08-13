@@ -4929,6 +4929,24 @@ describe('registerPtyHandlers', () => {
         }
       })
 
+      it('drops a legacy shim PATH entry inherited from the host process on the daemon path', async () => {
+        // Why: the daemon path passes a sparse env, so the prepends re-read PATH from
+        // process.env — the scrub must outlive that fallback (pre-upgrade host or parent pane).
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prev = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+            PATH: `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
+          })
+          expect(env.PATH).not.toContain('orca-terminal-attribution')
+          expect(env.PATH).toContain('/system/bin')
+        } finally {
+          mockedApp.isPackaged = prev
+        }
+      })
+
       it('defers indexed Git prompt guards from the daemon wire environment', async () => {
         const env = await daemonSpawnAndGetEnv(
           {
