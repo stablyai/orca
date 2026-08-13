@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -7,6 +7,9 @@ import {
   removeLegacyTerminalShimDir,
   stripLegacyTerminalShimEnv
 } from './legacy-terminal-shim-dir'
+
+// Why: the failure case is produced with a read-only parent dir, which Windows ignores and root bypasses.
+const itOnPosixNonRoot = process.platform === 'win32' || process.getuid?.() === 0 ? it.skip : it
 
 describe('legacy terminal shim removal', () => {
   beforeEach(() => {
@@ -28,6 +31,30 @@ describe('legacy terminal shim removal', () => {
   it('does not throw when nothing is left to remove', () => {
     const userData = mkdtempSync(join(tmpdir(), 'orca-legacy-shim-'))
     expect(() => removeLegacyTerminalShimDir(userData)).not.toThrow()
+  })
+
+  itOnPosixNonRoot('stays retryable when the removal fails, and latches once it succeeds', () => {
+    const userData = mkdtempSync(join(tmpdir(), 'orca-legacy-shim-'))
+    const legacyRoot = join(userData, 'orca-terminal-attribution')
+    mkdirSync(join(legacyRoot, 'posix'), { recursive: true })
+    writeFileSync(join(legacyRoot, 'posix', 'git'), '#!/usr/bin/env bash\n')
+    // Why: a read-only parent makes the unlink fail the way a locked Windows wrapper does.
+    chmodSync(userData, 0o500)
+    try {
+      removeLegacyTerminalShimDir(userData)
+      expect(existsSync(legacyRoot)).toBe(true)
+    } finally {
+      chmodSync(userData, 0o700)
+    }
+
+    // The failed attempt must not have latched the guard.
+    removeLegacyTerminalShimDir(userData)
+    expect(existsSync(legacyRoot)).toBe(false)
+
+    // A success latches it: a directory recreated afterwards is left alone.
+    mkdirSync(legacyRoot, { recursive: true })
+    removeLegacyTerminalShimDir(userData)
+    expect(existsSync(legacyRoot)).toBe(true)
   })
 
   it('drops inherited shim env and its PATH entry without touching real entries', () => {

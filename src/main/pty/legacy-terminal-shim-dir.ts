@@ -37,6 +37,10 @@ export function removeLegacyTerminalShimDir(userDataPath: string): void {
   }
 }
 
+export function isLegacyTerminalShimPathEntry(entry: string): boolean {
+  return entry.replaceAll('\\', '/').toLowerCase().includes(`/${LEGACY_SHIM_ROOT_DIR}/`)
+}
+
 export function stripLegacyTerminalShimEnv(
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform
@@ -52,12 +56,7 @@ export function stripLegacyTerminalShimEnv(
   const delimiter = platform === 'win32' ? ';' : ':'
   const cleaned = current
     .split(delimiter)
-    // Why: lowercase before matching — Windows/macOS PATH entries can arrive re-cased and
-    // still resolve to the same directory.
-    .filter(
-      (entry) =>
-        entry && !entry.replaceAll('\\', '/').toLowerCase().includes(`/${LEGACY_SHIM_ROOT_DIR}/`)
-    )
+    .filter((entry) => entry && !isLegacyTerminalShimPathEntry(entry))
     .join(delimiter)
   if (cleaned) {
     env[pathKey] = cleaned

@@ -111,7 +111,10 @@ import {
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../cli/linux-terminal-orca-cli-shim'
-import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
+import {
+  isLegacyTerminalShimPathEntry,
+  stripLegacyTerminalShimEnv
+} from '../pty/legacy-terminal-shim-dir'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { track } from '../telemetry/client'
@@ -1153,7 +1156,9 @@ function promoteAgentTeamsShimPath(
     return
   }
   const shimPath = firstPathEntry(requestedPath)
-  if (!shimPath) {
+  // Why: requestedPath is captured before buildPtyHostEnv scrubs, so a legacy entry that
+  // reached the front would be re-prepended here and outlive the scrub.
+  if (!shimPath || isLegacyTerminalShimPathEntry(shimPath)) {
     return
   }
   const currentPathKey = env.PATH !== undefined || env.Path === undefined ? 'PATH' : 'Path'
