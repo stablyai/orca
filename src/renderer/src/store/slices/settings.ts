@@ -67,6 +67,10 @@ function normalizeSettingsUpdates(
       updates.terminalQuickCommands
     )
   }
+  if ('showTerminalQuickCommandsButton' in updates) {
+    sanitizedUpdates.showTerminalQuickCommandsButton =
+      updates.showTerminalQuickCommandsButton !== false
+  }
   if ('terminalCustomThemes' in updates) {
     sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
       updates.terminalCustomThemes

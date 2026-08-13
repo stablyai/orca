@@ -9,6 +9,7 @@ import {
 import { useAppStore } from '../../store'
 import {
   getTerminalAdvancedTypographySearchEntries,
+  getTerminalChromeSearchEntries,
   getTerminalCursorSearchEntries,
   getTerminalDarkThemeSearchEntries,
   getTerminalGhosttyImportSearchEntries,
@@ -21,7 +22,12 @@ import {
   getTerminalWindowSearchEntries
 } from './terminal-search'
 import { Button } from '../ui/button'
-import { SettingsRow, SettingsSubsectionHeader, FontAutocomplete } from './SettingsFormControls'
+import {
+  SettingsRow,
+  SettingsSubsectionHeader,
+  FontAutocomplete,
+  SettingsSwitchRow
+} from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
@@ -87,6 +93,7 @@ export function TerminalAppearanceSection({
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
   const terminalTypographyEntries = getTerminalTypographySearchEntries()
+  const terminalChromeEntries = getTerminalChromeSearchEntries()
   const ghosttyImportEntries = getTerminalGhosttyImportSearchEntries()
   const themeCatalogSearchEntries = [
     ...getTerminalThemeTargetSearchEntries(),
@@ -117,6 +124,7 @@ export function TerminalAppearanceSection({
     terminalTypographyEntries.slice(0, 2)
   )
   const ghosttyImportMatches = matchesSettingsSearch(searchQuery, ghosttyImportEntries)
+  const chromeMatches = matchesSettingsSearch(searchQuery, terminalChromeEntries)
   const showPrimaryTypography =
     !isSearching ||
     forceVisiblePrimary ||
@@ -125,6 +133,7 @@ export function TerminalAppearanceSection({
     ghosttyImportMatches
   const showGhosttyImport = !isSearching || forceVisiblePrimary || ghosttyImportMatches
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
+  const showTerminalChrome = !isSearching || forceVisiblePrimary || chromeMatches
 
   const advancedGroups = [
     cursorMatches
@@ -245,6 +254,45 @@ export function TerminalAppearanceSection({
               </AppearanceAdvancedDisclosure>
             </div>
           ) : null}
+        </section>
+      ) : null}
+
+      {showTerminalChrome ? (
+        <section className="space-y-3">
+          <SettingsSubsectionHeader
+            title={translate(
+              'auto.components.settings.TerminalAppearanceSection.terminalChromeTitle',
+              'Terminal Toolbar'
+            )}
+          />
+          <div className="ml-4 divide-y divide-border/40 border-y border-border/40">
+            <SearchableSetting
+              title={terminalChromeEntries[0]?.title ?? 'Command Button'}
+              description={terminalChromeEntries[0]?.description}
+              keywords={terminalChromeEntries[0]?.keywords ?? ['terminal', 'command']}
+              forceVisible={forceVisiblePrimary}
+            >
+              <SettingsSwitchRow
+                label={translate(
+                  'auto.components.settings.TerminalAppearanceSection.commandButtonLabel',
+                  'Command Button'
+                )}
+                description={terminalChromeEntries[0]?.description}
+                checked={settings.showTerminalQuickCommandsButton !== false}
+                onChange={() =>
+                  updateSettings({
+                    showTerminalQuickCommandsButton: !(
+                      settings.showTerminalQuickCommandsButton !== false
+                    )
+                  })
+                }
+                ariaLabel={translate(
+                  'auto.components.settings.TerminalAppearanceSection.commandButtonLabel',
+                  'Command Button'
+                )}
+              />
+            </SearchableSetting>
+          </div>
         </section>
       ) : null}
 

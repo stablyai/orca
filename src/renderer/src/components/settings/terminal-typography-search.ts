@@ -131,6 +131,31 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getTerminalChromeSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.commandButtonTitle',
+      'Command Button'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.commandButtonDescription',
+      'Show the quick-command button in focused terminal toolbars.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.commandKeyword',
+        'command'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.quickKeyword', 'quick'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.toolbarKeyword',
+        'toolbar'
+      )
+    ]
+  }
+])
+
 export const getTerminalCursorSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.97bcfff662', 'Cursor Shape'),

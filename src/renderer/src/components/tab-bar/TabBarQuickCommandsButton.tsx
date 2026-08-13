@@ -35,6 +35,9 @@ export function TabBarQuickCommandsButton({
   worktreeId,
   groupId
 }: TabBarQuickCommandsButtonProps): React.JSX.Element | null {
+  const showQuickCommandsButton = useAppStore(
+    (s) => s.settings?.showTerminalQuickCommandsButton !== false
+  )
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
   const repos = useAppStore((s) => s.repos)
   const projectHostSetupProjection = useProjectHostSetupProjection()
@@ -109,6 +112,10 @@ export function TabBarQuickCommandsButton({
   const defaultHostId = hosts.some((host) => host.hostId === executionHostId)
     ? executionHostId
     : hosts[0].hostId
+
+  if (!showQuickCommandsButton) {
+    return null
+  }
 
   const addRepoCommand = (hostId: ExecutionHostId): void => {
     setEditor({

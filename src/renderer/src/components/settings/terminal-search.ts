@@ -19,6 +19,7 @@ import {
 import {
   getTerminalCursorSearchEntries,
   getTerminalRenderingSearchEntries,
+  getTerminalChromeSearchEntries,
   getTerminalTypographySearchEntries
 } from './terminal-typography-search'
 import {
@@ -37,6 +38,7 @@ export {
   getTerminalAdvancedTypographySearchEntries,
   getTerminalTypographySearchEntries,
   getTerminalRenderingSearchEntries,
+  getTerminalChromeSearchEntries,
   getTerminalCursorSearchEntries
 } from './terminal-typography-search'
 export {
@@ -69,6 +71,7 @@ type TerminalAppearanceSearchOptions = {
 const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     ...getTerminalTypographySearchEntries(),
+    ...getTerminalChromeSearchEntries(),
     ...getTerminalCursorSearchEntries(),
     ...getTerminalPaneAppearanceSearchEntries(),
     ...getTerminalThemeTargetSearchEntries(),

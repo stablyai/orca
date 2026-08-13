@@ -239,6 +239,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why: prefer modern PowerShell when installed, falling back to inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
     terminalMouseHideWhileTyping: false,
+    showTerminalQuickCommandsButton: true,
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
