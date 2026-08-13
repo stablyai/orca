@@ -56,6 +56,7 @@
     "../src/main/codex/config-toml-trust.ts",
     "../src/main/codex/hook-service.ts",
     "../src/main/codex/hook-trust-promotion.ts",
+    "../src/main/codex/wsl-managed-hook-trust.ts",
     "../src/main/codex-accounts/fs-utils.ts",
     "../src/main/codex-accounts/wsl-codex-command.ts",
     "../src/main/codex-cli/command.ts",

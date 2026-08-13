@@ -82,6 +82,10 @@ import {
 } from './codex-managed-trust-reconciliation'
 import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
+import {
+  preserveCodexWrittenWslManagedHookTrust,
+  type WslManagedHookTrustCandidate
+} from './wsl-managed-hook-trust'
 
 // Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
 const CODEX_EVENTS = [
@@ -877,23 +881,39 @@ function installManagedHooksIntoWslRuntime(
     }
   }
 
-  const trustEntries: CodexTrustEntry[] = []
+  const trustCandidates: WslManagedHookTrustCandidate[] = []
   for (const eventName of CODEX_EVENTS) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+    const managedHook = buildManagedCommandHook(command)
     const definition: HookDefinition = {
-      hooks: [buildManagedCommandHook(command)]
+      hooks: [managedHook]
     }
     nextHooks[eventName] = [definition, ...cleaned]
-    trustEntries.push({
+    const next: CodexTrustEntry = {
       sourcePath: plan.trustConfigPath,
       eventLabel: CODEX_EVENT_LABEL[eventName],
       groupIndex: 0,
       handlerIndex: 0,
       command,
       timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-    })
+    }
+    const previousDefinition = current[0]
+    const previousHook = previousDefinition?.hooks?.[0]
+    const previous =
+      previousDefinition && previousHook
+        ? createCodexHookTrustEntry(
+            plan.trustConfigPath,
+            eventName,
+            0,
+            0,
+            previousDefinition,
+            previousHook
+          )
+        : null
+    trustCandidates.push({ next, previous })
   }
+  const trustEntries = trustCandidates.map((candidate) => candidate.next)
 
   config.hooks = nextHooks
   writeManagedScript(plan.scriptPath, getManagedScript('posix'))
@@ -921,9 +941,15 @@ function installManagedHooksIntoWslRuntime(
       telemetryLane: 'managed'
     })
     if (grant.lane === 'fallback') {
+      // Why: when RPC grant is unavailable, keep a Codex-written hash if the
+      // managed hook content is unchanged so reinstalls do not force re-approval.
+      const preservedTrustEntries = preserveCodexWrittenWslManagedHookTrust(
+        plan.tomlPath,
+        trustCandidates
+      )
       // Why: WSL runtime homes may carry user hook approvals we did not rebuild
       // here; only upsert Orca's entries instead of sweeping the whole source.
-      upsertHookTrustEntries(plan.tomlPath, trustEntries)
+      upsertHookTrustEntries(plan.tomlPath, preservedTrustEntries)
     }
   } catch (error) {
     return {

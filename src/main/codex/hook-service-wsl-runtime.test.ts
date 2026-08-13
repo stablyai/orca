@@ -23,9 +23,10 @@ import {
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
 import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
 import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
+import { preserveCodexWrittenWslManagedHookTrust } from './wsl-managed-hook-trust'
 
 type HooksConfig = {
-  hooks: Record<string, { hooks?: { command?: string }[] }[]>
+  hooks: Record<string, { hooks?: { command?: string; timeout?: number }[] }[]>
 }
 
 const managedEvents = [
@@ -169,6 +170,42 @@ describe('Codex WSL runtime hook install', () => {
     expect(trustEntries.has(newKey)).toBe(true)
   })
 
+  it('keeps a Codex-written trust hash when the managed WSL hook is unchanged', () => {
+    const plan = createTestPlan()
+    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+    writeFileSync(plan.tomlPath, '', 'utf-8')
+    expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+
+    const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
+    const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
+    const managedEntry = getManagedTrustEntry(plan, managedCommand!)
+    const codexWrittenHash = 'sha256:codex-wsl-authoritative'
+    upsertHookTrustEntries(plan.tomlPath, [
+      { ...managedEntry, trustedHash: codexWrittenHash, enabled: true }
+    ])
+
+    expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+
+    expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(managedEntry))).toEqual({
+      enabled: true,
+      trustedHash: codexWrittenHash
+    })
+  })
+
+  it('does not carry Codex-written trust across managed WSL trust keys', () => {
+    const plan = createTestPlan()
+    writeFileSync(plan.tomlPath, '', 'utf-8')
+    const previous = getManagedTrustEntry(plan, expectedManagedCommand(plan.commandScriptPath))
+    const next = { ...previous, sourcePath: '/home/bob/.codex/hooks.json' }
+    upsertHookTrustEntries(plan.tomlPath, [
+      { ...previous, trustedHash: 'sha256:codex-wsl-authoritative', enabled: true }
+    ])
+
+    expect(preserveCodexWrittenWslManagedHookTrust(plan.tomlPath, [{ previous, next }])).toEqual([
+      next
+    ])
+  })
+
   it.skipIf(process.platform === 'win32')(
     'drains stdin when the WSL runtime script is missing',
     () => {
@@ -192,6 +229,32 @@ describe('Codex WSL runtime hook install', () => {
       expect(result.status).toBe(0)
     }
   )
+
+  it('recomputes WSL trust when the previously installed hook content changed', () => {
+    const plan = createTestPlan()
+    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+    writeFileSync(plan.tomlPath, '', 'utf-8')
+    expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+
+    const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
+    const definition = installed.hooks.UserPromptSubmit[0]!
+    const managedHook = definition.hooks![0]!
+    managedHook.timeout = MANAGED_HOOK_TIMEOUT_SECONDS + 1
+    writeFileSync(plan.configPath, `${JSON.stringify(installed)}\n`, 'utf-8')
+    const staleEntry = getManagedTrustEntry(plan, managedHook.command!)
+    staleEntry.timeoutSec = managedHook.timeout
+    upsertHookTrustEntries(plan.tomlPath, [
+      { ...staleEntry, trustedHash: 'sha256:stale-hook-content', enabled: true }
+    ])
+
+    expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+
+    const currentEntry = { ...staleEntry, timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS }
+    expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(currentEntry))).toEqual({
+      enabled: true,
+      trustedHash: computeTrustedHash(currentEntry)
+    })
+  })
 
   it('sweeps all managed WSL trust for disable or confirmed absence', () => {
     // Why: disable and confirmed absence intentionally pass []. Transient
