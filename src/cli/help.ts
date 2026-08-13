@@ -54,6 +54,10 @@ Projects:
   project setup-create      Create independent project host setup metadata
   project setup-update      Update project host setup metadata
   project setup-delete      Remove a project host setup
+  project group create      Create a project group for organizing the sidebar
+  project group list        List project groups
+  project group add         Add a project to a project group
+  project group rm          Delete a project group
 
 Repos:
   repo list                 List repos registered in Orca
@@ -254,6 +258,10 @@ Common Commands:
   orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-delete --setup <setup-id> [--json]
+  orca project group create <name> [--parent-path <path>] [--json]
+  orca project group list [--json]
+  orca project group add (--project <id> [--host <host-id>] | --project-host-setup <id> | --repo <selector>) --group <id> [--json]
+  orca project group rm --group <id> [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]
@@ -536,6 +544,7 @@ export function formatFlagHelp(flag: string): string {
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
+    group: '--group <id>           Project group id',
     focus: '--focus                Reveal the created terminal session in Orca',
     for: '--for exit|tui-idle    Wait condition to satisfy',
     'from-element-index': '--from-element-index <n> Source element index from get-app-state',
@@ -563,6 +572,7 @@ export function formatFlagHelp(flag: string): string {
     'no-parent': '--no-parent            Force no parent lineage for unrelated work',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
+    'parent-path': '--parent-path <path>   Parent folder path for the project group',
     'parent-worktree':
       '--parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     path: '--path <path>          Path argument for the command',

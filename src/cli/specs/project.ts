@@ -113,5 +113,51 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'Repo-backed setups remove the registered repo compatibility record.'
     ],
     examples: ['orca project setup-delete --setup github:stablyai/orca::gpu --json']
+  },
+  {
+    path: ['project', 'group', 'create'],
+    summary: 'Create a project group for organizing the sidebar',
+    usage: 'orca project group create <name> [--parent-path <path>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'name', 'parent-path'],
+    positionalArgs: ['name'],
+    notes: [
+      'Groups let headless workflows organize an otherwise flat project list (e.g. an umbrella repo plus its child repos).'
+    ],
+    examples: ['orca project group create frontend', 'orca project group create frontend --json']
+  },
+  {
+    path: ['project', 'group', 'list'],
+    summary: 'List project groups',
+    usage: 'orca project group list [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    examples: ['orca project group list', 'orca project group list --json']
+  },
+  {
+    path: ['project', 'group', 'add'],
+    summary: 'Add a project to a project group',
+    usage:
+      'orca project group add (--project <id> [--host <host-id>] | --project-host-setup <id> | --repo <selector>) --group <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'project-host-setup', 'repo', 'group'],
+    notes: [
+      'Select the project the same way as `orca worktree create`: --project (with --host to disambiguate a project set up on several hosts), --project-host-setup, or a direct --repo selector.',
+      'Choose either --repo or the project target flags, not both.'
+    ],
+    examples: [
+      'orca project group add --project github:stablyai/orca --group 1f3c...',
+      'orca project group add --project github:stablyai/orca --host local --group 1f3c... --json',
+      'orca project group add --repo id:9a2b... --group 1f3c...'
+    ]
+  },
+  {
+    path: ['project', 'group', 'rm'],
+    summary: 'Delete a project group',
+    usage: 'orca project group rm --group <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'group'],
+    destructive: true,
+    notes: ['Repos in the group are ungrouped, not deleted.'],
+    examples: [
+      'orca project group rm --group 1f3c...',
+      'orca project group rm --group 1f3c... --json'
+    ]
   }
 ]

@@ -1,5 +1,6 @@
 import type {
   Project,
+  ProjectGroup,
   ProjectHostSetup,
   ProjectHostSetupCloneArgs,
   ProjectHostSetupCreateArgs,
@@ -9,10 +10,15 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
+  Repo,
   RepoKind
 } from '../../shared/types'
 import type { CommandHandler } from '../dispatch'
 import {
+  formatProjectGroupAddResult,
+  formatProjectGroupCreateResult,
+  formatProjectGroupDeleteResult,
+  formatProjectGroupList,
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
   formatProjectHostSetupList,
@@ -24,6 +30,11 @@ import {
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime-client'
+import type { RuntimeClient } from '../runtime-client'
+import {
+  assertWorkspaceTargetFlagsCompatible,
+  resolveProjectCreateRepoSelector
+} from '../worktree-project-target'
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
   const kind = getOptionalStringFlag(flags, 'kind')
@@ -141,7 +152,57 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     printResult(result, json, formatProjectHostSetupDeleteResult)
+  },
+  'project group create': async ({ flags, client, json }) => {
+    const result = await client.call<{ group: ProjectGroup }>('projectGroup.create', {
+      name: getRequiredStringFlag(flags, 'name'),
+      parentPath: getOptionalStringFlag(flags, 'parent-path')
+    })
+    printResult(result, json, formatProjectGroupCreateResult)
+  },
+  'project group list': async ({ client, json }) => {
+    const result = await client.call<{ groups: ProjectGroup[] }>('projectGroup.list')
+    printResult(result, json, formatProjectGroupList)
+  },
+  'project group add': async ({ flags, client, json }) => {
+    assertWorkspaceTargetFlagsCompatible(flags)
+    const groupId = getRequiredStringFlag(flags, 'group')
+    const repo = await resolveProjectGroupTargetRepo(flags, client)
+    const result = await client.call<{ repo: Repo }>('projectGroup.moveProject', {
+      repo,
+      groupId
+    })
+    printResult(result, json, formatProjectGroupAddResult)
+  },
+  'project group rm': async ({ flags, client, json }) => {
+    const result = await client.call<{ deleted: boolean }>('projectGroup.delete', {
+      groupId: getRequiredStringFlag(flags, 'group')
+    })
+    printResult(result, json, formatProjectGroupDeleteResult)
   }
+}
+
+/**
+ * Resolve the repo a `project group add` should move, accepting the same
+ * selector forms as `orca worktree create`: a project target (--project with
+ * optional --host, or --project-host-setup) or a direct --repo selector.
+ */
+async function resolveProjectGroupTargetRepo(
+  flags: Map<string, string | boolean>,
+  client: RuntimeClient
+): Promise<string> {
+  const projectRepoSelector = await resolveProjectCreateRepoSelector(flags, client)
+  if (projectRepoSelector) {
+    return projectRepoSelector
+  }
+  const explicitRepo = getOptionalStringFlag(flags, 'repo')
+  if (explicitRepo) {
+    return explicitRepo
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    'Missing project selector. Pass --project <id> [--host <host-id>], --project-host-setup <id>, or --repo <selector>.'
+  )
 }
 
 function getOptionalSetupState(
