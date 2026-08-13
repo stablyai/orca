@@ -109,7 +109,7 @@ import {
   RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES,
   RuntimeFileCommands
 } from './orca-runtime-files'
-import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/git-diff-transport-budget'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   resetSshConnectionGenerations,
@@ -2331,6 +2331,30 @@ describe('RuntimeFileCommands', () => {
       ).rejects.toThrow('terminal_file_grant_stale')
     })
 
+    it('keeps local terminal artifact previews above the remote cap available', async () => {
+      const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
+      const artifactPath = await tempFile('result.png', 'a'.repeat(size))
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+
+      const result = await resolveTerminalArtifactPath(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toMatchObject({
+        content: Buffer.alloc(size, 0x61).toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+    })
+
     it('rejects binary-extension terminal artifacts from the editable text path', async () => {
       const artifactPath = await tempFile('report.pdf', '%PDF text-looking bytes')
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
@@ -2499,6 +2523,28 @@ describe('RuntimeFileCommands', () => {
       expect(readTerminalArtifact).not.toHaveBeenCalled()
     })
 
+    it('rejects additive remote terminal preview fields beyond the request budget', async () => {
+      const { commands, readTerminalArtifact } =
+        createRemoteTerminalArtifactGrantFixture('/tmp/result.png')
+      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.png')
+      const target = absoluteFileTarget(result)
+      readTerminalArtifact.mockResolvedValue({
+        content: 'a',
+        isBinary: true,
+        futureMetadata: 'x'.repeat(128)
+      })
+
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a',
+          128
+        )
+      ).rejects.toThrow('file_too_large')
+    })
+
     it('rejects remote terminal artifact writes when a grant no longer resolves to the granted path', async () => {
       const { commands, readTerminalArtifact, writeTerminalArtifact, moveArtifactTarget } =
         createRemoteTerminalArtifactGrantFixture()
@@ -2597,44 +2643,59 @@ describe('RuntimeFileCommands', () => {
       previewTempDirs.length = 0
     })
 
-    async function previewFixture(): Promise<string> {
+    async function previewFixture(size = Buffer.byteLength('fake-png')): Promise<string> {
       const dir = await mkdtemp(join(tmpdir(), 'orca-preview-budget-'))
       previewTempDirs.push(dir)
-      await writeFile(join(dir, 'logo.png'), 'fake-png')
+      await writeFile(join(dir, 'logo.png'), Buffer.alloc(size, 0x61))
       return dir
     }
 
     it('stays inside the transport ceiling once base64-inflated', () => {
-      const base64Bytes = Math.ceil(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES / 3) * 4
+      const result = {
+        content: Buffer.alloc(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES).toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      }
 
-      expect(base64Bytes).toBeLessThanOrEqual(REMOTE_RPC_MAX_CONTENT_BYTES)
-    })
-
-    it('rejects a previewable image one byte above the cap', async () => {
-      const dir = await previewFixture()
-      const { commands } = createRuntimeFileCommands({ path: dir })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-      statMock.mockResolvedValue({
-        isDirectory: () => false,
-        size: RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
-      })
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).rejects.toThrow(
-        'file_too_large'
+      expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeLessThanOrEqual(
+        REMOTE_RPC_MAX_CONTENT_BYTES
       )
     })
 
-    it('returns full base64 for a previewable image at the cap', async () => {
-      const dir = await previewFixture()
+    it('rejects a previewable image one byte above the cap', async () => {
+      const dir = await previewFixture(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1)
       const { commands } = createRuntimeFileCommands({ path: dir })
       resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-      statMock.mockResolvedValue({
-        isDirectory: () => false,
-        size: RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES
+
+      await expect(
+        commands.readFileExplorerPreview('id:wt-1', 'logo.png', REMOTE_RPC_MAX_CONTENT_BYTES)
+      ).rejects.toThrow('file_too_large')
+    })
+
+    it('returns full base64 for a previewable image at the cap', async () => {
+      const dir = await previewFixture(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES)
+      const { commands } = createRuntimeFileCommands({ path: dir })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+
+      await expect(
+        commands.readFileExplorerPreview('id:wt-1', 'logo.png', REMOTE_RPC_MAX_CONTENT_BYTES)
+      ).resolves.toEqual({
+        content: Buffer.alloc(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES, 0x61).toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
       })
+    })
+
+    it('keeps local previews above the remote cap available without a request budget', async () => {
+      const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
+      const dir = await previewFixture(size)
+      const { commands } = createRuntimeFileCommands({ path: dir })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
 
       await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual({
-        content: Buffer.from('fake-png').toString('base64'),
+        content: Buffer.alloc(size, 0x61).toString('base64'),
         isBinary: true,
         isImage: true,
         mimeType: 'image/png'
@@ -2669,6 +2730,58 @@ describe('RuntimeFileCommands', () => {
 
       await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual(
         preview
+      )
+    })
+
+    it('rejects an SSH binary result that grew past its request-scoped budget', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const readFile = vi.fn().mockResolvedValue({
+        content: 'a'.repeat(13),
+        isBinary: true,
+        isImage: true
+      })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 0 }),
+        readFile
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png', 12)).rejects.toThrow(
+        'file_too_large'
+      )
+      expect(readFile).toHaveBeenCalledWith('/repo/logo.png', {
+        maxBinaryBytes: 0,
+        maxTextBytes: 512 * 1024
+      })
+    })
+
+    it('rejects escape-dense SSH text beyond the request-scoped result budget', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 64 }),
+        readFile: vi.fn().mockResolvedValue({ content: '\u0001'.repeat(64), isBinary: false })
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt', 128)).rejects.toThrow(
+        'file_too_large'
+      )
+    })
+
+    it('rejects oversized SSH preview metadata with small content', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1 }),
+        readFile: vi.fn().mockResolvedValue({
+          content: 'a',
+          isBinary: true,
+          mimeType: 'x'.repeat(128)
+        })
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png', 128)).rejects.toThrow(
+        'file_too_large'
       )
     })
   })

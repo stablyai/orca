@@ -1,23 +1,19 @@
 // Why: a raw-byte cap is not enough. JSON escaping expands a control character sixfold and
 // binary-buffer.ts sniffs only for NUL, so control-dense content is classified as text; these
 // fixtures pin every branch of the measurement to native JSON.stringify.
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { GitDiffResult } from './types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime-memory-limits'
 import {
-  REMOTE_RPC_MAX_CONTENT_BYTES,
   assertGitDiffWithinTransportBudget,
   gitDiffExceedsTransportBudget
 } from './git-diff-transport-budget'
+import { REMOTE_RPC_MAX_CONTENT_BYTES, remoteRpcContentBudget } from './remote-rpc-content-budget'
 
 const BUDGET = REMOTE_RPC_MAX_CONTENT_BYTES
 
-/** Native reference: the bytes the two content sides occupy once JSON-encoded. */
-function referenceContentBytes(result: GitDiffResult): number {
-  return (
-    Buffer.byteLength(JSON.stringify(result.originalContent), 'utf8') +
-    Buffer.byteLength(JSON.stringify(result.modifiedContent), 'utf8')
-  )
+function referenceResultBytes(result: GitDiffResult): number {
+  return Buffer.byteLength(JSON.stringify(result), 'utf8')
 }
 
 /** Content whose JSON encoding, quotes included, is exactly `jsonBytes`. */
@@ -34,6 +30,31 @@ function textDiff(modifiedContent: string): GitDiffResult {
     modifiedContent,
     originalIsBinary: false,
     modifiedIsBinary: false
+  }
+}
+
+function textDiffOfJsonBytes(unit: string, jsonBytes: number): GitDiffResult {
+  const empty = textDiff('')
+  const fixedBytes = referenceResultBytes(empty) - 2
+  return textDiff(sideOfJsonBytes(unit, jsonBytes - fixedBytes))
+}
+
+function binaryDiffOfJsonBytes(unit: string, jsonBytes: number): GitDiffResult {
+  const empty: GitDiffResult = {
+    kind: 'binary',
+    originalContent: '',
+    modifiedContent: '',
+    isImage: true,
+    mimeType: 'image/png',
+    originalIsBinary: true,
+    modifiedIsBinary: true
+  }
+  const contentBytes = jsonBytes - (referenceResultBytes(empty) - 4)
+  const firstBytes = Math.floor(contentBytes / 2)
+  return {
+    ...empty,
+    originalContent: sideOfJsonBytes(unit, firstBytes),
+    modifiedContent: sideOfJsonBytes(unit, contentBytes - firstBytes)
   }
 }
 
@@ -64,60 +85,53 @@ describe('gitDiffExceedsTransportBudget', () => {
   })
 
   it.each(UNITS)('admits $name exactly at the budget', ({ unit }) => {
-    const result = textDiff(sideOfJsonBytes(unit, BUDGET - 2))
+    const result = textDiffOfJsonBytes(unit, BUDGET)
 
-    expect(referenceContentBytes(result)).toBe(BUDGET)
+    expect(referenceResultBytes(result)).toBe(BUDGET)
     expect(gitDiffExceedsTransportBudget(result, BUDGET)).toBe(false)
     expect(assertGitDiffWithinTransportBudget(result, BUDGET)).toBe(result)
   })
 
   it.each(UNITS)('rejects $name one byte above the budget', ({ unit }) => {
-    const result = textDiff(sideOfJsonBytes(unit, BUDGET - 1))
+    const result = textDiffOfJsonBytes(unit, BUDGET + 1)
 
-    expect(referenceContentBytes(result)).toBe(BUDGET + 1)
+    expect(referenceResultBytes(result)).toBe(BUDGET + 1)
     expect(gitDiffExceedsTransportBudget(result, BUDGET)).toBe(true)
     expect(budgetError(result).code).toBe('diff_too_large')
   })
 
   it.each(UNITS)('agrees with native JSON.stringify across the boundary for $name', ({ unit }) => {
-    for (const jsonBytes of [BUDGET - 3, BUDGET - 2, BUDGET - 1]) {
-      const result = textDiff(sideOfJsonBytes(unit, jsonBytes))
+    for (const jsonBytes of [BUDGET - 1, BUDGET, BUDGET + 1]) {
+      const result = textDiffOfJsonBytes(unit, jsonBytes)
       expect(gitDiffExceedsTransportBudget(result, BUDGET)).toBe(
-        referenceContentBytes(result) > BUDGET
+        referenceResultBytes(result) > BUDGET
       )
     }
   })
 
   // Why: this is the case a raw-byte budget silently lets through into the 1013 close.
   it('rejects control-dense content whose raw bytes are far under the budget', () => {
-    const result = textDiff(sideOfJsonBytes('\u0001', BUDGET - 1))
+    const result = textDiffOfJsonBytes('\u0001', BUDGET + 1)
 
     expect(Buffer.byteLength(result.modifiedContent, 'utf8')).toBeLessThan(BUDGET / 5)
     expect(budgetError(result).data).toEqual({ maxBytes: BUDGET })
   })
 
   it('splits the budget across both sides', () => {
-    const half = Math.floor(BUDGET / 2)
-    const overBudget: GitDiffResult = {
-      kind: 'binary',
-      originalContent: sideOfJsonBytes('Q', half),
-      modifiedContent: sideOfJsonBytes('Q', BUDGET - half + 1),
-      originalIsBinary: true,
-      modifiedIsBinary: true
-    }
+    const overBudget = binaryDiffOfJsonBytes('Q', BUDGET + 1)
 
-    expect(referenceContentBytes(overBudget)).toBe(BUDGET + 1)
+    expect(referenceResultBytes(overBudget)).toBe(BUDGET + 1)
     expect(budgetError(overBudget).code).toBe('diff_too_large')
   })
 
-  it('admits small content without an escape-aware scan', () => {
-    const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
-    try {
-      expect(gitDiffExceedsTransportBudget(textDiff('hello'), BUDGET)).toBe(false)
-      expect(charCodeAt).not.toHaveBeenCalled()
-    } finally {
-      charCodeAt.mockRestore()
-    }
+  it('rejects additive relay metadata beyond the result budget', () => {
+    const skewed = {
+      ...textDiff(''),
+      futureMetadata: 'x'.repeat(BUDGET)
+    } as unknown as GitDiffResult
+
+    expect(gitDiffExceedsTransportBudget(skewed, BUDGET)).toBe(true)
+    expect(budgetError(skewed).code).toBe('diff_too_large')
   })
 
   // Why: the SSH provider casts a relay payload to GitDiffResult without validating it.
@@ -139,10 +153,10 @@ describe('gitDiffExceedsTransportBudget', () => {
 // serialize inside the outbound JSON limit once wrapped in an RPC reply. A base64-only version of
 // this passes trivially; the newline and control-char fixtures are the load-bearing ones.
 describe('envelope ceiling', () => {
-  function replyBytes(result: GitDiffResult): number {
+  function replyBytes(result: GitDiffResult, requestId = 'req_0123456789abcdef'): number {
     return Buffer.byteLength(
       JSON.stringify({
-        id: 'req_0123456789abcdef',
+        id: requestId,
         ok: true,
         result,
         _meta: { runtimeId: '00000000-0000-4000-8000-000000000000' }
@@ -151,20 +165,18 @@ describe('envelope ceiling', () => {
     )
   }
 
-  function diffAtBudget(unit: string): GitDiffResult {
-    return {
-      kind: 'binary',
-      originalContent: sideOfJsonBytes(unit, Math.floor(BUDGET / 2)),
-      modifiedContent: sideOfJsonBytes(unit, BUDGET - Math.floor(BUDGET / 2)),
-      isImage: true,
-      mimeType: 'image/png',
-      originalIsBinary: true,
-      modifiedIsBinary: true
-    }
-  }
-
   it.each(UNITS)('keeps a $name diff at the budget inside the outbound limit', ({ unit }) => {
-    expect(replyBytes(diffAtBudget(unit))).toBeLessThanOrEqual(
+    expect(replyBytes(binaryDiffOfJsonBytes(unit, BUDGET))).toBeLessThanOrEqual(
+      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+    )
+  })
+
+  it('charges an escape-dense request id instead of overflowing the fixed reserve', () => {
+    const requestId = '\u0001'.repeat(8_192)
+    const budget = remoteRpcContentBudget(requestId)
+
+    expect(budget).toBeLessThan(BUDGET)
+    expect(replyBytes(binaryDiffOfJsonBytes('a', budget), requestId)).toBeLessThanOrEqual(
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
   })
@@ -172,7 +184,7 @@ describe('envelope ceiling', () => {
   // Why: every reserved byte is content that transferred before this cap existed, so the reserve
   // must stay close to the real envelope overhead. Fails if someone inflates it "just to be safe".
   it('keeps the envelope reserve within 64x the overhead it covers', () => {
-    const overhead = replyBytes(diffAtBudget('a')) - BUDGET
+    const overhead = replyBytes(binaryDiffOfJsonBytes('a', BUDGET)) - BUDGET
     const reserve = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - BUDGET
 
     expect(reserve).toBeGreaterThan(overhead)

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this table is the runtime git RPC contract; splitting it would make method coverage harder to audit. */
 import { defineMethod, type RpcMethod } from '../core'
-import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../../shared/git-diff-transport-budget'
+import { remoteRpcContentBudget } from '../../../../shared/remote-rpc-content-budget'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import {
@@ -31,8 +31,11 @@ import {
 
 // Why: clientKind is set only for WebSocket-transported requests, so desktop-local and in-process
 // callers keep uncapped full-fidelity diffs.
-function remoteDiffContentBudget(clientKind: 'mobile' | 'runtime' | undefined): number | undefined {
-  return clientKind ? REMOTE_RPC_MAX_CONTENT_BYTES : undefined
+function remoteDiffContentBudget(
+  clientKind: 'mobile' | 'runtime' | undefined,
+  requestId: string | undefined
+): number | undefined {
+  return clientKind && requestId ? remoteRpcContentBudget(requestId) : undefined
 }
 
 type CommitMessageGenerationOverride = {
@@ -165,13 +168,13 @@ export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.diff',
     params: GitDiff,
-    handler: async (params, { runtime, clientKind }) =>
+    handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitDiff(
         params.worktree,
         params.filePath,
         params.staged,
         params.compareAgainstHead,
-        remoteDiffContentBudget(clientKind)
+        remoteDiffContentBudget(clientKind, requestId)
       )
   }),
   defineMethod({
@@ -244,19 +247,19 @@ export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.branchDiff',
     params: GitBranchDiff,
-    handler: async (params, { runtime, clientKind }) =>
+    handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitBranchDiff(
         params.worktree,
         params.compare,
         params.filePath,
         params.oldPath,
-        remoteDiffContentBudget(clientKind)
+        remoteDiffContentBudget(clientKind, requestId)
       )
   }),
   defineMethod({
     name: 'git.commitDiff',
     params: GitCommitDiff,
-    handler: async (params, { runtime, clientKind }) =>
+    handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitCommitDiff(
         params.worktree,
         {
@@ -265,7 +268,7 @@ export const GIT_METHODS: RpcMethod[] = [
           filePath: params.filePath,
           oldPath: params.oldPath
         },
-        remoteDiffContentBudget(clientKind)
+        remoteDiffContentBudget(clientKind, requestId)
       )
   }),
   defineMethod({

@@ -13,7 +13,7 @@ import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
-import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/git-diff-transport-budget'
+import { remoteRpcContentBudget } from '../../shared/remote-rpc-content-budget'
 import { parsePairingCode } from '../../shared/pairing'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import {
@@ -3306,7 +3306,7 @@ describe('OrcaRuntimeRpcServer', () => {
       'docs/readme.md',
       false,
       undefined,
-      REMOTE_RPC_MAX_CONTENT_BYTES
+      remoteRpcContentBudget('req_git_diff')
     )
     expect(browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
     expect(browserSetViewport).toHaveBeenCalledWith({

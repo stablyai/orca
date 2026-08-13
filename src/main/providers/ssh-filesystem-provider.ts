@@ -16,6 +16,7 @@ import {
 } from './ssh-filesystem-provider-watch'
 import type {
   IFilesystemProvider,
+  FileReadLimits,
   FileStat,
   FileReadResult,
   FileUploadSession,
@@ -88,14 +89,14 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.readDir', { dirPath })) as DirEntry[]
   }
 
-  async readFile(filePath: string): Promise<FileReadResult> {
+  async readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult> {
     // Why: streaming is the default path so previews above the legacy single-
     // frame budget (~12 MB after base64) don't hit MAX_MESSAGE_SIZE. Old relays
     // that don't implement fs.readFileStream surface as MethodNotFound; we fall
     // back to the legacy single-shot fs.readFile (which retains the old 10 MB
     // cap on those hosts).
     try {
-      return await readFileViaStream(this.mux, filePath)
+      return await readFileViaStream(this.mux, filePath, limits)
     } catch (err) {
       if (isMethodNotFoundError(err)) {
         if (!this.loggedStreamFallback) {

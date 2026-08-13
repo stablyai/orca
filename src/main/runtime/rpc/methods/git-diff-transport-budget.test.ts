@@ -3,8 +3,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
-  assertGitDiffWithinTransportBudget
-} from '../../../../shared/git-diff-transport-budget'
+  remoteRpcContentBudget
+} from '../../../../shared/remote-rpc-content-budget'
+import { assertGitDiffWithinTransportBudget } from '../../../../shared/git-diff-transport-budget'
 import type { GitDiffResult, GlobalSettings } from '../../../../shared/types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from '../../orca-runtime-git'
@@ -96,10 +97,10 @@ describe('remote git diff transport budget', () => {
 
     const response = await dispatchRemote(runtime, method, params, 'mobile')
 
-    expect(budgetArgument(runtime, runtimeMethod)).toBe(REMOTE_RPC_MAX_CONTENT_BYTES)
+    expect(budgetArgument(runtime, runtimeMethod)).toBe(remoteRpcContentBudget('req-1'))
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'diff_too_large', data: { maxBytes: REMOTE_RPC_MAX_CONTENT_BYTES } }
+      error: { code: 'diff_too_large', data: { maxBytes: remoteRpcContentBudget('req-1') } }
     })
   })
 
@@ -110,10 +111,28 @@ describe('remote git diff transport budget', () => {
 
       const response = await dispatchRemote(runtime, method, params, 'runtime')
 
-      expect(budgetArgument(runtime, runtimeMethod)).toBe(REMOTE_RPC_MAX_CONTENT_BYTES)
+      expect(budgetArgument(runtime, runtimeMethod)).toBe(remoteRpcContentBudget('req-1'))
       expect(response).toMatchObject({ ok: false, error: { code: 'diff_too_large' } })
     }
   )
+
+  it('charges a long request id against the remote content budget', async () => {
+    const runtime = stubRuntime('getRuntimeGitDiff')
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const requestId = '\u0001'.repeat(8_192)
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      { ...makeRequest('git.diff', CASES[0]!.params), id: requestId },
+      (reply) => replies.push(reply),
+      { clientKind: 'mobile' }
+    )
+
+    expect(budgetArgument(runtime, 'getRuntimeGitDiff')).toBe(remoteRpcContentBudget(requestId))
+    expect(Buffer.byteLength(replies[0]!, 'utf8')).toBeLessThanOrEqual(
+      REMOTE_RPC_MAX_CONTENT_BYTES + 8 * 1024
+    )
+  })
 
   // Why: the in-process/Unix-socket context sets no clientKind, so desktop-local diffs keep full fidelity.
   it.each(CASES)(

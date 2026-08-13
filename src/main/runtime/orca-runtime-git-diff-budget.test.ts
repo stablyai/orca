@@ -1,7 +1,7 @@
 // Why: the cap lives in orca-runtime-git.ts so both branches of all three diff readers are covered —
 // an SSH host forwards its provider's payload verbatim, so an older relay cannot be relied on to clamp it.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/git-diff-transport-budget'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
 import type { GitDiffResult, GlobalSettings } from '../../shared/types'
 import type * as GitStatusModule from '../git/status'
 import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'

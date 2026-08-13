@@ -311,7 +311,11 @@ export class E2EEChannel {
   // Why: this close kills the whole remote session. `size` means a producer emitted something
   // too big and should fall to zero once producers cap themselves; `queue` means a backed-up link.
   private closeForOutboundBudget(emitter: OutboundBudgetEmitter): void {
-    track('remote_outbound_budget_close', { emitter })
+    try {
+      track('remote_outbound_budget_close', { emitter })
+    } catch {
+      // Telemetry is best-effort; closing the unsafe socket remains authoritative.
+    }
     this.onError(1013, 'Outbound reply buffer overflow')
   }
 
