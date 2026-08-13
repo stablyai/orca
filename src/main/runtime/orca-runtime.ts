@@ -260,6 +260,7 @@ import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -28662,9 +28663,7 @@ export class OrcaRuntimeService {
         const hostIds = new Set(
           candidates.map((worktree) => {
             const repo = this.store?.getRepo(worktree.repoId)
-            return (
-              worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
-            )
+            return getWorktreeExecutionHostId(worktree, repo)
           })
         )
         // Why: duplicate registrations on one host describe one path; identical paths on different hosts do not.
