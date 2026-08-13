@@ -57,7 +57,7 @@ export default function MonacoCodeExcerpt({
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+    monaco.editor.setTheme(isDark ? 'vs-dark' : 'orca-light')
   }, [isDark])
 
   useEffect(() => {

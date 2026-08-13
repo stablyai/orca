@@ -16,6 +16,7 @@ import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancella
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+import { ORCA_LIGHT_MONACO_THEME_NAME, orcaLightMonacoThemeData } from './monaco-orca-light-theme'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -78,6 +79,9 @@ registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
 registerNimLanguage(monaco)
+// Register the app's light theme: stock `vs` syntax colors on Orca's cream
+// content surface (see monaco-orca-light-theme.ts).
+monaco.editor.defineTheme(ORCA_LIGHT_MONACO_THEME_NAME, orcaLightMonacoThemeData)
 registerJsonlLanguage(monaco)
 installMonacoDelayerCancellationGuard()
 installMonacoDiffEditorDisposalGuard(monaco)

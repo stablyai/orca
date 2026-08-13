@@ -371,7 +371,7 @@ function CodeCell({
   }, [])
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+    monaco.editor.setTheme(isDark ? 'vs-dark' : 'orca-light')
   }, [isDark])
 
   if (!active) {
@@ -404,7 +404,7 @@ function CodeCell({
         height={editorHeight}
         defaultLanguage={cell.language}
         language={cell.language}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={isDark ? 'vs-dark' : 'orca-light'}
         value={source}
         onMount={handleMount}
         onChange={(value) => onChange(value ?? '')}
