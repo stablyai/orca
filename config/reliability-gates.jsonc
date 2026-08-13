@@ -1718,7 +1718,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
           "result": "failed",
           "durationSeconds": 0.72,
-          "summary": "The unchanged STA-4063 oracle failed 5/5 on scan e4c278eb52 and latest main f1ee3088a5: direct create never closed the new split, and side-preview rejection produced neither cleanup nor a toast. Pre-fix PR #14100 passed the two caller cases but still failed all three direct transaction cases."
+          "summary": "The unchanged STA-4063 oracle failed 5/5 on scan e4c278eb52 and latest main bc2e30000b: direct create never closed the new split, and side-preview rejection produced neither cleanup nor a toast. Pre-fix PR #14100 passed the two caller cases but still failed all three direct transaction cases."
         },
         {
           "date": "2026-08-12",
@@ -1866,7 +1866,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The unchanged STA-4063 five-assertion oracle is red 5/5 on scan e4c278eb52 and latest main f1ee3088a5, partially green 2/5 on pre-fix PR #14100, green 5/5 on candidate 14b5877a75, and red 3/5 when only the new transaction cleanup boundary is disabled. The earlier STA-4025 transaction oracle remains red on the post-#13909 base and green on this candidate. The byte-identical 2ec1dcf1 Electron oracle remains red on latest main 346e59c879, green on candidate d05217c40d, and red with only side-preview focus disabled; historical 5806b23f evidence separately proves owning-runtime routing."
+        "evidence": "The unchanged STA-4063 five-assertion oracle is red 5/5 on scan e4c278eb52 and latest main bc2e30000b, partially green 2/5 on pre-fix PR #14100, green 5/5 on candidate 14b5877a75, and red 3/5 when only the new transaction cleanup boundary is disabled on final candidate a9e6fb7716. The earlier STA-4025 transaction oracle remains red on the post-#13909 base and green on this candidate. The byte-identical 2ec1dcf1 Electron oracle remains red on latest main 346e59c879, green on candidate d05217c40d, and red with only side-preview focus disabled; historical 5806b23f evidence separately proves owning-runtime routing."
       },
       "performanceBudget": {
         "required": true,
