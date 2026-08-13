@@ -33,12 +33,14 @@ export type MutationPlan<TValue> = {
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
 }
 
-export function sendPlan(params: {
+export type AgentSessionSendPlanParams = {
   envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem
   retryUnknown?: true
   beforeRun?: () => void
-}): MutationPlan<AgentSessionSendResult> {
+}
+
+export function sendPlan(params: AgentSessionSendPlanParams): MutationPlan<AgentSessionSendResult> {
   // The operation id IS the client message id: one send, one durable row, one
   // key the client reconciles its optimistic bubble against.
   const clientMessageId = params.envelope.clientOperationId

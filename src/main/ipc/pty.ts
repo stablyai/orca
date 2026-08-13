@@ -4567,7 +4567,9 @@ export function registerPtyHandlers(
       // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
       const launchCommand = codexResumeLaunch.command
       const claudeAuth =
-        isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
+        isClaudeLaunch && prepareClaudeAuth && !args.preserveClaudeAuthEnv
+          ? await prepareClaudeAuth(codexSelectionTarget)
+          : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }

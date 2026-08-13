@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
@@ -101,6 +102,44 @@ describe('projectSessionTabAgentStatus', () => {
     const projected = projectSessionTabAgentStatus(makeSnapshot(true), 'runtime', [])
 
     expect(projected.tabs[0]).not.toHaveProperty('agentStatus')
+  })
+
+  it('withholds Claude tabs from the first Codex-only structured clients', () => {
+    const snapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...makeSnapshot(false),
+      tabs: [
+        {
+          type: 'agent-session',
+          id: 'agent-session:codex',
+          title: 'Codex Chat',
+          sessionId: 'codex',
+          agent: 'codex',
+          isActive: true
+        },
+        {
+          type: 'agent-session',
+          id: 'agent-session:claude',
+          title: 'Claude Chat',
+          sessionId: 'claude',
+          agent: 'claude',
+          isActive: false
+        }
+      ],
+      activeTabId: 'agent-session:codex',
+      activeTabType: 'agent-session'
+    }
+
+    expect(
+      projectSessionTabAgentStatus(snapshot, 'mobile', [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      ]).tabs.map((tab) => tab.id)
+    ).toEqual(['agent-session:codex'])
+    expect(
+      projectSessionTabAgentStatus(snapshot, 'mobile', [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      ])
+    ).toBe(snapshot)
   })
 
   it('publishes session boundaries to clients that negotiated them', () => {

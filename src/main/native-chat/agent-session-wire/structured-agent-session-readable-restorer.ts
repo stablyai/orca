@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type { RestoredStructuredAgentSessionRead } from './structured-agent-session-read-restore'
@@ -12,6 +13,7 @@ export class StructuredAgentSessionReadableRestorer {
     private readonly input: {
       store: AgentSessionRecordStore
       journalRoot: string
+      supportsRecord: (record: AgentSessionRecord) => boolean
       reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
       resume: (params: AgentSessionAttachParams) => Promise<boolean>
       serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
@@ -25,7 +27,7 @@ export class StructuredAgentSessionReadableRestorer {
   restore(): Promise<void> {
     this.restorePromise ??= restoreStructuredAgentSessionsOnRestart({
       ...this.input,
-      records: this.input.store.listRecords().filter((record) => record.provider === 'codex'),
+      records: this.input.store.listRecords().filter(this.input.supportsRecord),
       operationId: () =>
         `${Math.trunc(this.input.now()).toString().padStart(13, '0')}-${randomUUID().replaceAll('-', '')}`
     }).catch((error) => {

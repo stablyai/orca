@@ -186,4 +186,17 @@ describe('mobile session startup', () => {
       newTabActions.indexOf("label: 'Markdown Note'")
     )
   })
+
+  it('keeps structured Claude and Codex creation explicit and host-gated', () => {
+    const actions = sliceBetween(
+      'const structuredChatAction =',
+      'const sendDiffNotesAgentActions ='
+    )
+
+    expect(actions).toContain('createTabAgentOptions.flatMap')
+    expect(actions).toContain('isMobileStructuredAgent(agent)')
+    expect(actions).toContain('structuredSessionEntry.createSupported[agent]')
+    expect(actions).toContain("agent === 'claude' ? 'Claude' : 'Codex'")
+    expect(actions).toContain('onPress: () => structuredSessionEntry.create(agent)')
+  })
 })

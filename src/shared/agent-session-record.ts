@@ -109,9 +109,9 @@ export type AgentSessionRecord = {
   provider: AgentSessionHandleProvider
   providerHandleChain: AgentSessionProviderHandleLink[]
   accountHome: AgentSessionAccountHome
+  launchEnv?: AgentSessionLaunchEnv
   /** Provider options acknowledged for the next turn, restored across owner replacement. */
   options?: Record<string, string>
-  launchEnv?: AgentSessionLaunchEnv
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -205,20 +205,6 @@ function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccount
   )
 }
 
-function isAgentSessionOptions(value: unknown): value is Record<string, string> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false
-  }
-  const entries = Object.entries(value)
-  return (
-    entries.length <= 32 &&
-    entries.every(
-      ([key, option]) =>
-        isBoundedString(key, MAX_ID_LENGTH) && isBoundedString(option, MAX_ID_LENGTH)
-    )
-  )
-}
-
 export function isAgentSessionLaunchEnv(value: unknown): value is AgentSessionLaunchEnv {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
@@ -231,6 +217,20 @@ export function isAgentSessionLaunchEnv(value: unknown): value is AgentSessionLa
         isBoundedString(key, MAX_ID_LENGTH) &&
         typeof entry === 'string' &&
         entry.length <= MAX_LAUNCH_ENV_VALUE_LENGTH
+    )
+  )
+}
+
+function isAgentSessionOptions(value: unknown): value is Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  const entries = Object.entries(value)
+  return (
+    entries.length <= 32 &&
+    entries.every(
+      ([key, option]) =>
+        isBoundedString(key, MAX_ID_LENGTH) && isBoundedString(option, MAX_ID_LENGTH)
     )
   )
 }
@@ -314,8 +314,8 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     (record.provider === 'claude' || record.provider === 'codex') &&
     isAgentSessionProviderHandleChain(record.providerHandleChain) &&
     isAgentSessionAccountHome(record.accountHome) &&
-    (record.options === undefined || isAgentSessionOptions(record.options)) &&
     (record.launchEnv === undefined || isAgentSessionLaunchEnv(record.launchEnv)) &&
+    (record.options === undefined || isAgentSessionOptions(record.options)) &&
     isAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&
     Number.isSafeInteger(record.createdAt) &&

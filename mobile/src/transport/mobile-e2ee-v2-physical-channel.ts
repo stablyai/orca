@@ -2,8 +2,8 @@ import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
 } from '../../../src/shared/ws-outbound-backpressure-queue'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
+import { MOBILE_STRUCTURED_RUNTIME_CAPABILITIES } from './mobile-structured-runtime-capabilities'
 
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'
 type OutboundItem = { kind: 'text'; plaintext: string } | { kind: 'binary'; plaintext: Uint8Array }
@@ -117,7 +117,7 @@ export class MobileE2EEV2PhysicalChannel {
         plaintext: JSON.stringify({
           type: 'e2ee_client_capabilities',
           v: 1,
-          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+          clientCapabilities: MOBILE_STRUCTURED_RUNTIME_CAPABILITIES
         })
       })
       this.args.onAuthenticated()

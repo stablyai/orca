@@ -76,6 +76,19 @@ describe('resolveMobileTerminalTabAgentId', () => {
 })
 
 describe('getMobileSessionTabTitle', () => {
+  it('uses a provider-aware fallback for structured chat tabs', () => {
+    expect(
+      getMobileSessionTabTitle({
+        type: 'agent-session',
+        id: 'agent-session:mobile_1',
+        title: '',
+        sessionId: 'mobile_1',
+        agent: 'claude',
+        isActive: true
+      })
+    ).toBe('Claude Chat')
+  })
+
   it('strips leading agent decorations when an icon is shown', () => {
     expect(getMobileSessionTabTitle(terminalTab('✦ Gemini CLI'))).toBe('Gemini CLI')
   })

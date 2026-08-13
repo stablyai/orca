@@ -111,6 +111,7 @@ export type AgentJournalResolution = {
 export type AgentJournalPromptOption = {
   id: string
   label: string
+  description?: string
 }
 
 export type AgentJournalApprovalItem = {
@@ -121,12 +122,26 @@ export type AgentJournalApprovalItem = {
   resolution: AgentJournalResolution
 }
 
+export type AgentJournalQuestion = {
+  /** Stable address within the provider's original question group. */
+  id: string
+  question: string
+  header?: string
+  options: AgentJournalPromptOption[]
+  multiSelect: boolean
+  /** Present when this question accepts an answer outside the offered options. */
+  freeTextQuestionId?: string
+}
+
 export type AgentJournalQuestionItem = {
   kind: 'question'
+  /** Legacy single-question projection for mixed-version readers. */
   question: string
   options: AgentJournalPromptOption[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
+  /** Additive grouped shape; absent on journals written by older hosts. */
+  questions?: AgentJournalQuestion[]
   resolution: AgentJournalResolution
 }
 

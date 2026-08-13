@@ -1,6 +1,8 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store'
 import { attachFingerprintFields } from './structured-agent-session-attach'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 
@@ -28,6 +30,54 @@ export function hostTestOperationId(): string {
 
 export function hostTestMessage(text: string): AgentJournalMessageItem {
   return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+}
+
+export async function seedHostTestQuestionGroup(
+  root: string
+): Promise<{ itemId: string; revision: number }> {
+  const journal = await openAgentSessionJournal({
+    identity: {
+      sessionId: HOST_TEST_SESSION,
+      workspaceId: HOST_TEST_LOCATION.workspaceId,
+      hostId: 'local',
+      agent: 'codex',
+      providerHandle: { kind: 'codex', threadId: HOST_TEST_THREAD }
+    },
+    journalDir: journalDirectoryFor(root, {
+      workspaceId: HOST_TEST_LOCATION.workspaceId,
+      sessionId: HOST_TEST_SESSION
+    })
+  })
+  const appended = await journal.appendItem(
+    { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'turn-1', ordinal: 100 },
+    {
+      kind: 'question',
+      question: '2 grouped questions',
+      options: [],
+      questions: [
+        {
+          id: 'q1',
+          question: 'Targets?',
+          options: [
+            { id: 'q1:choice-1', label: 'Web' },
+            { id: 'q1:choice-2', label: 'Mobile' }
+          ],
+          multiSelect: true,
+          freeTextQuestionId: 'q1'
+        },
+        {
+          id: 'q2',
+          question: 'Mode?',
+          options: [{ id: 'q2:choice-1', label: 'Safe' }],
+          multiSelect: false,
+          freeTextQuestionId: 'q2'
+        }
+      ],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { fence: 1 }
+  )
+  return { itemId: appended.itemId, revision: appended.revision }
 }
 
 export function hostTestAttachParams(

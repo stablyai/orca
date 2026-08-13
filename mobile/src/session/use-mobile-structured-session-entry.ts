@@ -5,6 +5,7 @@ import {
   structuredAgentSessionCreateFingerprint
 } from '../../../src/shared/structured-agent-session-mutation'
 import type { RpcClient } from '../transport/rpc-client'
+import type { MobileStructuredAgent } from './mobile-structured-session-create'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredAttachments } from './use-mobile-structured-attachments'
 import { useMobileStructuredSessionOptions } from './use-mobile-structured-session-options'
@@ -17,6 +18,7 @@ export function useMobileStructuredSessionEntry(args: {
   hostSupported: boolean
   worktreeId: string
   sessionId: string | null
+  sessionAgent: MobileStructuredAgent | null
   creationGuardRef: MutableRefObject<boolean>
   setCreating: (creating: boolean) => void
   setCreateError: (message: string) => void
@@ -32,6 +34,7 @@ export function useMobileStructuredSessionEntry(args: {
     hostSupported,
     worktreeId,
     sessionId,
+    sessionAgent,
     creationGuardRef,
     setCreating,
     setCreateError,
@@ -39,11 +42,11 @@ export function useMobileStructuredSessionEntry(args: {
     onCreated,
     onError
   } = args
-  const [createSupported, setCreateSupported] = useState(false)
-  const session = useMobileStructuredAgentSession({
-    client,
-    sessionId
+  const [createSupported, setCreateSupported] = useState<Record<MobileStructuredAgent, boolean>>({
+    claude: false,
+    codex: false
   })
+  const session = useMobileStructuredAgentSession({ client, sessionId })
   const writes = useMobileStructuredSessionWrites({
     client,
     connected,
@@ -56,6 +59,7 @@ export function useMobileStructuredSessionEntry(args: {
     client,
     connected,
     sessionId,
+    agent: sessionAgent,
     fence: session.fence,
     setOption: writes.setOption
   })
@@ -68,78 +72,95 @@ export function useMobileStructuredSessionEntry(args: {
 
   useEffect(() => {
     if (!client || !connected || !drawerOpen || !hostSupported) {
-      setCreateSupported(false)
+      setCreateSupported({ claude: false, codex: false })
       return
     }
-    setCreateSupported(false)
+    setCreateSupported({ claude: false, codex: false })
     let stale = false
-    void client
-      .sendRequest('agentSession.createSupport', {
-        worktree: `id:${worktreeId}`,
-        agent: 'codex'
-      })
-      .then((response) => {
-        if (!stale) {
-          setCreateSupported(
+    const agents: MobileStructuredAgent[] = ['claude', 'codex']
+    void Promise.all(
+      agents.map(async (agent) => {
+        try {
+          const response = await client.sendRequest('agentSession.createSupport', {
+            worktree: `id:${worktreeId}`,
+            agent
+          })
+          return [
+            agent,
             response.ok && (response.result as { supported?: boolean }).supported === true
-          )
+          ] as const
+        } catch {
+          return [agent, false] as const
         }
       })
-      .catch(() => !stale && setCreateSupported(false))
+    ).then((entries) => {
+      if (!stale) {
+        setCreateSupported(Object.fromEntries(entries) as Record<MobileStructuredAgent, boolean>)
+      }
+    })
     return () => {
       stale = true
     }
   }, [client, connected, drawerOpen, hostSupported, worktreeId])
 
-  const create = useCallback(async (): Promise<void> => {
-    if (!client || creationGuardRef.current || !createSupported) {
-      return
-    }
-    creationGuardRef.current = true
-    setCreating(true)
-    setCreateError('')
-    const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
-    const sessionId = `mobile_${nonce}`
-    const worktree = `id:${worktreeId}`
-    try {
-      const response = await client.sendRequest('agentSession.create', {
-        envelope: {
-          sessionId,
-          clientOperationId: createStructuredAgentSessionOperationId(() => ExpoCrypto.randomUUID()),
-          expectedRuntimeFence: null,
-          payloadFingerprint: structuredAgentSessionCreateFingerprint({ sessionId, worktree })
-        },
-        worktree,
-        agent: 'codex'
-      })
-      if (!response.ok) {
-        throw new Error(response.error.message)
+  const create = useCallback(
+    async (agent: MobileStructuredAgent): Promise<void> => {
+      if (!client || creationGuardRef.current || !createSupported[agent]) {
+        return
       }
-      const result = response.result as { ok?: boolean; refusal?: { message?: string } }
-      if (result.ok !== true) {
-        throw new Error(result.refusal?.message ?? 'Failed to create chat session')
+      creationGuardRef.current = true
+      setCreating(true)
+      setCreateError('')
+      const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
+      const createdSessionId = `mobile_${nonce}`
+      const worktree = `id:${worktreeId}`
+      try {
+        const response = await client.sendRequest('agentSession.create', {
+          envelope: {
+            sessionId: createdSessionId,
+            clientOperationId: createStructuredAgentSessionOperationId(() =>
+              ExpoCrypto.randomUUID()
+            ),
+            expectedRuntimeFence: null,
+            payloadFingerprint: structuredAgentSessionCreateFingerprint({
+              sessionId: createdSessionId,
+              worktree,
+              agent
+            })
+          },
+          worktree,
+          agent
+        })
+        if (!response.ok) {
+          throw new Error(response.error.message)
+        }
+        const result = response.result as { ok?: boolean; refusal?: { message?: string } }
+        if (result.ok !== true) {
+          throw new Error(result.refusal?.message ?? 'Failed to create chat session')
+        }
+        closeDrawer()
+        onCreated(`agent-session:${createdSessionId}`)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create chat session'
+        setCreateError(message)
+        onError(message)
+      } finally {
+        creationGuardRef.current = false
+        setCreating(false)
       }
-      closeDrawer()
-      onCreated(`agent-session:${sessionId}`)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create chat session'
-      setCreateError(message)
-      onError(message)
-    } finally {
-      creationGuardRef.current = false
-      setCreating(false)
-    }
-  }, [
-    client,
-    closeDrawer,
-    createSupported,
-    creationGuardRef,
-    onCreated,
-    onError,
-    setCreateError,
-    setCreating,
-    worktreeId
-  ])
+    },
+    [
+      client,
+      closeDrawer,
+      createSupported,
+      creationGuardRef,
+      onCreated,
+      onError,
+      setCreateError,
+      setCreating,
+      worktreeId
+    ]
+  )
 
   return { createSupported, create, session, writes, sessionOptions, attachments }
 }

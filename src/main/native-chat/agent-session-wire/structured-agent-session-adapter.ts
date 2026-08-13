@@ -16,8 +16,21 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity
 } from '../../../shared/agent-session-record'
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionOptionsResult,
+  AgentSessionWireRefusalCode
+} from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+
+export class AgentSessionAcquisitionRefusal extends Error {
+  constructor(
+    message: string,
+    readonly code: AgentSessionWireRefusalCode = 'agent_session_operation_invalid'
+  ) {
+    super(message)
+    this.name = 'AgentSessionAcquisitionRefusal'
+  }
+}
 
 /** What a reservation turns into once something is actually running under it:
  *  the process the host can probe, and the provider handle it was minted with. */
@@ -62,6 +75,8 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = {
+  /** Provider-aware capability check for hosts that route more than one adapter. */
+  supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Provider/runtime support, kept here so remote enablement changes adapter data, not UI logic. */
   supportsLocation?(location: AgentSessionExecutionLocation): boolean
   /** Makes the reservation real. Called once per reservation, with the spawn

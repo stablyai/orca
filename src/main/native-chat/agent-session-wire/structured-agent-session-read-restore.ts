@@ -28,7 +28,7 @@ export async function restoreStructuredAgentSessionRead(
   sessionId: string
 ): Promise<RestoredStructuredAgentSessionRead | null> {
   const record = store.getRecord(sessionId)
-  if (!record || record.provider !== 'codex') {
+  if (!record) {
     return null
   }
   const params = attachParamsForRecord(record, {
@@ -66,8 +66,8 @@ export function attachParamsForRecord(
       payloadFingerprint: ''
     },
     location: record.location,
-    provider: 'codex',
-    agent: 'codex',
+    provider: record.provider,
+    agent: record.provider,
     accountHome: record.accountHome,
     runtimeKind: input.runtimeKind ?? record.lease.runtimeKind
   }

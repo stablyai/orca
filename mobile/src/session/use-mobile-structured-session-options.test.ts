@@ -10,6 +10,7 @@ describe('useMobileStructuredSessionOptions', () => {
   let renderer: ReactTestRenderer | null = null
   let controller: MobileNativeChatSessionOptionsController | null = null
   let sessionId = 'mobile_1'
+  let agent: 'claude' | 'codex' = 'claude'
   let fence = 3
   const setOption =
     vi.fn<(key: string, value: string) => Promise<AgentSessionOptionResult | null>>()
@@ -21,6 +22,7 @@ describe('useMobileStructuredSessionOptions', () => {
       client,
       connected: true,
       sessionId,
+      agent,
       fence,
       setOption
     })
@@ -36,8 +38,8 @@ describe('useMobileStructuredSessionOptions', () => {
       result: {
         models: [
           {
-            id: 'account-only',
-            label: 'Account Only',
+            id: 'claude-sonnet-live',
+            label: 'Claude Sonnet Live',
             isDefault: true,
             defaultEffort: 'medium',
             efforts: [
@@ -46,29 +48,21 @@ describe('useMobileStructuredSessionOptions', () => {
             ]
           },
           {
-            id: 'gpt-5.6-sol',
-            label: 'GPT-5.6 Sol Live',
+            id: 'claude-opus-live',
+            label: 'Claude Opus Live',
             isDefault: false,
             efforts: [
               { value: 'low', label: 'Low' },
               { value: 'high', label: 'High' }
             ]
-          },
-          {
-            id: 'gpt-5.6-terra',
-            label: 'GPT-5.6 Terra Live',
-            isDefault: false,
-            efforts: [
-              { value: 'medium', label: 'Medium' },
-              { value: 'high', label: 'High' }
-            ]
           }
         ],
-        current: { model: 'account-only', effort: 'medium' }
+        current: { model: 'claude-sonnet-live', effort: 'medium' }
       },
       _meta: { runtimeId: 'runtime-1' }
     })
     sessionId = 'mobile_1'
+    agent = 'claude'
     fence = 3
     await act(async () => {
       renderer = create(createElement(Probe))
@@ -87,11 +81,10 @@ describe('useMobileStructuredSessionOptions', () => {
     const model = controller!.snapshot.find((entry) => entry.id === 'model')
     expect(model?.kind).toEqual({
       type: 'select',
-      currentValue: 'account-only',
+      currentValue: 'claude-sonnet-live',
       choices: [
-        { value: 'account-only', label: 'Account Only' },
-        { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol Live' },
-        { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra Live' }
+        { value: 'claude-sonnet-live', label: 'Claude Sonnet Live' },
+        { value: 'claude-opus-live', label: 'Claude Opus Live' }
       ]
     })
     expect(model).not.toHaveProperty('action')
@@ -104,11 +97,11 @@ describe('useMobileStructuredSessionOptions', () => {
   it('uses agentSession.setOption and tracks the applied model and effort', async () => {
     setOption.mockResolvedValueOnce({
       key: 'model',
-      value: 'gpt-5.6-sol',
-      options: { model: 'gpt-5.6-sol', effort: 'low' }
+      value: 'claude-opus-live',
+      options: { model: 'claude-opus-live', effort: 'low' }
     })
     await act(async () => {
-      await controller!.setOption('model', 'gpt-5.6-sol')
+      await controller!.setOption('model', 'claude-opus-live')
     })
     expect(controller!.snapshot.find((entry) => entry.id === 'effort')?.kind).toMatchObject({
       currentValue: 'low'
@@ -117,10 +110,10 @@ describe('useMobileStructuredSessionOptions', () => {
       await controller!.setOption('effort', 'high')
     })
 
-    expect(setOption).toHaveBeenNthCalledWith(1, 'model', 'gpt-5.6-sol')
+    expect(setOption).toHaveBeenNthCalledWith(1, 'model', 'claude-opus-live')
     expect(setOption).toHaveBeenNthCalledWith(2, 'effort', 'high')
     expect(controller!.snapshot.find((entry) => entry.id === 'model')?.kind).toMatchObject({
-      currentValue: 'gpt-5.6-sol'
+      currentValue: 'claude-opus-live'
     })
     expect(controller!.snapshot.find((entry) => entry.id === 'effort')?.kind).toMatchObject({
       currentValue: 'high'
@@ -149,12 +142,12 @@ describe('useMobileStructuredSessionOptions', () => {
   it('does not claim a rejected option was applied', async () => {
     setOption.mockResolvedValue(null)
     await act(async () => {
-      await controller!.setOption('model', 'gpt-5.6-terra')
+      await controller!.setOption('model', 'claude-opus-live')
     })
 
     expect(controller!.snapshot.find((entry) => entry.id === 'model')).toMatchObject({
       valueSource: 'reported',
-      kind: { currentValue: 'account-only' }
+      kind: { currentValue: 'claude-sonnet-live' }
     })
     expect(controller!.pendingId).toBeNull()
   })
@@ -165,7 +158,7 @@ describe('useMobileStructuredSessionOptions', () => {
     let oldResult!: boolean
     let pending!: Promise<boolean>
     act(() => {
-      pending = controller!.setOption('model', 'gpt-5.6-sol')
+      pending = controller!.setOption('model', 'claude-opus-live')
     })
     sessionId = 'mobile_2'
     await act(async () => {
@@ -173,7 +166,7 @@ describe('useMobileStructuredSessionOptions', () => {
       await Promise.resolve()
     })
     await act(async () => {
-      resolve({ key: 'model', value: 'gpt-5.6-sol' })
+      resolve({ key: 'model', value: 'claude-opus-live' })
       oldResult = await pending
     })
 
@@ -181,7 +174,7 @@ describe('useMobileStructuredSessionOptions', () => {
     expect(controller!.pendingId).toBeNull()
     expect(controller!.snapshot.find((entry) => entry.id === 'model')).toMatchObject({
       valueSource: 'reported',
-      kind: { currentValue: 'account-only' }
+      kind: { currentValue: 'claude-sonnet-live' }
     })
   })
 

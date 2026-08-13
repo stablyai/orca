@@ -11,6 +11,10 @@ import type {
   AgentJournalMessageItem,
   AgentJournalResolution
 } from '../../../shared/agent-session-journal-types'
+import {
+  decodeAgentSessionQuestionAnswers,
+  isValidAgentSessionQuestionAnswers
+} from '../../../shared/agent-session-question-answer'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { decodeCodexQuestionOptionId } from '../../codex/codex-structured-prompt-replies'
 import type {
@@ -205,12 +209,25 @@ export async function performPrompt(
     }
   }
   const freeText = decodeCodexQuestionOptionId(input.optionId)
+  const groupedAnswers =
+    item.body.kind === 'question' && item.body.questions
+      ? decodeAgentSessionQuestionAnswers(input.optionId)
+      : null
+  const acceptsGroupedAnswers =
+    item.body.kind === 'question' &&
+    item.body.questions !== undefined &&
+    groupedAnswers !== null &&
+    isValidAgentSessionQuestionAnswers(item.body.questions, groupedAnswers)
   const acceptsFreeText =
     item.body.kind === 'question' &&
     prompt.freeTextQuestionId !== undefined &&
     freeText?.questionId === prompt.freeTextQuestionId &&
     freeText.answer.trim().length > 0
-  if (!acceptsFreeText && !prompt.options.some((option) => option.id === input.optionId)) {
+  if (
+    !acceptsGroupedAnswers &&
+    !acceptsFreeText &&
+    !prompt.options.some((option) => option.id === input.optionId)
+  ) {
     return invalid(`Option ${input.optionId} is not offered by item ${input.itemId}.`)
   }
   const identity = parseAgentJournalItemKey(input.itemId)

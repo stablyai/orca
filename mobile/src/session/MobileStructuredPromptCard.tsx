@@ -5,6 +5,7 @@ import type {
 } from '../../../src/shared/agent-session-journal-types'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
+import { MobileStructuredQuestionGroupCard } from './MobileStructuredQuestionGroupCard'
 
 export type MobileStructuredPromptItem = AgentJournalRenderItem & {
   body: AgentJournalApprovalItem | AgentJournalQuestionItem
@@ -35,6 +36,15 @@ export function MobileStructuredPromptCard(props: {
     )
   }
   const questionBody = item.body as AgentJournalQuestionItem
+  if (questionBody.questions) {
+    return (
+      <MobileStructuredQuestionGroupCard
+        key={`${item.itemId}:${item.revision}`}
+        questions={questionBody.questions}
+        onAnswer={(optionId) => props.onRespond(item, optionId)}
+      />
+    )
+  }
   const question = {
     question: questionBody.question,
     options: questionBody.options.map((option) => option.label),

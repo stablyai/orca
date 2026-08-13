@@ -143,7 +143,7 @@ describe('mobile E2EE v2 physical channel', () => {
     expect(JSON.parse(new TextDecoder().decode(capabilities!))).toEqual({
       type: 'e2ee_client_capabilities',
       v: 1,
-      clientCapabilities: ['agent-session.structured.v1']
+      clientCapabilities: ['agent-session.structured.v1', 'agent-session.structured.claude.v1']
     })
     expect(ctx.onAuthenticated).toHaveBeenCalledOnce()
     expect(ctx.onError).not.toHaveBeenCalled()

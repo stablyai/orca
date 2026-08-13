@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionHandoffRequest } from '../../../shared/agent-session-wire'
 import {
   abandonStoredAgentSessionHandoffAttempt,
@@ -43,9 +44,17 @@ export async function handoffStructuredSessionToNative(
         terminal: owner.terminal,
         hostLabel: deps.transport?.hostLabel
       })
+      const persistHandle = async (link: AgentSessionProviderHandleLink) => {
+        await deps.store.recordProviderHandle({
+          sessionId,
+          fence: record.lease.runtimeFence,
+          link,
+          now: deps.now()
+        })
+      }
       const exited = deps.transport!.closeTuiOwner
-        ? await deps.transport!.closeTuiOwner(owner)
-        : await deps.transport!.waitForTuiExit(owner)
+        ? await deps.transport!.closeTuiOwner(owner, persistHandle)
+        : await deps.transport!.waitForTuiExit(owner, persistHandle)
       transcriptPath = exited.transcriptPath ?? owner.transcriptPath
     } catch (error) {
       const current = context.requireRecord(sessionId)

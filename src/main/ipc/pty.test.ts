@@ -8496,6 +8496,65 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('preserves host-pinned Claude auth for a structured TUI launch', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        command: string
+        launchAgent: 'claude'
+        preserveClaudeAuthEnv: true
+        env: Record<string, string>
+      }): Promise<{ id: string }>
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    const prepareClaudeAuth = vi.fn(async () => ({
+      configDir: '/selected/claude',
+      envPatch: { CLAUDE_CONFIG_DIR: '/selected/claude' },
+      stripAuthEnv: true,
+      provenance: 'managed:selected'
+    }))
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      prepareClaudeAuth
+    )
+    const spawnController = controller as unknown as RuntimeSpawnController
+    await spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      command: 'claude --setting-sources user,project,local --resume provider-session',
+      launchAgent: 'claude',
+      preserveClaudeAuthEnv: true,
+      env: {
+        CLAUDE_CONFIG_DIR: '/pinned/claude',
+        ANTHROPIC_AUTH_TOKEN: 'pinned-gateway-token'
+      }
+    })
+
+    expect(prepareClaudeAuth).not.toHaveBeenCalled()
+    expect(spawnMock.mock.calls.at(-1)?.[2]?.env).toMatchObject({
+      CLAUDE_CONFIG_DIR: '/pinned/claude',
+      ANTHROPIC_AUTH_TOKEN: 'pinned-gateway-token'
+    })
+  })
+
   it('does not update cached PTY size when runtime controller resize fails', async () => {
     type RuntimeResizeController = {
       spawn(args: { cols: number; rows: number }): Promise<{ id: string }>

@@ -25,7 +25,7 @@ export function resolveAgentSessionReplayOutcome<TValue>(input: {
       decision: 'refuse',
       refusal: {
         code,
-        message: `Operation ${operationId} was already refused: ${outcome.code}.`
+        message: outcome.message ?? `Operation ${operationId} was already refused: ${outcome.code}.`
       }
     }
   }

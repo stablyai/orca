@@ -57,6 +57,7 @@ describe('MobileStructuredAgentSessionView command seam', () => {
     overrides: Partial<ComponentProps<typeof MobileStructuredAgentSessionView>> = {}
   ): ComponentProps<typeof MobileStructuredAgentSessionView> {
     return {
+      agent: 'codex',
       items: [],
       status: 'ready',
       hasOlder: false,
@@ -121,6 +122,26 @@ describe('MobileStructuredAgentSessionView command seam', () => {
     expect(
       renderer!.root.findByProps({ accessibilityRole: 'alert' }).findByType('Text').children
     ).toEqual(['/review is not available in chat sessions.'])
+  })
+
+  it('uses Claude branding and command suggestions for Claude sessions', () => {
+    act(() => {
+      renderer!.update(createElement(MobileStructuredAgentSessionView, props({ agent: 'claude' })))
+    })
+
+    const composer = renderer!.root.findByType('MobileNativeChatComposer')
+    expect(composer.props).toMatchObject({ agent: 'claude', placeholder: 'Message Claude' })
+    expect(composer.props.slashCommands.map((command: { name: string }) => command.name)).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact',
+      'init',
+      'review',
+      'help'
+    ])
+    const empty = renderer!.root.findByType('FlatList').props.ListEmptyComponent
+    expect(empty.props.children[0].props.children).toBe('New Claude chat')
   })
 
   it('keeps the composer enabled and routes stable TUI ownership through its bridge', async () => {

@@ -155,4 +155,48 @@ describe('NativeChatQuestionCard', () => {
     expect(container.querySelector('input')).toBeNull()
     expect(container.textContent).not.toContain('Type your answer')
   })
+
+  it('keeps question-tab state and submits the group from the last tab', () => {
+    const onAnswer = vi.fn()
+    render(
+      {
+        questions: [
+          {
+            header: 'Targets',
+            question: 'Which targets?',
+            multiSelect: true,
+            options: [{ label: 'Web' }, { label: 'Mobile' }]
+          },
+          {
+            header: 'Mode',
+            question: 'Which mode?',
+            multiSelect: false,
+            options: [{ label: 'Fast' }, { label: 'Safe' }]
+          },
+          { header: 'Other', question: 'Anything else?', multiSelect: false, options: [] }
+        ]
+      },
+      onAnswer,
+      true
+    )
+
+    clickOption('Web')
+    clickOption('Mobile')
+    clickAction('Next')
+    clickOption('Safe')
+    clickAction('Next')
+    const input = container.querySelector('input')!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(input, 'SSH host')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([
+      { indices: [0, 1], other: '' },
+      { indices: [1], other: '' },
+      { indices: [], other: 'SSH host' }
+    ])
+  })
 })

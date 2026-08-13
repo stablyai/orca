@@ -155,7 +155,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
           ctx.runtime.publishStructuredAgentSessionTab({
             workspaceId: resolved.location.workspaceId,
             sessionId: result.value.sessionId,
-            agent: 'codex',
+            agent: resolved.agent === 'claude' ? 'claude' : 'codex',
             activate: true
           })
         }

@@ -27,6 +27,22 @@ describe('structured AI Vault ownership', () => {
     })
   })
 
+  it('keeps Claude rows hidden until provider support is negotiated', () => {
+    installOwnership({ provider: 'claude', providerSessionId: 'claude-owned-session' })
+    const result = listResult({
+      agent: 'claude',
+      sessionId: 'claude-owned-session',
+      filePath: '/sessions/claude-owned-session.jsonl',
+      resumeCommand: 'claude --resume claude-owned-session'
+    })
+
+    expect(
+      projectStructuredAiVaultSessions(result, true, (provider) => provider === 'codex').sessions
+    ).toEqual([])
+    expect(projectStructuredAiVaultSessions(result, true, () => true).sessions[0]).toMatchObject({
+      structuredSession: { sessionId: 'session-alpha', workspaceId: 'workspace-1' }
+    })
+  })
   it('derives typed refusals from the single writer predicate for live and proving leases', async () => {
     installOwnership()
     expect(() =>
@@ -76,7 +92,10 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
             providerHandleChain: [
               {
                 ...record.providerHandleChain[0]!,
-                handle: { provider: 'codex', threadId: ownership.providerSessionId }
+                handle:
+                  ownership.provider === 'codex'
+                    ? { provider: 'codex', threadId: ownership.providerSessionId }
+                    : { provider: 'claude', sessionId: ownership.providerSessionId }
               }
             ],
             lease: { ...ownership.lease, sessionId: ownership.sessionId }
@@ -87,7 +106,7 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
   } as never)
 }
 
-function listResult(): AiVaultListResult {
+function listResult(overrides: Partial<AiVaultSession> = {}): AiVaultListResult {
   const session: AiVaultSession = {
     id: `local:codex:${PROVIDER_SESSION}`,
     executionHostId: 'local',
@@ -108,7 +127,8 @@ function listResult(): AiVaultListResult {
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
     resumeCommand: `codex resume '${PROVIDER_SESSION}'`,
-    subagent: null
+    subagent: null,
+    ...overrides
   }
   return { sessions: [session], issues: [], scannedAt: '2026-08-11T00:00:00.000Z' }
 }

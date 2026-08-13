@@ -40,7 +40,7 @@ import { isRpcResponse } from './rpc-response-shape'
 import { createRpcActivityProbe } from './rpc-client-activity-probe'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { MOBILE_STRUCTURED_RUNTIME_CAPABILITIES } from './mobile-structured-runtime-capabilities'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -411,7 +411,7 @@ export function connect(
             sendEncrypted({
               type: 'e2ee_auth',
               deviceToken,
-              clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+              clientCapabilities: MOBILE_STRUCTURED_RUNTIME_CAPABILITIES
             })
             return
           }

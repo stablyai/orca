@@ -20,7 +20,7 @@ export const AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT = 4_096
 export type AgentSessionOperationOutcome =
   | { status: 'pending' }
   | { status: 'succeeded'; sessionId: string }
-  | { status: 'failed'; code: string }
+  | { status: 'failed'; code: string; message?: string }
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
   | { status: 'unknown' }
 

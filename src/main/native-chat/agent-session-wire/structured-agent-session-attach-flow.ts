@@ -24,8 +24,12 @@ import {
 } from './structured-agent-session-attach'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { isAgentSessionPreSpawnError } from './structured-agent-session-adapter'
+import {
+  AgentSessionAcquisitionRefusal,
+  isAgentSessionPreSpawnError
+} from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { readNativeHandoffSessionOptions } from './structured-agent-session-handoff-options'
 
 export type AttachFlowInput = {
@@ -76,6 +80,16 @@ export async function performAttach(
     record = reserved.record
     reservedRecord = record
     replayed = reserved.disposition === 'replayed'
+    if (replayed && reserved.operationRow.outcome.status === 'failed') {
+      const replay = resolveAgentSessionReplayOutcome({
+        operationId: params.envelope.clientOperationId,
+        outcome: reserved.operationRow.outcome,
+        reconstruct: () => null
+      })
+      if (replay.decision === 'refuse') {
+        return { ok: false, refusal: replay.refusal }
+      }
+    }
     if (!agentSessionLeaseAdmitsWriter(record.lease)) {
       record = await acquireOwner(input, record)
     }
@@ -92,6 +106,15 @@ export async function performAttach(
           now: processlessAt
         })
       }
+    }
+    if (error instanceof AgentSessionAcquisitionRefusal) {
+      const refusal = { code: error.code, message: error.message }
+      await store.recordOperationOutcome({
+        callerKey: input.callerKey,
+        operationId: params.envelope.clientOperationId,
+        outcome: { status: 'failed', code: refusal.code, message: refusal.message }
+      })
+      return { ok: false, refusal }
     }
     return {
       ok: false,

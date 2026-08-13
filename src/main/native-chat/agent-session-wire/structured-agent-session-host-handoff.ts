@@ -121,14 +121,16 @@ async function importTuiHistory(
   const session = host.session(input.sessionId)
   const record = deps.store.getRecord(input.sessionId)
   const head = record?.providerHandleChain.at(-1)
-  if (!record || head?.handle.provider !== 'codex') {
+  if (!record || !head) {
     throw new Error('agent_session_identity_required')
   }
+  const providerSessionId =
+    head.handle.provider === 'claude' ? head.handle.sessionId : head.handle.threadId
   const options = structuredTuiTranscriptImportOptions(record, input.transcriptPath)
   const imported = await importLegacyTranscriptIntoJournal({
     journal: session.journal,
-    agent: 'codex',
-    sessionId: head.handle.threadId,
+    agent: head.handle.provider,
+    sessionId: providerSessionId,
     fence: input.fence,
     options
   })

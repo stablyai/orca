@@ -21,7 +21,10 @@ import { recordWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 
 const LOCAL_OWNER = 'local-structured-session'
 
-export function useStructuredAgentSessionCreate(worktreeId: string): {
+export function useStructuredAgentSessionCreate(
+  worktreeId: string,
+  agent: 'claude' | 'codex'
+): {
   supported: boolean
   creating: boolean
   create: () => Promise<boolean>
@@ -55,14 +58,14 @@ export function useStructuredAgentSessionCreate(worktreeId: string): {
       const support = await callStructuredAgentSession<{ supported?: boolean }>(
         target,
         'agentSession.createSupport',
-        { worktree: toRuntimeWorktreeSelector(worktreeId), agent: 'codex' }
+        { worktree: toRuntimeWorktreeSelector(worktreeId), agent }
       )
       if (!stale) {
         setSupported(
           showStructuredAgentSessionChoice({
             hostCapability,
             workspaceSupport: support.supported === true,
-            agent: 'codex'
+            agent
           })
         )
       }
@@ -70,7 +73,7 @@ export function useStructuredAgentSessionCreate(worktreeId: string): {
     return () => {
       stale = true
     }
-  }, [target, worktreeId])
+  }, [agent, target, worktreeId])
 
   const create = useCallback(async (): Promise<boolean> => {
     if (!supported || creating) {
@@ -92,10 +95,14 @@ export function useStructuredAgentSessionCreate(worktreeId: string): {
           sessionId,
           clientOperationId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
           expectedRuntimeFence: null,
-          payloadFingerprint: structuredAgentSessionCreateFingerprint({ sessionId, worktree })
+          payloadFingerprint: structuredAgentSessionCreateFingerprint({
+            sessionId,
+            worktree,
+            agent
+          })
         },
         worktree,
-        agent: 'codex'
+        agent
       })
       if (!result.ok) {
         throw new Error(result.refusal.message)
@@ -104,7 +111,7 @@ export function useStructuredAgentSessionCreate(worktreeId: string): {
     } finally {
       setCreating(false)
     }
-  }, [creating, supported, target, worktreeId])
+  }, [agent, creating, supported, target, worktreeId])
 
   return { supported, creating, create }
 }

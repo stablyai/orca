@@ -41,7 +41,7 @@ export function createStructuredAgentSessionOperationId(
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
-  agent?: 'codex'
+  agent?: 'claude' | 'codex'
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -55,5 +55,9 @@ export function showStructuredAgentSessionChoice(input: {
   workspaceSupport: boolean
   agent: string
 }): boolean {
-  return input.hostCapability && input.workspaceSupport && input.agent === 'codex'
+  return (
+    input.hostCapability &&
+    input.workspaceSupport &&
+    (input.agent === 'claude' || input.agent === 'codex')
+  )
 }

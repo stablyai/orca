@@ -3,6 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import {
+  getMobileStructuredTuiTerminal,
   sendMobileStructuredTuiComposerMessage,
   sendMobileStructuredTuiMessage
 } from './mobile-structured-tui-send'
@@ -25,6 +26,29 @@ afterEach(() => {
 })
 
 describe('sendMobileStructuredTuiMessage', () => {
+  it('accepts only an idle TUI handoff terminal', () => {
+    expect(
+      getMobileStructuredTuiTerminal({
+        owner: 'tui',
+        direction: null,
+        phase: 'idle',
+        stage: null,
+        operationId: null,
+        terminal: { handle: 'term-tui', tabId: 'tab-tui', paneKey: 'pane-tui' }
+      })
+    ).toBe('term-tui')
+    expect(
+      getMobileStructuredTuiTerminal({
+        owner: 'tui',
+        direction: 'to-native',
+        phase: 'waiting-for-exit',
+        stage: 'wait-for-tui-exit',
+        operationId: 'handoff-1',
+        terminal: { handle: 'term-tui', tabId: 'tab-tui', paneKey: 'pane-tui' }
+      })
+    ).toBeNull()
+  })
+
   it('routes stable TUI composer text through terminal.send', async () => {
     const client = acceptingClient()
 

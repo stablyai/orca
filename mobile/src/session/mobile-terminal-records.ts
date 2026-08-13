@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { MobileStructuredAgent } from './mobile-structured-session-create'
 
 export type TerminalRecord = {
   handle: string
@@ -51,7 +52,7 @@ type MobileSessionTabLike =
       id: string
       title?: string
       sessionId: string
-      agent: 'codex'
+      agent: MobileStructuredAgent
       isActive?: boolean
     }
   | {

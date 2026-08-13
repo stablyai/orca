@@ -10,7 +10,10 @@ import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import type { RpcRequest } from '../../../src/main/runtime/rpc/core'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-agent-session'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import { createMobileStructuredOutboxEntry } from '../session/mobile-structured-outbox-entry'
 import {
   createMobileStructuredOperationId,
@@ -99,7 +102,7 @@ describe('structured session RPC transport', () => {
     expect(auth).toEqual({
       type: 'e2ee_auth',
       deviceToken: 'token',
-      clientCapabilities: ['agent-session.structured.v1']
+      clientCapabilities: ['agent-session.structured.v1', 'agent-session.structured.claude.v1']
     })
     client.close()
   })
@@ -229,6 +232,9 @@ describe('structured session RPC transport', () => {
     const worktree = 'id:workspace-1'
     try {
       expect(advertisedCapabilities(socket)).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+      expect(advertisedCapabilities(socket)).toContain(
+        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      )
       const createdPromise = client.sendRequest('agentSession.create', {
         envelope: {
           sessionId,
@@ -236,7 +242,11 @@ describe('structured session RPC transport', () => {
             () => '00000000-0000-4000-8000-000000000001'
           ),
           expectedRuntimeFence: null,
-          payloadFingerprint: mobileStructuredCreateFingerprint({ sessionId, worktree })
+          payloadFingerprint: mobileStructuredCreateFingerprint({
+            sessionId,
+            worktree,
+            agent: 'codex'
+          })
         },
         worktree,
         agent: 'codex'

@@ -117,7 +117,8 @@ function QuickLaunchAgentMenuItemsInner({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
-  const structuredSession = useStructuredAgentSessionCreate(worktreeId)
+  const claudeStructuredSession = useStructuredAgentSessionCreate(worktreeId, 'claude')
+  const codexStructuredSession = useStructuredAgentSessionCreate(worktreeId, 'codex')
 
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
@@ -199,6 +200,12 @@ function QuickLaunchAgentMenuItemsInner({
       {agents.map((agent) => {
         const entry = getCatalogEntry(agent)
         const label = entry?.label ?? agent
+        const structuredSession =
+          agent === 'claude'
+            ? claudeStructuredSession
+            : agent === 'codex'
+              ? codexStructuredSession
+              : null
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
@@ -218,7 +225,7 @@ function QuickLaunchAgentMenuItemsInner({
                 <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
               ) : null}
             </DropdownMenuItem>
-            {agent === 'codex' && structuredSession.supported ? (
+            {structuredSession?.supported ? (
               <DropdownMenuItem
                 disabled={structuredSession.creating}
                 onSelect={() => {
@@ -235,7 +242,8 @@ function QuickLaunchAgentMenuItemsInner({
                 className="gap-2 rounded-[7px] px-2 py-1.5 pl-6 text-[12px] leading-5 font-medium"
                 title={translate(
                   'auto.components.tab.bar.QuickLaunchButton.a847779775',
-                  'Start Codex without a terminal'
+                  'Start {{value0}} without a terminal',
+                  { value0: label }
                 )}
               >
                 <MessageSquare className="size-3.5 text-muted-foreground" />

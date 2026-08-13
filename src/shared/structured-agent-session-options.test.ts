@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { CODEX_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
+import {
+  CLAUDE_SESSION_OPTION_CATALOG,
+  CODEX_SESSION_OPTION_CATALOG
+} from './agent-session-option-catalog-claude-codex'
 import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
 import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
 import {
@@ -9,6 +12,28 @@ import {
 } from './structured-agent-session-options'
 
 describe('structured agent session options', () => {
+  it('projects Claude models as direct provider mutations without a bridge picker', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      {
+        models: [
+          { id: 'sonnet', label: 'Sonnet', isDefault: true, efforts: [] },
+          { id: 'opus', label: 'Opus', isDefault: false, efforts: [] }
+        ],
+        current: { model: 'sonnet' }
+      }
+    )
+
+    const model = structuredAgentSessionOptionSnapshot(state)[0]
+    expect(model).toMatchObject({
+      id: 'model',
+      settable: true,
+      kind: { type: 'select', currentValue: 'sonnet' }
+    })
+    expect(model).not.toHaveProperty('action')
+  })
+
   it('projects native Codex selects while bridge Codex keeps its agent picker', () => {
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex'),

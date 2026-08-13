@@ -604,6 +604,7 @@ export class AgentHookServer {
   private paneStatusClearListeners = new Set<PaneStatusClearListener>()
   private statusChangeListeners = new Set<StatusChangeListener>()
   private providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
+  private claudeHookEnvelopeListeners = new Set<(envelope: unknown) => void>()
   // Why: setListener is a single slot owned by the main-window fanout; the
   // plugin event bus (and future consumers) need an additive subscription
   // that also works in headless serve, where no window listener exists.
@@ -671,6 +672,23 @@ export class AgentHookServer {
     this.providerSessionChangeListeners.add(listener)
     return () => {
       this.providerSessionChangeListeners.delete(listener)
+    }
+  }
+
+  subscribeClaudeHookEnvelopes(listener: (envelope: unknown) => void): () => void {
+    this.claudeHookEnvelopeListeners.add(listener)
+    return () => {
+      this.claudeHookEnvelopeListeners.delete(listener)
+    }
+  }
+
+  private emitClaudeHookEnvelope(envelope: unknown): void {
+    for (const listener of this.claudeHookEnvelopeListeners) {
+      try {
+        listener(envelope)
+      } catch (err) {
+        console.error('[agent-hooks] Claude hook envelope listener threw', err)
+      }
     }
   }
 
@@ -2145,6 +2163,9 @@ export class AgentHookServer {
 
         trackEmptyPaneKeyHook(body)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
+        if (source === 'claude') {
+          this.emitClaudeHookEnvelope(aliasedBody)
+        }
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {

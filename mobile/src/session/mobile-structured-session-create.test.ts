@@ -5,7 +5,7 @@ import {
 } from './mobile-structured-session-create'
 
 describe('mobile structured session opt-in', () => {
-  it('is invisible without both host and workspace support and only appears for Codex', () => {
+  it('is invisible without both host and workspace support and appears for supported agents', () => {
     expect(
       showMobileStructuredChatChoice({
         hostCapability: false,
@@ -26,7 +26,7 @@ describe('mobile structured session opt-in', () => {
         workspaceSupport: true,
         agent: 'claude'
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       showMobileStructuredChatChoice({
         hostCapability: true,
@@ -34,11 +34,29 @@ describe('mobile structured session opt-in', () => {
         agent: 'codex'
       })
     ).toBe(true)
+    expect(
+      showMobileStructuredChatChoice({
+        hostCapability: true,
+        workspaceSupport: true,
+        agent: 'openclaude'
+      })
+    ).toBe(false)
   })
 
-  it('matches the canonical create-by-intent fingerprint', () => {
+  it('matches the canonical provider-specific create-by-intent fingerprints', () => {
     expect(
-      mobileStructuredCreateFingerprint({ sessionId: 'session-alpha', worktree: 'id:wt-1' })
+      mobileStructuredCreateFingerprint({
+        sessionId: 'session-alpha',
+        worktree: 'id:wt-1',
+        agent: 'codex'
+      })
     ).toBe('d1e7f0b14cbd06c4740e671fc6a230c66a1e4451c970aab7953f4f150bd107bb')
+    expect(
+      mobileStructuredCreateFingerprint({
+        sessionId: 'session-alpha',
+        worktree: 'id:wt-1',
+        agent: 'claude'
+      })
+    ).toBe('def924b21a560c7db39794649f52ffdd475b53d9e04200e8d7d01c3074e606aa')
   })
 })

@@ -1,9 +1,11 @@
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
 import type {
+  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/runtime-types'
@@ -19,7 +21,14 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   const structuredVisible =
     clientKind === undefined ||
     (clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ?? false)
-  const projected = structuredVisible ? payload : projectStructuredTabsOut(payload)
+  let projected = structuredVisible ? payload : projectAgentSessionTabsOut(payload, () => true)
+  if (
+    structuredVisible &&
+    clientKind !== undefined &&
+    !clientCapabilities?.includes(CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+  ) {
+    projected = projectAgentSessionTabsOut(projected, (tab) => tab.agent === 'claude')
+  }
   // Why: only paired runtimes have legacy `done` completion side effects; mobile must keep its row without changing the exact v2 auth shape.
   if (
     clientKind !== 'runtime' ||
@@ -40,11 +49,17 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   return changed ? ({ ...projected, tabs } as TPayload) : projected
 }
 
-function projectStructuredTabsOut<TPayload extends SessionTabsPayload>(
-  payload: TPayload
+function projectAgentSessionTabsOut<TPayload extends SessionTabsPayload>(
+  payload: TPayload,
+  shouldHide: (tab: RuntimeMobileSessionAgentTab) => boolean
 ): TPayload {
   const hiddenIds = new Set(
-    payload.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.id)
+    payload.tabs
+      .filter(
+        (tab): tab is RuntimeMobileSessionAgentTab =>
+          tab.type === 'agent-session' && shouldHide(tab)
+      )
+      .map((tab) => tab.id)
   )
   if (hiddenIds.size === 0) {
     return payload

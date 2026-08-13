@@ -8,7 +8,8 @@ const {
   storeState,
   openSettingsPageMock,
   openSettingsTargetMock,
-  useDetectedAgentsMock
+  useDetectedAgentsMock,
+  useStructuredAgentSessionCreateMock
 } = vi.hoisted(() => ({
   shortcutLabelMock: vi.fn<() => string | null>(),
   storeState: {
@@ -23,7 +24,12 @@ const {
   },
   openSettingsPageMock: vi.fn(),
   openSettingsTargetMock: vi.fn(),
-  useDetectedAgentsMock: vi.fn(() => ({ detectedIds: ['claude', 'codex', 'gemini'] }))
+  useDetectedAgentsMock: vi.fn(() => ({ detectedIds: ['claude', 'codex', 'gemini'] })),
+  useStructuredAgentSessionCreateMock: vi.fn(() => ({
+    supported: true,
+    creating: false,
+    create: vi.fn(async () => true)
+  }))
 }))
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -32,6 +38,10 @@ vi.mock('@/hooks/useDetectedAgents', () => ({
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
   useOptionalShortcutLabel: shortcutLabelMock
+}))
+
+vi.mock('../native-chat/use-structured-agent-session-create', () => ({
+  useStructuredAgentSessionCreate: useStructuredAgentSessionCreateMock
 }))
 
 vi.mock('@/store', () => {
@@ -117,6 +127,7 @@ beforeEach(() => {
   shortcutLabelMock.mockReset()
   shortcutLabelMock.mockReturnValue(null)
   useDetectedAgentsMock.mockClear()
+  useStructuredAgentSessionCreateMock.mockClear()
   openSettingsPageMock.mockReset()
   openSettingsTargetMock.mockReset()
   storeState.settings.defaultTuiAgent = 'codex'
@@ -205,6 +216,16 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     storeState.settings.defaultTuiAgent = 'blank'
     expect(renderAgentMenuItems()).not.toContain('data-dropdown-shortcut="true"')
+  })
+
+  it('offers explicit structured chat creation for Claude and Codex', () => {
+    const html = renderAgentMenuItems()
+
+    expect(html.match(/Chat session/g) ?? []).toHaveLength(2)
+    expect(html).toContain('Start Claude without a terminal')
+    expect(html).toContain('Start Codex without a terminal')
+    expect(useStructuredAgentSessionCreateMock).toHaveBeenCalledWith('worktree-1', 'claude')
+    expect(useStructuredAgentSessionCreateMock).toHaveBeenCalledWith('worktree-1', 'codex')
   })
 })
 

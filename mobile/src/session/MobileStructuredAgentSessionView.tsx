@@ -45,10 +45,12 @@ import { useMobileStructuredComposerState } from './use-mobile-structured-compos
 import {
   dispatchMobileStructuredComposerCommand,
   isMobileStructuredComposerCommand,
-  MOBILE_STRUCTURED_SLASH_COMMANDS
+  mobileStructuredSlashCommands
 } from './mobile-structured-composer-command'
+import type { MobileStructuredAgent } from './mobile-structured-session-create'
 
 type Props = {
+  agent: MobileStructuredAgent
   items: AgentJournalRenderItem[]
   status: 'idle' | 'loading' | 'ready' | 'error'
   error?: string
@@ -87,6 +89,8 @@ export function MobileStructuredAgentSessionView(props: Props): React.JSX.Elemen
   const [commandError, setCommandError] = useState<string | null>(null)
   const turnId = activeMobileStructuredTurnId(props.items)
   const allAttachments = [...restored, ...props.attachments]
+  const agentName = props.agent === 'claude' ? 'Claude' : 'Codex'
+  const slashCommands = useMemo(() => mobileStructuredSlashCommands(props.agent), [props.agent])
   const stableTuiOwner =
     props.handoff?.owner === 'tui' &&
     props.handoff.phase === 'idle' &&
@@ -206,7 +210,7 @@ export function MobileStructuredAgentSessionView(props: Props): React.JSX.Elemen
         ListEmptyComponent={
           <View style={styles.center}>
             <Text style={styles.title}>
-              {props.status === 'error' ? 'Conversation unavailable' : 'New Codex chat'}
+              {props.status === 'error' ? 'Conversation unavailable' : `New ${agentName} chat`}
             </Text>
             <Text style={styles.subtitle}>{props.error ?? 'Send a message to get started.'}</Text>
           </View>
@@ -237,7 +241,7 @@ export function MobileStructuredAgentSessionView(props: Props): React.JSX.Elemen
             setCommandError('Session ownership is changing. Try again when switching finishes.')
             return false
           }
-          if (allAttachments.length > 0 && isMobileStructuredComposerCommand(text)) {
+          if (allAttachments.length > 0 && isMobileStructuredComposerCommand(text, props.agent)) {
             setCommandError('Remove attachments before using a chat-session command.')
             return false
           }
@@ -250,7 +254,11 @@ export function MobileStructuredAgentSessionView(props: Props): React.JSX.Elemen
             }
             return accepted
           }
-          const command = await dispatchMobileStructuredComposerCommand(text, props.sessionOptions)
+          const command = await dispatchMobileStructuredComposerCommand(
+            text,
+            props.sessionOptions,
+            props.agent
+          )
           if (command.handled) {
             setCommandError(command.error)
             if (command.accepted) {
@@ -266,8 +274,8 @@ export function MobileStructuredAgentSessionView(props: Props): React.JSX.Elemen
           }
           return accepted
         }}
-        agent="codex"
-        slashCommands={MOBILE_STRUCTURED_SLASH_COMMANDS}
+        agent={props.agent}
+        slashCommands={slashCommands}
         sessionOptions={{ controller: props.sessionOptions, isWorking: false }}
         onAttachImage={props.onAttachImage}
         attachments={allAttachments}
@@ -284,7 +292,7 @@ export function MobileStructuredAgentSessionView(props: Props): React.JSX.Elemen
           props.handoff?.owner === 'tui' && !stableTuiOwner
             ? 'Agent is open in terminal'
             : props.status === 'ready'
-              ? 'Message Codex'
+              ? `Message ${agentName}`
               : 'Reconnecting…'
         }
       />

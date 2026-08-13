@@ -45,7 +45,7 @@ describe('structured TUI process identity', () => {
     ).rejects.toThrow('one exact Codex child process')
   })
 
-  it('waits for a shell-delivered Codex child before binding ownership', async () => {
+  it('waits for a shell-delivered Claude child before binding ownership', async () => {
     let snapshots = 0
     const delays: number[] = []
     await expect(
@@ -53,14 +53,14 @@ describe('structured TUI process identity', () => {
         hostId: 'local',
         rootPid: 100,
         spawnToken: 'spawn-2',
-        agent: 'codex',
+        agent: 'claude',
         platform: 'darwin',
         readPosixRows: async () => {
           snapshots += 1
           return [
             { pid: 100, ppid: 1, stat: 'Ss', command: '/bin/zsh' },
             ...(snapshots >= 3
-              ? [{ pid: 101, ppid: 100, stat: 'S+', command: 'codex resume session-1' }]
+              ? [{ pid: 101, ppid: 100, stat: 'S+', command: 'claude --resume session-1' }]
               : [])
           ]
         },

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { encodeAgentSessionQuestionAnswers } from '../../../shared/agent-session-question-answer'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -29,7 +30,8 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  seedHostTestQuestionGroup
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
@@ -166,6 +168,24 @@ afterEach(async () => {
 })
 
 describe('attach', () => {
+  it('pins the provider launch environment when the session is created', async () => {
+    host = new StructuredAgentSessionHost({
+      store,
+      adapter: adapter(),
+      journalRoot: root,
+      claimKeyId: 'key-1',
+      mintSpawnToken: () => 'spawn-a',
+      resolveLaunchEnv: () => ({ ANTHROPIC_AUTH_TOKEN: 'pinned-token' }),
+      now: () => NOW
+    })
+
+    await host.attach(CALLER, attachParams())
+
+    expect(store.getRecord(SESSION)?.launchEnv).toEqual({
+      ANTHROPIC_AUTH_TOKEN: 'pinned-token'
+    })
+  })
+
   it('reserves the lease, spawns through the adapter, and opens the journal', async () => {
     const result = await host.attach(CALLER, attachParams())
     expect(result).toMatchObject({ ok: true, replayed: false })
@@ -493,6 +513,28 @@ describe('cancel', () => {
 })
 
 describe('respondToPrompt', () => {
+  it('round trips one grouped question answer through the durable compare-and-set', async () => {
+    const prompt = await seedHostTestQuestionGroup(root)
+    await attach()
+    const optionId = encodeAgentSessionQuestionAnswers([
+      { questionId: 'q1', optionIds: ['q1:choice-1'], other: 'Desktop' },
+      { questionId: 'q2', optionIds: ['q2:choice-1'] }
+    ])
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId }
+
+    const result = await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:question', fields),
+      kind: 'question',
+      ...fields
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { resolution: { state: 'resolved', selectedOptionId: optionId } }
+    })
+    expect(answerPrompt).toHaveBeenCalledWith(expect.objectContaining({ optionId }))
+  })
+
   it('commits the answer before the provider callback', async () => {
     const prompt = await seedApproval()
     await attach()
@@ -598,49 +640,6 @@ describe('respondToPrompt', () => {
       clientMessageId: `${prompt.itemId}#delivery`
     })
     expect(page.ok && page.page.items.some((entry) => entry.itemId === statusId)).toBe(true)
-  })
-})
-
-describe('setOption', () => {
-  it('goes to the provider and writes nothing to the journal', async () => {
-    await attach()
-    setOption.mockResolvedValueOnce({ model: 'gpt-5', effort: 'high' })
-    const fields = { key: 'model', value: 'gpt-5' }
-    const params = {
-      envelope: envelope('agentSession.setOption', fields),
-      ...fields
-    }
-    const result = await host.setOption(CALLER, params)
-    expect(result).toMatchObject({
-      ok: true,
-      value: { ...fields, options: { model: 'gpt-5', effort: 'high' } }
-    })
-    expect(await host.setOption(CALLER, params)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { ...fields, options: { model: 'gpt-5', effort: 'high' } }
-    })
-    expect(setOption).toHaveBeenCalledTimes(1)
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5', effort: 'high' })
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(page.ok && page.page.items).toHaveLength(0)
-  })
-
-  it('does not turn an unknown provider outcome into a successful replay', async () => {
-    await attach()
-    setOption.mockRejectedValueOnce(new Error('reply lost'))
-    const fields = { key: 'model', value: 'gpt-5' }
-    const params = {
-      envelope: envelope('agentSession.setOption', fields),
-      ...fields
-    }
-
-    await expect(host.setOption(CALLER, params)).rejects.toThrow('reply lost')
-    expect(await host.setOption(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
-    expect(setOption).toHaveBeenCalledTimes(1)
   })
 })
 

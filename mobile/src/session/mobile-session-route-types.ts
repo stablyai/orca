@@ -5,6 +5,7 @@ import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
+import type { MobileStructuredAgent } from './mobile-structured-session-create'
 
 export type Terminal = TerminalRecord
 
@@ -44,7 +45,7 @@ export type MobileSessionTab =
       id: string
       title: string
       sessionId: string
-      agent: 'codex'
+      agent: MobileStructuredAgent
       isActive: boolean
     }
   | {

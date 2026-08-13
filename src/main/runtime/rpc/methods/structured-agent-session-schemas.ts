@@ -15,6 +15,7 @@ const MAX_ID_LENGTH = 512
 const MAX_PROMPT_BYTES = 256 * 1024
 const MAX_BLOCKS = 64
 const MAX_OPTION_LABEL = 512
+const MAX_QUESTION_ANSWER_BYTES = 16 * 1024
 
 export const SessionId = z
   .string()
@@ -98,7 +99,7 @@ export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
+    agent: z.enum(['claude', 'codex'])
   })
   .strict()
 
@@ -107,7 +108,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
+    agent: z.enum(['claude', 'codex'])
   })
   .strict()
 
@@ -158,7 +159,11 @@ export const RespondParams = z
     itemId: Identifier('Invalid item id'),
     /** Compare-and-set: the revision the client had on screen. */
     expectedRevision: z.number().int().positive(),
-    optionId: Identifier('Invalid option id')
+    optionId: z
+      .string()
+      .min(1, 'Invalid option id')
+      .max(MAX_QUESTION_ANSWER_BYTES, 'Invalid option id')
+      .refine((value) => value === value.trim(), 'Invalid option id')
   })
   .strict()
 

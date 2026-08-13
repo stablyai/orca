@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { MobileStructuredSessionCreateError } from './MobileStructuredSessionCreateError'
+import {
+  mobileStructuredCreateFingerprint,
+  type MobileStructuredAgent
+} from './mobile-structured-session-create'
 import { useMobileStructuredSessionEntry } from './use-mobile-structured-session-entry'
 
 const dependencies = vi.hoisted(() => ({
@@ -41,6 +45,7 @@ describe('mobile structured session create entry', () => {
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
   const client = { sendRequest } as RpcClient
   let createResponse: RpcResponse
+  let targetAgent: MobileStructuredAgent
 
   function Harness() {
     const guard = useRef(false)
@@ -52,6 +57,7 @@ describe('mobile structured session create entry', () => {
       hostSupported: true,
       worktreeId: 'workspace-1',
       sessionId: null,
+      sessionAgent: null,
       creationGuardRef: guard,
       setCreating,
       setCreateError,
@@ -65,7 +71,10 @@ describe('mobile structured session create entry', () => {
       null,
       createElement(
         Pressable,
-        { accessibilityLabel: 'Create chat session', onPress: entry.create },
+        {
+          accessibilityLabel: 'Create chat session',
+          onPress: () => entry.create(targetAgent)
+        },
         createElement(Text, null, 'Chat session')
       ),
       createElement(MobileStructuredSessionCreateError, {
@@ -98,6 +107,7 @@ describe('mobile structured session create entry', () => {
       }
       return createResponse
     })
+    targetAgent = 'claude'
   })
 
   afterEach(() => {
@@ -142,6 +152,25 @@ describe('mobile structured session create entry', () => {
         clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
         expectedRuntimeFence: null
       },
+      worktree: 'id:workspace-1',
+      agent: 'claude'
+    })
+    const createParams = createCall?.[1] as {
+      envelope: { sessionId: string; payloadFingerprint: string }
+      worktree: string
+    }
+    expect(createParams.envelope.payloadFingerprint).toBe(
+      mobileStructuredCreateFingerprint({
+        sessionId: createParams.envelope.sessionId,
+        worktree: createParams.worktree,
+        agent: 'claude'
+      })
+    )
+    expect(sendRequest).toHaveBeenCalledWith('agentSession.createSupport', {
+      worktree: 'id:workspace-1',
+      agent: 'claude'
+    })
+    expect(sendRequest).toHaveBeenCalledWith('agentSession.createSupport', {
       worktree: 'id:workspace-1',
       agent: 'codex'
     })

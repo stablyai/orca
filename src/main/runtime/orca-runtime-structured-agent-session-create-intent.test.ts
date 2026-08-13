@@ -52,4 +52,56 @@ describe('structured agent-session create intent', () => {
       path: '/accounts/selected/home'
     })
   })
+
+  it('pins the selected Claude config directory without changing its auth environment', async () => {
+    const runtime = new OrcaRuntimeService({
+      getSettings: () => ({
+        agentDefaultEnv: {
+          claude: {
+            CLAUDE_CONFIG_DIR: '/accounts/claude/home',
+            ANTHROPIC_AUTH_TOKEN: 'inherited-by-launch'
+          }
+        }
+      })
+    } as never)
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+      supported: true
+    })
+    const internal = runtime as unknown as {
+      resolveStructuredAgentSessionLocation: (selector: string) => Promise<{
+        executionHostId: string
+        wslDistro: null
+        workspaceId: string
+        workspaceKind: 'folder'
+      }>
+      resolveRuntimeFileTarget: (selector: string) => Promise<{
+        worktree: { path: string }
+      }>
+    }
+    internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'folder-1',
+      workspaceKind: 'folder' as const
+    }))
+    internal.resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { path: '/folders/one' }
+    }))
+
+    const intent = await runtime.resolveStructuredAgentSessionCreateIntent({
+      envelope: { sessionId: 'session-claude', clientOperationId: 'operation-claude' },
+      worktree: 'id:folder-1',
+      agent: 'claude'
+    })
+
+    expect(intent).toMatchObject({
+      provider: 'claude',
+      agent: 'claude',
+      location: { workspaceKind: 'folder' },
+      accountHome: {
+        variable: 'CLAUDE_CONFIG_DIR',
+        path: '/accounts/claude/home'
+      }
+    })
+  })
 })

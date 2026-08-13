@@ -130,7 +130,14 @@ export function ProviderFrameRow({ block }: { block: NativeChatBlock }): React.J
         <span className="transition-transform group-open:rotate-90">›</span>
         <span className="font-medium text-foreground">{frame.provider}</span>
         <span className="truncate">{frame.kind}</span>
-        {frame.payload.truncated ? <span>· {frame.payload.byteLength} bytes</span> : null}
+        {frame.payload.truncated ? (
+          <span>
+            ·{' '}
+            {translate('components.native-chat.providerFrame.bytes', '{{value0}} bytes', {
+              value0: frame.payload.byteLength
+            })}
+          </span>
+        ) : null}
       </summary>
       <pre className="scrollbar-sleek mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-xs text-foreground">
         {frame.payload.head}

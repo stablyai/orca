@@ -18,7 +18,10 @@ import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/age
 import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   loadAgentSessionWireBuild,
@@ -34,6 +37,8 @@ const SUITE_TIMEOUT_MS = 180_000
 const SESSION = 'session-alpha'
 const WORKSPACE = 'workspace-1'
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
+const CLAUDE_SESSION = 'session-claude'
+const CLAUDE_PROVIDER_SESSION = '6de39f04-fdec-4f96-9d38-d0c1169db382'
 const NOW = 1_800_000_000_000
 
 /** Every method the structured surface publishes, paired with the host method it
@@ -112,6 +117,38 @@ function attachParams(fence: number | null): Record<string, unknown> {
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.attach',
         sessionId: SESSION,
+        fields: attachFingerprintFields(params as unknown as AgentSessionAttachParams)
+      })
+    }
+  }
+}
+
+function claudeAttachParams(): Record<string, unknown> {
+  const params = {
+    envelope: {
+      sessionId: CLAUDE_SESSION,
+      clientOperationId: operationId(),
+      expectedRuntimeFence: null
+    },
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: WORKSPACE,
+      workspaceKind: 'git-worktree'
+    },
+    provider: 'claude',
+    agent: 'claude',
+    accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
+    runtimeKind: 'native',
+    providerHandle: { kind: 'claude', sessionId: CLAUDE_PROVIDER_SESSION, leafUuid: null }
+  }
+  return {
+    ...params,
+    envelope: {
+      ...params.envelope,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.attach',
+        sessionId: CLAUDE_SESSION,
         fields: attachFingerprintFields(params as unknown as AgentSessionAttachParams)
       })
     }
@@ -345,16 +382,20 @@ describe('cross-version structured agent sessions', () => {
       const host = new StructuredAgentSessionHost({
         store,
         adapter: {
-          acquire: async ({ fence }) => ({
+          acquire: async ({ fence, identity }) => ({
             process: {
               hostId: 'local',
               pid: 4242,
               processStartTimeMs: NOW,
-              spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-vault'
+              spawnToken:
+                store.getRecord(identity.sessionId)?.lease.reservedSpawnToken ?? 'spawn-vault'
             },
             link: {
               linkId: `link-${fence}`,
-              handle: { provider: 'codex', threadId: THREAD },
+              handle:
+                identity.agent === 'claude'
+                  ? { provider: 'claude', sessionId: CLAUDE_PROVIDER_SESSION, leafUuid: null }
+                  : { provider: 'codex', threadId: THREAD },
               origin: 'created',
               mintedAtFence: fence,
               observedAt: NOW
@@ -373,6 +414,8 @@ describe('cross-version structured agent sessions', () => {
       setStructuredAgentSessionHost(host)
       const attached = await host.attach({ callerKey: 'test' }, attachParams(null) as never)
       expect(attached.ok).toBe(true)
+      const claudeAttached = await host.attach({ callerKey: 'test' }, claudeAttachParams() as never)
+      expect(claudeAttached.ok).toBe(true)
       createMobileSessionTerminal = vi.fn()
       runtime = {
         ...(runtimeStub() as Record<string, unknown>),
@@ -398,6 +441,28 @@ describe('cross-version structured agent sessions', () => {
               queuedMessageCount: 0,
               subagentTranscriptCount: 0,
               resumeCommand: `codex resume '${THREAD}'`,
+              subagent: null
+            },
+            {
+              id: `local:claude:${CLAUDE_PROVIDER_SESSION}`,
+              executionHostId: 'local',
+              agent: 'claude',
+              sessionId: CLAUDE_PROVIDER_SESSION,
+              title: 'Owned Claude session',
+              cwd: '/repo',
+              branch: null,
+              model: null,
+              filePath: `/home/dev/.claude/projects/repo/${CLAUDE_PROVIDER_SESSION}.jsonl`,
+              codexHome: null,
+              createdAt: null,
+              updatedAt: null,
+              modifiedAt: '2026-08-11T00:00:00.000Z',
+              messageCount: 1,
+              totalTokens: 0,
+              previewMessages: [],
+              queuedMessageCount: 0,
+              subagentTranscriptCount: 0,
+              resumeCommand: `claude --resume '${CLAUDE_PROVIDER_SESSION}'`,
               subagent: null
             }
           ],
@@ -451,6 +516,31 @@ describe('cross-version structured agent sessions', () => {
           ]
         }
       })
+
+      const claudeCapableReply = (
+        await callBuild(
+          current,
+          'aiVault.listSessions',
+          {},
+          {
+            clientKind: 'mobile',
+            clientCapabilities: [
+              STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+              CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+            ]
+          },
+          runtime
+        )
+      )[0]
+      expect(claudeCapableReply).toMatchObject({
+        ok: true,
+        result: {
+          sessions: [
+            { structuredSession: { sessionId: SESSION, workspaceId: WORKSPACE } },
+            { structuredSession: { sessionId: CLAUDE_SESSION, workspaceId: WORKSPACE } }
+          ]
+        }
+      })
     })
 
     it('refuses cached prepare and both legacy launch deliveries before a second writer starts', async () => {
@@ -491,6 +581,40 @@ describe('cross-version structured agent sessions', () => {
             current,
             'terminal.send',
             { terminal: 'terminal-1', text: `codex resume '${THREAD}'`, enter: true },
+            { clientKind: 'mobile', clientCapabilities: baseline.capabilities },
+            runtime
+          )
+        )[0]
+      ).toMatchObject({ ok: false, error: { code: 'agent_session_conflict' } })
+      expect(createMobileSessionTerminal).not.toHaveBeenCalled()
+
+      expect(
+        (
+          await callBuild(
+            current,
+            'aiVault.prepareSessionResume',
+            {
+              agent: 'claude',
+              filePath: `/home/dev/.claude/projects/repo/${CLAUDE_PROVIDER_SESSION}.jsonl`,
+              codexHome: null
+            },
+            {
+              clientKind: 'mobile',
+              clientCapabilities: baseline.capabilities
+            },
+            runtime
+          )
+        )[0]
+      ).toMatchObject({ ok: false, error: { code: 'agent_session_conflict' } })
+      expect(
+        (
+          await callBuild(
+            current,
+            'session.tabs.createTerminal',
+            {
+              worktree: `id:${WORKSPACE}`,
+              command: `claude --resume '${CLAUDE_PROVIDER_SESSION}'`
+            },
             { clientKind: 'mobile', clientCapabilities: baseline.capabilities },
             runtime
           )

@@ -10,12 +10,19 @@
 import { join } from 'node:path'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { createClaudeStructuredLaunchResolver } from '../claude/claude-structured-launch-resolution'
+import {
+  ClaudeStructuredSessionAdapter,
+  type ClaudeStructuredSessionAdapterDeps
+} from '../claude/claude-structured-session-adapter'
+import { claudeProviderHandleLink } from '../claude/claude-structured-owner-identity'
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredSessionAdapterDeps
 } from '../codex/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { AgentSessionRecordStore } from './agent-session-record-store'
@@ -36,16 +43,19 @@ export type StructuredAgentSessionRuntimeDeps = {
   claimKeyId: string
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: () => string
+  resolveClaudeCommand?: () => string
+  resolveClaudeLaunchEnv?: () => Record<string, string>
   /** Transport for the Codex child. Overridden only to drive the whole runtime
    *  against a scripted app-server; production spawns the real one. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
+  openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   onError?: (input: { scope: string; error: unknown }) => void
   handoffTransport?: StructuredAgentSessionHandoffTransport
 }
 
 type InstalledRuntime = {
   host: StructuredAgentSessionHost
-  adapter: CodexStructuredSessionAdapter
+  adapter: StructuredAgentSessionAdapterRouter
 }
 
 let installing: Promise<InstalledRuntime> | null = null
@@ -61,7 +71,7 @@ export function ensureStructuredAgentSessionHost(
   return installing.then((installed) => installed.host)
 }
 
-/** Drops the host and reaps every Codex child under it. Runtime teardown and
+/** Drops the host and reaps every structured child under it. Runtime teardown and
  *  test isolation take the same path, so neither can leave a live app-server. */
 export async function stopStructuredAgentSessionRuntime(): Promise<void> {
   const pending = installing
@@ -89,7 +99,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   })
   agentSessionPtyWriteGate.attachRecordLookup((sessionId) => store.getRecord(sessionId))
   try {
-    const adapter = new CodexStructuredSessionAdapter({
+    const codex = new CodexStructuredSessionAdapter({
       resolveLaunch: createCodexStructuredLaunchResolver({
         store,
         resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -97,11 +107,48 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       }),
       ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {})
     })
+    const claude = new ClaudeStructuredSessionAdapter({
+      resolveLaunch: createClaudeStructuredLaunchResolver({
+        store,
+        resolveWorkspacePath: deps.resolveWorkspacePath,
+        ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
+        ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {})
+      }),
+      ...(deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}),
+      persistHandle: async (observed) => {
+        const record = store.getRecord(observed.sessionId)
+        if (!record || record.provider !== 'claude') {
+          return
+        }
+        const fence = record.lease.runtimeFence
+        await store.recordProviderHandle({
+          sessionId: observed.sessionId,
+          fence,
+          link: claudeProviderHandleLink({
+            sessionId: observed.providerSessionId,
+            leafUuid: observed.leafUuid,
+            resumed: record.providerHandleChain.length > 0,
+            fence,
+            observedAt: Date.now()
+          }),
+          now: Date.now()
+        })
+      }
+    })
+    const adapter = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () =>
+      Promise.all([claude.closeAll(), codex.closeAll()]).then(() => undefined)
+    )
     const host = new StructuredAgentSessionHost({
       store,
       adapter,
       journalRoot: deps.stateDirectory,
       claimKeyId: deps.claimKeyId,
+      ...(deps.resolveClaudeLaunchEnv
+        ? {
+            resolveLaunchEnv: (provider) =>
+              provider === 'claude' ? deps.resolveClaudeLaunchEnv?.() : undefined
+          }
+        : {}),
       probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
       onEventSinkError: ({ sessionId, error }) =>
         deps.onError?.({ scope: `structured-agent-session-journal:${sessionId}`, error }),

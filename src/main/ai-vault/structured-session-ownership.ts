@@ -9,7 +9,9 @@ import {
 
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
-  structuredSupported: boolean
+  structuredSupported: boolean,
+  providerSupported: (provider: StructuredProviderSessionOwnership['provider']) => boolean = () =>
+    true
 ): AiVaultListResult {
   const host = getStructuredAgentSessionHost()
   if (!host) {
@@ -20,7 +22,7 @@ export function projectStructuredAiVaultSessions(
     if (!ownership) {
       return [session]
     }
-    if (!structuredSupported) {
+    if (!structuredSupported || !providerSupported(ownership.provider)) {
       return []
     }
     return [

@@ -3066,7 +3066,7 @@
             "e518f544b1": "No agents detected",
             "8dea9b5cdf": "No enabled agents",
             "f378201fbd": "Could not create chat session",
-            "a847779775": "Start Codex without a terminal",
+            "a847779775": "Start {{value0}} without a terminal",
             "0ea6a78efb": "Chat session"
           },
           "RecentTabSwitcher": {
@@ -15119,6 +15119,9 @@
       "status": {
         "responding": "Agent is responding"
       },
+      "providerFrame": {
+        "bytes": "{{value0}} bytes"
+      },
       "handoff": {
         "mode": {
           "switching": "Switching",
@@ -15149,7 +15152,8 @@
           "verifyingChat": "Verifying chat session…",
           "recovering": "Recovering agent session…",
           "manualRecovery": "Agent session needs recovery"
-        }
+        },
+        "retryProof": "Retry proof"
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {

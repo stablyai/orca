@@ -13,7 +13,6 @@ import {
   type AgentSessionOperationAdmission
 } from './agent-session-operation-admission'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
-import { classifyObservedAgentSessionSpawnToken } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
   agentSessionScopeKey,
@@ -31,6 +30,7 @@ import {
   setAgentSessionJournalCheckpoint,
   type AgentSessionProcessIdentityCommit
 } from './agent-session-lease-transitions'
+import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
 import { agentSessionReconciliationTargetMatches } from './agent-session-reconciliation-target'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
 import {
@@ -54,6 +54,7 @@ import {
   AgentSessionStoreTransactionQueue,
   markAgentSessionStoreLeasesUnreconciled
 } from './agent-session-store-transaction-queue'
+import * as claimKeyState from './agent-session-claim-key-state'
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
@@ -122,16 +123,12 @@ export class AgentSessionRecordStore {
   }
 
   isClaimKeyVerifiable(keyId: string, now: number): boolean {
-    const retired = this.state.retiredClaimKeys.find((entry) => entry.keyId === keyId)
-    return !retired || now - retired.retiredAt <= AGENT_SESSION_CLAIM_KEY_RETENTION_MS
+    return claimKeyState.isVerifiable(this.state, keyId, now, AGENT_SESSION_CLAIM_KEY_RETENTION_MS)
   }
 
   /** Spawn tokens observed on the host with no matching lease. Stop them; never adopt them. */
   listOrphanSpawnTokens(observedTokens: readonly string[]): string[] {
-    const leases = this.listRecords().map((record) => record.lease)
-    return observedTokens.filter(
-      (spawnToken) => classifyObservedAgentSessionSpawnToken({ spawnToken, leases }) === 'orphan'
-    )
+    return claimKeyState.listOrphanSpawnTokens(this.listRecords(), observedTokens)
   }
 
   /**
@@ -197,6 +194,17 @@ export class AgentSessionRecordStore {
         ? replaceAgentSessionRecordOptions(proved, { ...args, options: args.options })
         : proved
     })
+  }
+
+  async recordProviderHandle(args: {
+    sessionId: string
+    fence: number
+    link: AgentSessionProviderHandleLink
+    now: number
+  }): Promise<AgentSessionRecord> {
+    return this.mutate(args.sessionId, (record) =>
+      recordAgentSessionProviderHandle({ ...args, record })
+    )
   }
 
   async renewLease(args: {
@@ -299,27 +307,16 @@ export class AgentSessionRecordStore {
   }
 
   async markClaimConflicted(sessionId: string, now: number): Promise<AgentSessionRecord> {
-    return this.mutate(sessionId, (record) => ({
-      ...record,
-      updatedAt: now,
-      // Why: a conflicted key must stay conflicted across a restart; it cannot resolve to free
-      // merely because the process that observed the conflict is gone.
-      lease: { ...record.lease, claimStatus: 'conflicted', handoffStage: 'manual-recovery' }
-    }))
+    return this.mutate(sessionId, (record) => claimKeyState.markConflicted(record, now))
   }
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
   async retireClaimKey(keyId: string, now: number): Promise<void> {
-    await this.transact(() => {
-      if (!this.state.retiredClaimKeys.some((entry) => entry.keyId === keyId)) {
-        this.state.retiredClaimKeys.push({ keyId, retiredAt: now })
-      }
-      this.state.retiredClaimKeys = this.state.retiredClaimKeys.filter(
-        (entry) => now - entry.retiredAt <= AGENT_SESSION_CLAIM_KEY_RETENTION_MS
-      )
-    })
+    await this.transact(() =>
+      claimKeyState.retire(this.state, keyId, now, AGENT_SESSION_CLAIM_KEY_RETENTION_MS)
+    )
   }
 
   private async mutate(

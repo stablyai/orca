@@ -13164,6 +13164,54 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('pins Claude handoff auth through the terminal provider boundary', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-claude-handoff' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.ensureAgentSession(
+      {
+        kind: 'explicit',
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'provider-session-1' }
+      },
+      {},
+      {
+        spawnToken: 'spawn-token',
+        providerHome: '/pinned/claude',
+        sessionId: 'structured-session-1',
+        launch: {
+          command: 'claude',
+          args: ['--setting-sources', 'user,project,local', '--resume', 'provider-session-1'],
+          cwd: TEST_WORKTREE_PATH,
+          env: {
+            CLAUDE_CONFIG_DIR: '/pinned/claude',
+            ANTHROPIC_AUTH_TOKEN: 'pinned-gateway-token'
+          },
+          providerSessionId: 'provider-session-1',
+          resumeLeafUuid: 'leaf-1'
+        }
+      }
+    )
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launchAgent: 'claude',
+        preserveClaudeAuthEnv: true,
+        env: expect.objectContaining({
+          CLAUDE_CONFIG_DIR: '/pinned/claude',
+          ANTHROPIC_AUTH_TOKEN: 'pinned-gateway-token'
+        })
+      })
+    )
+  })
+
   it('builds structured fresh drafts with supported launch preferences on the host', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-draft' })
     const runtime = new OrcaRuntimeService({

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
+import type {
+  AgentSessionOptionResult,
+  AgentSessionOptionsResult
+} from '../../../src/shared/agent-session-wire'
+import type { SessionOptionValue } from '../../../src/shared/native-chat-session-options'
 import {
   applyStructuredAgentSessionOptions,
   canSetStructuredAgentSessionOption,
@@ -7,38 +12,35 @@ import {
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot
 } from '../../../src/shared/structured-agent-session-options'
-import type { SessionOptionValue } from '../../../src/shared/native-chat-session-options'
-import type {
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
-} from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
+import type { MobileStructuredAgent } from './mobile-structured-session-create'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
-
-const CODEX_CATALOG = getAgentSessionOptionCatalog('codex')
 
 export function useMobileStructuredSessionOptions(args: {
   client: RpcClient | null
   connected: boolean
   sessionId: string | null
+  agent: MobileStructuredAgent | null
   fence: number | null
   setOption: (key: string, value: string) => Promise<AgentSessionOptionResult | null>
 }): MobileNativeChatSessionOptionsController {
-  const { client, connected, fence, sessionId, setOption: dispatchOption } = args
+  const { client, connected, fence, sessionId, agent, setOption: dispatchOption } = args
   const [optionState, setOptionState] = useState(() =>
-    createStructuredAgentSessionOptionState('codex')
+    createStructuredAgentSessionOptionState(agent ?? 'codex')
   )
   const [pickerRequest, setPickerRequest] = useState<{ id: string; token: number } | null>(null)
   const activeRecordRef = useRef(optionState.record)
+  const seed = agent ? getAgentSessionOptionCatalog(agent) : null
+
   useEffect(() => {
-    const next = createStructuredAgentSessionOptionState('codex')
+    const next = createStructuredAgentSessionOptionState(agent ?? 'codex')
     activeRecordRef.current = next.record
     setOptionState(next)
-  }, [fence, sessionId])
+  }, [agent, fence, sessionId])
 
   useEffect(() => {
     setPickerRequest(null)
-    if (!client || !connected || !sessionId || !CODEX_CATALOG) {
+    if (!client || !connected || !sessionId || !seed) {
       return
     }
     let stale = false
@@ -51,7 +53,7 @@ export function useMobileStructuredSessionOptions(args: {
         const result = response.result as AgentSessionOptionsResult
         setOptionState((current) =>
           current.record === activeRecordRef.current
-            ? applyStructuredAgentSessionOptions(current, CODEX_CATALOG, result)
+            ? applyStructuredAgentSessionOptions(current, seed, result)
             : current
         )
       })
@@ -59,7 +61,7 @@ export function useMobileStructuredSessionOptions(args: {
     return () => {
       stale = true
     }
-  }, [client, connected, fence, sessionId])
+  }, [client, connected, fence, seed, sessionId])
 
   const snapshot = useMemo(
     () => (sessionId ? structuredAgentSessionOptionSnapshot(optionState) : []),
