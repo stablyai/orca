@@ -1,9 +1,11 @@
 // Claude JSONL line → NativeChatMessage decoder.
 
+import { isAgentAuthError } from '../../shared/agent-auth-errors'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
-  type NativeChatMessage
+  type NativeChatMessage,
+  type NativeChatNoticeKind
 } from '../../shared/native-chat-types'
 import {
   asRecord,
@@ -23,6 +25,9 @@ export function decodeClaudeTranscriptLine(
     return null
   }
   const role = record.type
+  if (role === 'system') {
+    return decodeClaudeSystemNotice(record, fallbackId)
+  }
   if (role !== 'user' && role !== 'assistant') {
     return null
   }
@@ -81,4 +86,34 @@ function claudeMessageRole(
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+// Claude writes several bookkeeping `type:"system"` lines — `stop_hook_summary`,
+// `turn_duration`, and others — that are internal telemetry the user never
+// needs to see; they stay silently dropped (return null), same as before this
+// notice path existed. `subtype:"informational"` is the one shape that carries
+// agent-authored copy meant for the user (e.g. a login/device-trust nudge), so
+// it alone gets decoded into a bannerable notice.
+function decodeClaudeSystemNotice(
+  record: Record<string, unknown>,
+  fallbackId: string
+): NativeChatMessage | null {
+  if (record.subtype !== 'informational') {
+    return null
+  }
+  const text = extractString(record.content)
+  if (!text) {
+    return null
+  }
+  const noticeKind: NativeChatNoticeKind = isAgentAuthError('claude', text)
+    ? 'login-required'
+    : 'generic'
+  return {
+    id: extractString(record.uuid) ?? fallbackId,
+    role: 'system',
+    blocks: [{ type: 'text', text }],
+    timestamp: parseTimestamp(record.timestamp),
+    source: 'transcript',
+    noticeKind
+  }
 }

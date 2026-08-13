@@ -64,6 +64,14 @@ export type NativeChatBlock =
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
 
+/** Distinguishes a synthesized `role: 'system'` notice from an ordinary quiet
+ *  aside (e.g. the interrupted-turn marker). `'login-required'` gets an
+ *  actionable card in the renderer; `'generic'` gets a plain descriptive
+ *  banner. Optional and additive — absent on every message the assembler
+ *  already produced, so old snapshots/hosts are unaffected. */
+export const NATIVE_CHAT_NOTICE_KINDS = ['generic', 'login-required'] as const
+export type NativeChatNoticeKind = (typeof NATIVE_CHAT_NOTICE_KINDS)[number]
+
 export type NativeChatMessage = {
   /** Stable across re-reads/appends so the assembler and the renderer list can
    *  dedup and key by it. */
@@ -77,6 +85,11 @@ export type NativeChatMessage = {
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** Set only on a `role: 'system'` message synthesized from a provider
+   *  transcript notice (e.g. Claude's `type:"system", subtype:"informational"`
+   *  line) that the user should actually see — as opposed to the quiet,
+   *  chrome-free system asides the transcript decoders already emit. */
+  noticeKind?: NativeChatNoticeKind
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const
@@ -145,4 +158,10 @@ export function isInterruptedStatusMessage(message: NativeChatMessage): boolean 
 
 export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {
   return block.type === 'image-ref'
+}
+
+/** A provider notice (see `noticeKind`) worth its own banner rather than the
+ *  quiet system aside treatment. */
+export function isAgentNoticeMessage(message: NativeChatMessage): boolean {
+  return message.role === 'system' && message.noticeKind != null
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
+import { useNativeChatAccountReauth } from './use-native-chat-account-reauth'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
@@ -64,7 +65,8 @@ export default function NativeChatView({
   resolvedAgent,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions
+  contextMenuActions,
+  worktreeId
 }: NativeChatViewProps): React.JSX.Element {
   // Select only this tab's status entry (shallow-compared) so an unrelated
   // pane's status tick doesn't re-render this view or re-run the resolution.
@@ -99,6 +101,7 @@ export default function NativeChatView({
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
+          worktreeId={worktreeId}
         />
       )}
     </NativeChatSessionGate>
@@ -115,7 +118,8 @@ function NativeChatResolvedView({
   terminalTabId,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions
+  contextMenuActions,
+  worktreeId
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
@@ -357,6 +361,7 @@ function NativeChatResolvedView({
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
   const fontScale = useNativeChatFontScale(isConversation)
+  const onReauthenticateAccount = useNativeChatAccountReauth(agent, worktreeId)
 
   return (
     <div
@@ -411,6 +416,8 @@ function NativeChatResolvedView({
             onLinkClick={nativeChatFileLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
+            onReauthenticateAccount={onReauthenticateAccount}
+            onSwitchToTerminal={onSwitchToTerminal}
           />
         )}
       </div>

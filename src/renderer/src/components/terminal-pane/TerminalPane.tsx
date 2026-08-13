@@ -3049,6 +3049,7 @@ function TerminalPane(
                 resolvedAgent={chatPaneResolvedAgent}
                 onSwitchToTerminal={switchNativeChatToTerminal}
                 readTerminalScreen={readNativeChatTerminalScreen}
+                worktreeId={worktreeId}
                 contextMenuActions={{
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
                   onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),

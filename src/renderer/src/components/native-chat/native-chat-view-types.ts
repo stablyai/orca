@@ -20,6 +20,11 @@ export type NativeChatViewProps = {
   /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+  /** Owning worktree, used only to resolve the local host/WSL target for the
+   *  "reauthenticate account" notice action — absent (or an SSH-remote
+   *  worktree) simply drops that action, since Orca's managed Claude accounts
+   *  are a local-host concept. */
+  worktreeId?: string
 }
 
 export type NativeChatResolvedViewProps = {
@@ -33,4 +38,5 @@ export type NativeChatResolvedViewProps = {
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+  worktreeId?: string
 }

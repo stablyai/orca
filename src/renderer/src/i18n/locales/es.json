@@ -14400,7 +14400,12 @@
         "allow": "Permitir",
         "deny": "Denegar"
       },
-      "launchPromptNotDelivered": "No entregado — revisa la terminal"
+      "launchPromptNotDelivered": "No entregado — revisa la terminal",
+      "notice": {
+        "reauthenticate": "Reautenticar cuenta",
+        "goToTerminal": "Ir a la terminal",
+        "reauthenticateSuccess": "Cuenta reautenticada. Si el agente de este panel sigue sin responder, hacé clic en \"Ir a la terminal\" y reiniciá la sesión ahí."
+      }
     },
     "tab": {
       "bar": {

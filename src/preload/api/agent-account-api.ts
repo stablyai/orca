@@ -48,6 +48,10 @@ export type ClaudeAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
+  reauthenticateForTarget: (args?: {
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => Promise<ClaudeRateLimitAccountsState>
 }
 
 export type GrokAccountsApi = {

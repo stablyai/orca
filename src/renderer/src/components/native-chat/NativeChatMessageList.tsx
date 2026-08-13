@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import {
+  isAgentNoticeMessage,
   isTextBlock,
   type NativeChatBlock,
   type NativeChatMessage
@@ -19,6 +20,10 @@ import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './nat
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import {
+  NativeChatAgentNoticeBanner,
+  type NativeChatAgentAccountReauthResult
+} from './NativeChatAgentNoticeBanner'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
@@ -128,7 +133,9 @@ function MessageRow({
   onScrollMessageToTop,
   onLinkClick,
   allowFileUriLinks = false,
-  deliveryFailed = false
+  deliveryFailed = false,
+  onReauthenticateAccount,
+  onSwitchToTerminal
 }: {
   message: NativeChatMessage
   expandSignal: boolean
@@ -137,6 +144,8 @@ function MessageRow({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   deliveryFailed?: boolean
+  onReauthenticateAccount?: () => Promise<NativeChatAgentAccountReauthResult>
+  onSwitchToTerminal?: () => void
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
@@ -157,6 +166,22 @@ function MessageRow({
   // After all hooks, so hook order stays unconditional.
   if (markdown.length === 0 && !hasImages && tools.length === 0) {
     return null
+  }
+
+  // A notice worth its own banner (e.g. a login-required nudge the agent
+  // wrote to its transcript) — checked before the quiet `isSystem` styling
+  // below so it never collapses into a chrome-free aside.
+  if (isAgentNoticeMessage(message)) {
+    return (
+      <div ref={rowRef}>
+        <NativeChatAgentNoticeBanner
+          message={message}
+          text={markdown}
+          onReauthenticateAccount={onReauthenticateAccount}
+          onSwitchToTerminal={onSwitchToTerminal}
+        />
+      </div>
+    )
   }
 
   if (isUser) {
@@ -240,7 +265,9 @@ export function NativeChatMessageList({
   fontScale,
   onLinkClick,
   allowFileUriLinks = false,
-  failedDeliveryMessageIds
+  failedDeliveryMessageIds,
+  onReauthenticateAccount,
+  onSwitchToTerminal
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -251,6 +278,10 @@ export function NativeChatMessageList({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
+  /** Wired only for agents this view knows how to reauthenticate (Claude, for
+   *  now) — see `NativeChatAgentNoticeBanner`. */
+  onReauthenticateAccount?: () => Promise<NativeChatAgentAccountReauthResult>
+  onSwitchToTerminal?: () => void
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -408,6 +439,8 @@ export function NativeChatMessageList({
               onLinkClick={onLinkClick}
               allowFileUriLinks={allowFileUriLinks}
               deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
+              onReauthenticateAccount={onReauthenticateAccount}
+              onSwitchToTerminal={onSwitchToTerminal}
             />
           ))}
           {showTypingIndicator ? <TypingIndicatorRow /> : null}

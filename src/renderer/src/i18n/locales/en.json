@@ -15304,7 +15304,12 @@
         "allow": "Allow",
         "deny": "Deny"
       },
-      "launchPromptNotDelivered": "Not delivered — check the terminal"
+      "launchPromptNotDelivered": "Not delivered — check the terminal",
+      "notice": {
+        "reauthenticate": "Reauthenticate account",
+        "goToTerminal": "Go to Terminal",
+        "reauthenticateSuccess": "Account reauthenticated. If the agent in this pane still isn’t responding, click \"Go to Terminal\" and restart the session there."
+      }
     },
     "tab": {
       "bar": {

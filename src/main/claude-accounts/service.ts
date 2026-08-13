@@ -144,6 +144,22 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.doSelectAccount(accountId, target))
   }
 
+  /**
+   * Reauthenticate whichever account is currently selected for `target`,
+   * without the caller having to resolve an accountId itself. Built for the
+   * native-chat "this pane's agent needs login" notice, which only knows the
+   * pane's runtime target (host or a WSL distro), not an account id.
+   */
+  async reauthenticateAccountForTarget(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const accountId = getSelectedClaudeAccountIdForTarget(this.store.getSettings(), target)
+    if (!accountId) {
+      throw new Error('No Claude account is configured for this pane yet.')
+    }
+    return this.reauthenticateAccount(accountId)
+  }
+
   cancelPendingLogin(): boolean {
     return this.cancelPendingClaudeLogin?.() ?? false
   }

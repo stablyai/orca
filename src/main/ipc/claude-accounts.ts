@@ -23,4 +23,9 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
       return claudeAccounts.selectAccountForTarget(args.accountId, args)
     }
   )
+  ipcMain.handle(
+    'claudeAccounts:reauthenticateForTarget',
+    (_event, args?: ClaudeAccountSelectionTarget) =>
+      claudeAccounts.reauthenticateAccountForTarget(args)
+  )
 }
