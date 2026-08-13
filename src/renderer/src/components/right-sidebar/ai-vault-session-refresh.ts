@@ -5,6 +5,7 @@ import {
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
@@ -46,7 +47,7 @@ export function useAiVaultSessionRefresh(
   const [scanResult, setScanResult] = useState<AiVaultListResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const requestTokenRef = useRef(crypto.randomUUID())
+  const requestTokenRef = useRef(createBrowserUuid())
   const refreshIdRef = useRef(0)
   const refreshInFlightRef = useRef(false)
   const pendingRefreshRef = useRef(false)

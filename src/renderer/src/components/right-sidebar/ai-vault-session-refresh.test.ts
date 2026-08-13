@@ -21,6 +21,7 @@ const EMPTY_RESULT: AiVaultListResult = {
 }
 
 const THROTTLE_MS = 30_000
+const realCrypto = globalThis.crypto
 
 const listSessionsMock = vi.fn<(args: unknown) => Promise<AiVaultListResult>>()
 const cancelListSessionsMock = vi.fn<() => Promise<void>>()
@@ -201,11 +202,29 @@ afterEach(() => {
   roots.splice(0).forEach((root) => act(() => root.unmount()))
   document.body.replaceChildren()
   useAppStore.setState(initialAppState, true)
+  Object.defineProperty(globalThis, 'crypto', { configurable: true, value: realCrypto })
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
 describe('useAiVaultSessionRefresh refocus behavior', () => {
+  it('mounts in a non-secure browser context without crypto.randomUUID', async () => {
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) }
+    })
+
+    await renderHook()
+    await flushMicrotasks()
+
+    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+    expect(lastCallArgs()).toMatchObject({
+      requestToken: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      )
+    })
+  })
+
   it('uses the shared scan cache on local panel entry', async () => {
     await renderHook()
     await flushMicrotasks()
