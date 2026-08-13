@@ -343,6 +343,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     agentStatusHooksEnabled: true,
     tabAutoGenerateTitle: false,
     confirmClosePinnedTab: true,
+    // Why: ssh remotes default to https web links; self-hosted http-only forges set hostname → http here.
+    gitHostWebSchemes: {},
     keepComputerAwakeWhileAgentsRun: false,
     // Why: 'auto' probes keyboard layout so non-US users can type Option chars like @/€/[ out of the box (issue #903). See src/renderer/src/lib/keyboard-layout/*.
     terminalMacOptionAsAlt: 'auto',

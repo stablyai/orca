@@ -5,6 +5,7 @@ import {
   normalizeProvider,
   parseRemoteRepo,
   parseUpstream,
+  type GitHostWebSchemes,
   type RemoteRepoRef
 } from './source-control-remote-repo'
 
@@ -17,6 +18,8 @@ type ManualReviewUrlInput = {
   pushTarget?: GitPushTarget | null
   /** Tracking upstream in `<remote>/<branch>` form (git `branch.upstream`). */
   upstreamName?: string | null
+  /** Hostname → web UI scheme for ssh remotes (self-hosted http-only forges). */
+  webSchemeByHost?: GitHostWebSchemes | null
 }
 
 export type SourceControlManualReviewContext = ManualReviewUrlInput & {
@@ -138,8 +141,9 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
     return null
   }
 
-  const baseRepo = parseRemoteRepo(baseRemoteUrl, input.provider)
-  const headRepo = parseRemoteRepo(headRemoteUrl, input.provider)
+  const parseOptions = { webSchemeByHost: input.webSchemeByHost ?? null }
+  const baseRepo = parseRemoteRepo(baseRemoteUrl, input.provider, parseOptions)
+  const headRepo = parseRemoteRepo(headRemoteUrl, input.provider, parseOptions)
   if (!baseRepo || !headRepo) {
     return null
   }

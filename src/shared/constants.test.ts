@@ -77,6 +77,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })
 
+  it('defaults git host web schemes empty so ssh remotes keep https until overridden', () => {
+    expect(getDefaultSettings('/tmp').gitHostWebSchemes).toEqual({})
+  })
+
   it('keeps file-editor word wrapping enabled by default', () => {
     expect(getDefaultSettings('/tmp').editorWordWrap).toBe(true)
   })

@@ -148,6 +148,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
     confirmClosePinnedTab: true,
+    gitHostWebSchemes: {},
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     terminalJISYenToBackslash: false,

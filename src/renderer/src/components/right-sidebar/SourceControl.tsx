@@ -1536,7 +1536,8 @@ function SourceControlInner(): React.JSX.Element {
         repoRemoteName: activeRepo?.gitRemoteIdentity?.remoteName ?? null,
         repoRemoteUrl: activeRepo?.gitRemoteIdentity?.remoteUrl ?? null,
         pushTarget: activeWorktree?.pushTarget ?? null,
-        upstreamName: remoteStatus?.upstreamName ?? null
+        upstreamName: remoteStatus?.upstreamName ?? null,
+        webSchemeByHost: settings?.gitHostWebSchemes ?? null
       }),
     [
       activeRepo?.gitRemoteIdentity?.remoteName,
@@ -1552,7 +1553,8 @@ function SourceControlInner(): React.JSX.Element {
       linkedGitHubPR,
       linkedGitLabMR,
       linkedGiteaPR,
-      remoteStatus?.upstreamName
+      remoteStatus?.upstreamName,
+      settings?.gitHostWebSchemes
     ]
   )
   const shouldResolveHostedReviewCreation =

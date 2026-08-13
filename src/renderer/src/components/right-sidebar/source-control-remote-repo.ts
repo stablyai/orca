@@ -2,6 +2,14 @@ import type { HostedReviewProvider } from '../../../../shared/hosted-review'
 
 export type ManualReviewProvider = Exclude<HostedReviewProvider, 'unsupported'>
 
+/** Prefer `http` for self-hosted web UIs when the git remote is ssh/git. Keyed by hostname. */
+export type GitHostWebScheme = 'http' | 'https'
+export type GitHostWebSchemes = Readonly<Record<string, GitHostWebScheme>>
+
+export type ParseRemoteRepoOptions = {
+  webSchemeByHost?: GitHostWebSchemes | null
+}
+
 export type RemoteRepoRef = {
   provider: ManualReviewProvider | null
   webBaseUrl: string
@@ -73,22 +81,57 @@ export function normalizeProvider(
   return provider && provider !== 'unsupported' ? provider : null
 }
 
-function buildWebOrigin(protocol: string, host: string, hostname: string): string {
-  return protocol === 'http:' || protocol === 'https:'
-    ? `${protocol}//${host}`
-    : `https://${hostname}`
+/** Resolve web UI scheme for an ssh/git remote host. Defaults to https. */
+export function resolveGitHostWebScheme(
+  hostname: string,
+  schemes?: GitHostWebSchemes | null
+): GitHostWebScheme {
+  const key = hostname.trim().toLowerCase()
+  if (!key) {
+    return 'https'
+  }
+  const direct = schemes?.[key]
+  if (direct === 'http' || direct === 'https') {
+    return direct
+  }
+  // Why: ssh remotes often use a transport port (e.g. :2222); overrides are keyed by bare hostname.
+  const bare = key.replace(/:\d+$/, '')
+  if (bare !== key) {
+    const bareScheme = schemes?.[bare]
+    if (bareScheme === 'http' || bareScheme === 'https') {
+      return bareScheme
+    }
+  }
+  return 'https'
 }
 
-function parseAzureDevOpsRemote(trimmed: string): RemoteRepoRef | null {
+export function buildWebOrigin(
+  protocol: string,
+  host: string,
+  hostname: string,
+  schemes?: GitHostWebSchemes | null
+): string {
+  // Why: http(s) remotes already carry the web scheme (and port); ssh/git do not.
+  if (protocol === 'http:' || protocol === 'https:') {
+    return `${protocol}//${host}`
+  }
+  return `${resolveGitHostWebScheme(hostname, schemes)}://${hostname}`
+}
+
+function parseAzureDevOpsRemote(
+  trimmed: string,
+  schemes?: GitHostWebSchemes | null
+): RemoteRepoRef | null {
   const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
   if (scpLike && scpLike[1].toLowerCase() === 'ssh.dev.azure.com') {
     const parts = cleanPath(scpLike[2])?.split('/') ?? []
     if (parts.length >= 4 && parts[0].toLowerCase() === 'v3') {
       const [, organization, project, repository] = parts
+      const azureScheme = resolveGitHostWebScheme('dev.azure.com', schemes)
       return {
         provider: 'azure-devops',
         path: `${organization}/${project}/_git/${repository}`,
-        webBaseUrl: `https://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
+        webBaseUrl: `${azureScheme}://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
       }
     }
   }
@@ -103,10 +146,11 @@ function parseAzureDevOpsRemote(trimmed: string): RemoteRepoRef | null {
     const parts = cleanPath(url.pathname)?.split('/') ?? []
     if (host === 'ssh.dev.azure.com' && parts.length >= 4 && parts[0].toLowerCase() === 'v3') {
       const [, organization, project, repository] = parts
+      const azureScheme = resolveGitHostWebScheme('dev.azure.com', schemes)
       return {
         provider: 'azure-devops',
         path: `${organization}/${project}/_git/${repository}`,
-        webBaseUrl: `https://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
+        webBaseUrl: `${azureScheme}://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
       }
     }
 
@@ -128,7 +172,7 @@ function parseAzureDevOpsRemote(trimmed: string): RemoteRepoRef | null {
     return {
       provider: 'azure-devops',
       path: webPath.join('/'),
-      webBaseUrl: `${buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')}/${encodePath(webPath.join('/'))}`
+      webBaseUrl: `${buildWebOrigin(protocol, url.host, url.hostname, schemes).replace(/\/+$/, '')}/${encodePath(webPath.join('/'))}`
     }
   } catch {
     return null
@@ -137,14 +181,16 @@ function parseAzureDevOpsRemote(trimmed: string): RemoteRepoRef | null {
 
 export function parseRemoteRepo(
   remoteUrl: string,
-  providerHint?: HostedReviewProvider | null
+  providerHint?: HostedReviewProvider | null,
+  options?: ParseRemoteRepoOptions
 ): RemoteRepoRef | null {
   const trimmed = remoteUrl.trim().replace(/^git\+/, '')
   if (!trimmed || /^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith('/')) {
     return null
   }
+  const schemes = options?.webSchemeByHost ?? null
 
-  const azure = parseAzureDevOpsRemote(trimmed)
+  const azure = parseAzureDevOpsRemote(trimmed, schemes)
   if (azure && (providerHint == null || providerHint === 'azure-devops')) {
     return azure
   }
@@ -159,10 +205,11 @@ export function parseRemoteRepo(
       return null
     }
     const hintedProvider = normalizeProvider(providerHint)
+    const scheme = resolveGitHostWebScheme(host, schemes)
     return {
       provider: hintedProvider ?? providerForHost(host) ?? null,
       path,
-      webBaseUrl: `https://${host}/${encodePath(path)}`
+      webBaseUrl: `${scheme}://${host}/${encodePath(path)}`
     }
   }
 
@@ -183,7 +230,7 @@ export function parseRemoteRepo(
     const webOrigin =
       host === 'ssh.github.com'
         ? 'https://github.com'
-        : buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
+        : buildWebOrigin(protocol, url.host, url.hostname, schemes).replace(/\/+$/, '')
     return {
       provider,
       path,

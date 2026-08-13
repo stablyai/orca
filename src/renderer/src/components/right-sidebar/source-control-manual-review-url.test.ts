@@ -157,6 +157,23 @@ describe('buildSourceControlManualReviewUrl', () => {
     )
   })
 
+  it('builds an http GitLab merge request URL when the host web scheme is overridden', () => {
+    // Why: ssh remotes carry no web scheme; http-only self-hosted GitLab needs an explicit override.
+    expect(
+      buildSourceControlManualReviewUrl({
+        baseRef: 'refs/remotes/origin/release/next',
+        branchName: 'feature/gitlab',
+        repoRemoteName: 'origin',
+        repoRemoteUrl: 'ssh://git@gitlab.company.test:2222/group/sub/orca.git',
+        provider: 'gitlab',
+        upstreamName: 'origin/feature/gitlab',
+        webSchemeByHost: { 'gitlab.company.test': 'http' }
+      })
+    ).toBe(
+      'http://gitlab.company.test/group/sub/orca/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fgitlab&merge_request%5Btarget_branch%5D=release%2Fnext'
+    )
+  })
+
   it('builds a Bitbucket manual pull request URL', () => {
     expect(
       buildSourceControlManualReviewUrl({
