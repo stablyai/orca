@@ -4,6 +4,8 @@ type PendingBrowserPlacement = {
 }
 
 const placementByPendingPage = new Map<string, PendingBrowserPlacement>()
+const materializedGroupKeys = new Set<string>()
+const pendingCleanupClaimsByGroup = new Map<string, number>()
 const MAX_PENDING_PLACEMENTS = 128
 
 function pageKey(environmentId: string, worktreeId: string, remotePageId: string): string {
@@ -12,6 +14,27 @@ function pageKey(environmentId: string, worktreeId: string, remotePageId: string
 
 function worktreePrefix(environmentId: string, worktreeId: string): string {
   return `${environmentId}\0${worktreeId}\0`
+}
+
+function worktreeGroupKey(worktreeId: string, groupId: string): string {
+  return `${worktreeId}\0${groupId}`
+}
+
+function hasPlacementForGroup(worktreeId: string, groupId: string): boolean {
+  const worktreeMarker = `\0${worktreeId}\0`
+  for (const [key, placement] of placementByPendingPage) {
+    if (key.includes(worktreeMarker) && placement.groupId === groupId) {
+      return true
+    }
+  }
+  return false
+}
+
+function forgetSettledMaterializedGroup(worktreeId: string, groupId: string): void {
+  const key = worktreeGroupKey(worktreeId, groupId)
+  if (!hasPlacementForGroup(worktreeId, groupId) && !pendingCleanupClaimsByGroup.has(key)) {
+    materializedGroupKeys.delete(key)
+  }
 }
 
 export function recordWebSessionBrowserPlacement(args: {
@@ -57,7 +80,12 @@ export function forgetWebSessionBrowserPlacement(args: {
   worktreeId: string
   remotePageId: string
 }): void {
-  placementByPendingPage.delete(pageKey(args.environmentId, args.worktreeId, args.remotePageId))
+  const key = pageKey(args.environmentId, args.worktreeId, args.remotePageId)
+  const placement = placementByPendingPage.get(key)
+  placementByPendingPage.delete(key)
+  if (placement) {
+    forgetSettledMaterializedGroup(args.worktreeId, placement.groupId)
+  }
 }
 
 export function takeWebSessionBrowserPlacementGroup(args: {
@@ -68,7 +96,19 @@ export function takeWebSessionBrowserPlacementGroup(args: {
   const key = pageKey(args.environmentId, args.worktreeId, args.remotePageId)
   const placement = placementByPendingPage.get(key)
   placementByPendingPage.delete(key)
+  if (placement) {
+    forgetSettledMaterializedGroup(args.worktreeId, placement.groupId)
+  }
   return placement?.groupId
+}
+
+export function peekWebSessionBrowserPlacementGroup(args: {
+  environmentId: string
+  worktreeId: string
+  remotePageId: string
+}): string | undefined {
+  return placementByPendingPage.get(pageKey(args.environmentId, args.worktreeId, args.remotePageId))
+    ?.groupId
 }
 
 export function isWebSessionBrowserPlacementGroupReserved(args: {
@@ -88,12 +128,31 @@ export function releaseWebSessionBrowserPlacementGroup(args: {
   environmentId: string
   worktreeId: string
   remotePageId: string
+  groupId: string
   callerCreatedGroup: boolean
 }): boolean {
   const key = pageKey(args.environmentId, args.worktreeId, args.remotePageId)
   const placement = placementByPendingPage.get(key)
+  const groupId = placement?.groupId ?? args.groupId
+  const groupKey = worktreeGroupKey(args.worktreeId, groupId)
+  const materialized = materializedGroupKeys.has(groupKey)
   placementByPendingPage.delete(key)
-  return args.callerCreatedGroup || placement?.ownsGroupCleanup === true
+  const ownsCleanup =
+    !materialized && (args.callerCreatedGroup || placement?.ownsGroupCleanup === true)
+  if (ownsCleanup) {
+    pendingCleanupClaimsByGroup.set(groupKey, (pendingCleanupClaimsByGroup.get(groupKey) ?? 0) + 1)
+  }
+  forgetSettledMaterializedGroup(args.worktreeId, groupId)
+  return ownsCleanup
+}
+
+export function markWebSessionBrowserPlacementGroupMaterialized(args: {
+  worktreeId: string
+  groupId: string
+}): void {
+  if (hasPlacementForGroup(args.worktreeId, args.groupId)) {
+    materializedGroupKeys.add(worktreeGroupKey(args.worktreeId, args.groupId))
+  }
 }
 
 export function claimWebSessionBrowserPlacementGroupCleanup(args: {
@@ -102,6 +161,17 @@ export function claimWebSessionBrowserPlacementGroupCleanup(args: {
   ownsGroupCleanup: boolean
 }): boolean {
   if (!args.ownsGroupCleanup) {
+    return false
+  }
+  const groupKey = worktreeGroupKey(args.worktreeId, args.groupId)
+  const pendingClaims = pendingCleanupClaimsByGroup.get(groupKey) ?? 0
+  if (pendingClaims <= 1) {
+    pendingCleanupClaimsByGroup.delete(groupKey)
+  } else {
+    pendingCleanupClaimsByGroup.set(groupKey, pendingClaims - 1)
+  }
+  if (materializedGroupKeys.has(groupKey)) {
+    forgetSettledMaterializedGroup(args.worktreeId, args.groupId)
     return false
   }
   const worktreeMarker = `\0${args.worktreeId}\0`
@@ -121,7 +191,7 @@ export function clearWebSessionBrowserPlacementsForWorktree(
 ): void {
   const prefix = worktreePrefix(environmentId, worktreeId)
   for (const key of placementByPendingPage.keys()) {
-    if (key.startsWith(prefix)) {
+    if (key.startsWith(prefix) && !placementByPendingPage.get(key)?.ownsGroupCleanup) {
       placementByPendingPage.delete(key)
     }
   }
@@ -130,7 +200,7 @@ export function clearWebSessionBrowserPlacementsForWorktree(
 export function clearWebSessionBrowserPlacementsForEnvironment(environmentId: string): void {
   const prefix = `${environmentId}\0`
   for (const key of placementByPendingPage.keys()) {
-    if (key.startsWith(prefix)) {
+    if (key.startsWith(prefix) && !placementByPendingPage.get(key)?.ownsGroupCleanup) {
       placementByPendingPage.delete(key)
     }
   }
@@ -138,4 +208,6 @@ export function clearWebSessionBrowserPlacementsForEnvironment(environmentId: st
 
 export function resetWebSessionBrowserPlacementsForTests(): void {
   placementByPendingPage.clear()
+  materializedGroupKeys.clear()
+  pendingCleanupClaimsByGroup.clear()
 }

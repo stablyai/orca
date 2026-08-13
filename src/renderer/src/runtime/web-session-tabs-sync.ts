@@ -95,8 +95,8 @@ import {
   clearWebSessionBrowserPlacementsForEnvironment,
   clearWebSessionBrowserPlacementsForWorktree,
   isWebSessionBrowserPlacementGroupReserved,
-  resetWebSessionBrowserPlacementsForTests,
-  takeWebSessionBrowserPlacementGroup
+  peekWebSessionBrowserPlacementGroup,
+  resetWebSessionBrowserPlacementsForTests
 } from './web-session-browser-placement'
 import { suppressE2eWebRuntimeBrowserSnapshot } from './web-runtime-browser-creation-e2e-fault'
 
@@ -1521,7 +1521,7 @@ function buildMirroredBrowserTabs(
     const workspaceId = existing?.workspace.id ?? tab.browserWorkspaceId
     const pageId = existing?.page.id ?? tab.browserPageId
     const createdAt = existing?.page.createdAt ?? now + sortOffset + index
-    const recordedClientGroupId = takeWebSessionBrowserPlacementGroup({
+    const recordedClientGroupId = peekWebSessionBrowserPlacementGroup({
       environmentId,
       worktreeId: snapshot.worktree,
       remotePageId: tab.browserPageId

@@ -725,7 +725,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         worktreeId: WORKTREE_ID,
         groupId: 'client-preview-group'
       })
-    ).toBe(true)
+    ).toBe(false)
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
     expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
   })

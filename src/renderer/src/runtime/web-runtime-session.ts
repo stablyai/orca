@@ -69,6 +69,7 @@ import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import {
   claimWebSessionBrowserPlacementGroupCleanup,
   forgetWebSessionBrowserPlacement,
+  markWebSessionBrowserPlacementGroupMaterialized,
   moveWebSessionBrowserPlacement,
   recordWebSessionBrowserPlacement,
   releaseWebSessionBrowserPlacementGroup
@@ -616,6 +617,17 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, guardedPageId)
     }
     unsubscribeFocusGuard()
+    if (args.clientTargetGroupId) {
+      markWebSessionBrowserPlacementGroupMaterialized({
+        worktreeId: args.worktreeId,
+        groupId: args.clientTargetGroupId
+      })
+    }
+    forgetWebSessionBrowserPlacement({
+      environmentId,
+      worktreeId: args.worktreeId,
+      remotePageId: guardedPageId
+    })
     return true
   } catch (error) {
     unsubscribeFocusGuard()
@@ -626,6 +638,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
           environmentId,
           worktreeId: args.worktreeId,
           remotePageId: guardedPageId,
+          groupId: args.clientTargetGroupId,
           callerCreatedGroup: args.clientTargetGroupCreated === true
         })
       : false

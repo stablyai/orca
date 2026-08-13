@@ -5,6 +5,7 @@ import {
   clearWebSessionBrowserPlacementsForWorktree,
   forgetWebSessionBrowserPlacement,
   isWebSessionBrowserPlacementGroupReserved,
+  peekWebSessionBrowserPlacementGroup,
   recordWebSessionBrowserPlacement,
   releaseWebSessionBrowserPlacementGroup,
   resetWebSessionBrowserPlacementsForTests,
@@ -71,6 +72,7 @@ describe('web session browser placement', () => {
       environmentId: ENVIRONMENT_ID,
       worktreeId: WORKTREE_ID,
       remotePageId: 'page-1',
+      groupId: 'preview-group',
       callerCreatedGroup: true
     })
     expect(
@@ -84,6 +86,7 @@ describe('web session browser placement', () => {
       environmentId: 'environment-2',
       worktreeId: WORKTREE_ID,
       remotePageId: 'page-2',
+      groupId: 'preview-group',
       callerCreatedGroup: false
     })
     expect(
@@ -113,6 +116,7 @@ describe('web session browser placement', () => {
       environmentId: ENVIRONMENT_ID,
       worktreeId: WORKTREE_ID,
       remotePageId: 'page-1',
+      groupId: 'preview-group',
       callerCreatedGroup: true
     })
     expect(
@@ -128,6 +132,7 @@ describe('web session browser placement', () => {
       environmentId: 'environment-3',
       worktreeId: WORKTREE_ID,
       remotePageId: 'page-3',
+      groupId: 'preview-group',
       callerCreatedGroup: false
     })
     expect(remainingOwnsCleanup).toBe(true)
@@ -137,8 +142,116 @@ describe('web session browser placement', () => {
         groupId: 'preview-group',
         ownsGroupCleanup: remainingOwnsCleanup
       })
+    ).toBe(false)
+    const clearedEnvironmentOwnsCleanup = releaseWebSessionBrowserPlacementGroup({
+      environmentId: 'environment-2',
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-2',
+      groupId: 'preview-group',
+      callerCreatedGroup: false
+    })
+    expect(
+      claimWebSessionBrowserPlacementGroupCleanup({
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group',
+        ownsGroupCleanup: clearedEnvironmentOwnsCleanup
+      })
     ).toBe(true)
   })
+
+  it('retains transferred cleanup through snapshot placement lookup', () => {
+    recordWebSessionBrowserPlacement({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-1',
+      groupId: 'preview-group',
+      callerCreatedGroup: true
+    })
+    recordWebSessionBrowserPlacement({
+      environmentId: 'environment-2',
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-2',
+      groupId: 'preview-group'
+    })
+    const ownsCleanup = releaseWebSessionBrowserPlacementGroup({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-1',
+      groupId: 'preview-group',
+      callerCreatedGroup: true
+    })
+    expect(
+      claimWebSessionBrowserPlacementGroupCleanup({
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group',
+        ownsGroupCleanup: ownsCleanup
+      })
+    ).toBe(false)
+
+    expect(
+      peekWebSessionBrowserPlacementGroup({
+        environmentId: 'environment-2',
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-2'
+      })
+    ).toBe('preview-group')
+    expect(
+      releaseWebSessionBrowserPlacementGroup({
+        environmentId: 'environment-2',
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-2',
+        groupId: 'preview-group',
+        callerCreatedGroup: false
+      })
+    ).toBe(true)
+  })
+
+  it.each(['environment', 'worktree'] as const)(
+    'retains transferred cleanup through %s teardown',
+    (scope) => {
+      recordWebSessionBrowserPlacement({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-1',
+        groupId: 'preview-group',
+        callerCreatedGroup: true
+      })
+      recordWebSessionBrowserPlacement({
+        environmentId: 'environment-2',
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-2',
+        groupId: 'preview-group'
+      })
+      const ownsCleanup = releaseWebSessionBrowserPlacementGroup({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-1',
+        groupId: 'preview-group',
+        callerCreatedGroup: true
+      })
+      claimWebSessionBrowserPlacementGroupCleanup({
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group',
+        ownsGroupCleanup: ownsCleanup
+      })
+
+      if (scope === 'environment') {
+        clearWebSessionBrowserPlacementsForEnvironment('environment-2')
+      } else {
+        clearWebSessionBrowserPlacementsForWorktree('environment-2', WORKTREE_ID)
+      }
+
+      expect(
+        releaseWebSessionBrowserPlacementGroup({
+          environmentId: 'environment-2',
+          worktreeId: WORKTREE_ID,
+          remotePageId: 'page-2',
+          groupId: 'preview-group',
+          callerCreatedGroup: false
+        })
+      ).toBe(true)
+    }
+  )
 
   it('bounds pending page placements', () => {
     for (let index = 0; index < 128; index += 1) {
