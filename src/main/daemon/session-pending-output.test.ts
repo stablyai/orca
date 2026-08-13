@@ -96,6 +96,49 @@ describe('Session pending output', () => {
     expect(empty!.records).toEqual([])
   })
 
+  it('keeps appended batch sequences contiguous across an empty take', () => {
+    // Why: a write-only / no-output tick (e.g. raw-mode keystroke marked the
+    // session dirty but produced no recorded output) yields an empty take
+    // between two appended batches. If that empty take burned a seq, the next
+    // appended batch would be non-contiguous and the cold-restore reader would
+    // discard the whole log as if a batch were lost.
+    const subprocess = createMockSubprocess()
+    const live = createSession(subprocess)
+
+    subprocess.simulateData('first')
+    const first = live.takePendingOutput(false)
+    expect(first!.records).toEqual([{ kind: 'output', data: 'first' }])
+
+    // Empty take in between (no output recorded since the last take).
+    const empty = live.takePendingOutput(false)
+    expect(empty!.records).toEqual([])
+
+    subprocess.simulateData('second')
+    const second = live.takePendingOutput(false)
+    expect(second!.records).toEqual([{ kind: 'output', data: 'second' }])
+    // The two appended batches must be adjacent — the empty take must not have
+    // burned the seq between them.
+    expect(second!.seq).toBe(first!.seq + 1)
+  })
+
+  it('does not burn a sequence on a snapshot take between two appends', () => {
+    // Why: a snapshot take resets the log to a new generation and contributes
+    // no appended batch, so it must not consume a batch sequence either.
+    const subprocess = createMockSubprocess()
+    const live = createSession(subprocess)
+
+    subprocess.simulateData('first')
+    const first = live.takePendingOutput(false)
+
+    subprocess.simulateData('snapshotted')
+    const snap = live.takePendingOutput(true)
+    expect(snap!.records).toEqual([])
+
+    subprocess.simulateData('second')
+    const second = live.takePendingOutput(false)
+    expect(second!.seq).toBe(first!.seq + 1)
+  })
+
   it('flags overflow past the cap and recovers after a take', () => {
     const subprocess = createMockSubprocess()
     const live = createSession(subprocess)

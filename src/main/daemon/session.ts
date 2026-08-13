@@ -494,7 +494,17 @@ export class Session {
     this.pendingOutputRecords = []
     this.pendingOutputBytes = 0
     this.pendingOutputOverflowed = false
-    this.pendingOutputSeq += 1
+    // Why: a batch sequence number is consumed only by a take that produces a
+    // disk batch (non-empty records appended via appendIncrements). A snapshot
+    // take resets the log, and an empty/write-only take (e.g. a keystroke
+    // marked the session dirty but recorded no output) appends nothing — so
+    // neither must burn a seq. Incrementing on an empty take would leave the
+    // next appended batch non-contiguous (k, k+2), and the cold-restore reader
+    // treats that gap as a lost batch and discards the entire log.
+    const willAppend = !includeSnapshot && records.length > 0
+    if (willAppend) {
+      this.pendingOutputSeq += 1
+    }
     return {
       records: includeSnapshot
         ? releasedHeldBytes
