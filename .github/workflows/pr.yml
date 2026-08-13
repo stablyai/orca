@@ -53,6 +53,9 @@ jobs:
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
+      - name: Enforce circular-imports ratchet
+        run: pnpm run check:circular-imports-ratchet
+
       - name: Verify bundled skill guides
         run: pnpm run verify:bundled-skill-guides
 
