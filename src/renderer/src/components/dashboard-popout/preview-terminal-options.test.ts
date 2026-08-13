@@ -41,6 +41,12 @@ describe('buildPreviewAppearanceOptions', () => {
     expect(options.fontSize).toBe(14)
     expect(options.cursorBlink).toBe(true)
   })
+
+  it('does not assign the same face to regular and bold at weight 700', () => {
+    const options = buildPreviewAppearanceOptions({ ...SETTINGS, terminalFontWeight: 700 }, false)
+    expect(options.fontWeight).toBe(400)
+    expect(options.fontWeightBold).toBe(700)
+  })
 })
 
 describe('buildPreviewTerminalOptions', () => {

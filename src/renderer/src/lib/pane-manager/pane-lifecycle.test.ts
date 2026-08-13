@@ -96,6 +96,12 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().scrollback).toBe(5_000)
   })
 
+  it('keeps default regular and bold weights on distinct faces', () => {
+    const options = buildDefaultTerminalOptions()
+    expect(options.fontWeight).toBe(500)
+    expect(options.fontWeightBold).toBe(700)
+  })
+
   it('slightly increases default terminal wheel scrolling while preserving fast scroll', () => {
     const options = buildDefaultTerminalOptions()
 

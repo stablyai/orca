@@ -134,9 +134,13 @@ vi.mock('@/lib/terminal-theme', () => ({
   })
 }))
 
-vi.mock('../../../../shared/terminal-fonts', () => ({
-  resolveTerminalFontWeights: () => ({ fontWeight: 500, fontWeightBold: 700 })
-}))
+vi.mock('../../../../shared/terminal-fonts', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    resolveTerminalFontWeights: () => ({ fontWeight: 500, fontWeightBold: 700 })
+  }
+})
 
 vi.mock('../../../../shared/terminal-ligatures', () => ({
   resolveTerminalLigaturesEnabled: () => mockLigaturesAddon.enabled

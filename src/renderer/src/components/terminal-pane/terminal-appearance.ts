@@ -2,6 +2,7 @@ import type { ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
+import { probeTerminalFontFaces } from '@/lib/terminal-font-face-probe'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
   getBuiltinTheme,
@@ -150,7 +151,11 @@ export function applyTerminalAppearance(
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
 
-  const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
+  const fontFamily = buildFontFamily(settings.terminalFontFamily)
+  const terminalFontWeights = resolveTerminalFontWeights(
+    settings.terminalFontWeight,
+    probeTerminalFontFaces(fontFamily)
+  )
   const ligaturesEnabled = resolveTerminalLigaturesEnabled(
     settings.terminalLigatures,
     settings.terminalFontFamily
@@ -181,7 +186,7 @@ export function applyTerminalAppearance(
     const paneSize = paneFontSizes.get(pane.id)
     const metricOptions = {
       fontSize: paneSize ?? settings.terminalFontSize,
-      fontFamily: buildFontFamily(settings.terminalFontFamily),
+      fontFamily,
       fontWeight: terminalFontWeights.fontWeight,
       fontWeightBold: terminalFontWeights.fontWeightBold,
       lineHeight: normalizeTerminalLineHeight(settings.terminalLineHeight)

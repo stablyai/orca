@@ -72,6 +72,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
+import { probeTerminalFontFaces } from '@/lib/terminal-font-face-probe'
 import {
   buildFontFamily,
   normalizeTerminalLayoutSnapshot,
@@ -1505,7 +1506,11 @@ export function useTerminalPaneLifecycle({
       onExternalPaneDrop,
       terminalOptions: () => {
         const currentSettings = settingsRef.current
-        const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
+        const fontFamily = buildFontFamily(currentSettings?.terminalFontFamily ?? '')
+        const terminalFontWeights = resolveTerminalFontWeights(
+          currentSettings?.terminalFontWeight,
+          probeTerminalFontFaces(fontFamily)
+        )
         const cursorStyle = currentSettings?.terminalCursorStyle ?? 'block'
         const storeState = useAppStore.getState()
         const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
@@ -1534,7 +1539,7 @@ export function useTerminalPaneLifecycle({
           ...windowsPtyCompatibilityOptions,
           ...keyboardProtocolOptions,
           fontSize: currentSettings?.terminalFontSize ?? 14,
-          fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
+          fontFamily,
           fontWeight: terminalFontWeights.fontWeight,
           fontWeightBold: terminalFontWeights.fontWeightBold,
           scrollback: normalizeDesktopTerminalScrollbackRows(

@@ -10,6 +10,7 @@ import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
+import { probeTerminalFontFaces } from '@/lib/terminal-font-face-probe'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
@@ -117,7 +118,10 @@ export function TerminalSettingsPreview({
     if (!container) {
       return
     }
-    const weights = resolveTerminalFontWeights(settings.terminalFontWeight)
+    const weights = resolveTerminalFontWeights(
+      settings.terminalFontWeight,
+      probeTerminalFontFaces(buildFontFamily(effectiveFontFamily))
+    )
     skipInitialOptionMutationRef.current = true
     skipInitialThemeRewriteRef.current = true
     // Why: DOM renderer only — WebGL contexts are scarce and multiple previews can mount at once.
@@ -171,7 +175,10 @@ export function TerminalSettingsPreview({
       skipInitialOptionMutationRef.current = false
       return
     }
-    const weights = resolveTerminalFontWeights(settings.terminalFontWeight)
+    const weights = resolveTerminalFontWeights(
+      settings.terminalFontWeight,
+      probeTerminalFontFaces(buildFontFamily(effectiveFontFamily))
+    )
     terminal.options.fontSize = settings.terminalFontSize
     terminal.options.fontFamily = buildFontFamily(effectiveFontFamily)
     terminal.options.fontWeight = weights.fontWeight

@@ -2,6 +2,7 @@ import type { ITerminalInitOnlyOptions, ITerminalOptions, ITheme } from '@xterm/
 import type { GlobalSettings } from '../../../../shared/types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
+import { probeTerminalFontFaces } from '@/lib/terminal-font-face-probe'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import {
   buildDefaultTerminalOptions,
@@ -19,10 +20,14 @@ export function buildPreviewAppearanceOptions(
   macOptionIsMeta: boolean
 ): Partial<ITerminalOptions> {
   const cursorStyle = settings?.terminalCursorStyle ?? 'block'
-  const fontWeights = resolveTerminalFontWeights(settings?.terminalFontWeight)
+  const fontFamily = buildFontFamily(settings?.terminalFontFamily ?? '')
+  const fontWeights = resolveTerminalFontWeights(
+    settings?.terminalFontWeight,
+    probeTerminalFontFaces(fontFamily)
+  )
   return {
     fontSize: settings?.terminalFontSize ?? 14,
-    fontFamily: buildFontFamily(settings?.terminalFontFamily ?? ''),
+    fontFamily,
     fontWeight: fontWeights.fontWeight,
     fontWeightBold: fontWeights.fontWeightBold,
     cursorStyle,
