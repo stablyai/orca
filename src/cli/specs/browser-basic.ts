@@ -228,8 +228,8 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['tab', 'close'],
     summary: 'Close a browser tab',
-    usage: 'orca tab close [--index <n>] [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'index', 'worktree']
+    usage: 'orca tab close [--index <n> | --page <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'index', 'page', 'worktree']
   },
   {
     path: ['exec'],

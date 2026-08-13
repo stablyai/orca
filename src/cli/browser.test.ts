@@ -126,6 +126,40 @@ describe('orca cli browser page targeting', () => {
     })
   })
 
+  it('passes page-targeted tab closes through without resolving the current worktree', async () => {
+    queueFixtures(callMock, okFixture('req_close', { closed: true }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['tab', 'close', '--page', 'page-2', '--json'], '/tmp/not-an-orca-worktree')
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('browser.tabClose', {
+      index: undefined,
+      page: 'page-2'
+    })
+  })
+
+  it('validates page-targeted tab closes against an explicit current worktree', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_close', { closed: true })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'close', '--page', 'page-2', '--worktree', 'current', '--json'],
+      '/tmp/repo/feature/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'browser.tabClose', {
+      index: undefined,
+      page: 'page-2',
+      worktree: 'id:repo::/tmp/repo/feature'
+    })
+  })
+
   it('passes focus: true through to browser.tabSwitch when --focus is set', async () => {
     queueFixtures(callMock, okFixture('req_switch', { switched: 1, browserPageId: 'page-1' }))
     vi.spyOn(console, 'log').mockImplementation(() => {})
