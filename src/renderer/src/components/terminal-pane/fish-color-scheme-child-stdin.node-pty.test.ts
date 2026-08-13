@@ -366,13 +366,17 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       // screen. Why a line and not the first chunk: leaked replies carry no newline, so a
       // once('data') child reports them alone whenever they arrive in their own read —
       // which is what the issue's own `sys.stdin.readline()` repro measures.
+      // CHILD-READY is the settle signal: fish can emit extra ?2031l during startup, so
+      // a global withdraw count of 2 is not proof the node child owns the tty.
+      // Accept CR or LF: a PTY without ICRNL never turns the harness' \r into \n.
       const childScript = path.join(configHome, 'read-stdin.mjs')
       writeFileSync(
         childScript,
-        "let buffered = ''\n" +
+        "process.stdout.write('CHILD-READY\\n')\n" +
+          "let buffered = ''\n" +
           "process.stdin.on('data', (d) => {\n" +
           "  buffered += d.toString('utf8')\n" +
-          "  if (!buffered.includes('\\n')) return\n" +
+          "  if (!buffered.includes('\\n') && !buffered.includes('\\r')) return\n" +
           "  process.stdout.write('CHILD-READ:' + JSON.stringify(buffered) + '\\n')\n" +
           '  process.exit(0)\n' +
           '})\n'
@@ -436,16 +440,22 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           .paneMode2031Ref.current
         expect(await waitUntil(() => paneMode2031.get(1) === true, 5_000)).toBe(true)
 
+        // Startup can already have emitted ?2031l (prompt paint / DA1). Count from here
+        // so those do not make the sleep/child waits succeed before either owns the tty.
+        const withdrawsAtPrompt = countOf(rendered, WITHDRAW_2031)
         // Type-ahead is the deterministic leak shape: queue the child command while an
         // external command still owns the tty, so fish repaints the prompt (`?2031h`) and
         // consumes the buffered line in the same breath — handoff lands sub-millisecond
         // after the subscribe, inside any reply's flight time.
         term.write('sleep 0.4\r')
-        // Withdrawal #1: `sleep` owns the tty now, so the next line is typed ahead.
-        expect(await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= 1, 5_000)).toBe(true)
+        expect(
+          await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= withdrawsAtPrompt + 1, 5_000)
+        ).toBe(true)
         term.write('"$ORCA_NODE_BIN" "$ORCA_CHILD_SCRIPT"\r')
-        // Withdrawal #2: fish re-armed for the prompt and handed the tty to the child.
-        expect(await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= 2, 5_000)).toBe(true)
+        expect(
+          await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= withdrawsAtPrompt + 2, 5_000)
+        ).toBe(true)
+        expect(await waitUntil(() => rendered.includes('CHILD-READY'), 10_000)).toBe(true)
 
         const renderedBeforeChildInput = rendered.length
         // Canonical mode buffers this in the tty, so it queues behind anything already
@@ -455,7 +465,8 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           await waitUntil(
             () => rendered.slice(renderedBeforeChildInput).includes('CHILD-READ:'),
             10_000
-          )
+          ),
+          `child produced no CHILD-READ; rendered=${JSON.stringify(rendered.slice(-400))}`
         ).toBe(true)
 
         const childRead =

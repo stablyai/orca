@@ -154,36 +154,72 @@ function settingsForWorktreeOwner(state: AppState, worktreeId: string): AppState
 }
 
 // Why: IPC writes aren't ordered, so serialize per worktree to stop an older snapshot from overwriting a newer one on disk.
-const persistQueueByWorktree = new Map<string, Promise<void>>()
+const persistQueueByWorktree = new Map<string, Promise<PersistOutcome>>()
 
-// Why: chain each write onto the prior promise so writes land in call order; both then handlers keep the chain alive past a failure.
-// Why: queued work reads the latest list at dequeue time, and the returned promise settles for THIS write so callers can roll back.
+type QueueDurability = {
+  // Why: what storage actually holds, so a failed write rolls back to disk rather than to a still-optimistic list.
+  comments: DiffComment[] | undefined
+  // Why: a write snapshots state at dequeue time, so it can carry mutations queued behind it all the way to disk.
+  persistedSeq: number
+  enqueuedSeq: number
+}
+
+// Why: dropped once the queue drains and state matches disk again.
+const durabilityByQueue = new Map<string, QueueDurability>()
+
+type PersistOutcome =
+  | { ok: true }
+  | { ok: false; error: unknown; durable: DiffComment[] | undefined }
+
+// Why: chain each write onto the prior one so writes land in call order; outcomes resolve rather than reject so a
+// failure carries the durable list back to its own caller without breaking the chain.
 function enqueuePersist(
   worktreeId: string,
   get: () => AppState,
-  folderExecutionHostId?: ReturnType<typeof getExecutionHostIdForFolderWorkspace>
-): Promise<void> {
+  mutation: CommentMutation
+): Promise<PersistOutcome> {
+  const folderExecutionHostId = mutation.folderExecutionHostId
   const queueKey = folderExecutionHostId ? `${folderExecutionHostId}\0${worktreeId}` : worktreeId
-  const prior = persistQueueByWorktree.get(queueKey) ?? Promise.resolve()
-  const run = async (): Promise<void> => {
+  let existing = durabilityByQueue.get(queueKey)
+  if (!existing) {
+    // Why: an empty queue means nothing is in flight, so the pre-mutation list is what storage holds.
+    existing = { comments: mutation.previous, persistedSeq: 0, enqueuedSeq: 0 }
+    durabilityByQueue.set(queueKey, existing)
+  }
+  const durability = existing
+  const seq = ++durability.enqueuedSeq
+  const prior =
+    persistQueueByWorktree.get(queueKey) ?? Promise.resolve<PersistOutcome>({ ok: true })
+  const run = async (): Promise<PersistOutcome> => {
     const scope = parseWorkspaceKey(worktreeId)
-    if (scope?.type === 'folder') {
-      const state = get()
-      const folderWorkspace = findFolderWorkspaceOwner(
-        state,
-        scope.folderWorkspaceId,
-        folderExecutionHostId
-      )
-      const latest = (folderWorkspace?.diffComments ?? []).map(normalizeDiffComment)
-      await persist(state, state.settings, worktreeId, latest, folderExecutionHostId)
-      return
-    }
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    const repoList = get().worktreesByRepo[repoId]
-    const target = repoList?.find((w) => w.id === worktreeId)
-    const latest = (target?.diffComments ?? []).map(normalizeDiffComment)
     const state = get()
-    await persist(state, settingsForWorktreeOwner(state, worktreeId), worktreeId, latest)
+    // Why: enqueue follows the state mutation synchronously, so this snapshot already covers every enqueued mutation.
+    const covered = durability.enqueuedSeq
+    const latest =
+      scope?.type === 'folder'
+        ? (
+            findFolderWorkspaceOwner(state, scope.folderWorkspaceId, folderExecutionHostId)
+              ?.diffComments ?? []
+          ).map(normalizeDiffComment)
+        : (
+            state.worktreesByRepo[getRepoIdFromWorktreeId(worktreeId)]?.find(
+              (w) => w.id === worktreeId
+            )?.diffComments ?? []
+          ).map(normalizeDiffComment)
+    try {
+      await (scope?.type === 'folder'
+        ? persist(state, state.settings, worktreeId, latest, folderExecutionHostId)
+        : persist(state, settingsForWorktreeOwner(state, worktreeId), worktreeId, latest))
+    } catch (error) {
+      // Why: an earlier queued write may have snapshotted this mutation and landed it, so it isn't lost after all.
+      if (durability.persistedSeq >= seq) {
+        return { ok: true }
+      }
+      return { ok: false, error, durable: durability.comments }
+    }
+    durability.comments = latest
+    durability.persistedSeq = covered
+    return { ok: true }
   }
   const next = prior.then(run, run)
   persistQueueByWorktree.set(queueKey, next)
@@ -192,10 +228,34 @@ function enqueuePersist(
   const cleanup = (): void => {
     if (persistQueueByWorktree.get(queueKey) === next) {
       persistQueueByWorktree.delete(queueKey)
+      durabilityByQueue.delete(queueKey)
     }
   }
   next.then(cleanup, cleanup)
   return next
+}
+
+// Why: single commit path for every mutation so rollback always targets the durable list.
+async function commitMutation(
+  set: Parameters<StateCreator<AppState, [], [], DiffCommentsSlice>>[0],
+  get: () => AppState,
+  worktreeId: string,
+  mutation: CommentMutation
+): Promise<boolean> {
+  const outcome = await enqueuePersist(worktreeId, get, mutation)
+  if (outcome.ok) {
+    return true
+  }
+  console.error('Failed to persist diff comments:', outcome.error)
+  // Why: rollback's identity guard no-ops if a later mutation already replaced the list, so a newer write can't be lost.
+  rollback(set, worktreeId, outcome.durable, mutation.next, mutation.folderExecutionHostId)
+  return false
+}
+
+type CommentMutation = {
+  previous: DiffComment[] | undefined
+  next: DiffComment[]
+  folderExecutionHostId?: ReturnType<typeof getExecutionHostIdForFolderWorkspace>
 }
 
 // Why: derive the next list inside the `set` updater so concurrent writes can't clobber each other via a stale closure.
@@ -203,11 +263,7 @@ function mutateComments(
   set: Parameters<StateCreator<AppState, [], [], DiffCommentsSlice>>[0],
   worktreeId: string,
   mutate: (existing: DiffComment[]) => DiffComment[] | null
-): {
-  previous: DiffComment[] | undefined
-  next: DiffComment[]
-  folderExecutionHostId?: ReturnType<typeof getExecutionHostIdForFolderWorkspace>
-} | null {
+): CommentMutation | null {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   let previous: DiffComment[] | undefined
   let next: DiffComment[] | null = null
@@ -330,17 +386,12 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     if (!result) {
       return null
     }
-    try {
-      // Why: serialize through the per-worktree queue so concurrent writes can't land on disk out of call order.
-      await enqueuePersist(input.worktreeId, get, result.folderExecutionHostId)
-      get().recordFeatureInteraction?.('review-notes')
-      return comment
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      // Why: rollback's identity guard no-ops if a later mutation already replaced the list, so a newer write can't be lost.
-      rollback(set, input.worktreeId, result.previous, result.next, result.folderExecutionHostId)
+    // Why: serialize through the per-worktree queue so concurrent writes can't land on disk out of call order.
+    if (!(await commitMutation(set, get, input.worktreeId, result))) {
       return null
     }
+    get().recordFeatureInteraction?.('review-notes')
+    return comment
   },
 
   updateDiffComment: async (worktreeId, commentId, body) => {
@@ -377,14 +428,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       // Why: comment vanished or the same body was already written between pre-check and set; treat as success so the editor closes.
       return true
     }
-    try {
-      await enqueuePersist(worktreeId, get, result.folderExecutionHostId)
-      return true
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next, result.folderExecutionHostId)
-      return false
-    }
+    return commitMutation(set, get, worktreeId, result)
   },
 
   clearDeliveredDiffComments: async (worktreeId, comments) => {
@@ -403,15 +447,11 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     if (!result) {
       return true
     }
-    try {
-      await enqueuePersist(worktreeId, get, result.folderExecutionHostId)
-      get().recordFeatureInteraction?.('review-notes')
-      return true
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next, result.folderExecutionHostId)
+    if (!(await commitMutation(set, get, worktreeId, result))) {
       return false
     }
+    get().recordFeatureInteraction?.('review-notes')
+    return true
   },
 
   markDiffCommentsSent: async (worktreeId, commentIds, sentAt = Date.now()) => {
@@ -433,15 +473,11 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     if (!result) {
       return true
     }
-    try {
-      await enqueuePersist(worktreeId, get, result.folderExecutionHostId)
-      get().recordFeatureInteraction?.('review-notes')
-      return true
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next, result.folderExecutionHostId)
+    if (!(await commitMutation(set, get, worktreeId, result))) {
       return false
     }
+    get().recordFeatureInteraction?.('review-notes')
+    return true
   },
 
   deleteDiffComment: async (worktreeId, commentId) => {
@@ -452,13 +488,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     if (!result) {
       return
     }
-    try {
-      // Why: serialize through the per-worktree queue so concurrent writes can't land out of call order.
-      await enqueuePersist(worktreeId, get, result.folderExecutionHostId)
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next, result.folderExecutionHostId)
-    }
+    // Why: serialize through the per-worktree queue so concurrent writes can't land out of call order.
+    await commitMutation(set, get, worktreeId, result)
   },
 
   clearDiffComments: async (worktreeId) => {
@@ -468,14 +499,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     if (!result) {
       return true
     }
-    try {
-      await enqueuePersist(worktreeId, get, result.folderExecutionHostId)
-      return true
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next, result.folderExecutionHostId)
-      return false
-    }
+    return commitMutation(set, get, worktreeId, result)
   },
 
   clearDiffCommentsForFile: async (worktreeId, filePath) => {
@@ -486,13 +510,6 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     if (!result) {
       return true
     }
-    try {
-      await enqueuePersist(worktreeId, get, result.folderExecutionHostId)
-      return true
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next, result.folderExecutionHostId)
-      return false
-    }
+    return commitMutation(set, get, worktreeId, result)
   }
 })

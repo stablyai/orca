@@ -4,6 +4,7 @@ import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
+import { parsePersistedDiffComments } from './diff-comment-schema'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -104,7 +105,9 @@ export function normalizeFolderWorkspaces(
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
         typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
-      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
+      ...(Array.isArray(raw.diffComments)
+        ? { diffComments: parsePersistedDiffComments(raw.diffComments) }
+        : {})
     })
   }
   return workspaces.sort(
