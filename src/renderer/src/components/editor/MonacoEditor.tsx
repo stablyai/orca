@@ -34,6 +34,13 @@ import {
   createMarkdownDocLinkDecorationController,
   type MarkdownDocLinkDecorationController
 } from './monaco-markdown-doc-link-decorations'
+import {
+  createImportFileLinkController,
+  IMPORT_LINKS_MOD_HELD_CLASS,
+  type ImportFileLinkController
+} from './monaco-import-file-links'
+import { useModifierHeldClass } from './useModifierHeldClass'
+import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
 import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
@@ -123,6 +130,10 @@ export default function MonacoEditor({
   const languageRef = useRef(language)
   languageRef.current = language
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
+  const importFileLinksRef = useRef<ImportFileLinkController | null>(null)
+  // Why: import links only advertise clickability while ⌘/Ctrl is held, matching
+  // the markdown-editor link affordance so a plain click still just places the caret.
+  useModifierHeldClass(editorContainerRef, isMacPlatform(), IMPORT_LINKS_MOD_HELD_CLASS)
   const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealDecorationRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -361,6 +372,13 @@ export default function MonacoEditor({
         editorInstance,
         () => languageRef.current
       )
+      importFileLinksRef.current?.dispose()
+      importFileLinksRef.current = createImportFileLinkController(editorInstance, monaco, {
+        getLanguageId: () => languageRef.current,
+        getFilePath: () => filePath,
+        getFileId: () => fileId,
+        getWorktreeId: () => worktreeId
+      })
       ensureMarkdownDocCompletionProvider(monaco)
       updateMarkdownCompletionDocuments()
 
@@ -737,6 +755,7 @@ export default function MonacoEditor({
 
   useEffect(() => {
     markdownDocLinkDecorationsRef.current?.refresh()
+    importFileLinksRef.current?.refresh()
   }, [content, language])
 
   useEffect(() => {
@@ -770,6 +789,8 @@ export default function MonacoEditor({
       }
       markdownDocLinkDecorationsRef.current?.dispose()
       markdownDocLinkDecorationsRef.current = null
+      importFileLinksRef.current?.dispose()
+      importFileLinksRef.current = null
       conflictDecorationsRef.current?.clear()
       conflictDecorationsRef.current = null
     }

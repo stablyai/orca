@@ -98,6 +98,7 @@
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-ai-action-accent: var(--ai-action-accent);
+  --color-editor-link: var(--editor-link);
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
@@ -168,6 +169,7 @@
   --input: #e5e5e5;
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
+  --editor-link: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
@@ -271,6 +273,7 @@
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
+  --editor-link: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
@@ -2117,10 +2120,82 @@ html.native-shell .app-layout {
 }
 
 .monaco-editor .monaco-markdown-doc-link {
-  color: #58a6ff !important;
+  color: var(--editor-link) !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;
+}
+
+/* Why: the hover card stacks rows from every provider in registration order;
+   flex ordering pins Orca's "open import target" link row below TS quick info
+   and the ctrl+hover definition excerpt regardless of provider order. */
+.monaco-editor .monaco-hover-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.monaco-editor .monaco-hover-content .hover-row:has(a[data-href^='command:orca.openImportTarget']) {
+  order: 99;
+}
+
+/* Peek title filename/dirname open the shown file on click. */
+.monaco-editor .peekview-title .orca-peek-open-target {
+  cursor: pointer;
+}
+
+.monaco-editor .peekview-title .orca-peek-open-target:hover {
+  color: var(--editor-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+/* Copy-path button injected into the peek (references) widget title. */
+.monaco-editor .peekview-title .orca-peek-copy-path {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.monaco-editor .peekview-title .orca-peek-copy-path:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.monaco-editor .peekview-title .orca-peek-copy-path .orca-peek-copy-path-check {
+  display: none;
+}
+
+.monaco-editor
+  .peekview-title
+  .orca-peek-copy-path.orca-peek-copy-path--copied
+  .orca-peek-copy-path-check {
+  display: inline;
+}
+
+.monaco-editor
+  .peekview-title
+  .orca-peek-copy-path.orca-peek-copy-path--copied
+  .orca-peek-copy-path-icon {
+  display: none;
+}
+
+/* Why: import links advertise clickability only while ⌘/Ctrl is held, so a plain
+   click keeps behaving as caret placement (same affordance as markdown links). */
+.monaco-import-links-mod-held .monaco-editor .monaco-import-file-link {
+  color: var(--editor-link) !important;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 /* Why: Monaco's faded scrollbar uses the class `invisible`, which collides with

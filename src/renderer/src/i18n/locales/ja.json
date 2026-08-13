@@ -313,6 +313,12 @@
       }
     },
     "lib": {
+      "monaco": {
+        "peek": {
+          "open": { "file": { "openFile": "クリックしてファイルを開く" } },
+          "path": { "copy": { "copyPath": "パスをコピー" } }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -12825,7 +12831,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "選択したテキストにメモを追加する",
           "fd68ae03b3": "ファイル内を検索",
-          "largePasteTooLarge": "貼り付け内容が大きすぎます。"
+          "largePasteTooLarge": "貼り付け内容が大きすぎます。",
+          "openImportedFile": "インポートされたファイルを開く"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "リモート URL をコピー",

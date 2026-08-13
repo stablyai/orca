@@ -313,6 +313,12 @@
       }
     },
     "lib": {
+      "monaco": {
+        "peek": {
+          "open": { "file": { "openFile": "클릭하여 파일 열기" } },
+          "path": { "copy": { "copyPath": "경로 복사" } }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -12825,7 +12831,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "선택한 텍스트에 메모 추가",
           "fd68ae03b3": "파일에서 검색",
-          "largePasteTooLarge": "붙여넣기 내용이 너무 큽니다."
+          "largePasteTooLarge": "붙여넣기 내용이 너무 큽니다.",
+          "openImportedFile": "가져온 파일 열기"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "원격 URL 복사",
