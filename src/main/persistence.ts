@@ -3552,6 +3552,7 @@ export class Store {
             mobilePairingCustomAddresses,
             // Why: persisted settings may be hand-edited or from older builds; keep tray-minimize false unless stored value is true.
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
+            discordRichPresenceEnabled: parsed.settings?.discordRichPresenceEnabled === true,
             // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
             showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
@@ -5917,6 +5918,10 @@ export class Store {
     // Why: the artifact publish capability must be an exact boolean on disk; no truthy value grants it.
     if ('artifactSharingEnabled' in updates) {
       sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
+    }
+    // Why: presence sharing is opt-in and privacy-sensitive; coerce to exact boolean like other gates.
+    if ('discordRichPresenceEnabled' in updates) {
+      sanitizedUpdates.discordRichPresenceEnabled = updates.discordRichPresenceEnabled === true
     }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
