@@ -107,6 +107,7 @@ export const DORMANT_AUTOMATION_RUN: AutomationRun = {
   terminalSessionId: 'tab-history',
   terminalPaneKey: null,
   terminalPtyId: 'pty-history',
+  completionAttribution: null,
   outputSnapshot: {
     format: 'plain_text',
     content: 'all green',

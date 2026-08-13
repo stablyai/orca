@@ -88,6 +88,7 @@ export async function handleAutomationDispatchRequest({
     const completion = createAutomationDispatchCompletion({
       run,
       worktree,
+      agentId: automation.agentId,
       precheckResult: resolved.context.precheckResult,
       markDispatchResult,
       releaseTerminalOwnership,
@@ -151,6 +152,7 @@ export async function handleAutomationDispatchRequest({
               completion.observeAgentStatus(reusableSession.paneKey, reuseCompletionStartedAt, {
                 requireWorkingAfterStart: true
               })
+              completion.setCompletionTerminal(reusableSession.paneKey, reusableSession.ptyId)
               await markDispatchResult({
                 runId: run.id,
                 status: 'dispatched',
@@ -214,6 +216,7 @@ export async function handleAutomationDispatchRequest({
     }
     const launchedTabId = result.tabId
     completion.observeAgentStatus(result.paneKey, dispatchStartedAt)
+    completion.setCompletionTerminal(result.paneKey, result.ptyId)
     try {
       await markDispatchResult({
         runId: run.id,

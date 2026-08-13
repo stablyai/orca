@@ -14,8 +14,10 @@ import type {
   AgentStatusState
 } from '../../../shared/agent-status-types'
 import {
+  buildAutomationRunCompletionAttribution,
   createAutomationAgentSessionTracker,
-  noteAutomationAgentStatus
+  noteAutomationAgentStatus,
+  resolveAutomationRunUsageProvider
 } from '@/lib/automation-agent-session-attribution'
 import {
   selectAutomationAgentStatusEntryChange,
@@ -30,6 +32,7 @@ type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 export function createAutomationDispatchCompletion(args: {
   run: AutomationRun
   worktree: Worktree
+  agentId?: string
   precheckResult: AutomationPrecheckResult | null
   markDispatchResult: MarkDispatchResult
   releaseTerminalOwnership: () => void
@@ -47,6 +50,15 @@ export function createAutomationDispatchCompletion(args: {
   // Why: bind completion to the primary provider session so nested same-pane
   // agents (SessionStart `claude -p`) cannot finalize the run early (#10999).
   const agentSessionTracker = createAutomationAgentSessionTracker()
+  let completionTerminalPaneKey: string | null = null
+  let completionTerminalPtyId: string | null = null
+  const buildCompletionAttribution = () =>
+    buildAutomationRunCompletionAttribution({
+      tracker: agentSessionTracker,
+      provider: resolveAutomationRunUsageProvider(args.agentId ?? ''),
+      terminalPtyId: completionTerminalPtyId,
+      terminalPaneKey: completionTerminalPaneKey
+    })
   let unsubscribeAgentStatus = (): void => {}
   let unsubscribeSessionObserver = (): void => {}
   let releaseReuseDispatchTab = (): void => {}
@@ -71,6 +83,7 @@ export function createAutomationDispatchCompletion(args: {
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
+        completionAttribution: buildCompletionAttribution(),
         precheckResult: args.precheckResult,
         error: null
       })
@@ -129,6 +142,7 @@ export function createAutomationDispatchCompletion(args: {
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
+        completionAttribution: code === 0 ? buildCompletionAttribution() : null,
         precheckResult: args.precheckResult,
         error: code === 0 ? null : `Automation process exited with code ${code}.`
       })
@@ -296,6 +310,10 @@ export function createAutomationDispatchCompletion(args: {
       )
     },
     observeAgentStatus,
+    setCompletionTerminal: (paneKey: string | null, ptyId: string | null) => {
+      completionTerminalPaneKey = paneKey
+      completionTerminalPtyId = ptyId
+    },
     setReuseDispatchTabRelease: (release: () => void) => {
       releaseReuseDispatchTab = release
     },

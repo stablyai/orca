@@ -229,6 +229,10 @@ export function backfillLegacyAutomationContexts(
       next.terminalPtyId = null
       changed = true
     }
+    if (!Object.hasOwn(next, 'completionAttribution')) {
+      next.completionAttribution = null
+      changed = true
+    }
     return next
   })
   if (!changed) {
