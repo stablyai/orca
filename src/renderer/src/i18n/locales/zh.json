@@ -14439,7 +14439,7 @@
       "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
       "modeFull": "完整会话记录",
       "modeFullDescription": "让新智能体在继续前读取完整的已保存会话。这可能需要更长时间，并消耗大量上下文、套餐用量或 API 额度。",
-      "startsIn": "将在…后开始：",
+      "startsIn": "启动目录：",
       "startSession": "启动新会话",
       "starting": "正在启动…",
       "noContext": "没有可用于在新会话中继续的上下文。",
