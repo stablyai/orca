@@ -16,7 +16,6 @@ import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
 import {
-  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
@@ -56,6 +55,7 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
+import { buildAiVaultListCacheKeys } from './ai-vault-list-cache-keys'
 
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 // Why: a remote home with many agent roots routinely needs seconds to walk,
@@ -94,17 +94,8 @@ async function listAiVaultSessions(
   const executionHostScope = normalizeExecutionHostScope(
     args?.executionHostScope ?? LOCAL_EXECUTION_HOST_ID
   )
-  // Scope paths change the result set, so they must be part of the cache key.
-  // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
-  // can share a snapshot regardless of which worktree was selected first.
   const scopePaths = args?.scopePaths ?? []
-  const key = JSON.stringify({
-    scopePaths:
-      scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
-        ? [...new Set(scopePaths)].sort()
-        : scopePaths,
-    executionHostScope
-  })
+  const { key, remoteLegKey } = buildAiVaultListCacheKeys({ scopePaths, executionHostScope })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   // Why: every renderer request carries its own cancellation signal, so
@@ -115,7 +106,8 @@ async function listAiVaultSessions(
     force: args?.force,
     signal: options.signal,
     start: (scanSignal) => {
-      const scan = () => scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, key)
+      const scan = () =>
+        scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, remoteLegKey)
       if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
         return scan()
       }

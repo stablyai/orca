@@ -3342,6 +3342,7 @@ export class OrcaRuntimeService {
       // here, not via the window-only registerCoreHandlers path — that path never
       // runs under `orca serve`, so remote/SSH hosts would silently drop
       // managed-Codex sessions. The runtime ctor runs in BOTH window and serve.
+      getCodexSessionSourceHomePath?: () => string | undefined
       getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
       prepareAiVaultSessionResume?: (
         args: AiVaultPrepareSessionResumeArgs
@@ -3378,8 +3379,9 @@ export class OrcaRuntimeService {
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
     // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
     // even on headless `orca serve` hosts where registerCoreHandlers never runs.
-    if (deps?.getAdditionalAiVaultCodexHomePaths) {
+    if (deps?.getCodexSessionSourceHomePath || deps?.getAdditionalAiVaultCodexHomePaths) {
       configureAiVaultSessionSources({
+        getCodexSessionSourceHomePath: deps.getCodexSessionSourceHomePath,
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
       })
     }

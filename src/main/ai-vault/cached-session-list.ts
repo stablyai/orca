@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
@@ -24,6 +24,9 @@ const AI_VAULT_CACHE_TTL_MS = 60_000
 // path — `orca serve` never runs that path, so sourcing it there would silently
 // drop managed-Codex sessions from remote/SSH results.
 export type AiVaultSessionSources = {
+  // Why: separate from the managed-home list because that list also feeds
+  // resume's trusted-CODEX_HOME set; this override is history-import only.
+  getCodexSessionSourceHomePath?: () => string | undefined
   getAdditionalCodexHomePaths?: () => readonly string[]
 }
 
@@ -47,12 +50,51 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
   sources = next
 }
 
+// Why: the configured source home is an EXTRA root, never a replacement for the
+// default one — users who set it still have real history in ~/.codex (the
+// #12186 reporter had 229 sessions there), so swapping the default out hides
+// them. The default root is itself `process.env.CODEX_HOME || ~/.codex`, so
+// ~/.codex stays unscanned when Orca's own env carries a custom CODEX_HOME;
+// that gap predates this seam and this override cannot reach it.
+function resolveCodexSessionDirs(): string[] {
+  const sourceHomePath = sources.getCodexSessionSourceHomePath?.()
+  return [
+    ...(sourceHomePath ? [sourceHomePath] : []),
+    ...(sources.getAdditionalCodexHomePaths?.() ?? [])
+  ].map((homePath) => join(homePath, 'sessions'))
+}
+
+// Why: order and duplicates move the key but never the scan — discovery unions
+// these roots and de-dupes them by resolve() — so an equivalent set has to key
+// identically. Pointing the override at a root already in the list (~/.codex is
+// the field's own placeholder) would otherwise evict the cache on every request.
+function codexSessionDirsCacheIdentity(dirs: readonly string[]): string[] {
+  return [...new Set(dirs.map((dir) => resolve(dir)))].sort()
+}
+
+// Why: this one runs at the IPC edge, OUTSIDE the all-hosts guard that stops a
+// failing local leg from discarding every host's sessions. Resolving sources
+// touches the filesystem and can throw, so degrade to a stable placeholder key
+// and let the scan itself report the failure as a local host issue.
+export function getAiVaultSessionSourcesCacheKey(): string {
+  try {
+    return JSON.stringify(codexSessionDirsCacheIdentity(resolveCodexSessionDirs()))
+  } catch {
+    return JSON.stringify({ unresolvedSources: true })
+  }
+}
+
 export async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
-  // Scope paths change the result set, so they must be part of the cache key.
-  const key = JSON.stringify({ scopePaths: [...new Set(args?.scopePaths ?? [])].sort() })
+  // The scan keeps the ordered list (root precedence); only the key is canonical.
+  const additionalCodexSessionsDirs = resolveCodexSessionDirs()
+  // Scope and source paths both change the result set, so they belong in the cache key.
+  const key = JSON.stringify({
+    scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
+    codexSessionDirs: codexSessionDirsCacheIdentity(additionalCodexSessionsDirs)
+  })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   const now = Date.now()
@@ -75,8 +117,6 @@ export async function listAiVaultSessions(
     force: args?.force,
     signal: options.signal,
     start: async (scanSignal) => {
-      const additionalCodexSessionsDirs =
-        sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
       const result = await scanAiVaultSessionsInBackground(
         {
           limit: args?.limit,

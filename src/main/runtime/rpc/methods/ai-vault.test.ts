@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -371,10 +372,12 @@ describe('aiVault.listSessions handler + shared cache', () => {
     // still pass if OrcaRuntimeService stopped forwarding the codex-home source.
     // Construct the real runtime to lock that cross-layer wiring in place.
     const runtime = new OrcaRuntimeService(null, undefined, {
+      getCodexSessionSourceHomePath: () => '/custom/codex/home',
       getAdditionalAiVaultCodexHomePaths: () => ['/ctor/codex/home']
     })
     await runtime.listAiVaultSessions({})
     const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
+    expect(options.additionalCodexSessionsDirs).toContain(join('/custom/codex/home', 'sessions'))
     expect(options.additionalCodexSessionsDirs).toContain('/ctor/codex/home/sessions')
   })
 })
