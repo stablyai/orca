@@ -190,6 +190,8 @@ import {
   type PhysicalModifierToken
 } from '../../shared/keybindings'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../shared/plugins/plugin-command-actions'
+import { getActiveSidebarWorkspaceId } from '../../shared/workspace-scope'
+import { resolveWorkspacePinToggleTarget } from '../../shared/workspace-pin-toggle'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
 import { findPluginCommandForKeybinding } from '@/lib/plugin-command-keybindings'
@@ -1695,6 +1697,29 @@ function App(): React.JSX.Element {
             return claim('workspace.rename', () => {
               useAppStore.getState().setSidebarOpen(true)
               requestScrollToCurrentWorkspaceRevealAndRename()
+            })
+          }
+        ],
+        [
+          'workspace.togglePin',
+          () => {
+            if (!workspaceChromeActive || floatingWorkspaceFocused) {
+              return false
+            }
+            const store = useAppStore.getState()
+            const worktreeId = getActiveSidebarWorkspaceId(
+              store.activeWorkspaceKey,
+              store.activeWorktreeId
+            )
+            const target = resolveWorkspacePinToggleTarget({
+              worktreeId,
+              isPinned: worktreeId ? store.getKnownWorktreeById(worktreeId)?.isPinned : undefined
+            })
+            if (!target) {
+              return false
+            }
+            return claim('workspace.togglePin', () => {
+              store.setWorktreesPinnedAndReveal([target.worktreeId], target.nextPinned)
             })
           }
         ],

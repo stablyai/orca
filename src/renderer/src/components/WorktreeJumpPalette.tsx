@@ -146,6 +146,8 @@ import {
 } from '@/components/cmd-j/palette-section-render-cap'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
+import { getActiveSidebarWorkspaceId } from '../../../shared/workspace-scope'
+import { resolveWorkspacePinToggleTarget } from '../../../shared/workspace-pin-toggle'
 import {
   buildCmdJActionResults,
   buildCmdJSettingsResults,
@@ -1518,6 +1520,22 @@ function WorktreeJumpPaletteContent({
     queueMicrotask(() => runWorktreeDelete(activeWorktreeId))
   }, [])
 
+  const toggleActiveWorkspacePinAction = useCallback(() => {
+    const store = useAppStore.getState()
+    const worktreeId = getActiveSidebarWorkspaceId(
+      store.activeWorkspaceKey,
+      store.activeWorktreeId
+    )
+    const target = resolveWorkspacePinToggleTarget({
+      worktreeId,
+      isPinned: worktreeId ? store.getKnownWorktreeById(worktreeId)?.isPinned : undefined
+    })
+    if (!target) {
+      return
+    }
+    store.setWorktreesPinnedAndReveal([target.worktreeId], target.nextPinned)
+  }, [])
+
   const openAddQuickCommandAction = useCallback(() => {
     openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
     openSettingsPage()
@@ -1533,6 +1551,7 @@ function WorktreeJumpPaletteContent({
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
         openCreateWorkspace: openCreateWorkspaceAction,
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
+        toggleActiveWorkspacePin: toggleActiveWorkspacePinAction,
         openAddQuickCommand: openAddQuickCommandAction
       }),
     [
@@ -1541,7 +1560,8 @@ function WorktreeJumpPaletteContent({
       openCreateWorkspaceAction,
       openNewBrowserTabInActiveWorkspace,
       openNewMarkdownInActiveWorkspace,
-      openNewTerminalTabInActiveWorkspace
+      openNewTerminalTabInActiveWorkspace,
+      toggleActiveWorkspacePinAction
     ]
   )
 

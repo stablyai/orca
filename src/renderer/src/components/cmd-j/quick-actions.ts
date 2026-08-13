@@ -1,4 +1,4 @@
-import { FileText, FolderPlus, Globe, Play, SquareTerminal, Trash2 } from 'lucide-react'
+import { FileText, FolderPlus, Globe, Pin, Play, SquareTerminal, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
 import {
@@ -170,6 +170,35 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
         return { status: 'unavailable', reason: availability.reason }
       }
       ctx.deleteActiveWorkspace()
+      return { status: 'ok' }
+    }
+  },
+  {
+    id: 'toggle-pin-workspace',
+    kind: 'action',
+    title: translate(
+      'auto.components.cmd.j.quick.actions.togglePinWorkspace',
+      'Toggle Pin for Current Workspace'
+    ),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.togglePinWorkspaceDescription',
+      'Pin or unpin the current workspace in the sidebar.'
+    ),
+    icon: Pin,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.togglePin', 'toggle pin'),
+      translate('auto.components.cmd.j.quick.actions.verbs.pinWorkspace', 'pin workspace'),
+      translate('auto.components.cmd.j.quick.actions.verbs.unpinWorkspace', 'unpin workspace'),
+      translate('auto.components.cmd.j.quick.actions.verbs.pin', 'pin'),
+      translate('auto.components.cmd.j.quick.actions.verbs.unpin', 'unpin')
+    ],
+    isAvailable: currentWorkspaceActionAvailability,
+    run: async (ctx) => {
+      const availability = currentWorkspaceActionAvailability(ctx)
+      if (!availability.available) {
+        return { status: 'unavailable', reason: availability.reason }
+      }
+      ctx.toggleActiveWorkspacePin()
       return { status: 'ok' }
     }
   },

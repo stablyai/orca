@@ -756,6 +756,35 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('keeps workspace pin toggle unassigned until users customize it', () => {
+    const binding = {
+      key: 'p',
+      code: 'KeyP',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    expect(getEffectiveKeybindingsForAction('workspace.togglePin', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('workspace.togglePin', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('workspace.togglePin', 'win32')).toEqual([])
+    expect(keybindingMatchesAction('workspace.togglePin', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.togglePin', binding, 'linux', {
+        'workspace.togglePin': ['Mod+Alt+P']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('workspace.togglePin')
+    expect(definition?.title).toBe('Toggle Pin for Current Workspace')
+    expect(definition?.scope).toBe('global')
+    expect(definition?.allowInTerminal).toBe(true)
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['pin', 'unpin', 'workspace', 'worktree'])
+    )
+  })
+
   it('keeps workspace board unassigned until users customize it', () => {
     const binding = {
       key: 'k',

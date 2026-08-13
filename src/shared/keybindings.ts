@@ -36,6 +36,7 @@ export type KeybindingActionId =
   | 'workspace.create'
   | 'workspace.rename'
   | 'workspace.delete'
+  | 'workspace.togglePin'
   | 'workspace.openBoard'
   | 'workspace.selectByIndex'
   | 'voice.dictation'
@@ -293,6 +294,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'trash'
     ],
     // Why: ship now without a default chord; user overrides still win when a future default is assigned.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'workspace.togglePin',
+    title: 'Toggle Pin for Current Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'workspace',
+      'current workspace',
+      'worktree',
+      'pin',
+      'unpin',
+      'toggle pin',
+      'favorite'
+    ],
+    // Why: unbound by default so users assign a chord; matches Pin/Unpin on the worktree card.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
