@@ -3,6 +3,7 @@ import { buildGitHistoryCommitFileTree } from './source-control/sync/git-history
 import { flattenSourceControlTree } from './source-control-tree'
 import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
 
+/** Builds a changed-file entry for a commit, defaulting to a modification. */
 function entry(
   path: string,
   status: GitBranchChangeEntry['status'] = 'modified'

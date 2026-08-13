@@ -34,6 +34,7 @@ afterEach(() => {
   container.remove()
 })
 
+/** Mounts the panel for one commit in the given view mode and compaction setting. */
 function render(
   viewMode: SourceControlViewMode,
   state: GitHistoryCommitFilesState = { status: 'ready', entries: ENTRIES },
@@ -51,10 +52,12 @@ function render(
   })
 }
 
+/** The changed-file rows currently in the document. */
 function fileRows(): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>('[data-testid="git-history-commit-file"]')]
 }
 
+/** The directory rows currently in the document; empty in list view. */
 function directoryRows(): HTMLElement[] {
   return [
     ...container.querySelectorAll<HTMLElement>('[data-testid="git-history-commit-directory"]')
