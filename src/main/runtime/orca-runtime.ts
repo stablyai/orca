@@ -2715,6 +2715,13 @@ function getSetupRunnerCommandPlatformForLaunch(
   return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
 }
 
+type ForkUpstreamSshScope = {
+  connectionId: string
+  providerGeneration: number
+}
+
+const FORK_UPSTREAM_BACKFILL_CONCURRENCY = 2
+
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
@@ -2864,6 +2871,11 @@ export class OrcaRuntimeService {
   >()
   private worktreeLifecycleListeners = new Set<(event: RuntimeWorktreeLifecycleEvent) => void>()
   private forkBackfillStarted = false
+  private forkUpstreamBackfillActivePasses = 0
+  private forkUpstreamBackfillWaiters: (() => void)[] = []
+  private forkUpstreamBackfilledConnectionIds = new Set<string>()
+  private forkUpstreamBackfillReadyGenerationByConnectionId = new Map<string, number>()
+  private forkUpstreamBackfillRunningConnectionIds = new Set<string>()
   private agentBrowserBridge: AgentBrowserBridge | null = null
   private offscreenBrowserBackend: BrowserBackend | null = null
   private emulatorBridge: EmulatorBridge | null = null
@@ -5317,6 +5329,9 @@ export class OrcaRuntimeService {
     this.invalidateSshWorktreeScanCache(targetId)
     if (state.status !== 'connected') {
       this.cancelLegacyWorkerTerminalRecoveryRetry(`ssh:${targetId}`)
+      this.forkUpstreamBackfillReadyGenerationByConnectionId.delete(targetId)
+    } else {
+      this.backfillForkUpstreamsForConnection(targetId)
     }
     this.emitClientEvent({ type: 'sshStateChanged', targetId, state: getPublicSshState(state)! })
   }
@@ -19540,22 +19555,141 @@ export class OrcaRuntimeService {
   }
 
   // Why: repos added before fork detection existed have no stored `upstream`, so
-  // their avatar/badge would never self-correct. Resolve it once at startup for
-  // local git repos; SSH repos resolve lazily when their settings open (their
-  // connection may not be up yet). Sequential to respect the gh rate limit;
-  // failures leave `upstream` unset so the next launch retries.
-  private async backfillForkUpstreams(): Promise<void> {
+  // their avatar/badge/project rows would never self-correct. Resolve it once at
+  // startup for repos whose host is already reachable; SSH repos wait for their
+  // connection instead (their host may not be up yet).
+  private backfillForkUpstreams(): Promise<boolean> {
+    return this.queueForkUpstreamBackfill(() =>
+      this.runForkUpstreamBackfill((repo) => !repo.connectionId)
+    )
+  }
+
+  // Why: an SSH fork used to stay `upstream === undefined` until someone opened
+  // its settings page, hiding it from project rows and from the fork badge with
+  // no visible cause (#12967). Connect is the first moment the probe can succeed.
+  // Fire-and-forget so nothing on the connection path waits on the network.
+  private backfillForkUpstreamsForConnection(connectionId: string): void {
+    if (
+      this.forkUpstreamBackfilledConnectionIds.has(connectionId) ||
+      !getSshGitProvider(connectionId)
+    ) {
+      return
+    }
+    this.forkUpstreamBackfillReadyGenerationByConnectionId.set(
+      connectionId,
+      getSshGitProviderGeneration(connectionId)
+    )
+    if (this.forkUpstreamBackfillRunningConnectionIds.has(connectionId)) {
+      return
+    }
+    this.forkUpstreamBackfillRunningConnectionIds.add(connectionId)
+    void this.drainForkUpstreamBackfillForConnection(connectionId)
+      .catch(() => undefined)
+      .finally(() => {
+        this.forkUpstreamBackfillRunningConnectionIds.delete(connectionId)
+        if (
+          !this.forkUpstreamBackfilledConnectionIds.has(connectionId) &&
+          this.forkUpstreamBackfillReadyGenerationByConnectionId.has(connectionId)
+        ) {
+          this.backfillForkUpstreamsForConnection(connectionId)
+        }
+      })
+  }
+
+  // Why: bound migration subprocesses without letting one stalled host block every other host.
+  private async queueForkUpstreamBackfill(run: () => Promise<boolean>): Promise<boolean> {
+    await this.acquireForkUpstreamBackfillPermit()
+    try {
+      return await run()
+    } finally {
+      this.releaseForkUpstreamBackfillPermit()
+    }
+  }
+
+  private acquireForkUpstreamBackfillPermit(): Promise<void> {
+    if (this.forkUpstreamBackfillActivePasses < FORK_UPSTREAM_BACKFILL_CONCURRENCY) {
+      this.forkUpstreamBackfillActivePasses += 1
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => this.forkUpstreamBackfillWaiters.push(resolve))
+  }
+
+  private releaseForkUpstreamBackfillPermit(): void {
+    const next = this.forkUpstreamBackfillWaiters.shift()
+    if (next) {
+      next()
+      return
+    }
+    this.forkUpstreamBackfillActivePasses -= 1
+  }
+
+  private async drainForkUpstreamBackfillForConnection(connectionId: string): Promise<void> {
+    while (!this.forkUpstreamBackfilledConnectionIds.has(connectionId)) {
+      const providerGeneration =
+        this.forkUpstreamBackfillReadyGenerationByConnectionId.get(connectionId)
+      if (providerGeneration === undefined) {
+        return
+      }
+      const scope = { connectionId, providerGeneration }
+      const complete = await this.queueForkUpstreamBackfill(() =>
+        this.runForkUpstreamBackfill((repo) => repo.connectionId === connectionId, scope)
+      )
+      if (complete) {
+        this.forkUpstreamBackfilledConnectionIds.add(connectionId)
+        this.forkUpstreamBackfillReadyGenerationByConnectionId.delete(connectionId)
+        return
+      }
+      if (
+        this.forkUpstreamBackfillReadyGenerationByConnectionId.get(connectionId) ===
+        providerGeneration
+      ) {
+        this.forkUpstreamBackfillReadyGenerationByConnectionId.delete(connectionId)
+      }
+    }
+  }
+
+  private isForkUpstreamBackfillScopeCurrent(scope: ForkUpstreamSshScope): boolean {
+    return (
+      this.forkUpstreamBackfillReadyGenerationByConnectionId.get(scope.connectionId) ===
+        scope.providerGeneration &&
+      getSshGitProviderGeneration(scope.connectionId) === scope.providerGeneration &&
+      getSshGitProvider(scope.connectionId) !== undefined
+    )
+  }
+
+  /** Resolves false when any probe failed, so the caller can retry that scope later. */
+  private async runForkUpstreamBackfill(
+    selects: (repo: Repo) => boolean,
+    sshScope?: ForkUpstreamSshScope
+  ): Promise<boolean> {
+    let complete = true
     try {
       const store = this.requireStore()
       let changed = false
       for (const repo of store.getRepos()) {
-        if (repo.upstream !== undefined || repo.kind === 'folder' || repo.connectionId) {
+        if (repo.upstream !== undefined || repo.kind === 'folder' || !selects(repo)) {
           continue
+        }
+        if (sshScope && !this.isForkUpstreamBackfillScopeCurrent(sshScope)) {
+          complete = false
+          break
         }
         let upstream: GitHubOwnerRepo | null
         try {
-          upstream = await getRepoUpstream(repo.path, null)
+          upstream = await getRepoUpstream(repo.path, repo.connectionId ?? null)
         } catch {
+          complete = false
+          if (sshScope && !this.isForkUpstreamBackfillScopeCurrent(sshScope)) {
+            break
+          }
+          continue
+        }
+        if (sshScope && !this.isForkUpstreamBackfillScopeCurrent(sshScope)) {
+          complete = false
+          break
+        }
+        // Why: SSH null may hide a transient Git/gh failure, so only persist a positive result.
+        if (sshScope && !upstream) {
           continue
         }
         const repoIcon =
@@ -19584,8 +19718,10 @@ export class OrcaRuntimeService {
       if (changed) {
         this.notifyReposChanged()
       }
+      return complete
     } catch {
-      // Best-effort startup backfill; never disrupt launch.
+      // Best-effort; never disrupt launch or a connection.
+      return false
     }
   }
 

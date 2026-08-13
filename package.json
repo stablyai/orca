@@ -102,6 +102,7 @@
     "test:e2e:terminal-perf:html-report": "node config/scripts/generate-terminal-perf-html-report.mjs",
     "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
     "test:e2e:ssh-docker-watcher-isolation": "node config/scripts/run-ssh-docker-watcher-isolation-e2e.mjs",
+    "test:e2e:ssh-docker-fork-upstream-backfill": "node config/scripts/run-ssh-docker-fork-upstream-backfill-e2e.mjs",
     "test:e2e:ssh-docker-terminal-parking": "node config/scripts/run-ssh-docker-terminal-parking-e2e.mjs",
     "test:e2e:ssh-docker-reconnect-pane-cardinality": "node config/scripts/run-ssh-docker-reconnect-pane-cardinality-e2e.mjs",
     "test:e2e:ssh-docker-maxsessions-identity": "node config/scripts/run-ssh-docker-maxsessions-identity-e2e.mjs",
