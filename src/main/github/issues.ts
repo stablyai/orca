@@ -340,15 +340,36 @@ export async function updateIssue(
     await acquire()
     try {
       if (updates.state === 'closed') {
-        const closeArgs = ['issue', 'close', String(issueNumber), '--repo', repo]
-        if (updates.stateReason === 'completed') {
-          closeArgs.push('--reason', 'completed')
-        } else if (updates.stateReason === 'not_planned') {
-          closeArgs.push('--reason', 'not planned')
-        } else if (updates.stateReason === 'duplicate' && updates.duplicateOf) {
-          closeArgs.push('--duplicate-of', String(updates.duplicateOf))
+        if (updates.stateReason === 'duplicate' && !updates.duplicateOf) {
+          // Why: `gh issue close` only accepts --reason completed/"not planned";
+          // marking "duplicate" without a target issue number has no CLI flag,
+          // so route it through the REST endpoint which honors state_reason
+          // directly. Without this branch the duplicate selection fell through
+          // to a default close, silently dropping the user's chosen reason.
+          await ghExecFileAsync(
+            [
+              'api',
+              '-X',
+              'PATCH',
+              `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
+              '--raw-field',
+              'state=closed',
+              '--raw-field',
+              'state_reason=duplicate'
+            ],
+            ghOptions
+          )
+        } else {
+          const closeArgs = ['issue', 'close', String(issueNumber), '--repo', repo]
+          if (updates.stateReason === 'completed') {
+            closeArgs.push('--reason', 'completed')
+          } else if (updates.stateReason === 'not_planned') {
+            closeArgs.push('--reason', 'not planned')
+          } else if (updates.stateReason === 'duplicate' && updates.duplicateOf) {
+            closeArgs.push('--duplicate-of', String(updates.duplicateOf))
+          }
+          await ghExecFileAsync(closeArgs, ghOptions)
         }
-        await ghExecFileAsync(closeArgs, ghOptions)
       } else {
         await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
       }
