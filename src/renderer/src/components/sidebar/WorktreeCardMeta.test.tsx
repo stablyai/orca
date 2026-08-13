@@ -48,7 +48,9 @@ describe('WorktreeCardMetaBadges', () => {
     expect(markup).toContain('href="https://github.com/acme/orca/pull/456"')
     expect(markup).toContain('target="_blank"')
     expect(markup).toContain('aria-label="Linked PR #456"')
-    expect(markup).toContain('>#456</a>')
+    expect(markup).toContain('text-emerald-500/80')
+    expect(markup).toContain('viewBox="0 0 16 16"')
+    expect(markup).toContain('#456</a>')
   })
 
   it('keeps an MR number visible while its provider URL is unavailable', () => {
@@ -69,7 +71,9 @@ describe('WorktreeCardMetaBadges', () => {
 
     expect(markup).toContain('data-worktree-review-number=""')
     expect(markup).toContain('aria-label="Linked MR #77"')
-    expect(markup).toContain('>#77</span>')
+    expect(markup).toContain('lucide-git-merge')
+    expect(markup).toContain('text-amber-500/85')
+    expect(markup).toContain('#77</span>')
     expect(markup).not.toContain('href=')
   })
 })
