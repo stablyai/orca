@@ -5,6 +5,7 @@ import {
   type ShellOpenWithApplication
 } from '../../shared/shell-open-types'
 import { launchExternalEditor } from '../external-editor-launch'
+import { getRundll32ExePath } from '../win32-utils'
 import type { OpenWithApplicationCandidate, OpenWithLaunchSpec } from './open-with-candidate'
 import {
   buildLinuxLaunchInvocation,
@@ -171,15 +172,15 @@ function resolveLaunchInvocation(
     return buildWindowsLaunchInvocation(launch.command, filePath)
   }
   if (launch.kind === 'windows-chooser') {
-    const systemRoot = process.env.SystemRoot?.trim() || 'C:\\Windows'
     return {
-      spawnCmd: `${systemRoot}\\System32\\rundll32.exe`,
+      spawnCmd: getRundll32ExePath(),
       spawnArgs: [`shell32.dll,OpenAs_RunDLL ${filePath}`],
       windowsVerbatimArguments: true
     }
   }
   if (launch.kind === 'macos-application') {
-    return { spawnCmd: 'open', spawnArgs: ['-a', launch.applicationPath, filePath] }
+    // Why: absolute path — a shadowing `open` earlier on PATH must not win.
+    return { spawnCmd: '/usr/bin/open', spawnArgs: ['-a', launch.applicationPath, filePath] }
   }
   return buildLinuxLaunchInvocation(launch.execTokens, filePath)
 }

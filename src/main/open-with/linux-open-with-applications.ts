@@ -35,8 +35,9 @@ export async function listLinuxOpenWithApplications(
     } catch {
       continue
     }
-    // Why: Terminal=true entries need a terminal emulator we cannot attach.
-    if (entry.noDisplay || entry.terminal) {
+    // Why: Terminal=true entries need a terminal emulator we cannot attach;
+    // Hidden means the user deleted the entry at their level.
+    if (entry.noDisplay || entry.hidden || entry.terminal) {
       continue
     }
     const execTokens = entry.exec ? parseLinuxExecTokens(entry.exec) : null
@@ -112,12 +113,14 @@ function findDesktopFilePath(desktopId: string): string | null {
 export function parseDesktopEntry(content: string): {
   name: string | null
   noDisplay: boolean
+  hidden: boolean
   exec: string | null
   terminal: boolean
 } {
   let inDesktopEntryGroup = false
   let name: string | null = null
   let noDisplay = false
+  let hidden = false
   let exec: string | null = null
   let terminal = false
   for (const rawLine of content.split('\n')) {
@@ -135,6 +138,9 @@ export function parseDesktopEntry(content: string): {
     if (line.startsWith('NoDisplay=')) {
       noDisplay = line.slice('NoDisplay='.length).trim() === 'true'
     }
+    if (line.startsWith('Hidden=')) {
+      hidden = line.slice('Hidden='.length).trim() === 'true'
+    }
     if (exec === null && line.startsWith('Exec=')) {
       exec = line.slice('Exec='.length).trim() || null
     }
@@ -142,7 +148,7 @@ export function parseDesktopEntry(content: string): {
       terminal = line.slice('Terminal='.length).trim() === 'true'
     }
   }
-  return { name, noDisplay, exec, terminal }
+  return { name, noDisplay, hidden, exec, terminal }
 }
 
 // Why: `gio launch` needs GLib 2.67.2+, newer than the Ubuntu 20.04 floor, so

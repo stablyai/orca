@@ -5,6 +5,7 @@ import {
   WINDOWS_REG_EXPAND_SZ,
   type WindowsNativeRegistryModule
 } from '../windows-native-registry'
+import { getWindowsPowerShellExePath } from '../win32-utils'
 import type { OpenWithApplicationCandidate } from './open-with-candidate'
 import { readOpenWithCommandOutput } from './open-with-command-output'
 
@@ -43,7 +44,12 @@ export async function listWindowsOpenWithApplications(
     const executableKey = executablePath.toLowerCase()
     const existing = candidatesByExecutable.get(executableKey)
     if (existing) {
-      existing.isDefault = existing.isDefault || openCommand.isDefault
+      // Why: two ProgIds can share an exe with different command lines; the
+      // default handler's line wins so the launch matches the Default label.
+      if (openCommand.isDefault && !existing.isDefault) {
+        existing.isDefault = true
+        existing.launch = { kind: 'windows-command', command: openCommand.command }
+      }
       continue
     }
     candidatesByExecutable.set(executableKey, {
@@ -299,7 +305,7 @@ ConvertTo-Json -InputObject @($results) -Compress
   let entries: { path?: unknown; description?: unknown }[]
   try {
     const output = await readOpenWithCommandOutput(
-      'powershell.exe',
+      getWindowsPowerShellExePath(),
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
       DESCRIPTION_LOOKUP_TIMEOUT_MS
     )

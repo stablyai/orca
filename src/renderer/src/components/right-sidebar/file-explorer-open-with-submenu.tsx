@@ -16,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 import { isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 
 type OpenWithListingState =
+  | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; applications: ShellOpenWithApplication[]; supportsChooserDialog: boolean }
   | { status: 'unavailable' }
@@ -37,9 +38,20 @@ export function shouldShowOpenWithSubmenu(
 }
 
 export function FileExplorerOpenWithSubmenu({ filePath }: { filePath: string }): React.JSX.Element {
-  const [listing, setListing] = useState<OpenWithListingState>({ status: 'loading' })
+  const [listing, setListing] = useState<OpenWithListingState>({ status: 'idle' })
+  // Why: discovery spawns OS tools — only pay for it once the user opens the
+  // submenu, not on every context-menu open.
+  const [discoveryRequested, setDiscoveryRequested] = useState(false)
 
   useEffect(() => {
+    setListing({ status: 'idle' })
+    setDiscoveryRequested(false)
+  }, [filePath])
+
+  useEffect(() => {
+    if (!discoveryRequested) {
+      return
+    }
     let disposed = false
     setListing({ status: 'loading' })
     window.api.shell
@@ -66,7 +78,7 @@ export function FileExplorerOpenWithSubmenu({ filePath }: { filePath: string }):
     return () => {
       disposed = true
     }
-  }, [filePath])
+  }, [filePath, discoveryRequested])
 
   const handleOpenWithApplication = useCallback(
     (applicationId: string) => {
@@ -91,7 +103,13 @@ export function FileExplorerOpenWithSubmenu({ filePath }: { filePath: string }):
   )
 
   return (
-    <ContextMenuSub>
+    <ContextMenuSub
+      onOpenChange={(open) => {
+        if (open) {
+          setDiscoveryRequested(true)
+        }
+      }}
+    >
       <ContextMenuSubTrigger>
         <AppWindow />
         {translate(
@@ -100,7 +118,7 @@ export function FileExplorerOpenWithSubmenu({ filePath }: { filePath: string }):
         )}
       </ContextMenuSubTrigger>
       <ContextMenuSubContent className="w-56">
-        {listing.status === 'loading' && (
+        {(listing.status === 'idle' || listing.status === 'loading') && (
           <ContextMenuItem disabled>
             {translate(
               'auto.components.right.sidebar.FileExplorerOpenWithSubmenu.loading',

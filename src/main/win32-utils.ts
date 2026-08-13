@@ -41,11 +41,30 @@ export function getWhoamiExePath(): string {
   return `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\whoami.exe`
 }
 
+function resolveSystemRoot(env: NodeJS.ProcessEnv): string {
+  const systemRoot = env.SystemRoot?.trim()
+  return systemRoot && /^[a-z]:[\\/]/i.test(systemRoot) ? systemRoot : 'C:\\Windows'
+}
+
 /** Absolute path because service-launched Electron can omit System32 from PATH. */
 export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
-  const systemRoot = env.SystemRoot?.trim()
-  const root = systemRoot && /^[a-z]:[\\/]/i.test(systemRoot) ? systemRoot : 'C:\\Windows'
-  return win32.join(root, 'System32', 'reg.exe')
+  return win32.join(resolveSystemRoot(env), 'System32', 'reg.exe')
+}
+
+/** Absolute path because service-launched Electron can omit System32 from PATH. */
+export function getWindowsPowerShellExePath(env: NodeJS.ProcessEnv = process.env): string {
+  return win32.join(
+    resolveSystemRoot(env),
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe'
+  )
+}
+
+/** Absolute path because service-launched Electron can omit System32 from PATH. */
+export function getRundll32ExePath(env: NodeJS.ProcessEnv = process.env): string {
+  return win32.join(resolveSystemRoot(env), 'System32', 'rundll32.exe')
 }
 
 export function resolveWindowsCommand(

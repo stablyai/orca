@@ -49,16 +49,24 @@ describe('parseDesktopEntry', () => {
     expect(parseDesktopEntry(content)).toEqual({
       name: 'Text Editor',
       noDisplay: false,
+      hidden: false,
       exec: 'gedit %U',
       terminal: false
     })
   })
 
-  it('flags NoDisplay and Terminal entries', () => {
-    const content = ['[Desktop Entry]', 'Name=Vim', 'NoDisplay=true', 'Terminal=true'].join('\n')
+  it('flags NoDisplay, Hidden and Terminal entries', () => {
+    const content = [
+      '[Desktop Entry]',
+      'Name=Vim',
+      'NoDisplay=true',
+      'Hidden=true',
+      'Terminal=true'
+    ].join('\n')
     expect(parseDesktopEntry(content)).toEqual({
       name: 'Vim',
       noDisplay: true,
+      hidden: true,
       exec: null,
       terminal: true
     })
@@ -102,9 +110,7 @@ describe('buildLinuxLaunchInvocation', () => {
   })
 
   it('drops bare %i/%c/%k tokens and keeps %% literal', () => {
-    expect(
-      buildLinuxLaunchInvocation(['app', '%i', '%c', '--pct=100%%', '%F'], '/tmp/x')
-    ).toEqual({
+    expect(buildLinuxLaunchInvocation(['app', '%i', '%c', '--pct=100%%', '%F'], '/tmp/x')).toEqual({
       spawnCmd: 'app',
       spawnArgs: ['--pct=100%', '/tmp/x']
     })

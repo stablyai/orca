@@ -4230,7 +4230,7 @@ export class Store {
     if (!key) {
       return []
     }
-    return this.state.openWithRecentApplicationsByExtension?.[key] ?? []
+    return [...(this.state.openWithRecentApplicationsByExtension?.[key] ?? [])]
   }
 
   recordOpenWithApplicationLaunch(extension: string, applicationId: string): void {

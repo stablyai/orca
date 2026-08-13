@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OPEN_WITH_CHOOSER_APPLICATION_ID } from '../../shared/shell-open-types'
 import { launchOpenWithApplication, sortOpenWithApplications } from './open-with-applications'
 
@@ -55,5 +55,79 @@ describe('launchOpenWithApplication', () => {
     await expect(
       launchOpenWithApplication(OPEN_WITH_CHOOSER_APPLICATION_ID, '/tmp/x', { platform: 'linux' })
     ).resolves.toBe(false)
+  })
+})
+
+vi.mock('./linux-open-with-applications', () => ({
+  listLinuxOpenWithApplications: vi.fn(async () => []),
+  buildLinuxLaunchInvocation: vi.fn(() => null)
+}))
+
+describe('listOpenWithApplications caching', () => {
+  const CANDIDATE = {
+    id: 'linux:editor.desktop',
+    name: 'Editor',
+    isDefault: true,
+    launch: { kind: 'linux-desktop-entry' as const, execTokens: ['editor', '%f'] }
+  }
+
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function loadModules() {
+    const linux = await import('./linux-open-with-applications')
+    const applications = await import('./open-with-applications')
+    return { discover: vi.mocked(linux.listLinuxOpenWithApplications), applications }
+  }
+
+  it('deduplicates concurrent listings for the same extension', async () => {
+    const { discover, applications } = await loadModules()
+    let settle: (candidates: (typeof CANDIDATE)[]) => void = () => {}
+    discover.mockImplementation(() => new Promise((resolve) => (settle = resolve)))
+
+    const first = applications.listOpenWithApplications('/tmp/a.md', { platform: 'linux' })
+    const second = applications.listOpenWithApplications('/tmp/b.md', { platform: 'linux' })
+    settle([CANDIDATE])
+
+    expect((await first).applications).toEqual([
+      { id: CANDIDATE.id, name: 'Editor', isDefault: true }
+    ])
+    expect((await second).applications).toHaveLength(1)
+    expect(discover).toHaveBeenCalledTimes(1)
+  })
+
+  it('serves the cache inside the TTL and rediscovers after it expires', async () => {
+    vi.useFakeTimers()
+    const { discover, applications } = await loadModules()
+    discover.mockResolvedValue([CANDIDATE])
+
+    await applications.listOpenWithApplications('/tmp/a.md', { platform: 'linux' })
+    await applications.listOpenWithApplications('/tmp/b.md', { platform: 'linux' })
+    expect(discover).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(5 * 60_000 + 1)
+    await applications.listOpenWithApplications('/tmp/c.md', { platform: 'linux' })
+    expect(discover).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not cache a failed discovery', async () => {
+    const { discover, applications } = await loadModules()
+    discover.mockRejectedValueOnce(new Error('xdg-mime missing'))
+
+    expect(
+      (await applications.listOpenWithApplications('/tmp/a.md', { platform: 'linux' })).applications
+    ).toEqual([])
+
+    discover.mockResolvedValue([CANDIDATE])
+    expect(
+      (await applications.listOpenWithApplications('/tmp/b.md', { platform: 'linux' })).applications
+    ).toHaveLength(1)
+    expect(discover).toHaveBeenCalledTimes(2)
   })
 })
