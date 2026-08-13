@@ -26,6 +26,54 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   )
 }))
 
+describe('WorktreeCardMetaBadges', () => {
+  it('shows a linked review number as a direct provider link', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        review={{
+          provider: 'github',
+          number: 456,
+          title: 'Fix stale GH PR',
+          state: 'open',
+          url: 'https://github.com/acme/orca/pull/456',
+          status: 'success'
+        }}
+        comment={null}
+      />
+    )
+
+    expect(markup).toContain('data-worktree-review-number=""')
+    expect(markup).toContain('href="https://github.com/acme/orca/pull/456"')
+    expect(markup).toContain('target="_blank"')
+    expect(markup).toContain('aria-label="Linked PR #456"')
+    expect(markup).toContain('>#456</a>')
+  })
+
+  it('keeps an MR number visible while its provider URL is unavailable', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        review={{
+          provider: 'gitlab',
+          number: 77,
+          title: 'Fix GitLab MR display',
+          state: 'open',
+          status: 'pending'
+        }}
+        comment={null}
+      />
+    )
+
+    expect(markup).toContain('data-worktree-review-number=""')
+    expect(markup).toContain('aria-label="Linked MR #77"')
+    expect(markup).toContain('>#77</span>')
+    expect(markup).not.toContain('href=')
+  })
+})
+
 describe('WorktreeCardDetailsHover', () => {
   it('wraps workspace and branch identity so long names stay readable in the hover panel', () => {
     const markup = renderToStaticMarkup(
