@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import type { OpenWithApplicationCandidate } from './open-with-candidate'
 import { readOpenWithCommandOutput } from './open-with-command-output'
 
+/** Discovers the applications registered for a file's MIME type via xdg-mime and gio. */
 export async function listLinuxOpenWithApplications(
   filePath: string
 ): Promise<OpenWithApplicationCandidate[]> {
@@ -54,6 +55,7 @@ export async function listLinuxOpenWithApplications(
   return candidates
 }
 
+/** Extracts the default and registered desktop ids from `gio mime` output. */
 export function parseGioMimeApplications(output: string): {
   defaultDesktopId: string | null
   desktopIds: string[]
@@ -77,6 +79,7 @@ export function parseGioMimeApplications(output: string): {
   return { defaultDesktopId, desktopIds }
 }
 
+/** XDG application directories, user data home first. */
 function getLinuxApplicationDirectories(env: NodeJS.ProcessEnv = process.env): string[] {
   const home = env.HOME ?? ''
   const dataHome = env.XDG_DATA_HOME?.trim() || (home ? join(home, '.local', 'share') : '')
@@ -87,6 +90,7 @@ function getLinuxApplicationDirectories(env: NodeJS.ProcessEnv = process.env): s
     .map((dir) => join(dir, 'applications'))
 }
 
+/** Locates a desktop id's file, or null when no XDG directory holds it. */
 function findDesktopFilePath(desktopId: string): string | null {
   for (const directory of getLinuxApplicationDirectories()) {
     const directPath = join(directory, desktopId)
@@ -110,6 +114,7 @@ function findDesktopFilePath(desktopId: string): string | null {
   return null
 }
 
+/** Reads Name, NoDisplay, Hidden, Exec and Terminal from the [Desktop Entry] group. */
 export function parseDesktopEntry(content: string): {
   name: string | null
   noDisplay: boolean
@@ -151,9 +156,11 @@ export function parseDesktopEntry(content: string): {
   return { name, noDisplay, hidden, exec, terminal }
 }
 
-// Why: `gio launch` needs GLib 2.67.2+, newer than the Ubuntu 20.04 floor, so
-// Orca runs the Exec line itself: freedesktop quoting rules, the file path kept
-// as its own argv element, never a shell.
+/**
+ * Splits a desktop entry's Exec line into argv tokens using freedesktop quoting
+ * rules. Orca runs the Exec line itself because `gio launch` needs GLib 2.67.2+,
+ * newer than the Ubuntu 20.04 floor.
+ */
 export function parseLinuxExecTokens(exec: string): string[] | null {
   const tokens: string[] = []
   let current: string | null = null
@@ -190,6 +197,7 @@ export function parseLinuxExecTokens(exec: string): string[] | null {
   return tokens.length > 0 ? tokens : null
 }
 
+/** Turns Exec tokens plus a target path into a spawn command, or null when nothing executable remains. */
 export function buildLinuxLaunchInvocation(
   execTokens: string[],
   filePath: string
@@ -215,6 +223,7 @@ export function buildLinuxLaunchInvocation(
   return { spawnCmd: args[0], spawnArgs: args.slice(1) }
 }
 
+/** Substitutes one token's field codes; null when the token expands to nothing. */
 function substituteExecFieldCodes(
   token: string,
   filePath: string

@@ -18,6 +18,7 @@ type WindowsOpenCommand = {
   isDefault: boolean
 }
 
+/** Discovers the applications registered for a file extension in the Windows registry. */
 export async function listWindowsOpenWithApplications(
   filePath: string
 ): Promise<OpenWithApplicationCandidate[]> {
@@ -66,6 +67,7 @@ export async function listWindowsOpenWithApplications(
   return candidates.map(({ executablePath: _executablePath, ...candidate }) => candidate)
 }
 
+/** Collects an extension's open command lines from UserChoice, OpenWithProgids and OpenWithList. */
 function collectWindowsOpenCommands(
   registry: WindowsNativeRegistryModule,
   extension: string
@@ -126,6 +128,7 @@ function collectWindowsOpenCommands(
   return commands
 }
 
+/** Reads the OpenWithList executable names, ignoring the MRU ordering value. */
 function readWindowsOpenWithListExecutables(
   registry: WindowsNativeRegistryModule,
   fileExtsKey: string
@@ -141,6 +144,7 @@ function readWindowsOpenWithListExecutables(
   return executableNames
 }
 
+/** Reads a ProgId's shell\open\command line from one hive. */
 function readClassOpenCommand(
   registry: WindowsNativeRegistryModule,
   classSubkeyPath: string
@@ -159,6 +163,7 @@ function readClassOpenCommand(
   return null
 }
 
+/** Reads one registry string value, or null when the key, value or type does not match. */
 function readRegistryString(
   registry: WindowsNativeRegistryModule,
   root: number,
@@ -180,6 +185,7 @@ function readRegistryString(
     : entry.value
 }
 
+/** Lists a registry key's value names; empty when the key is missing. */
 function readRegistryValueNames(
   registry: WindowsNativeRegistryModule,
   root: number,
@@ -192,6 +198,7 @@ function readRegistryValueNames(
   }
 }
 
+/** Expands %VAR% references while leaving argument placeholders such as %1 intact. */
 export function expandWindowsEnvironmentVariables(
   value: string,
   env: NodeJS.ProcessEnv = process.env
@@ -201,6 +208,7 @@ export function expandWindowsEnvironmentVariables(
   return value.replace(/%([^%]+)%/g, (match, name: string) => env[name] ?? match)
 }
 
+/** Extracts the executable path from a registry command line. */
 export function extractWindowsExecutablePath(
   command: string,
   fileExists: (path: string) => boolean = existsSync
@@ -226,6 +234,7 @@ export function extractWindowsExecutablePath(
   return /\.exe$/i.test(tokens[0] ?? '') ? tokens[0] : null
 }
 
+/** Builds the spawn command and argv for a registry command line and target path. */
 export function buildWindowsLaunchInvocation(
   command: string,
   filePath: string,
@@ -266,6 +275,7 @@ export function buildWindowsLaunchInvocation(
   return { spawnCmd: executablePath, spawnArgs }
 }
 
+/** Splits a command line's argument tail, honoring double-quoted spans. */
 function tokenizeWindowsCommandArguments(argsText: string): string[] {
   const tokens: string[] = []
   const tokenPattern = /"([^"]*)"|(\S+)/g
@@ -276,11 +286,13 @@ function tokenizeWindowsCommandArguments(argsText: string): string[] {
   return tokens
 }
 
+/** Display name derived from the executable file name, used when FileDescription is unavailable. */
 export function fallbackWindowsApplicationName(executablePath: string): string {
   const baseName = win32.basename(executablePath).replace(/\.exe$/i, '')
   return baseName ? baseName.charAt(0).toUpperCase() + baseName.slice(1) : executablePath
 }
 
+/** Replaces candidate names with each executable's FileDescription where one is available. */
 async function applyWindowsFileDescriptions(
   candidates: (OpenWithApplicationCandidate & { executablePath: string })[]
 ): Promise<void> {

@@ -21,6 +21,7 @@ type OpenWithListingState =
   | { status: 'ready'; applications: ShellOpenWithApplication[]; supportsChooserDialog: boolean }
   | { status: 'unavailable' }
 
+/** True only for local file rows on the desktop client, the one case where OS handlers apply. */
 export function shouldShowOpenWithSubmenu(
   node: { isDirectory: boolean },
   connectionId: string | null | undefined,
@@ -37,6 +38,7 @@ export function shouldShowOpenWithSubmenu(
   return !isLocalPathOpenBlocked(settings, { connectionId })
 }
 
+/** Open With submenu; discovery starts the first time it opens. */
 export function FileExplorerOpenWithSubmenu({ filePath }: { filePath: string }): React.JSX.Element {
   const [listing, setListing] = useState<OpenWithListingState>({ status: 'idle' })
   // Why: discovery spawns OS tools — only pay for it once the user opens the

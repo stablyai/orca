@@ -35,6 +35,7 @@ const inFlightListings = new Map<string, Promise<OpenWithApplicationCandidate[]>
 // opaque id back, so arbitrary commands cannot be injected over IPC.
 const launchSpecsByApplicationId = new Map<string, OpenWithLaunchSpec>()
 
+/** Lists the applications that can open a file, ranked by recency, then OS default, then name. */
 export async function listOpenWithApplications(
   filePath: string,
   options: { platform?: NodeJS.Platform; recentApplicationIds?: string[] } = {}
@@ -52,6 +53,7 @@ export async function listOpenWithApplications(
   }
 }
 
+/** Launches a discovered application id against a file; false when the id is unknown or the spawn fails. */
 export async function launchOpenWithApplication(
   applicationId: string,
   filePath: string,
@@ -89,8 +91,11 @@ export async function launchOpenWithApplication(
   }
 }
 
-// Why: rundll32's OpenAs_RunDLL takes its raw command-line tail and does not
-// strip quotes, so a spawn-quoted spaced path never resolves; pass it verbatim.
+/**
+ * Spawns detached with an unquoted argument tail. rundll32's OpenAs_RunDLL takes
+ * its raw command-line tail and does not strip quotes, so a spawn-quoted spaced
+ * path never resolves.
+ */
 function spawnDetachedVerbatim(spawnCmd: string, spawnArgs: string[]): Promise<void> {
   return new Promise((resolvePromise, rejectPromise) => {
     // Why: SW_HIDE from windowsHide propagates into apps launched from the
@@ -123,6 +128,7 @@ function spawnDetachedVerbatim(spawnCmd: string, spawnArgs: string[]): Promise<v
   })
 }
 
+/** Serves discovery from a per-extension cache, deduping concurrent calls and never caching a failure. */
 async function listCachedCandidates(
   filePath: string,
   platform: NodeJS.Platform
@@ -151,6 +157,7 @@ async function listCachedCandidates(
   return listing
 }
 
+/** Dispatches discovery to the platform backend. */
 function loadCandidates(
   filePath: string,
   platform: NodeJS.Platform
@@ -164,6 +171,7 @@ function loadCandidates(
   return listLinuxOpenWithApplications(filePath)
 }
 
+/** Turns a launch spec into the exact command and argv for the target path. */
 function resolveLaunchInvocation(
   launch: OpenWithLaunchSpec,
   filePath: string
@@ -185,6 +193,7 @@ function resolveLaunchInvocation(
   return buildLinuxLaunchInvocation(launch.execTokens, filePath)
 }
 
+/** Orders candidates by recency, then the OS default, then name. */
 export function sortOpenWithApplications<T extends ShellOpenWithApplication>(
   candidates: T[],
   recentApplicationIds: string[]

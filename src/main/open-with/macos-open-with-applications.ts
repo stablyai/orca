@@ -20,6 +20,7 @@ function run(argv) {
 }
 `
 
+/** Discovers the applications LaunchServices registers for a file. */
 export async function listMacOpenWithApplications(
   filePath: string
 ): Promise<OpenWithApplicationCandidate[]> {
@@ -33,6 +34,7 @@ export async function listMacOpenWithApplications(
   return parseMacApplicationList(output)
 }
 
+/** Turns the JXA payload into candidates with the default handler marked. */
 export function parseMacApplicationList(output: string): OpenWithApplicationCandidate[] {
   const parsed = JSON.parse(output) as {
     defaultPath?: string | null

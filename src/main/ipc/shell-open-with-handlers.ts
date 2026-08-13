@@ -13,6 +13,7 @@ import {
 } from '../open-with/open-with-applications'
 import { hasActiveRuntime, validateLocalPathTarget } from './local-path-target-guard'
 
+/** Registers the Open With listing and launch IPC handlers. */
 export function registerShellOpenWithHandlers(store: Store): void {
   ipcMain.handle(
     'shell:listOpenWithApplications',

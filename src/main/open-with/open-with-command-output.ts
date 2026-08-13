@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 export const OPEN_WITH_COMMAND_TIMEOUT_MS = 10_000
 const OPEN_WITH_COMMAND_MAX_BUFFER = 4 * 1024 * 1024
 
+/** Runs a discovery command and resolves its stdout, rejecting on failure or timeout. */
 export function readOpenWithCommandOutput(
   command: string,
   args: string[],
