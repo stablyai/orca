@@ -55,6 +55,7 @@ for %%G in ("%~1") do (
   if /I not "%%~fG\"=="%orca_wrapper_dir%" (
     if exist "%%~fG\__ORCA_COMMAND__.exe" set "orca_real=%%~fG\__ORCA_COMMAND__.exe"
     if not defined orca_real if exist "%%~fG\__ORCA_COMMAND__.cmd" set "orca_real=%%~fG\__ORCA_COMMAND__.cmd"
+    if not defined orca_real if exist "%%~fG\__ORCA_COMMAND__.bat" set "orca_real=%%~fG\__ORCA_COMMAND__.bat"
   )
 )
 exit /b
@@ -97,9 +98,12 @@ if (-not $realCommand -or -not (Test-Path -LiteralPath $realCommand)) {
   foreach ($dir in ($env:PATH -split ';')) {
     if (-not $dir) { continue }
     # Why: a relative entry resolves against the current directory, same exposure as an empty one.
-    if (-not [IO.Path]::IsPathRooted($dir)) { continue }
+    # IsPathRooted is not enough: it accepts drive-relative 'C:foo', which resolves against the
+    # current directory on that drive. IsPathFullyQualified is absent on Windows PowerShell 5.1,
+    # so match the same prefixes the cmd wrapper accepts.
+    if ($dir -notmatch '^([A-Za-z]:[\\/]|\\\\)') { continue }
     if ($wrapperDirs | Where-Object { [string]::Equals($_, $dir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) }) { continue }
-    foreach ($ext in @('.exe', '.cmd')) {
+    foreach ($ext in @('.exe', '.cmd', '.bat')) {
       $candidate = Join-Path $dir "$commandName$ext"
       if (Test-Path -LiteralPath $candidate -PathType Leaf) { $realCommand = $candidate; break }
     }

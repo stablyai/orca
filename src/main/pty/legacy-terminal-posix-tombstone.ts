@@ -8,8 +8,13 @@ command_name="__ORCA_COMMAND__"
 # would be empty and cd into it succeeds, silently making wrapper_dir the cwd so the wrapper
 # fails to exclude itself from PATH.
 wrapper_src="${SHELL_DOLLAR}{BASH_SOURCE[0]}"
-wrapper_dir="$(cd -- "${SHELL_DOLLAR}{wrapper_src%/*}" 2>/dev/null && pwd)"
-[[ -n "$wrapper_dir" ]] || wrapper_dir="${SHELL_DOLLAR}{wrapper_src%/*}"
+case "$wrapper_src" in
+  # Why: with no slash the %/* strip yields the file name, not a directory, so self-exclusion
+  # would miss the wrapper's own dir and the lookup would resolve back to this script.
+  */*) wrapper_dir="$(cd -- "${SHELL_DOLLAR}{wrapper_src%/*}" 2>/dev/null && pwd)" ;;
+  *) wrapper_dir="$PWD" ;;
+esac
+[[ -n "$wrapper_dir" ]] || wrapper_dir="$PWD"
 legacy_wrapper_dir="${SHELL_DOLLAR}{ORCA_ATTRIBUTION_SHIM_DIR:-}"
 cleaned_path="${SHELL_DOLLAR}{PATH:-}"
 

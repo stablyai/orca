@@ -129,7 +129,10 @@ describe('legacy terminal shim neutralization', () => {
       const powershell = readFileSync(join(win32Dir, `${command}-wrapper.ps1`), 'utf8')
       expect(powershell).not.toContain('Get-Command')
       expect(powershell).toContain("($env:PATH -split ';')")
-      expect(powershell).toContain('[IO.Path]::IsPathRooted($dir)')
+      // Why: the rooted check must reject drive-relative 'C:foo', which still resolves against
+      // the cwd — so the IsPathRooted call must be gone, replaced by an explicit prefix match.
+      expect(powershell).not.toContain('[IO.Path]::IsPathRooted(')
+      expect(powershell).toContain("-notmatch '^([A-Za-z]:")
       expect(powershell).toContain('if (-not $dir) { continue }')
       expect(powershell).toContain('Test-Path -LiteralPath $candidate -PathType Leaf')
     }
@@ -216,6 +219,15 @@ describe('legacy terminal shim neutralization', () => {
       expect(run.stdout, `PATH=${cwdSpelling}`).toContain('REAL')
       expect(run.stdout, `PATH=${cwdSpelling}`).not.toContain('HOSTILE')
     }
+
+    // Why: invoked with no slash in $0, `${BASH_SOURCE%/*}` yields the file name rather than a
+    // directory, so self-exclusion missed the shim dir and the lookup resolved back to itself.
+    const noSlash = spawnSync('bash', ['git', '--version'], {
+      cwd: shimDir,
+      env: { ...process.env, PATH: `${shimDir}:${realBin}:/usr/bin:/bin` },
+      encoding: 'utf8'
+    })
+    expect(noSlash.stdout).toContain('REAL')
   })
 
   it('removes every Windows PATH occurrence of both captured wrapper directories', () => {
