@@ -3371,7 +3371,7 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.toolInput).toBeUndefined()
   })
 
-  it('normalizes Hermes post_llm_call to done with assistant text', () => {
+  it('keeps Hermes working through post_llm_call and completes on session end', () => {
     normalizeHookPayload(
       state,
       'hermes',
@@ -3384,7 +3384,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
-    const done = normalizeHookPayload(
+    const finalizing = normalizeHookPayload(
       state,
       'hermes',
       {
@@ -3396,10 +3396,39 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+    expect(finalizing?.payload.state).toBe('working')
+    expect(finalizing?.payload.prompt).toBe('summarize')
+    expect(finalizing?.payload.lastAssistantMessage).toBe('Hermes is wired up.')
+
+    const done = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'on_session_end' }
+      },
+      'production'
+    )
     expect(done?.payload.state).toBe('done')
-    expect(done?.payload.prompt).toBe('summarize')
     expect(done?.payload.lastAssistantMessage).toBe('Hermes is wired up.')
   })
+
+  it.each(['on_session_start', 'on_session_finalize', 'on_session_reset'])(
+    'ignores Hermes %s as a task status event',
+    (hookEventName) => {
+      expect(
+        normalizeHookPayload(
+          state,
+          'hermes',
+          {
+            paneKey: PANE_KEY,
+            payload: { hook_event_name: hookEventName }
+          },
+          'production'
+        )
+      ).toBeNull()
+    }
+  )
 
   describe('claude subagent tracking', () => {
     const claudeEvent = (

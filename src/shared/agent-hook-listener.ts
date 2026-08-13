@@ -4084,16 +4084,14 @@ function normalizeHermesEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  // Why: Hermes still finalizes after post_llm_call; on_session_end is its turn boundary.
   const stateName =
     eventName === 'pre_approval_request'
       ? 'waiting'
-      : eventName === 'post_llm_call' ||
-          eventName === 'on_session_end' ||
-          eventName === 'on_session_finalize' ||
-          eventName === 'on_session_reset'
+      : eventName === 'on_session_end'
         ? 'done'
-        : eventName === 'on_session_start' ||
-            eventName === 'pre_llm_call' ||
+        : eventName === 'pre_llm_call' ||
+            eventName === 'post_llm_call' ||
             eventName === 'pre_tool_call' ||
             eventName === 'post_tool_call' ||
             eventName === 'post_approval_response'
