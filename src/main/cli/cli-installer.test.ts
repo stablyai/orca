@@ -1177,6 +1177,47 @@ describe('CliInstaller', () => {
     }
   )
 
+  // Why: a foreign execute-only `orca` earlier on PATH cannot be readFile'd, so
+  // inspectSymlink throws EACCES; getStatus must skip it, not reject the status.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'skips an execute-only unreadable macOS orca earlier on PATH instead of failing status',
+    async () => {
+      const fixture = await makeFixture()
+      const homePath = join(fixture.root, 'home')
+      const resourcesPath = await createPackagedMacLauncher(fixture.root)
+      const usrLocalBin = join(fixture.root, 'usr', 'local', 'bin')
+      const foreignBin = join(fixture.root, 'foreign', 'bin')
+      const defaultInstallPath = join(usrLocalBin, 'orca')
+      const foreignInstallPath = join(foreignBin, 'orca')
+      const launcherPath = join(resourcesPath, 'bin', 'orca')
+      await mkdir(usrLocalBin, { recursive: true })
+      await mkdir(foreignBin, { recursive: true })
+      // Execute-only regular file: passes isExecutableFile (X_OK) but readFile
+      // throws EACCES because the read bit is unset.
+      await writeFile(foreignInstallPath, '#!/usr/bin/env bash\necho foreign\n', {
+        encoding: 'utf8',
+        mode: 0o111
+      })
+      await symlink(launcherPath, defaultInstallPath)
+
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: true,
+        resourcesPath,
+        userDataPath: fixture.userDataPath,
+        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+        appPath: fixture.appPath,
+        homePath,
+        defaultMacCommandPath: defaultInstallPath,
+        processPathEnv: `${foreignBin}:${usrLocalBin}`
+      })
+
+      const status = await installer.getStatus()
+      expect(status.commandPath).toBe(defaultInstallPath)
+      expect(status.state).toBe('installed')
+    }
+  )
+
   // Why: when macCommandPath falls back to ~/.local/bin/orca on arm64, commandName
   // must still be 'orca' (not 'orca-ide' which is Linux-only).
   it.skipIf(process.platform === 'win32')(

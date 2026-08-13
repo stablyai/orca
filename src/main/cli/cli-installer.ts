@@ -305,8 +305,11 @@ export class CliInstaller {
         continue
       }
 
-      const status = await this.inspectSymlink(commandPath, launcherPath)
-      if (status.state !== 'not_installed') {
+      // Why: a foreign PATH `orca` can be unreadable (e.g. execute-only), so
+      // inspectSymlink's readFile throws EACCES. That candidate is not the
+      // active Orca command — skip it instead of rejecting the whole status.
+      const status = await this.inspectSymlink(commandPath, launcherPath).catch(() => null)
+      if (status && status.state !== 'not_installed') {
         if (reachedDefaultCommandPath && !isDefaultCommandPath && status.state === 'conflict') {
           // Why: a non-Orca command after an empty default slot can be shadowed by installing there; no user file replaced.
           continue
