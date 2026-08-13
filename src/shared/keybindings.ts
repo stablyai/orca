@@ -89,6 +89,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
+  | 'editor.toggleDiffViewer'
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'
@@ -826,6 +827,23 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'editor', 'word wrap', 'wrap', 'long lines', 'soft wrap'],
     // Why: Alt+Z matches VS Code; bare Alt+letter is not AltGr, so it stays cross-platform (#9974).
     defaultBindings: platformBindings(['Alt+Z'])
+  },
+  {
+    id: 'editor.toggleDiffViewer',
+    title: 'Toggle Diff Viewer',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: [
+      'shortcut',
+      'editor',
+      'diff',
+      'viewer',
+      'changes',
+      'edit',
+      'toggle'
+    ],
+    // Why: unbound by default so users opt in; avoids colliding with existing editor chords (#11095).
+    defaultBindings: platformBindings([])
   },
   {
     id: 'editor.copyContext',

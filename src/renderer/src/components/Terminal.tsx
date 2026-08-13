@@ -35,6 +35,10 @@ import {
   type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
+import {
+  canUseChangesModeForFile,
+  toggleEditorDiffViewMode
+} from './editor/editor-panel-file-mode'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import EditorAutosaveController from './editor/EditorAutosaveController'
@@ -2148,6 +2152,27 @@ function Terminal(): React.JSX.Element | null {
             void state.updateSettings({ editorWordWrap: !wrapOn })
           }
           return
+        }
+      }
+
+      // Why: Settings → Shortcuts entry for the Edit/Changes toolbar toggle (#11095).
+      if (!e.repeat && matchShortcut('editor.toggleDiffViewer')) {
+        const state = useAppStore.getState()
+        if (state.activeTabType === 'editor' && state.activeFileId) {
+          const activeFile = state.openFiles.find((file) => file.id === state.activeFileId)
+          const nextMode = activeFile
+            ? toggleEditorDiffViewMode(
+                state.editorViewMode[activeFile.id],
+                canUseChangesModeForFile(activeFile)
+              )
+            : null
+          // Why: only consume when changes mode applies (same gate as the toolbar).
+          if (activeFile && nextMode) {
+            e.preventDefault()
+            notifyTerminalCapture('editor.toggleDiffViewer')
+            state.setEditorViewMode(activeFile.id, nextMode)
+            return
+          }
         }
       }
 
