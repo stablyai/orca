@@ -234,5 +234,5 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // command and let its own picker apply the account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  unknownModelOptions: [codexEffort('ultra')]
+  unknownModelOptions: [codexEffort('xhigh')]
 }

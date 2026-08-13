@@ -60,9 +60,24 @@ describe('orchestration worker launch preferences', () => {
       rejected: ['max', 'ultra', 'future-effort']
     },
     {
+      model: 'gpt-5.4',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'future-effort']
+    },
+    {
+      model: 'gpt-5.4-mini',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'future-effort']
+    },
+    {
+      model: 'gpt-5.3-codex-spark',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'future-effort']
+    },
+    {
       model: 'future-codex-model',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-      rejected: ['future-effort']
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'future-effort']
     }
   ])('enforces the Codex effort ceiling for $model', ({ model, accepted, rejected }) => {
     const catalog = getAgentSessionOptionCatalog('codex')!
