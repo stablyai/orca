@@ -11,6 +11,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { TerminalSettingsPreview } from './TerminalSettingsPreview'
 import { WarpThemeImportButton } from './WarpThemeImportButton'
 import { YamlThemeImportButton } from './YamlThemeImportButton'
+import { AgentTerminalThemesSection } from './AgentTerminalThemesSection'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import {
   DEFAULT_TERMINAL_THEME_DARK,
@@ -217,6 +218,12 @@ export function TerminalThemeCatalogSection({
                     })
                   }
                 />
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.TerminalThemeSections.agent_themes_follow_dark',
+                    'Agent terminal themes follow the Dark slot while Match dark mode is on.'
+                  )}
+                </p>
               </SearchableSetting>
             ) : null}
           </div>
@@ -259,6 +266,12 @@ export function TerminalThemeCatalogSection({
                   importedHighlightSignal={importedHighlightSignal}
                 />
               </SearchableSetting>
+
+              <AgentTerminalThemesSection
+                settings={settings}
+                updateSettings={updateSettings}
+                target={target}
+              />
 
               <SearchableSetting
                 title={dividerTitle}

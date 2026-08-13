@@ -16,15 +16,18 @@ vi.mock('./AgentTerminalPreview', () => ({
   AgentTerminalPreview: ({
     ptyId,
     terminalInput,
+    agentType,
     className
   }: {
     ptyId: string
     terminalInput?: DashboardCardTerminalInput | null
+    agentType?: string | null
     className?: string
   }) => (
     <div
       data-testid="preview"
       data-pty-id={ptyId}
+      data-agent-type={agentType ?? ''}
       data-terminal-input={terminalInput === null ? 'null' : JSON.stringify(terminalInput)}
       className={className}
     />
@@ -83,6 +86,7 @@ describe('AgentTerminalDialog', () => {
       'data-terminal-input',
       JSON.stringify(TERMINAL_INPUT)
     )
+    expect(screen.getByTestId('preview')).toHaveAttribute('data-agent-type', 'claude')
   })
 
   it('passes null when the card carries no profile, so the preview routes by client OS', () => {

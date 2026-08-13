@@ -3,7 +3,6 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
@@ -18,13 +17,17 @@ import { createPreviewClipboardPaster } from './preview-terminal-paste'
 import { installPreviewImeBridge, type PreviewImeBridge } from './preview-terminal-ime-bridge'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { translate } from '@/i18n/i18n'
-import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { installPreviewTerminalKeyHandler } from './preview-terminal-key-handler'
 import { createPreviewGridClaim } from './preview-grid-claim'
 import { installPreviewTerminalAppMenuClipboard } from './preview-terminal-app-menu-clipboard'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
+import {
+  applyAgentPreviewThemeIfChanged,
+  resolveAgentPreviewTheme,
+  resolvePreviewAgent
+} from './agent-terminal-preview-theme'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
 // Why: main only ever serializes PREVIEW_SCROLLBACK_ROWS of history into this
@@ -52,11 +55,14 @@ function clamp(value: number, min: number, max: number): number {
 export function AgentTerminalPreview({
   ptyId,
   terminalInput = null,
+  agentType,
   className
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
+  /** Dashboard card agent; non-TUI / unknown falls back to the global theme. */
+  agentType?: string | null
   className?: string
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -69,17 +75,13 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
-  const { terminalTheme, terminalMode } = useMemo(() => {
-    if (!settings) {
-      return { terminalTheme: null, terminalMode: 'dark' as const }
-    }
-    const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-    const theme = composeActiveTerminalTheme(
-      appearance.theme ?? getBuiltinTheme(appearance.themeName),
-      settings
-    )
-    return { terminalTheme: theme, terminalMode: appearance.mode }
-  }, [settings, systemPrefersDark])
+  const previewAgent = resolvePreviewAgent(agentType)
+  const { terminalTheme, terminalMode } = useMemo(
+    () => resolveAgentPreviewTheme(settings, systemPrefersDark, previewAgent),
+    [settings, systemPrefersDark, previewAgent]
+  )
+  const terminalThemeRef = useRef(terminalTheme)
+  const terminalModeRef = useRef(terminalMode)
   // A null snapshot means no serializer knows this pty (it died or was never
   // spawned this session) — say so instead of painting a silent blank terminal.
   const [ptyGone, setPtyGone] = useState(false)
@@ -92,7 +94,9 @@ export function AgentTerminalPreview({
     settingsRef.current = settings
     macOptionAsAltRef.current = macOptionAsAlt
     terminalInputRef.current = terminalInput
-  }, [settings, macOptionAsAlt, terminalInput])
+    terminalThemeRef.current = terminalTheme
+    terminalModeRef.current = terminalMode
+  }, [settings, macOptionAsAlt, terminalInput, terminalTheme, terminalMode])
 
   useEffect(() => {
     setPtyGone(false)
@@ -283,8 +287,8 @@ export function AgentTerminalPreview({
             settings: settingsRef.current,
             terminalInput: terminalInputRef.current,
             macOptionIsMeta: macOptionAsAltRef.current === 'true',
-            theme: terminalTheme,
-            themeMode: terminalMode,
+            theme: terminalThemeRef.current,
+            themeMode: terminalModeRef.current,
             cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
             rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
             scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
@@ -416,7 +420,7 @@ export function AgentTerminalPreview({
       terminal?.dispose()
       terminalRef.current = null
     }
-  }, [ptyId, terminalTheme, terminalMode])
+  }, [ptyId])
 
   // Why: appearance settings must land on the open terminal, and the OS input
   // source can flip Option-as-Alt with no settings change at all. A remount
@@ -430,8 +434,9 @@ export function AgentTerminalPreview({
       terminal.options,
       buildPreviewAppearanceOptions(settings, macOptionAsAlt === 'true')
     )
+    applyAgentPreviewThemeIfChanged(terminal, terminalTheme)
     syncPreviewTerminalLigatures(terminal, settings)
-  }, [settings, macOptionAsAlt])
+  }, [settings, macOptionAsAlt, terminalTheme])
 
   return (
     // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden

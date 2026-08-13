@@ -2857,6 +2857,8 @@ export type GlobalSettings = {
   terminalCursorBlink: boolean
   terminalThemeDark: string
   terminalCustomThemes?: TerminalCustomTheme[]
+  /** Per-agent terminal theme slots. Missing agent key or missing slot = inherit the global Dark/Light theme. */
+  agentTerminalThemes?: Partial<Record<TuiAgent, { dark?: string; light?: string }>>
   terminalDividerColorDark: string
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string

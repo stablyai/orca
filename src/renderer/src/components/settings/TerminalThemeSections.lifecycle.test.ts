@@ -10,13 +10,21 @@ vi.mock('react', async () => {
     ...actual,
     useState: <T>(initial: T | (() => T)) => {
       const initialValue = typeof initial === 'function' ? (initial as () => T)() : initial
-      return [
-        themeTarget ?? initialValue,
-        (value: T) => {
-          themeTarget = value as 'dark' | 'light'
-        }
-      ]
-    }
+      if (initialValue === 'dark' || initialValue === 'light') {
+        return [
+          themeTarget ?? initialValue,
+          (value: T) => {
+            themeTarget = value as 'dark' | 'light'
+          }
+        ]
+      }
+      return [initialValue, () => {}]
+    },
+    useMemo: <T>(factory: () => T) => factory(),
+    useEffect: () => {},
+    useLayoutEffect: () => {},
+    useRef: <T>(initial: T) => ({ current: initial }),
+    useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn
   }
 })
 
@@ -24,6 +32,33 @@ vi.mock('./TerminalSettingsPreview', () => ({
   TerminalSettingsPreview: function TerminalSettingsPreview() {
     return null
   }
+}))
+
+const detectedAgentsMock = vi.hoisted(() => ({
+  detectedIds: ['claude'] as string[],
+  isLoading: false,
+  detectionFailed: false,
+  refresh: vi.fn()
+}))
+
+const storeMock = vi.hoisted(() => ({
+  settingsSearchQuery: '',
+  remoteDetectedAgentIds: {} as Record<string, string[] | null>,
+  runtimeDetectedAgentIds: {} as Record<string, string[] | null>
+}))
+
+vi.mock('@/hooks/useDetectedAgents', () => ({
+  useDetectedAgents: () => ({
+    detectedIds: detectedAgentsMock.detectedIds,
+    isLoading: detectedAgentsMock.isLoading,
+    detectionFailed: detectedAgentsMock.detectionFailed,
+    isRefreshing: false,
+    refresh: detectedAgentsMock.refresh
+  })
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: (selector: (state: typeof storeMock) => unknown) => selector(storeMock)
 }))
 
 import {
@@ -87,6 +122,15 @@ function renderCatalog(
     showThemeImport: true,
     preferredTarget
   })
+}
+
+function mountFunctionComponent(node: ReactElementLike | null): ReactElementLike | null {
+  if (node == null || typeof node.type !== 'function') {
+    return null
+  }
+  return (node.type as (props: Record<string, unknown>) => React.JSX.Element)(
+    node.props ?? {}
+  ) as unknown as ReactElementLike
 }
 
 function getTypeName(node: ReactElementLike): string {
@@ -172,10 +216,30 @@ function findButtonTexts(node: unknown): string[] {
   return [...findButtonTexts(element.props?.children), ...findButtonTexts(element.props?.action)]
 }
 
+function findTextNodes(node: unknown): string[] {
+  if (typeof node === 'string') {
+    return [node]
+  }
+  if (node == null || typeof node === 'number') {
+    return []
+  }
+  if (Array.isArray(node)) {
+    return node.flatMap(findTextNodes)
+  }
+  const element = node as ReactElementLike
+  return findTextNodes(element.props?.children)
+}
+
 describe('TerminalThemeCatalogSection', () => {
   beforeEach(() => {
     themeTarget = 'dark'
     resetTerminalThemeTargetMemoryForTests()
+    detectedAgentsMock.detectedIds = ['claude']
+    detectedAgentsMock.isLoading = false
+    detectedAgentsMock.detectionFailed = false
+    storeMock.settingsSearchQuery = ''
+    storeMock.remoteDetectedAgentIds = {}
+    storeMock.runtimeDetectedAgentIds = {}
     vi.clearAllMocks()
   })
 
@@ -395,6 +459,66 @@ describe('TerminalThemeCatalogSection', () => {
     const picker = findElementByTypeName(element, 'ThemePicker')
 
     expect(picker?.props?.importedHighlightSignal).toBe(7)
+  })
+
+  it('keeps inherit out of the global catalog picker options', () => {
+    const element = renderCatalog()
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const themeOptions = picker?.props?.themeOptions as { value: string; group: string }[]
+
+    expect(themeOptions.some((option) => option.value === 'inherit' || option.group === 'inherit')).toBe(
+      false
+    )
+  })
+
+  it('keeps agent theme rows inside the match-dark-mode collapse', () => {
+    const collapsed = renderCatalog(
+      makeSettings({ terminalUseSeparateLightTheme: false }),
+      vi.fn(),
+      'light'
+    )
+    const collapsedRegion = findElementByClassSubstring(
+      collapsed,
+      'transition-[grid-template-rows,padding-top]'
+    )
+    const expanded = renderCatalog(makeSettings(), vi.fn(), 'dark')
+    const expandedRegion = findElementByClassSubstring(
+      expanded,
+      'transition-[grid-template-rows,padding-top]'
+    )
+
+    expect(collapsedRegion?.props?.inert).toBe(true)
+    expect(findElementByTypeName(collapsedRegion, 'AgentTerminalThemesSection')).not.toBeNull()
+    expect(expandedRegion?.props?.inert).toBe(false)
+    expect(findElementByTypeName(expandedRegion, 'AgentTerminalThemesSection')).not.toBeNull()
+    expect(findElementByTypeName(expandedRegion, 'AgentTerminalThemesSection')?.props?.target).toBe(
+      'dark'
+    )
+
+    const mounted = mountFunctionComponent(
+      findElementByTypeName(expandedRegion, 'AgentTerminalThemesSection')
+    )
+    const disclosure = findElementByTypeName(mounted, 'AppearanceAdvancedDisclosure')
+    expect(disclosure?.props?.label).toBe('Agent terminal themes')
+    expect(disclosure?.props?.forceOpen).toBe(false)
+
+    const disclosureTree = mountFunctionComponent(disclosure)
+    const trigger = findElementByTypeName(disclosureTree, 'button')
+    expect(trigger?.props?.['aria-expanded']).toBe(false)
+    expect(findTextNodes(trigger)).toContain('Agent terminal themes')
+  })
+
+  it('explains that agent themes follow the dark slot next to match dark mode', () => {
+    const element = renderCatalog(
+      makeSettings({ terminalUseSeparateLightTheme: false }),
+      vi.fn(),
+      'light'
+    )
+    const texts = findTextNodes(element)
+
+    expect(texts).toContain(
+      'Agent terminal themes follow the Dark slot while Match dark mode is on.'
+    )
   })
 })
 

@@ -196,8 +196,11 @@ import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
 } from '../runtime/terminal-model-query-authority'
-import { setTerminalViewAttributes } from '../runtime/terminal-view-attribute-store'
-import { validateTerminalViewAttributes } from '../../shared/terminal-view-attributes'
+import { validateTerminalViewAttributesPush } from '../../shared/terminal-view-attributes'
+import {
+  commitTerminalViewAttributesSnapshot,
+  markRendererCommittedSnapshot
+} from '../runtime/terminal-view-attribute-store'
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import {
@@ -7638,10 +7641,10 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:terminalViewAttributes')
   ipcMain.on('pty:terminalViewAttributes', (_event, args: unknown) => {
-    // Why validate-or-drop: a malformed palette gives a wrong color reply that breaks TUI theme detection worse than the silent-until-first-push default.
-    const attributes = validateTerminalViewAttributes(args)
-    if (attributes) {
-      setTerminalViewAttributes(attributes)
+    const push = validateTerminalViewAttributesPush(args)
+    if (push) {
+      commitTerminalViewAttributesSnapshot(push)
+      markRendererCommittedSnapshot()
     }
   })
 

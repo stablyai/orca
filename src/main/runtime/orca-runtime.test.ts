@@ -130,7 +130,12 @@ import { TERMINAL_METHODS } from './rpc/methods/terminal'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../ipc/watcher-removal-drain'
 import {
+  _resetHiddenRendererPtyDeliveryGateForTest,
+  markHiddenRendererPty
+} from '../ipc/pty-hidden-delivery-gate'
+import {
   _resetTerminalViewAttributesForTest,
+  commitTerminalViewAttributesSnapshot,
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
@@ -650,6 +655,7 @@ function resetRuntimeTestMocks(): void {
   electronMocks.app.isPackaged = false
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
   _resetTerminalViewAttributesForTest()
+  _resetHiddenRendererPtyDeliveryGateForTest()
   advertisedUrlWatcher.clear()
   electronMocks.BrowserWindow.fromId.mockReset()
   electronMocks.BrowserWindow.fromId.mockReturnValue(null)
@@ -13183,6 +13189,154 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+  })
+
+  it('passes Codex byAgent view colors to background Codex spawns', async () => {
+    commitTerminalViewAttributesSnapshot({
+      global: {
+        foreground: [0xff, 0xff, 0xff],
+        background: [0x28, 0x2c, 0x34],
+        cursor: [0xff, 0xff, 0xff],
+        ansi: Array.from({ length: 256 }, () => [0, 0, 0] as [number, number, number]),
+        colorSchemeMode: 'dark',
+        cursorStyle: 'block',
+        cursorBlink: false
+      },
+      byAgent: {
+        codex: {
+          foreground: [0xf8, 0xf8, 0xf2],
+          background: [0x28, 0x2a, 0x36],
+          cursor: [0xf8, 0xf8, 0xf2],
+          ansi: Array.from({ length: 256 }, () => [0, 0, 0] as [number, number, number]),
+          colorSchemeMode: 'dark',
+          cursorStyle: 'block',
+          cursorBlink: false
+        }
+      }
+    })
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-codex-colors' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'codex' })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#f8f8f2',
+          background: '#282a36'
+        }
+      })
+    )
+  })
+
+  it('answers hidden OSC 11 from the Codex byAgent snapshot', async () => {
+    commitTerminalViewAttributesSnapshot({
+      global: {
+        foreground: [0xd0, 0xd0, 0xd0],
+        background: [0x1e, 0x1e, 0x2e],
+        cursor: [0xff, 0x99, 0x00],
+        ansi: Array.from({ length: 256 }, () => [0, 0, 0] as [number, number, number]),
+        colorSchemeMode: 'dark',
+        cursorStyle: 'block',
+        cursorBlink: false
+      },
+      byAgent: {
+        codex: {
+          foreground: [0xd0, 0xd0, 0xd0],
+          background: [0x28, 0x2a, 0x36],
+          cursor: [0xff, 0x99, 0x00],
+          ansi: Array.from({ length: 256 }, () => [0, 0, 0] as [number, number, number]),
+          colorSchemeMode: 'dark',
+          cursorStyle: 'block',
+          cursorBlink: false
+        }
+      }
+    })
+    const replies: string[] = []
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-codex-osc' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: (_id, data) => {
+        replies.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'codex' })
+    markHiddenRendererPty('pty-codex-osc')
+    runtime.onPtyData('pty-codex-osc', '\x1b]11;?\x07', Date.now())
+    await runtime.serializeMainTerminalBuffer('pty-codex-osc')
+
+    expect(replies).toEqual(['\x1b]11;rgb:2828/2a2a/3636\x1b\\'])
+  })
+
+  it('fans out Codex view-attribute changes to Codex emulators only', async () => {
+    const globalAttrs = {
+      foreground: [0xff, 0xff, 0xff] as [number, number, number],
+      background: [0x28, 0x2c, 0x34] as [number, number, number],
+      cursor: [0xff, 0xff, 0xff] as [number, number, number],
+      ansi: Array.from({ length: 256 }, () => [0, 0, 0] as [number, number, number]),
+      colorSchemeMode: 'dark' as const,
+      cursorStyle: 'block' as const,
+      cursorBlink: false
+    }
+    const codexAttrs = {
+      ...globalAttrs,
+      background: [0x11, 0x00, 0x00] as [number, number, number]
+    }
+    commitTerminalViewAttributesSnapshot({ global: globalAttrs, byAgent: {} })
+
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-fanout-codex' })
+      .mockResolvedValueOnce({ id: 'pty-fanout-shell' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      tabId: 'fanout-codex-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      tabId: 'fanout-shell-tab',
+      leafId: '22222222-2222-4222-8222-222222222222'
+    })
+
+    runtime.onPtyData('pty-fanout-codex', 'boot', Date.now())
+    runtime.onPtyData('pty-fanout-shell', 'boot', Date.now())
+
+    type HeadlessStateForTest = {
+      emulator: { applyPushedViewAttributes: ReturnType<typeof vi.fn> & ((attrs: unknown) => void) }
+    }
+    const terminals = (
+      runtime as unknown as { headlessTerminals: Map<string, HeadlessStateForTest> }
+    ).headlessTerminals
+    const codexApply = vi.spyOn(terminals.get('pty-fanout-codex')!.emulator, 'applyPushedViewAttributes')
+    const shellApply = vi.spyOn(terminals.get('pty-fanout-shell')!.emulator, 'applyPushedViewAttributes')
+
+    commitTerminalViewAttributesSnapshot({
+      global: globalAttrs,
+      byAgent: { codex: codexAttrs }
+    })
+
+    expect(codexApply).toHaveBeenCalledTimes(1)
+    expect(shellApply).not.toHaveBeenCalled()
   })
 
   it('does not register or publish a PTY incarnation that exited before spawn resolved', async () => {

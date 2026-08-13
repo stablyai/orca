@@ -157,3 +157,5 @@ export const getTerminalWarpImportSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+export { getAgentTerminalThemeSearchEntries } from './agent-terminal-theme-search'

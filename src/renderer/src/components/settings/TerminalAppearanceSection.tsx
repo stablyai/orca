@@ -17,6 +17,7 @@ import {
   getTerminalThemeTargetSearchEntries,
   getTerminalWarpImportSearchEntries,
   getTerminalYamlImportSearchEntries,
+  getAgentTerminalThemeSearchEntries,
   getTerminalTypographySearchEntries,
   getTerminalWindowSearchEntries
 } from './terminal-search'
@@ -92,6 +93,7 @@ export function TerminalAppearanceSection({
     ...getTerminalThemeTargetSearchEntries(),
     ...darkThemeSearchEntries,
     ...lightThemeSearchEntries,
+    ...getAgentTerminalThemeSearchEntries(),
     ...(showWarpThemeImport
       ? [...getTerminalWarpImportSearchEntries(), ...getTerminalYamlImportSearchEntries()]
       : [])

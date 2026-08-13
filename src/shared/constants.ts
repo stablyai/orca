@@ -222,6 +222,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalUseSeparateLightTheme: true,
     terminalThemeLight: 'Builtin Tango Light',
     terminalCustomThemes: [],
+    agentTerminalThemes: {},
     terminalDividerColorLight: '#d4d4d8',
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalActivePaneOpacity: 1,

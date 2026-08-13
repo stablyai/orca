@@ -109,6 +109,10 @@ vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
   },
+  nativeTheme: {
+    shouldUseDarkColors: true,
+    on: () => undefined
+  },
   safeStorage: {
     isEncryptionAvailable: () => true,
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),

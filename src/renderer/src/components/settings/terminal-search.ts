@@ -16,6 +16,7 @@ import {
   getTerminalWarpImportSearchEntries,
   getTerminalYamlImportSearchEntries
 } from './terminal-theme-search'
+import { getAgentTerminalThemeSearchEntries } from './agent-terminal-theme-search'
 import {
   getTerminalCursorSearchEntries,
   getTerminalRenderingSearchEntries,
@@ -50,6 +51,7 @@ export {
   getTerminalWarpImportSearchEntries,
   getTerminalYamlImportSearchEntries
 } from './terminal-theme-search'
+export { getAgentTerminalThemeSearchEntries } from './agent-terminal-theme-search'
 export {
   getTerminalAdvancedSearchEntries,
   getTerminalMacOptionSearchEntries,
@@ -74,6 +76,7 @@ const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
     ...getTerminalThemeTargetSearchEntries(),
     ...getTerminalDarkThemeSearchEntries(),
     ...getTerminalLightThemeSearchEntries(),
+    ...getAgentTerminalThemeSearchEntries(),
     ...getTerminalWindowSearchEntries(),
     ...getTerminalGhosttyImportSearchEntries()
   ]
