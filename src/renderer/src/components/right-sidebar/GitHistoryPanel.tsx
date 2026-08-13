@@ -99,12 +99,18 @@ export function GitHistoryPanel({
   // never refetches; an entry is cleared on error to allow a retry.
   const loadedCommitsRef = useRef<Set<string>>(new Set())
 
-  // A new history result can reorder or replace commits, so drop any expansion
-  // and cached file lists rather than risk showing stale files under a row.
+  // Prune expansion and cached file lists to the commits that survived the new result.
+  // Clearing wholesale would collapse every expanded row on Load more, which only appends;
+  // file lists are keyed by immutable commit id, so a surviving id cannot show stale files.
   useEffect(() => {
-    setExpanded(new Set())
-    setFilesByCommit({})
-    loadedCommitsRef.current = new Set()
+    const liveIds = new Set(result?.items.map((item) => item.id) ?? [])
+    setExpanded((prev) => new Set([...prev].filter((id) => liveIds.has(id))))
+    setFilesByCommit((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([id]) => liveIds.has(id)))
+    )
+    loadedCommitsRef.current = new Set(
+      [...loadedCommitsRef.current].filter((id) => liveIds.has(id))
+    )
   }, [result])
 
   const handleToggleExpand = useCallback(

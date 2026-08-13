@@ -107,6 +107,8 @@ describe('GitHistoryPanel', () => {
       />
     )
 
+    // Anchor on a rendered row so the negative assertion cannot pass on empty markup.
+    expect(markup).toContain('Fix tab overflow')
     expect(markup).not.toContain('Load more commits')
   })
 
@@ -126,6 +128,8 @@ describe('GitHistoryPanel', () => {
       />
     )
 
+    // Anchor on a rendered row so the negative assertion cannot pass on empty markup.
+    expect(markup).toContain('Fix tab overflow')
     expect(markup).not.toContain('Load more commits')
   })
 
@@ -143,6 +147,8 @@ describe('GitHistoryPanel', () => {
       />
     )
 
+    // Anchor on a rendered row so the negative assertion cannot pass on empty markup.
+    expect(markup).toContain('Fix tab overflow')
     expect(markup).not.toContain('Load more commits')
   })
 })
