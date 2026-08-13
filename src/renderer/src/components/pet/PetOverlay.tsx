@@ -12,6 +12,7 @@ import {
 } from './pet-agent-state'
 import { usePetPointerInteraction } from './usePetPointerInteraction'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
+import { getPetFrameIntervalMs, usePetCpuAnimationSpeed } from './pet-cpu-animation-speed'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -50,13 +51,15 @@ function SpriteFrame({
   animate,
   maxSize,
   animationName,
-  restartKey
+  restartKey,
+  speedMultiplier
 }: {
   url: string
   sprite: Sprite
   animate: boolean
   maxSize: number
   animationName: PetAnimationName
+  speedMultiplier: number
   // Why: folded into the keyframes name, so bumping it mints a fresh animation
   // that restarts from frame 0 even when the state row is unchanged.
   restartKey: number
@@ -91,7 +94,8 @@ function SpriteFrame({
     frameWidth: sprite.frameWidth,
     scale,
     rowOffsetY: startY,
-    frameDurationsMs: anim?.frameDurationsMs
+    frameDurationsMs: anim?.frameDurationsMs,
+    speedMultiplier
   })
   return (
     <>
@@ -121,15 +125,21 @@ function SpriteFrame({
 function DetectedSpriteFrame({
   detected,
   animate,
-  maxSize
+  maxSize,
+  speedMultiplier
 }: {
   detected: DetectedSpriteCacheEntry
   animate: boolean
   maxSize: number
+  speedMultiplier: number
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const frameIndexRef = useRef(0)
   const lastTimeRef = useRef(0)
+  const speedMultiplierRef = useRef(speedMultiplier)
+  useEffect(() => {
+    speedMultiplierRef.current = speedMultiplier
+  }, [speedMultiplier])
   // Why: honor manifest fps captured at import time so bundles play at their
   // intended speed; default to 8 only when the manifest didn't declare one.
   const fps = detected.fps > 0 ? detected.fps : 8
@@ -185,7 +195,7 @@ function DetectedSpriteFrame({
     }
     const tick = (now: number): void => {
       const dt = now - lastTimeRef.current
-      if (dt >= 1000 / fps) {
+      if (dt >= getPetFrameIntervalMs(fps, speedMultiplierRef.current)) {
         lastTimeRef.current = now
         frameIndexRef.current = (frameIndexRef.current + 1) % detected.frames.length
         draw()
@@ -372,6 +382,7 @@ export function PetOverlay(): React.JSX.Element {
   }, [dragging, position])
 
   const motionAllowed = documentVisible && !reducedMotion
+  const speedMultiplier = usePetCpuAnimationSpeed(motionAllowed)
   // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
   // horizontal drag keeps animating so the running rows show. Bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
@@ -419,9 +430,15 @@ export function PetOverlay(): React.JSX.Element {
               maxSize={size}
               animationName={animationName}
               restartKey={dragGeneration}
+              speedMultiplier={speedMultiplier}
             />
           ) : detected ? (
-            <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
+            <DetectedSpriteFrame
+              detected={detected}
+              animate={spriteAnimate}
+              maxSize={size}
+              speedMultiplier={speedMultiplier}
+            />
           ) : (
             // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
             // fit-content, so max-w/h-full has no fixed box to resolve against

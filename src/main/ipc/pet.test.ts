@@ -8,6 +8,7 @@ const {
   browserWindowFromWebContentsMock,
   browserWindowGetFocusedWindowMock,
   handleMock,
+  samplePetSystemCpuUsageMock,
   nativeImageCreateFromBufferMock,
   showOpenDialogMock
 } = vi.hoisted(() => ({
@@ -15,8 +16,13 @@ const {
   browserWindowFromWebContentsMock: vi.fn(),
   browserWindowGetFocusedWindowMock: vi.fn(),
   handleMock: vi.fn(),
+  samplePetSystemCpuUsageMock: vi.fn(),
   nativeImageCreateFromBufferMock: vi.fn(),
   showOpenDialogMock: vi.fn()
+}))
+
+vi.mock('../pet-system-cpu-usage', () => ({
+  samplePetSystemCpuUsage: samplePetSystemCpuUsageMock
 }))
 
 vi.mock('electron', () => ({
@@ -54,6 +60,7 @@ describe('registerPetHandlers', () => {
     browserWindowFromWebContentsMock.mockReset()
     browserWindowGetFocusedWindowMock.mockReset()
     handleMock.mockReset()
+    samplePetSystemCpuUsageMock.mockReset()
     nativeImageCreateFromBufferMock.mockReset()
     showOpenDialogMock.mockReset()
 
@@ -81,6 +88,13 @@ describe('registerPetHandlers', () => {
     }
     return handler
   }
+
+  it('returns sampled system CPU usage over pet IPC', async () => {
+    samplePetSystemCpuUsageMock.mockReturnValue(0.42)
+
+    expect(await getHandler('pet:getSystemCpuUsage')({})).toBe(0.42)
+    expect(samplePetSystemCpuUsageMock).toHaveBeenCalledOnce()
+  })
 
   it('imports a pet bundle whose manifest uses Windows separators', async () => {
     const bundleDir = join(tempDir, 'windows-export.codex-pet')

@@ -21,6 +21,8 @@ export type SpriteAnimationCssInput = {
   rowOffsetY: number
   // Per-frame holds in ms; uneven pacing renders when they pass validation.
   frameDurationsMs: number[] | undefined
+  // Live playback multiplier. The pet CPU hook constrains this to 1x-1.5x.
+  speedMultiplier: number
 }
 
 // Why: sprite keyframes are runtime CSS, not user-visible copy; translated CSS
@@ -32,9 +34,11 @@ export function buildSpriteAnimationCss({
   frameWidth,
   scale,
   rowOffsetY,
-  frameDurationsMs
+  frameDurationsMs,
+  speedMultiplier
 }: SpriteAnimationCssInput): SpriteAnimationCss {
   const name = `pet-${keyframesId}`
+  const speed = Number.isFinite(speedMultiplier) && speedMultiplier > 0 ? speedMultiplier : 1
   const durations = validFrameDurations(frameDurationsMs, frames)
   if (durations) {
     const totalMs = durations.reduce((sum, ms) => sum + ms, 0)
@@ -44,12 +48,12 @@ export function buildSpriteAnimationCss({
     if (stops) {
       return {
         keyframesCss: `@keyframes ${name} { ${stops.join(' ')} }`,
-        animationCss: `${name} ${totalMs / 1000}s step-end infinite`
+        animationCss: `${name} ${Number((totalMs / 1000 / speed).toFixed(4))}s step-end infinite`
       }
     }
   }
   // Uniform sheet fps: one steps() run across the row.
-  const duration = Math.max(0.1, frames / Math.max(0.1, fps))
+  const duration = Math.max(0.1, frames / Math.max(0.1, fps) / speed)
   const endX = -(frames * frameWidth * scale)
   return {
     keyframesCss: `@keyframes ${name} { from { background-position: 0px ${rowOffsetY}px; } to { background-position: ${endX}px ${rowOffsetY}px; } }`,

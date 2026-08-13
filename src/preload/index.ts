@@ -2534,6 +2534,7 @@ const api = {
   },
 
   pet: {
+    getSystemCpuUsage: (): Promise<number | null> => ipcRenderer.invoke('pet:getSystemCpuUsage'),
     import: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:import'),
     importPetBundle: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:importPetBundle'),
     read: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<ArrayBuffer | null> =>

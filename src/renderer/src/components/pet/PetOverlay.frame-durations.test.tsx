@@ -44,6 +44,11 @@ vi.mock('./usePetUrl', () => ({
   })
 }))
 
+vi.mock('./pet-cpu-animation-speed', () => ({
+  usePetCpuAnimationSpeed: () => 1.5,
+  getPetFrameIntervalMs: (fps: number, speedMultiplier: number) => 1000 / (fps * speedMultiplier)
+}))
+
 import { PetOverlay } from './PetOverlay'
 
 function renderPetOverlay(): { container: HTMLDivElement; root: Root } {
@@ -105,7 +110,7 @@ describe('PetOverlay per-frame sprite durations', () => {
     const spriteDiv = Array.from(container.querySelectorAll('div')).find(
       (div) => div.style.backgroundImage !== ''
     )
-    expect(spriteDiv?.style.animation).toContain('6.6s')
+    expect(spriteDiv?.style.animation).toContain('4.4s')
     expect(spriteDiv?.style.animation).toContain('step-end')
     expect(spriteDiv?.style.animation).toContain('infinite')
   })
