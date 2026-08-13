@@ -10,6 +10,10 @@ export type SpriteAnimationCss = {
   animationCss: string
 }
 
+// Why: repeat x frames becomes one stop each, so bound the emitted keyframe set
+// the same way the importer bounds frames.
+const MAX_REPEATED_STOPS = 512
+
 export type SpriteAnimationCssInput = {
   // Sanitized `@keyframes` identifier; folded with the restart key by the caller.
   keyframesId: string
@@ -21,6 +25,17 @@ export type SpriteAnimationCssInput = {
   rowOffsetY: number
   // Per-frame holds in ms; uneven pacing renders when they pass validation.
   frameDurationsMs: number[] | undefined
+  // How many times the row plays before `settle` takes over.
+  repeat?: number
+  // Resolved track that becomes the steady loop; absent means the row loops.
+  settle?: {
+    frames: number
+    rowOffsetY: number
+    frameDurationsMs: number[] | undefined
+  }
+  // Ms already spent in this state when the track is minted. Fast-forwards the
+  // played part of the burst so a re-minted track resumes instead of replaying.
+  settleElapsedMs?: number
 }
 
 // Why: sprite keyframes are runtime CSS, not user-visible copy; translated CSS
@@ -32,19 +47,35 @@ export function buildSpriteAnimationCss({
   frameWidth,
   scale,
   rowOffsetY,
-  frameDurationsMs
+  frameDurationsMs,
+  repeat,
+  settle,
+  settleElapsedMs
 }: SpriteAnimationCssInput): SpriteAnimationCss {
   const name = `pet-${keyframesId}`
   const durations = validFrameDurations(frameDurationsMs, frames)
   if (durations) {
-    const totalMs = durations.reduce((sum, ms) => sum + ms, 0)
+    const settled = buildSettlingCss({
+      name,
+      durations,
+      frames,
+      frameWidth,
+      scale,
+      rowOffsetY,
+      repeat,
+      settle,
+      settleElapsedMs
+    })
+    if (settled) {
+      return settled
+    }
     // Why: Codex pets hold frames unevenly (idle rests ~1.9s on its last frame).
     // steps() can't express that, so emit one step-end stop per frame.
-    const stops = stepEndStops(durations, totalMs, frameWidth, scale, rowOffsetY)
-    if (stops) {
+    const track = buildTrack(name, durations, frames, frameWidth, scale, rowOffsetY)
+    if (track) {
       return {
-        keyframesCss: `@keyframes ${name} { ${stops.join(' ')} }`,
-        animationCss: `${name} ${totalMs / 1000}s step-end infinite`
+        keyframesCss: track.keyframesCss,
+        animationCss: `${name} ${track.totalMs / 1000}s step-end infinite`
       }
     }
   }
@@ -74,12 +105,95 @@ function validFrameDurations(
   return null
 }
 
-// Cumulative step-end stops, one per frame. Returns null (→ uniform fallback)
-// when a frame is too short to survive 4-decimal precision (two stops collapse,
-// or the final stop rounds to 100%) so no frame is silently dropped.
+// Why: Codex's app-state rows play a few times and then rest on idle forever
+// (`app_state_animation` sets loop_start past the repeats). CSS can't loop part
+// of one timeline, so emit the repeats and the resting track as two animations
+// and start the resting one on a delay equal to the repeats.
+function buildSettlingCss({
+  name,
+  durations,
+  frames,
+  frameWidth,
+  scale,
+  rowOffsetY,
+  repeat,
+  settle,
+  settleElapsedMs
+}: {
+  name: string
+  durations: number[]
+  frames: number
+  frameWidth: number
+  scale: number
+  rowOffsetY: number
+  repeat: number | undefined
+  settle: SpriteAnimationCssInput['settle']
+  settleElapsedMs: number | undefined
+}): SpriteAnimationCss | null {
+  if (
+    !settle ||
+    !Number.isInteger(repeat) ||
+    repeat === undefined ||
+    repeat < 1 ||
+    repeat * frames > MAX_REPEATED_STOPS
+  ) {
+    return null
+  }
+  const settleDurations = validFrameDurations(settle.frameDurationsMs, settle.frames)
+  if (!settleDurations) {
+    return null
+  }
+  const burstDurations = Array.from({ length: repeat }, () => durations).flat()
+  const burst = buildTrack(`${name}-burst`, burstDurations, frames, frameWidth, scale, rowOffsetY)
+  const rest = buildTrack(
+    `${name}-rest`,
+    settleDurations,
+    settle.frames,
+    frameWidth,
+    scale,
+    settle.rowOffsetY
+  )
+  if (!burst || !rest) {
+    return null
+  }
+  // Why: aligned with Codex's player, which measures elapsed from when the
+  // state started. Negative delays fast-forward a re-minted track by the time
+  // already played, so ending a drag or hover resumes rather than replays.
+  const elapsedMs = Math.max(0, settleElapsedMs ?? 0)
+  const burstDelayS = -Math.round(Math.min(elapsedMs, burst.totalMs)) / 1000
+  const restDelayS = Math.round(burst.totalMs - elapsedMs) / 1000
+  return {
+    keyframesCss: `${burst.keyframesCss} ${rest.keyframesCss}`,
+    animationCss:
+      `${name}-burst ${burst.totalMs / 1000}s step-end ${burstDelayS}s 1, ` +
+      `${name}-rest ${rest.totalMs / 1000}s step-end ${restDelayS}s infinite`
+  }
+}
+
+function buildTrack(
+  name: string,
+  durations: number[],
+  columns: number,
+  frameWidth: number,
+  scale: number,
+  rowOffsetY: number
+): { keyframesCss: string; totalMs: number } | null {
+  const totalMs = durations.reduce((sum, ms) => sum + ms, 0)
+  const stops = stepEndStops(durations, totalMs, columns, frameWidth, scale, rowOffsetY)
+  if (!stops) {
+    return null
+  }
+  return { keyframesCss: `@keyframes ${name} { ${stops.join(' ')} }`, totalMs }
+}
+
+// Cumulative step-end stops, one per frame. `columns` wraps the x offset so a
+// repeated row replays its own cells. Returns null (→ uniform fallback) when a
+// frame is too short to survive 4-decimal precision (two stops collapse, or the
+// final stop rounds to 100%) so no frame is silently dropped.
 function stepEndStops(
   durations: number[],
   totalMs: number,
+  columns: number,
   frameWidth: number,
   scale: number,
   rowOffsetY: number
@@ -93,7 +207,7 @@ function stepEndStops(
       return null
     }
     previousPct = pct
-    const x = -(index * frameWidth * scale)
+    const x = -((index % columns) * frameWidth * scale)
     stops.push(`${pct}% { background-position: ${x}px ${rowOffsetY}px; }`)
     elapsedMs += durations[index]
   }

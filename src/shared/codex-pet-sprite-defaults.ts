@@ -11,23 +11,40 @@ export const CODEX_PET_DEFAULT_FPS = 8
 // Codex sheets are 8 columns wide (its widest rows run 8 frames).
 export const CODEX_PET_DEFAULT_COLUMNS = 8
 
+// Codex repeats an app-state row 3x and sets loop_start past those repeats, so
+// the state bursts and then rests on idle until it changes.
+const APP_STATE_REPEAT = 3
+
 // Codex's `app_state_animation`: every non-final frame holds `frameMs`, the last
 // holds `finalMs`. Values below mirror `codex-rs/tui/src/pets/model.rs` exactly.
-function appStateDurations(frames: number, frameMs: number, finalMs: number): number[] {
-  return Array.from({ length: frames }, (_, i) => (i === frames - 1 ? finalMs : frameMs))
+function appStateAnimation(
+  row: number,
+  frames: number,
+  frameMs: number,
+  finalMs: number
+): SpriteAnimation {
+  return {
+    row,
+    frames,
+    frameDurationsMs: Array.from({ length: frames }, (_, i) =>
+      i === frames - 1 ? finalMs : frameMs
+    ),
+    repeat: APP_STATE_REPEAT,
+    settleTo: CODEX_PET_DEFAULT_ANIMATION
+  }
 }
 
 export const CODEX_PET_ANIMATIONS: Record<string, SpriteAnimation> = {
   // Idle is the ambient loop: long holds on the bookend frames, 6.6s cycle.
   idle: { row: 0, frames: 6, frameDurationsMs: [1680, 660, 660, 840, 840, 1920] },
-  'running-right': { row: 1, frames: 8, frameDurationsMs: appStateDurations(8, 120, 220) },
-  'running-left': { row: 2, frames: 8, frameDurationsMs: appStateDurations(8, 120, 220) },
-  waving: { row: 3, frames: 4, frameDurationsMs: appStateDurations(4, 140, 280) },
-  jumping: { row: 4, frames: 5, frameDurationsMs: appStateDurations(5, 140, 280) },
-  failed: { row: 5, frames: 8, frameDurationsMs: appStateDurations(8, 140, 240) },
-  waiting: { row: 6, frames: 6, frameDurationsMs: appStateDurations(6, 150, 260) },
-  running: { row: 7, frames: 6, frameDurationsMs: appStateDurations(6, 120, 220) },
-  review: { row: 8, frames: 6, frameDurationsMs: appStateDurations(6, 150, 280) }
+  'running-right': appStateAnimation(1, 8, 120, 220),
+  'running-left': appStateAnimation(2, 8, 120, 220),
+  waving: appStateAnimation(3, 4, 140, 280),
+  jumping: appStateAnimation(4, 5, 140, 280),
+  failed: appStateAnimation(5, 8, 140, 240),
+  waiting: appStateAnimation(6, 6, 150, 260),
+  running: appStateAnimation(7, 6, 120, 220),
+  review: appStateAnimation(8, 6, 150, 280)
 }
 
 /** The Codex row layout paced uniformly at `fps` (each frame held 1000/fps ms).
@@ -38,22 +55,31 @@ export const CODEX_PET_ANIMATIONS: Record<string, SpriteAnimation> = {
 export function codexAnimationsAtUniformFps(fps: number): Record<string, SpriteAnimation> {
   const frameMs = 1000 / fps
   return Object.fromEntries(
-    Object.entries(CODEX_PET_ANIMATIONS).map(([name, { row, frames }]) => [
+    Object.entries(CODEX_PET_ANIMATIONS).map(([name, { row, frames, repeat, settleTo }]) => [
       name,
-      { row, frames, frameDurationsMs: Array.from({ length: frames }, () => frameMs) }
+      {
+        row,
+        frames,
+        frameDurationsMs: Array.from({ length: frames }, () => frameMs),
+        // Why: the fps pin retimes frames. Repeat/settle is structural in Codex
+        // and applies at any pacing, so carry it through.
+        repeat,
+        settleTo
+      }
     ])
   )
 }
 
 export type CustomPetSprite = NonNullable<CustomPet['sprite']>
 
-/** The exact sprite an old Orca build baked for an imported Codex bundle:
+/** The exact sprite an older Orca build baked for an imported Codex bundle:
  *  192x208 frames on an 8-wide sheet at the flat 8 fps rate, idle default, and
- *  the nine Codex rows carrying no per-frame durations. Matching the full
- *  geometry (not just the row map) keeps a hand-authored 8 fps sheet that merely
- *  reuses those rows from being silently retimed. A pet deliberately built on
- *  the Codex layout that wants to keep uniform pacing opts out by declaring any
- *  frameDurationsMs of its own.
+ *  the nine Codex rows carrying either no per-frame durations (pre-durations
+ *  builds) or exactly the preset ones (built before repeat/settle existed).
+ *  Matching the full geometry (not just the row map) keeps a hand-authored 8 fps
+ *  sheet that merely reuses those rows from being silently retimed. A pet built
+ *  on the Codex layout opts out by declaring any pacing of its own: durations
+ *  that differ from the presets, or a repeat/settleTo.
  *
  *  Rows/sheet height are intentionally excluded so v2 (11-row) Codex sheets,
  *  which still bake these nine animations, upgrade too. */
@@ -83,9 +109,26 @@ function isLegacyCodexSprite(sprite: CustomPetSprite): boolean {
       !!anim &&
       anim.row === preset.row &&
       anim.frames === preset.frames &&
-      anim.frameDurationsMs === undefined
+      anim.repeat === undefined &&
+      anim.settleTo === undefined &&
+      isAbsentOrPresetDurations(anim.frameDurationsMs, preset.frameDurationsMs)
     )
   })
+}
+
+function isAbsentOrPresetDurations(
+  actual: number[] | undefined,
+  preset: number[] | undefined
+): boolean {
+  if (actual === undefined) {
+    return true
+  }
+  return (
+    Array.isArray(actual) &&
+    !!preset &&
+    actual.length === preset.length &&
+    actual.every((ms, index) => ms === preset[index])
+  )
 }
 
 /** Pets imported before per-frame durations existed persist the legacy Codex

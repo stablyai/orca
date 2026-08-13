@@ -3664,6 +3664,10 @@ export type SpriteAnimation = {
   frames: number
   /** Per-frame holds in ms (length === frames). Absent means uniform sheet fps. */
   frameDurationsMs?: number[]
+  /** Plays the row this many times before `settleTo` takes over. Absent loops the row. */
+  repeat?: number
+  /** Animation whose frames become the steady loop once `repeat` runs out. */
+  settleTo?: string
 }
 
 export type PersistedTrustedOrcaHookEntry = {

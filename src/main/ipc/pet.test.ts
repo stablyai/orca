@@ -129,7 +129,17 @@ describe('registerPetHandlers', () => {
   }
 
   async function writeSpriteBundle(
-    animations: Record<string, { row: number; frames: number; frameDurationsMs?: number[] }>
+    animations: Record<
+      string,
+      {
+        row: number
+        frames: number
+        frameDurationsMs?: number[]
+        repeat?: number
+        settleTo?: string
+      }
+    >,
+    sheetWidth = 4
   ): Promise<string> {
     const bundleDir = join(tempDir, 'durations.codex-pet')
     await mkdir(bundleDir, { recursive: true })
@@ -143,7 +153,7 @@ describe('registerPetHandlers', () => {
         animations
       })
     )
-    await writeFile(join(bundleDir, 'sheet.webp'), webpVp8x(4, 2))
+    await writeFile(join(bundleDir, 'sheet.webp'), webpVp8x(sheetWidth, 2))
     return bundleDir
   }
 
@@ -170,6 +180,91 @@ describe('registerPetHandlers', () => {
 
     await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(
       'declares 1 frame durations but 2 frames'
+    )
+  })
+
+  it('imports repeat and settleTo so app states can settle into idle', async () => {
+    const bundleDir = await writeSpriteBundle({
+      idle: { row: 0, frames: 2, frameDurationsMs: [1680, 1920] },
+      running: { row: 0, frames: 2, frameDurationsMs: [120, 220], repeat: 3, settleTo: 'idle' }
+    })
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
+
+    const result = (await getHandler('pet:importPetBundle')({ sender: {} })) as CustomPet
+
+    expect(result.sprite?.animations?.running).toEqual({
+      row: 0,
+      frames: 2,
+      frameDurationsMs: [120, 220],
+      repeat: 3,
+      settleTo: 'idle'
+    })
+  })
+
+  it('rejects settle declarations the renderer would silently ignore', async () => {
+    const invalid: [Record<string, Parameters<typeof writeSpriteBundle>[0][string]>, string][] = [
+      // repeat without settleTo
+      [
+        { idle: { row: 0, frames: 2, frameDurationsMs: [100, 200], repeat: 3 } },
+        'needs both repeat and settleTo'
+      ],
+      // settling into itself
+      [
+        {
+          idle: { row: 0, frames: 2, frameDurationsMs: [100, 200], repeat: 3, settleTo: 'idle' }
+        },
+        'cannot settle to itself'
+      ],
+      // no durations on the settling row
+      [
+        {
+          idle: { row: 0, frames: 2, frameDurationsMs: [100, 200] },
+          running: { row: 0, frames: 2, repeat: 3, settleTo: 'idle' }
+        },
+        'must both carry frameDurationsMs'
+      ],
+      // no durations on the settle target
+      [
+        {
+          idle: { row: 0, frames: 2 },
+          running: { row: 0, frames: 2, frameDurationsMs: [120, 220], repeat: 3, settleTo: 'idle' }
+        },
+        'must both carry frameDurationsMs'
+      ]
+    ]
+    for (const [animations, message] of invalid) {
+      const bundleDir = await writeSpriteBundle(animations)
+      showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
+
+      await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(message)
+    }
+  })
+
+  it('rejects a settleTo that names a missing animation', async () => {
+    const bundleDir = await writeSpriteBundle({
+      idle: { row: 0, frames: 2, settleTo: 'nap' }
+    })
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
+
+    await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(
+      'settles to "nap" which is not in animations'
+    )
+  })
+
+  it('rejects repeats whose expanded frame count exceeds the keyframe cap', async () => {
+    // A 2048px sheet gives 1024 columns, so 512 frames pass the column check
+    // and only the repeat product trips.
+    const bundleDir = await writeSpriteBundle(
+      {
+        idle: { row: 0, frames: 2 },
+        running: { row: 0, frames: 512, repeat: 2, settleTo: 'idle' }
+      },
+      2048
+    )
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
+
+    await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(
+      'exceeding the 512 keyframe cap'
     )
   })
 })
