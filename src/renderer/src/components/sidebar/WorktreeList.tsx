@@ -124,12 +124,9 @@ import {
   readWorkspaceDragDataIds
 } from './workspace-status'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
-import {
-  computeClearFilterActions,
-  computeVisibleWorktreeIds,
-  setVisibleWorktreeIds,
-  sidebarHasActiveFilters
-} from './visible-worktrees'
+import { computeVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
+import { computeClearFilterActions, sidebarHasActiveFilters } from './sidebar-filter-state'
+import { isWorkspaceStatusHidden } from './workspace-status-visibility'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   filterFolderWorkspacesFromOtherDevices,
@@ -5273,6 +5270,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
+  const hiddenWorkspaceStatusIds = useAppStore((s) => s.hiddenWorkspaceStatusIds)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
@@ -5573,15 +5571,23 @@ const WorktreeList = React.memo(function WorktreeList({
       hideWorkspacesFromOtherDevices,
       pairedDeviceIdsByEnvironment,
       alwaysShowDefaultBranchWorkspace,
+      hiddenWorkspaceStatusIds,
+      workspaceStatuses,
       repoMap,
       workspaceHostScope,
       visibleWorkspaceHostIds,
       defaultHostId: getSettingsFocusedExecutionHostId(settings),
       worktreeLineageById,
-      forcedVisibleWorktreeIds: agentSendTargetWorktreeId ? [agentSendTargetWorktreeId] : undefined
+      // Why the active workspace: "Move to status" sits on the row itself, so
+      // marking the workspace you are working in as a hidden status would
+      // otherwise delete its row while its panes stay open.
+      forcedVisibleWorktreeIds: [agentSendTargetWorktreeId, activeWorktreeId].filter(
+        (id): id is string => Boolean(id)
+      )
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
+    activeWorktreeId,
     agentSendTargetWorktreeId,
     agentStatusEpoch,
     filterRepoIds,
@@ -5592,6 +5598,8 @@ const WorktreeList = React.memo(function WorktreeList({
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace,
+    hiddenWorkspaceStatusIds,
+    workspaceStatuses,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,
@@ -5699,20 +5707,25 @@ const WorktreeList = React.memo(function WorktreeList({
       visibleHostIdSet,
       defaultHostId
     )
-    if (!hideWorkspacesFromOtherDevices) {
-      return hostVisibleWorkspaces
-    }
-    return filterFolderWorkspacesFromOtherDevices(
-      hostVisibleWorkspaces,
-      pairedDeviceIdsByEnvironment
+    const deviceVisibleWorkspaces = hideWorkspacesFromOtherDevices
+      ? filterFolderWorkspacesFromOtherDevices(hostVisibleWorkspaces, pairedDeviceIdsByEnvironment)
+      : hostVisibleWorkspaces
+    // Why the extra pass: folder workspaces never reach
+    // computeVisibleWorktreeIds, so the status filter has to be applied here or
+    // unchecking a status would silently skip them.
+    return deviceVisibleWorkspaces.filter(
+      (folderWorkspace) =>
+        !isWorkspaceStatusHidden(folderWorkspace, hiddenWorkspaceStatusIds, workspaceStatuses)
     )
   }, [
     defaultHostId,
     folderWorkspaces,
+    hiddenWorkspaceStatusIds,
     hideWorkspacesFromOtherDevices,
     pairedDeviceIdsByEnvironment,
     projectGroups,
-    visibleHostIdSet
+    visibleHostIdSet,
+    workspaceStatuses
   ])
   const repoOrder = useMemo(() => {
     return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
@@ -6571,6 +6584,7 @@ const WorktreeList = React.memo(function WorktreeList({
       hideDetachedHeadWorkspaces,
       hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace,
+      hiddenWorkspaceStatusIds,
       visibleWorkspaceHostIds,
       workspaceHostScope
     }),
@@ -6583,6 +6597,7 @@ const WorktreeList = React.memo(function WorktreeList({
       hideDetachedHeadWorkspaces,
       hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace,
+      hiddenWorkspaceStatusIds,
       visibleWorkspaceHostIds,
       workspaceHostScope
     ]
@@ -6600,6 +6615,7 @@ const WorktreeList = React.memo(function WorktreeList({
     (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
+  const setHiddenWorkspaceStatusIds = useAppStore((s) => s.setHiddenWorkspaceStatusIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
   const clearFilters = useCallback(() => {
@@ -6628,6 +6644,9 @@ const WorktreeList = React.memo(function WorktreeList({
     if (actions.resetAlwaysShowDefaultBranchWorkspace) {
       setAlwaysShowDefaultBranchWorkspace(true)
     }
+    if (actions.resetHiddenWorkspaceStatusIds) {
+      setHiddenWorkspaceStatusIds([])
+    }
     if (actions.resetVisibleWorkspaceHostIds) {
       setVisibleWorkspaceHostIds(null)
     }
@@ -6640,6 +6659,7 @@ const WorktreeList = React.memo(function WorktreeList({
     setHideDetachedHeadWorkspaces,
     setHideWorkspacesFromOtherDevices,
     setAlwaysShowDefaultBranchWorkspace,
+    setHiddenWorkspaceStatusIds,
     setVisibleWorkspaceHostIds,
     filterState
   ])

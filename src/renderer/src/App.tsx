@@ -694,6 +694,7 @@ function App(): React.JSX.Element {
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
+  const hiddenWorkspaceStatusIds = useAppStore((s) => s.hiddenWorkspaceStatusIds)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -1415,6 +1416,7 @@ function App(): React.JSX.Element {
         hideDetachedHeadWorkspaces,
         hideWorkspacesFromOtherDevices,
         alwaysShowDefaultBranchWorkspace,
+        hiddenWorkspaceStatusIds,
         showDotfilesByWorktree,
         // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to
         // main, which owns a mutable array — copy at the boundary rather than widening the wire type.
@@ -1452,6 +1454,7 @@ function App(): React.JSX.Element {
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace,
+    hiddenWorkspaceStatusIds,
     showDotfilesByWorktree,
     filterRepoIds,
     acknowledgedAgentsByPaneKey

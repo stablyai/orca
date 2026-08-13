@@ -19,6 +19,8 @@ import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
+import SidebarWorkspaceStatusFilterSection from './SidebarWorkspaceStatusFilterSection'
+import { getEffectiveHiddenWorkspaceStatusIds } from './workspace-status-visibility'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
@@ -44,6 +46,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  const hiddenWorkspaceStatusIds = useAppStore((s) => s.hiddenWorkspaceStatusIds)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const repos = useAppStore((s) => s.repos)
   const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
@@ -79,6 +83,12 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     return count
   }, [repos, filterRepoIds])
   const hasRepoFilter = selectedCount > 0
+  // Why not the raw list: a status deleted after being hidden would otherwise
+  // count as an active filter with no row left to untick.
+  const hiddenStatusCount = getEffectiveHiddenWorkspaceStatusIds(
+    hiddenWorkspaceStatusIds,
+    workspaceStatuses
+  ).length
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
   const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
   // Why gated on the parent row: the exemption only narrows the list during the
@@ -96,6 +106,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     hideWorkspacesFromOtherDevices ||
     hasSleepingExemptionFilter ||
     hasRepoFilter ||
+    hiddenStatusCount > 0 ||
     hasHostVisibilityFilter
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
@@ -106,6 +117,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     (hideWorkspacesFromOtherDevices ? 1 : 0) +
     (hasSleepingExemptionFilter ? 1 : 0) +
     (hasHostVisibilityFilter ? 1 : 0) +
+    hiddenStatusCount +
     selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
@@ -171,29 +183,29 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
-        {/* Why: host + project filters share one section and the same single-row
-            shell as Sort by (label left, value right) so the menu stays flat. */}
-        {(showHostScopeControls || repos.length > 1) && (
-          <>
-            <DropdownMenuLabel>
-              {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
-            </DropdownMenuLabel>
-            {showHostScopeControls && (
-              <SidebarHostScopeMenuSection
-                hostVisibilityLabel={hostVisibilityLabel}
-                hostOptions={hostOptions}
-                preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
-                setWorkspaceHostScope={setWorkspaceHostScope}
-                visibleWorkspaceHostIds={visibleWorkspaceHostIds}
-                setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
-              />
-            )}
-            <SidebarRepositoryFilterSection
-              preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
-            />
-            <DropdownMenuSeparator />
-          </>
+        {/* Why: host + project + status filters share one section and the same
+            single-row shell as Sort by (label left, value right) so the menu
+            stays flat. Status always applies, so the section is unconditional;
+            the host and project rows hide themselves when they have nothing
+            to offer. */}
+        <DropdownMenuLabel>
+          {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
+        </DropdownMenuLabel>
+        {showHostScopeControls && (
+          <SidebarHostScopeMenuSection
+            hostVisibilityLabel={hostVisibilityLabel}
+            hostOptions={hostOptions}
+            preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+            setWorkspaceHostScope={setWorkspaceHostScope}
+            visibleWorkspaceHostIds={visibleWorkspaceHostIds}
+            setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
+          />
         )}
+        <SidebarRepositoryFilterSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+        <SidebarWorkspaceStatusFilterSection
+          preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+        />
+        <DropdownMenuSeparator />
 
         <DropdownMenuLabel>
           {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}

@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  computeClearFilterActions,
   isDefaultBranchWorkspace,
-  isSleepingSweepExemptionNarrowingList,
-  sidebarHasActiveFilters
+  isSleepingSweepExemptionNarrowingList
 } from './visible-worktrees'
+import { computeClearFilterActions, sidebarHasActiveFilters } from './sidebar-filter-state'
 import type { Worktree } from '../../../../shared/types'
 
 function makeWorktree(id: string, repoId = 'repo1'): Worktree {
@@ -148,6 +147,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -165,6 +165,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -181,6 +182,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -195,6 +197,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -209,6 +212,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: true,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -236,6 +240,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: true
     })
   })
@@ -252,6 +257,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: true,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -276,6 +282,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: true
     })
   })

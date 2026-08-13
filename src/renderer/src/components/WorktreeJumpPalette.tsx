@@ -53,6 +53,7 @@ import {
   isDefaultBranchWorkspace,
   isSleepingSweepExemptWorkspace
 } from '@/components/sidebar/visible-worktrees'
+import { isWorkspaceStatusHidden } from '@/components/sidebar/workspace-status-visibility'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment,
@@ -668,6 +669,8 @@ function WorktreeJumpPaletteContent({
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const hiddenWorkspaceStatusIds = useAppStore((s) => s.hiddenWorkspaceStatusIds)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
@@ -856,6 +859,9 @@ function WorktreeJumpPaletteContent({
         if (hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(worktree)) {
           return false
         }
+        if (isWorkspaceStatusHidden(worktree, hiddenWorkspaceStatusIds, workspaceStatuses)) {
+          return false
+        }
         if (
           hideWorkspacesFromOtherDevices &&
           isWorkspaceFromOtherDevice(worktree, pairedDeviceIdsByEnvironment)
@@ -888,6 +894,8 @@ function WorktreeJumpPaletteContent({
       hideCliCreatedWorkspaces,
       hideDefaultBranchWorkspace,
       hideDetachedHeadWorkspaces,
+      hiddenWorkspaceStatusIds,
+      workspaceStatuses,
       hideWorkspacesFromOtherDevices,
       pairedDeviceIdsByEnvironment,
       ptyIdsByTabId,
