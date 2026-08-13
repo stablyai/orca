@@ -2555,6 +2555,9 @@ void app.whenReady().then(async () => {
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport
   })
+  agentHookServer.setLocalStatusIdentityResolver((event) =>
+    runtimeService.resolveCorroboratedLocalHookAgent(event)
+  )
   runtime = runtimeService
   runtimeService.prepareLegacyWorkerTerminalRecovery()
   publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())

@@ -51,6 +51,9 @@ import {
   type AgentStatusOrchestrationContext,
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
+import { resolveCorroboratedForegroundAgent } from '../../shared/agent-status-identity'
+import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
@@ -1826,6 +1829,7 @@ const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 const WORKTREE_CREATE_RESULT_TTL_MS = 60_000
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
+const LOCAL_HOOK_FOREGROUND_PROCESS_TIMEOUT_MS = 1_000
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
@@ -16440,6 +16444,70 @@ export class OrcaRuntimeService {
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : null
     return leaf?.worktreeId ?? this.getPtyRecordForPaneKey(paneKey)?.worktreeId ?? null
+  }
+
+  async resolveCorroboratedLocalHookAgent(
+    event: Readonly<AgentHookEventPayload>
+  ): Promise<TuiAgent | null> {
+    const launchToken = event.launchToken?.trim()
+    const eventPane = parsePaneKey(event.paneKey)
+    if (event.connectionId !== null || !launchToken || !eventPane) {
+      return null
+    }
+    const pty = this.getPtyRecordForPaneKey(event.paneKey)
+    const ptyPane = parsePaneKey(pty?.paneKey ?? '')
+    if (
+      !pty?.connected ||
+      pty.connectionId !== null ||
+      pty.launchToken !== launchToken ||
+      !ptyPane ||
+      ptyPane.leafId !== eventPane.leafId ||
+      (event.tabId !== undefined && event.tabId !== eventPane.tabId) ||
+      (event.worktreeId !== undefined && event.worktreeId !== pty.worktreeId)
+    ) {
+      return null
+    }
+    const title = getLatestPtyTitle(pty) ?? ''
+    const titleAgent = resolveCompatibleAgentTypeForOwner(
+      resolveExplicitTerminalTitleAgentType(title),
+      pty.launchAgent
+    )
+    const incomingAgent = resolveCompatibleAgentTypeForOwner(
+      event.payload.agentType,
+      pty.launchAgent
+    )
+    if (!titleAgent || !incomingAgent || titleAgent === incomingAgent) {
+      return null
+    }
+    const controller = this.ptyController
+    const foregroundRead = this.readPtyForegroundProcessFromController(
+      pty.ptyId,
+      pty.lastOscTitleAt ?? 0
+    )
+    if (!controller || !foregroundRead) {
+      return null
+    }
+    const result = await withTimeout(foregroundRead, LOCAL_HOOK_FOREGROUND_PROCESS_TIMEOUT_MS, {
+      controller,
+      process: null,
+      available: false
+    })
+    const current = this.getPtyRecordForPaneKey(event.paneKey)
+    if (
+      current !== pty ||
+      !current.connected ||
+      current.connectionId !== null ||
+      current.launchToken !== launchToken ||
+      result.controller !== this.ptyController ||
+      !result.available
+    ) {
+      return null
+    }
+    return resolveCorroboratedForegroundAgent({
+      processAgent: recognizeAgentProcess(result.process)?.agent ?? null,
+      title: getLatestPtyTitle(current) ?? '',
+      ownerAgent: current.launchAgent
+    })
   }
 
   /** Read-only context of the worktree the user is focused on, for plugin

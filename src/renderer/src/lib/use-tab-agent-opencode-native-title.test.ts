@@ -274,6 +274,42 @@ describe('OpenCode native title tab identity', () => {
     }
   })
 
+  it('keeps OpenCode identity when its process and native title contradict a Claude hook', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'OC | Continue weighted SLO scheduling work',
+        hookAgent: 'claude',
+        processAgent: 'opencode',
+        processAgentTrusted: true,
+        launchAgent: 'opencode'
+      })
+    ).toBe('opencode')
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'OC | Continue weighted SLO scheduling work',
+        hookAgent: 'claude',
+        processAgent: 'opencode',
+        launchAgent: 'opencode'
+      })
+    ).toBe('claude')
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'OC | Continue weighted SLO scheduling work',
+        hookAgent: 'claude',
+        processAgent: 'opencode',
+        processAgentTrusted: true,
+        processShellForeground: true,
+        launchAgent: 'opencode'
+      })
+    ).toBe('claude')
+  })
+
   it('updates a mounted inactive/restored split without provider probes', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
