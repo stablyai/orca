@@ -1,5 +1,6 @@
 import type {
   RuntimeTerminalClose,
+  RuntimeTerminalAgentStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
@@ -98,6 +99,17 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
     `preview: ${terminal.preview || '<empty>'}`
+  ].join('\n')
+}
+
+export function formatTerminalAgentStatus(result: {
+  agentStatus: RuntimeTerminalAgentStatus
+}): string {
+  const agentStatus = result.agentStatus
+  return [
+    `handle: ${agentStatus.handle}`,
+    `isRunningAgent: ${agentStatus.isRunningAgent}`,
+    `status: ${agentStatus.status ?? 'null'}`
   ].join('\n')
 }
 

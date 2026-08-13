@@ -3181,6 +3181,80 @@ describe('orca cli worktree awareness', () => {
     ])
   })
 
+  it.each(['working', 'permission', 'idle'] as const)(
+    'prints terminal agent status JSON for %s',
+    async (status) => {
+      queueFixtures(
+        callMock,
+        okFixture('req_terminal_agent_status', {
+          agentStatus: {
+            handle: 'term_worker',
+            isRunningAgent: true,
+            status
+          }
+        })
+      )
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(['terminal', 'agent-status', '--terminal', 'term_worker', '--json'], '/tmp/repo')
+
+      expect(callMock).toHaveBeenCalledWith('terminal.agentStatus', {
+        terminal: 'term_worker'
+      })
+      const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+      expect(printed.result.agentStatus).toEqual({
+        handle: 'term_worker',
+        isRunningAgent: true,
+        status
+      })
+    }
+  )
+
+  it('prints terminal agent status in human-readable mode', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_agent_status', {
+        agentStatus: {
+          handle: 'term_worker',
+          isRunningAgent: true,
+          status: 'permission'
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'agent-status', '--terminal', 'term_worker'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('terminal.agentStatus', {
+      terminal: 'term_worker'
+    })
+    expect(logSpy.mock.calls.flat().join('\n')).toBe(
+      ['handle: term_worker', 'isRunningAgent: true', 'status: permission'].join('\n')
+    )
+  })
+
+  it('prints terminal agent status null for non-agent terminals', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_agent_status', {
+        agentStatus: {
+          handle: 'term_shell',
+          isRunningAgent: false,
+          status: null
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'agent-status', '--terminal', 'term_shell'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('terminal.agentStatus', {
+      terminal: 'term_shell'
+    })
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('isRunningAgent: false')
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('status: null')
+  })
+
   it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,
