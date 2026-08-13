@@ -151,6 +151,29 @@ describe('mergeAiVaultListResults', () => {
     ).toBe('2026-08-02T00:00:05.000Z')
   })
 
+  // `new Date(ms).toISOString()` throws RangeError outside +/-8.64e15. It cannot
+  // be reached because Date.parse applies TimeClip, so a non-NaN parse is always
+  // in range — pin both sides of that boundary so widening the accept guard
+  // turns a would-be crash on a hostile leg stamp into a test failure.
+  it('accepts the oldest representable stamp and rejects one millisecond beyond it', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
+
+    expect(
+      mergeAiVaultListResults(
+        [{ ...listResult([]), scannedAt: '-271821-04-20T00:00:00.000Z' }],
+        undefined
+      ).scannedAt
+    ).toBe('-271821-04-20T00:00:00.000Z')
+
+    expect(
+      mergeAiVaultListResults(
+        [{ ...listResult([]), scannedAt: '-271821-04-19T23:59:59.999Z' }],
+        undefined
+      ).scannedAt
+    ).toBe('2026-08-02T00:00:10.000Z')
+  })
+
   it('does not cap an Unlimited all-host merge', () => {
     const sessions = Array.from({ length: 1001 }, (_, index) => session(index))
     const merged = mergeAiVaultListResults([{ ...listResult([]), sessions }], undefined, true)
