@@ -567,6 +567,7 @@ describePosix('local PTY shell-ready launch config', () => {
     // The exact escape sequences terminal-command-lifecycle parses (133;D = finished, 133;C = start).
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    expect(bashRc).toContain('return "$exit_code"')
     expect(bashRc).toContain(
       'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}}"'
     )
@@ -576,6 +577,9 @@ describePosix('local PTY shell-ready launch config', () => {
     // Sanity: zsh wrapper emits the same markers — both branches must stay in sync.
     expect(zshRc).toContain('printf "\\033]133;D;%s\\007"')
     expect(zshRc).toContain('printf "\\033]133;C\\007"')
+    // Why: zsh restores $? per precmd hook, so a return here would only double
+    // the ERR-trap fires for a failed command (#10940 review).
+    expect(zshRc).not.toContain('return "$exit_code"')
   })
 
   itWithBash('runs the bash wrapper without fake C/D markers before the first prompt', async () => {
@@ -593,7 +597,7 @@ describePosix('local PTY shell-ready launch config', () => {
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
-          'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
+          'PROMPT_COMMAND=\'printf "PROMPT_STATUS:%s\\n" "$?"; AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
           'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then\n  printf "USER_DEBUG_AFTER\\n"\nfi\' DEBUG'
         ].join('\n')
       )
@@ -601,6 +605,13 @@ describePosix('local PTY shell-ready launch config', () => {
       const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath)
 
       expect(output).toContain('PROMPT_HOOK')
+      // Why: #10940 — pre-fix the precmd returned its own printf status, so the
+      // downstream hook saw 0,0,0 and a real failure looked like success.
+      expect([...output.matchAll(/PROMPT_STATUS:(\d+)/g)].map((match) => match[1])).toEqual([
+        '0',
+        '0',
+        '1'
+      ])
       expect(output).toContain('USER_DEBUG_AFTER')
       expectBashOsc133Lifecycle(output)
     }

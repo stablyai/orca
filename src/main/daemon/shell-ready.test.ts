@@ -121,7 +121,14 @@ async function runInteractiveZshRc(args: {
   return output
 }
 
-function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
+function runInteractiveBashRcfile(
+  rcfileContent: string,
+  tempDir: string,
+  // Why: attribution shells launch with the marker off, and the trailing marker
+  // test used to be the precmd's last command — only marker='0' exposes the
+  // phantom-error direction of #10940.
+  readyMarker: '0' | '1' = '1'
+): string {
   const rcfile = join(tempDir, 'bash-osc133-rcfile')
   writeFileSync(rcfile, rcfileContent)
 
@@ -134,7 +141,7 @@ function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): strin
       env: {
         ...process.env,
         HOME: tempDir,
-        ORCA_SHELL_READY_MARKER: '1',
+        ORCA_SHELL_READY_MARKER: readyMarker,
         TERM: process.env.TERM || 'xterm'
       },
       timeout: 5000
@@ -668,6 +675,7 @@ describePosix('daemon shell-ready launch config', () => {
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
     expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    expect(bashRc).toContain('return "$exit_code"')
     // precmd is prepended (captures $? first), epilogue appended last, so a framework needing last position stays between them.
     expect(bashRc).toContain(
       'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}};__orca_osc133_epilogue"'
@@ -678,6 +686,9 @@ describePosix('daemon shell-ready launch config', () => {
     )
     expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
     expect(zshrc).toContain('printf "\\033]133;C\\007"')
+    // Why: zsh restores $? per precmd hook, so a return here would only double
+    // the ERR-trap fires for a failed command (#10940 review).
+    expect(zshrc).not.toContain('return "$exit_code"')
   })
 
   itWithBash(
@@ -698,7 +709,7 @@ describePosix('daemon shell-ready launch config', () => {
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
-          'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
+          'PROMPT_COMMAND=\'printf "PROMPT_STATUS:%s\\n" "$?"; AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
           'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then\n  printf "USER_DEBUG_AFTER\\n"\nfi\' DEBUG'
         ].join('\n')
       )
@@ -706,10 +717,41 @@ describePosix('daemon shell-ready launch config', () => {
       const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
 
       expect(output).toContain('PROMPT_HOOK')
+      // Why: #10940 — pre-fix the precmd returned its own printf status, so the
+      // downstream hook saw 0,0,0 and a real failure looked like success.
+      expect([...output.matchAll(/PROMPT_STATUS:(\d+)/g)].map((match) => match[1])).toEqual([
+        '0',
+        '0',
+        '1'
+      ])
       expect(output).toContain('USER_DEBUG_AFTER')
       expectBashOsc133Lifecycle(output)
     }
   )
+
+  // Why: #10940's headline symptom. With the marker off (attribution shells) the
+  // precmd's last command used to be a failing `[[ ... ]]` test, so a successful
+  // command reached prompt frameworks as status 1 — a phantom error on every
+  // prompt. Guards both directions from one run.
+  itWithBash('reports the real command status to prompt hooks with the marker off', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      'PROMPT_COMMAND=\'printf "PROMPT_STATUS:%s\\n" "$?"; printf "LATER_HOOK\\n"\''
+    )
+
+    const output = runInteractiveBashRcfile(
+      getDaemonBashShellReadyRcfileContent(),
+      userDataPath,
+      '0'
+    )
+
+    const statuses = [...output.matchAll(/PROMPT_STATUS:(\d+)/g)].map((match) => match[1])
+    // First prompt + `true` report 0; `false` reports 1. Pre-fix this was 1,1,1.
+    expect(statuses).toEqual(['0', '0', '1'])
+    // Why: a non-zero precmd return must not abort the rest of the chain.
+    expect([...output.matchAll(/LATER_HOOK/g)]).toHaveLength(3)
+  })
 
   itWithBash(
     'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',

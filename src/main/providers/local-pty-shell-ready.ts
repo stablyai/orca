@@ -138,6 +138,8 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"
+  # Why: downstream prompt hooks must observe the foreground command's status.
+  return "$exit_code"
 }
 __orca_osc133_prompt_done() {
   unset __orca_in_prompt_command
@@ -246,6 +248,9 @@ __orca_osc133_preexec() {
   printf "\\033]133;C\\007"
   __orca_in_command=1
 }
+# Why: no exit-status return here — unlike bash's PROMPT_COMMAND chain, zsh
+# resets $? to the foreground command's status before each precmd hook, so a
+# return would only add a second spurious ERR-trap fire per failed command.
 # Why: prepend so Orca captures $? before user prompt hooks can overwrite it.
 precmd_functions=(__orca_osc133_precmd \${precmd_functions[@]})
 preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})

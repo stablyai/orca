@@ -134,6 +134,8 @@ __orca_osc133_precmd() {
   # so a framework that must be last in PROMPT_COMMAND — bash-preexec — is not
   # displaced by one of Orca's own hooks.
   [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]] && printf "${SHELL_READY_MARKER}"
+  # Why: downstream prompt hooks must observe the foreground command's status.
+  return "$exit_code"
 }
 __orca_run_user_debug_trap() {
   if [[ -n "\${__orca_user_debug_trap:-}" ]]; then
@@ -243,6 +245,9 @@ __orca_osc133_preexec() {
   printf "\\033]133;C\\007"
   __orca_in_command=1
 }
+# Why: no exit-status return here — unlike bash's PROMPT_COMMAND chain, zsh
+# resets $? to the foreground command's status before each precmd hook, so a
+# return would only add a second spurious ERR-trap fire per failed command.
 # Why: prepend so Orca captures $? before user prompt hooks can overwrite it.
 precmd_functions=(__orca_osc133_precmd \${precmd_functions[@]})
 preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
