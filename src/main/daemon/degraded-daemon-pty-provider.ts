@@ -89,14 +89,25 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
 
-  hasPty(id: string): boolean {
+  hasPty(id: string): boolean | null {
     const mapped = this.sessionProviders.get(id)
-    return mapped ? (mapped.hasPty?.(id) ?? true) : this.findProviderForExistingSession(id) !== null
+    if (mapped) {
+      // Why not `?? true`: a route outlives the session it was memoized for, so an
+      // owner that cannot answer must stay unknown rather than become a liveness proof.
+      return mapped.hasPty ? mapped.hasPty(id) : true
+    }
+    if (this.findProviderForExistingSession(id)) {
+      return true
+    }
+    // Why: one provider that cannot answer makes absence unknown; only unanimous proof is false.
+    return this.allProviders().every((provider) => provider.hasPty?.(id) === false) ? false : null
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
     const mapped = this.sessionProviders.get(id)
-    if (mapped && (mapped.hasPty?.(id) ?? true)) {
+    // Why only an explicit true short-circuits: an owner that cannot answer must
+    // fall through to the real probe instead of skipping it on a fabricated proof.
+    if (mapped && (mapped.hasPty ? mapped.hasPty(id) === true : true)) {
       return true
     }
     return await this.ownerRecovery.probe(id)
@@ -180,9 +191,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.providerFor(id).getForegroundProcess(id)
   }
   inspectProcess(id: string) {
-    return this.hasPty(id)
-      ? inspectPtyProviderProcess(this.providerFor(id), id)
-      : Promise.reject(new Error('terminal_gone'))
+    return this.hasPty(id) === false
+      ? Promise.reject(new Error('terminal_gone'))
+      : inspectPtyProviderProcess(this.providerFor(id), id)
   }
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).confirmForegroundProcess?.(id) ?? null

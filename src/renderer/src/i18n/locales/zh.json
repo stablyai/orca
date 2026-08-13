@@ -2871,7 +2871,7 @@
             "removedBody": "此工作区的 SSH 主机已被移除，无法再连接。请移除工作区以清理 — 远程文件不会受影响。",
             "removeWorkspaceButton": "移除工作区"
           },
-          "TerminalRemoteRuntimeReconnectBanner": {
+          "TerminalPaneDisconnectedBanner": {
             "retryingTitle": "正在重新连接到远程运行时",
             "disconnectedTitle": "远程运行时已断开连接",
             "retryingBody": "Orca 将重试最多一分钟。如果连接恢复，此终端将恢复。",

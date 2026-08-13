@@ -943,6 +943,7 @@ const api = {
       rows: number
       cwd?: string
       cwdFallback?: 'worktree'
+      createFreshShellForUnreachablePane?: boolean
       env?: Record<string, string>
       envToDelete?: string[]
       command?: string

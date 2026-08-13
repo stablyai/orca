@@ -161,6 +161,30 @@ export function advanceTerminalTopologyRevision(
   }
 }
 
+/**
+ * The tab whose live layout holds this leaf. Only the leaf half of a pane key is stable — breaking
+ * a pane out into its own tab moves the leaf and leaves any stored tabId naming the tab it left.
+ */
+export function findTerminalTabIdForLeaf(
+  session: WorkspaceSessionState | undefined,
+  leafId: string
+): string | undefined {
+  // Only a still-existing tab counts: a layout entry outlives its tab, and binding a live shell to
+  // a deleted one registers a pane under a ghost. Scanned across worktrees rather than under one
+  // key so the answer cannot hinge on a worktreeId matching exactly (`::workspace:` suffixes).
+  const liveTabIds = new Set(
+    Object.values(session?.tabsByWorktree ?? {}).flatMap((tabs) => tabs.map((tab) => tab.id))
+  )
+  for (const [tabId, layout] of Object.entries(session?.terminalLayoutsByTabId ?? {})) {
+    const leafIds = new Set<string>()
+    collectLeafIds(layout.root, leafIds)
+    if (liveTabIds.has(tabId) && leafIds.has(leafId)) {
+      return tabId
+    }
+  }
+  return undefined
+}
+
 export function hasHostAuthoritativeTerminalMembership(
   session: WorkspaceSessionState | undefined,
   worktreeId: string

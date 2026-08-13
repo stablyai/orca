@@ -9992,6 +9992,9 @@ describe('Store', () => {
       expect(store.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
         'inc-live'
       )
+      // Unchanged by STA-3077 step P. The fold moves an SSH pane's incarnation only when it moves
+      // the binding it fences, and this fixture's tab exists solely in the SSH partition — so
+      // there is no second home to disagree with, nothing folds, and both halves stay together.
       const reloaded = await createStore()
       expect(reloaded.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
         'inc-live'

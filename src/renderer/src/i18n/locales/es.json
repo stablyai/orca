@@ -2859,7 +2859,7 @@
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
           },
-          "TerminalRemoteRuntimeReconnectBanner": {
+          "TerminalPaneDisconnectedBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",

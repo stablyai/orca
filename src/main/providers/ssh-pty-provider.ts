@@ -13,6 +13,7 @@ import { SshPtyProviderOutputState } from './ssh-pty-provider-output-state'
 import { spawnFreshSshPty } from './ssh-agent-session-create-operation'
 import { mapSshPtyProcessList } from './ssh-agent-session-process-list'
 import {
+  buildSshPtyReconnectAttachParams,
   requestSshPtyAttach,
   reattachSshPtySessionWithExitFence,
   type PtySourceRecoveryRequest,
@@ -22,7 +23,7 @@ import { buildSshPtySpawnRequest } from './ssh-pty-spawn-request'
 import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
-import { SSH_SESSION_EXPIRED_ERROR } from './ssh-pty-errors'
+import { SSH_SOURCE_RESTORE_REQUIRED_ERROR } from './ssh-pty-errors'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -34,6 +35,7 @@ export class SshPtyProvider implements IPtyProvider {
   private mux: SshChannelMultiplexer
   private connectionId: string
   private livePtyIds = new Set<string>()
+  private listedOnce = false
   readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
@@ -63,6 +65,7 @@ export class SshPtyProvider implements IPtyProvider {
   dispose(): void {
     this.outputState.dispose()
     this.livePtyIds.clear()
+    this.listedOnce = false
   }
 
   getConnectionId = (): string => this.connectionId
@@ -101,8 +104,11 @@ export class SshPtyProvider implements IPtyProvider {
             this.outputState.rememberPtyIncarnation(relayPtyId, incarnationId)
         })
         if (result.sourceRecovery?.status === 'restoreRequired') {
+          // Why not SSH_SESSION_EXPIRED: the shell is still running, only its
+          // output source needs re-establishing. Reporting expiry made the pane
+          // respawn and resume the same agent session twice into one transcript.
           throw new Error(
-            `${SSH_SESSION_EXPIRED_ERROR}: ${toRelaySshPtyId(this.connectionId, result.id)}`
+            `${SSH_SOURCE_RESTORE_REQUIRED_ERROR}: ${toRelaySshPtyId(this.connectionId, result.id)}`
           )
         }
         this.livePtyIds.add(result.id)
@@ -177,20 +183,16 @@ export class SshPtyProvider implements IPtyProvider {
 
   async attachForReconnect(
     id: string,
-    expected?: { paneKey?: string; tabId?: string },
-    sourceRecovery?: PtySourceRecoveryRequest
+    sourceRecovery?: PtySourceRecoveryRequest,
+    expectedIncarnationId?: string,
+    legacyExpectedIdentity?: { paneKey?: string; tabId?: string }
   ): Promise<SshPtyAttachResult> {
-    // Why: reconnect owns replay delivery so stale/duplicate attach results can
-    // be filtered before they reach the renderer. The expected identity lets the
-    // relay reject a cross-generation id collision instead of reattaching this
-    // lease to a different pane's freshly spawned PTY.
-    const params = {
+    const params = buildSshPtyReconnectAttachParams({
       id: this.toRelayPtyId(id),
-      suppressReplayNotification: true,
       ...(sourceRecovery ? { sourceRecovery } : {}),
-      ...(expected?.paneKey ? { expectedPaneKey: expected.paneKey } : {}),
-      ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
-    }
+      ...(expectedIncarnationId ? { expectedIncarnationId } : {}),
+      ...(legacyExpectedIdentity ? { legacyExpectedIdentity } : {})
+    })
     const relayPtyId = this.toRelayPtyId(id)
     return await requestSshPtyAttach({
       mux: this.mux,
@@ -296,11 +298,14 @@ export class SshPtyProvider implements IPtyProvider {
       const relayPtyId = this.toRelayPtyId(process.id)
       this.outputState.rememberPtyIncarnation(relayPtyId, process.incarnationId)
     }
+    this.listedOnce = true
     return processes
   }
 
-  hasPty(id: string): boolean {
-    return this.livePtyIds.has(id)
+  hasPty(id: string): boolean | null {
+    // Why null before a completed listing: a reconnect builds a new provider with an
+    // empty set, so a miss there is ignorance about the host, not a dead PTY.
+    return this.livePtyIds.has(id) ? true : this.listedOnce ? false : null
   }
 
   async getDefaultShell(): Promise<string> {

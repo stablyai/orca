@@ -1911,6 +1911,20 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(adapter.hasPty(id)).toBe(true)
     })
 
+    // Why: off-socket the cache can only be missing exits it never received, so a
+    // miss is ignorance. Answering false there authorizes a respawn over a live shell.
+    it('answers unknown, not absent, for an uncached id while disconnected', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const unknownId = 'repo::/repo/unknown@@deadbeef'
+      expect(adapter.hasPty(unknownId)).toBe(false)
+
+      await server.shutdown()
+      await waitFor(() => !(adapter as unknown as { client: DaemonClient }).client.isConnected())
+
+      expect(adapter.hasPty(unknownId)).toBe(null)
+      expect(adapter.hasPty(id)).toBe(true)
+    })
+
     it('returns active sessions', async () => {
       await adapter.spawn({
         cols: 80,
