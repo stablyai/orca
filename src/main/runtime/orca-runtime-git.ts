@@ -90,10 +90,7 @@ import type { HostedReviewProvider } from '../../shared/hosted-review'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
-  Pick<
-    GlobalSettings,
-    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
-  >
+  Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>
 > & {
   commitMessageDiscoveryHostKey?: string
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams

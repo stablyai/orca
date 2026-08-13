@@ -17,6 +17,7 @@ import {
   nativeChatTurnLifecycleDecoderForAgent,
   type NativeChatTurnLifecycleDecoder
 } from './transcript-turn-lifecycle'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 const TAIL_CHUNK_BYTES = 64 * 1024
@@ -202,7 +203,7 @@ async function findLastCompleteLineEnd(
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
     signal?.throwIfAborted()
     const newline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a)
-    if (newline >= 0) {
+    if (newline !== -1) {
       return start + newline + 1
     }
     cursor = start
@@ -231,12 +232,20 @@ export async function readNativeChatTranscriptTail(
 > {
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
-  const filePath =
-    args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
-  signal?.throwIfAborted()
   if (!decode) {
     return { error: 'Transcript unavailable' }
   }
+  let filePath: string | null
+  try {
+    filePath =
+      args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+  } catch (error) {
+    signal?.throwIfAborted()
+    // Why: gate refusal is transient unavailability with retry guidance —
+    // `notFound` would settle callers into a false "missing" state.
+    return { error: wslTranscriptFsRefusal(error).message }
+  }
+  signal?.throwIfAborted()
   // Why: a new agent session can report its id before the first JSONL flush;
   // callers keep that miss in loading/retry rather than showing a false error.
   if (!filePath) {

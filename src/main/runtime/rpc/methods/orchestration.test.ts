@@ -415,7 +415,7 @@ describe('orchestration RPC methods', () => {
       )
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
-      await call('orchestration.send', {
+      const result = await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'Done',
@@ -429,6 +429,7 @@ describe('orchestration RPC methods', () => {
 
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+      expect(result).toMatchObject({ lifecycle: { action: 'completed' } })
     })
 
     it('rejects an identity-less lifecycle send resolved through the coordinator handle', async () => {
@@ -482,7 +483,7 @@ describe('orchestration RPC methods', () => {
       }
 
       expect(db.getTask(task.id)?.status).toBe('completed')
-      expect(result.lifecycle).toBeUndefined()
+      expect(result.lifecycle).toMatchObject({ action: 'completed' })
       expect(result.message).toMatchObject({
         type: 'worker_done',
         subject: 'Done'
@@ -1788,10 +1789,13 @@ describe('orchestration RPC methods', () => {
       })
     })
 
-    it('rejects invalid deps JSON', async () => {
+    it('rejects non-JSON deps', async () => {
       setup()
       await expect(
         call('orchestration.taskCreate', { spec: 'bad', deps: 'not-json' })
+      ).rejects.toThrow('Invalid --deps')
+      await expect(
+        call('orchestration.taskCreate', { spec: 'bad', deps: '[task_example]' })
       ).rejects.toThrow('Invalid --deps')
     })
   })

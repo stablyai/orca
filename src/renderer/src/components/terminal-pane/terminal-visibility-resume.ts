@@ -131,8 +131,7 @@ export function hideTerminalVisibility({
     captureViewportPositions(false)
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
-    // Suspend WebGL when going hidden. xterm.write() continues to land in the
-    // DOM-renderer fallback terminal; the suspend is purely a GPU resource decision.
+    // xterm.write() keeps updating the hidden buffer; suspension only changes renderer lifetime.
     manager.suspendRendering()
     return { hiddenReason: 'surface', renderingSuspended: true }
   }

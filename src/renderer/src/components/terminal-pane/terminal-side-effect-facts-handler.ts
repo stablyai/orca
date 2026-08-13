@@ -86,8 +86,8 @@ export type TerminalSideEffectFactConsumerCallbacks = {
   onCommandCodeWorking?: (prompt: string) => void
   onCommandCodeDone?: (prompt: string) => void
   /** DECSET 2031 subscribe observed by main's tracker. Registered only by
-   *  hidden-delivery-gated consumers (their bytes never arrive); the theme
-   *  reply is sent renderer-side — query authority stays with the view. */
+   *  hidden-delivery-gated consumers (their bytes never arrive); it records the
+   *  subscription for later theme-flip pushes, it does not answer. */
   onMode2031Subscribe?: () => void
   /** DECSET 2031 withdrawal observed by main's tracker. Clears the pane's
    *  subscription registry so later theme flips stop pushing CSI 997. */

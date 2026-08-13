@@ -87,7 +87,7 @@ export function mergeLandedImagePreviewEchoes(
   const entries = Object.entries(previous[sessionKey] ?? {})
   for (const preview of landed) {
     const existingIndex = entries.findIndex(([messageId]) => messageId === preview.messageId)
-    if (existingIndex >= 0) {
+    if (existingIndex !== -1) {
       entries.splice(existingIndex, 1)
     }
     entries.push([preview.messageId, preview.images])

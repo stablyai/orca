@@ -80,7 +80,6 @@ import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
 
 const ORCA_SHELL_WRAPPER_ENV = [
-  'ORCA_ATTRIBUTION_SHIM_DIR',
   'ORCA_OPENCODE_CONFIG_DIR',
   'ORCA_MIMOCODE_HOME',
   'ORCA_PI_CODING_AGENT_DIR',
@@ -1760,7 +1759,7 @@ describe('createPtySubprocess', () => {
     expect(spawnEnv.MY_VAR).toBe('test-value')
   })
 
-  it('uses shell wrapper when attribution shims must survive shell startup', () => {
+  it('uses shell wrapper when managed env must survive shell startup', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1773,7 +1772,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         env: {
           SHELL: '/bin/zsh',
-          ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/orca-terminal-attribution/posix'
+          ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config'
         }
       })
     } finally {
@@ -2165,7 +2164,7 @@ describe('createPtySubprocess', () => {
         PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
         ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
       },
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      envToDelete: ['TERM_PROGRAM']
     })
 
     const lastCall = spawnMock.mock.calls.at(-1)!
@@ -2173,7 +2172,6 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.TERM).toBe('screen-256color')
     expect(lastCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
     expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
-    expect(lastCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
   })
 
   it('collapses its own env merge onto the requested Windows `Path` spelling', () => {
@@ -2965,36 +2963,39 @@ describe('createPtySubprocess', () => {
     expect(spawnCall[2].env.WSLENV ?? '').not.toContain(POWERLEVEL10K_WIZARD_DISABLE_ENV)
   })
 
-  it('keeps daemon WSL split panes in their distro when cwd is already POSIX', () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+  it.each(['/home/jin/repo/subdir', '/a', '/c'])(
+    'keeps daemon WSL split panes in their distro when cwd is POSIX (%s)',
+    (cwd) => {
+      const proc = mockPtyProcess()
+      spawnMock.mockReturnValue(proc)
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
 
-    Object.defineProperty(process, 'platform', { value: 'win32' })
+      Object.defineProperty(process, 'platform', { value: 'win32' })
 
-    try {
-      createPtySubprocess({
-        sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
-        cols: 80,
-        rows: 24,
-        cwd: '/home/jin/repo/subdir',
-        shellOverride: 'wsl.exe'
-      })
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
+      try {
+        createPtySubprocess({
+          sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
+          cols: 80,
+          rows: 24,
+          cwd,
+          shellOverride: 'wsl.exe'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
       }
-    }
 
-    expect(validateWorkingDirectoryMock).toHaveBeenCalledWith(
-      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\subdir'
-    )
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
-      expect.objectContaining({ cwd: expect.any(String) })
-    )
-  })
+      expect(validateWorkingDirectoryMock).toHaveBeenCalledWith(
+        `\\\\wsl.localhost\\Ubuntu${cwd.replaceAll('/', '\\')}`
+      )
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining(`cd '${cwd}'`)],
+        expect.objectContaining({ cwd: expect.any(String) })
+      )
+    }
+  )
 
   // Why: node-pty's UnixTerminal.destroy() registers _socket.once('close', () =>
   // this.kill('SIGHUP')), and the socket 'close' event can fire concurrently

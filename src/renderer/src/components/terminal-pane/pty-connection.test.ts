@@ -62,18 +62,6 @@ async function drainFakeTimerWork(limit = 20): Promise<void> {
   vi.clearAllTimers()
 }
 
-// Why: a reveal remount reads the still-live park watcher entry at connect time to
-// tell itself apart from an in-place reattach; the host disposes it a beat later.
-async function parkTabForReveal(tabId: string, ptyId: string, worktreeId = 'wt-1'): Promise<void> {
-  const { parkedWatchersByTabId } = await import('./terminal-parked-watcher-registry')
-  parkedWatchersByTabId.set(tabId, {
-    worktreeId,
-    tabPtyId: ptyId,
-    paneIdByPtyId: new Map([[ptyId, 1]]),
-    disposersByPtyId: new Map([[ptyId, () => {}]])
-  })
-}
-
 async function drainPendingTimeouts(pendingTimeouts: (() => void)[], limit = 100): Promise<void> {
   let iterations = 0
   while (pendingTimeouts.length > 0) {
@@ -338,6 +326,7 @@ type MockTransport = {
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
+  serializeBufferOutcome?: ReturnType<typeof vi.fn>
 }
 
 const scheduleRuntimeGraphSync = vi.fn()
@@ -624,6 +613,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     startup: null,
     restoredLeafId: null,
     restoredPtyIdByLeafId: {},
+    mountFollowsTerminalPark: false,
     paneTransportsRef: { current: new Map() },
     paneMode2031Ref: { current: new Map() },
     paneKittyKeyboardModesRef: { current: new Map() },
@@ -3146,6 +3136,39 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.(redraw)
 
     expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
+  })
+
+  it('routes terminal input through deferPtyInput so the host can withhold it', async () => {
+    // Regression: inlining forwardPtyInput into onData dropped this hop, silently disabling link-click mouse suppression.
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    transportFactoryQueue.push(transport)
+    const deferPtyInput = vi.fn()
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps({ deferPtyInput }) as never)
+    await flushAsyncTicks()
+    sendTerminalInputThroughPane(pane, 'a')
+
+    expect(deferPtyInput).toHaveBeenCalledWith(1, 'a', expect.any(Function))
+    expect(transport.sendInput).not.toHaveBeenCalled()
+
+    const forward = deferPtyInput.mock.calls[0]?.[2] as (data: string) => void
+    forward('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a')
+  })
+
+  it('forwards terminal input directly when the host supplies no deferPtyInput', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    sendTerminalInputThroughPane(pane, 'a')
+
+    expect(transport.sendInput).toHaveBeenCalledWith('a')
   })
 
   it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {
@@ -8758,7 +8781,7 @@ describe('connectPanePty', () => {
     expect(writes.join('')).not.toContain('ALT-FRAME-BODY')
   })
 
-  it('drops a live daemon alt frame until a hidden pane has a final grid', async () => {
+  it('keeps a daemon alt frame at its capture grid while the target grid is unknown', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
@@ -8796,7 +8819,8 @@ describe('connectPanePty', () => {
 
     const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])
     expect(writes.join('')).toContain('PREFIX-SCROLLBACK')
-    expect(writes.join('')).not.toContain('ALT-FRAME-BODY')
+    expect(writes.join('')).toContain('ALT-FRAME-BODY')
+    expect(writes.filter((write) => write.includes('ALT-FRAME-BODY'))).toHaveLength(1)
   })
 
   it('falls back to the merged daemon snapshot when split metadata is incomplete', async () => {
@@ -12244,14 +12268,13 @@ describe('connectPanePty', () => {
       dataCallback('startup probe output\r\n')
       expect(setHiddenRendererPty).toHaveBeenCalledWith('pty-id', true)
 
-      // The fact stays the sole 2031 responder for gate-managed PTYs.
+      // The fact records the subscription for gate-managed PTYs; it never answers it (#9993).
       factsHandler._dispatchTerminalSideEffectBatchForTest({
         ptyId: 'pty-id',
         seq: 8,
         facts: [{ kind: '2031-subscribe' }]
       })
-      expect(transport.sendInput).toHaveBeenCalledTimes(1)
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     })
 
     it('latches model restore from the out-of-band marker and restores on reveal', async () => {
@@ -12287,7 +12310,8 @@ describe('connectPanePty', () => {
       )
     })
 
-    it('answers each 2031-subscribe fact exactly once, before any hidden mark exists', async () => {
+    it('never answers a 2031-subscribe fact, hidden or visible', async () => {
+      // Regression pin (#9993): a subscribe arms future notifications, it is not a query.
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { transport } = await connectHiddenPane(deps)
@@ -12298,27 +12322,23 @@ describe('connectPanePty', () => {
       transportOptions.onPtySpawn?.('pty-id')
       const factsHandler = await import('./terminal-side-effect-facts-handler')
 
-      // Why: the fact can outrun the hidden mark (codex startup race) and must still reply — ownership is structural, not mark-dependent.
       factsHandler._dispatchTerminalSideEffectBatchForTest({
         ptyId: 'pty-id',
         seq: 12,
         facts: [{ kind: '2031-subscribe' }]
       })
-      expect(transport.sendInput).toHaveBeenCalledTimes(1)
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
-
-      // Why: a visible gated pane still answers via the fact — the lifecycle suppresses xterm's CSI reply for gate-managed panes.
       ;(deps.isVisibleRef as { current: boolean }).current = true
       factsHandler._dispatchTerminalSideEffectBatchForTest({
         ptyId: 'pty-id',
         seq: 24,
         facts: [{ kind: '2031-subscribe' }]
       })
-      expect(transport.sendInput).toHaveBeenCalledTimes(2)
-      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[?997;1n')
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
+      expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     })
 
-    it('registers the fact-answered 2031 subscription for later theme flips', async () => {
+    it('registers the fact-observed 2031 subscription for later theme flips', async () => {
       enableMainAuthority()
       const recordPaneMode2031Subscription = vi.fn()
       const deps = createDeps({
@@ -12338,16 +12358,16 @@ describe('connectPanePty', () => {
         facts: [{ kind: '2031-subscribe' }]
       })
 
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
       // Why: without the registry write, maybePushMode2031Flip won't push CSI 997 after a theme change, so the TUI keeps a stale theme.
       expect(recordPaneMode2031Subscription).toHaveBeenCalledWith(1, 'dark')
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     })
 
     it('retires the fact-registered subscription when the TUI withdraws it', async () => {
       // The counterpart to the test above. A gated pane never sees the withdrawal bytes
-      // (main drops them) and both the chunk scanner and xterm's CSI handler are disabled
-      // for it, so this fact is the only observer that can retire the subscription. Left
-      // registered, the next theme flip pushes CSI 997 at the shell that replaced the TUI.
+      // (main drops them) and the chunk scanner is disabled for it, so this fact is the only
+      // observer that can retire the subscription. Left registered, the next theme flip
+      // pushes CSI 997 at the shell that replaced the TUI.
       enableMainAuthority()
       const paneMode2031Ref = { current: new Map<number, boolean>() }
       const paneLastThemeModeRef = { current: new Map<number, 'dark' | 'light'>() }
@@ -12356,9 +12376,9 @@ describe('connectPanePty', () => {
         paneMode2031Ref,
         paneLastThemeModeRef,
         // Exactly what use-terminal-pane-lifecycle wires up for this callback.
-        recordPaneMode2031Subscription: (paneId: number, repliedMode: 'dark' | 'light') => {
+        recordPaneMode2031Subscription: (paneId: number, subscribedMode: 'dark' | 'light') => {
           paneMode2031Ref.current.set(paneId, true)
-          paneLastThemeModeRef.current.set(paneId, repliedMode)
+          paneLastThemeModeRef.current.set(paneId, subscribedMode)
         }
       })
       await connectHiddenPane(deps)
@@ -12385,8 +12405,7 @@ describe('connectPanePty', () => {
     })
 
     it('leaves the chunk scanner silent on a gate-managed PTY', async () => {
-      // Main's '2031-subscribe' fact already answers these; a chunk-boundary reply here
-      // would answer the same subscribe a second time.
+      // Main's '2031-subscribe' fact already records these; nothing on this path replies.
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { transport, dataCallback } = await connectHiddenPane(deps)
@@ -12746,6 +12765,7 @@ describe('connectPanePty', () => {
         dataCallback: (data: string, meta?: { seq?: number; rawLength?: number }) => void
         getMainBufferSnapshot: ReturnType<typeof vi.fn>
         transport: MockTransport
+        deps: ReturnType<typeof createDeps>
       }> {
         enableMainAuthority()
         const deps = createDeps({ isVisibleRef: { current: true } })
@@ -12777,7 +12797,7 @@ describe('connectPanePty', () => {
           expect.any(Function)
         )
         pane.terminal.write.mockClear()
-        return { pane, dataCallback, getMainBufferSnapshot, transport }
+        return { pane, dataCallback, getMainBufferSnapshot, transport, deps }
       }
 
       function writtenData(pane: ReturnType<typeof createPane>): string {
@@ -12798,24 +12818,25 @@ describe('connectPanePty', () => {
         expect(writtenData(pane)).toContain('NEW')
       })
 
-      it('answers a 2031 subscribe on a chunk the restored snapshot drops as duplicate', async () => {
-        // Why the scan runs before reconciliation: the snapshot restore replays bytes
-        // into xterm without answering queries, so this live delivery is the only
-        // chance to reply. Dropping the chunk as a duplicate must not drop the query.
-        // Gate off so the chunk scanner (not main's fact) owns this pane's reply.
+      it('records a 2031 subscribe on a chunk the restored snapshot drops as duplicate', async () => {
+        // Why the scan runs before reconciliation: the snapshot restore replays bytes into
+        // xterm without tracking modes, so this live delivery is the only chance to observe
+        // the subscription. Dropping the chunk as a duplicate must not drop that.
+        // Gate off so the chunk scanner (not main's fact) owns this pane's registry.
         enableMainAuthority()
         mockStoreState.settings = {
           ...mockStoreState.settings,
           terminalHiddenDeliveryGate: false
         } as StoreState['settings']
-        const { pane, dataCallback, transport } = await restoreVisiblePaneToBaseline()
+        const { pane, dataCallback, transport, deps } = await restoreVisiblePaneToBaseline()
         transport.sendInput.mockClear()
 
         dataCallback(`SUB\x1b[?2031h`, { seq: 60, rawLength: 11 })
         await flushAsyncTicks(8)
 
         expect(writtenData(pane)).not.toContain('SUB')
-        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+        expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+        expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
       })
 
       it('slices a partial overlap when raw and clean lengths match', async () => {
@@ -13496,7 +13517,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('answers a mode 2031 subscribe once, from the raw chunk boundary', async () => {
+  it('records a mode 2031 subscribe from the raw chunk boundary without answering', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -13526,8 +13547,8 @@ describe('connectPanePty', () => {
 
       // Why the scanner and not xterm's CSI handler: xterm batches PTY chunks into one
       // parse, so only this layer knows the chunk ended still subscribed (#9993).
-      expect(transport.sendInput).toHaveBeenCalledTimes(1)
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;2n')
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
+      expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
       // The bytes still reach xterm so the emulator tracks the mode itself.
       expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?2031h')
     } finally {
@@ -13537,12 +13558,12 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  // Why these three: fish 4.7.1 enables and disables 2031 around *every* prompt with no
-  // opt-out, so back-to-back chunks each carrying a toggle are the normal case, not an edge
-  // case. Each chunk owes exactly one decision, and xterm cannot make it — it parses several
-  // chunks in one synchronous batch, so a reply deferred to the parser is either dropped or
-  // answered against a subscription a later chunk already withdrew (#9993).
-  describe('mode 2031 replies are decided per raw PTY chunk', () => {
+  // Why: fish 4.7.1 enables and disables 2031 around *every* prompt with no opt-out, so
+  // back-to-back chunks each carrying a toggle are the normal case. Subscribing is never
+  // answered (#9993) — these pin that silence plus the per-chunk subscription bookkeeping
+  // that theme-flip pushes depend on. xterm cannot do that bookkeeping: it parses several
+  // chunks in one synchronous batch and only sees the net result.
+  describe('mode 2031 subscriptions are tracked per raw PTY chunk, never answered', () => {
     async function connectVisiblePane(): Promise<{
       transport: ReturnType<typeof createMockTransport>
       deps: ReturnType<typeof createDeps>
@@ -13581,56 +13602,60 @@ describe('connectPanePty', () => {
     const replies = (transport: { sendInput: { mock: { calls: unknown[][] } } }): unknown[] =>
       transport.sendInput.mock.calls.flat().filter((arg) => String(arg).includes('997'))
 
-    it('answers a chunk that ends subscribed even when the next chunk withdraws', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
-      // Two separate PTY chunks. xterm would parse both in one batch and see only the net
-      // result; the first chunk still owes a reply.
+    it('registers a chunk that ends subscribed, then retires it when the next withdraws', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
+      // Two separate PTY chunks. xterm would parse both in one batch and see only the net result.
       emit('\x1b[?2031h')
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
       emit('\x1b[?2031l')
-      expect(replies(transport)).toEqual(['\x1b[?997;2n'])
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('answers each chunk that ends subscribed', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('re-registers a chunk that withdraws and subscribes again', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit('\x1b[?2031h')
       emit('\x1b[?2031l\x1b[?2031h')
-      expect(replies(transport)).toHaveLength(2)
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('stays silent when one chunk both subscribes and withdraws', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
-      // The fish prompt case: the subscription is gone before the program could read a reply.
+    it('registers nothing when one chunk both subscribes and withdraws', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
+      // The fish prompt case: the subscription is gone before the program could read anything.
       emit('\x1b[?2031h prompt \x1b[?2031l')
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('stays silent when the withdrawal is split across two chunks', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('registers nothing when the withdrawal is split across two chunks', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit('\x1b[?2031h prompt \x1b[?20')
-      expect(replies(transport)).toEqual([])
       emit('31l')
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('stays silent when an unrelated private mode appends a split withdrawal', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('registers nothing when an unrelated private mode appends a split withdrawal', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit('\x1b[?2031h prompt \x1b[?25')
-      expect(replies(transport)).toEqual([])
       emit(';2031l')
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('answers after an ambiguous tail resolves to another mode', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('registers the subscription once an ambiguous tail resolves to another mode', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit('\x1b[?2031h drawing \x1b[?20')
-      expect(replies(transport)).toEqual([])
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       emit('25h')
-      expect(replies(transport)).toEqual(['\x1b[?997;2n'])
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
@@ -13654,19 +13679,21 @@ describe('connectPanePty', () => {
       dispose()
     })
 
-    it('answers once when a TUI subscribes at the end of a fish prompt chunk', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('registers a TUI that subscribes at the end of a fish prompt chunk', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit(`${FISH_PROMPT_HANDOFF}\x1b[?2031h`)
-      expect(replies(transport)).toHaveLength(1)
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('answers a subscribe whose withdrawal never arrives', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('keeps a subscription whose withdrawal never arrives', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       // A real TUI: subscribe now, unsubscribe minutes later on exit.
       emit('\x1b[?2031h')
       emit('painting the ui')
-      expect(replies(transport)).toHaveLength(1)
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
@@ -13683,7 +13710,7 @@ describe('connectPanePty', () => {
     })
 
     it('discards a half-read escape prefix when the pane swaps PTYs', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       // Why: the tail is a byte range from the old stream. Splicing it onto the first
       // chunk of a replacement PTY fabricates a subscribe no program ever sent.
       transport.serializeBuffer = vi.fn().mockResolvedValue(null)
@@ -13694,12 +13721,13 @@ describe('connectPanePty', () => {
 
       emit('31h')
 
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       expect(replies(transport)).toEqual([])
       dispose()
     })
   })
 
-  it('answers hidden Codex mode 2031 subscribes split across becoming visible', async () => {
+  it('records hidden Codex mode 2031 subscribes split across becoming visible', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -13734,8 +13762,9 @@ describe('connectPanePty', () => {
     isVisibleRef.current = true
     capturedDataCallback.current?.('31h')
 
-    expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[?997;2n')
+    expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     expect(paneMode2031Ref.current.get(1)).toBe(true)
+    // Seeded so the next appearance re-apply only pushes on a real color-mode flip.
     expect(paneLastThemeModeRef.current.get(1)).toBe('light')
     expect(pane.terminal.write).not.toHaveBeenCalledWith('31h', expect.any(Function))
 
@@ -14284,7 +14313,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(getMainBufferSnapshot).toHaveBeenCalled()
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
       expect(pane.terminal.write).toHaveBeenCalledWith(
         expect.stringContaining('healed from snapshot'),
         expect.any(Function)
@@ -14982,7 +15011,8 @@ describe('connectPanePty', () => {
       undefined,
       { connectionId: null }
     )
-    expect(transport.sendInput).toHaveBeenCalledWith(expect.stringContaining('\x1b['))
+    // Remote gated panes record the subscription from the fact and answer nothing (#9993).
+    expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     expect(recordPaneMode2031Subscription).toHaveBeenCalledWith(1, expect.any(String))
     deps.paneMode2031Ref.current.set(1, true)
     deps.paneLastThemeModeRef.current.set(1, 'dark')
@@ -15137,6 +15167,63 @@ describe('connectPanePty', () => {
       expect.stringContaining('remote snapshot with hidden remote output'),
       expect.any(Function)
     )
+    disposable.dispose()
+  })
+
+  it('preserves the painted normal buffer when a successful hidden restore has no image', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
+    const live = 'visible remote output\r\n'
+    transport.serializeBuffer = vi.fn()
+    transport.serializeBufferOutcome = vi.fn().mockResolvedValue({
+      availability: { kind: 'snapshot' },
+      snapshot: {
+        data: '',
+        scrollbackAnsi: '',
+        cols: 120,
+        rows: 40,
+        seq: hidden.length + live.length,
+        source: 'headless'
+      }
+    })
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'remote:env-1@@terminal-1'
+    })
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const deps = createDeps({ isVisibleRef: { current: false } })
+    const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(6)
+    const writeStart = pane.terminal.write.mock.calls.length
+
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(live, {
+      seq: hidden.length + live.length,
+      rawLength: live.length
+    })
+    await flushAsyncTicks(20)
+
+    const restoreWrites = pane.terminal.write.mock.calls
+      .slice(writeStart)
+      .map(([data]) => String(data))
+    const paintedFrame = Array.from({ length: 8 }, (_, index) => `painted-frame-${index + 1}`).join(
+      '\r\n'
+    )
+    const actual = await renderHeadlessTerminalState([paintedFrame, ...restoreWrites], 120, 4)
+    const expected = await renderHeadlessTerminalState(
+      [paintedFrame, ...restoreWrites.filter((data) => data === live)],
+      120,
+      4
+    )
+    expect(actual).toEqual(expected)
+    expect(transport.serializeBufferOutcome).toHaveBeenCalledTimes(1)
+    expect(transport.serializeBuffer).not.toHaveBeenCalled()
     disposable.dispose()
   })
 
@@ -15440,9 +15527,8 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
-  it('pulses a skipped hidden alt frame when reveal keeps the snapshot grid', async () => {
+  it('keeps a hidden-output alt frame at the capture grid below the fit floor', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
     const transport = createMockTransport('pty-id')
     let onData: ConnectCallbacks['onData']
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -15464,41 +15550,36 @@ describe('connectPanePty', () => {
       scrollbackAnsi: 'preserved history'
     })
     const pane = createPane(1)
-    let paneRect = createRect(0, 0)
-    pane.container.getBoundingClientRect = vi.fn(() => paneRect)
-    let xtermContainerDisplay = 'none'
-    const xtermContainer = new EventTarget() as HTMLElement
-    Object.defineProperty(xtermContainer, 'parentElement', { value: null })
-    Object.defineProperty(xtermContainer, 'ownerDocument', {
-      value: { defaultView: { getComputedStyle: () => ({ display: xtermContainerDisplay }) } }
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+    const writes: string[] = []
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      writes.push(data)
+      callback?.()
     })
-    ;(pane as { xtermContainer?: HTMLElement }).xtermContainer = xtermContainer
+    pane.container.getBoundingClientRect = vi.fn(() => createRect(4, 3))
     const deps = createDeps({ isVisibleRef: { current: false } })
-    const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(6)
     onData?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+    _dispatchPtyModelRestoreNeededForTest({
+      id: 'pty-id',
+      reason: 'hidden-drop',
+      markerSeq: hidden.length + 1
+    })
     ;(deps.isVisibleRef as { current: boolean }).current = true
-    onData?.('x', { seq: hidden.length + 1, rawLength: 1 })
+    const { requestTerminalBacklogRecovery } =
+      await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+    requestTerminalBacklogRecovery(pane.terminal as never)
     await flushAsyncTicks(20)
 
-    const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
-      (call) => call[0]
-    )
-    expect(writes.join('')).not.toContain('TOO-WIDE-ALT-FRAME')
-    expect(writes.join('')).toContain('\x1b[?1004h\x1b[?25l')
+    expect(writes.join('')).toContain('TOO-WIDE-ALT-FRAME')
+    expect(writes.join('')).toContain('preserved history')
+    expect(writes.filter((write) => write.includes('TOO-WIDE-ALT-FRAME'))).toHaveLength(1)
+    expect(pane.terminal.resize).toHaveBeenCalledWith(120, 40)
     expect(transport.resize).not.toHaveBeenCalled()
-
-    xtermContainerDisplay = 'block'
-    paneRect = createRect(800, 600)
-    safeFit(pane as never)
-    await flushAsyncTicks(12)
-
-    const pulseStart = transport.resize.mock.calls.findIndex(
-      ([cols, rows]) => cols === 119 && rows === 40
-    )
-    expect(pulseStart).toBeGreaterThanOrEqual(0)
-    expect(transport.resize.mock.calls[pulseStart + 1]).toEqual([120, 40])
-    disposable.dispose()
+    binding.dispose()
   })
 
   it('drains foreground output after a renderer-sourced hidden-backlog snapshot without seq', async () => {
@@ -21395,7 +21476,6 @@ describe('connectPanePty', () => {
       alternateScreen: true,
       scrollbackAnsi: 'PARKED-SSH-SCROLLBACK\r\n'
     })
-    await parkTabForReveal('tab-1', sshPtyId)
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: sshPtyId }] },
@@ -21413,6 +21493,7 @@ describe('connectPanePty', () => {
       pane as never,
       createManager(1) as never,
       createDeps({
+        mountFollowsTerminalPark: true,
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
       }) as never
@@ -21458,7 +21539,6 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(createMockTransport())
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockReturnValue(snapshot.promise)
     vi.mocked(window.api.ssh.connect).mockReturnValue(sshConnect.promise)
-    await parkTabForReveal('tab-1', sshPtyId)
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: sshPtyId, generation: 7 }] },
@@ -21485,6 +21565,7 @@ describe('connectPanePty', () => {
       pane as never,
       createManager(1) as never,
       createDeps({
+        mountFollowsTerminalPark: true,
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
       }) as never
@@ -21537,7 +21618,6 @@ describe('connectPanePty', () => {
       seq: 125,
       source: 'headless'
     })
-    await parkTabForReveal('tab-1', foreignPtyId)
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: foreignPtyId }] },
@@ -21554,6 +21634,7 @@ describe('connectPanePty', () => {
       pane as never,
       createManager(1) as never,
       createDeps({
+        mountFollowsTerminalPark: true,
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: foreignPtyId }
       }) as never
@@ -21589,7 +21670,6 @@ describe('connectPanePty', () => {
     })
     transportFactoryQueue.push(transport)
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockReturnValue(snapshot.promise)
-    await parkTabForReveal('tab-1', sshPtyId)
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: sshPtyId }] },
@@ -21606,6 +21686,7 @@ describe('connectPanePty', () => {
       pane as never,
       createManager(1) as never,
       createDeps({
+        mountFollowsTerminalPark: true,
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
       }) as never
@@ -21643,7 +21724,6 @@ describe('connectPanePty', () => {
       source: 'headless'
     })
     transportFactoryQueue.push(transport)
-    await parkTabForReveal('tab-1', remotePtyId)
     mockStoreState = {
       ...mockStoreState,
       runtimeStatusByEnvironmentId: new Map([
@@ -21659,7 +21739,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
-    const deps = createDeps()
+    const deps = createDeps({ mountFollowsTerminalPark: true })
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
     for (let step = 0; step < 30; step += 1) {
@@ -21674,7 +21754,7 @@ describe('connectPanePty', () => {
     expect(transport.getPtyId).toHaveReturnedWith(remotePtyId)
   })
 
-  it('restores a local main-model snapshot after a contentless park reattach', async () => {
+  it('keeps a parked main-model alt frame at its capture grid while hidden', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const localPtyId = 'global-floating-terminal@@terminal-1'
     const transport = createMockTransport(localPtyId)
@@ -21685,13 +21765,15 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
     const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
     getMainBufferSnapshot.mockResolvedValue({
-      data: 'FLOATING-PARK-RESTORE-OK\r\n',
+      data: 'FLOATING-PARK-ALT-FRAME',
+      frameRestoreAnsi: '\x1b[?25l',
       cols: 113,
       rows: 32,
       seq: 558,
-      source: 'headless'
+      source: 'headless',
+      alternateScreen: true,
+      scrollbackAnsi: 'FLOATING-PARK-HISTORY\r\n'
     })
-    await parkTabForReveal('tab-1', localPtyId, 'global-floating-terminal')
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
@@ -21709,8 +21791,10 @@ describe('connectPanePty', () => {
     }
 
     const pane = createPane(1)
+    pane.container.getBoundingClientRect = vi.fn(() => createRect(0, 0))
     const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
     const deps = createDeps({
+      mountFollowsTerminalPark: true,
       worktreeId: 'global-floating-terminal',
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: localPtyId }
@@ -21727,7 +21811,55 @@ describe('connectPanePty', () => {
       expect.objectContaining({ sessionId: localPtyId })
     )
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, localPtyId)
-    expect(writes.join('')).toContain('FLOATING-PARK-RESTORE-OK')
+    expect(writes.join('')).toContain('FLOATING-PARK-HISTORY')
+    expect(writes.join('')).toContain('FLOATING-PARK-ALT-FRAME')
+    expect(writes.filter((write) => write.includes('FLOATING-PARK-ALT-FRAME'))).toHaveLength(1)
+    expect(pane.terminal.resize).toHaveBeenCalledWith(113, 32)
+  })
+
+  it('restores a parked SSH alt frame after StrictMode watcher disposal', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const sshPtyId = toAppSshPtyId('conn-1', 'relay-pty-static-alt')
+    const transport = createMockTransport(sshPtyId)
+    transport.connect.mockImplementation(async () => {
+      transport.getPtyId.mockReturnValue(sshPtyId)
+      return { id: sshPtyId, isReattach: true, replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+    vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
+      data: '\x1b[0m\x1b[?1049h\x1b[HSTATIC-SSH-ALT-FRAME',
+      frameRestoreAnsi: '\x1b[0m\x1b[?1049h\x1b[?6l\x1b[1;21H',
+      cols: 100,
+      rows: 30,
+      seq: 512,
+      source: 'headless',
+      alternateScreen: true,
+      scrollbackAnsi: 'PRESERVED-SSH-HISTORY\r\n'
+    })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': sshPtyId }
+    }
+
+    const pane = createPane(1)
+    const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      mountFollowsTerminalPark: true,
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
+    })
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    for (let step = 0; step < 30; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
+
+    expect(window.api.pty.getMainBufferSnapshot).toHaveBeenCalledOnce()
+    expect(writes.join('')).toContain('PRESERVED-SSH-HISTORY')
+    expect(writes.filter((write) => write.includes('STATIC-SSH-ALT-FRAME'))).toHaveLength(1)
   })
 
   it('falls back to relay replay when the SSH model snapshot stalls', async () => {
@@ -21741,9 +21873,7 @@ describe('connectPanePty', () => {
     })
     transportFactoryQueue.push(transport)
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockReturnValue(new Promise(() => {}))
-    // Why parked: only a reveal remount probes main's model — the pane reads the
-    // still-live park watcher entry at connect time to tell the two apart.
-    await parkTabForReveal('tab-1', sshPtyId)
+    // Why parked: only a reveal remount probes main's model.
 
     mockStoreState = {
       ...mockStoreState,
@@ -21756,6 +21886,7 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
     const deps = createDeps({
+      mountFollowsTerminalPark: true,
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
     })
@@ -23075,6 +23206,159 @@ describe('connectPanePty', () => {
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
+      )
+    } finally {
+      restoreUserAgent()
+    }
+  })
+
+  it('resets stale keyboard state when a batched done→working→done burst lands as one publication', async () => {
+    const restoreUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    try {
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const firstDoneAt = Date.now()
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'done',
+        prompt: 'first turn',
+        updatedAt: firstDoneAt,
+        stateStartedAt: firstDoneAt,
+        agentType: 'codex',
+        paneKey,
+        stateHistory: [{ state: 'working', prompt: 'first turn', startedAt: firstDoneAt - 5_000 }]
+      }
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps()
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      expect(pane.terminal.write).not.toHaveBeenCalled()
+
+      // The burst's intermediate `working` never publishes, so the entry stays `done` end-to-end;
+      // only the stateHistory row proves a second turn ran and re-armed the kitty protocol.
+      const secondDoneAt = firstDoneAt + 10_000
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'done',
+        prompt: 'second turn',
+        updatedAt: secondDoneAt,
+        stateStartedAt: secondDoneAt,
+        agentType: 'codex',
+        paneKey,
+        stateHistory: [
+          { state: 'working', prompt: 'first turn', startedAt: firstDoneAt - 5_000 },
+          { state: 'done', prompt: 'first turn', startedAt: firstDoneAt },
+          { state: 'working', prompt: 'second turn', startedAt: secondDoneAt - 2_000 }
+        ]
+      }
+      notifyStoreSubscribers()
+
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        expect.any(Function)
+      )
+    } finally {
+      restoreUserAgent()
+    }
+  })
+
+  it('resets stale keyboard state when a batched burst ends on working after a completed turn', async () => {
+    const restoreUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    try {
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const startedAt = Date.now()
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'working',
+        prompt: 'ship it',
+        updatedAt: startedAt,
+        stateStartedAt: startedAt,
+        agentType: 'codex',
+        paneKey,
+        stateHistory: []
+      }
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps()
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      notifyStoreSubscribers()
+      expect(pane.terminal.write).not.toHaveBeenCalled()
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'working',
+        prompt: 'follow-up',
+        updatedAt: startedAt + 8_000,
+        stateStartedAt: startedAt + 8_000,
+        agentType: 'codex',
+        paneKey,
+        stateHistory: [
+          { state: 'working', prompt: 'ship it', startedAt },
+          { state: 'done', prompt: 'ship it', startedAt: startedAt + 4_000 }
+        ]
+      }
+      notifyStoreSubscribers()
+
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        expect.any(Function)
+      )
+    } finally {
+      restoreUserAgent()
+    }
+  })
+
+  it('keeps native Windows same-turn done repaints from re-resetting keyboard state', async () => {
+    const restoreUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    try {
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const doneAt = Date.now()
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps()
+
+      connectPanePty(pane as never, manager as never, deps as never)
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'done',
+        prompt: 'ship it',
+        updatedAt: doneAt,
+        stateStartedAt: doneAt,
+        agentType: 'codex',
+        paneKey,
+        stateHistory: []
+      }
+      notifyStoreSubscribers()
+      const writesAfterDone = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.length
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'done',
+        prompt: 'ship it',
+        updatedAt: doneAt + 1_000,
+        stateStartedAt: doneAt,
+        agentType: 'codex',
+        paneKey,
+        stateHistory: []
+      }
+      notifyStoreSubscribers()
+
+      expect((pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+        writesAfterDone
       )
     } finally {
       restoreUserAgent()

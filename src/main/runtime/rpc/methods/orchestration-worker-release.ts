@@ -54,12 +54,36 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
         }
       }
       if (requested.disposition === 'retained') {
+        const resource = requested.resource
+        const processIncarnation = resource?.process_incarnation
+        if (
+          processIncarnation &&
+          (await runtime.inspectTerminalProcessIncarnationLiveness(
+            processIncarnation,
+            resource.host_scope
+          )) === 'dead'
+        ) {
+          const reconciled = db.settleDeadWorkerTerminalRelease({
+            requestingDispatchId: params.dispatch,
+            resourceId: resource.id,
+            processIncarnation
+          })
+          if (reconciled.disposition === 'released') {
+            runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+            return {
+              dispatchId: params.dispatch,
+              state: 'released',
+              processAction: 'none',
+              archive: archiveSummary(reconciled.resource)
+            }
+          }
+        }
         return {
           dispatchId: params.dispatch,
           state: 'retained',
           reason: requested.reason,
           processAction: 'none',
-          archive: archiveSummary(requested.resource)
+          archive: archiveSummary(resource)
         }
       }
       return completeWorkerTerminalRelease({

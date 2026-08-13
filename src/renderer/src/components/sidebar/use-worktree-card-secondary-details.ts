@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react'
 
 import type { GitHubWorkItem } from '../../../../shared/types'
-import { useAppStore } from '@/store'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -42,7 +41,8 @@ export function useWorktreeCardSecondaryDetails({
   agentActivityDisplayMode,
   workspacePorts,
   openTaskPage,
-  updateWorktreeMeta
+  updateWorktreeMeta,
+  settings
 }: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'statusPrDisplay'> &
   Pick<
     Foundation,
@@ -53,6 +53,7 @@ export function useWorktreeCardSecondaryDetails({
     | 'workspacePorts'
     | 'openTaskPage'
     | 'updateWorktreeMeta'
+    | 'settings'
   > &
   Pick<LinkedDetails, 'issueDisplay' | 'linearIssue' | 'linearIssueDisplay' | 'jiraIssueDisplay'> &
   Pick<
@@ -190,9 +191,9 @@ export function useWorktreeCardSecondaryDetails({
   })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
-  const cacheTtlMs = useAppStore((s) =>
-    showAggregateCacheTimer ? (s.settings?.promptCacheTtlMs ?? 0) : 0
-  )
+  // Why: derived from the settings the card already subscribes to — a third store
+  // subscription for this one field costs a listener per card on every store write.
+  const cacheTtlMs = showAggregateCacheTimer ? (settings?.promptCacheTtlMs ?? 0) : 0
 
   return {
     showUnreadEmphasis,

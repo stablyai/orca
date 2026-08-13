@@ -1,0 +1,215 @@
+import { translate } from '@/i18n/i18n'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { SEARCH_ENGINE_LABELS, type SearchEngine } from '../../../shared/browser-url'
+import {
+  getClientCreationActionPolicy,
+  type ClientCreationActionAvailability
+} from './client-creation-action-policy'
+import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+
+export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engine: SearchEngine }
+
+export type OpenWorkspaceBrowserTabRequest = {
+  workspaceId: string
+  targetGroupId?: string
+  url: string
+  intent: WorkspaceBrowserTabIntent
+  expectedRuntimeEnvironmentId?: string
+}
+
+function isExpectedRuntimeBrowserRoute(
+  availability: ClientCreationActionAvailability,
+  route: ReturnType<typeof resolveWorktreeOperationRoute>,
+  expectedRuntimeEnvironmentId: string
+): boolean {
+  if (availability.state !== 'enabled' || availability.provider !== 'paired-runtime' || !route) {
+    return false
+  }
+  const environmentId = route.runtimeEnvironmentId?.trim() || null
+  if (environmentId !== expectedRuntimeEnvironmentId.trim()) {
+    return false
+  }
+  const host = parseExecutionHostId(route.executionHostId)
+  return (
+    !route.executionHostId ||
+    Boolean(host && (host.kind !== 'runtime' || host.environmentId === environmentId))
+  )
+}
+
+export function canOpenWorkspaceBrowserTabOnRuntime(
+  state: AppState,
+  workspaceId: string,
+  expectedRuntimeEnvironmentId: string
+): boolean {
+  const availability = getClientCreationActionPolicy(state, workspaceId)['managed-browser']
+  const route = resolveWorktreeOperationRoute(state, workspaceId)
+  return isExpectedRuntimeBrowserRoute(availability, route, expectedRuntimeEnvironmentId)
+}
+
+// Why: concurrent URL tabs are indistinguishable under a shared "Open URL"
+// label until the page title loads; the query string stays out so a typed URL
+// does not park credentials or tokens in persisted tab state.
+function urlTabTitle(url: string): string | null {
+  try {
+    // host, not hostname: localhost:3000 and localhost:5173 are different tabs.
+    const parsed = new URL(url)
+    return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}`
+  } catch {
+    return null
+  }
+}
+
+function intentPresentation(
+  intent: WorkspaceBrowserTabIntent,
+  url: string
+): {
+  error: string
+  title: string
+} {
+  if (intent.kind === 'url') {
+    return {
+      error: translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.'),
+      title:
+        urlTabTitle(url) ??
+        translate('auto.components.tab.bar.TabBarCreateEntry.7cdf8ee0c8', 'Open URL')
+    }
+  }
+  const engine = SEARCH_ENGINE_LABELS[intent.engine]
+  return {
+    error: translate(
+      'auto.lib.workspace.browser.tab.open.searchFailed',
+      'Unable to search with {{value0}}.',
+      { value0: engine }
+    ),
+    title: translate(
+      'auto.components.tab.bar.TabBarCreateEntry.searchProvider',
+      'Search {{value0}}',
+      { value0: engine }
+    )
+  }
+}
+
+// Why: the UI string stays friendly and query-free, but the diagnosable reason
+// rides along as `cause` so a failed open is not indistinguishable in logs.
+function openFailure(message: string, reason: string, cause?: unknown): Error {
+  // Why: callers only surface `message`, so log the reason here or a failed open
+  // leaves no trace at all. The reason alone — never `cause` — keeps the typed
+  // URL and search query out of the console.
+  console.warn(`[workspace-browser-tab-open] ${reason}`)
+  return new Error(message, {
+    cause: new Error(reason, cause === undefined ? undefined : { cause })
+  })
+}
+
+function validateTarget(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && !!parsed.hostname
+  } catch {
+    return false
+  }
+}
+
+function createClientBrowserTab(
+  state: AppState,
+  request: OpenWorkspaceBrowserTabRequest,
+  hostId: ExecutionHostId,
+  presentation: { error: string; title: string }
+): void {
+  try {
+    state.createBrowserTab(request.workspaceId, request.url, {
+      activate: true,
+      browserRuntimeEnvironmentId: null,
+      focusAddressBar: false,
+      sessionProfileId:
+        state.defaultBrowserSessionProfileIdByHostId[hostId] ??
+        state.defaultBrowserSessionProfileId,
+      targetGroupId: request.targetGroupId,
+      title: presentation.title
+    })
+  } catch (error) {
+    throw openFailure(presentation.error, 'client tab creation rejected', error)
+  }
+}
+
+function assertManagedBrowserEnabled(
+  availability: ClientCreationActionAvailability,
+  presentation: { error: string }
+): asserts availability is Extract<ClientCreationActionAvailability, { state: 'enabled' }> {
+  if (availability.state !== 'enabled') {
+    throw openFailure(presentation.error, availability.reason)
+  }
+}
+
+export async function openWorkspaceBrowserTab(
+  request: OpenWorkspaceBrowserTabRequest
+): Promise<void> {
+  const presentation = intentPresentation(request.intent, request.url)
+  if (!validateTarget(request.url)) {
+    throw openFailure(presentation.error, 'target is not an http(s) URL')
+  }
+  const state = useAppStore.getState()
+  const availability = getClientCreationActionPolicy(state, request.workspaceId)['managed-browser']
+  assertManagedBrowserEnabled(availability, presentation)
+  const route = resolveWorktreeOperationRoute(state, request.workspaceId)
+  if (!route) {
+    throw openFailure(presentation.error, 'no active worktree route')
+  }
+  const environmentId = route.runtimeEnvironmentId?.trim() || null
+  const expectedEnvironmentId = request.expectedRuntimeEnvironmentId?.trim() || null
+  if (
+    expectedEnvironmentId &&
+    !isExpectedRuntimeBrowserRoute(availability, route, expectedEnvironmentId)
+  ) {
+    throw openFailure(presentation.error, 'asserted runtime cannot provide this managed browser')
+  }
+  const host = parseExecutionHostId(route.executionHostId)
+  if (!environmentId) {
+    if (!host || host.kind === 'runtime') {
+      throw openFailure(presentation.error, `unresolved client host: ${route.executionHostId}`)
+    }
+    createClientBrowserTab(state, request, host.id, presentation)
+    return
+  }
+  if (
+    route.executionHostId &&
+    (!host || (host.kind === 'runtime' && host.environmentId !== environmentId))
+  ) {
+    throw openFailure(
+      presentation.error,
+      `host ${route.executionHostId} does not own runtime ${environmentId}`
+    )
+  }
+  if (availability.provider === 'local-client') {
+    const localHostId = host && host.kind !== 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID
+    createClientBrowserTab(state, request, localHostId, presentation)
+    return
+  }
+  let created = false
+  try {
+    created = await createWebRuntimeSessionBrowserTab({
+      worktreeId: request.workspaceId,
+      environmentId,
+      url: request.url,
+      targetGroupId: request.targetGroupId,
+      // Why: the tab is opened from this workspace's tab bar, so surface that
+      // workspace — otherwise a background worktree looks like nothing happened.
+      selectWorktree: true,
+      stagedTitle: presentation.title,
+      stagedFocusAddressBar: false,
+      failureLogMode: 'operation-only'
+    })
+  } catch (error) {
+    throw openFailure(presentation.error, 'runtime browser tab creation failed', error)
+  }
+  if (!created) {
+    throw openFailure(presentation.error, 'runtime browser tab creation was unavailable')
+  }
+}

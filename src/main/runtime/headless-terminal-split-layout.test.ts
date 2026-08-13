@@ -2,8 +2,26 @@ import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../shared/types'
 import {
   buildHeadlessTerminalSplitLayout,
-  countTerminalLayoutLeaves
+  countTerminalLayoutLeaves,
+  terminalLayoutContainsLeaf
 } from './headless-terminal-split-layout'
+
+describe('terminalLayoutContainsLeaf', () => {
+  it('requires the leaf in the layout tree', () => {
+    expect(
+      terminalLayoutContainsLeaf(
+        {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: 'leaf-a' },
+          second: { type: 'leaf', leafId: 'leaf-b' }
+        },
+        'leaf-b'
+      )
+    ).toBe(true)
+    expect(terminalLayoutContainsLeaf({ type: 'leaf', leafId: 'leaf-a' }, 'leaf-b')).toBe(false)
+  })
+})
 
 describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => {
   it('splits a single-leaf tab into a 2-leaf split tree', () => {
@@ -81,6 +99,64 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       direction: 'horizontal',
       first: { type: 'leaf', leafId: 'leaf-a' },
       second: { type: 'leaf', leafId: 'leaf-b' }
+    })
+  })
+
+  it('replaces the provisional admission leaf with the requested split direction', () => {
+    const next = buildHeadlessTerminalSplitLayout(
+      {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: 'leaf-a' },
+          second: { type: 'leaf', leafId: 'leaf-c' }
+        },
+        activeLeafId: 'leaf-c',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-c': 'provisional-pty' }
+      },
+      { leafId: 'leaf-c', ptyId: 'pty-c', splitFromLeafId: 'leaf-a', direction: 'horizontal' }
+    )
+
+    expect(next.root).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', leafId: 'leaf-a' },
+      second: { type: 'leaf', leafId: 'leaf-c' }
+    })
+    expect(next.ptyIdsByLeafId).toEqual({ 'leaf-a': 'pty-a', 'leaf-c': 'pty-c' })
+  })
+
+  it('preserves a sibling committed by a concurrent split', () => {
+    const next = buildHeadlessTerminalSplitLayout(
+      {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf-a' },
+            second: { type: 'leaf', leafId: 'leaf-b' }
+          },
+          second: { type: 'leaf', leafId: 'leaf-c' }
+        },
+        activeLeafId: 'leaf-c',
+        expandedLeafId: null,
+        ptyIdsByLeafId: {
+          'leaf-a': 'pty-a',
+          'leaf-b': 'pty-b',
+          'leaf-c': 'provisional-pty'
+        }
+      },
+      { leafId: 'leaf-c', ptyId: 'pty-c', splitFromLeafId: 'leaf-a', direction: 'vertical' }
+    )
+
+    expect(countTerminalLayoutLeaves(next.root)).toBe(3)
+    expect(next.ptyIdsByLeafId).toEqual({
+      'leaf-a': 'pty-a',
+      'leaf-b': 'pty-b',
+      'leaf-c': 'pty-c'
     })
   })
 

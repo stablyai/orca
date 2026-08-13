@@ -1,6 +1,5 @@
 import WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
-import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import { openSharedControlSocket } from './remote-runtime-shared-control-open'
@@ -66,14 +65,16 @@ export class RemoteRuntimeSharedControlConnection {
   request<TResult>(
     method: string,
     params: unknown,
-    timeoutMs: number
-  ): Promise<RuntimeRpcResponse<TResult>> {
-    return requestSharedControl({
+    timeoutMs: number,
+    envelope?: Parameters<typeof requestSharedControl>[0]['envelope']
+  ): ReturnType<typeof requestSharedControl<TResult>> {
+    return requestSharedControl<TResult>({
       pendingRequests: this.pendingRequests,
       deviceToken: this.pairing.deviceToken,
       method,
       params,
       timeoutMs,
+      envelope,
       ensureReady: () => this.ensureReadyWithTimeout(timeoutMs),
       send: (requestId) => this.sendRequest(requestId),
       retireRequestId: (requestId) => this.retiredRequestIds.retire(requestId)

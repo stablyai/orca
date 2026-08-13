@@ -15,7 +15,7 @@ export function hasOwnBindingOverride(
   overrides: KeybindingOverrides,
   actionId: KeybindingActionId
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(overrides, actionId)
+  return Object.hasOwn(overrides, actionId)
 }
 
 export function removeBindingOverride(

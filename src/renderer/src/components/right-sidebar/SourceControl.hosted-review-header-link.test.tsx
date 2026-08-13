@@ -8,7 +8,8 @@ const { openHttpLinkMock } = vi.hoisted(() => ({ openHttpLinkMock: vi.fn() }))
 
 vi.mock('@/lib/http-link-routing', () => ({
   openHttpLink: openHttpLinkMock,
-  registerHttpLinkStoreAccessor: vi.fn()
+  registerHttpLinkStoreAccessor: vi.fn(),
+  registerRuntimeHttpLinkBrowserOpener: vi.fn()
 }))
 
 function makeReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {

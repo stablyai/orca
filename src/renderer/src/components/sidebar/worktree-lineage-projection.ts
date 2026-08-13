@@ -15,7 +15,7 @@ export function getProjectedWorktreeLineage(
   worktree: Worktree,
   lineageById: Readonly<Record<string, WorktreeLineage>>
 ): WorktreeLineage | null | undefined {
-  if (Object.prototype.hasOwnProperty.call(lineageById, worktree.id)) {
+  if (Object.hasOwn(lineageById, worktree.id)) {
     return lineageById[worktree.id]
   }
   return (worktree as WorktreeWithResolvedLineage).lineage

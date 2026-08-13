@@ -103,7 +103,8 @@ export function normalizeFolderWorkspaces(
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
-        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now
+        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
     })
   }
   return workspaces.sort(

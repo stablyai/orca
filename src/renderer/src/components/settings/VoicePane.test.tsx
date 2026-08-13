@@ -253,4 +253,74 @@ describe('VoicePane', () => {
 
     expect(recordFeatureInteraction).not.toHaveBeenCalled()
   })
+
+  it('merges an in-flight voice write onto the newest settings, not the render-time snapshot', async () => {
+    const updateSettings = vi.fn()
+    let resolveClear: () => void = () => {}
+    const clearing = new Promise<{ configured: boolean }>((resolve) => {
+      resolveClear = () => resolve({ configured: false })
+    })
+    useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
+      selector({
+        modelStates: [],
+        refreshModelStates: vi.fn(),
+        markFeatureTipsSeen: vi.fn(),
+        recordFeatureInteraction: vi.fn()
+      })
+    )
+    useShortcutLabelMock.mockReturnValue('Ctrl+Shift+Y')
+    installWindowApi(vi.fn(async () => deniedMicrophoneResult))
+    window.api.speech.getOpenAiApiKeyStatus = vi.fn(async () => ({ configured: true }))
+    window.api.speech.clearOpenAiApiKey = vi.fn(() => clearing)
+
+    const settingsWithKey = (enabled: boolean): GlobalSettings =>
+      ({
+        voice: {
+          ...getDefaultVoiceSettings(),
+          enabled,
+          openAiApiKeyConfigured: true,
+          microphoneDeviceId: 'usb-mic',
+          microphoneDeviceLabel: 'USB Microphone'
+        }
+      }) as GlobalSettings
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(<VoicePane settings={settingsWithKey(true)} updateSettings={updateSettings} />)
+    })
+
+    const disconnect = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Disconnect OpenAI API key"]'
+    )
+    if (!disconnect) {
+      throw new Error('Disconnect OpenAI API key button was not rendered')
+    }
+    await act(async () => {
+      disconnect.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    // The user turns dictation off while the clear-key IPC is still in flight.
+    await act(async () => {
+      root.render(<VoicePane settings={settingsWithKey(false)} updateSettings={updateSettings} />)
+    })
+
+    await act(async () => {
+      resolveClear()
+      await clearing
+    })
+    root.unmount()
+
+    expect(updateSettings).toHaveBeenCalledTimes(1)
+    expect(updateSettings).toHaveBeenCalledWith({
+      voice: {
+        ...getDefaultVoiceSettings(),
+        enabled: false,
+        openAiApiKeyConfigured: false,
+        microphoneDeviceId: 'usb-mic',
+        microphoneDeviceLabel: 'USB Microphone'
+      }
+    })
+  })
 })

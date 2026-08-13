@@ -26,6 +26,7 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
+import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
 import {
   getRepoExecutionHostId,
@@ -46,6 +47,7 @@ import {
   transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
+import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
 
 /** Snapshot of a finished/vanished agent status entry, kept so the dashboard and sidebar hover
  *  keep showing the completion until the user clicks the worktree. `worktreeId` is stamped at
@@ -106,6 +108,65 @@ type AgentLaunchConfigRegistryEntry = {
   identity: AgentLaunchConfigRegistrationMetadata
 }
 
+export type AgentStatusPayload = ParsedAgentStatusPayload & {
+  orchestration?: AgentStatusOrchestrationContext
+  promptInteractionKey?: string
+  restoredUnconfirmed?: boolean
+}
+
+export type AgentStatusTiming = { updatedAt?: number; stateStartedAt?: number }
+
+export type AgentStatusRouting = {
+  tabId?: string
+  worktreeId?: string
+  terminalHandle?: string
+  connectionId?: string | null
+}
+
+export type AgentStatusMetadata = {
+  providerSession?: AgentProviderSessionMetadata
+  launchConfig?: SleepingAgentLaunchConfig
+  launchToken?: string
+}
+
+export type AgentStatusUpdate = {
+  kind?: 'status'
+  paneKey: string
+  payload: AgentStatusPayload
+  terminalTitle?: string
+  timing?: AgentStatusTiming
+  routing?: AgentStatusRouting
+  metadata?: AgentStatusMetadata
+}
+
+export type AgentProviderSessionTiming = { updatedAt?: number }
+
+export type AgentProviderSessionRouting = {
+  tabId?: string
+  worktreeId?: string
+  connectionId?: string | null
+}
+
+export type AgentProviderSessionRecordMetadata = { launchToken?: string }
+
+export type AgentProviderSessionUpdate = {
+  kind: 'providerSession'
+  paneKey: string
+  agent: ResumableTuiAgent
+  providerSession: AgentProviderSessionMetadata
+  timing?: AgentProviderSessionTiming
+  routing?: AgentProviderSessionRouting
+  metadata?: AgentProviderSessionRecordMetadata
+}
+
+export type AgentStatusBatchUpdate = AgentStatusUpdate | AgentProviderSessionUpdate
+
+export type AgentStatusBatchTransaction = {
+  getState: () => AppState
+  apply: (update: AgentStatusBatchUpdate) => boolean
+  afterCommit: (effect: () => void) => void
+}
+
 export type AgentStatusSlice = {
   /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -152,34 +213,30 @@ export type AgentStatusSlice = {
   /** Update or insert an agent status entry from a status payload. */
   setAgentStatus: (
     paneKey: string,
-    payload: ParsedAgentStatusPayload & {
-      orchestration?: AgentStatusOrchestrationContext
-      promptInteractionKey?: string
-      restoredUnconfirmed?: boolean
-    },
+    payload: AgentStatusPayload,
     terminalTitle?: string,
-    timing?: { updatedAt?: number; stateStartedAt?: number },
-    routing?: {
-      tabId?: string
-      worktreeId?: string
-      terminalHandle?: string
-      connectionId?: string | null
-    },
-    metadata?: {
-      providerSession?: AgentProviderSessionMetadata
-      launchConfig?: SleepingAgentLaunchConfig
-      launchToken?: string
-    }
+    timing?: AgentStatusTiming,
+    routing?: AgentStatusRouting,
+    metadata?: AgentStatusMetadata
   ) => void
+
+  /** Apply ordered status updates as one status publication (generated titles and tab
+   *  titles still publish after it — three total, not 2N). */
+  setAgentStatuses: (updates: readonly AgentStatusBatchUpdate[]) => boolean[]
+
+  /** Fold caller-derived updates against exact staged state, committing one status publication. */
+  transactAgentStatuses: <Result>(
+    operation: (transaction: AgentStatusBatchTransaction) => Result
+  ) => Result
 
   /** Record resume identity without creating a visible turn-status row. */
   recordAgentProviderSession: (
     paneKey: string,
     agent: ResumableTuiAgent,
     providerSession: AgentProviderSessionMetadata,
-    timing?: { updatedAt?: number },
-    routing?: { tabId?: string; worktreeId?: string; connectionId?: string | null },
-    metadata?: { launchToken?: string }
+    timing?: AgentProviderSessionTiming,
+    routing?: AgentProviderSessionRouting,
+    metadata?: AgentProviderSessionRecordMetadata
   ) => void
 
   registerAgentLaunchConfig: (
@@ -1211,10 +1268,143 @@ function collectWorktreeIdsForConnection(state: AppState, connectionId: string):
   return onConnection
 }
 
+/** Slices that only the fold touched, so the batch commits as a MERGE.
+ *  Why: the fold runs against a snapshot taken at transaction start. Committing that
+ *  snapshot wholesale (zustand REPLACE) would silently revert any write that landed on
+ *  the real store meanwhile — and it can, because a batched action reaching another
+ *  slice's setter through `get()` bypasses the shadowed `set` entirely
+ *  (setRuntimeAgentOrchestrationByPaneKey → setGeneratedTabTitleFromAgentPrompt does this).
+ *  A merge keeps the single publication while confining conflicts to keys this fold wrote. */
+function buildAgentStatusBatchPatch(
+  initialState: AppState,
+  nextState: AppState
+): Partial<AppState> {
+  const patch: Record<string, unknown> = {}
+  for (const key of Object.keys(nextState) as (keyof AppState)[]) {
+    if (!Object.is(nextState[key], initialState[key])) {
+      patch[key as string] = nextState[key]
+    }
+  }
+  return patch as Partial<AppState>
+}
+
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
-  set,
-  get
+  storeSet,
+  storeGet
 ) => {
+  type AgentStatusStateUpdate =
+    | AppState
+    | Partial<AppState>
+    | ((state: AppState) => AppState | Partial<AppState>)
+
+  let batchedAgentStatusState: AppState | null = null
+  let batchedAgentStatusEffects: (() => void)[] | null = null
+  let batchedGeneratedTabTitleUpdates: GeneratedTabTitleUpdate[] | null = null
+  let batchedAgentStatusFreshnessRequested = false
+  const get = (): AppState => batchedAgentStatusState ?? storeGet()
+  // Deliberately narrower than zustand's `set`: no `replace` parameter, so no call site in
+  // this slice can compile into a REPLACE the batch commit is unable to express.
+  const set = (update: AgentStatusStateUpdate): void => {
+    if (batchedAgentStatusState === null) {
+      storeSet(update, false)
+      return
+    }
+    const nextState = typeof update === 'function' ? update(batchedAgentStatusState) : update
+    if (Object.is(nextState, batchedAgentStatusState)) {
+      return
+    }
+    batchedAgentStatusState = Object.assign({}, batchedAgentStatusState, nextState)
+  }
+  const runAfterAgentStatusCommit = (effect: () => void): void => {
+    if (batchedAgentStatusEffects) {
+      batchedAgentStatusEffects.push(effect)
+      return
+    }
+    effect()
+  }
+  const applyGeneratedTabTitleUpdate = (update: GeneratedTabTitleUpdate): void => {
+    if (batchedGeneratedTabTitleUpdates) {
+      batchedGeneratedTabTitleUpdates.push(update)
+      return
+    }
+    if (update.options) {
+      get().setGeneratedTabTitleFromAgentPrompt(update.paneKey, update.prompt, update.options)
+    } else {
+      get().setGeneratedTabTitleFromAgentPrompt(update.paneKey, update.prompt)
+    }
+  }
+  const applyBatchedAgentStatusUpdate = (update: AgentStatusBatchUpdate): boolean => {
+    const stateBeforeUpdate = batchedAgentStatusState
+    if (!stateBeforeUpdate) {
+      return false
+    }
+    if (update.kind === 'providerSession') {
+      get().recordAgentProviderSession(
+        update.paneKey,
+        update.agent,
+        update.providerSession,
+        update.timing,
+        update.routing,
+        update.metadata
+      )
+    } else {
+      get().setAgentStatus(
+        update.paneKey,
+        update.payload,
+        update.terminalTitle,
+        update.timing,
+        update.routing,
+        update.metadata
+      )
+    }
+    return batchedAgentStatusState !== stateBeforeUpdate
+  }
+  const batchTransaction: AgentStatusBatchTransaction = {
+    getState: get,
+    apply: applyBatchedAgentStatusUpdate,
+    afterCommit: runAfterAgentStatusCommit
+  }
+  const transactAgentStatuses = <Result>(
+    operation: (transaction: AgentStatusBatchTransaction) => Result
+  ): Result => {
+    if (batchedAgentStatusState) {
+      return operation(batchTransaction)
+    }
+    const initialState = storeGet()
+    batchedAgentStatusState = initialState
+    batchedAgentStatusEffects = []
+    batchedGeneratedTabTitleUpdates = []
+    try {
+      const result = operation(batchTransaction)
+      const nextState = batchedAgentStatusState
+      const effects = batchedAgentStatusEffects
+      const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
+      const freshnessRequested = batchedAgentStatusFreshnessRequested
+      batchedAgentStatusState = null
+      batchedAgentStatusEffects = null
+      batchedGeneratedTabTitleUpdates = null
+      batchedAgentStatusFreshnessRequested = false
+      if (nextState !== initialState) {
+        storeSet(buildAgentStatusBatchPatch(initialState, nextState), false)
+      }
+      if (generatedTabTitleUpdates.length > 0) {
+        storeGet().setGeneratedTabTitlesFromAgentPrompts(generatedTabTitleUpdates)
+      }
+      if (freshnessRequested) {
+        queueMicrotask(() => freshness.schedule())
+      }
+      for (const effect of effects) {
+        effect()
+      }
+      return result
+    } finally {
+      batchedAgentStatusState = null
+      batchedAgentStatusEffects = null
+      batchedGeneratedTabTitleUpdates = null
+      batchedAgentStatusFreshnessRequested = false
+    }
+  }
+
   // Why: scheduler is process-lifetime-scoped (no dispose) because the store is a
   // module-level singleton with no teardown lifecycle anywhere in the codebase.
   const freshness = createFreshnessScheduler({
@@ -1228,6 +1418,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }))
     }
   })
+  const requestAgentStatusFreshness = (acceptedInBatch: boolean): void => {
+    if (batchedAgentStatusState !== null) {
+      batchedAgentStatusFreshnessRequested ||= acceptedInBatch
+      return
+    }
+    queueMicrotask(() => freshness.schedule())
+  }
 
   const clearSleepingAgentSessionsByPaneKey = (paneKeys: readonly string[]): void => {
     if (paneKeys.length === 0) {
@@ -1706,7 +1903,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
       })
       if (removedLiveStatus) {
-        queueMicrotask(() => freshness.schedule())
+        requestAgentStatusFreshness(true)
       }
     },
 
@@ -1745,6 +1942,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // must push that completion into history, or the finished timestamp and unread badge
         // lose the turn the moment the flag overwrites the live entry.
         let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
+        // Why: a batched burst can fold a whole done→working turn into one publication, so a
+        // completion-reactive subscriber never sees `lastAssistantMessage` while state is `done`.
+        // One slot per entry, not one per history row — 20 transcripts per live status OOMs (#9872).
+        let lastCompletedAssistantMessage = existing?.lastCompletedAssistantMessage
         const boundaryLandsOnRealDone =
           existing?.state === 'done' &&
           existing.sessionBoundary !== true &&
@@ -1768,6 +1969,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ]
           if (history.length > AGENT_STATE_HISTORY_MAX) {
             history = history.slice(history.length - AGENT_STATE_HISTORY_MAX)
+          }
+          if (existing.state === 'done') {
+            // The push above just moved this completion out of the live entry; a done that
+            // carried no message must clear the slot, or a stale prior turn leaks forward.
+            lastCompletedAssistantMessage = existing.lastAssistantMessage
           }
         }
 
@@ -1933,6 +2139,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // card; parseAgentStatusPayload clears it on tool/state change.
           interactivePrompt: payload.interactivePrompt,
           lastAssistantMessage: payload.lastAssistantMessage,
+          ...(lastCompletedAssistantMessage ? { lastCompletedAssistantMessage } : {}),
           // Why: reused panes can start non-orchestrated work; only final done rows keep the
           // previous lineage fallback so completed children stay grouped.
           orchestration,
@@ -1982,13 +2189,18 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           !!existing &&
           existing.state === payload.state &&
           entry.stateStartedAt !== existing.stateStartedAt
+        const sameStateDoneAttentionChanged =
+          existing?.state === 'done' &&
+          entry.state === 'done' &&
+          agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
         const sortRelevantChange =
           !existing ||
           existing.state !== payload.state ||
           !wasFresh ||
           attributionChanged ||
           commandCodeNewTurn ||
-          sameStateStateStartedAtChanged
+          sameStateStateStartedAtChanged ||
+          sameStateDoneAttentionChanged
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
           entry.state === 'done' &&
@@ -2157,21 +2369,32 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             ? getAgentRowGeneratedTitleText(entryForGeneratedTitle)
             : entryForGeneratedTitle.prompt
         if (shouldReplaceGeneratedTitle) {
-          get().setGeneratedTabTitleFromAgentPrompt(paneKey, generatedTitlePrompt, {
-            replaceExistingGeneratedTitle: true
+          applyGeneratedTabTitleUpdate({
+            paneKey,
+            prompt: generatedTitlePrompt,
+            options: {
+              replaceExistingGeneratedTitle: true
+            }
           })
         } else {
-          get().setGeneratedTabTitleFromAgentPrompt(paneKey, generatedTitlePrompt)
+          applyGeneratedTabTitleUpdate({ paneKey, prompt: generatedTitlePrompt })
         }
       }
-      // Why: schedule via queueMicrotask after set so the timer reads the updated map without re-entering the store during set.
-      queueMicrotask(() => freshness.schedule())
+      // Why: batches coalesce accepted updates; standalone calls keep their existing deferred scheduling.
+      requestAgentStatusFreshness(generatedTitleEntry.current !== null)
       if (completionRefreshWorktreeId) {
         const worktreeId = completionRefreshWorktreeId
         // Why: agents can create a PR via `gh pr create`, bypassing Orca's flow and leaving a stale "no PR" cache entry in place.
         queueMicrotask(() => get().refreshGitHubForWorktreeIfStale(worktreeId))
       }
     },
+
+    setAgentStatuses: (updates) =>
+      updates.length === 0
+        ? []
+        : transactAgentStatuses((transaction) => updates.map(transaction.apply)),
+
+    transactAgentStatuses,
 
     setMigrationUnsupportedPty: (entry) => {
       set((s) => {

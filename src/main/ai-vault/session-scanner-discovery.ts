@@ -2,6 +2,7 @@ import type { Dirent } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 
@@ -64,8 +65,13 @@ export async function walkSessionFiles(
     entries = options.readDirectory
       ? await options.readDirectory(dirPath)
       : await readdir(dirPath, { withFileTypes: true })
-  } catch {
+  } catch (error) {
     options.signal?.throwIfAborted()
+    // Why: a gate refusal means the scan could not run, not that the tree is
+    // empty — swallowing it would misreport a stalled distro as "no transcript".
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return []
   }
 

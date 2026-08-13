@@ -142,6 +142,8 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  // Hidden retained renderers rebuild at the resume boundary, never behind the hidden surface.
+  webglRebuildDeferred?: boolean
   // Why per-pane: one pane's failed WebGL attach must not strand every other
   // pane on the DOM renderer until the next recovery boundary. Optional so
   // absent means "never failed"; only the attach failure path sets it.

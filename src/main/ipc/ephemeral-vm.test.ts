@@ -6,7 +6,7 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 
-const handlers = new Map<string, (_event: unknown, args: never) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
 const {
   handleMock,
   removeHandlerMock,

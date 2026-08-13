@@ -217,7 +217,7 @@
     "mermaid": "^11.16.1",
     "monaco-editor": "^0.55.1",
     "oxfmt": "^0.52.0",
-    "oxlint": "^1.75.0",
+    "oxlint": "^1.77.0",
     "oxlint-plugin-react-doctor": "0.9.1",
     "oxlint-tsgolint": "7.0.2001",
     "pdfjs-dist": "^6.2.108",

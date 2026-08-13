@@ -2167,6 +2167,28 @@ describe('repos:add + repos:clone', () => {
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
+  it('persists agent worktree visibility through local repos:update', () => {
+    const updated = {
+      id: 'repo-agent-visibility',
+      path: '/tmp/repo-agent-visibility',
+      displayName: 'repo-agent-visibility',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      agentWorktreeVisibility: 'show'
+    }
+    mockStore.updateRepo.mockReturnValue(updated)
+
+    const result = handlers.get('repos:update')!(null, {
+      repoId: updated.id,
+      updates: { agentWorktreeVisibility: 'show' }
+    })
+
+    expect(result).toBe(updated)
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+      agentWorktreeVisibility: 'show'
+    })
+  })
+
   it('prepares and invalidates roots when project host setup update changes worktree base path', () => {
     const repo = {
       id: 'repo-setup-update-root',

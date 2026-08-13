@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { DiffComment, Worktree } from '../../../shared/types'
+import type { DiffComment, FolderWorkspace, Worktree } from '../../../shared/types'
 import type { AppState } from './types'
 import {
   selectWorktreeDiffComments,
   selectWorktreeDiffCommentsOrEmpty
 } from './worktree-diff-comments-selector'
 import { getIndexedWorktreeById } from './worktree-repo-index'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 function makeComment(id: string): DiffComment {
   return {
@@ -83,5 +84,26 @@ describe('selectWorktreeDiffComments', () => {
     expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo: next }, null)).toBe(
       selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo: next }, undefined)
     )
+  })
+
+  it('reads review notes from a folder workspace', () => {
+    const comments = [makeComment('folder-comment')]
+    const folderWorkspace = {
+      id: 'folder-1',
+      executionHostId: 'local',
+      diffComments: comments
+    } as FolderWorkspace
+
+    expect(
+      selectWorktreeDiffComments(
+        {
+          worktreesByRepo: {},
+          activeWorktreeId: folderWorkspaceKey(folderWorkspace.id),
+          activeWorkspaceExecutionHostId: 'local',
+          folderWorkspaces: [folderWorkspace]
+        },
+        folderWorkspaceKey(folderWorkspace.id)
+      )
+    ).toBe(comments)
   })
 })

@@ -16,6 +16,12 @@ export type HostedReviewProvider =
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 
+// Why: Bitbucket Cloud's API has no draft pull requests, so offering the toggle
+// there would either publish a live PR or fail at submit.
+export function hostedReviewProviderSupportsDraft(provider: HostedReviewProvider): boolean {
+  return provider !== 'bitbucket'
+}
+
 /** A linked review is identified by a positive integer PR/MR number. */
 export function isPositiveHostedReviewNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
@@ -88,6 +94,14 @@ export type CreateHostedReviewArgs = CreateHostedReviewInput & {
   connectionId?: string | null
 }
 
+export type CreateStackedHostedReviewInput = CreateHostedReviewInput
+
+export type CreateStackedHostedReviewArgs = CreateStackedHostedReviewInput & {
+  repoPath: string
+  repoId?: string
+  connectionId?: string | null
+}
+
 export type CreateHostedReviewErrorCode =
   | 'auth_required'
   | 'unsupported_provider'
@@ -105,6 +119,21 @@ export type CreateHostedReviewResult =
       code: CreateHostedReviewErrorCode
       error: string
       existingReview?: HostedReviewSummary
+    }
+
+export type CreateStackedHostedReviewResult =
+  | {
+      ok: true
+      number: number
+      url: string
+      stackNumber: number
+      parentReview: HostedReviewSummary
+    }
+  | {
+      ok: false
+      code: CreateHostedReviewErrorCode
+      error: string
+      createdReview?: HostedReviewSummary
     }
 
 export type HostedReviewCreationBlockedReason =
@@ -152,6 +181,8 @@ export type HostedReviewCreationEligibility = {
   head?: string | null
   title?: string | null
   body?: string | null
+  /** Present only when the executing host supports GitHub stack creation. */
+  stackedCreationSupported?: boolean
 }
 
 export type HostedReviewCreationEligibilityArgs = {

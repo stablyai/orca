@@ -176,7 +176,7 @@ export class AiVaultScannerWorkerClient {
       return
     }
     const index = this.queue.indexOf(call)
-    if (index >= 0) {
+    if (index !== -1) {
       this.queue.splice(index, 1)
       this.clearCall(call)
     }

@@ -20,7 +20,7 @@ const {
   toWindowsWslPathMock: vi.fn((value: string) => value)
 }))
 
-const handlers = new Map<string, (event: unknown, args: unknown) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
   ipcMain: {

@@ -25,7 +25,7 @@ function TableRowSkeleton({
   statusWidthClass: string
 }): React.JSX.Element {
   return (
-    <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, 'items-center gap-3 px-3 py-2')}>
+    <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, 'min-h-11 items-center gap-3 px-3 py-3')}>
       <SkeletonBar className={cn('h-3.5', nameWidthClass)} />
       <SkeletonBar className={cn('h-3.5', scheduleWidthClass)} />
       <SkeletonBar className={cn('h-3.5', projectWidthClass)} />
@@ -91,7 +91,7 @@ const TABLE_ROW_SKELETONS = [
 export function AutomationsPageSkeleton(): React.JSX.Element {
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-3 pb-4 md:px-5"
+      className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-3 pb-4 md:px-5"
       aria-busy="true"
       aria-label={translate(
         'auto.components.automations.AutomationsPageSkeleton.55527b7bcf',

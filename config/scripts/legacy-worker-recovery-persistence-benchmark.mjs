@@ -30,8 +30,8 @@ const recoveryEnd = runtimeSource.indexOf(
 )
 const recoverySource = runtimeSource.slice(recoveryStart, recoveryEnd)
 if (
-  recoveryStart < 0 ||
-  recoveryEnd < 0 ||
+  recoveryStart === -1 ||
+  recoveryEnd === -1 ||
   !recoverySource.includes('await this.flushWorkspaceSessionOrThrowAsync()') ||
   recoverySource.includes('flushOrThrow()')
 ) {

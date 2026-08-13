@@ -673,11 +673,8 @@ function migrateTerminalScrollbackRows(settings: unknown): {
   needsSave: boolean
 } {
   const legacySettings = readLegacyTerminalScrollbackSettings(settings)
-  const hasRows = Object.prototype.hasOwnProperty.call(legacySettings, 'terminalScrollbackRows')
-  const hasLegacyBytes = Object.prototype.hasOwnProperty.call(
-    legacySettings,
-    'terminalScrollbackBytes'
-  )
+  const hasRows = Object.hasOwn(legacySettings, 'terminalScrollbackRows')
+  const hasLegacyBytes = Object.hasOwn(legacySettings, 'terminalScrollbackBytes')
   const rows = hasRows
     ? normalizeDesktopTerminalScrollbackRows(legacySettings.terminalScrollbackRows)
     : legacyTerminalScrollbackBytesToRows(legacySettings.terminalScrollbackBytes)
@@ -1685,7 +1682,7 @@ type LayoutLeafNormalization = {
 
 function collectLayoutLeafCounts(
   node: TerminalPaneLayoutNode,
-  counts: Map<string, number> = new Map()
+  counts = new Map<string, number>()
 ): Map<string, number> {
   if (node.type === 'leaf') {
     counts.set(node.leafId, (counts.get(node.leafId) ?? 0) + 1)
@@ -2781,6 +2778,14 @@ function deleteRemovedTerminalScrollbackSnapshots(
 
 export type StoreOptions = {
   dataFile?: string
+}
+
+export type PtyBindingSourceExpectation = {
+  worktreeId?: string
+  tabId: string
+  leafId: string
+  ptyId: string
+  incarnationId?: string
 }
 
 export class Store {
@@ -4546,6 +4551,7 @@ export class Store {
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
+        | 'diffComments'
       >
     >
   ): FolderWorkspace | null {
@@ -4618,6 +4624,9 @@ export class Store {
     }
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
+    }
+    if (updates.diffComments !== undefined) {
+      workspace.diffComments = updates.diffComments
     }
     workspace.updatedAt = Date.now()
     this.scheduleSave()
@@ -4910,6 +4919,7 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
+        | 'agentWorktreeVisibility'
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
@@ -6773,15 +6783,37 @@ export class Store {
       incarnationId?: string
       startupCwd?: string
       expectedBinding?: { ptyId: string; incarnationId?: string }
+      expectedSourceBinding?: PtyBindingSourceExpectation
     },
     hostId?: string | null
   ): boolean {
     const resolvedHostId = this.resolveHostId(hostId)
     const session = this.getWorkspaceSession(resolvedHostId)
     const paneKey = `${args.tabId}:${args.leafId}`
+    const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
+    if (args.expectedSourceBinding) {
+      const expected = args.expectedSourceBinding
+      if (expected.tabId !== args.tabId) {
+        return false
+      }
+      const sourceTab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
+        (candidate) => candidate.id === expected.tabId && candidate.worktreeId === bindingWorktreeId
+      )
+      const sourceLayout = session.terminalLayoutsByTabId?.[expected.tabId]
+      const sourcePaneKey = `${expected.tabId}:${expected.leafId}`
+      if (
+        !sourceTab ||
+        sourceLayout?.ptyIdsByLeafId?.[expected.leafId] !== expected.ptyId ||
+        !layoutContainsLeafId(sourceLayout.root, expected.leafId) ||
+        (expected.incarnationId !== undefined &&
+          session.terminalPtyIncarnationsByPaneKey?.[sourcePaneKey] !== expected.incarnationId)
+      ) {
+        return false
+      }
+    }
     if (args.expectedBinding) {
-      const tab = session.tabsByWorktree?.[args.worktreeId]?.find(
-        (candidate) => candidate.id === args.tabId && candidate.worktreeId === args.worktreeId
+      const tab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
+        (candidate) => candidate.id === args.tabId && candidate.worktreeId === bindingWorktreeId
       )
       const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
       if (
@@ -6804,9 +6836,13 @@ export class Store {
       args.incarnationId !== args.expectedBinding.incarnationId
     let terminalMembershipChanged = false
     const advanceTopologyFence = (): void => {
-      const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+      const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
       const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-      if (!reconciledIncarnation && (!terminalMembershipChanged || currentRevision <= 0)) {
+      const establishesSplitAuthority = args.expectedSourceBinding !== undefined
+      if (
+        !reconciledIncarnation &&
+        (!terminalMembershipChanged || (currentRevision <= 0 && !establishesSplitAuthority))
+      ) {
         return
       }
       // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
@@ -6837,7 +6873,7 @@ export class Store {
         delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
       }
     }
-    const tabs = session.tabsByWorktree?.[args.worktreeId]
+    const tabs = session.tabsByWorktree?.[bindingWorktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
       tab.ptyId = args.ptyId
@@ -6848,18 +6884,19 @@ export class Store {
         ...(tabs ?? []),
         createMinimalPersistedTerminalTab({
           ...args,
+          worktreeId: bindingWorktreeId,
           existingTabCount: tabs?.length ?? 0
         })
       ]
       session.tabsByWorktree = {
         ...session.tabsByWorktree,
-        [args.worktreeId]: nextTabs
+        [bindingWorktreeId]: nextTabs
       }
-      session.activeWorktreeId ??= args.worktreeId
+      session.activeWorktreeId ??= bindingWorktreeId
       session.activeTabId ??= args.tabId
       session.activeTabIdByWorktree = {
         ...session.activeTabIdByWorktree,
-        [args.worktreeId]: session.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId
+        [bindingWorktreeId]: session.activeTabIdByWorktree?.[bindingWorktreeId] ?? args.tabId
       }
     }
     if (!isTerminalLeafId(args.leafId)) {
@@ -7226,14 +7263,14 @@ export class Store {
       (entry) =>
         entry.targetId === normalizedLease.targetId && entry.ptyId === normalizedLease.ptyId
     )
-    const existing = existingIndex >= 0 ? this.state.sshRemotePtyLeases[existingIndex] : undefined
+    const existing = existingIndex !== -1 ? this.state.sshRemotePtyLeases[existingIndex] : undefined
     const next: SshRemotePtyLease = {
       ...existing,
       ...normalizedLease,
       createdAt: existing?.createdAt ?? normalizedLease.createdAt ?? now,
       updatedAt: normalizedLease.updatedAt ?? now
     }
-    if (existingIndex >= 0) {
+    if (existingIndex !== -1) {
       this.state.sshRemotePtyLeases[existingIndex] = next
     } else {
       this.state.sshRemotePtyLeases.push(next)

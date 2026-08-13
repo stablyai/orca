@@ -7,6 +7,7 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
@@ -41,7 +42,14 @@ export async function readNativeChatTranscript(
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
-  const filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  let filePath: string | null
+  try {
+    filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  } catch (err) {
+    // Why: gate refusal is transient unavailability with retry guidance —
+    // `notFound` would settle callers into a false "missing" state.
+    return { error: wslTranscriptFsRefusal(err).message }
+  }
   if (!filePath) {
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }

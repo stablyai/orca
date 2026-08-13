@@ -59,6 +59,7 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
 import { isShellProcess } from '../../shared/agent-detection'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
@@ -835,7 +836,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const snapshotFrame = result.snapshot.snapshotAnsi
     const snapshotPayload = snapshotPrefix + snapshotFrame
     // Why kitty flags ride beside the payload, not inside it: the snapshot reaches renderer xterms where POST_REPLAY_REATTACH_RESET's kitty reset must win (terminal-query-authority.md §kitty).
-    const kittyKeyboardFlags = result.snapshot.modes.kittyKeyboardFlags
+    // Why known `0` is no longer dropped: the pane tracker must be able to tell
+    // "the app negotiated nothing" from "this reattach proved nothing".
+    const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(
+      result.snapshot.modes.kittyKeyboardFlags
+    )
     return {
       id: sessionId,
       ...incarnationResult(),
@@ -855,7 +860,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
           }
         : {}),
       ...(providerSequence ? { providerSequence } : {}),
-      ...(typeof kittyKeyboardFlags === 'number' && kittyKeyboardFlags > 0
+      ...(kittyKeyboardFlags !== undefined
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
         : {}),
       isReattach: true,
@@ -1221,6 +1226,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (!snapshot || typeof snapshot.outputSequence !== 'number') {
         return null
       }
+      const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(snapshot.modes.kittyKeyboardFlags)
       return {
         data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
         frameRestoreAnsi: snapshot.frameRestoreAnsi,
@@ -1233,6 +1239,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
         source: 'headless',
         oscLinks: snapshot.oscLinks,
         alternateScreen: snapshot.modes.alternateScreen,
+        // Why known `0` is carried too: it proves the app negotiated nothing at
+        // this boundary, which is a different fact from a source that cannot say.
+        ...(kittyKeyboardFlags !== undefined ? { kittyKeyboardFlags } : {}),
         ...(snapshot.pendingEscapeTailAnsi
           ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
           : {})
@@ -1464,8 +1473,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       )
       return processes
     } catch (error) {
-      const missingAuthenticatedToken =
-        isMissingTokenFileError(error) && this.client.hasObservedAuthenticatedDisconnect()
+      const missingAuthenticatedToken = this.isRetiredEndpointTokenMissing()
       const missingNamedPipe = isMissingWindowsNamedPipeError(error)
       this.observeAuditFailure(
         missingAuthenticatedToken
@@ -1949,7 +1957,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
   }
 
-  // Why final=true not teardown: clean disconnect needs the full-depth snapshot as the restore source, but the
+  // Why final=true not teardown: clean disconnect needs the full daemon-window snapshot as the restore source, but the
   // detached daemon's PTYs keep running for warm reattach, so shell-ready scanner state must stay intact.
   private async checkpointAllSessions(): Promise<void> {
     const completed = await this.checkpointSessions(this.activeSessionIds, { final: true })
@@ -2111,14 +2119,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return 'unavailable'
   }
 
-  // Why: on daemon-death errors, respawn a fresh daemon and retry once rather than leaving terminals broken until app restart.
+  // Why: the token read no longer throws, so audit its absence directly after an authenticated drop.
+  private isRetiredEndpointTokenMissing(): boolean {
+    return this.client.hasObservedAuthenticatedDisconnect() && !existsSync(this.tokenPath)
+  }
+
   private async withDaemonRetry<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn()
     } catch (err) {
-      // Why: the token is removed only after an authenticated drop; an initial missing token may still hide a live daemon.
-      const missingRetiredEndpointToken =
-        isMissingTokenFileError(err) && this.client.hasObservedAuthenticatedDisconnect()
+      const missingRetiredEndpointToken = this.isRetiredEndpointTokenMissing()
       if (missingRetiredEndpointToken) {
         this.observeAuditFailure(
           'token_missing_after_authenticated_disconnect',
@@ -2126,11 +2136,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
           ['token_file']
         )
       }
-      if (
-        this.respawnAdoptionClosed ||
-        !this.respawnFn ||
-        (!isDaemonGoneError(err) && !missingRetiredEndpointToken)
-      ) {
+      if (this.respawnAdoptionClosed || !this.respawnFn || !isDaemonGoneError(err)) {
         throw err
       }
       if (!this.respawnPromise) {
@@ -2522,14 +2528,6 @@ export function isDaemonGoneError(err: unknown): boolean {
     // reaches whoever owns it; surfacing this to the user would strand the request instead.
     msg === DAEMON_ENDPOINT_LOST_MESSAGE
   )
-}
-
-function isMissingTokenFileError(err: unknown): boolean {
-  if (!(err instanceof Error)) {
-    return false
-  }
-  const errno = err as NodeJS.ErrnoException
-  return errno.code === 'ENOENT' && errno.syscall === 'open'
 }
 
 function isMissingWindowsNamedPipeError(err: unknown): boolean {
