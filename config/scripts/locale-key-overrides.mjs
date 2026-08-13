@@ -9,9 +9,10 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.TaskPage.94f0339621': { ja: '私に割り当てられた Issue' },
   // aria-label describing the assignee picker state; the past-passive sentence reads oddly for a static label.
   'auto.components.TaskPage.bb63046423': { ja: '{{value0}} に割り当て済み' },
-  // Bare "Cursor" terminal/theme settings = on-screen カーソル, not the Cursor product.
-  'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル' },
-  'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル' },
+  // Bare "Cursor" terminal/theme settings = on-screen カーソル/游標, not the Cursor product;
+  // NEVER_TRANSLATE_VALUES pins the value before isScreenCursorContext is consulted.
+  'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル', 'zh-TW': '游標' },
+  'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル', 'zh-TW': '游標' },
   'menu.reportCrash': { ko: '크래시 신고...', zh: '报告崩溃...', ja: 'クラッシュを報告...' },
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
