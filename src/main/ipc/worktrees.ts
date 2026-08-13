@@ -117,6 +117,7 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { registerWorktreeChangeInvalidator } from './worktree-change-invalidators'
+import { scheduleMergedWorktreeAutoCloseForRepo } from './merged-worktree-auto-close'
 import {
   invalidateAuthorizedRootsCache,
   isENOENT,
@@ -1808,6 +1809,33 @@ export function registerWorktreeHandlers(
   options?: { onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void }
 ): void {
   const detectedWorktreeCancellations = createSenderScopedRequestCancellations()
+  /**
+   * Run the landed-workspace sweep behind a workspace list.
+   *
+   * Why not only `worktrees:list`: the desktop renderer lists through
+   * `worktrees:listDetected` and only falls back to `worktrees:list` when the
+   * preload has no `listDetected`. Wiring the sweep into the fallback alone
+   * left it never running on desktop.
+   *
+   * Never awaited — a list must not wait on Git merge probes — and
+   * cooldown-gated inside the scheduler.
+   */
+  const scheduleMergedWorktreeAutoCloseForListedRepo = (
+    repoId: string,
+    executionHostId?: ExecutionHostId
+  ): void => {
+    if (executionHostId !== undefined && executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+      return
+    }
+    // Why the explicit host: with no host argument a single SSH- or runtime-owned
+    // candidate still resolves as the owner, and the legacy call shape supplies no
+    // host at all — so the guard above would pass and the sweep would run on a repo
+    // this machine does not own.
+    const repo = findExactRepoOwner(store, repoId, LOCAL_EXECUTION_HOST_ID)
+    if (repo) {
+      void scheduleMergedWorktreeAutoCloseForRepo(store, runtime, repo)
+    }
+  }
   // Remove previously registered handlers so re-register works when macOS re-activates and creates a new window.
   ipcMain.removeHandler('worktrees:listAll')
   ipcMain.removeHandler('worktrees:list')
@@ -1943,6 +1971,13 @@ export function registerWorktreeHandlers(
         pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
+      // Why here: this is the one point every worktree-graph change funnels back
+      // through (`worktrees:changed` makes the renderer re-list), so the sweep is
+      // event-driven without a timer of its own. It is cooldown-gated and never
+      // awaited — a list must not wait on Git merge probes.
+      // Why through the helper: `store.getRepo` returns any owner for the id, so
+      // routing both listing entry points through it keeps one ownership rule.
+      scheduleMergedWorktreeAutoCloseForListedRepo(repo.id, getRepoExecutionHostId(repo))
       return buildDetectedGitWorktrees(store, repo, gitWorktrees)
         .filter((worktree) => worktree.visible)
         .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree))
@@ -2115,9 +2150,13 @@ export function registerWorktreeHandlers(
                 }
               : undefined
           )
-          return abortedResult
+          const listed = abortedResult
             ? await Promise.race([providerResult, abortedResult])
             : await providerResult
+          if (listed.status === 'complete') {
+            scheduleMergedWorktreeAutoCloseForListedRepo(args.repoId, args.executionHostId)
+          }
+          return listed
         } finally {
           if (timeout) {
             clearTimeout(timeout)
@@ -2151,6 +2190,9 @@ export function registerWorktreeHandlers(
               isCurrentSshProviderAuthority(authority))),
         provider
       )
+      if (result && !('providerAbortStatus' in result) && result.authoritative) {
+        scheduleMergedWorktreeAutoCloseForListedRepo(repo.id)
+      }
       return result && !('providerAbortStatus' in result)
         ? result
         : {

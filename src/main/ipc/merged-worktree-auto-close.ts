@@ -1,0 +1,171 @@
+import type { Store } from '../persistence'
+import type { Repo } from '../../shared/types'
+import type { MergedWorktreeAutoCloseDecision } from '../../shared/merged-worktree-auto-close'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { scanMergedWorktreeAutoCloseCandidates } from './merged-worktree-auto-close-scan'
+
+/** Why a cooldown: `worktrees:list` fires on every sidebar refresh, and the sweep shells out to Git per branch. */
+export const MERGED_WORKTREE_AUTO_CLOSE_REPO_COOLDOWN_MS = 5 * 60 * 1000
+
+/** Structural view of the runtime; `OrcaRuntimeService` satisfies it. */
+export type MergedWorktreeAutoCloseRuntime = {
+  removeManagedWorktree(
+    worktreeSelector: string,
+    force?: boolean,
+    runHooks?: boolean,
+    allowUnverifiedPtyStop?: boolean,
+    hostId?: string
+  ): Promise<unknown>
+}
+
+/** What one sweep did: removed, refused, and the full decision list behind both. */
+export type MergedWorktreeAutoCloseResult = {
+  closed: string[]
+  failed: { worktreeId: string; error: string }[]
+  decisions: MergedWorktreeAutoCloseDecision[]
+}
+
+/** `now` and `scan` are seams for tests; production passes neither. */
+export type MergedWorktreeAutoCloseOptions = {
+  now?: number
+  signal?: AbortSignal
+  scan?: typeof scanMergedWorktreeAutoCloseCandidates
+}
+
+const lastSweepAtByRepoId = new Map<string, number>()
+const sweepsInFlightByRepoId = new Map<string, Promise<MergedWorktreeAutoCloseResult>>()
+
+/**
+ * Whether this profile opted into the automation. Strict `=== true` because the
+ * setting is optional, and an absent one must not authorize a removal.
+ */
+export function isMergedWorktreeAutoCloseEnabled(store: Store): boolean {
+  return store.getSettings().autoCloseMergedWorktrees === true
+}
+
+/**
+ * Close every workspace in the repo whose branch has landed. Removal goes
+ * through the runtime's managed delete, so Orca's own tracking state, PTYs and
+ * the now-orphaned branch are cleaned up exactly like a user-initiated delete.
+ */
+export async function autoCloseMergedWorktreesForRepo(
+  store: Store,
+  runtime: MergedWorktreeAutoCloseRuntime,
+  repo: Repo,
+  options: MergedWorktreeAutoCloseOptions = {}
+): Promise<MergedWorktreeAutoCloseResult> {
+  // Why fenced up front: the only merge proof this sweep can read is a local one,
+  // and `id:` selectors are `repoId::path` ids that repeat across execution hosts.
+  // A repo owned elsewhere is not swept at all, so no probe and no removal can
+  // land on another host's workspace.
+  const hostId = getRepoExecutionHostId(repo)
+  if (hostId !== LOCAL_EXECUTION_HOST_ID) {
+    return { closed: [], failed: [], decisions: [] }
+  }
+  const scan = options.scan ?? scanMergedWorktreeAutoCloseCandidates
+  const decisions = await scan(store, repo, {
+    ...(options.now !== undefined ? { now: options.now } : {}),
+    ...(options.signal ? { signal: options.signal } : {})
+  })
+  const closed: string[] = []
+  const failed: MergedWorktreeAutoCloseResult['failed'] = []
+  const outcomeByWorktreeId = new Map<string, string>()
+
+  for (const decision of decisions) {
+    if (decision.action !== 'close') {
+      continue
+    }
+    try {
+      // Why never force: Git's own non-force removal is the authoritative refusal
+      // for a workspace that turned dirty between the scan and this call.
+      // Why the host: it pins the `id:` selector to the owner the sweep proved, so
+      // a same-id workspace on another connection cannot be the one that is torn down.
+      await runtime.removeManagedWorktree(`id:${decision.worktreeId}`, false, false, false, hostId)
+      closed.push(decision.worktreeId)
+      outcomeByWorktreeId.set(decision.worktreeId, 'closed')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      failed.push({ worktreeId: decision.worktreeId, error: message })
+      // Why first-line-only: Git refusal messages span multiple lines, and the
+      // sweep log promises one physical line per sweep — the grep target must
+      // hold precisely in the failure case an operator searches for.
+      const firstLine = message.split('\n', 1)[0].trim()
+      outcomeByWorktreeId.set(decision.worktreeId, `close-failed(${firstLine})`)
+    }
+  }
+
+  logMergedWorktreeAutoCloseSweep(repo, decisions, outcomeByWorktreeId)
+  return { closed, failed, decisions }
+}
+
+/**
+ * Report every sweep, including the all-skipped ones.
+ *
+ * Why unconditional: this ran silently for weeks while never reaching the
+ * removal at all, and no log distinguished "swept and kept everything" from
+ * "never swept". One line per sweep per repo, rate-limited by the cooldown.
+ */
+function logMergedWorktreeAutoCloseSweep(
+  repo: Repo,
+  decisions: MergedWorktreeAutoCloseDecision[],
+  outcomeByWorktreeId: Map<string, string>
+): void {
+  const outcomes = decisions
+    .map((decision) => {
+      const outcome =
+        decision.action === 'close'
+          ? (outcomeByWorktreeId.get(decision.worktreeId) ?? 'close')
+          : `skip:${decision.reason}`
+      return `${decision.branch || decision.path}=${outcome}`
+    })
+    .join(', ')
+  console.info(
+    `[worktree-auto-close] swept "${repo.displayName}" (${repo.id}): ${outcomes || 'no workspaces'}`
+  )
+}
+
+/**
+ * Run the sweep for a repo unless it is disabled, already running, or ran
+ * within the cooldown. Never rejects: callers fire this from lifecycle points
+ * whose own result must not depend on it.
+ */
+export function scheduleMergedWorktreeAutoCloseForRepo(
+  store: Store,
+  runtime: MergedWorktreeAutoCloseRuntime,
+  repo: Repo,
+  options: MergedWorktreeAutoCloseOptions = {}
+): Promise<MergedWorktreeAutoCloseResult | null> {
+  if (!isMergedWorktreeAutoCloseEnabled(store)) {
+    return Promise.resolve(null)
+  }
+  const inFlight = sweepsInFlightByRepoId.get(repo.id)
+  if (inFlight) {
+    return inFlight.catch(() => null)
+  }
+  const now = options.now ?? Date.now()
+  const lastSweepAt = lastSweepAtByRepoId.get(repo.id)
+  if (
+    lastSweepAt !== undefined &&
+    now - lastSweepAt < MERGED_WORKTREE_AUTO_CLOSE_REPO_COOLDOWN_MS
+  ) {
+    return Promise.resolve(null)
+  }
+  lastSweepAtByRepoId.set(repo.id, now)
+
+  const sweep = autoCloseMergedWorktreesForRepo(store, runtime, repo, { ...options, now })
+  sweepsInFlightByRepoId.set(repo.id, sweep)
+  return sweep
+    .catch((error): null => {
+      console.warn(`[worktree-auto-close] Sweep failed for repo "${repo.id}"`, error)
+      return null
+    })
+    .finally(() => {
+      sweepsInFlightByRepoId.delete(repo.id)
+    })
+}
+
+/** Clear the cooldown and in-flight maps, which outlive a single test otherwise. */
+export function _resetMergedWorktreeAutoCloseStateForTests(): void {
+  lastSweepAtByRepoId.clear()
+  sweepsInFlightByRepoId.clear()
+}

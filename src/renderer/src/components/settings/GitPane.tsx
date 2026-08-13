@@ -15,6 +15,10 @@ import {
   CompareAgainstUpstreamSetting,
   compareAgainstUpstreamMatchesSearch
 } from './CompareAgainstUpstreamSetting'
+import {
+  AutoCloseMergedWorkspacesSetting,
+  autoCloseMergedWorkspacesMatchesSearch
+} from './AutoCloseMergedWorkspacesSetting'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
@@ -307,6 +311,13 @@ export function GitPane({
     compareAgainstUpstreamMatchesSearch(searchQuery) ? (
       <CompareAgainstUpstreamSetting
         key="compare-against-upstream"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
+    autoCloseMergedWorkspacesMatchesSearch(searchQuery) ? (
+      <AutoCloseMergedWorkspacesSetting
+        key="auto-close-merged-workspaces"
         settings={settings}
         updateSettings={updateSettings}
       />

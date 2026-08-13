@@ -6,7 +6,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { CreateWorktreeResult, GitWorktreeInfo, Repo, Worktree } from '../../shared/types'
 import type { ProviderRequestId } from '../../shared/detected-worktree-provider-contract'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -222,6 +226,14 @@ const { deleteWorktreeHistoryDirMock } = vi.hoisted(() => ({
 
 vi.mock('../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
+}))
+
+const { scheduleMergedWorktreeAutoCloseForRepoMock } = vi.hoisted(() => ({
+  scheduleMergedWorktreeAutoCloseForRepoMock: vi.fn()
+}))
+
+vi.mock('./merged-worktree-auto-close', () => ({
+  scheduleMergedWorktreeAutoCloseForRepo: scheduleMergedWorktreeAutoCloseForRepoMock
 }))
 
 const { advertisedUrlWatcherForgetWorktreeMock } = vi.hoisted(() => ({
@@ -2412,6 +2424,161 @@ describe('registerWorktreeHandlers', () => {
       branchNameOverride: 'feature/add-feature',
       pushTarget: { remoteName: 'origin', branchName: 'feature/add-feature' }
     })
+  })
+
+  it('sweeps landed workspaces behind the local host-qualified detected list', async () => {
+    // Why this path: the desktop renderer lists through `worktrees:listDetected`
+    // with an execution host, so a sweep wired only into `worktrees:list` never
+    // ran in the app.
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'def456',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    const result = await handlers['worktrees:listDetected'](ipcEvent, {
+      providerRequestId: 'request-sweep' as ProviderRequestId,
+      repoId: 'repo-1',
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+
+    expect(result).toMatchObject({ status: 'complete' })
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).toHaveBeenCalledTimes(1)
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).toHaveBeenCalledWith(
+      store,
+      runtimeStub,
+      expect.objectContaining({ id: 'repo-1' })
+    )
+  })
+
+  it('sweeps landed workspaces behind the legacy detected list', async () => {
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'def456',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('never sweeps a runtime-owned repo behind the legacy detected list', async () => {
+    // Why this shape: the legacy call names no execution host, so only pinning the
+    // owner resolution to the local host can rule a runtime-owned repo out.
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        executionHostId: toRuntimeExecutionHostId('env-1')
+      }
+    ])
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'def456',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).not.toHaveBeenCalled()
+  })
+
+  it('never sweeps a local repo behind an SSH-host detected list', async () => {
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    const sshHostId = toSshExecutionHostId('target-a')
+    const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
+    store.getRepos.mockImplementation(() => [
+      {
+        id: 'repo-1',
+        path: '/remote/repo',
+        displayName: 'remote repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'target-a'
+      }
+    ])
+    getSshGitProviderMock.mockImplementation((targetId) =>
+      targetId === 'target-a' ? provider : undefined
+    )
+
+    await handlers['worktrees:listDetected'](ipcEvent, {
+      providerRequestId: 'request-ssh-sweep' as ProviderRequestId,
+      repoId: 'repo-1',
+      executionHostId: sshHostId,
+      expectedAuthority: getSshProviderAuthority('target-a')
+    })
+
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).not.toHaveBeenCalled()
+  })
+
+  it('sweeps landed workspaces behind the legacy worktrees:list fallback', async () => {
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'def456',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).toHaveBeenCalledTimes(1)
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).toHaveBeenCalledWith(
+      store,
+      runtimeStub,
+      expect.objectContaining({ id: 'repo-1' })
+    )
+  })
+
+  it('never sweeps a runtime-owned repo behind worktrees:list', async () => {
+    // Why runtime-owned: it carries an executionHostId and no connectionId, so the
+    // SSH branch never runs and only the host resolver can rule it out.
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    const runtimeRepo = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: toRuntimeExecutionHostId('env-1')
+    }
+    store.getRepo.mockReturnValue({ ...runtimeRepo, worktreeBaseRef: null })
+    store.getRepos.mockReturnValue([runtimeRepo])
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'def456',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).not.toHaveBeenCalled()
   })
 
   it('lists detected worktrees through the selected WSL project runtime', async () => {
