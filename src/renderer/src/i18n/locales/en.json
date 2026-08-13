@@ -12098,6 +12098,20 @@
             "90cabf6cfc": "Stack this PR above #{{value0}}",
             "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
             "29732f2fb0": "new PR"
+          },
+          "notes": "Notes",
+          "WorkspaceNotesPanel": {
+            "noWorkspaceSelected": "No workspace selected",
+            "selectWorkspaceDescription": "Select a workspace to view and edit its note.",
+            "workspaceNote": "Workspace note",
+            "notePlaceholder": "Add a note for this workspace",
+            "saving": "Saving",
+            "saved": "Saved",
+            "saveError": "Could not save workspace note.",
+            "retry": "Retry",
+            "noteView": "Note view",
+            "edit": "Edit",
+            "previewTab": "Preview"
           }
         }
       },

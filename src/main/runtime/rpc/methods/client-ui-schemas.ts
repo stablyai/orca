@@ -29,11 +29,9 @@ const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
 })
 const FeatureTipIds = z.array(z.custom(isFeatureTipId, { message: 'Unknown feature tip id' }))
-const UnknownRecord = z.record(z.string(), z.unknown())
-const UnknownRecordArray = z.array(UnknownRecord)
+const UnknownRecordArray = z.array(z.record(z.string(), z.unknown()))
 type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
-// Derived from the shared union so a new card property cannot drift out of the
-// client schema — it previously omitted 'cli' and rejected the whole payload.
+// Keep this list aligned with the shared union; missing values reject paired clients.
 const WorktreeCardPropertyParam = z.enum(WORKTREE_CARD_PROPERTIES)
 const WorktreeCardProperties = z
   .array(WorktreeCardPropertyParam)
@@ -46,7 +44,8 @@ const STATIC_RIGHT_SIDEBAR_TABS = [
   'pr-checks',
   'source-control',
   'checks',
-  'ports'
+  'ports',
+  'notes'
 ] as const
 // Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
 // schema validates their shape rather than enumerating them.

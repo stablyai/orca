@@ -29,9 +29,9 @@ function createServices(): PluginHostServices {
   return {
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue({
       worktreeId: WORKTREE_ID,
+      path: '/Users/private/orca',
       branch: 'main',
-      displayName: 'Orca',
-      path: '/Users/private/orca'
+      displayName: 'Orca'
     }),
     listWorktreeTerminals: vi
       .fn()
@@ -128,7 +128,6 @@ describe('plugin host main/relay conformance', () => {
     )
     expect(PLUGIN_HOST_API_V0.every((entry) => entry.stability === 'experimental')).toBe(true)
     expect(PLUGIN_HOST_API_V0.every((entry) => entry.scope.length > 0)).toBe(true)
-
     for (const spec of PLUGIN_HOST_API_V0) {
       const policy = createPolicy([spec.capability])
       const resolvePolicy = vi.fn().mockResolvedValue(policy)
@@ -143,7 +142,7 @@ describe('plugin host main/relay conformance', () => {
     }
   })
 
-  it('projects workspace context without host paths on main and relay', async () => {
+  it('projects workspace.readContext without host paths on main and relay', async () => {
     const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['workspace:read']))
     for (const adapter of Object.values(createAdapters(resolvePolicy))) {
       const outcome = await adapter({ method: 'workspace.readContext', params: {} }, true)
@@ -200,9 +199,9 @@ describe('plugin host main/relay conformance', () => {
     },
     {
       name: 'panel-forbidden method',
-      request: { method: 'storage.get', params: { key: 'alpha' } },
+      request: { method: 'secrets.get', params: { key: 'token' } },
       viaPanel: true,
-      policy: () => createPolicy(['storage']),
+      policy: () => createPolicy(['secrets']),
       code: 'panel_forbidden'
     },
     {

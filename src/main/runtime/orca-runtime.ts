@@ -16357,9 +16357,9 @@ export class OrcaRuntimeService {
   }
 
   /** Read-only context of the worktree the user is focused on, for plugin
-   *  panels (workspace.readContext). Prefers the persisted session focus and
-   *  falls back to the last-focused pane's worktree; null when neither
-   *  resolves so panels degrade instead of erroring. */
+   * panels (workspace.readContext). Prefers the persisted session focus and
+   * falls back to the last-focused pane's worktree; null when neither
+   * resolves so panels degrade instead of erroring. */
   async resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
     path: string
