@@ -135,9 +135,10 @@ async function removeScopedSocketDirectory(
     return
   }
   const scopedDirectory = dirname(resolve(socketTarget))
+  const scopedName = basename(scopedDirectory)
   if (
     dirname(scopedDirectory) !== resolve(tempDirectory) ||
-    !basename(scopedDirectory).startsWith('.org.chromium.')
+    !(/^scoped_dir[A-Za-z0-9]{6}$/.test(scopedName) || scopedName.startsWith('.org.chromium.'))
   ) {
     return
   }
@@ -150,6 +151,11 @@ async function removeScopedSocketDirectory(
       throw error
     }
   })
+  const cookiePath = join(scopedDirectory, 'SingletonCookie')
+  const cookieStats = await lstat(cookiePath).catch(() => null)
+  if (cookieStats?.isSymbolicLink()) {
+    await unlink(cookiePath)
+  }
   await rmdir(scopedDirectory).catch((error) => {
     const code = (error as NodeJS.ErrnoException).code
     if (code !== 'ENOENT' && code !== 'ENOTEMPTY') {

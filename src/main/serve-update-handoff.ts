@@ -11,12 +11,11 @@ import {
 import {
   SERVE_SUPERVISOR_ENV,
   SERVE_SUPERVISOR_STOP_EXIT_CODE,
+  SERVE_SUPERVISED_SHUTDOWN_GRACE_MS,
   type ServeSupervisorHealth
 } from '../shared/serve-supervision'
 import { getCanonicalUserDataPath } from './persistence'
-import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from './quit-teardown-deadline'
-
-export const SERVE_SUPERVISOR_EXIT_FALLBACK_MS = WILL_QUIT_TEARDOWN_DEADLINE_MS + 5_000
+export const SERVE_SUPERVISOR_EXIT_FALLBACK_MS = SERVE_SUPERVISED_SHUTDOWN_GRACE_MS
 
 function getConfiguredHandoffPath(): string | null {
   const configuredPath = process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]

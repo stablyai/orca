@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { SERVE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/serve-supervision'
+import {
+  SERVE_ALREADY_RUNNING_EXIT_CODE,
+  SERVE_SUPERVISED_SHUTDOWN_GRACE_MS
+} from '../../shared/serve-supervision'
+import { waitForForegroundServeChild } from './serve-child-monitor'
 import {
   SERVE_SUPERVISOR_STOP_EXIT_CODE,
   superviseForegroundServe
@@ -54,6 +58,36 @@ function supervisorArgs(
 }
 
 describe('foreground serve crash supervisor', () => {
+  it('preserves the main-process teardown budget before forcing exit', async () => {
+    vi.useFakeTimers()
+    const child = new FakeChildProcess(4101)
+    const healthProbe = vi
+      .fn()
+      .mockResolvedValueOnce({ healthy: true, runtimeId: 'runtime-ready' })
+      .mockResolvedValue({ healthy: false, reason: 'graph_not_ready' })
+    try {
+      const result = waitForForegroundServeChild(child as never, null, {
+        healthProbe,
+        healthCheckIntervalMs: 1,
+        healthProbeTimeoutMs: 1_000,
+        healthFailureLimit: 1
+      })
+      child.emit('message', readyMessage)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+
+      await vi.advanceTimersByTimeAsync(SERVE_SUPERVISED_SHUTDOWN_GRACE_MS - 1)
+      expect(child.kill).not.toHaveBeenCalledWith('SIGKILL')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+
+      child.emit('exit', 0, null)
+      await result
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('restarts a crashed main process after SIGSEGV', async () => {
     const first = new FakeChildProcess(4101)
     const replacement = new FakeChildProcess(4102)

@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import { SERVE_SUPERVISED_SHUTDOWN_GRACE_MS } from '../../shared/serve-supervision'
 import { parseServeSupervisorMessage } from '../../shared/serve-update-handoff'
 import type { ServeRuntimeHealth } from './serve-runtime-health'
 
@@ -52,7 +53,7 @@ export function waitForForegroundServeChild(
 
     const terminateChild = (): void => {
       child.kill('SIGTERM')
-      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), 5000)
+      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_SUPERVISED_SHUTDOWN_GRACE_MS)
     }
     const recordReadinessFailure = (reason: string): boolean => {
       if (readiness !== 'pending') {
@@ -82,7 +83,7 @@ export function waitForForegroundServeChild(
     const forwardSignal = (signal: NodeJS.Signals): void => {
       terminationRequested = true
       child.kill(signal)
-      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), 5000)
+      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_SUPERVISED_SHUTDOWN_GRACE_MS)
     }
     const scheduleHealthCheck = (runtimeId: string): void => {
       if (!options.healthProbe || settled || readiness !== 'verified') {
