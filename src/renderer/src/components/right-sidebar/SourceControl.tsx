@@ -417,6 +417,16 @@ export function shouldClearBranchCompareForMissingBase(input: {
   return input.remoteStatus !== undefined
 }
 
+// Why: step off the last LANDED limit, not the requested one — refreshGitHistory swallows errors,
+// so stepping off the request lets failed clicks escalate to the cap and wedge the button.
+export function resolveNextGitHistoryLimit(landedLimit: number | undefined): number | null {
+  const current = landedLimit ?? GIT_HISTORY_DEFAULT_LIMIT
+  if (current >= GIT_HISTORY_MAX_LIMIT) {
+    return null
+  }
+  return Math.min(GIT_HISTORY_MAX_LIMIT, current + GIT_HISTORY_DEFAULT_LIMIT)
+}
+
 export function resolveSourceControlPickerBaseRef(input: {
   pinnedBaseRef?: string | null
   effectiveBaseRef?: string | null
@@ -2045,6 +2055,7 @@ function SourceControlInner(): React.JSX.Element {
     for (const key of Object.keys(gitHistoryRequestByWorktreeRef.current)) {
       if (!worktreeMap.has(key)) {
         delete gitHistoryRequestByWorktreeRef.current[key]
+        delete gitHistoryLimitByWorktreeRef.current[key]
       }
     }
   }, [updateCommitDrafts, worktreeMap])
@@ -5031,17 +5042,13 @@ function SourceControlInner(): React.JSX.Element {
     if (!activeWorktreeId) {
       return
     }
-    const current =
-      gitHistoryLimitByWorktreeRef.current[activeWorktreeId] ?? GIT_HISTORY_DEFAULT_LIMIT
-    if (current >= GIT_HISTORY_MAX_LIMIT) {
+    const next = resolveNextGitHistoryLimit(gitHistoryState.result?.limit)
+    if (next === null) {
       return
     }
-    gitHistoryLimitByWorktreeRef.current[activeWorktreeId] = Math.min(
-      GIT_HISTORY_MAX_LIMIT,
-      current + GIT_HISTORY_DEFAULT_LIMIT
-    )
+    gitHistoryLimitByWorktreeRef.current[activeWorktreeId] = next
     await refreshGitHistoryRef.current()
-  }, [activeWorktreeId])
+  }, [activeWorktreeId, gitHistoryState])
 
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
