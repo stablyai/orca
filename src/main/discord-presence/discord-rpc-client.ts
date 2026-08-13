@@ -1,6 +1,7 @@
 import * as net from 'node:net'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { DiscordActivity } from './discord-presence-activity'
 
 const OP_HANDSHAKE = 0
@@ -188,7 +189,7 @@ export function createDiscordRpcClient(
         reject(new Error('Not connected'))
         return
       }
-      const nonce = crypto.randomUUID()
+      const nonce = randomUUID()
       pendingRequests.set(nonce, { resolve, reject })
 
       const args: Record<string, unknown> = { pid }

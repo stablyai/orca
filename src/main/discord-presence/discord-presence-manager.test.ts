@@ -27,61 +27,12 @@ function workingEntry(agentType = 'claude', receivedAt = 1000): AgentStatusIpcPa
   }
 }
 
+// Flush microtasks so the async connectAndPublish resolves
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 describe('DiscordPresenceManager', () => {
-  it('publishes activity on status change when enabled', () => {
+  it('connects and publishes initial activity on start', async () => {
     const getSnapshot = vi.fn().mockReturnValue([workingEntry()])
-    const subscribeChanges = vi.fn()
-    const client = makeClient()
-    let enabled = true
-
-    const mgr = new DiscordPresenceManager({
-      getSnapshot,
-      subscribeChanges,
-      client,
-      isEnabled: () => enabled,
-      assetKey: 'orca'
-    })
-
-    mgr.start()
-    // subscribeChanges should have been called
-    expect(subscribeChanges).toHaveBeenCalledTimes(1)
-
-    // Trigger a change
-    const changeCb = subscribeChanges.mock.calls[0][0] as () => void
-    changeCb()
-
-    // Should have called setActivity with the built activity
-    expect(client.setActivity).toHaveBeenCalledTimes(1)
-    const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
-    expect(activity.details).toBe('1 agent working')
-    expect(activity.state).toBe('Claude')
-    expect(activity.assets.large_image).toBe('orca')
-  })
-
-  it('clears activity when disabled', () => {
-    const getSnapshot = vi.fn().mockReturnValue([workingEntry()])
-    const subscribeChanges = vi.fn()
-    const client = makeClient()
-    let enabled = false
-
-    const mgr = new DiscordPresenceManager({
-      getSnapshot,
-      subscribeChanges,
-      client,
-      isEnabled: () => enabled,
-      assetKey: 'orca'
-    })
-
-    mgr.start()
-    const changeCb = subscribeChanges.mock.calls[0][0] as () => void
-    // Trigger change while disabled
-    changeCb()
-
-    expect(client.setActivity).toHaveBeenCalledWith(null)
-  })
-
-  it('clears activity when no active agents', () => {
-    const getSnapshot = vi.fn().mockReturnValue([])
     const subscribeChanges = vi.fn()
     const client = makeClient()
 
@@ -94,11 +45,87 @@ describe('DiscordPresenceManager', () => {
     })
 
     mgr.start()
+    expect(subscribeChanges).toHaveBeenCalledTimes(1)
+    expect(client.connect).toHaveBeenCalledTimes(1)
+
+    await flush()
+
+    // Initial publish after connect
+    const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
+    expect(activity.details).toBe('1 agent working')
+    expect(activity.state).toBe('Claude')
+    expect(activity.assets.large_image).toBe('orca')
+  })
+
+  it('does not connect when disabled', async () => {
+    const getSnapshot = vi.fn().mockReturnValue([workingEntry()])
+    const subscribeChanges = vi.fn()
+    const client = makeClient()
+
+    const mgr = new DiscordPresenceManager({
+      getSnapshot,
+      subscribeChanges,
+      client,
+      isEnabled: () => false,
+      assetKey: 'orca'
+    })
+
+    mgr.start()
+    await flush()
+
+    expect(client.connect).not.toHaveBeenCalled()
+    expect(client.setActivity).not.toHaveBeenCalled()
+  })
+
+  it('publishes activity on status change when connected', async () => {
+    const getSnapshot = vi.fn().mockReturnValue([workingEntry()])
+    const subscribeChanges = vi.fn()
+    const client = makeClient()
+
+    const mgr = new DiscordPresenceManager({
+      getSnapshot,
+      subscribeChanges,
+      client,
+      isEnabled: () => true,
+      assetKey: 'orca',
+      throttleIntervalMs: 0
+    })
+
+    mgr.start()
+    await flush()
+    client.setActivity.mockClear()
+
+    const changeCb = subscribeChanges.mock.calls[0][0] as () => void
+    changeCb()
+
+    expect(client.setActivity).toHaveBeenCalledTimes(1)
+    const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
+    expect(activity.details).toBe('1 agent working')
+  })
+
+  it('clears activity when no active agents', async () => {
+    const getSnapshot = vi.fn().mockReturnValue([])
+    const subscribeChanges = vi.fn()
+    const client = makeClient()
+
+    const mgr = new DiscordPresenceManager({
+      getSnapshot,
+      subscribeChanges,
+      client,
+      isEnabled: () => true,
+      assetKey: 'orca',
+      throttleIntervalMs: 0
+    })
+
+    mgr.start()
+    await flush()
+    client.setActivity.mockClear()
+
     subscribeChanges.mock.calls[0][0]()
     expect(client.setActivity).toHaveBeenCalledWith(null)
   })
 
-  it('stop() unsubscribes and disconnects', () => {
+  it('stop() unsubscribes and disconnects', async () => {
     const getSnapshot = vi.fn()
     const unsubscribe = vi.fn()
     const subscribeChanges = vi.fn().mockReturnValue(unsubscribe)
@@ -113,6 +140,7 @@ describe('DiscordPresenceManager', () => {
     })
 
     mgr.start()
+    await flush()
     mgr.stop()
 
     expect(unsubscribe).toHaveBeenCalled()
