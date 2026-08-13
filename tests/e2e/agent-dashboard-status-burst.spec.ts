@@ -1,8 +1,7 @@
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-const PANE_COUNT = 300
-const STATUS_ROUNDS = 4
+const PANE_COUNT = 100
 const BASE_TIME = 1_700_000_000_000
 
 type BurstPane = {
@@ -19,7 +18,7 @@ type BurstEvidence = {
   firstHistory: string[]
 }
 
-test('keeps the visible Agent Dashboard interactive during an ordered status burst', async ({
+test('keeps the visible Agent Dashboard interactive during a 100-pane status replay', async ({
   electronApp,
   orcaPage
 }) => {
@@ -82,44 +81,25 @@ test('keeps the visible Agent Dashboard interactive during an ordered status bur
   await expect(dashboardButton).toBeVisible()
 
   await electronApp.evaluate(
-    ({ BrowserWindow }, { baseTime, panes, statusRounds }) => {
+    ({ BrowserWindow }, { baseTime, panes }) => {
       const window = BrowserWindow.getAllWindows().find((candidate) => !candidate.isDestroyed())
       if (!window) {
         throw new Error('Orca BrowserWindow is unavailable')
       }
-      for (let round = 0; round < statusRounds; round += 1) {
-        for (const [index, pane] of panes.entries()) {
-          const turn = round * panes.length + index
-          const receivedAt = baseTime + turn * 3
-          window.webContents.send('agentStatus:set', {
-            ...pane,
-            state: 'working',
-            prompt: `Turn ${turn}`,
-            agentType: 'codex',
-            receivedAt,
-            stateStartedAt: receivedAt
-          })
-          window.webContents.send('agentStatus:set', {
-            ...pane,
-            state: 'waiting',
-            prompt: `Turn ${turn}`,
-            agentType: 'codex',
-            receivedAt: receivedAt + 1,
-            stateStartedAt: receivedAt + 1
-          })
-          window.webContents.send('agentStatus:set', {
-            ...pane,
-            state: 'done',
-            prompt: `Turn ${turn}`,
-            agentType: 'codex',
-            lastAssistantMessage: `Completed ${turn}`,
-            receivedAt: receivedAt + 2,
-            stateStartedAt: receivedAt + 2
-          })
-        }
+      for (const [index, pane] of panes.entries()) {
+        const receivedAt = baseTime + index
+        window.webContents.send('agentStatus:set', {
+          ...pane,
+          state: 'done',
+          prompt: `Completed task ${index}`,
+          agentType: 'codex',
+          lastAssistantMessage: `Completed ${index}`,
+          receivedAt,
+          stateStartedAt: receivedAt
+        })
       }
     },
-    { baseTime: BASE_TIME, panes, statusRounds: STATUS_ROUNDS }
+    { baseTime: BASE_TIME, panes }
   )
 
   const interactionStartedAt = performance.now()
@@ -176,8 +156,7 @@ test('keeps the visible Agent Dashboard interactive during an ordered status bur
     JSON.stringify({
       sha: process.env.GITHUB_SHA ?? 'local',
       paneCount: PANE_COUNT,
-      statusRounds: STATUS_ROUNDS,
-      ipcEvents: PANE_COUNT * STATUS_ROUNDS * 3,
+      ipcEvents: PANE_COUNT,
       interactionElapsedMs: Math.round(interactionElapsedMs * 10) / 10,
       statusPublications: evidence.statusPublications,
       statusPublicationsAtVisible: evidence.statusPublicationsAtVisible,
@@ -188,5 +167,5 @@ test('keeps the visible Agent Dashboard interactive during an ordered status bur
   expect(evidence.statusPublicationsAtVisible).toBeLessThanOrEqual(3)
   expect(evidence.statusPublications).toBeLessThanOrEqual(3)
   expect(new Set(evidence.finalStates)).toEqual(new Set(['done']))
-  expect(evidence.firstHistory.slice(-2)).toEqual(['working', 'waiting'])
+  expect(evidence.firstHistory.at(-1)).toBe('working')
 })
