@@ -30,7 +30,7 @@ export class RoomMessageStore {
     this.db.exec('SAVEPOINT room_message_create')
     try {
       const room = this.db
-        .prepare('SELECT loop_limit FROM rooms WHERE id = ? AND archived_at IS NULL')
+        .prepare('SELECT loop_limit FROM rooms WHERE id = ?')
         .get(input.roomId) as RoomRow | undefined
       if (!room) {
         throw new Error('room_not_found')
@@ -188,6 +188,17 @@ export class RoomMessageStore {
       throw new Error('room_attachment_not_found')
     }
     return attachmentFromRow(row)
+  }
+
+  listAttachments(roomId: string): RoomAttachment[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT a.* FROM room_attachments a
+           JOIN room_messages m ON m.id = a.message_id WHERE m.room_id = ?`
+        )
+        .all(roomId) as RoomRow[]
+    ).map(attachmentFromRow)
   }
 
   linkReply(id: string, replyToId: string): void {

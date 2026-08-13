@@ -52,9 +52,7 @@ export class RoomArchive {
   }
 
   import(roomId: string, bytes: Uint8Array): Promise<RoomArchiveImportReport> {
-    if (this.db.core.get(roomId).archivedAt) {
-      return Promise.reject(new Error('room_archived'))
-    }
+    this.db.core.get(roomId)
     if (bytes.byteLength > MAX_ROOM_ARCHIVE_BYTES) {
       return Promise.reject(new Error('room_archive_too_large'))
     }

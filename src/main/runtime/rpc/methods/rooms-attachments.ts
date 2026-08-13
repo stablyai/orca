@@ -18,12 +18,7 @@ export const ROOM_ATTACHMENT_METHODS: readonly RpcAnyMethod[] = [
       .strict(),
     handler: async (params, { runtime }) => {
       const service = runtime.getRoomService()
-      service.assertWritable(params.roomId)
-      return service.attachmentTransfers.startUpload(
-        params.roomId,
-        params.fileName,
-        params.byteSize
-      )
+      return service.startAttachmentUpload(params.roomId, params.fileName, params.byteSize)
     }
   }),
   defineMethod({
@@ -35,16 +30,23 @@ export const ROOM_ATTACHMENT_METHODS: readonly RpcAnyMethod[] = [
         contentBase64: z.string().max(600_000)
       })
       .strict(),
-    handler: async (params, { runtime }) =>
-      runtime
-        .getRoomService()
-        .attachmentTransfers.appendUpload(params.uploadId, params.offset, params.contentBase64)
+    handler: async (params, { runtime }) => {
+      const service = runtime.getRoomService()
+      service.assertWritable(service.attachmentTransfers.uploadRoomId(params.uploadId))
+      return service.attachmentTransfers.appendUpload(
+        params.uploadId,
+        params.offset,
+        params.contentBase64
+      )
+    }
   }),
   defineMethod({
     name: 'rooms.attachments.upload.finish',
     params: z.object({ uploadId: UploadId }).strict(),
     handler: async (params, { runtime }) => {
-      runtime.getRoomService().attachmentTransfers.finishUpload(params.uploadId)
+      const service = runtime.getRoomService()
+      service.assertWritable(service.attachmentTransfers.uploadRoomId(params.uploadId))
+      service.attachmentTransfers.finishUpload(params.uploadId)
       return { ready: true }
     }
   }),
@@ -60,13 +62,16 @@ export const ROOM_ATTACHMENT_METHODS: readonly RpcAnyMethod[] = [
     name: 'rooms.attachments.download.start',
     params: z.object({ roomId: RoomId, attachmentId: z.string().uuid() }).strict(),
     handler: async (params, { runtime }) =>
-      runtime.getRoomService().attachmentTransfers.startDownload(params.roomId, params.attachmentId)
+      runtime.getRoomService().startAttachmentDownload(params.roomId, params.attachmentId)
   }),
   defineMethod({
     name: 'rooms.attachments.download.read',
     params: z.object({ transferId: TransferId, offset: z.number().int().nonnegative() }).strict(),
-    handler: async (params, { runtime }) =>
-      runtime.getRoomService().attachmentTransfers.readDownload(params.transferId, params.offset)
+    handler: async (params, { runtime }) => {
+      const service = runtime.getRoomService()
+      service.assertWritable(service.attachmentTransfers.downloadRoomId(params.transferId))
+      return service.attachmentTransfers.readDownload(params.transferId, params.offset)
+    }
   }),
   defineMethod({
     name: 'rooms.attachments.download.cancel',

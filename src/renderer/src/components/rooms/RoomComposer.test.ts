@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RoomDelivery, RoomMessage } from '../../../../shared/rooms'
 import { getRoomContinueDeliveryIds } from './room-composer-continue-deliveries'
+import { roomComposerRunMode } from './room-composer-run-mode'
 import { getRoomDictationUnavailableReason } from './RoomDictationButton'
 
 describe('room loop continuation', () => {
@@ -19,6 +20,16 @@ describe('room loop continuation', () => {
       'beta-delivery',
       'gamma-delivery'
     ])
+  })
+})
+
+describe('room composer run mode', () => {
+  it('switches between Stop, Play, and Send without hiding an existing draft', () => {
+    expect(roomComposerRunMode('active', false)).toBe('stop')
+    expect(roomComposerRunMode('active', true)).toBe('stop')
+    expect(roomComposerRunMode('stopped', false)).toBe('resume')
+    expect(roomComposerRunMode('stopped', true)).toBe('send')
+    expect(roomComposerRunMode('idle', false)).toBe('send')
   })
 })
 

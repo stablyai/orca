@@ -1,27 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RoomDelivery } from '../../../shared/rooms'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-types'
 import { RoomDatabase } from './database'
 import { createRoomHarnessAdapters, type RoomHarnessRuntime } from './harness-adapter'
 import type { RoomAttachmentManager } from './attachments'
 import { RoomDeliveryWorker } from './delivery-worker'
-import { deliveryFailureState, selectConcurrentDeliveries } from './delivery-selection'
-import { roomDeliveryIdFromTurn } from './delivery-prompt'
-
-describe('room delivery concurrency', () => {
-  it('dispatches different agents together while preserving one delivery per agent', () => {
-    const due = [
-      { id: 'first-a', participantId: 'a' },
-      { id: 'first-b', participantId: 'b' },
-      { id: 'second-a', participantId: 'a' }
-    ] as RoomDelivery[]
-
-    expect(selectConcurrentDeliveries(due).map((delivery) => delivery.id)).toEqual([
-      'first-a',
-      'first-b'
-    ])
-  })
-})
+import { deliveryFailureState } from './delivery-selection'
+import { roomDeliveryAttemptsFromTurn } from './delivery-prompt'
 
 describe('room delivery retry state', () => {
   it('only exposes a terminal failure after retries are exhausted', () => {
@@ -33,9 +17,16 @@ describe('room delivery retry state', () => {
 describe('room delivery turn correlation', () => {
   it('extracts the stable delivery id through harness framing', () => {
     const prompt = '<orca-room-delivery id="delivery-1">\nmessage\n</orca-room-delivery>'
-    expect(roomDeliveryIdFromTurn(prompt)).toBe('delivery-1')
-    expect(roomDeliveryIdFromTurn(`<harness>\n${prompt}\n</harness>`)).toBe('delivery-1')
-    expect(roomDeliveryIdFromTurn('a simultaneous direct question')).toBeNull()
+    expect(roomDeliveryAttemptsFromTurn(prompt)).toEqual([
+      { deliveryId: 'delivery-1', attempt: null }
+    ])
+    expect(roomDeliveryAttemptsFromTurn(`<harness>\n${prompt}\n</harness>`)).toHaveLength(1)
+    expect(roomDeliveryAttemptsFromTurn('a simultaneous direct question')).toEqual([])
+    expect(
+      roomDeliveryAttemptsFromTurn(
+        '<orca-room-delivery id="delivery-1" response="required" attempt="2">'
+      )
+    ).toEqual([{ deliveryId: 'delivery-1', attempt: 2 }])
   })
 })
 
@@ -54,11 +45,17 @@ describe('room delivery confirmation deadline', () => {
     participantId: string
     dispose: () => void
   } {
-    const send = vi.fn(async (handle: string, prompt: string) => ({
-      handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(prompt)
-    }))
+    const send = vi.fn(
+      async (
+        handle: string,
+        prompt: string,
+        _options?: { beforeWrite?: (ptyId: string) => void | Promise<void> }
+      ) => ({
+        handle,
+        accepted: true,
+        bytesWritten: Buffer.byteLength(prompt)
+      })
+    )
     const status = vi.fn(
       async (handle: string): Promise<RuntimeTerminalAgentStatus> => ({
         handle,
@@ -86,7 +83,8 @@ describe('room delivery confirmation deadline', () => {
       getTerminalProcessIncarnation: () => 'pty:term-codex:1',
       closeTerminal: unused,
       waitForTerminal: unused,
-      listRoomAttachableAgents: async () => [],
+      listRoomRunningAgents: async () => [],
+      listRoomExistingAgents: async () => [],
       resolveRoomHistoricalSession: unused,
       stageRoomAttachment: stage
     }
@@ -181,7 +179,8 @@ describe('room delivery confirmation deadline', () => {
         localPath: '/stored/current.png'
       })
       expect(harness.send).toHaveBeenCalledWith('term-codex', prompt, {
-        clearInput: true,
+        beforeWrite: expect.any(Function),
+        clearInput: false,
         imagePaths: ['/staged/current-image-current.png']
       })
     } finally {
@@ -216,7 +215,26 @@ describe('room delivery confirmation deadline', () => {
     }
   })
 
-  it('requeues a swallowed prompt after the deadline and confirms the resent turn once', async () => {
+  it('fences every remaining PTY write after the room is stopped', async () => {
+    const harness = worker(10_000)
+    try {
+      harness.worker.start()
+      await vi.waitFor(() => expect(harness.send).toHaveBeenCalledOnce())
+      harness.db.transaction(() =>
+        harness.db.messages.deliveries.stopRoom(
+          harness.db.messages.get(harness.db.messages.deliveries.get(harness.deliveryId).messageId)
+            .roomId
+        )
+      )
+      const beforeWrite = harness.send.mock.calls[0][2]?.beforeWrite
+      expect(beforeWrite).toBeTypeOf('function')
+      expect(() => beforeWrite?.('pty-1')).toThrow('room_delivery_stopped')
+    } finally {
+      harness.dispose()
+    }
+  })
+
+  it('requires an explicit retry after Enter and correlates a glued retry marker', async () => {
     const harness = worker(150, true)
     try {
       harness.worker.start()
@@ -224,15 +242,22 @@ describe('room delivery confirmation deadline', () => {
         expect(harness.send).toHaveBeenCalledTimes(1)
         expect(harness.db.messages.deliveries.get(harness.deliveryId).state).toBe('delivering')
       })
+      const firstPrompt = harness.send.mock.calls[0][1] as string
       const firstStage = harness.stage.mock.calls.map(([, , attachment]) => ({
         id: attachment.id,
         fileName: attachment.fileName
       }))
 
-      // No turn ever opens: the idle agent proves the paste was swallowed.
       await vi.waitFor(() => {
-        expect(harness.send).toHaveBeenCalledTimes(2)
+        expect(harness.db.messages.deliveries.get(harness.deliveryId)).toMatchObject({
+          state: 'failed',
+          error: 'room_delivery_uncertain'
+        })
       })
+      expect(harness.send).toHaveBeenCalledTimes(1)
+      harness.db.messages.deliveries.retry(harness.deliveryId)
+      harness.worker.wake()
+      await vi.waitFor(() => expect(harness.send).toHaveBeenCalledTimes(2))
       const secondStage = harness.stage.mock.calls
         .slice(firstStage.length)
         .map(([, , attachment]) => ({
@@ -240,15 +265,10 @@ describe('room delivery confirmation deadline', () => {
           fileName: attachment.fileName
         }))
       expect(secondStage).toEqual(firstStage)
-      const requeued = harness.db.messages.deliveries.get(harness.deliveryId)
-      expect(requeued.state).toBe('delivering')
-      expect(requeued.attempts).toBe(2)
-
-      // The resent turn confirms; the late deadline of the first send must not fire again.
-      const prompt = harness.send.mock.calls[1][1] as string
+      const secondPrompt = harness.send.mock.calls[1][1] as string
       const confirmed = harness.worker.confirmTurn(harness.participantId, {
         id: 'turn-1',
-        text: prompt
+        text: `${firstPrompt}\n${secondPrompt}`
       })
       expect(confirmed?.state).toBe('delivered')
       expect(confirmed?.providerTurnId).toBe('turn-1')
@@ -278,16 +298,18 @@ describe('room delivery confirmation deadline', () => {
       expect(harness.db.messages.deliveries.get(harness.deliveryId).state).toBe('delivering')
       expect(harness.send).toHaveBeenCalledTimes(1)
 
-      // Once the agent goes idle with no matching turn, the delivery is requeued.
-      // The resend stays unconfirmed too, so the cycle repeats: assert at least one.
       harness.status.mockImplementation(async (handle: string) => ({
         handle,
         isRunningAgent: true,
         status: 'idle' as const
       }))
       await vi.waitFor(() => {
-        expect(harness.send.mock.calls.length).toBeGreaterThanOrEqual(2)
+        expect(harness.db.messages.deliveries.get(harness.deliveryId)).toMatchObject({
+          state: 'failed',
+          error: 'room_delivery_uncertain'
+        })
       })
+      expect(harness.send).toHaveBeenCalledTimes(1)
     } finally {
       harness.dispose()
     }

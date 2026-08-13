@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, ChevronsUpDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,33 +20,22 @@ import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
-import {
-  isAiVaultSessionResumableContent,
-  type AiVaultListResult,
-  type AiVaultSession
-} from '../../../../shared/ai-vault-types'
-import { isAiVaultSessionInWorkspacePath } from '../../../../shared/ai-vault-session-filters'
-import type { RoomAttachableAgent, RoomHarnessAgent } from '../../../../shared/rooms'
+import type { RoomExistingAgentCandidate, RoomHarnessAgent } from '../../../../shared/rooms'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { showRoomActionError } from './room-action-error'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const AGENTS: RoomHarnessAgent[] = ['claude', 'openclaude', 'codex', 'grok']
-type Mode = 'launch' | 'attach' | 'resume'
+type Mode = 'new' | 'existing'
 const MODE_LABELS: Record<Mode, [string, string]> = {
-  launch: ['rooms.addAgent.mode.launch', 'Launch'],
-  attach: ['rooms.addAgent.mode.attach', 'Attach'],
-  resume: ['rooms.addAgent.mode.resume', 'Resume']
+  new: ['rooms.addAgent.mode.new', 'New'],
+  existing: ['rooms.addAgent.mode.existing', 'Existing']
 }
 const MODE_DESCRIPTIONS: Record<Mode, [string, string]> = {
-  launch: ['rooms.addAgent.mode.launchDescription', 'Start a new clean agent session.'],
-  attach: [
-    'rooms.addAgent.mode.attachDescription',
-    'Use an agent that is already running in this worktree.'
-  ],
-  resume: [
-    'rooms.addAgent.mode.resumeDescription',
-    'Continue a local conversation from Agent Session History.'
+  new: ['rooms.addAgent.mode.newDescription', 'Start a new clean agent session.'],
+  existing: [
+    'rooms.addAgent.mode.existingDescription',
+    'Add a running agent or continue a session from history.'
   ]
 }
 
@@ -66,10 +55,9 @@ export function RoomAddAgentDialog({
   target: RuntimeClientTarget
 }): React.JSX.Element {
   const [agent, setAgent] = useState<RoomHarnessAgent>('claude')
-  const [mode, setMode] = useState<Mode>('launch')
+  const [mode, setMode] = useState<Mode>('new')
   const [identity, setIdentity] = useState('claude')
-  const [attachable, setAttachable] = useState<RoomAttachableAgent[]>([])
-  const [sessions, setSessions] = useState<AiVaultSession[]>([])
+  const [choices, setChoices] = useState<RoomExistingAgentCandidate[]>([])
   const [selection, setSelection] = useState('')
   const [saving, setSaving] = useState(false)
   const [loadingChoices, setLoadingChoices] = useState(false)
@@ -78,35 +66,30 @@ export function RoomAddAgentDialog({
   const worktree = worktrees.find((item) => item.id === worktreeId)
   useEffect(() => setIdentity(agent), [agent])
   useEffect(() => {
-    if (!open || !worktree?.id) {
+    if (!open || mode !== 'existing' || !worktree?.id) {
       return
     }
     let disposed = false
+    setChoices([])
     setLoadingChoices(true)
     setLoadError('')
-    void Promise.all([
-      roomRpc<{ participants: RoomAttachableAgent[] }>(target, 'rooms.participants.attachable', {
-        worktreeId: worktree.id
-      }),
-      roomRpc<AiVaultListResult>(target, 'aiVault.listSessions', {
-        unlimited: true,
-        scopePaths: [worktree.path]
-      })
-    ]).then(
-      ([live, history]) => {
+    void roomRpc<{ participants: RoomExistingAgentCandidate[] }>(
+      target,
+      'rooms.participants.existing',
+      { worktreeId: worktree.id, agent }
+    ).then(
+      ({ participants }) => {
         if (disposed) {
           return
         }
-        setAttachable(live.participants)
-        setSessions(history.sessions)
+        setChoices(participants)
         setLoadingChoices(false)
       },
       (error) => {
         if (disposed) {
           return
         }
-        setAttachable([])
-        setSessions([])
+        setChoices([])
         setLoadingChoices(false)
         setLoadError(error instanceof Error ? error.message : 'Failed to load sessions')
       }
@@ -114,48 +97,26 @@ export function RoomAddAgentDialog({
     return () => {
       disposed = true
     }
-  }, [open, target, worktree?.id, worktree?.path])
-  const choices = useMemo(() => {
-    if (mode === 'attach') {
-      return attachable.filter((item) => item.agent === agent)
-    }
-    const worktreePath = worktree?.path
-    if (!worktreePath) {
-      return []
-    }
-    return sessions.filter(
-      (item) =>
-        item.agent === (agent === 'openclaude' ? 'claude' : agent) &&
-        isAiVaultSessionResumableContent(item) &&
-        item.cwd !== null &&
-        isAiVaultSessionInWorkspacePath(worktreePath, item.cwd)
-    )
-  }, [agent, attachable, mode, sessions, worktree?.path])
+  }, [agent, mode, open, target, worktree?.id])
 
   const add = async (): Promise<void> => {
     if (!roomId || !worktree || !identity.trim()) {
       return
     }
-    const selected = choices.find((item) =>
-      'terminalHandle' in item ? item.terminalHandle === selection : item.id === selection
-    )
+    const selected = choices.find((item) => item.id === selection)
     const connection =
-      mode === 'launch'
-        ? { kind: 'launch', worktreeId: worktree.id }
-        : mode === 'attach' && selected && 'terminalHandle' in selected
+      mode === 'new'
+        ? { kind: 'new', worktreeId: worktree.id }
+        : selected
           ? {
-              kind: 'attach',
+              kind: 'existing',
               worktreeId: worktree.id,
-              terminalHandle: selected.terminalHandle,
-              paneKey: selected.paneKey
+              ...(selected.terminalHandle
+                ? { terminalHandle: selected.terminalHandle, paneKey: selected.paneKey }
+                : {}),
+              ...(selected.historyId ? { historyId: selected.historyId } : {})
             }
-          : mode === 'resume' && selected && 'sessionId' in selected
-            ? {
-                kind: 'resume',
-                worktreeId: worktree.id,
-                historyId: selected.id
-              }
-            : null
+          : null
     if (!connection) {
       return
     }
@@ -177,12 +138,10 @@ export function RoomAddAgentDialog({
     }
   }
 
-  const selected = choices.find((item) =>
-    'terminalHandle' in item ? item.terminalHandle === selection : item.id === selection
-  )
+  const selected = choices.find((item) => item.id === selection)
 
-  const choose = (item: RoomAttachableAgent | AiVaultSession): void => {
-    setSelection('terminalHandle' in item ? item.terminalHandle : item.id)
+  const choose = (item: RoomExistingAgentCandidate): void => {
+    setSelection(item.id)
     setChoosing(false)
   }
 
@@ -193,16 +152,16 @@ export function RoomAddAgentDialog({
           <DialogTitle>{translate('rooms.addAgent.title', 'Add agent')}</DialogTitle>
           <DialogDescription>
             {choosing
-              ? mode === 'attach'
-                ? translate('rooms.addAgent.chooseRunning', 'Choose a running {{agent}} session.', {
+              ? translate(
+                  'rooms.addAgent.chooseExisting',
+                  'Choose an existing {{agent}} session.',
+                  {
                     agent
-                  })
-                : translate('rooms.addAgent.chooseHistory', 'Choose local {{agent}} history.', {
-                    agent
-                  })
+                  }
+                )
               : translate(
                   'rooms.addAgent.description',
-                  'Launch a clean harness, attach a running one, or resume local history.'
+                  'Start a new agent or add an existing session.'
                 )}
           </DialogDescription>
         </DialogHeader>
@@ -220,12 +179,11 @@ export function RoomAddAgentDialog({
                     translate('rooms.addAgent.noMatchingSessions', 'No matching sessions found.')}
               </CommandEmpty>
               {choices.map((item) => {
-                const live = 'terminalHandle' in item
-                const value = live ? item.terminalHandle : item.id
+                const value = item.id
                 return (
                   <CommandItem
                     key={value}
-                    value={`${item.title || value} ${live ? '' : item.model || ''} ${value}`}
+                    value={`${item.title || value} ${item.model || ''} ${value}`}
                     onSelect={() => choose(item)}
                     className="min-w-0 items-start py-2"
                   >
@@ -233,11 +191,12 @@ export function RoomAddAgentDialog({
                     <div className="min-w-0 flex-1">
                       <div className="truncate">{item.title || value}</div>
                       <div className="truncate text-xs text-muted-foreground">
-                        {live
+                        {item.status === 'running'
                           ? translate('rooms.addAgent.runningNow', 'Running now')
                           : [
+                              translate('rooms.addAgent.history', 'History'),
                               item.model,
-                              new Date(item.updatedAt ?? item.modifiedAt).toLocaleString()
+                              item.updatedAt ? new Date(item.updatedAt).toLocaleString() : null
                             ]
                               .filter(Boolean)
                               .join(' · ')}
@@ -271,8 +230,8 @@ export function RoomAddAgentDialog({
               {translate('rooms.addAgent.identity', 'Room identity')}
               <Input value={identity} onChange={(event) => setIdentity(event.target.value)} />
             </label>
-            <div className="grid grid-cols-3 gap-1 rounded-md bg-muted p-1">
-              {(['launch', 'attach', 'resume'] as Mode[]).map((item) => (
+            <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+              {(['new', 'existing'] as Mode[]).map((item) => (
                 <Button
                   key={item}
                   type="button"
@@ -286,7 +245,7 @@ export function RoomAddAgentDialog({
                   onClick={() => {
                     setMode(item)
                     setSelection('')
-                    setChoosing(item !== 'launch')
+                    setChoosing(item === 'existing')
                   }}
                 >
                   {translate(...MODE_LABELS[item])}
@@ -294,7 +253,7 @@ export function RoomAddAgentDialog({
               ))}
             </div>
             <p className="text-xs text-muted-foreground">{translate(...MODE_DESCRIPTIONS[mode])}</p>
-            {mode !== 'launch' ? (
+            {mode === 'existing' ? (
               <Button
                 type="button"
                 variant="outline"
@@ -304,8 +263,7 @@ export function RoomAddAgentDialog({
               >
                 <span className="min-w-0 truncate text-left">
                   {selected
-                    ? selected.title ||
-                      ('terminalHandle' in selected ? selected.terminalHandle : selected.id)
+                    ? selected.title || selected.id
                     : loadingChoices
                       ? translate('rooms.addAgent.loadingSessions', 'Loading sessions…')
                       : translate('rooms.addAgent.chooseSession', 'Choose session…')}
@@ -313,7 +271,7 @@ export function RoomAddAgentDialog({
                 <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
               </Button>
             ) : null}
-            {loadError ? (
+            {mode === 'existing' && loadError ? (
               <span className="text-xs text-destructive" role="alert">
                 {loadError}
               </span>
@@ -342,8 +300,7 @@ export function RoomAddAgentDialog({
                 saving ||
                 !roomId ||
                 !worktree ||
-                // The attachable/history prefetch only feeds Attach and Resume.
-                (mode !== 'launch' && (loadingChoices || !selection))
+                (mode === 'existing' && (loadingChoices || !selection))
               }
             >
               <span className={cn(saving && 'invisible')}>

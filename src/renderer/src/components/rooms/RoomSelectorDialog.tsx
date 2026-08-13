@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Archive, Check, Plus } from 'lucide-react'
+import { Check, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -56,8 +56,7 @@ export function RoomSelectorDialog({
     setLoading(true)
     setError(null)
     void roomRpc<{ rooms: Room[] }>(target, 'rooms.list', {
-      projectId,
-      includeArchived: true
+      projectId
     }).then(
       ({ rooms: listed }) => {
         if (!disposed) {
@@ -167,12 +166,6 @@ export function RoomSelectorDialog({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="truncate text-sm font-medium">{room.name}</span>
-                          {room.archivedAt ? (
-                            <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                              <Archive className="size-3" />
-                              {translate('rooms.common.archived', 'Archived')}
-                            </span>
-                          ) : null}
                         </div>
                         <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                           {room.description ||

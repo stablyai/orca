@@ -3,13 +3,9 @@ import type { RoomDelivery, RoomEvent, RoomMessage, RoomParticipant } from '../.
 import type { RoomDatabase } from './database'
 import type { RoomHarnessAdapter, RoomHarnessLifecycleEvent } from './harness-adapter'
 import type { RoomHarnessTurnUserMessage } from './harness-lifecycle'
-import { extractRoomReplyRecipients } from './mentions'
+import { roomDeliveryAttemptsFromTurn } from './delivery-prompt'
 import { roomParticipantHarnessBinding } from './participant-harness-binding'
-import {
-  providerMessageId,
-  RoomTranscriptTurnState,
-  selectRoomTranscriptFinal
-} from './transcript-turn-state'
+import { providerMessageId, RoomTranscriptTurnState } from './transcript-turn-state'
 
 type ActiveWatcher = {
   providerSessionId: string
@@ -55,10 +51,8 @@ export class RoomTranscriptBridge {
     if (current) {
       current.unsubscribe()
       this.watchers.delete(participant.id)
-      this.turnState.disposeParticipant(participant.id)
+      this.turnState.clearParticipant(participant)
       this.activeDeliveries.delete(participant.id)
-      this.db.activities.remove(participant.id)
-      this.emit(participant.roomId, { type: 'activity.cleared', participantId: participant.id })
     }
     const generation = (this.generations.get(participant.id) ?? 0) + 1
     this.generations.set(participant.id, generation)
@@ -87,6 +81,13 @@ export class RoomTranscriptBridge {
     this.activeDeliveries.delete(participantId)
   }
 
+  forgetParticipants(participantIds: readonly string[]): void {
+    for (const participantId of participantIds) {
+      this.disposeParticipant(participantId)
+      this.generations.delete(participantId)
+    }
+  }
+
   dispose(): void {
     for (const watcher of this.watchers.values()) {
       watcher.unsubscribe()
@@ -106,9 +107,17 @@ export class RoomTranscriptBridge {
     this.suppressedControls.delete(participantId)
   }
 
+  clearStoppedDeliveries(participantIds: readonly string[]): void {
+    for (const participantId of participantIds) {
+      this.activeDeliveries.delete(participantId)
+      this.turnState.clearParticipant(this.db.participants.get(participantId))
+    }
+  }
+
   currentTurnDeliveryId(participantId: string): string | null {
     return this.activeDeliveries.get(participantId) ?? null
   }
+
   ingestStatus(participantId: string, event: RoomHarnessLifecycleEvent | null): void {
     if (event) {
       this.ingestLifecycle(participantId, event)
@@ -163,7 +172,9 @@ export class RoomTranscriptBridge {
       }
       if (event.userMessage) {
         const confirmed = this.confirmTurn(participantId, event.userMessage)
-        this.activeDeliveries.set(participantId, confirmed?.id ?? null)
+        if (confirmed || roomDeliveryAttemptsFromTurn(event.userMessage.text).length === 0) {
+          this.activeDeliveries.set(participantId, confirmed?.id ?? null)
+        }
       }
       const delivery = this.activeDelivery(participantId)
       if (this.suppressedControls.has(participantId)) {
@@ -196,19 +207,39 @@ export class RoomTranscriptBridge {
         return
       }
       if (event.type === 'final') {
-        this.publishFinal(participant, delivery, session.id, event)
+        const settled = this.turnState.publishFinal(
+          participant,
+          delivery,
+          session.id,
+          event,
+          this.onSettled
+        )
         participant = this.updateParticipant(participant, 'online', event.timestamp)
         this.turnState.removeActivity(participant.id)
         this.emit(participant.roomId, { type: 'activity.cleared', participantId: participant.id })
+        if (settled) {
+          this.activeDeliveries.delete(participant.id)
+        }
       } else {
         participant = this.updateParticipant(
           participant,
           event.type === 'failed' ? 'error' : 'online',
           event.timestamp
         )
-        this.turnState.emitActivity(participant, event)
         this.turnState.ignorePending(participant.id, session.id)
         this.turnState.removeActivity(participant.id)
+        const failed = this.db.messages.deliveries.failResponse(
+          delivery.id,
+          event.type === 'failed' ? 'room_turn_failed' : 'room_turn_interrupted',
+          event.timestamp
+        )
+        this.emit(participant.roomId, { type: 'delivery.updated', delivery: failed })
+        this.emit(participant.roomId, {
+          type: 'activity.cleared',
+          participantId: participant.id
+        })
+        this.activeDeliveries.delete(participant.id)
+        this.onSettled()
       }
       void this.refreshContext(participant).catch(() => {})
     })
@@ -223,72 +254,10 @@ export class RoomTranscriptBridge {
     }
     try {
       const delivery = this.db.messages.deliveries.get(deliveryId)
-      return delivery.respondedAt ? null : delivery
+      return delivery.state === 'delivered' && !delivery.respondedAt ? delivery : null
     } catch {
       return null
     }
-  }
-
-  private publishFinal(
-    participant: RoomParticipant,
-    delivery: RoomDelivery,
-    providerSessionId: string,
-    event: RoomHarnessLifecycleEvent
-  ): void {
-    const pending = this.turnState.entries(participant.id)
-    const explicitBody = event.text?.trim() || null
-    const { candidate, body } = selectRoomTranscriptFinal(pending, explicitBody)
-    const finalProviderMessageId = candidate?.publishable
-      ? providerMessageId(candidate.message)
-      : `status:${event.turnId ?? event.timestamp}`
-    const completedActivity = this.turnState.completed(participant.id, pending, candidate, event)
-    this.turnState.ignorePending(participant.id, providerSessionId, finalProviderMessageId)
-    if (candidate?.message.providerError) {
-      const failed = this.db.messages.deliveries.failResponse(
-        delivery.id,
-        'room_provider_error',
-        event.timestamp
-      )
-      this.emit(participant.roomId, { type: 'delivery.updated', delivery: failed })
-      this.onSettled()
-      return
-    }
-    if (!body) {
-      return
-    }
-    const roomParticipants = this.db.participants.list(participant.roomId)
-    const reply = extractRoomReplyRecipients(body, roomParticipants, participant.identity)
-    if (reply.silent) {
-      this.db.transaction(() => {
-        this.db.providerMessages.ignore(participant.id, providerSessionId, finalProviderMessageId)
-        this.db.messages.deliveries.markResponded(delivery.id, null, event.timestamp)
-      })
-      this.emit(participant.roomId, {
-        type: 'delivery.updated',
-        delivery: this.db.messages.deliveries.get(delivery.id)
-      })
-      this.onSettled()
-      return
-    }
-    const message = this.db.providerMessages.createReply({
-      participant,
-      delivery,
-      providerSessionId,
-      providerMessageId: finalProviderMessageId,
-      body: reply.body,
-      mentions: reply.mentions,
-      createdAt: candidate?.message.timestamp ?? event.timestamp,
-      ...(completedActivity ? { activity: completedActivity } : {})
-    })
-    if (!message) {
-      return
-    }
-    this.emit(participant.roomId, {
-      type: 'delivery.updated',
-      delivery: this.db.messages.deliveries.get(delivery.id)
-    })
-    this.emit(participant.roomId, { type: 'message.created', message })
-    this.onSettled(message)
   }
 
   private updateParticipant(

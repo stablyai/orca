@@ -23,3 +23,20 @@ export function useRoomTabs(rooms: Room[]) {
     }
   }, [roomTabs, rooms, setTabLabel])
 }
+
+export function closeRoomTabs(roomId: string): void {
+  const state = useAppStore.getState()
+  for (const tabId of getRoomTabIds(state.unifiedTabsByWorktree, roomId)) {
+    useAppStore.getState().closeUnifiedTab(tabId)
+  }
+}
+
+export function getRoomTabIds(
+  tabsByWorktree: Record<string, readonly Tab[]>,
+  roomId: string
+): string[] {
+  return Object.values(tabsByWorktree)
+    .flat()
+    .filter((tab) => tab.contentType === 'room' && tab.entityId === roomId)
+    .map((tab) => tab.id)
+}

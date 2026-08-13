@@ -7,6 +7,7 @@ import {
   type RoomProviderSession
 } from '../../../shared/rooms'
 import { participantFromRow, type RoomRow } from './rows'
+import { findRoomAgentOwner, type RoomAgentOwnershipIdentity } from './participant-ownership'
 
 const ROOM_PARTICIPANT_COLUMNS = `id, room_id, identity, display_name, actor_kind, agent,
   role_id, worktree_id, pane_key, terminal_handle, provider_session_json, process_incarnation,
@@ -116,7 +117,7 @@ export class RoomParticipantStore {
         throw new Error('room_role_not_found')
       }
     }
-    if (input.paneKey && this.findByPaneKey(input.paneKey)) {
+    if (this.findOwner(input)) {
       throw new Error('room_agent_already_in_room')
     }
     const id = input.id ?? randomUUID()
@@ -254,24 +255,18 @@ export class RoomParticipantStore {
   }
 
   findByPaneKey(paneKey: string): RoomParticipant | null {
-    const row = this.db
-      .prepare("SELECT * FROM room_participants WHERE pane_key = ? AND actor_kind = 'agent'")
-      .get(paneKey) as RoomRow | undefined
-    return row ? participantFromRow(row) : null
+    return this.findOwner({ paneKey })
   }
 
   findByTerminalHandle(terminalHandle: string): RoomParticipant | null {
-    const row = this.db
-      .prepare("SELECT * FROM room_participants WHERE terminal_handle = ? AND actor_kind = 'agent'")
-      .get(terminalHandle) as RoomRow | undefined
-    return row ? participantFromRow(row) : null
+    return this.findOwner({ terminalHandle })
   }
 
-  /** Hibernation candidates: bound online agents whose last COMMUNICATION
-   *  (message they sent, delivery they received, or their creation) predates
-   *  `idleBefore`, with no delivery in flight or awaiting a response. Row
-   *  bookkeeping (restarts, reconciles, context refresh) must not count as
-   *  activity, so updated_at is deliberately not consulted. */
+  findOwner(input: RoomAgentOwnershipIdentity): RoomParticipant | null {
+    return findRoomAgentOwner(this.db, input)
+  }
+
+  /** Hibernation uses communication timestamps only; bookkeeping updates are not activity. */
   listIdleAgents(idleBefore: number): RoomParticipant[] {
     return (
       this.db
@@ -279,6 +274,7 @@ export class RoomParticipantStore {
           `SELECT p.* FROM room_participants p
          WHERE p.actor_kind = 'agent' AND p.state = 'online'
            AND p.terminal_handle IS NOT NULL
+           AND p.terminal_surface_visible = 0
            AND MAX(
              p.created_at,
              COALESCE((SELECT MAX(m.created_at) FROM room_messages m WHERE m.sender_id = p.id), 0),
@@ -288,7 +284,9 @@ export class RoomParticipantStore {
            AND NOT EXISTS (
              SELECT 1 FROM room_deliveries d WHERE d.participant_id = p.id AND (
                d.state IN ('pending', 'delivering') OR
-               (d.state = 'delivered' AND d.responded_at IS NULL)
+               (d.state = 'delivered' AND d.responded_at IS NULL) OR
+               (d.state = 'failed' AND d.error = 'room_delivery_uncertain') OR
+               (d.state = 'suppressed' AND d.error = 'room_stopping')
              )
            )`
         )

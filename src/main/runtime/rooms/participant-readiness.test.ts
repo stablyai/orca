@@ -45,7 +45,8 @@ it('accepts a fresh composer while restored status still reports working', async
           }
         })
     ),
-    listRoomAttachableAgents: async () => [],
+    listRoomRunningAgents: async () => [],
+    listRoomExistingAgents: async () => [],
     resolveRoomHistoricalSession: unused,
     stageRoomAttachment: unused
   }
@@ -81,7 +82,7 @@ it('accepts a fresh composer while restored status still reports working', async
     expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term-new',
       expect.stringContaining('<orca-room-delivery id='),
-      { clearInput: true }
+      { beforeWrite: expect.any(Function), clearInput: false }
     )
     expect(service.db.participants.get(participant.id).state).toBe('online')
     expect(service.db.participants.get(participant.id).providerSession).toBeNull()
@@ -113,7 +114,8 @@ it('accepts composer proof when a live participant has no fresh hook status', as
     getTerminalProcessIncarnation: () => null,
     closeTerminal: unused,
     waitForTerminal: unused,
-    listRoomAttachableAgents: async () => [],
+    listRoomRunningAgents: async () => [],
+    listRoomExistingAgents: async () => [],
     resolveRoomHistoricalSession: unused,
     stageRoomAttachment: unused
   }

@@ -4,6 +4,7 @@ import { appendFile, lstat, mkdir, open, realpath, rename, rm, unlink } from 'no
 import { extname, join, resolve, sep } from 'node:path'
 import type { RoomAttachment } from '../../../shared/rooms'
 import { decodeCanonicalBase64 } from './canonical-base64'
+import { roomAttachmentMimeType, safeRoomAttachmentName } from './attachment-file-metadata'
 
 export const ROOM_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024
 export const ROOM_ATTACHMENT_CHUNK_BYTES = 384 * 1024
@@ -22,6 +23,7 @@ type PendingUpload = {
   ready: boolean
   busy: boolean
   cancelled: boolean
+  idleWaiters: (() => void)[]
   touchedAt: number
   expiry: ReturnType<typeof setTimeout> | null
 }
@@ -57,13 +59,14 @@ export class RoomAttachmentManager {
     const upload: PendingUpload = {
       id,
       roomId,
-      fileName: safeName(fileName),
+      fileName: safeRoomAttachmentName(fileName),
       byteSize,
       path,
       received: 0,
       ready: false,
       busy: false,
       cancelled: false,
+      idleWaiters: [],
       touchedAt: Date.now(),
       expiry: null
     }
@@ -95,6 +98,9 @@ export class RoomAttachmentManager {
       return upload.received
     } finally {
       upload.busy = false
+      for (const resolveIdle of upload.idleWaiters.splice(0)) {
+        resolveIdle()
+      }
     }
   }
 
@@ -132,7 +138,7 @@ export class RoomAttachmentManager {
           id: upload.id,
           messageId: '',
           fileName: upload.fileName,
-          mimeType: mimeType(upload.fileName),
+          mimeType: roomAttachmentMimeType(upload.fileName),
           byteSize: upload.byteSize,
           localPath: destination,
           createdAt: Date.now()
@@ -158,10 +164,33 @@ export class RoomAttachmentManager {
       clearTimeout(upload.expiry)
     }
     if (upload.busy) {
-      return
+      return new Promise((resolveIdle) => upload.idleWaiters.push(resolveIdle))
     }
     this.uploads.delete(id)
     await unlink(upload.path).catch(() => undefined)
+  }
+
+  pendingUploadIds(roomId: string): string[] {
+    return [...this.uploads.values()]
+      .filter((upload) => upload.roomId === roomId)
+      .map((upload) => upload.id)
+  }
+
+  uploadRoomId(id: string): string {
+    return this.pending(id).roomId
+  }
+
+  async removeRoom(
+    roomId: string,
+    pendingUploadIds: string[],
+    attachmentPaths: string[]
+  ): Promise<void> {
+    await Promise.all(pendingUploadIds.map((id) => this.cancelUpload(id)))
+    await Promise.all(
+      pendingUploadIds.map((id) => rm(join(this.uploadsRoot, `${id}.part`), { force: true }))
+    )
+    await this.remove(attachmentPaths)
+    await rm(join(this.root, roomId), { recursive: true, force: true })
   }
 
   async remove(paths: string[]): Promise<void> {
@@ -292,29 +321,4 @@ export class RoomAttachmentManager {
     })
     return this.initialized
   }
-}
-
-function safeName(value: string): string {
-  const cleaned = value.replace(/[\p{Cc}<>:"/\\|?*]/gu, '_').trim()
-  return (cleaned || 'attachment').slice(0, 240)
-}
-
-function mimeType(fileName: string): string {
-  const extension = extname(fileName).toLowerCase()
-  return (
-    (
-      {
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.gif': 'image/gif',
-        '.webp': 'image/webp',
-        '.svg': 'image/svg+xml',
-        '.pdf': 'application/pdf',
-        '.json': 'application/json',
-        '.md': 'text/markdown',
-        '.txt': 'text/plain'
-      } as Record<string, string>
-    )[extension] ?? 'application/octet-stream'
-  )
 }

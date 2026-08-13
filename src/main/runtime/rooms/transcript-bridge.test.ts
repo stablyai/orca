@@ -23,7 +23,12 @@ function runtimeStub(
     createAgentSession: unused,
     ensureAgentSession: unused,
     sendTerminalAgentPrompt,
-    waitForTerminalAgentInputReady: unused,
+    sendTerminal: async (handle, action) => ({
+      handle,
+      accepted: true,
+      bytesWritten: Buffer.byteLength(action.text ?? '')
+    }),
+    waitForTerminalAgentInputReady: async () => true,
     compactTerminalAgentSession: unused,
     getTerminalAgentStatus: async (handle) => ({ handle, isRunningAgent: true, status: 'idle' }),
     getTerminalProcessIncarnation: (handle) => `pty:${handle}:1`,
@@ -36,13 +41,127 @@ function runtimeStub(
       exitCode: null
     }),
     emitRoomEvent: (_roomId, event) => events.push(event),
-    listRoomAttachableAgents: async () => [],
+    listRoomRunningAgents: async () => [],
+    listRoomExistingAgents: async () => [],
     resolveRoomHistoricalSession: unused,
     stageRoomAttachment: unused
   }
 }
 
 describe('room transcript bridge lifecycle', () => {
+  it.each([
+    ['task_complete', 'room_empty_response'],
+    ['turn_aborted', 'room_turn_interrupted']
+  ])(
+    'settles a transcript %s without leaving the participant queue blocked',
+    async (type, error) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-room-terminal-'))
+      const transcriptPath = join(root, 'rollout.jsonl')
+      await writeFile(
+        transcriptPath,
+        line('event_msg', { type: 'user_message', id: 'prompt-1', message: 'room event' }, 100) +
+          line('event_msg', { type: 'task_started', turn_id: 'turn-1' }, 110)
+      )
+      const service = new RoomService(':memory:', runtimeStub([]))
+      try {
+        const room = service.createRoom({ projectId: 'project-1', name: 'Research' }).room
+        const agent = service.db.participants.add({
+          roomId: room.id,
+          identity: 'codex',
+          displayName: 'Codex',
+          agent: 'codex',
+          worktreeId: 'worktree-1',
+          paneKey: 'tab:codex',
+          terminalHandle: 'term-codex',
+          providerSession: { key: 'session_id', id: 'session-1', transcriptPath }
+        })
+        const user = service.getUserParticipant(room.id)
+        const delivery = service.db.messages.create({
+          roomId: room.id,
+          senderId: user.id,
+          senderIdentity: user.identity,
+          actorKind: 'user',
+          body: 'room event'
+        }).deliveries[0]!
+        service.db.messages.deliveries.claim(delivery.id)
+        service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1')
+        await service.activateRoom(room.id)
+
+        await appendFile(transcriptPath, line('event_msg', { type, turn_id: 'turn-1' }, 120))
+
+        await vi.waitFor(() =>
+          expect(service.db.messages.deliveries.get(delivery.id)).toMatchObject({
+            state: 'failed',
+            error
+          })
+        )
+        expect(service.db.participants.get(agent.id).state).not.toBe('busy')
+      } finally {
+        service.close()
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('drops a final that arrives after the room was stopped', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-room-stopped-final-'))
+    const transcriptPath = join(root, 'rollout.jsonl')
+    await writeFile(
+      transcriptPath,
+      line('event_msg', { type: 'user_message', id: 'prompt-1', message: 'room event' }, 100) +
+        line('event_msg', { type: 'task_started', turn_id: 'turn-1' }, 110)
+    )
+    const events: RoomEvent[] = []
+    const service = new RoomService(':memory:', runtimeStub(events))
+    try {
+      const room = service.createRoom({ projectId: 'project-1', name: 'Research' }).room
+      const agent = service.db.participants.add({
+        roomId: room.id,
+        identity: 'codex',
+        displayName: 'Codex',
+        agent: 'codex',
+        worktreeId: 'worktree-1',
+        paneKey: 'tab:codex',
+        terminalHandle: 'term-codex',
+        providerSession: { key: 'session_id', id: 'session-1', transcriptPath }
+      })
+      const user = service.getUserParticipant(room.id)
+      const delivery = service.db.messages.create({
+        roomId: room.id,
+        senderId: user.id,
+        senderIdentity: user.identity,
+        actorKind: 'user',
+        body: 'room event'
+      }).deliveries[0]!
+      service.db.messages.deliveries.claim(delivery.id)
+      service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1')
+      await service.activateRoom(room.id)
+      await vi.waitFor(() => expect(service.db.participants.get(agent.id).state).toBe('busy'))
+
+      await service.stopRoom(room.id)
+      await appendFile(
+        transcriptPath,
+        line('event_msg', { type: 'agent_message', id: 'final', message: 'Too late.' }, 120) +
+          line('event_msg', { type: 'task_complete', turn_id: 'turn-1' }, 130)
+      )
+      await vi.waitFor(() => expect(service.db.participants.get(agent.id).lastSeenAt).toBe(130))
+
+      expect(service.db.messages.deliveries.get(delivery.id)).toMatchObject({
+        state: 'suppressed',
+        error: 'room_stopped',
+        responseMessageId: null
+      })
+      expect(
+        service
+          .listMessages(room.id, null)
+          .messages.filter((message) => message.actorKind === 'agent')
+      ).toEqual([])
+    } finally {
+      service.close()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('publishes only the confirmed final answer of the delivery turn', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-room-lifecycle-'))
     const transcriptPath = join(root, 'rollout.jsonl')
@@ -141,14 +260,16 @@ describe('room transcript bridge lifecycle', () => {
       expect(events).toContainEqual({ type: 'activity.cleared', participantId: agent.id })
       expect(service.db.participants.get(agent.id).state).toBe('online')
       expect(service.db.messages.deliveries.get(delivery.id).responseMessageId).not.toBeNull()
-      expect(events).toContainEqual({
-        type: 'delivery.updated',
-        delivery: expect.objectContaining({
-          id: delivery.id,
-          state: 'delivered',
-          responseMessageId: expect.any(String)
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'delivery.updated',
+          delivery: expect.objectContaining({
+            id: delivery.id,
+            state: 'delivered',
+            responseMessageId: expect.any(String)
+          })
         })
-      })
+      )
     } finally {
       service.close()
       await rm(root, { recursive: true, force: true })
@@ -218,10 +339,12 @@ describe('room transcript bridge lifecycle', () => {
           .listMessages(room.id, null)
           .messages.filter((message) => message.actorKind === 'agent')
       ).toEqual([])
-      expect(events).toContainEqual({
-        type: 'delivery.updated',
-        delivery: expect.objectContaining({ id: delivery.id, respondedAt: 130 })
-      })
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'delivery.updated',
+          delivery: expect.objectContaining({ id: delivery.id, respondedAt: 130 })
+        })
+      )
       expect(service.currentTurnDeliveryIdForPane(agent.paneKey!)).toBe(delivery.id)
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
       expect(service.db.messages.deliveries.get(queued.id).state).toBe('delivering')

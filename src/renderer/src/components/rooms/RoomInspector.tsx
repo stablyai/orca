@@ -54,10 +54,7 @@ export function RoomInspector({
           )
         })}
       </div>
-      <fieldset
-        disabled={Boolean(data.snapshot?.room.archivedAt)}
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto border-0 p-3 scrollbar-sleek"
-      >
+      <fieldset className="min-h-0 min-w-0 flex-1 overflow-y-auto border-0 p-3 scrollbar-sleek">
         {tab === 'people' ? <PeoplePanel data={data} onAddAgent={onAddAgent} /> : null}
         {tab === 'pins' ? <PinsPanel data={data} /> : null}
       </fieldset>

@@ -51,7 +51,6 @@ export type Room = {
   loopLimit: number
   createdAt: number
   updatedAt: number
-  archivedAt: number | null
 }
 export type RoomRole = {
   id: string
@@ -88,13 +87,26 @@ export type RoomParticipant = {
   updatedAt: number
 }
 
-export type RoomAttachableAgent = {
+export type RoomRunningAgent = {
   agent: RoomHarnessAgent
   worktreeId: string
   terminalHandle: string
   paneKey: string
   title: string | null
   providerSession: RoomProviderSession | null
+}
+
+export type RoomExistingAgentCandidate = {
+  id: string
+  agent: RoomHarnessAgent
+  title: string | null
+  status: 'running' | 'history'
+  model: string | null
+  updatedAt: string | null
+  providerSession: RoomProviderSession | null
+  terminalHandle?: string
+  paneKey?: string
+  historyId?: string
 }
 
 export type RoomAttachment = {
@@ -142,6 +154,8 @@ export type RoomUnread = {
   lastReadSequence: number
 }
 
+export type RoomWorkState = 'idle' | 'active' | 'stopped'
+
 export type RoomSnapshot = {
   room: Room
   participants: RoomParticipant[]
@@ -149,6 +163,8 @@ export type RoomSnapshot = {
   roles: RoomRole[]
   pins: RoomPin[]
   unread: RoomUnread
+  /** Absent when connected to a host that predates room Stop/Resume. */
+  workState?: RoomWorkState
 }
 
 export type RoomMessagePage = {
@@ -197,7 +213,7 @@ export type RoomEvent =
     }
   | { type: 'message.updated'; message: RoomMessage }
   | { type: 'message.deleted'; messageId: string }
-  | { type: 'delivery.updated'; delivery: RoomDelivery }
+  | { type: 'delivery.updated'; delivery: RoomDelivery; workState?: RoomWorkState }
   | { type: 'room.updated'; room: Room }
   | { type: 'role.updated'; role: RoomRole }
   | { type: 'role.removed'; roleId: string }
@@ -207,6 +223,6 @@ export type RoomEvent =
   | { type: 'activity.cleared'; participantId: string }
   | { type: 'pin.updated'; pin: RoomPin | null; messageId: string }
   | { type: 'unread.updated'; unread: RoomUnread }
-  | { type: 'end' }
+  | { type: 'end'; reason?: 'deleted' }
 
 export { EMPTY_ROOM_CONTEXT } from './room-context'

@@ -2,15 +2,11 @@ import type { RoomDelivery, RoomEvent, RoomParticipant } from '../../../shared/r
 import type { RoomDatabase } from './database'
 import type { RoomHarnessAdapter, RoomHarnessBinding } from './harness-adapter'
 import type { RoomHarnessTurnUserMessage } from './harness-lifecycle'
-import { formatRoomDeliveryPrompt, roomDeliveryIdFromTurn } from './delivery-prompt'
+import { formatRoomDeliveryPrompt } from './delivery-prompt'
 import type { RoomAttachmentManager } from './attachments'
-import {
-  deliveryFailureState,
-  selectConcurrentDeliveries,
-  suppressPausedDelivery
-} from './delivery-selection'
+import { deliveryFailureState, suppressPausedDelivery } from './delivery-selection'
 import { stageRoomDeliveryAttachments } from './delivery-attachments'
-import type { PendingRoomDeliveryConfirmation } from './delivery-configuration'
+import { RoomDeliveryConfirmations } from './delivery-confirmations'
 
 const MAX_DELIVERY_ATTEMPTS = 5
 const MAX_RETRY_DELAY_MS = 60_000
@@ -23,8 +19,9 @@ export class RoomDeliveryWorker {
   private draining = false
   private rerun = false
   private disposed = false
-  private readonly pendingConfirmations = new Map<string, PendingRoomDeliveryConfirmation>()
-  private readonly confirmDeadlines = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly confirmations: RoomDeliveryConfirmations
+  private readonly blockedRooms = new Map<string, number>()
+  private readonly inFlight = new Map<string, Set<Promise<void>>>()
 
   constructor(
     private readonly db: RoomDatabase,
@@ -32,10 +29,19 @@ export class RoomDeliveryWorker {
     private readonly attachments: RoomAttachmentManager,
     private readonly emit: (roomId: string, event: RoomEvent) => void,
     private readonly ensureParticipantReady: (participantId: string) => Promise<RoomParticipant>,
-    private readonly confirmDeadlineMs = CONFIRM_TURN_DEADLINE_MS
-  ) {}
+    confirmDeadlineMs = CONFIRM_TURN_DEADLINE_MS
+  ) {
+    this.confirmations = new RoomDeliveryConfirmations(
+      db,
+      adapters,
+      emit,
+      () => this.wake(),
+      confirmDeadlineMs
+    )
+  }
 
   start(): void {
+    this.db.messages.deliveries.suppressDeletedMessages()
     this.db.messages.deliveries.recoverInterrupted()
     this.wake()
   }
@@ -65,46 +71,33 @@ export class RoomDeliveryWorker {
       clearTimeout(this.timer)
       this.timer = null
     }
-    this.confirmDeadlines.forEach((timer) => clearTimeout(timer))
-    this.confirmDeadlines.clear()
-    this.pendingConfirmations.clear()
+    this.confirmations.dispose()
+    this.blockedRooms.clear()
+    this.inFlight.clear()
+  }
+
+  async blockRoom(roomId: string): Promise<void> {
+    this.blockedRooms.set(roomId, (this.blockedRooms.get(roomId) ?? 0) + 1)
+    const tasks = this.inFlight.get(roomId)
+    if (tasks) {
+      await Promise.allSettled(tasks)
+    }
+    this.confirmations.clearRoom(roomId)
+  }
+
+  unblockRoom(roomId: string): void {
+    const remaining = (this.blockedRooms.get(roomId) ?? 1) - 1
+    if (remaining === 0) {
+      this.blockedRooms.delete(roomId)
+    } else {
+      this.blockedRooms.set(roomId, remaining)
+    }
+    this.wake()
   }
 
   /** Stable delivery IDs distinguish room turns from direct Chat/CLI turns. */
   confirmTurn(participantId: string, userMessage: RoomHarnessTurnUserMessage): RoomDelivery | null {
-    const deliveryId = roomDeliveryIdFromTurn(userMessage.text)
-    if (!deliveryId) {
-      return this.db.messages.deliveries.awaitingResponseForTurn(participantId, userMessage.id)
-    }
-    let delivery: RoomDelivery
-    try {
-      delivery = this.db.messages.deliveries.get(deliveryId)
-    } catch {
-      return this.db.messages.deliveries.awaitingResponseForTurn(participantId, userMessage.id)
-    }
-    const pending = this.pendingConfirmations.get(delivery.id)
-    const confirmable =
-      delivery.participantId === participantId &&
-      (delivery.state === 'delivering' ||
-        (delivery.state === 'failed' && delivery.error === 'room_delivery_uncertain'))
-    if (!confirmable || (pending && pending.participantId !== participantId)) {
-      return this.db.messages.deliveries.awaitingResponseForTurn(participantId, userMessage.id)
-    }
-    const message = this.db.messages.get(delivery.messageId)
-    const confirmed = this.db.transaction(() => {
-      const result = this.db.messages.deliveries.confirmTurn(delivery.id, userMessage.id)
-      if (pending) {
-        this.db.deliveryConfiguration.commit(participantId, pending.configuration)
-      } else {
-        this.db.deliveryConfiguration.requireFull(participantId)
-      }
-      return result
-    })
-    this.pendingConfirmations.delete(delivery.id)
-    this.clearConfirmDeadline(delivery.id)
-    this.emit(message.roomId, { type: 'delivery.updated', delivery: confirmed })
-    this.wake()
-    return confirmed
+    return this.confirmations.confirm(participantId, userMessage)
   }
 
   private async drain(): Promise<void> {
@@ -113,18 +106,38 @@ export class RoomDeliveryWorker {
     }
     this.draining = true
     try {
+      let repeat: boolean
       do {
         this.rerun = false
-        const due = this.db.messages.deliveries.listDue()
-        for (const candidate of selectConcurrentDeliveries(due)) {
+        let claimedAny = false
+        const due = this.db.messages.deliveries.listDue(Date.now(), 100, [
+          ...this.blockedRooms.keys()
+        ])
+        for (const candidate of due) {
+          const roomId = this.db.messages.get(candidate.messageId).roomId
+          if (this.blockedRooms.has(roomId)) {
+            continue
+          }
           const delivery = this.db.messages.deliveries.claim(candidate.id)
           if (!delivery) {
             continue
           }
+          claimedAny = true
           // One slow harness must not block other participants' queues.
-          void this.deliver(delivery).finally(() => this.wake())
+          const task = this.deliver(delivery)
+          const roomTasks = this.inFlight.get(roomId) ?? new Set<Promise<void>>()
+          roomTasks.add(task)
+          this.inFlight.set(roomId, roomTasks)
+          void task.finally(() => {
+            roomTasks.delete(task)
+            if (roomTasks.size === 0) {
+              this.inFlight.delete(roomId)
+            }
+            this.wake()
+          })
         }
-      } while (this.rerun || this.db.messages.deliveries.listDue().length > 0)
+        repeat = claimedAny || this.rerun
+      } while (repeat)
     } finally {
       this.draining = false
       this.scheduleNext()
@@ -136,15 +149,14 @@ export class RoomDeliveryWorker {
     let target = this.db.participants.get(delivery.participantId)
     this.emit(message.roomId, { type: 'delivery.updated', delivery })
     try {
-      if (this.db.core.get(message.roomId).archivedAt) {
-        throw new Error('room_archived')
-      }
+      this.db.core.get(message.roomId)
       const initiallySuppressed = suppressPausedDelivery(this.db, delivery, target)
       if (initiallySuppressed) {
         return this.emit(target.roomId, { type: 'delivery.updated', delivery: initiallySuppressed })
       }
       // A second status probe would reject silent daemon-recovered PTYs.
       target = await this.ensureParticipantReady(target.id)
+      this.assertCurrent(delivery)
       const adapter = target.agent ? this.adapters[target.agent] : undefined
       const binding = this.binding(target)
       if (!adapter || !binding) {
@@ -164,8 +176,10 @@ export class RoomDeliveryWorker {
         attachments: this.attachments,
         messages: replyParent ? [replyParent, message] : [message]
       })
+      this.assertCurrent(delivery)
       const prompt = formatRoomDeliveryPrompt({
         deliveryId: delivery.id,
+        attempt: delivery.attempts,
         response: message.mentions.some(
           (identity) => identity.toLocaleLowerCase() === target.identity.toLocaleLowerCase()
         )
@@ -187,14 +201,12 @@ export class RoomDeliveryWorker {
       if (suppressed) {
         return this.emit(target.roomId, { type: 'delivery.updated', delivery: suppressed })
       }
-      this.pendingConfirmations.set(delivery.id, {
-        participantId: target.id,
-        configuration: configuration.snapshot
-      })
+      this.confirmations.prepare(delivery.id, target.id, configuration.snapshot)
       delivery = this.db.messages.deliveries.setPhase(delivery.id, 'submitting')
       this.emit(message.roomId, { type: 'delivery.updated', delivery })
       const result = await adapter.send(binding, prompt, {
-        clearInput: true,
+        beforeWrite: () => this.assertCurrent(delivery),
+        clearInput: delivery.attempts > 1,
         ...(imagePaths.length > 0 ? { imagePaths } : {})
       })
       if (!result.accepted) {
@@ -206,15 +218,14 @@ export class RoomDeliveryWorker {
       delivery = this.db.messages.deliveries.setPhase(delivery.id, 'awaiting-turn')
       this.emit(message.roomId, { type: 'delivery.updated', delivery })
       // Only a provider turn confirms PTY paste; a swallowed paste must be requeued.
-      this.armConfirmDeadline(delivery.id)
+      this.confirmations.arm(delivery.id)
     } catch (error) {
-      this.pendingConfirmations.delete(delivery.id)
+      this.confirmations.discard(delivery.id)
       if (this.disposed) {
         return
       }
       const messageText = error instanceof Error ? error.message : String(error)
-      const exhausted =
-        messageText === 'room_archived' || delivery.attempts >= MAX_DELIVERY_ATTEMPTS
+      const exhausted = delivery.attempts >= MAX_DELIVERY_ATTEMPTS
       const delay = Math.min(MAX_RETRY_DELAY_MS, 1000 * 2 ** Math.max(0, delivery.attempts - 1))
       const failed = this.db.messages.deliveries.complete(
         delivery.id,
@@ -226,80 +237,11 @@ export class RoomDeliveryWorker {
     }
   }
 
-  private armConfirmDeadline(deliveryId: string): void {
-    this.clearConfirmDeadline(deliveryId)
-    if (this.disposed) {
-      return
-    }
-    const timer = setTimeout(() => {
-      this.confirmDeadlines.delete(deliveryId)
-      void this.expireUnconfirmed(deliveryId)
-    }, this.confirmDeadlineMs)
-    timer.unref?.()
-    this.confirmDeadlines.set(deliveryId, timer)
-  }
-
-  private clearConfirmDeadline(deliveryId: string): void {
-    clearTimeout(this.confirmDeadlines.get(deliveryId))
-    this.confirmDeadlines.delete(deliveryId)
-  }
-
-  /** A working agent may be running our turn with the watcher lagging — keep
-   *  waiting; only an idle agent whose turn never opened proves a swallowed paste. */
-  private async expireUnconfirmed(deliveryId: string): Promise<void> {
-    if (this.disposed || !this.pendingConfirmations.has(deliveryId)) {
-      return
-    }
-    let delivery: RoomDelivery
-    try {
-      delivery = this.db.messages.deliveries.get(deliveryId)
-    } catch {
-      this.pendingConfirmations.delete(deliveryId)
-      return
-    }
-    if (delivery.state !== 'delivering') {
-      this.pendingConfirmations.delete(deliveryId)
-      return
-    }
-    const participant = this.participantOrNull(delivery.participantId)
-    const adapter = participant?.agent ? this.adapters[participant.agent] : undefined
-    const binding = participant ? this.binding(participant) : null
-    const status = adapter && binding ? await adapter.status(binding).catch(() => null) : null
-    if (status?.isRunningAgent && status.status === 'working') {
-      this.armConfirmDeadline(deliveryId)
-      return
-    }
-    // Re-check: the turn may have confirmed while the status probe was in flight.
-    if (this.disposed || !this.pendingConfirmations.has(deliveryId)) {
-      return
-    }
-    this.pendingConfirmations.delete(deliveryId)
-    const message = this.db.messages.get(delivery.messageId)
-    const provenIdle = status?.isRunningAgent && status.status === 'idle'
-    const exhausted = !provenIdle || delivery.attempts >= MAX_DELIVERY_ATTEMPTS
-    const requeued = this.db.messages.deliveries.complete(
-      deliveryId,
-      deliveryFailureState(exhausted),
-      provenIdle ? 'room_delivery_unconfirmed' : 'room_delivery_uncertain',
-      exhausted ? Number.MAX_SAFE_INTEGER : Date.now()
-    )
-    this.emit(message.roomId, { type: 'delivery.updated', delivery: requeued })
-    this.wake()
-  }
-
-  private participantOrNull(id: string): RoomParticipant | null {
-    try {
-      return this.db.participants.get(id)
-    } catch {
-      return null
-    }
-  }
-
   private scheduleNext(): void {
     if (this.disposed || this.timer) {
       return
     }
-    const nextDueAt = this.db.messages.deliveries.nextDueAt()
+    const nextDueAt = this.db.messages.deliveries.nextDueAt([...this.blockedRooms.keys()])
     if (nextDueAt === null) {
       return
     }
@@ -309,6 +251,13 @@ export class RoomDeliveryWorker {
       void this.drain()
     }, delay)
     this.timer.unref?.()
+  }
+
+  private assertCurrent(delivery: RoomDelivery): void {
+    const current = this.db.messages.deliveries.get(delivery.id)
+    if (current.state !== 'delivering' || current.attempts !== delivery.attempts) {
+      throw new Error('room_delivery_stopped')
+    }
   }
 
   private binding(participant: RoomParticipant): RoomHarnessBinding | null {

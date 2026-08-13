@@ -23,6 +23,7 @@ import type {
 } from './harness-adapter-types'
 import { subscribeRoomHarnessTranscript } from './harness-transcript-subscription'
 import { resolveRoomTerminalRestorationSurface } from './room-terminal-restoration-surface'
+import { interruptRoomHarness } from './room-harness-interrupt'
 import { roomHarnessBindingFromTerminal } from './participant-harness-binding'
 import { ensureLiveRoomHarnessSession, ROOM_AGENT_EXTRA_ARGS } from './room-harness-session-launch'
 
@@ -69,24 +70,45 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
     return roomHarnessBindingFromTerminal(worktreeId, result.terminal, null, 'created')
   }
 
-  async attach(binding: RoomHarnessBinding): Promise<RoomHarnessBinding> {
-    const match = (await this.runtime.listRoomAttachableAgents(binding.worktreeId)).find(
-      (candidate) =>
-        candidate.agent === this.agent &&
-        candidate.worktreeId === binding.worktreeId &&
-        candidate.terminalHandle === binding.terminalHandle &&
-        candidate.paneKey === binding.paneKey
-    )
-    if (!match) {
+  async connectExisting(input: {
+    worktreeId: string
+    terminalHandle?: string
+    paneKey?: string
+    historyId?: string
+  }): Promise<RoomHarnessBinding> {
+    if (input.terminalHandle && input.paneKey) {
+      const match = (await this.runtime.listRoomRunningAgents(input.worktreeId)).find(
+        (candidate) =>
+          candidate.agent === this.agent &&
+          candidate.worktreeId === input.worktreeId &&
+          candidate.terminalHandle === input.terminalHandle &&
+          candidate.paneKey === input.paneKey
+      )
+      if (match) {
+        return {
+          worktreeId: match.worktreeId,
+          terminalHandle: match.terminalHandle,
+          paneKey: match.paneKey,
+          providerSession: match.providerSession,
+          disposition: 'adopted',
+          terminalSurfaceVisible: true
+        }
+      }
+    }
+    if (!input.historyId) {
       throw new Error('room_agent_not_running')
     }
-    return {
-      worktreeId: match.worktreeId,
-      terminalHandle: match.terminalHandle,
-      paneKey: match.paneKey,
-      providerSession: match.providerSession,
-      disposition: 'attached'
-    }
+    const providerSession = await this.runtime.resolveRoomHistoricalSession(
+      input.worktreeId,
+      this.agent,
+      input.historyId
+    )
+    return this.restore({
+      worktreeId: input.worktreeId,
+      terminalHandle: '',
+      paneKey: '',
+      providerSession
+    })
   }
 
   read(binding: RoomHarnessBinding, limit = 200): Promise<RoomHarnessReadResult> {
@@ -105,11 +127,19 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
   send(
     binding: RoomHarnessBinding,
     prompt: string,
-    options?: { clearInput?: boolean }
+    options?: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      clearInput?: boolean
+      imagePaths?: readonly string[]
+    }
   ): Promise<RuntimeTerminalSend> {
     return options
       ? this.runtime.sendTerminalAgentPrompt(binding.terminalHandle, prompt, options)
       : this.runtime.sendTerminalAgentPrompt(binding.terminalHandle, prompt)
+  }
+
+  async interrupt(binding: RoomHarnessBinding): Promise<void> {
+    await interruptRoomHarness(this.runtime, binding)
   }
 
   async prepareControl(binding: RoomHarnessBinding, command: string): Promise<void> {
@@ -126,23 +156,17 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
   }
 
   stop(binding: RoomHarnessBinding): Promise<RuntimeTerminalClose> {
-    return this.runtime.closeTerminal(binding.terminalHandle, { force: true })
-  }
-
-  async resume(worktreeId: string, historyId: string): Promise<RoomHarnessBinding> {
-    const session = await this.runtime.resolveRoomHistoricalSession(
-      worktreeId,
-      this.agent,
-      historyId
-    )
-    return this.restore({ worktreeId, terminalHandle: '', paneKey: '', providerSession: session })
+    return this.runtime.closeTerminal(binding.terminalHandle, {
+      force: true,
+      waitForExit: true
+    })
   }
 
   /** Foreground-verified lookup of the live pane hosting this binding's agent.
    *  Provider session survives pane replacement; pane identity is the fallback
    *  before the provider has assigned one. */
   async locate(binding: RoomHarnessBinding): Promise<RoomHarnessBinding | null> {
-    const current = (await this.runtime.listRoomAttachableAgents(binding.worktreeId)).find(
+    const current = (await this.runtime.listRoomRunningAgents(binding.worktreeId)).find(
       (candidate) =>
         candidate.agent === this.agent &&
         candidate.worktreeId === binding.worktreeId &&
@@ -159,7 +183,9 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
       terminalHandle: current.terminalHandle,
       paneKey: current.paneKey,
       providerSession: current.providerSession,
-      disposition: 'attached'
+      disposition: 'adopted',
+      terminalSurfaceVisible:
+        this.runtime.hasPersistedTerminalSurface?.(current.worktreeId, current.paneKey) === true
     }
   }
 

@@ -10,6 +10,7 @@ const MAX_RETAINED_BYTES = MAX_ROOM_ARCHIVE_BYTES * 2
 
 type ExportTransfer = {
   kind: 'export'
+  roomId: string
   bytes: Buffer
   fileName: string
   touchedAt: number
@@ -28,6 +29,7 @@ export class RoomArchiveTransferStore {
   private pendingExports = 0
   private reservedBytes = 0
   private generation = 0
+  private readonly roomGenerations = new Map<string, number>()
 
   constructor(private readonly archive: RoomArchive) {}
 
@@ -44,16 +46,26 @@ export class RoomArchiveTransferStore {
     this.pendingExports += 1
     this.reservedBytes += MAX_ROOM_ARCHIVE_BYTES
     const generation = this.generation
+    const roomGeneration = this.roomGenerations.get(roomId) ?? 0
     try {
       const bytes = await this.archive.export(roomId)
-      if (generation !== this.generation) {
+      if (
+        generation !== this.generation ||
+        roomGeneration !== (this.roomGenerations.get(roomId) ?? 0)
+      ) {
         throw new Error('room_archive_transfer_not_found')
       }
       if (bytes.byteLength > MAX_ROOM_ARCHIVE_BYTES) {
         throw new Error('room_archive_too_large')
       }
       const transferId = randomUUID()
-      this.transfers.set(transferId, { kind: 'export', bytes, fileName, touchedAt: Date.now() })
+      this.transfers.set(transferId, {
+        kind: 'export',
+        roomId,
+        bytes,
+        fileName,
+        touchedAt: Date.now()
+      })
       return {
         transferId,
         fileName,
@@ -130,13 +142,31 @@ export class RoomArchiveTransferStore {
     return { roomId: transfer.roomId, report }
   }
 
+  importRoomId(transferId: string): string {
+    return this.get(transferId, 'import').roomId
+  }
+
   cancel(transferId: string): void {
     this.transfers.delete(transferId)
+  }
+
+  cancelRoom(roomId: string): void {
+    this.roomGenerations.set(roomId, (this.roomGenerations.get(roomId) ?? 0) + 1)
+    for (const [id, transfer] of this.transfers) {
+      if (transfer.roomId === roomId) {
+        this.transfers.delete(id)
+      }
+    }
+  }
+
+  forgetRoom(roomId: string): void {
+    this.roomGenerations.delete(roomId)
   }
 
   clear(): void {
     this.generation += 1
     this.transfers.clear()
+    this.roomGenerations.clear()
   }
 
   private reserve(bytes = 0): void {

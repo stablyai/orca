@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import type { RoomAgentActivity } from '../../../../shared/rooms'
+import type { RoomAgentActivity, RoomDelivery, RoomSnapshot } from '../../../../shared/rooms'
 import { EMPTY_ACTIVE_ROOM, reduceRoomEvent } from './room-event-reducer'
 
 describe('room transient activity state', () => {
+  it('accepts the authoritative work state on delivery updates', () => {
+    const stopped = reduceRoomEvent(
+      { ...EMPTY_ACTIVE_ROOM, snapshot: { workState: 'active' } as RoomSnapshot },
+      {
+        type: 'delivery.updated',
+        delivery: { id: 'delivery-1' } as RoomDelivery,
+        workState: 'stopped'
+      }
+    )
+
+    expect(stopped.snapshot?.workState).toBe('stopped')
+  })
+
   it('keeps activity outside persisted messages and clears it on final', () => {
     const activity: RoomAgentActivity = {
       participantId: 'agent-1',

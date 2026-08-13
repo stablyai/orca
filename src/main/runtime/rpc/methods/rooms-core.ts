@@ -10,6 +10,7 @@ import {
   RoomIdentity,
   RoomSubscription
 } from './rooms-schemas'
+import { withoutRoomAgentOwners } from '../../rooms/participant-ownership'
 
 const Unsubscribe = z.object({ subscriptionId: z.string().trim().min(1).max(256) }).strict()
 
@@ -18,12 +19,11 @@ export const ROOM_CORE_METHODS: readonly RpcAnyMethod[] = [
     name: 'rooms.list',
     params: z
       .object({
-        projectId: z.string().trim().min(1).max(512),
-        includeArchived: z.boolean().optional()
+        projectId: z.string().trim().min(1).max(512)
       })
       .strict(),
     handler: async (params, { runtime }) => ({
-      rooms: runtime.getRoomService().listRooms(params.projectId, params.includeArchived)
+      rooms: runtime.getRoomService().listRooms(params.projectId)
     })
   }),
   defineMethod({
@@ -58,12 +58,23 @@ export const ROOM_CORE_METHODS: readonly RpcAnyMethod[] = [
     params: RoomSubscription,
     handler: async (params, { runtime, connectionId }, emit) => {
       const key = `rooms:${connectionId ?? 'local'}:${params.subscriptionId}`
-      const unsubscribe = runtime.getRoomService().subscribe(params.roomId, params.readerKey, emit)
+      let deleted = false
+      const unsubscribe = runtime
+        .getRoomService()
+        .subscribe(params.roomId, params.readerKey, (event) => {
+          emit(event)
+          if (event.type === 'end' && event.reason === 'deleted') {
+            deleted = true
+            queueMicrotask(() => runtime.cleanupSubscription(key))
+          }
+        })
       runtime.registerSubscriptionCleanup(
         key,
         () => {
           unsubscribe()
-          emit({ type: 'end' })
+          if (!deleted) {
+            emit({ type: 'end' })
+          }
         },
         connectionId
       )
@@ -173,11 +184,24 @@ export const ROOM_CORE_METHODS: readonly RpcAnyMethod[] = [
     })
   }),
   defineMethod({
-    name: 'rooms.participants.attachable',
-    params: z.object({ worktreeId: z.string().trim().min(1).max(1024) }).strict(),
-    handler: async (params, { runtime }) => ({
-      participants: await runtime.getRoomService().listAttachableAgents(params.worktreeId)
-    })
+    name: 'rooms.participants.existing',
+    params: z
+      .object({
+        worktreeId: z.string().trim().min(1).max(1024),
+        agent: HarnessAgent
+      })
+      .strict(),
+    handler: async (params, { runtime }) => {
+      const service = runtime.getRoomService()
+      return {
+        participants: withoutRoomAgentOwners(
+          service.db.participants,
+          await runtime.listRoomExistingAgents(params.worktreeId, params.agent),
+          params.worktreeId,
+          params.agent
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'rooms.participants.remove',
@@ -262,5 +286,19 @@ export const ROOM_CORE_METHODS: readonly RpcAnyMethod[] = [
       runtime.getRoomService().retryDelivery(params.deliveryId)
       return { retried: true }
     }
+  }),
+  defineMethod({
+    name: 'rooms.work.stop',
+    params: z.object({ roomId: RoomId }).strict(),
+    handler: async (params, { runtime }) => ({
+      stopped: await runtime.getRoomService().stopRoom(params.roomId)
+    })
+  }),
+  defineMethod({
+    name: 'rooms.work.resume',
+    params: z.object({ roomId: RoomId }).strict(),
+    handler: async (params, { runtime }) => ({
+      resumed: await runtime.getRoomService().resumeRoom(params.roomId)
+    })
   })
 ]

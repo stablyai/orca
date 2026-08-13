@@ -51,6 +51,7 @@ const participants = [
 function prompt(overrides: Partial<Parameters<typeof formatRoomDeliveryPrompt>[0]> = {}): string {
   return formatRoomDeliveryPrompt({
     deliveryId: 'delivery-1',
+    attempt: 1,
     response: 'required',
     roomName: 'Research',
     message: message(),
@@ -69,7 +70,7 @@ describe('room delivery prompt', () => {
       configuration: { description: 'Compare the evidence.' }
     })
 
-    expect(result).toContain('<orca-room-delivery id="delivery-1" response="required">')
+    expect(result).toContain('<orca-room-delivery id="delivery-1" response="required" attempt="1">')
     expect(result).toContain('A reply is required.')
     expect(result).toContain('using only identities from ["claude"]')
     expect(result).not.toContain('room-context-ref')
