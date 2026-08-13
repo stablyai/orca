@@ -248,6 +248,7 @@ import {
   type PrepareCodexSessionResume
 } from './pty'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
+import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../pty/legacy-terminal-shim-dir'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import {
@@ -4399,6 +4400,16 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
       })
 
+      it('asks surviving pre-upgrade daemons to delete legacy attribution env', async () => {
+        const spawnOptions = await daemonSpawnAndGetOptions({})
+
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining([...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS])
+        )
+        expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GIT')
+        expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GH')
+      })
+
       it('deletes stale Claude scoped settings env from runtime-created daemon PTYs', async () => {
         type RuntimeSpawnController = {
           spawn(args: {
@@ -4434,6 +4445,38 @@ describe('registerPtyHandlers', () => {
         )
         expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('asks surviving pre-upgrade daemons to delete legacy attribution env for runtime PTYs', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            env?: Record<string, string>
+          }): Promise<{ id: string }>
+        }
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({ cols: 80, rows: 24, worktreeId: 'wt-runtime', env: {} })
+
+        const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining([...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS])
+        )
+        expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GIT')
+        expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GH')
       })
 
       it('strips inherited Claude child-session stamps from runtime-created PTYs', async () => {

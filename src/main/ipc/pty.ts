@@ -113,6 +113,7 @@ import {
 import { ensureLinuxTerminalOrcaCliShimDir } from '../cli/linux-terminal-orca-cli-shim'
 import {
   isLegacyTerminalShimPathEntry,
+  LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS,
   stripLegacyTerminalShimEnv
 } from '../pty/legacy-terminal-shim-dir'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
@@ -4732,6 +4733,8 @@ export function registerPtyHandlers(
       spawnOptions.envToDelete = mergePtyEnvDeletions(
         authEnvToDelete,
         args.envToDelete ?? [],
+        // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
+        isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
         isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : [],
         // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
         getInheritedClaudeSessionStampEnvKeysToDelete(env)
@@ -6396,6 +6399,8 @@ export function registerPtyHandlers(
           envToDelete,
           args.envToDelete ?? [],
           agentTeamsEnvToDelete ?? [],
+          // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
+          isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
           isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : [],
           getInheritedClaudeSessionStampEnvKeysToDelete(spawnEnv),
           skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
