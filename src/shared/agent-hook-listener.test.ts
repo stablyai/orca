@@ -801,52 +801,8 @@ describe('shared agent-hook-listener', () => {
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('maps OMP ask_user_question tool_call to blocked with interactivePrompt', () => {
-    const questions = {
-      questions: [
-        {
-          question: 'Choose',
-          options: ['x', 'y']
-        }
-      ]
-    }
+  it('maps OMP ask to blocked without publishing a native prompt', () => {
     const tool = normalizeHookPayload(
-      state,
-      'omp',
-      {
-        paneKey: PANE_KEY,
-        tabId: 'tab-1',
-        worktreeId: 'wt',
-        env: 'production',
-        version: '1',
-        payload: {
-          hook_event_name: 'tool_call',
-          tool_name: 'ask_user_question',
-          tool_input: questions
-        }
-      },
-      'production'
-    )
-    expect(tool?.payload).toMatchObject({
-      state: 'blocked',
-      agentType: 'omp',
-      toolName: 'ask_user_question'
-    })
-    expect(tool?.payload.interactivePrompt).toBe(JSON.stringify(questions))
-  })
-
-  it('maps OMP ask tool_execution_start to blocked with interactivePrompt', () => {
-    // Why: OMP emits tool_execution_start while it waits for the user's answer.
-    const questions = {
-      questions: [
-        {
-          id: 'route',
-          question: 'How to proceed?',
-          options: [{ label: 'Open a PR' }, { label: 'File an issue' }]
-        }
-      ]
-    }
-    const blocked = normalizeHookPayload(
       state,
       'omp',
       {
@@ -858,17 +814,24 @@ describe('shared agent-hook-listener', () => {
         payload: {
           hook_event_name: 'tool_execution_start',
           tool_name: 'ask',
-          tool_input: questions
+          tool_input: {
+            questions: [
+              {
+                question: 'Choose',
+                options: ['x', 'y']
+              }
+            ]
+          }
         }
       },
       'production'
     )
-    expect(blocked?.payload).toMatchObject({
+    expect(tool?.payload).toMatchObject({
       state: 'blocked',
       agentType: 'omp',
       toolName: 'ask'
     })
-    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
   it('captures Pi session ids on Pi-compatible status events', () => {
