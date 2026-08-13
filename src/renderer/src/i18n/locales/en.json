@@ -14473,7 +14473,9 @@
           "tableStatus": "Status",
           "tableActions": "Actions",
           "newAutomation": "New Automation",
-          "rowActions": "Automation actions"
+          "rowActions": "Automation actions",
+          "tableLastRun": "Last run",
+          "noListMatches": "No automations match."
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "Loading automations"
@@ -14599,6 +14601,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "Automation actions"
+        },
+        "AutomationListFilterMenu": {
+          "removeFilter": "Remove {{value0}} filter",
+          "failed": "Failed",
+          "succeeded": "Succeeded",
+          "neverRan": "Never ran",
+          "filters": "Filters",
+          "all": "All",
+          "clear": "Clear filters"
+        },
+        "AutomationListSortHeader": {
+          "ascending": "ascending",
+          "descending": "descending"
         }
       },
       "agent": {

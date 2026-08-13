@@ -36,6 +36,8 @@ import {
   AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
 } from './automations-table-layout'
 import { isPortaledRowMenuClick, isRowActivationKey } from './automation-list-row-interaction'
+import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
+import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
 
@@ -85,6 +87,7 @@ export function AutomationListExternalRows({
         const nextRunLabel = entry.job.enabled
           ? formatExternalDate(entry.job.nextRunAt, relativeNow)
           : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
+        const lastRunSnapshot = getExternalAutomationLastRunSnapshot(entry.job)
 
         return (
           <ContextMenu key={entry.key}>
@@ -124,6 +127,7 @@ export function AutomationListExternalRows({
                 <span className="min-w-0 truncate text-muted-foreground" title={nextRunLabel}>
                   {nextRunLabel}
                 </span>
+                <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
                 <AutomationListStatusCell enabled={entry.job.enabled} />
                 <span className="truncate text-center text-xs text-muted-foreground">
                   {providerLabel}
