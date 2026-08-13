@@ -57,6 +57,17 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.c6e5a03aa0',
         'dev box'
+      ),
+      // This pane hosts the paired-server update check, so its channels must be searchable too.
+      // Channel names stay English everywhere; they are the literal build identifiers.
+      ...translateSearchKeyword('auto.components.settings.runtime.environments.search.rc', 'rc', {
+        englishOnly: true,
+        aliases: ['prerelease']
+      }),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.perf',
+        'perf',
+        { englishOnly: true }
       )
     ]
   })

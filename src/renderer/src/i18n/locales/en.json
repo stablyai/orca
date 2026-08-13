@@ -789,6 +789,12 @@
             "additionalErrors": "{{count}} additional images could not be attached."
           }
         }
+      },
+      "updateCheckClickOptions": {
+        "hint": "{{value0}}+click checks the latest RC; {{value1}}+click checks the latest perf build.",
+        "localBuildHint": "{{value0}}+click chooses a local macOS build.",
+        "serverHint": "{{value0}}+click checks servers for the latest RC; {{value1}}+click checks servers for the latest perf build.",
+        "menuHint": "{{value0}}+click RC · {{value1}}+click perf"
       }
     },
     "hooks": {

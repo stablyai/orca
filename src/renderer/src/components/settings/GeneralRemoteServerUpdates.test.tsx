@@ -47,6 +47,12 @@ describe('GeneralRemoteServerUpdates', () => {
     expect(button?.querySelector('svg.lucide-download')).toBeNull()
     expect(container.textContent).toContain('1 paired server · 1 up to date')
 
+    // #10590: the channels are readable without hovering, and never promise a local macOS build
+    // the server-update path cannot deliver.
+    expect(container.textContent).toContain('checks servers for the latest RC')
+    expect(container.textContent).not.toContain('macOS')
+    expect(button?.getAttribute('aria-describedby')).toBe('remote-server-update-check-hint')
+
     await act(async () => {
       button?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))
     })

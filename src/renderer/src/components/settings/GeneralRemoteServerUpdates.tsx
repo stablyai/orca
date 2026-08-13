@@ -4,8 +4,13 @@ import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import {
+  getRemoteServerUpdateCheckClickOptions,
+  getRemoteServerUpdateCheckHint
+} from '@/lib/update-check-click-options'
 import { SearchableSetting } from './SearchableSetting'
+
+const REMOTE_UPDATE_CHECK_HINT_ID = 'remote-server-update-check-hint'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const entryMap = useAppStore((state) => state.remoteServerUpdates)
@@ -14,7 +19,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
-  const updateCheckHint = getUpdateCheckHint()
+  const updateCheckHint = getRemoteServerUpdateCheckHint()
 
   useEffect(() => {
     void refresh()
@@ -85,7 +90,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         'auto.components.settings.GeneralRemoteServerUpdates.description',
         'Check and update paired Orca servers from this client.'
       )}
-      keywords={['remote server', 'update all', 'paired', 'version']}
+      keywords={['remote server', 'update all', 'paired', 'version', 'rc', 'prerelease', 'perf']}
       className="space-y-3"
     >
       <div className="space-y-0.5">
@@ -101,6 +106,9 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
             'Check and update paired Orca servers from this client.'
           )}
         </p>
+        <p id={REMOTE_UPDATE_CHECK_HINT_ID} className="text-[11px] text-muted-foreground">
+          {updateCheckHint}
+        </p>
       </div>
       <div>
         <Button
@@ -109,10 +117,11 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           size="sm"
           className="gap-2"
           title={updateCheckHint}
+          aria-describedby={REMOTE_UPDATE_CHECK_HINT_ID}
           disabled={checking || running}
           onClick={(event) => {
             setDialogOpen(true)
-            void refresh(getUpdateCheckClickOptions(event))
+            void refresh(getRemoteServerUpdateCheckClickOptions(event))
           }}
         >
           {checking || running ? (

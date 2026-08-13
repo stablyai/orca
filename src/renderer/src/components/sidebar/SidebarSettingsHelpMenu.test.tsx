@@ -60,21 +60,27 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuItem: ({
     children,
+    className,
     disabled,
+    onKeyDown,
     onPointerDown,
     onSelect,
     title
   }: {
     children: ReactNode
+    className?: string
     disabled?: boolean
+    onKeyDown?: (event: React.KeyboardEvent<HTMLButtonElement>) => void
     onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void
     onSelect?: (event: Event) => void
     title?: string
   }) => (
     <button
       data-testid="menu-item"
+      className={className}
       disabled={disabled}
       onClick={() => onSelect?.(new Event('menu.itemSelect'))}
+      onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       title={title}
     >
@@ -310,6 +316,57 @@ describe('SidebarSettingsHelpMenu', () => {
       includePrerelease: false,
       includePerfPrerelease: false
     })
+  })
+
+  // #10590: the menu now advertises the gesture as visible copy, so it has to work for a user
+  // who arrows to the item and presses Enter — Radix's synthetic click carries no modifiers.
+  it('forwards modifiers held during keyboard selection', async () => {
+    const container = await renderMenu()
+    const checkButton = findMenuItem(container, 'Check for Updates')
+
+    await act(async () => {
+      checkButton.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', shiftKey: true })
+      )
+      checkButton.click()
+    })
+
+    expect(mocks.updaterCheck).toHaveBeenLastCalledWith({
+      includePrerelease: true,
+      includePerfPrerelease: false
+    })
+  })
+
+  it('shows the update channels as visible menu copy, not only a native title', () => {
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    const visibleText = html.replace(/<[^>]*>/g, ' ')
+    expect(visibleText).toMatch(/(⇧|Shift)\+click RC/)
+    expect(visibleText).toMatch(/(⌘|Ctrl)\+click perf/)
+  })
+
+  // DropdownMenuItem is `flex items-center gap-2`, so label and hint must be stacked by an
+  // intermediate column that is allowed to shrink — otherwise they share one row and overflow w-52.
+  it('stacks the menu hint under the label in a shrinkable column', () => {
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    const columnClass = /class="([^"]*flex-col[^"]*)"/.exec(html)?.[1] ?? ''
+    expect(columnClass.split(' ')).toEqual(expect.arrayContaining(['flex', 'min-w-0', 'flex-col']))
+  })
+
+  // #10590: web's updater bridge is `check: () => Promise.resolve()`, so the gesture cannot work
+  // there — the menu must not advertise it, matching the Updates settings section.
+  it('omits the menu hint in the web client, whose updater bridge is a no-op', async () => {
+    ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    try {
+      const visibleText = renderToStaticMarkup(<SidebarSettingsHelpMenu />).replace(/<[^>]*>/g, ' ')
+      expect(visibleText).toContain('Check for Updates')
+      expect(visibleText).not.toMatch(/RC/)
+      expect(visibleText).not.toMatch(/perf/)
+
+      const container = await renderMenu()
+      expect(findMenuItem(container, 'Check for Updates').getAttribute('title')).toBeNull()
+    } finally {
+      delete (window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+    }
   })
 
   it('renders shortcut keys in the settings tooltip', () => {

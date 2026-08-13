@@ -188,7 +188,15 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.general.search.c9d8c1ce66',
         'release notes'
       ),
-      ...translateSearchKeyword('auto.components.settings.general.search.e49e739a59', 'download')
+      ...translateSearchKeyword('auto.components.settings.general.search.e49e739a59', 'download'),
+      // Channel names stay English everywhere; they are the literal build identifiers.
+      ...translateSearchKeyword('auto.components.settings.general.search.updateRc', 'rc', {
+        englishOnly: true,
+        aliases: ['prerelease']
+      }),
+      ...translateSearchKeyword('auto.components.settings.general.search.updatePerf', 'perf', {
+        englishOnly: true
+      })
     ]
   }
 ])

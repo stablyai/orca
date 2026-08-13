@@ -8,9 +8,12 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
+
+const UPDATE_CHECK_HINT_ID = 'general-update-check-hint'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -40,7 +43,10 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const updateCheckHint = getUpdateCheckHint()
+  // Why: the web client's updater bridge resolves without doing anything, so advertising the
+  // modifier gestures there would teach a gesture that cannot work.
+  const showUpdateCheckHint = !isWebClientLocation()
+  const updateCheckHint = showUpdateCheckHint ? getUpdateCheckHint() : null
   // Why: channel switching is a power-user escape hatch that can downgrade the app
   // onto an unvetted build. Option/Alt-clicking the header reveals it rather than
   // shipping it on the default surface.
@@ -97,7 +103,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
           'auto.components.settings.GeneralUpdateSettingsSection.ceb579abaf',
           'Check for app updates and install a newer Orca version.'
         )}
-        keywords={['update', 'version', 'release notes', 'download']}
+        keywords={['update', 'version', 'release notes', 'download', 'rc', 'prerelease', 'perf']}
         className="space-y-3"
       >
         <div className="flex items-center gap-3">
@@ -107,7 +113,8 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             // Why: modifier-click channels are power-user update affordances, not
             // persistent settings toggles.
             onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
-            title={updateCheckHint}
+            title={updateCheckHint ?? undefined}
+            aria-describedby={updateCheckHint ? UPDATE_CHECK_HINT_ID : undefined}
             disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
             className="gap-2"
           >
@@ -256,6 +263,14 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                   { value0: updateStatus.message }
                 ))}
         </p>
+
+        {/* Why: rendered outside every updateStatus branch — while a check runs the button is
+            disabled, and `disabled:pointer-events-none` stops the native title from ever firing. */}
+        {updateCheckHint ? (
+          <p id={UPDATE_CHECK_HINT_ID} className="text-[11px] text-muted-foreground">
+            {updateCheckHint}
+          </p>
+        ) : null}
       </SearchableSetting>
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />

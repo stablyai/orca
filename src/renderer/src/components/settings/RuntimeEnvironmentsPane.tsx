@@ -56,7 +56,10 @@ import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import {
+  getRemoteServerUpdateCheckClickOptions,
+  getRemoteServerUpdateCheckHint
+} from '@/lib/update-check-click-options'
 import {
   getRemoteServerManualUpdateHelp,
   RemoteServerUpdateStatus
@@ -65,6 +68,7 @@ import { RuntimeHostAccessForm, type RuntimeHostAccessFailure } from './RuntimeH
 
 const LOCAL_RUNTIME_VALUE = '__local__'
 const NO_RUNTIME_VALUE = '__none__'
+const REMOTE_UPDATE_CHECK_HINT_ID = 'runtime-environments-update-check-hint'
 
 type RuntimeEnvironmentsPaneProps = {
   settings: GlobalSettings
@@ -295,7 +299,7 @@ export function RuntimeEnvironmentsPane({
   )
   const consumedAddServerIntentSignalRef = useRef(0)
   const mountedRef = useMountedRef()
-  const updateCheckHint = getUpdateCheckHint()
+  const updateCheckHint = getRemoteServerUpdateCheckHint()
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
     (allowLocalRuntime ? LOCAL_RUNTIME_VALUE : NO_RUNTIME_VALUE)
@@ -866,6 +870,11 @@ export function RuntimeEnvironmentsPane({
                 'Pair another Orca runtime, then connect or disconnect it here.'
               )}
             </p>
+            {environments.length > 0 ? (
+              <p id={REMOTE_UPDATE_CHECK_HINT_ID} className="text-[11px] text-muted-foreground">
+                {updateCheckHint}
+              </p>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {environments.length > 0 ? (
@@ -875,9 +884,10 @@ export function RuntimeEnvironmentsPane({
                 size="sm"
                 className="gap-1.5"
                 title={updateCheckHint}
+                aria-describedby={REMOTE_UPDATE_CHECK_HINT_ID}
                 onClick={(event) => {
                   setRemoteServerUpdateDialogOpen(true)
-                  void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
+                  void refreshRemoteServerUpdates(getRemoteServerUpdateCheckClickOptions(event))
                 }}
                 disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
               >
