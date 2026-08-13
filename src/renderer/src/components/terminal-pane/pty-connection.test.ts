@@ -3632,6 +3632,140 @@ describe('connectPanePty', () => {
     expect(transport.connect.mock.calls.length).toBe(connectCallsAfterFailure + 1)
   })
 
+  it('releases a failed resume attempt pending startup command so the retry wake still resumes', async () => {
+    // Regression: startFreshSpawn installs pendingStartupCommand BEFORE transport.connect (so
+    // schedulePendingStartupCommandDelivery can paste it once the shell speaks), but no failure
+    // path released it again — unlike the sibling clearRegisteredStartupLaunchConfig() cleanup.
+    // buildColdRestoreAgentResumeStartup() early-returns null while a command is still pending, so
+    // the retry wake degraded from a real cold-restore resume (command + launchConfig +
+    // resumeProviderSession + ORCA_AGENT_LAUNCH_TOKEN) into a bare shell that merely got the dead
+    // attempt's resume line typed into it — no launch token, no launch config, sleeping record
+    // never consumed.
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+
+      const capturedDataCallbacks: ((data: string) => void)[] = []
+      let currentPtyId: string | null = null
+      const transport = createMockTransport()
+      transport.getPtyId = vi.fn(() => currentPtyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          const spawnedPtyId = `pty-ssh-${capturedDataCallbacks.length}`
+          capturedDataCallbacks.push(callbacks.onData ?? (() => {}))
+          currentPtyId = spawnedPtyId
+          return spawnedPtyId
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] },
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }],
+        sshConnectionStates: new Map([['ssh-conn-1', { status: 'connected' }]]),
+        agentStatusByPaneKey: {}
+      } as StoreState
+
+      const pane = createPane(1)
+      pane.terminal.modes.bracketedPasteMode = true
+      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        callback?.()
+      })
+      const manager = createManager(1)
+      const deps = createDeps({
+        startup: { command: 'claude', delivery: 'terminal-paste' },
+        consumeSuppressedPtyExit: vi.fn(() => true)
+      })
+      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
+        wakeHibernatedAgentIfArmed: () => string | null
+      }
+      await flushAsyncTicks(20)
+
+      // The pane's own terminal-paste startup command is delivered normally, clearing the slot.
+      expect(capturedDataCallbacks.length).toBe(1)
+      capturedDataCallbacks[0]?.('user@host $ ')
+      await drainPendingTimeouts(pendingTimeouts)
+      await flushAsyncTicks(20)
+      expect(pane.terminal.paste).toHaveBeenCalledWith('claude')
+
+      // The agent hibernates while hidden: its suppressed exit arms the wake target.
+      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'sess-ssh-resume-retry' },
+        prompt: 'finish the task',
+        state: 'done',
+        capturedAt: 1,
+        updatedAt: 1,
+        origin: 'worktree-sleep'
+      }
+      mockStoreState.suppressedPtyExitIds['pty-ssh-0'] = true
+      deps.isVisibleRef.current = false
+      const onPtyExit = createdTransportOptions[0]?.onPtyExit as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtyExit?.('pty-ssh-0')
+      // Why: a real exit clears the transport's tracked ptyId.
+      currentPtyId = null
+      await flushAsyncTicks(20)
+
+      // Wake 1: a genuine cold-restore resume that installs its command and then fails to spawn.
+      transport.connect.mockRejectedValueOnce(new Error('transient ssh spawn failure'))
+      expect(binding.wakeHibernatedAgentIfArmed()).not.toBeNull()
+      await flushAsyncTicks(20)
+      const failedResumeOptions = transport.connect.mock.calls.at(-1)?.[0] as
+        | { command?: string }
+        | undefined
+      expect(failedResumeOptions?.command).toContain('sess-ssh-resume-retry')
+      // The failed attempt produced no PTY, so nothing was ever typed into a shell.
+      expect(capturedDataCallbacks.length).toBe(1)
+
+      // Wake 2: the re-armed target retries. It must still be a real resume, not a bare shell
+      // carrying attempt 1's leftover command.
+      expect(binding.wakeHibernatedAgentIfArmed()).not.toBeNull()
+      await flushAsyncTicks(20)
+      expect(capturedDataCallbacks.length).toBe(2)
+      const retryResumeOptions = transport.connect.mock.calls.at(-1)?.[0] as
+        | {
+            command?: string
+            launchConfig?: unknown
+            launchToken?: string
+            resumeProviderSession?: unknown
+            env?: Record<string, string>
+          }
+        | undefined
+      expect(retryResumeOptions?.command).toContain('sess-ssh-resume-retry')
+      expect(retryResumeOptions?.resumeProviderSession).toEqual({
+        key: 'session_id',
+        id: 'sess-ssh-resume-retry'
+      })
+      expect(retryResumeOptions?.launchToken).toEqual(
+        expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+      )
+      expect(retryResumeOptions?.env).toEqual(
+        expect.objectContaining({
+          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+        })
+      )
+      // Why: only a real cold-restore resume registers the launch config the session rules and
+      // takeover bookkeeping key off — the degraded bare-shell path never did.
+      expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalled()
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
+
   it('does not latch a stale sleeping record beside an unsuppressed live PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-pane-2')

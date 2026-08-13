@@ -5613,6 +5613,7 @@ export function connectPanePty(
       // a restart-in-place would leak the old TUI's flags into a fresh shell.
       kittyKeyboardModes.reset()
       prepareFreshShellViewportForSpawn(options)
+      let ownedPendingStartupCommand: PendingStartupCommand | null = null
       if (connectionId && startupOverride?.command && shouldDeliverStartupViaTerminalPaste) {
         // Why: ordinary SSH resumes are provider-owned (commandDelivery: 'provider'
         // below) — the transport submits the command once it sees shell-ready.
@@ -5620,7 +5621,24 @@ export function connectPanePty(
         // needs pendingStartupCommand so schedulePendingStartupCommandDelivery
         // pastes it in. Setting this unconditionally would double-submit the
         // command: once via the provider, once via sendInput.
-        pendingStartupCommand = { command: startupOverride.command }
+        ownedPendingStartupCommand = { command: startupOverride.command }
+        pendingStartupCommand = ownedPendingStartupCommand
+      }
+      // Why: this attempt owns the slot it just installed only while its own spawn is still
+      // a viable delivery target — the same ownership contract as
+      // resetOwnedColdRestoreDraftOnAbortedAttempt above and clearRegisteredStartupLaunchConfig
+      // below. If the spawn settles with no PTY there is no shell left to type this command
+      // into, and leaving it set has two user-visible consequences: the pane's next
+      // buildColdRestoreAgentResumeStartup() early-returns null while any command is pending, so
+      // the retry wake degrades from a real cold-restore resume (command + launchConfig +
+      // resumeProviderSession + ORCA_AGENT_LAUNCH_TOKEN, and the sleeping record consumed) into a
+      // bare shell; and schedulePendingStartupCommandDelivery then types the dead attempt's
+      // resume line into that unrelated shell. The identity check keeps a newer attempt's
+      // command — and the pane's own paneStartup command — untouched.
+      const releaseOwnedPendingStartupCommand = (): void => {
+        if (ownedPendingStartupCommand && pendingStartupCommand === ownedPendingStartupCommand) {
+          pendingStartupCommand = null
+        }
       }
       // Why: pre-signal the main process so its cooperation gate suppresses
       // the daemon-snapshot seed for this paneKey. We issue declare and the
@@ -5676,6 +5694,7 @@ export function connectPanePty(
       const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
         .then(async (spawnedPtyId) => {
           if (outputCallbacks.generation !== transportStreamGeneration) {
+            releaseOwnedPendingStartupCommand()
             finishReattachLiveDataDeferral(false, outputCallbacks.generation)
             const gen = await preSignalPromise
             if (typeof gen === 'number') {
@@ -5690,6 +5709,7 @@ export function connectPanePty(
                 ? spawnedPtyId
                 : transport.getPtyId()
           if (resolvedPtyId && !claimCapturedDirectSshRetryPty(resolvedPtyId)) {
+            releaseOwnedPendingStartupCommand()
             finishReattachLiveDataDeferral(false, outputCallbacks.generation)
             return null
           }
@@ -5742,14 +5762,17 @@ export function connectPanePty(
               showSessionRestoredBanner()
             }
             clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
-          } else if (
-            paneStartup?.launchConfig ||
-            (startupOverride && 'launchConfig' in startupOverride)
-          ) {
-            // Why: delayed draft/follow-up delivery keys off this launch
-            // registry. If spawn produced no PTY, the launch is no longer a
-            // viable delivery target and must not wait for a future pane.
-            clearRegisteredStartupLaunchConfig()
+          } else {
+            releaseOwnedPendingStartupCommand()
+            if (
+              paneStartup?.launchConfig ||
+              (startupOverride && 'launchConfig' in startupOverride)
+            ) {
+              // Why: delayed draft/follow-up delivery keys off this launch
+              // registry. If spawn produced no PTY, the launch is no longer a
+              // viable delivery target and must not wait for a future pane.
+              clearRegisteredStartupLaunchConfig()
+            }
           }
           if (
             resolvedPtyId &&
@@ -5793,6 +5816,7 @@ export function connectPanePty(
           return resolvedPtyId
         })
         .catch(async () => {
+          releaseOwnedPendingStartupCommand()
           finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           if (paneStartup?.launchConfig || (startupOverride && 'launchConfig' in startupOverride)) {
             clearRegisteredStartupLaunchConfig()
