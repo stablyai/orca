@@ -6,8 +6,13 @@
  * main then drops renderer-bound delivery AFTER model ingestion — the runtime
  * already parsed the chunk, and reveal restores from the model snapshot via
  * the existing seq-guarded machinery. Any renderer party that still needs raw
- * bytes (dispatcher sidecars) registers delivery
- * interest, which suppresses the gate for that PTY.
+ * bytes (dispatcher sidecars) registers delivery interest; those bytes are
+ * still sent, but flagged sidecar-only so no view renders or replies to them.
+ *
+ * The view suppression, not the send, is what main's query authority keys on:
+ * a sidecar is not an xterm, so inferring "delivered ⇒ a renderer xterm will
+ * answer" left parked panes with a live sidecar unanswered (fish blocks ~10s
+ * on DA1 at every prompt paint).
  */
 import type { GlobalSettings } from '../../shared/types'
 
@@ -77,15 +82,31 @@ export function setRendererPtyDeliveryInterest(id: string, interested: boolean):
   }
 }
 
+/** No renderer VIEW may render or reply to this PTY's bytes: hidden panes are
+ *  starved by design and parked panes have no xterm at all. Delivery interest
+ *  does not lift this — it only decides whether the bytes still travel (to
+ *  sidecars) or are dropped outright. */
+export function shouldSuppressHiddenRendererPtyView(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): boolean {
+  return isHiddenPtyDeliveryGateEnabled(settings) && hiddenRendererPtys.has(id)
+}
+
 export function shouldDropHiddenRendererPtyData(
   id: string,
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
-  return (
-    isHiddenPtyDeliveryGateEnabled(settings) &&
-    hiddenRendererPtys.has(id) &&
-    !deliveryInterestRendererPtys.has(id)
-  )
+  return shouldSuppressHiddenRendererPtyView(id, settings) && !deliveryInterestRendererPtys.has(id)
+}
+
+/** Bytes a sidecar still needs while the view is suppressed: sent, but flagged
+ *  so the dispatcher routes them past the primary (xterm) handler. */
+export function shouldDeliverHiddenRendererPtyDataToSidecarsOnly(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): boolean {
+  return shouldSuppressHiddenRendererPtyView(id, settings) && deliveryInterestRendererPtys.has(id)
 }
 
 /** Record one gated drop. Returns whether the caller should emit the one-shot
@@ -96,6 +117,14 @@ export function recordHiddenRendererPtyDataDrop(
 ): { shouldEmitRestoreMarker: boolean } {
   droppedHiddenDeliveryChars += chars
   droppedHiddenDeliveryChunks += 1
+  return recordHiddenRendererPtyViewGap(id)
+}
+
+/** Same restore latch as a drop, for bytes that were sent sidecar-only: the
+ *  view missed them either way, so reveal must repaint from the model. */
+export function recordHiddenRendererPtyViewGap(id: string): {
+  shouldEmitRestoreMarker: boolean
+} {
   if (droppedSinceHiddenPtys.has(id)) {
     return { shouldEmitRestoreMarker: false }
   }

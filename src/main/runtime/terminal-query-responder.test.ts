@@ -190,7 +190,10 @@ describe('reply ownership matrix', () => {
     expect(replies).toEqual([])
   })
 
-  it('never answers while renderer delivery interest holds the chunk delivered', async () => {
+  // Regression: delivery interest routes bytes to raw-byte sidecars, never to a
+  // view — a parked pane has no xterm at all, so yielding here left DA1
+  // unanswered and fish blocked ~10s at every prompt paint.
+  it('still answers while renderer delivery interest holds — a sidecar is not an xterm', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-i')
     setRendererPtyDeliveryInterest('pty-i', true)
@@ -198,7 +201,7 @@ describe('reply ownership matrix', () => {
     runtime.onPtyData('pty-i', DA1, Date.now())
     await settle(runtime, 'pty-i')
 
-    expect(replies).toEqual([])
+    expect(replies).toEqual([{ ptyId: 'pty-i', data: '\x1b[?1;2c' }])
   })
 
   it.each([
@@ -260,6 +263,21 @@ describe('reply ownership matrix', () => {
 
     release()
     expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(false)
+  })
+
+  it('gives a raw-only headless stream exactly one answerer', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    const release = runtime.registerRawTerminalViewSubscriber('pty-headless')
+
+    runtime.onPtyData('pty-headless', DA1, Date.now())
+    await settle(runtime, 'pty-headless')
+    expect(replies).toEqual([{ ptyId: 'pty-headless', data: '\x1b[?1;2c' }])
+
+    runtime.setLocalRendererTerminalViewVisible('pty-headless', true)
+    runtime.onPtyData('pty-headless', DA1, Date.now())
+    await settle(runtime, 'pty-headless')
+    expect(replies).toHaveLength(1)
+    release()
   })
 
   it('treats mobile subscriber records as remote view subscribers', async () => {
@@ -793,7 +811,7 @@ describe('view-attribute replay guard and suppression', () => {
     expect(replies).toEqual([])
   })
 
-  it('never answers while renderer delivery interest holds the chunk delivered', async () => {
+  it('answers a view-attribute query while only a sidecar holds delivery interest', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-vint')
     setRendererPtyDeliveryInterest('pty-vint', true)
@@ -802,7 +820,8 @@ describe('view-attribute replay guard and suppression', () => {
     runtime.onPtyData('pty-vint', '\x1b]11;?\x07', Date.now())
     await settle(runtime, 'pty-vint')
 
-    expect(replies).toEqual([])
+    expect(replies).toHaveLength(1)
+    expect(replies[0]?.ptyId).toBe('pty-vint')
   })
 
   it('yields view-attribute replies while a remote view subscriber is attached', async () => {

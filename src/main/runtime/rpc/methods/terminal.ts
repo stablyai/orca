@@ -140,6 +140,10 @@ type TerminalMultiplexStream = {
   supportsOutputPause: boolean
   supportsWriteUnavailable: boolean
   outputPaused: boolean
+  /** Releases the stream's current view or raw-only presence. */
+  releaseViewPresence: () => void
+  /** null until this stream registers presence at all. */
+  holdsViewAuthority: boolean | null
   supportsDesktopViewportClaims: boolean
   desktopClaimTail: Promise<boolean>
   // Whether THIS stream registered the width driver, so detach won't release a peer stream's floor.
@@ -412,6 +416,22 @@ function assertTerminalSendExactPtyBinding(
     // Fall through to the stable guarded-send result below.
   }
   throw new Error('terminal_guard_not_writable')
+}
+
+// Why: a paused client cannot answer terminal probes; raw presence retains its PTY without claiming view authority.
+function setRemoteStreamViewAuthority(
+  runtime: OrcaRuntimeService,
+  stream: TerminalMultiplexStream,
+  holdsViewAuthority: boolean
+): void {
+  if (stream.holdsViewAuthority === holdsViewAuthority) {
+    return
+  }
+  stream.holdsViewAuthority = holdsViewAuthority
+  stream.releaseViewPresence()
+  stream.releaseViewPresence = holdsViewAuthority
+    ? runtime.registerRemoteTerminalViewSubscriber(stream.ptyId)
+    : runtime.registerRawTerminalViewSubscriber(stream.ptyId)
 }
 
 function appendPendingMultiplexOutput(
@@ -1797,11 +1817,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         sendAckGatedOutput(stream, chunk)
       }
-      const sendAckRecoverySnapshot = async (stream: TerminalMultiplexStream): Promise<void> => {
+      const sendAckRecoverySnapshot = async (
+        stream: TerminalMultiplexStream,
+        allowWhilePaused = false
+      ): Promise<void> => {
         if (
           closed ||
           streams.get(stream.streamId) !== stream ||
-          stream.outputPaused ||
+          (stream.outputPaused && !allowWhilePaused) ||
           stream.ackRecoverySnapshotInFlight
         ) {
           return
@@ -1810,7 +1833,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         let replacement: RemoteTerminalSourceRangeReplacementReservation | null = null
         try {
           const serialized = await serializeBudgetedRequestedSnapshot(runtime, stream.ptyId, 0)
-          if (closed || streams.get(stream.streamId) !== stream || stream.outputPaused) {
+          if (
+            closed ||
+            streams.get(stream.streamId) !== stream ||
+            (stream.outputPaused && !allowWhilePaused)
+          ) {
             return
           }
           if (!serialized) {
@@ -1919,19 +1946,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         } finally {
           if (streams.get(stream.streamId) === stream) {
             stream.ackRecoverySnapshotInFlight = false
-            flushAllAckPendingOutput()
+            flushAllAckPendingOutput(allowWhilePaused)
           }
         }
       }
       const flushAckPendingOutput = (
         stream: TerminalMultiplexStream,
-        maxChunks = Number.POSITIVE_INFINITY
+        maxChunks = Number.POSITIVE_INFINITY,
+        allowWhilePaused = false
       ): number => {
-        if (stream.outputPaused) {
+        if (stream.outputPaused && !allowWhilePaused) {
           return 0
         }
         if (stream.ackPendingOutputOverflowed) {
-          void sendAckRecoverySnapshot(stream)
+          void sendAckRecoverySnapshot(stream, allowWhilePaused)
           return 0
         }
         let flushed = 0
@@ -1954,7 +1982,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         return flushed
       }
-      const flushAllAckPendingOutput = (): void => {
+      const flushAllAckPendingOutput = (allowWhilePaused = false): void => {
         const ordered = Array.from(streams.values())
         ackFlushCursorStreamId = drainTerminalMultiplexRoundRobin({
           streams: ordered,
@@ -1964,7 +1992,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             if (streams.get(stream.streamId) !== stream) {
               return false
             }
-            if (flushAckPendingOutput(stream, 1) > 0) {
+            if (flushAckPendingOutput(stream, 1, allowWhilePaused) > 0) {
               return true
             }
             return false
@@ -1986,7 +2014,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         )
         stream.ackInFlightBytes -= acknowledged
         ackTotalInFlightBytes = Math.max(0, ackTotalInFlightBytes - acknowledged)
-        flushAllAckPendingOutput()
+        // Why allowed while paused: queued pre-pause bytes retain remote reply authority.
+        flushAllAckPendingOutput(true)
       }
       const acknowledgeSourceRanges = (
         stream: TerminalMultiplexStream,
@@ -2186,12 +2215,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (typeof payload?.paused !== 'boolean' || stream.outputPaused === payload.paused) {
             return
           }
-          stream.outputPaused = payload.paused
-          if (stream.outputPaused) {
+          if (payload.paused) {
+            // Why flush first: pre-pause bytes retain remote reply authority through the ACK queue.
             stream.outputBatcher.flush()
-            stream.ackPendingOutput = []
-            stream.ackPendingOutputBytes = 0
-            stream.ackPendingOutputOverflowed = false
+            flushAckPendingOutput(stream)
+            stream.outputPaused = true
+            setRemoteStreamViewAuthority(runtime, stream, false)
+          } else {
+            stream.outputPaused = false
+            setRemoteStreamViewAuthority(runtime, stream, true)
+            flushAckPendingOutput(stream)
           }
           return
         }
@@ -2520,6 +2553,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           supportsOutputPause: request.capabilities?.outputPause === 1,
           supportsWriteUnavailable: request.capabilities?.writeUnavailable === 1,
           outputPaused: false,
+          releaseViewPresence: () => {},
+          holdsViewAuthority: null,
           supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
           desktopClaimTail: Promise.resolve(true),
           registeredRemoteDesktopDriver: false,
@@ -2575,10 +2610,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             }
             stream.outputBatcher.push(data, meta)
           })
-          // Why: a multiplexed stream feeds a remote xterm view with query authority, so the main model responder yields while attached (terminal-query-authority.md).
-          const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
+          // Why: a multiplexed stream feeds a remote xterm view with query authority, so the main model responder yields while attached (terminal-query-authority.md) — until the client pauses output, which hands authority back.
+          setRemoteStreamViewAuthority(runtime, stream, !stream.outputPaused)
           stream.unsubscribeData = () => {
-            releaseViewSubscriber()
+            stream.releaseViewPresence()
+            stream.releaseViewPresence = () => {}
+            stream.holdsViewAuthority = null
             unsubscribeStreamData()
           }
 

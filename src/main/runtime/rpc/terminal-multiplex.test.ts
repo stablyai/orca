@@ -34,6 +34,8 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
     // Why: every multiplex stream registers as a remote view subscriber for
     // Phase-5 query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
+    // Why: a paused stream swaps view presence for raw presence — it can no longer answer queries.
+    registerRawTerminalViewSubscriber: () => () => {},
     // Why: the multiplex subscribe path resolves handles via
     // resolveLiveLeafForHandle (#7718). Default to a live pty so tests that
     // only stub the legacy resolveLeafForHandle still bind; tests that need a
@@ -4552,6 +4554,191 @@ describe('terminal multiplex RPC', () => {
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Error)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
     ).toEqual([])
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
+  // Why: a paused stream receives no bytes, so its remote xterm cannot answer
+  // DA1/DSR/OSC probes. Holding view presence there left NOBODY answering and a
+  // remote fish pane blocked ~10s at every prompt paint.
+  it('hands query authority back to the model while a stream pauses output', async () => {
+    const releaseView = vi.fn()
+    const releaseRaw = vi.fn()
+    const registerRemoteTerminalViewSubscriber = vi.fn().mockReturnValue(releaseView)
+    const registerRawTerminalViewSubscriber = vi.fn().mockReturnValue(releaseRaw)
+    const harness = startDesktopMultiplexSubscribe({
+      registerRemoteTerminalViewSubscriber,
+      registerRawTerminalViewSubscriber
+    })
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers, { ackOutput: 1, outputPause: 1 })
+    await vi.waitFor(() => expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledTimes(1))
+
+    const setPaused = (paused: boolean, seq: number): void => {
+      harness.handlers.get(7)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: SET_OUTPUT_PAUSED_OPCODE,
+            streamId: 7,
+            seq,
+            payload: encodeTerminalStreamJson({ paused })
+          })
+        )!
+      )
+    }
+
+    setPaused(true, 2)
+    expect(releaseView).toHaveBeenCalledTimes(1)
+    // Raw presence still pins the provider, without claiming reply ownership.
+    expect(registerRawTerminalViewSubscriber).toHaveBeenCalledTimes(1)
+
+    setPaused(false, 3)
+    expect(releaseRaw).toHaveBeenCalledTimes(1)
+    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledTimes(2)
+
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
+  it('settles ACK-pending pre-pause bytes when credit arrives while paused', async () => {
+    let dataListener: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | undefined
+    const releaseView = vi.fn()
+    const registerRaw = vi.fn(() => vi.fn())
+    const sendBinary = vi.fn(() => true)
+    const harness = startDesktopMultiplexSubscribe(
+      {
+        registerRemoteTerminalViewSubscriber: vi.fn(() => releaseView),
+        registerRawTerminalViewSubscriber: registerRaw,
+        subscribeToTerminalData: vi.fn((_ptyId, listener) => {
+          dataListener = listener
+          return vi.fn()
+        })
+      },
+      undefined,
+      sendBinary
+    )
+    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
+    sendDesktopMultiplexSubscribe(harness.handlers, { ackOutput: 1, outputPause: 1 })
+    await vi.waitFor(() => expect(dataListener).toBeDefined())
+    await vi.waitFor(() =>
+      expect(
+        harness.messages.some((message) => JSON.parse(message).result?.type === 'subscribed')
+      ).toBe(true)
+    )
+    harness.binaryFrames.splice(0)
+    sendBinary.mockClear()
+
+    dataListener?.('five-ms-batch', { seq: 13, rawLength: 13 })
+    harness.handlers.get(7)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: SET_OUTPUT_PAUSED_OPCODE,
+          streamId: 7,
+          seq: 2,
+          payload: encodeTerminalStreamJson({ paused: true })
+        })
+      )!
+    )
+    expect(
+      harness.binaryFrames
+        .map(decodeTerminalStreamFrame)
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .join('')
+    ).toBe('five-ms-batch')
+    expect(sendBinary.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      releaseView.mock.invocationCallOrder[0]!
+    )
+
+    harness.handlers.get(7)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: SET_OUTPUT_PAUSED_OPCODE,
+          streamId: 7,
+          seq: 3,
+          payload: encodeTerminalStreamJson({ paused: false })
+        })
+      )!
+    )
+    harness.binaryFrames.splice(0)
+    dataListener?.('x'.repeat(TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES), {
+      seq: 13 + TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
+      rawLength: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES
+    })
+    dataListener?.('ack-pending', {
+      seq: 24 + TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
+      rawLength: 11
+    })
+    harness.handlers.get(7)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: SET_OUTPUT_PAUSED_OPCODE,
+          streamId: 7,
+          seq: 4,
+          payload: encodeTerminalStreamJson({ paused: true })
+        })
+      )!
+    )
+    expect(releaseView).toHaveBeenCalledTimes(2)
+    expect(registerRaw).toHaveBeenCalledTimes(2)
+    dataListener?.('post-pause-query\x1b[6n', {
+      seq: 42 + TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
+      rawLength: 'post-pause-query\x1b[6n'.length
+    })
+    harness.handlers.get(7)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Ack,
+          streamId: 7,
+          seq: 5,
+          payload: encodeTerminalStreamJson({
+            bytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES
+          })
+        })
+      )!
+    )
+    expect(
+      harness.binaryFrames
+        .map(decodeTerminalStreamFrame)
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .join('')
+    ).toContain('ack-pending')
+    expect(
+      harness.binaryFrames
+        .map(decodeTerminalStreamFrame)
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .join('')
+    ).not.toContain('post-pause-query')
+
+    const sentPendingCountBeforeResume = harness.binaryFrames
+      .map(decodeTerminalStreamFrame)
+      .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      .filter((data) => data === 'ack-pending').length
+    expect(sentPendingCountBeforeResume).toBe(1)
+
+    harness.handlers.get(7)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: SET_OUTPUT_PAUSED_OPCODE,
+          streamId: 7,
+          seq: 6,
+          payload: encodeTerminalStreamJson({ paused: false })
+        })
+      )!
+    )
+    expect(
+      harness.binaryFrames
+        .map(decodeTerminalStreamFrame)
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .filter((data) => data === 'ack-pending')
+    ).toHaveLength(1)
+
     harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
     await harness.dispatchPromise
   })

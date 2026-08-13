@@ -189,7 +189,11 @@ function deliverShutdownEvent(
     replayHandler(event.data)
     return
   }
-  dataHandler(event.data, event.meta)
+  // Why conditional: a sidecar-only chunk was withheld from the view and already
+  // answered by main; a rollback must not hand it to the pane's xterm.
+  if (event.meta?.sidecarOnly !== true) {
+    dataHandler(event.data, event.meta)
+  }
   for (const sidecar of Array.from(ptyDataSidecars.get(ptyId) ?? [])) {
     sidecar(event.data)
   }

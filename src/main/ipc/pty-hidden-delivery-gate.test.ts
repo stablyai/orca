@@ -6,9 +6,12 @@ import {
   isHiddenPtyDeliveryGateEnabled,
   markHiddenRendererPty,
   recordHiddenRendererPtyDataDrop,
+  recordHiddenRendererPtyViewGap,
   resetRendererScopedHiddenPtyDeliveryState,
   setRendererPtyDeliveryInterest,
+  shouldDeliverHiddenRendererPtyDataToSidecarsOnly,
   shouldDropHiddenRendererPtyData,
+  shouldSuppressHiddenRendererPtyView,
   unmarkHiddenRendererPty
 } from './pty-hidden-delivery-gate'
 
@@ -39,6 +42,38 @@ describe('pty hidden delivery gate', () => {
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
     setRendererPtyDeliveryInterest(PTY_ID, false)
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(true)
+  })
+
+  it('suppresses the view for every hidden PTY, delivery interest or not', () => {
+    expect(shouldSuppressHiddenRendererPtyView(PTY_ID, {})).toBe(false)
+    markHiddenRendererPty(PTY_ID)
+    expect(shouldSuppressHiddenRendererPtyView(PTY_ID, {})).toBe(true)
+    setRendererPtyDeliveryInterest(PTY_ID, true)
+    expect(shouldSuppressHiddenRendererPtyView(PTY_ID, {})).toBe(true)
+    expect(shouldSuppressHiddenRendererPtyView(PTY_ID, { terminalHiddenDeliveryGate: false })).toBe(
+      false
+    )
+  })
+
+  it('routes a suppressed PTY sidecar-only exactly while interest is registered', () => {
+    markHiddenRendererPty(PTY_ID)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(false)
+    setRendererPtyDeliveryInterest(PTY_ID, true)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(true)
+    // Exactly one of drop / sidecar-only ever holds, so bytes are never both dropped and sent.
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
+    unmarkHiddenRendererPty(PTY_ID)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(false)
+  })
+
+  it('latches the restore marker for sidecar-only sends too (the view missed those bytes)', () => {
+    markHiddenRendererPty(PTY_ID)
+    setRendererPtyDeliveryInterest(PTY_ID, true)
+    expect(recordHiddenRendererPtyViewGap(PTY_ID).shouldEmitRestoreMarker).toBe(true)
+    expect(recordHiddenRendererPtyViewGap(PTY_ID).shouldEmitRestoreMarker).toBe(false)
+    expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
+    // Why: the sidecar send is not a drop — the diagnostics counters must stay clean.
+    expect(getHiddenRendererPtyDeliveryDebug().hiddenDeliveryDroppedChunks).toBe(0)
   })
 
   it('requests the restore marker exactly once per drop episode, re-armed by unmark', () => {

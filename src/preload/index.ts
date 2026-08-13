@@ -222,7 +222,8 @@ import type {
   PluginHostInstallSource,
   PluginHostListEntry,
   PluginHostLogLine,
-  PreloadApi
+  PreloadApi,
+  PtyDataPayload
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
@@ -1155,29 +1156,8 @@ const api = {
     getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
       ipcRenderer.invoke('pty:getSize', { id }),
 
-    onData: (
-      callback: (data: {
-        id: string
-        data: string
-        seq?: number
-        rawLength?: number
-        transformed?: boolean
-        background?: boolean
-        droppedOutput?: boolean
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          id: string
-          data: string
-          seq?: number
-          rawLength?: number
-          transformed?: boolean
-          background?: boolean
-          droppedOutput?: boolean
-        }
-      ) => callback(data)
+    onData: (callback: (data: PtyDataPayload) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: PtyDataPayload) => callback(data)
       ipcRenderer.on('pty:data', listener)
       return () => ipcRenderer.removeListener('pty:data', listener)
     },

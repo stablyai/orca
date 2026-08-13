@@ -69,4 +69,23 @@ describe('PTY snapshot capability preload IPC', () => {
       expect.anything()
     )
   })
+
+  it('forwards the sidecar-only PTY data bit through the public preload API', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const callback = vi.fn()
+    api.pty.onData(callback)
+    const listener = on.mock.calls.find(([channel]) => channel === 'pty:data')?.[1] as (
+      event: unknown,
+      payload: { id: string; data: string; sidecarOnly?: boolean }
+    ) => void
+
+    listener({}, { id: 'pty-contract', data: 'raw', sidecarOnly: true })
+
+    expect(callback).toHaveBeenCalledWith({
+      id: 'pty-contract',
+      data: 'raw',
+      sidecarOnly: true
+    })
+  })
 })

@@ -7,6 +7,16 @@ export type PendingPtyData = {
   transformed?: true
   containsBackgroundOutput?: boolean
   droppedOutput?: true
+  /** Ingested while no renderer view could see this PTY, so main answered its
+   *  queries: the send must stay sidecar-only even if the pane reveals first. */
+  viewSuppressed?: true
+  /** Authority transitions within data/rawLength; delivery never crosses one. */
+  viewSuppressionBoundaries?: {
+    dataOffset: number
+    rawOffset: number
+    viewSuppressed: boolean
+  }[]
+  emitViewGapRestoreMarker?: true
   droppedMode2031Data?: string
   droppedMode2031ScanState?: Mode2031ReplyScanState
   projectionAdmissionIds?: readonly string[]

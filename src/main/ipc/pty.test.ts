@@ -15059,6 +15059,91 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('preserves visible-to-hidden query authority across a pending-cap drop', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      const setHidden = getPtySetHiddenRendererPtyListener()
+      const setInterest = getPtySetDeliveryInterestListener()
+
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(34)
+      mockProc.emitData(`${'y'.repeat(3 * 1024 * 1024)}\x1b[6n`)
+      setInterest(null, { id: spawn.id, interested: true })
+      setHidden(null, { id: spawn.id, hidden: true })
+      mockProc.emitData('\x1b[0c')
+      setHidden(null, { id: spawn.id, hidden: false })
+      mockProc.emitData('\x1b[5n')
+      setHidden(null, { id: spawn.id, hidden: true })
+      mockProc.emitData('\x1b[>q')
+
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawn.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(2)
+      expect(
+        mainWindow.webContents.send.mock.calls.filter((call: unknown[]) => call[0] === 'pty:data')
+      ).toEqual([
+        ['pty:data', { id: spawn.id, data: '\x1b[6n', droppedOutput: true }],
+        ['pty:data', { id: spawn.id, data: '\x1b[0c', droppedOutput: true, sidecarOnly: true }],
+        ['pty:data', { id: spawn.id, data: '\x1b[5n', droppedOutput: true }],
+        ['pty:data', { id: spawn.id, data: '\x1b[>q', droppedOutput: true, sidecarOnly: true }]
+      ])
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves hidden-to-visible query authority across a pending-cap drop', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      const setHidden = getPtySetHiddenRendererPtyListener()
+      const setInterest = getPtySetDeliveryInterestListener()
+
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(34)
+      setInterest(null, { id: spawn.id, interested: true })
+      setHidden(null, { id: spawn.id, hidden: true })
+      mockProc.emitData(`${'y'.repeat(3 * 1024 * 1024)}\x1b[6n`)
+      setHidden(null, { id: spawn.id, hidden: false })
+      mockProc.emitData('\x1b[0c')
+
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawn.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(2)
+      expect(
+        mainWindow.webContents.send.mock.calls.filter((call: unknown[]) => call[0] === 'pty:data')
+      ).toEqual([
+        ['pty:data', { id: spawn.id, data: '\x1b[6n', droppedOutput: true, sidecarOnly: true }],
+        ['pty:data', { id: spawn.id, data: '\x1b[0c', droppedOutput: true }]
+      ])
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   it('scales the pending-output cap with the scrollback setting', async () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -17019,7 +17104,7 @@ describe('registerPtyHandlers', () => {
       }
     })
 
-    it('suppresses the gate while renderer delivery interest is registered', async () => {
+    it('routes hidden bytes sidecar-only while renderer delivery interest is registered', async () => {
       vi.useFakeTimers()
       const mockProc = createMockProc()
       spawnMock.mockReturnValue(mockProc.proc)
@@ -17039,19 +17124,171 @@ describe('registerPtyHandlers', () => {
         setInterest(null, { id: spawnResult.id, interested: true })
         mockProc.emitData('sidecar bytes')
         vi.advanceTimersByTime(2)
+        // Why the flag: the sidecar gets the bytes, the view does not — so main
+        // stays the query answerer for a pane whose xterm is unmounted.
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
           id: spawnResult.id,
-          data: 'sidecar bytes'
+          data: 'sidecar bytes',
+          sidecarOnly: true
+        })
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: spawnResult.id,
+          reason: 'hidden-drop'
         })
 
         setInterest(null, { id: spawnResult.id, interested: false })
         mainWindow.webContents.send.mockClear()
         mockProc.emitData('gated bytes')
         vi.advanceTimersByTime(2)
+        // Nothing reaches the renderer now, and the restore latch was already
+        // consumed by the sidecar-only send, so no second marker.
+        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps queued sidecar-only bytes sidecar-only when the pane reveals before the flush', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        const setInterest = getPtySetDeliveryInterestListener()
+
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        setInterest(null, { id: spawnResult.id, interested: true })
+        mockProc.emitData('parked bytes')
+        mainWindow.webContents.send.mockClear()
+        // Reveal lands between ingestion and flush; main already answered this
+        // chunk's queries, so the now-mounted xterm must never parse it.
+        setHidden(null, { id: spawnResult.id, hidden: false })
+        vi.advanceTimersByTime(50)
+
+        const dataSends = mainWindow.webContents.send.mock.calls.filter(
+          (call: unknown[]) => call[0] === 'pty:data'
+        )
+        expect(dataSends).toHaveLength(1)
+        expect(dataSends[0][1]).toMatchObject({ data: 'parked bytes', sidecarOnly: true })
+
+        mainWindow.webContents.send.mockClear()
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        setHidden(null, { id: spawnResult.id, hidden: false })
+        expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+          'pty:modelRestoreNeeded',
+          expect.anything()
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it.each([
+      {
+        direction: 'hidden to visible',
+        arrange: (
+          setHidden: ReturnType<typeof getPtySetHiddenRendererPtyListener>,
+          setInterest: ReturnType<typeof getPtySetDeliveryInterestListener>,
+          id: string
+        ) => {
+          setHidden(null, { id, hidden: true })
+          setInterest(null, { id, interested: true })
+        },
+        transition: (
+          setHidden: ReturnType<typeof getPtySetHiddenRendererPtyListener>,
+          _setInterest: ReturnType<typeof getPtySetDeliveryInterestListener>,
+          id: string
+        ) => setHidden(null, { id, hidden: false }),
+        firstSidecarOnly: true,
+        secondSidecarOnly: false
+      },
+      {
+        direction: 'visible to hidden',
+        arrange: () => {},
+        transition: (
+          setHidden: ReturnType<typeof getPtySetHiddenRendererPtyListener>,
+          setInterest: ReturnType<typeof getPtySetDeliveryInterestListener>,
+          id: string
+        ) => {
+          setInterest(null, { id, interested: true })
+          setHidden(null, { id, hidden: true })
+        },
+        firstSidecarOnly: false,
+        secondSidecarOnly: true
+      }
+    ])('splits queued $direction view authority', async (scenario) => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        const setInterest = getPtySetDeliveryInterestListener()
+        scenario.arrange(setHidden, setInterest, spawnResult.id)
+        mainWindow.webContents.send.mockClear()
+
+        mockProc.emitData('first-query\x1b[c')
+        scenario.transition(setHidden, setInterest, spawnResult.id)
+        mockProc.emitData('second-query\x1b[c')
+        vi.advanceTimersByTime(50)
+
+        const payloads = mainWindow.webContents.send.mock.calls
+          .filter((call: unknown[]) => call[0] === 'pty:data')
+          .map((call: unknown[]) => call[1] as { data: string; sidecarOnly?: boolean })
+        expect(payloads.map(({ data }) => data)).toEqual([
+          'first-query\x1b[c',
+          'second-query\x1b[c'
+        ])
+        expect(payloads.map(({ sidecarOnly }) => sidecarOnly === true)).toEqual([
+          scenario.firstSidecarOnly,
+          scenario.secondSidecarOnly
+        ])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('bounds queued view-authority transitions with the snapshot sentinel', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        getPtySetDeliveryInterestListener()(null, { id: spawnResult.id, interested: true })
+
+        for (let index = 0; index < 258; index++) {
+          setHidden(null, { id: spawnResult.id, hidden: index % 2 === 0 })
+          mockProc.emitData('x')
+        }
+        mainWindow.webContents.send.mockClear()
+        vi.advanceTimersByTime(50)
+
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
-        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
           id: spawnResult.id,
-          reason: 'hidden-drop'
+          data: '',
+          droppedOutput: true,
+          sidecarOnly: true
         })
       } finally {
         vi.useRealTimers()
@@ -17439,7 +17676,7 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(50)
         expect(mainWindow.webContents.send).toHaveBeenLastCalledWith(
           'pty:data',
-          expect.objectContaining({ id: result.id, data: 'sidecar bytes' })
+          expect.objectContaining({ id: result.id, data: 'sidecar bytes', sidecarOnly: true })
         )
 
         // Why: the renderer reload killed the sidecar's ref count without a release IPC — the leaked hold must not force-feed the PTY forever.
@@ -17449,12 +17686,10 @@ describe('registerPtyHandlers', () => {
         daemon.emitData(result.id, 'gated after reload')
         vi.advanceTimersByTime(50)
 
-        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
-        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
-          id: result.id,
-          reason: 'hidden-drop',
-          markerSeq: 42
-        })
+        // Fully dropped now, not merely sidecar-routed. The marker latch is
+        // deliberately preserved across a reload (the new renderer's first
+        // unmark re-emits), so the drop itself is silent.
+        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()
       }

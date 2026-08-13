@@ -1112,6 +1112,18 @@ export type PluginMarketplaceHostInstallPreview = {
   blockedByKillList?: { reason: string; advisoryUrl?: string }
 }
 
+export type PtyDataPayload = {
+  id: string
+  data: string
+  seq?: number
+  rawLength?: number
+  transformed?: boolean
+  background?: boolean
+  droppedOutput?: boolean
+  /** Hidden-gated bytes delivered to raw-byte sidecars without the view. */
+  sidecarOnly?: boolean
+}
+
 export type PreloadApi = {
   app: AppApi
   orcaProfiles: {
@@ -1622,17 +1634,7 @@ export type PreloadApi = {
       rendererDispatcherReadyForcedCount: number
     }>
     resetRendererDeliveryDebug: () => Promise<void>
-    onData: (
-      callback: (data: {
-        id: string
-        data: string
-        seq?: number
-        rawLength?: number
-        transformed?: boolean
-        background?: boolean
-        droppedOutput?: boolean
-      }) => void
-    ) => () => void
+    onData: (callback: (data: PtyDataPayload) => void) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     /** Out-of-band main→renderer signal that renderer-bound bytes were
      *  dropped (hidden-delivery gate / pending cap); the pane restores from

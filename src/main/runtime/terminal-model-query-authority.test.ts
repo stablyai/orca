@@ -57,17 +57,20 @@ describe('shouldModelAnswerHiddenPtyQueries', () => {
       hasRemoteViewSubscriber: false
     })
 
-  it('answers only for hidden-marked PTYs (the delivery decision is the reply decision)', () => {
+  it('answers only for hidden-marked PTYs (the view-delivery decision is the reply decision)', () => {
     expect(answer('pty-1')).toBe(false)
     markHiddenRendererPty('pty-1')
     expect(answer('pty-1')).toBe(true)
     expect(answer('pty-other')).toBe(false)
   })
 
-  it('yields to registered renderer delivery interest (chunk is delivered to a sidecar)', () => {
+  // Regression: a sidecar is not an xterm. Yielding to delivery interest left a
+  // parked pane (xterm unmounted) with a live sidecar unanswered — fish then
+  // blocked ~10s on DA1 at every prompt paint, forever.
+  it('keeps answering when only a raw-byte sidecar holds delivery interest', () => {
     markHiddenRendererPty('pty-1')
     setRendererPtyDeliveryInterest('pty-1', true)
-    expect(answer('pty-1')).toBe(false)
+    expect(answer('pty-1')).toBe(true)
     setRendererPtyDeliveryInterest('pty-1', false)
     expect(answer('pty-1')).toBe(true)
   })
@@ -79,6 +82,27 @@ describe('shouldModelAnswerHiddenPtyQueries', () => {
         ptyId: 'pty-1',
         settings: ALL_ON,
         hasRemoteViewSubscriber: true
+      })
+    ).toBe(false)
+  })
+
+  it('answers for a raw-only headless stream but yields to a visible local xterm', () => {
+    expect(
+      shouldModelAnswerHiddenPtyQueries({
+        ptyId: 'pty-headless',
+        settings: ALL_ON,
+        hasRemoteViewSubscriber: false,
+        hasRawViewSubscriber: true,
+        hasLocalRendererView: false
+      })
+    ).toBe(true)
+    expect(
+      shouldModelAnswerHiddenPtyQueries({
+        ptyId: 'pty-headless',
+        settings: ALL_ON,
+        hasRemoteViewSubscriber: false,
+        hasRawViewSubscriber: true,
+        hasLocalRendererView: true
       })
     ).toBe(false)
   })

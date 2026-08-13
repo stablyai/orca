@@ -2,17 +2,19 @@
  * Phase 5 of the terminal model/view architecture: main-side terminal query
  * authority.
  *
- * The delivery decision is the reply decision: main answers a query iff the
- * hidden-delivery gate dropped the chunk that carried it. This module owns
- * the responder kill-switch predicate and the main-side mirror of the
- * renderer's native-Windows-ConPTY determination, recorded per PTY at spawn
- * so the runtime emulator can register the DA1 override before byte zero.
+ * The VIEW delivery decision is the reply decision: main answers a query iff
+ * the hidden-delivery gate withheld the chunk from every renderer view — a
+ * hidden pane's xterm is starved, a parked pane has none, and a sidecar-only
+ * chunk reaches raw-byte watchers that never reply. This module owns the
+ * responder kill-switch predicate and the main-side mirror of the renderer's
+ * native-Windows-ConPTY determination, recorded per PTY at spawn so the
+ * runtime emulator can register the DA1 override before byte zero.
  */
 import type { GlobalSettings } from '../../shared/types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   isHiddenPtyDeliveryGateEnabled,
-  shouldDropHiddenRendererPtyData
+  shouldSuppressHiddenRendererPtyView
 } from '../ipc/pty-hidden-delivery-gate'
 
 export type TerminalModelQueryAuthoritySettings = Pick<
@@ -30,19 +32,22 @@ export function isTerminalModelQueryAuthorityEnabled(
 
 /** Per-chunk reply-ownership predicate, evaluated once at ingestion in
  *  OrcaRuntimeService.onPtyData — the same module state and tick as the
- *  hidden-gate drop sites, so "chunk dropped" and "main answers" cannot
- *  diverge for live chunks. Remote view subscribers (mobile/web/remote
- *  desktop xterms on the multiplexed stream) keep view authority, so main
- *  yields while one is attached. */
+ *  hidden-gate suppression sites, so "no view saw the chunk" and "main
+ *  answers" cannot diverge for live chunks. Remote view subscribers
+ *  (mobile/web/remote desktop xterms on the multiplexed stream) keep view
+ *  authority, so main yields while one is attached and unpaused. */
 export function shouldModelAnswerHiddenPtyQueries(opts: {
   ptyId: string
   settings: TerminalModelQueryAuthoritySettings | null | undefined
   hasRemoteViewSubscriber: boolean
+  hasRawViewSubscriber?: boolean
+  hasLocalRendererView?: boolean
 }): boolean {
   return (
     isTerminalModelQueryAuthorityEnabled(opts.settings) &&
     !opts.hasRemoteViewSubscriber &&
-    shouldDropHiddenRendererPtyData(opts.ptyId, opts.settings)
+    (shouldSuppressHiddenRendererPtyView(opts.ptyId, opts.settings) ||
+      (opts.hasRawViewSubscriber === true && opts.hasLocalRendererView !== true))
   )
 }
 
