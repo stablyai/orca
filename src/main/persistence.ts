@@ -238,7 +238,10 @@ import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_TEXT_ACTION_IDS
 } from '../shared/source-control-ai-actions'
-import { normalizeAgentSessionRulesSettings } from '../shared/agent-session-rules'
+import {
+  normalizeAgentSessionRulesSettings,
+  normalizeRepoAgentSessionRuleOverrides
+} from '../shared/agent-session-rules'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 import {
   DEFAULT_TUI_AGENT_ARGS,
@@ -4962,6 +4965,7 @@ export class Store {
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      agentSessionRules?: Repo['agentSessionRules'] | null
     },
     hostId?: ExecutionHostId
   ): Repo | null {
@@ -5036,6 +5040,23 @@ export class Store {
         delete sanitizedUpdates.sourceControlAi
       } else {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
+      }
+    }
+    if (
+      'agentSessionRules' in sanitizedUpdates &&
+      (sanitizedUpdates.agentSessionRules === undefined ||
+        sanitizedUpdates.agentSessionRules === null)
+    ) {
+      delete repo.agentSessionRules
+      delete sanitizedUpdates.agentSessionRules
+    } else if ('agentSessionRules' in sanitizedUpdates) {
+      const normalizedAgentSessionRules = normalizeRepoAgentSessionRuleOverrides(
+        sanitizedUpdates.agentSessionRules
+      )
+      if (normalizedAgentSessionRules === undefined) {
+        delete sanitizedUpdates.agentSessionRules
+      } else {
+        sanitizedUpdates.agentSessionRules = normalizedAgentSessionRules
       }
     }
     Object.assign(repo, sanitizedUpdates)
@@ -5138,6 +5159,7 @@ export class Store {
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
       forkSyncMode: rawForkSyncMode,
+      agentSessionRules: rawAgentSessionRules,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
@@ -5146,6 +5168,7 @@ export class Store {
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
+    const agentSessionRules = normalizeRepoAgentSessionRuleOverrides(rawAgentSessionRules)
     // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
     const gitUsername = isFolderRepo(repo)
       ? ''
@@ -5159,6 +5182,7 @@ export class Store {
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
+      ...(agentSessionRules !== undefined ? { agentSessionRules } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {

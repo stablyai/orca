@@ -143,6 +143,7 @@ export type RepoUpdate = Partial<
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  agentSessionRules?: Repo['agentSessionRules'] | null
 }
 
 type ProjectUpdate = ProjectUpdateArgs['updates']
@@ -3772,6 +3773,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             const {
               sourceControlAi,
               externalWorktreeDiscoverySuppressedAt,
+              agentSessionRules,
               ...updatesWithoutClearSentinels
             } = sanitizedUpdates
             mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
@@ -3790,6 +3792,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               mergedRepo = repoWithoutSuppression
             } else if (externalWorktreeDiscoverySuppressedAt !== undefined) {
               mergedRepo = { ...mergedRepo, externalWorktreeDiscoverySuppressedAt }
+            }
+            if (agentSessionRules === null) {
+              const { agentSessionRules: _agentSessionRules, ...repoWithoutAgentSessionRules } =
+                mergedRepo
+              mergedRepo = repoWithoutAgentSessionRules
+            } else if (agentSessionRules !== undefined) {
+              mergedRepo = { ...mergedRepo, agentSessionRules }
             }
             return mergedRepo
           })

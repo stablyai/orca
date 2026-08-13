@@ -4257,6 +4257,70 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
   })
 
+  it('updateRepo persists agent session rule overrides and survives a reload', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      agentSessionRules: {
+        enabled: false,
+        disabledRuleIds: ['builtin-graphify'],
+        extraRules: [
+          {
+            id: 'repo-rule',
+            label: 'Repo rule',
+            content: 'Use the repo convention.',
+            enabled: true,
+            source: 'custom'
+          }
+        ]
+      }
+    })
+    expect(updated?.agentSessionRules).toMatchObject({
+      enabled: false,
+      disabledRuleIds: ['builtin-graphify']
+    })
+    expect(updated?.agentSessionRules?.extraRules).toHaveLength(1)
+    store.flushOrThrow()
+
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')?.agentSessionRules).toMatchObject({
+      enabled: false,
+      disabledRuleIds: ['builtin-graphify']
+    })
+    expect(reloaded.getRepo('r1')?.agentSessionRules?.extraRules).toHaveLength(1)
+  })
+
+  it('updateRepo clears agent session rule overrides on null', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        agentSessionRules: { enabled: false, disabledRuleIds: ['builtin-graphify'] }
+      })
+    )
+
+    const updated = store.updateRepo('r1', { agentSessionRules: null })
+    expect(updated?.agentSessionRules).toBeUndefined()
+    expect(store.getRepo('r1')?.agentSessionRules).toBeUndefined()
+  })
+
+  it('drops malformed persisted agent session rule overrides on load instead of surfacing garbage', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    // Why: a repo record with a malformed override (persisted by an older client, or hand-edited)
+    // must not surface non-string ids/rules once read back through the store.
+    store.updateRepo('r1', {
+      // @ts-expect-error intentionally malformed for this test
+      agentSessionRules: { enabled: 'yes', disabledRuleIds: [1, 2, 'builtin-graphify'] }
+    })
+    store.flushOrThrow()
+
+    const reloaded = await createStore()
+    const rules = reloaded.getRepo('r1')?.agentSessionRules
+    expect(rules?.enabled).toBeUndefined()
+    expect(rules?.disabledRuleIds).toEqual(['builtin-graphify'])
+  })
+
   it('updateRepo targets one host when repo ids collide', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
