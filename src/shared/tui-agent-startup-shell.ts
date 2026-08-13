@@ -289,7 +289,13 @@ export function prependSessionRulesToPrompt(prompt: string, rulesText: string): 
 
 /** Build a draft prompt containing only session rules (no user prompt), for pre-filling the composer
  * ahead of a paste-after-ready launch. Null when native injection will carry the rules instead, since
- * the composer needs nothing extra in that case. */
+ * the composer needs nothing extra in that case. Only valid for a FRESH launch — hasNativeSessionRulesInjection
+ * reports whether an agent HAS a sessionRulesTextFlag/sessionRulesFileFlag/sessionRulesConfigOverride
+ * mechanism at all, which is only an accurate proxy for "did THIS launch apply one" on the fresh-launch
+ * path (buildAgentStartupPlan calls appendSessionRulesFlag AND appendSessionRulesConfigOverride
+ * unconditionally). A resume launch never calls appendSessionRulesFlag at all — for that context use
+ * buildAgentResumeSessionRulesDraft below instead, or this returns a false negative and the rules get
+ * dropped entirely for any resumable agent with only a text/file flag (e.g. Claude — see #41). */
 export function buildAgentSessionRulesOnlyDraft(
   config: TuiAgentConfig,
   filePath: string | null | undefined,
@@ -297,6 +303,30 @@ export function buildAgentSessionRulesOnlyDraft(
   shell: AgentStartupShell
 ): string | null {
   if (hasNativeSessionRulesInjection(config, filePath, text, shell) || !text?.trim()) {
+    return null
+  }
+  return wrapSessionRulesText(text, '')
+}
+
+/** Build a draft prompt containing only session rules (no user prompt), for a RESUME launch
+ * specifically. A resume command never calls appendSessionRulesFlag (no prompt to attach an argv
+ * text/file flag to) — the only mechanism buildAgentResumeStartupPlan ever applies is a
+ * config-override, embedded directly into the resume command. So unlike
+ * buildAgentSessionRulesOnlyDraft, a plain sessionRulesTextFlag/sessionRulesFileFlag never suppresses
+ * this draft on its own: only an actually-applied config override does (and it bails out on a shell
+ * that can't carry the text inline, same as appendSessionRulesConfigOverride itself — see #41). */
+export function buildAgentResumeSessionRulesDraft(
+  config: TuiAgentConfig,
+  text: string | null | undefined,
+  shell: AgentStartupShell
+): string | null {
+  if (!text?.trim()) {
+    return null
+  }
+  const configOverrideEmbedsRules =
+    Boolean(config.sessionRulesConfigOverride) &&
+    !sessionRulesTextRequiresPostReadyDelivery(text, shell)
+  if (configOverrideEmbedsRules) {
     return null
   }
   return wrapSessionRulesText(text, '')

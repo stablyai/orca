@@ -431,6 +431,7 @@ import {
   buildAgentStartupPlan
 } from '../../shared/tui-agent-startup'
 import {
+  buildAgentResumeSessionRulesDraft,
   buildAgentSessionRulesOnlyDraft,
   prependSessionRulesToPrompt,
   resolveSessionRulesDeliveryShell
@@ -25378,9 +25379,13 @@ export class OrcaRuntimeService {
     if (!startup) {
       throw new Error('agent_session_identity_required')
     }
-    const rulesOnlyDraft = buildAgentSessionRulesOnlyDraft(
+    // Why: this is a resume launch (buildAgentResumeStartupPlan above) — it never applies an argv
+    // session-rules flag, only ever a config-override, so the rules-only draft must gate on that
+    // specifically (buildAgentResumeSessionRulesDraft), not on whether the agent merely has some
+    // native mechanism (buildAgentSessionRulesOnlyDraft's hasNativeSessionRulesInjection check,
+    // correct only for a fresh launch) — see #41.
+    const rulesOnlyDraft = buildAgentResumeSessionRulesDraft(
       TUI_AGENT_CONFIG[request.agent],
-      agentSessionRules.agentSessionRulesFilePath,
       agentSessionRules.agentSessionRulesText,
       resolveSessionRulesDeliveryShell({ platform, shell, isRemote })
     )
@@ -26710,12 +26715,29 @@ export class OrcaRuntimeService {
     } else {
       this.markLocalWorkspaceTrustedForAgent(agent, workspace.path)
     }
-    const rulesOnlyDraft = buildAgentSessionRulesOnlyDraft(
-      TUI_AGENT_CONFIG[agent],
-      agentSessionRules.agentSessionRulesFilePath,
-      agentSessionRules.agentSessionRulesText,
-      resolveSessionRulesDeliveryShell({ platform, shell: queuedShell, isRemote })
-    )
+    // Why: startupPlan above is either a resume (buildAgentResumeStartupPlan, which never applies
+    // an argv session-rules flag — only ever a config-override) or a fresh launch
+    // (buildAgentStartupPlan/buildAgentDraftLaunchPlan, which does apply one). The rules-only draft
+    // must use the gate that matches which one actually ran, or a resumable agent with only a
+    // text/file flag (e.g. Claude) silently loses its rules on resume — see #41.
+    const shellForRules = resolveSessionRulesDeliveryShell({
+      platform,
+      shell: queuedShell,
+      isRemote
+    })
+    const rulesOnlyDraft =
+      launchIntent?.kind === 'resume'
+        ? buildAgentResumeSessionRulesDraft(
+            TUI_AGENT_CONFIG[agent],
+            agentSessionRules.agentSessionRulesText,
+            shellForRules
+          )
+        : buildAgentSessionRulesOnlyDraft(
+            TUI_AGENT_CONFIG[agent],
+            agentSessionRules.agentSessionRulesFilePath,
+            agentSessionRules.agentSessionRulesText,
+            shellForRules
+          )
     const startupDraftPrompt = !hostOwnsPrompt
       ? null
       : launchIntent?.promptDelivery === 'draft' && !nativeDraft

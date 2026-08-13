@@ -559,10 +559,12 @@ type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   useLiveEntry: boolean
   hasSleepingRecord: boolean
   sleepingRecordEntry: { paneKey: string; record: SleepingAgentSessionRecord } | null
-  // Why: only set for agents with no native session-rules injection mechanism
-  // (see hasNativeSessionRulesInjection) — buildAgentResumeStartupPlan already
-  // resolves this to the wrapped '## Agent session rules' text; PendingStartupCommand
-  // stays untouched since it is also shared by non-agent SSH startup commands.
+  // Why: only set when this resume did NOT already embed rules into launchCommand via
+  // a config-override agent (buildAgentResumeStartupPlan's own gate — see #41; resume
+  // never applies an argv session-rules flag like claude's --append-system-prompt, so
+  // that mechanism alone never suppresses this). Already resolved to the wrapped
+  // '## Agent session rules' text; PendingStartupCommand stays untouched since it is
+  // also shared by non-agent SSH startup commands.
   draftPrompt?: string | null
 }
 
@@ -5381,9 +5383,14 @@ export function connectPanePty(
         useLiveEntry: Boolean(useLiveEntry),
         hasSleepingRecord: Boolean(sleepingRecord),
         sleepingRecordEntry,
-        // Why: already resolved by buildAgentResumeStartupPlan — null for
-        // agents with a native session-rules injection mechanism (claude's
-        // --append-system-prompt, codex's -c developer_instructions=, ...).
+        // Why: already resolved by buildAgentResumeStartupPlan — null only when a
+        // config-override agent's rules actually got embedded (codex's -c
+        // developer_instructions=, into launchCommand with no prompt needed). Resume
+        // never applies an argv session-rules flag (claude's --append-system-prompt
+        // included, since resume has no prompt to attach it to), and even a config
+        // override embeds nothing on a cmd.exe tab (it quotes onto argv same as any
+        // other flag), so every other case with rules text gets this non-null draft
+        // instead — see #41.
         draftPrompt: startupPlan.draftPrompt ?? null
       }
     }

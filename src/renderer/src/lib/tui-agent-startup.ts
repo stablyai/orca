@@ -15,6 +15,7 @@ import {
 } from '../../../shared/agent-session-rules'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
+  buildAgentResumeSessionRulesDraft,
   buildAgentSessionRulesOnlyDraft,
   hasNativeSessionRulesInjection,
   prependSessionRulesToPrompt
@@ -110,12 +111,13 @@ export function buildAgentStartupPlan(
   return buildAgentStartupPlanShared({ ...sharedArgs, agentSessionRulesText })
 }
 
-// Why: the shared plan already embeds a config-override agent's rules (e.g. Codex's
-// `-c developer_instructions=`) directly into launchCommand, unconditionally, since resume has no
-// prompt to prepend to. hasNativeSessionRulesInjection reports true for that agent too, so the
-// draftPrompt fallback below skips itself rather than pasting the same rules text a second time —
-// it still applies its normal fallback for every agent without a config override or other native
-// mechanism (still native-flag or filePath-blind here, since the renderer never resolves a rules file).
+// Why: resume never calls appendSessionRulesFlag (no prompt to attach an argv text/file flag to),
+// unlike the fresh-launch plan above — the only mechanism the shared plan ever applies is a
+// config-override, embedded directly into launchCommand. buildAgentResumeSessionRulesDraft (unlike
+// buildAgentSessionRulesOnlyDraft/hasNativeSessionRulesInjection) knows this and gates the draft on
+// whether a config override actually embedded the rules, not on whether the agent merely has some
+// native mechanism — see #41 for how the general-purpose predicate silently dropped Claude's rules
+// on every resume/cold-restore launch.
 export function buildAgentResumeStartupPlan(
   args: Parameters<typeof buildAgentResumeStartupPlanShared>[0] & AgentSessionRulesLaunchContext
 ): ReturnType<typeof buildAgentResumeStartupPlanShared> {
@@ -126,17 +128,17 @@ export function buildAgentResumeStartupPlan(
     executionHostId
   })
   const plan = buildAgentResumeStartupPlanShared({ ...sharedArgs, agentSessionRulesText })
-  const shell = resolveSessionRulesDeliveryShell(args)
-  if (
-    !plan ||
-    !agentSessionRulesText ||
-    hasNativeSessionRulesInjection(TUI_AGENT_CONFIG[args.agent], null, agentSessionRulesText, shell)
-  ) {
+  const draftPrompt = buildAgentResumeSessionRulesDraft(
+    TUI_AGENT_CONFIG[args.agent],
+    agentSessionRulesText,
+    resolveSessionRulesDeliveryShell(args)
+  )
+  if (!plan || !draftPrompt) {
     return plan
   }
   return {
     ...plan,
-    draftPrompt: prependSessionRulesToPrompt('', agentSessionRulesText)
+    draftPrompt
   }
 }
 

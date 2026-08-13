@@ -568,6 +568,49 @@ describe('agent session rules resolution', () => {
     expect(plan?.launchCommand).toBe("claude '--resume' 'session-1'")
   })
 
+  it('drafts session rules for a Claude resume, since resume never applies its native flag', () => {
+    setSessionRule('Use graphify.')
+
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    expect(plan?.launchCommand).not.toContain('--append-system-prompt')
+    expect(plan?.draftPrompt).toContain('Use graphify.')
+  })
+
+  it('embeds session rules directly for a Codex resume via its config override', () => {
+    setSessionRule('Use graphify.')
+
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    expect(plan?.launchCommand).toContain('developer_instructions=')
+    expect(plan?.draftPrompt).toBeUndefined()
+  })
+
+  it('drafts session rules for a Codex resume on cmd.exe, since the config override cannot embed there', () => {
+    setSessionRule('Use graphify.')
+
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'win32',
+      shell: 'cmd'
+    })
+
+    expect(plan?.launchCommand).not.toContain('developer_instructions=')
+    expect(plan?.draftPrompt).toContain('Use graphify.')
+  })
+
   it('isolates repository overrides by connection when repo ids collide', () => {
     setSessionRule('Use graphify.', [
       {
