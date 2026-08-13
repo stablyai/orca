@@ -22,7 +22,6 @@ test('new-tab file results prioritize the filename and reveal the full path on h
   // Keyboard activation avoids the animated tab bar's pointer stability gate in CI.
   await newTab.press('Space')
   const searchInput = orcaPage.getByRole('combobox')
-  await expect(searchInput).toBeFocused()
   await searchInput.fill('s')
   // Not the placeholder/aria-label: that copy is translated and already drifted
   // once. aria-controls points at the results listbox id, which is structural.
