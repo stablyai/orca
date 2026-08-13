@@ -11,6 +11,7 @@ const macTccAttribution = vi.hoisted(() =>
 const openSettingsPage = vi.hoisted(() => vi.fn())
 const openSettingsTarget = vi.hoisted(() => vi.fn())
 const setSettingsSearchQuery = vi.hoisted(() => vi.fn())
+const platform = vi.hoisted(() => ({ value: 'darwin' as NodeJS.Platform }))
 
 vi.mock('sonner', () => ({
   toast: {
@@ -58,11 +59,15 @@ describe('useMacTccAttributionSeveredNotice', () => {
     openSettingsPage.mockReset()
     openSettingsTarget.mockReset()
     setSettingsSearchQuery.mockReset()
+    platform.value = 'darwin'
     vi.mocked(toast.warning).mockReset()
     vi.mocked(toast.dismiss).mockReset()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
+        platform: {
+          get: () => ({ platform: platform.value })
+        },
         pty: {
           management: {
             macTccAttribution
@@ -82,6 +87,17 @@ describe('useMacTccAttributionSeveredNotice', () => {
       expect(macTccAttribution).toHaveBeenCalled()
     })
     expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('does not probe on non-macOS focus', async () => {
+    platform.value = 'win32'
+    render(<MacosTccPromptNoticeHost />)
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    expect(macTccAttribution).not.toHaveBeenCalled()
   })
 
   it('toasts Manage Sessions remedy once when attribution is severed', async () => {

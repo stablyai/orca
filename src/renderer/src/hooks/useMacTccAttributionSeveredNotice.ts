@@ -34,7 +34,11 @@ export function useMacTccAttributionSeveredNotice(): void {
   const checkInFlight = useRef(false)
 
   useEffect(() => {
-    if (!localeReady || typeof window === 'undefined') {
+    if (
+      !localeReady ||
+      typeof window === 'undefined' ||
+      window.api?.platform?.get().platform !== 'darwin'
+    ) {
       return
     }
     const macTccAttribution = window.api?.pty?.management?.macTccAttribution
