@@ -1,4 +1,5 @@
 import type * as ChildProcessModule from 'node:child_process'
+import type * as FsModule from 'node:fs'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,6 +28,19 @@ vi.mock('node:child_process', async (importOriginal) => ({
   execFile: execFileMock,
   execFileSync: execFileSyncMock
 }))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsModule>()
+  return {
+    ...actual,
+    readFileSync: ((path, options) => {
+      if (String(path) === `/proc/${process.pid}/cmdline`) {
+        throw new Error('procfs unavailable on macOS')
+      }
+      return actual.readFileSync(path, options)
+    }) as typeof actual.readFileSync
+  }
+})
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
 const { getMacDaemonTccAttributionHealth } = await import('./daemon-health')
@@ -63,14 +77,14 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     }
   })
 
-  function writePidRecord(appVersion: string): void {
+  function writePidRecord(appVersion?: string): void {
     writeFileSync(
       join(dir, `daemon-v${PROTOCOL_VERSION}.pid`),
       JSON.stringify({
         pid: process.pid,
         startedAtMs: PS_STARTED_AT_MS,
         launchNonce: 'launch-a',
-        appVersion,
+        ...(appVersion === undefined ? {} : { appVersion }),
         spawnerExecPath
       })
     )
@@ -125,5 +139,16 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
 
     expect(execFileSyncMock).not.toHaveBeenCalled()
     expect(execFileMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats a packaged legacy pid record as a previous app generation', async () => {
+    writePidRecord()
+
+    await expect(
+      getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')
+    ).resolves.toBe('severed')
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileSyncMock).not.toHaveBeenCalled()
   })
 })

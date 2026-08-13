@@ -768,13 +768,9 @@ export async function getMacDaemonTccAttributionHealth(
     if (!parsedPid) {
       return 'unknown'
     }
-    // Packaged updates can replace the bundle at the same path, so path existence
-    // alone cannot prove the recorded spawning binary still backs this daemon.
-    if (
-      packagedAppVersion !== null &&
-      parsedPid.appVersion !== null &&
-      parsedPid.appVersion !== packagedAppVersion
-    ) {
+    // Packaged updates can replace the bundle at the same path; missing version
+    // metadata also identifies a daemon from before the current packaged generation.
+    if (packagedAppVersion !== null && parsedPid.appVersion !== packagedAppVersion) {
       return 'severed'
     }
     if (parsedPid.spawnerExecPath) {
