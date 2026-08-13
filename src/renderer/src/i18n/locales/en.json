@@ -713,6 +713,16 @@
         "distroMissing": "The selected WSL distro is unavailable. Choose an available distro or switch this project to Windows.",
         "wslDefault": "WSL default"
       },
+      "provider": {
+        "account": {
+          "index": {
+            "shortcut": {
+              "switchedAccount": "Switched to {{provider}} account",
+              "switchFailed": "Could not switch {{provider}} account"
+            }
+          }
+        }
+      },
       "sidebarWorktreeActivation": {
         "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
       },

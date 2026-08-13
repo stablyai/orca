@@ -22,6 +22,7 @@ import {
 } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
+import { switchProviderAccountByIndex } from '@/lib/provider-account-index-shortcut'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -613,6 +614,7 @@ function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined):
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
 
+/** Subscribes the renderer to all main-process UI IPC events for the lifetime of the app shell. */
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
@@ -1411,6 +1413,12 @@ export function useIpcEvents(): void {
           return
         }
         activateTabNumberShortcut(index)
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onSwitchProviderAccountIndex(({ provider, index }) => {
+        void switchProviderAccountByIndex(provider, index)
       })
     )
 

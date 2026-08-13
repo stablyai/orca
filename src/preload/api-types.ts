@@ -3151,6 +3151,9 @@ export type PreloadApi = {
     onOpenTasks: (callback: () => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
+    onSwitchProviderAccountIndex: (
+      callback: (data: { provider: 'claude' | 'codex'; index: number }) => void
+    ) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
     onNewMarkdownTab: (callback: () => void) => () => void

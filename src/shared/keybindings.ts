@@ -38,6 +38,8 @@ export type KeybindingActionId =
   | 'workspace.delete'
   | 'workspace.openBoard'
   | 'workspace.selectByIndex'
+  | 'accounts.claude.selectByIndex'
+  | 'accounts.codex.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -335,6 +337,48 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     ],
     // Why: one remappable row covers the whole 1-9 range (stored chord is a representative; any of 1-9 fires it).
     defaultBindings: platformBindings(['Mod+1'])
+  },
+  {
+    id: 'accounts.claude.selectByIndex',
+    title: 'Select Claude Account 1–9',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'account',
+      'claude',
+      'provider',
+      'select',
+      'switch',
+      'number',
+      'digit',
+      '1-9',
+      'index'
+    ],
+    // Why: one remappable row covers the whole 1-9 range (see workspace.selectByIndex); Alt distinguishes it from the workspace/tab jump chords.
+    defaultBindings: platformBindings(['Mod+Alt+1'])
+  },
+  {
+    id: 'accounts.codex.selectByIndex',
+    title: 'Select Codex Account 1–9',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'account',
+      'codex',
+      'provider',
+      'select',
+      'switch',
+      'number',
+      'digit',
+      '1-9',
+      'index'
+    ],
+    // Why: ship unbound so it can't collide with accounts.claude.selectByIndex's default; user assigns their own chord in Settings.
+    defaultBindings: platformBindings([])
   },
   {
     id: 'voice.dictation',
@@ -1147,7 +1191,9 @@ const DEFINITION_IDS = new Set<KeybindingActionId>(
 // Why: these ids are single remappable rows whose chord is a representative — the digit canonicalizes to 1 but the binding fires for any 1-9.
 export const DIGIT_INDEX_ACTION_IDS: readonly KeybindingActionId[] = [
   'tab.selectByIndex',
-  'workspace.selectByIndex'
+  'workspace.selectByIndex',
+  'accounts.claude.selectByIndex',
+  'accounts.codex.selectByIndex'
 ]
 
 const DIGIT_INDEX_ACTION_ID_SET = new Set<KeybindingActionId>(DIGIT_INDEX_ACTION_IDS)

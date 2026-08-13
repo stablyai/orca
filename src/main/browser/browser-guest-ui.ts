@@ -255,7 +255,10 @@ export function setupGrabShortcutForwarding(args: {
   }
 }
 
-// Why: a focused webview guest is its own Chromium process whose key events never reach the renderer; forward shortcuts from here.
+/**
+ * Forwards window shortcuts from focused webview guests to the renderer.
+ * A focused guest is its own Chromium process whose key events never reach the renderer, so they must be forwarded from here.
+ */
 export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
@@ -455,6 +458,11 @@ export function setupGuestShortcutForwarding(args: {
       } else {
         renderer.send('ui:jumpToTabIndex', action.index)
       }
+    } else if (action?.type === 'switchProviderAccountIndex') {
+      renderer.send('ui:switchProviderAccountIndex', {
+        provider: action.provider,
+        index: action.index
+      })
     } else if (action?.type === 'dictationKeyDown') {
       if (!shouldForwardDictationShortcut?.()) {
         return false

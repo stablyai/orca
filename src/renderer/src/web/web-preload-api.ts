@@ -2790,6 +2790,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenWorkspaceBoard: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
+    onSwitchProviderAccountIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onNewBrowserTab: () => noopUnsubscribe,
     onNewMarkdownTab: () => noopUnsubscribe,

@@ -1,7 +1,4 @@
 import {
-  getKeybindingDefinition,
-  isKeybindingAllowedInTerminal,
-  isKeybindingPotentialTerminalConflict,
   keybindingMatchesAction,
   matchKeybindingDigitIndex,
   type KeybindingActionId,
@@ -9,6 +6,7 @@ import {
   type KeybindingOverrides,
   type PhysicalModifierToken
 } from './keybindings'
+import { resolveAccountShortcut } from './provider-account-shortcut-policy'
 
 export type WindowShortcutInput = {
   type?: string
@@ -44,6 +42,7 @@ export type WindowShortcutAction =
   | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'jumpToTabIndex'; index: number }
+  | { type: 'switchProviderAccountIndex'; provider: 'claude' | 'codex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
   | { type: 'dictationKeyDown' }
 
@@ -165,6 +164,7 @@ export function nativeZoomCommandMatchesKeybindings(
   )
 }
 
+/** Resolves a window keybinding input to its shortcut action, or null when it matches no action. */
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
@@ -281,6 +281,11 @@ export function resolveWindowShortcutAction(
     return { type: 'jumpToTabIndex', index: tabIndex }
   }
 
+  const accountIndex = resolveAccountShortcut(input, platform, keybindings, options)
+  if (accountIndex) {
+    return accountIndex
+  }
+
   if (actionMatches('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
     return { type: 'toggleQuickCommandsMenu' }
   }
@@ -292,59 +297,9 @@ export function resolveWindowShortcutAction(
   return null
 }
 
-export function getWindowShortcutActionId(action: WindowShortcutAction): KeybindingActionId | null {
-  switch (action.type) {
-    case 'zoom':
-      return action.direction === 'in'
-        ? 'zoom.in'
-        : action.direction === 'out'
-          ? 'zoom.out'
-          : 'zoom.reset'
-    case 'openSettings':
-      return 'app.settings'
-    case 'forceReload':
-      return 'app.forceReload'
-    case 'toggleWorktreePalette':
-      return 'worktree.palette'
-    case 'toggleFloatingTerminal':
-      return 'floatingTerminal.toggle'
-    case 'toggleLeftSidebar':
-      return 'sidebar.left.toggle'
-    case 'toggleRightSidebar':
-      return 'sidebar.right.toggle'
-    case 'openQuickOpen':
-      return 'worktree.quickOpen'
-    case 'toggleQuickCommandsMenu':
-      return 'tab.openQuickCommandsMenu'
-    case 'openNewWorkspace':
-      return 'workspace.create'
-    case 'deleteCurrentWorkspace':
-      return 'workspace.delete'
-    case 'openWorkspaceBoard':
-      return 'workspace.openBoard'
-    case 'openTasks':
-      return 'view.tasks'
-    case 'switchRecentTab':
-      return 'tab.previousRecent'
-    case 'worktreeHistoryNavigate':
-      return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
-    case 'dictationKeyDown':
-      return 'voice.dictation'
-    case 'jumpToWorktreeIndex':
-      return 'workspace.selectByIndex'
-    case 'jumpToTabIndex':
-      return 'tab.selectByIndex'
-  }
-}
-
-export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {
-  const actionId = getWindowShortcutActionId(action)
-  if (!actionId) {
-    return false
-  }
-  const definition = getKeybindingDefinition(actionId)
-  if (!definition || isKeybindingAllowedInTerminal(definition)) {
-    return false
-  }
-  return isKeybindingPotentialTerminalConflict(definition)
-}
+// Why: moved to window-shortcut-action-id.ts (action -> keybinding id direction) to keep this
+// file under its line budget; re-exported so existing imports of this module don't break.
+export {
+  getWindowShortcutActionId,
+  windowShortcutActionCapturesTerminal
+} from './window-shortcut-action-id'
