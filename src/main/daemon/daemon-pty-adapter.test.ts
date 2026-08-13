@@ -26,7 +26,9 @@ import { TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS } from './terminal-history-seed
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
-    getMacDaemonSystemResolverHealthMock: vi.fn(async (): Promise<'unknown' | 'unhealthy'> => 'unknown'),
+    getMacDaemonSystemResolverHealthMock: vi.fn(
+      async (): Promise<'unknown' | 'unhealthy'> => 'unknown'
+    ),
     getMacDaemonTccAttributionHealthMock: vi.fn(
       async (): Promise<'intact' | 'severed' | 'unknown'> => 'unknown'
     )
@@ -3969,6 +3971,35 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         '1.4.178',
         respawnAdapter.protocolVersion
       )
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(next.id).toBeDefined()
+
+      respawnAdapter.dispose()
+    })
+
+    it('preserves a severed-TCC daemon when its live session inventory is unavailable', async () => {
+      const respawnFn = vi.fn()
+      const respawnAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        runtimeDir: dir,
+        packagedAppVersion: '1.4.178',
+        respawn: respawnFn
+      })
+      const internals = respawnAdapter as unknown as {
+        client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+      }
+      const originalRequest = internals.client.request.bind(internals.client)
+      vi.spyOn(internals.client, 'request').mockImplementation((type, payload) => {
+        if (type === 'listSessions') {
+          return Promise.reject(new Error('inventory unavailable'))
+        }
+        return originalRequest(type, payload)
+      })
+      getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
       expect(respawnFn).not.toHaveBeenCalled()
       expect(next.id).toBeDefined()
 

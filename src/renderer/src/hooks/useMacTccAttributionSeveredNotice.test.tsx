@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { MacosTccPromptNoticeHost } from './MacosTccPromptNoticeHost'
 
@@ -76,20 +76,18 @@ describe('useMacTccAttributionSeveredNotice', () => {
 
   it('does not toast when attribution is intact', async () => {
     render(<MacosTccPromptNoticeHost />)
-    await act(async () => {
-      await Promise.resolve()
+    await waitFor(() => {
+      expect(macTccAttribution).toHaveBeenCalled()
     })
-    expect(macTccAttribution).toHaveBeenCalled()
     expect(toast.warning).not.toHaveBeenCalled()
   })
 
   it('toasts Manage Sessions remedy once when attribution is severed', async () => {
     macTccAttribution.mockResolvedValue({ health: 'severed' })
     render(<MacosTccPromptNoticeHost />)
-    await act(async () => {
-      await Promise.resolve()
+    await waitFor(() => {
+      expect(toast.warning).toHaveBeenCalledTimes(1)
     })
-    expect(toast.warning).toHaveBeenCalledTimes(1)
     const call = vi.mocked(toast.warning).mock.calls[0]
     const title = String(call?.[0] ?? '')
     const options = call?.[1] as
@@ -110,14 +108,12 @@ describe('useMacTccAttributionSeveredNotice', () => {
   it('does not toast again after the first severed notice this session', async () => {
     macTccAttribution.mockResolvedValue({ health: 'severed' })
     const { rerender } = render(<MacosTccPromptNoticeHost />)
-    await act(async () => {
-      await Promise.resolve()
+    await waitFor(() => {
+      expect(toast.warning).toHaveBeenCalledTimes(1)
     })
-    expect(toast.warning).toHaveBeenCalledTimes(1)
     rerender(<MacosTccPromptNoticeHost />)
-    await act(async () => {
+    act(() => {
       window.dispatchEvent(new Event('focus'))
-      await Promise.resolve()
     })
     expect(toast.warning).toHaveBeenCalledTimes(1)
   })
@@ -130,10 +126,11 @@ describe('useMacTccAttributionSeveredNotice', () => {
     macTccAttribution.mockImplementation(() => pending)
 
     render(<MacosTccPromptNoticeHost />)
-    // Focus while the first check is still in flight — must not start a second IPC.
-    await act(async () => {
+    await waitFor(() => {
+      expect(macTccAttribution).toHaveBeenCalledTimes(1)
+    })
+    act(() => {
       window.dispatchEvent(new Event('focus'))
-      await Promise.resolve()
     })
     expect(macTccAttribution).toHaveBeenCalledTimes(1)
     expect(toast.warning).not.toHaveBeenCalled()
@@ -141,10 +138,11 @@ describe('useMacTccAttributionSeveredNotice', () => {
     await act(async () => {
       resolveHealth({ health: 'severed' })
       await pending
-      await Promise.resolve()
     })
-    expect(macTccAttribution).toHaveBeenCalledTimes(1)
-    expect(toast.warning).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(macTccAttribution).toHaveBeenCalledTimes(1)
+      expect(toast.warning).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('clears the in-flight guard on rejection so a later focus can retry', async () => {
@@ -153,16 +151,17 @@ describe('useMacTccAttributionSeveredNotice', () => {
       .mockResolvedValueOnce({ health: 'severed' })
 
     render(<MacosTccPromptNoticeHost />)
-    await act(async () => {
-      await Promise.resolve()
+    await waitFor(() => {
+      expect(macTccAttribution).toHaveBeenCalledTimes(1)
     })
     expect(toast.warning).not.toHaveBeenCalled()
 
-    await act(async () => {
+    act(() => {
       window.dispatchEvent(new Event('focus'))
-      await Promise.resolve()
     })
-    expect(macTccAttribution).toHaveBeenCalledTimes(2)
-    expect(toast.warning).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(macTccAttribution).toHaveBeenCalledTimes(2)
+      expect(toast.warning).toHaveBeenCalledTimes(1)
+    })
   })
 })

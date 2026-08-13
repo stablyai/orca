@@ -8,13 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { resolveUiLocale } from '@/i18n/supported-languages'
 import { MANAGE_SESSIONS_SECTION_ID } from '@/components/settings/TerminalTccAttributionNotice'
 
-/**
- * #13594 / STA-3491: when the terminal daemon's macOS TCC responsible process is
- * severed (packaged update deleted the spawning binary), Settings already shows
- * TerminalTccAttributionNotice — but users who never open Settings only see
- * Operation not permitted. Toast the same remedy once per app session.
- * Does not kill the daemon or broaden permissions.
- */
+/** Surface the existing restart remedy once when daemon TCC attribution is severed. */
 export function useMacTccAttributionSeveredNotice(): void {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)

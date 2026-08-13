@@ -138,24 +138,15 @@ export type DaemonPtyAdapterOptions = {
   protocolVersion?: number
   /** Directory for disk-based terminal history; when set, raw PTY output is written to disk for cold restore on daemon crash. */
   historyPath?: string
-  /**
-   * Runtime profile dir (same value as the daemon pid file's parent). Used for
-   * macOS TCC attribution checks before new-session spawns (#13594).
-   */
+  /** Runtime profile directory used to verify daemon TCC attribution. */
   runtimeDir?: string
-  /**
-   * Packaged app version, or null when unpackaged. When the daemon's recorded
-   * appVersion differs, attribution is severed after a bundle replace.
-   */
+  /** Current packaged version, or null for unpackaged builds. */
   packagedAppVersion?: string | null
   /** Forks a fresh daemon after endpoint death or a confirmed resolver-health replacement. */
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
 }
 
-export type DaemonRespawnReason =
-  | 'daemon_died'
-  | 'unhealthy_resolver'
-  | 'severed_tcc_attribution'
+export type DaemonRespawnReason = 'daemon_died' | 'unhealthy_resolver' | 'severed_tcc_attribution'
 
 export type DaemonIdentityChangeEvent = {
   previous: DaemonEndpointIdentity
@@ -315,8 +306,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
     this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
-    this.packagedAppVersion =
-      opts.packagedAppVersion === undefined ? null : opts.packagedAppVersion
+    this.packagedAppVersion = opts.packagedAppVersion === undefined ? null : opts.packagedAppVersion
     this.supportsCheckpoints = this.protocolVersion >= 4
     this.supportsIncrementalCheckpoints = this.protocolVersion >= 13
     this.supportsProducerFlowControl = this.protocolVersion >= 19
@@ -2461,13 +2451,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.respawnPromise
   }
 
-  /**
-   * #13594: a packaged update can leave a healthy daemon whose TCC responsible
-   * process is the deleted pre-update binary. Launch-time replacement only runs
-   * when liveSessionCount === 0, so long-lived fleets stay severed. When the user
-   * later opens a *new* terminal with no live sessions left, recover here —
-   * never while sessions would be killed (same gate as launch-time).
-   */
+  /** Replace a TCC-severed daemon only after its live sessions drain. */
   private async replaceSeveredMacTccDaemonBeforeNewPty(): Promise<void> {
     // Why no platform gate: getMacDaemonTccAttributionHealth returns 'unknown' off macOS.
     if (!this.respawnFn || !this.runtimeDir) {
