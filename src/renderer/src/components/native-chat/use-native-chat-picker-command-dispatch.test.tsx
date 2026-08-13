@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { EMPTY_HISTORY } from './native-chat-composer-state'
+import { describe, expect, it, vi } from 'vitest'
 
 const sendNativeChatMessage = vi.fn()
 const sendNativeChatTypedCommand = vi.fn()
@@ -16,58 +15,81 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatSendClassified: vi.fn()
 }))
+vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+  isRemoteRuntimePtyId: () => false
+}))
 
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 
-const COMMAND = {
-  kind: 'command' as const,
-  id: 'command:status',
-  name: 'status',
-  description: 'Show status',
-  skillCollision: false
-}
-
-function renderDispatch(agent: 'codex' | 'claude' | 'openclaude') {
-  return renderHook(() =>
-    useNativeChatPickerCommandDispatch({
-      agent,
+describe('useNativeChatPickerCommandDispatch', () => {
+  it('blocks duplicates and preserves composer state when verified delivery is rejected', async () => {
+    let settleDelivery!: (delivered: boolean) => void
+    const handle = {
+      cancel: vi.fn(),
+      settleAfterMs: 500,
+      delivered: new Promise<boolean>((resolve) => {
+        settleDelivery = resolve
+      })
+    }
+    sendNativeChatTypedCommand.mockReturnValue(handle)
+    const setDraft = vi.fn()
+    const setNotice = vi.fn()
+    const setVerifiedSendPending = vi.fn()
+    const onSlashCommand = vi.fn()
+    const args = {
+      agent: 'codex' as const,
       disabled: false,
       isDispatchingSessionOption: false,
-      resolveTarget: () => ({ settings: {}, ptyId: 'pty-1' }),
+      resolveTarget: () => ({
+        ptyId: 'pty-1',
+        settings: {},
+        writer: {
+          requiresWriteAcceptance: true,
+          write: vi.fn(() => true),
+          writeAccepted: vi.fn(async () => false)
+        }
+      }),
+      onSlashCommand,
       sessionOptionsSurface: null,
       trackPendingSend: vi.fn(),
-      setHistory: vi.fn((update) => update(EMPTY_HISTORY)),
-      setDraft: vi.fn(),
+      setHistory: vi.fn(),
+      setDraft,
       setCaret: vi.fn(),
       setActiveSuggestion: vi.fn(),
       clearSkillOrigin: vi.fn(),
       clearImageAttachments: vi.fn(),
-      setNotice: vi.fn()
+      setNotice,
+      setVerifiedSendPending
+    }
+    const { result } = renderHook(() => useNativeChatPickerCommandDispatch(args))
+    const command = {
+      kind: 'command' as const,
+      id: 'command:clear',
+      name: 'clear',
+      skillCollision: false
+    }
+
+    act(() => {
+      result.current(command)
+      result.current(command)
     })
-  )
-}
 
-describe('useNativeChatPickerCommandDispatch', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    const handle = { cancel: vi.fn(), settleAfterMs: 0 }
-    sendNativeChatMessage.mockReturnValue(handle)
-    sendNativeChatTypedCommand.mockReturnValue(handle)
-  })
+    expect(sendNativeChatTypedCommand).toHaveBeenCalledOnce()
+    expect(sendNativeChatTypedCommand).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      '/clear',
+      expect.any(Object)
+    )
+    expect(setVerifiedSendPending).toHaveBeenCalledWith(true)
+    expect(setDraft).not.toHaveBeenCalled()
+    expect(onSlashCommand).not.toHaveBeenCalled()
 
-  it('types Codex autocomplete commands', () => {
-    const hook = renderDispatch('codex')
-    act(() => hook.result.current(COMMAND))
+    await act(async () => settleDelivery(false))
 
-    expect(sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
-    expect(sendNativeChatMessage).not.toHaveBeenCalled()
-  })
-
-  it.each(['claude', 'openclaude'] as const)('keeps %s autocomplete commands pasted', (agent) => {
-    const hook = renderDispatch(agent)
-    act(() => hook.result.current(COMMAND))
-
-    expect(sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/status')
-    expect(sendNativeChatTypedCommand).not.toHaveBeenCalled()
+    expect(setVerifiedSendPending).toHaveBeenLastCalledWith(false)
+    expect(setNotice).toHaveBeenCalledWith(expect.stringMatching(/did not accept/))
+    expect(setDraft).not.toHaveBeenCalled()
+    expect(onSlashCommand).not.toHaveBeenCalled()
   })
 })

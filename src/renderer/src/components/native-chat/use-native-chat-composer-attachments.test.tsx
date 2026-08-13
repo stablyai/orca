@@ -8,6 +8,7 @@ import {
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
+import { runtimeNativeChatPtyWriter } from './native-chat-pty-writer'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -20,7 +21,8 @@ type ProbeApi = ReturnType<typeof useNativeChatComposerAttachments>
 
 const target: NativeChatResolvedTarget = {
   ptyId: 'pty-1',
-  settings: { activeRuntimeEnvironmentId: null }
+  settings: { activeRuntimeEnvironmentId: null },
+  writer: runtimeNativeChatPtyWriter
 }
 
 function Probe({

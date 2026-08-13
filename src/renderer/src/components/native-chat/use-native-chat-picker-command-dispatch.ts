@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   emitNativeChatMessageSent,
@@ -17,6 +17,7 @@ import {
 } from './native-chat-composer-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import { translate } from '@/i18n/i18n'
 
 export function useNativeChatPickerCommandDispatch(args: {
   agent: AgentType
@@ -33,6 +34,7 @@ export function useNativeChatPickerCommandDispatch(args: {
   clearSkillOrigin: () => void
   clearImageAttachments: () => void
   setNotice: Dispatch<SetStateAction<string | null>>
+  setVerifiedSendPending: Dispatch<SetStateAction<boolean>>
 }): (command: Extract<NativeChatPickerItem, { kind: 'command' }>) => void {
   const {
     agent,
@@ -48,38 +50,66 @@ export function useNativeChatPickerCommandDispatch(args: {
     setActiveSuggestion,
     clearSkillOrigin,
     clearImageAttachments,
-    setNotice
+    setNotice,
+    setVerifiedSendPending
   } = args
+  const verifiedPendingRef = useRef(false)
   return useCallback(
     (command) => {
       const text = `/${command.name}`
       const target = resolveTarget()
-      if (!target || disabled || isDispatchingSessionOption) {
+      if (!target || disabled || isDispatchingSessionOption || verifiedPendingRef.current) {
         return
       }
-      trackPendingSend(
+      const handle =
         agent === 'codex'
-          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
-          : sendNativeChatMessage(target.settings, target.ptyId, text)
-      )
-      emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
-      // Why: picker dispatch is a catalog-verified command send; it must leave
-      // the same telemetry and composer state as the typed path — including
-      // disarming attachments, or a stale image rides the next prompt.
-      emitNativeChatSendClassified({ agent, outcome: 'command' })
-      onSlashCommand?.(text)
-      sessionOptionsSurface?.recordOutgoingCommand(text)
-      emitNativeChatMessageSent({
-        agent,
-        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
-      })
-      setHistory((previous) => pushHistory(previous, text))
-      setDraft('')
-      setCaret(0)
-      setActiveSuggestion(0)
-      clearSkillOrigin()
-      clearImageAttachments()
-      setNotice(null)
+          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text, target.writer)
+          : sendNativeChatMessage(target.settings, target.ptyId, text, { writer: target.writer })
+      trackPendingSend(handle)
+      const finishAcceptedCommand = (): void => {
+        emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
+        // Why: picker dispatch is a catalog-verified command send; it must leave
+        // the same telemetry and composer state as the typed path — including
+        // disarming attachments, or a stale image rides the next prompt.
+        emitNativeChatSendClassified({ agent, outcome: 'command' })
+        onSlashCommand?.(text)
+        sessionOptionsSurface?.recordOutgoingCommand(text)
+        emitNativeChatMessageSent({
+          agent,
+          runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
+        })
+        setHistory((previous) => pushHistory(previous, text))
+        setDraft('')
+        setCaret(0)
+        setActiveSuggestion(0)
+        clearSkillOrigin()
+        clearImageAttachments()
+        setNotice(null)
+      }
+      if (handle.delivered) {
+        verifiedPendingRef.current = true
+        setVerifiedSendPending(true)
+        void handle.delivered
+          .catch(() => false)
+          .then((delivered) => {
+            if (delivered) {
+              finishAcceptedCommand()
+              return
+            }
+            setNotice(
+              translate(
+                'components.native-chat.composer.sendRejected',
+                'The terminal did not accept the message. Try again.'
+              )
+            )
+          })
+          .finally(() => {
+            verifiedPendingRef.current = false
+            setVerifiedSendPending(false)
+          })
+        return
+      }
+      finishAcceptedCommand()
     },
     [
       agent,
@@ -95,6 +125,7 @@ export function useNativeChatPickerCommandDispatch(args: {
       setDraft,
       setHistory,
       setNotice,
+      setVerifiedSendPending,
       trackPendingSend
     ]
   )

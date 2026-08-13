@@ -1,5 +1,7 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
+import type { NativeChatPtyWriter } from './native-chat-pty-writer'
 
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
@@ -8,13 +10,23 @@ export type NativeChatComposerProps = {
   paneKey: string
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
+  /** Alternate authorized write lane for secondary renderer surfaces. */
+  ptyWriter?: NativeChatPtyWriter
+  /** Whether this renderer mounts the controller that consumes dictation events. */
+  dictationEnabled?: boolean
+  /** Whether this renderer can observe terminal output needed by option controls. */
+  sessionOptionsEnabled?: boolean
+  /** Whether the host relays native file-drop events into this renderer. */
+  fileDropEnabled?: boolean
+  /** Resolved owner when the surrounding surface has no hydrated tab store. */
+  attachmentOwner?: NativeChatAttachmentOwner
   agent: AgentType
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
-  onStop?: () => void
+  onStop?: () => boolean | Promise<boolean> | void
   /** Render an optimistic echo until the real transcript turn lands. */
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
   /** Remove an optimistic echo when its delayed submit is canceled. */

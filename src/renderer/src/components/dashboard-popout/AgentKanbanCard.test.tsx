@@ -295,6 +295,63 @@ describe('AgentKanbanCard', () => {
     expect(agentIconRender).toHaveBeenCalledTimes(2)
   })
 
+  it('opens the inspector with fresh chat and terminal-routing metadata', () => {
+    const onOpenTerminal = vi.fn()
+    const initial = card()
+    const { rerender } = render(
+      <TooltipProvider>
+        <AgentKanbanCard card={initial} now={2_000} onOpenTerminal={onOpenTerminal} />
+      </TooltipProvider>
+    )
+    const chatCard = {
+      ...initial,
+      hostKind: 'local' as const,
+      viewMode: 'chat' as const,
+      sessionId: 'session-2',
+      transcriptPath: '/tmp/session-2.jsonl'
+    }
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard card={chatCard} now={2_000} onOpenTerminal={onOpenTerminal} />
+      </TooltipProvider>
+    )
+
+    fireEvent.click(screen.getByText('Review the change'))
+    expect(onOpenTerminal).toHaveBeenLastCalledWith(chatCard)
+
+    const windowsCard = {
+      ...chatCard,
+      terminalInput: {
+        hostPlatform: 'win32' as const,
+        localWindowsConpty: true,
+        windowsShiftEnterEncoding: 'csi-u' as const,
+        kittyKeyboardAdvertised: false,
+        ctrlEnterCsiU: false
+      }
+    }
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard card={windowsCard} now={2_000} onOpenTerminal={onOpenTerminal} />
+      </TooltipProvider>
+    )
+
+    fireEvent.click(screen.getByText('Review the change'))
+    expect(onOpenTerminal).toHaveBeenLastCalledWith(windowsCard)
+
+    const ctrlEnterCard = {
+      ...windowsCard,
+      terminalInput: { ...windowsCard.terminalInput, ctrlEnterCsiU: true }
+    }
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard card={ctrlEnterCard} now={2_000} onOpenTerminal={onOpenTerminal} />
+      </TooltipProvider>
+    )
+
+    fireEvent.click(screen.getByText('Review the change'))
+    expect(onOpenTerminal).toHaveBeenLastCalledWith(ctrlEnterCard)
+  })
+
   it('updates the relative age when the UI language changes', async () => {
     renderCard({ card: card({ startedAt: 1_000 }), now: 121_500 })
     expect(screen.getByText('2m')).toBeInTheDocument()

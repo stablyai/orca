@@ -8,6 +8,8 @@ export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
   /** Whether the snapshotted answer is still being delivered to the agent. */
   isSubmitting?: boolean
+  /** Blocks repeated cancel writes while Escape acceptance is pending. */
+  cancelDisabled?: boolean
   /** Deliver the chosen answer (per-question option indices + free text). */
   onAnswer: (selections: AskAnswerSelection[]) => void
   /** Dismiss the prompt (sends Escape to the agent). */
@@ -27,6 +29,7 @@ export type NativeChatQuestionCardProps = {
 export function NativeChatQuestionCard({
   prompt,
   isSubmitting = false,
+  cancelDisabled = false,
   onAnswer,
   onCancel,
   answerInputRef
@@ -161,9 +164,10 @@ export function NativeChatQuestionCard({
             </p>
             <button
               type="button"
+              disabled={cancelDisabled}
               onClick={onCancel}
               aria-label={translate('components.native-chat.question.cancel', 'Cancel')}
-              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
             >
               <X className="size-4" />
             </button>

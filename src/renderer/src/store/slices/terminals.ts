@@ -522,6 +522,9 @@ export type TerminalSlice = {
   ptyIdsByTabId: Record<string, string[]>
   /** Live pane titles by tabId then paneId; preserves per-pane agent status (unlike the legacy tab title) while TerminalPane is mounted. */
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  /** Dashboard-only live ownership of the leaf currently rendered as native chat. */
+  runtimeNativeChatLeafIdByTabId: Record<string, string>
+  setRuntimeNativeChatLeafId: (tabId: string, leafId: string | null) => void
   /** Per-tab unread flags (BEL or agent-complete); ephemeral UI state, not persisted. Cleared when the user activates/interacts with the tab. */
   unreadTerminalTabs: Record<string, true>
   /** Pane-keyed attention marker (narrower than unreadTerminalTabs); clears when the user interacts with the exact pane that raised it. */
@@ -1051,6 +1054,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   activeTabIdByWorktree: {},
   ptyIdsByTabId: {},
   runtimePaneTitlesByTabId: {},
+  runtimeNativeChatLeafIdByTabId: {},
   unreadTerminalTabs: {},
   unreadTerminalPanes: {},
   unreadAgentCompletionPanes: {},
@@ -1674,6 +1678,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextPendingReconnectPtyIdByTabId[tabId]
       const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
       delete nextRuntimePaneTitlesByTabId[tabId]
+      const nextRuntimeNativeChatLeafIdByTabId = { ...s.runtimeNativeChatLeafIdByTabId }
+      delete nextRuntimeNativeChatLeafIdByTabId[tabId]
       const nextDirectSshPaneRetryByTabId = { ...s.directSshPaneRetryByTabId }
       delete nextDirectSshPaneRetryByTabId[tabId]
       const nextDirectSshLivePtyBindingByTabId = {
@@ -1786,6 +1792,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         deferredSshSessionIdsByTabId: nextDeferredSshSessionIdsByTabId,
         pendingReconnectPtyIdByTabId: nextPendingReconnectPtyIdByTabId,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+        runtimeNativeChatLeafIdByTabId: nextRuntimeNativeChatLeafIdByTabId,
         directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
         directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId,
         directSshPaneRetryHistoryByTabId: nextDirectSshPaneRetryHistoryByTabId,
@@ -3612,6 +3619,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
     transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
+  },
+
+  setRuntimeNativeChatLeafId: (tabId, leafId) => {
+    set((s) => {
+      const current = s.runtimeNativeChatLeafIdByTabId[tabId]
+      if (leafId === null) {
+        if (current === undefined) {
+          return s
+        }
+        const next = { ...s.runtimeNativeChatLeafIdByTabId }
+        delete next[tabId]
+        return { runtimeNativeChatLeafIdByTabId: next }
+      }
+      if (current === leafId) {
+        return s
+      }
+      return {
+        runtimeNativeChatLeafIdByTabId: {
+          ...s.runtimeNativeChatLeafIdByTabId,
+          [tabId]: leafId
+        }
+      }
+    })
   },
 
   syncPaneDetachPtyOwnership: ({

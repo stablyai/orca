@@ -1,8 +1,8 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
+import type { AgentQuestionAnsweredInferenceRequest } from '../../../../shared/agent-question-answered-intent'
 import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
@@ -21,6 +21,7 @@ import {
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
 import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-question-answered-inference'
+import { runtimeNativeChatPtyWriter, type NativeChatPtyWriter } from './native-chat-pty-writer'
 
 // ESC is the agent-TUI interrupt/cancel key over the PTY (matches how the
 // composer forwards Escape). Used to cancel a question or deny an approval.
@@ -35,11 +36,11 @@ export type NativeChatInteractiveSend = {
     onDeliverySettled?: (delivered: boolean) => void
   ) => { settleAfterMs: number; waitsForVerifiedDelivery: boolean }
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
-  sendRaw: (raw: string) => void
+  sendRaw: (raw: string) => boolean | Promise<boolean>
   /** Stop delayed writes without interrupting the agent. */
   cancelPending: () => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
-  cancel: () => void
+  cancel: () => boolean | Promise<boolean>
 }
 
 /**
@@ -54,7 +55,9 @@ export function useNativeChatInteractiveSend(
   terminalTabId: string,
   paneKey: string,
   targetPtyId: string | null,
-  agent: AgentType
+  agent: AgentType,
+  writer: NativeChatPtyWriter = runtimeNativeChatPtyWriter,
+  questionInferenceRequest?: AgentQuestionAnsweredInferenceRequest
 ): NativeChatInteractiveSend {
   // The in-flight answer's cancel handle; cleared on a new send, on Stop, and on
   // unmount so a detached setTimeout chain can't keep writing PTY bytes after
@@ -74,11 +77,14 @@ export function useNativeChatInteractiveSend(
   const sendRaw = useCallback(
     (raw: string) => {
       if (!targetPtyId) {
-        return
+        return false
       }
-      sendRuntimePtyInput(getSettingsForAgentTabRuntimeOwner(terminalTabId), targetPtyId, raw)
+      const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
+      return writer.requiresWriteAcceptance
+        ? writer.writeAccepted(settings, targetPtyId, raw).catch(() => false)
+        : writer.write(settings, targetPtyId, raw)
     },
-    [terminalTabId, targetPtyId]
+    [terminalTabId, targetPtyId, writer]
   )
 
   const sendAnswer = useCallback(
@@ -115,7 +121,7 @@ export function useNativeChatInteractiveSend(
               inFlightRef.current = null
             }
             if (delivered) {
-              inferQuestionAnsweredFromCurrentStatus({
+              const inferred = inferQuestionAnsweredFromCurrentStatus({
                 paneKey,
                 getStatusEntry: () => questionStatusBaseline,
                 inferQuestionAnswered: (request) =>
@@ -124,6 +130,14 @@ export function useNativeChatInteractiveSend(
                     return false
                   })
               })
+              if (!inferred && questionInferenceRequest) {
+                void window.api.agentStatus
+                  .inferQuestionAnswered(questionInferenceRequest)
+                  .catch((err) => {
+                    console.warn('[agent-question] dashboard inference failed:', err)
+                    return false
+                  })
+              }
             }
             onDeliverySettled?.(delivered)
           }
@@ -135,9 +149,15 @@ export function useNativeChatInteractiveSend(
             buildsCodexAnswer
               ? buildCodexAskAnswerKeys(prompt, selections)
               : buildAskAnswerKeys(prompt, selections),
-            onSettled
+            onSettled,
+            writer
           )
-        : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
+        : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections), {
+            writer
+          })
+      if (handle.delivered && onDeliverySettled) {
+        void handle.delivered.then(onDeliverySettled)
+      }
       // Why: native-chat answer writes bypass xterm.onData. Infer only after
       // every paced selector write has fired, so an early digit in a multi-step
       // answer cannot dismiss the wait or cancel the remaining writes.
@@ -145,16 +165,16 @@ export function useNativeChatInteractiveSend(
       inFlightRef.current = handle
       return {
         settleAfterMs: handle.settleAfterMs,
-        waitsForVerifiedDelivery: onSettled !== undefined
+        waitsForVerifiedDelivery: onSettled !== undefined || handle.delivered !== undefined
       }
     },
-    [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight]
+    [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight, questionInferenceRequest, writer]
   )
 
   // Stop/cancel: drop any pending answer writes, then send ESC to interrupt.
   const cancel = useCallback(() => {
     cancelInFlight()
-    sendRaw(ESC)
+    return sendRaw(ESC)
   }, [cancelInFlight, sendRaw])
 
   return { sendAnswer, sendRaw, cancelPending: cancelInFlight, cancel }

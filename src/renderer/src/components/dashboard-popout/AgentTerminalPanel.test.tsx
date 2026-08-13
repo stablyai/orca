@@ -8,7 +8,7 @@ import type {
   DashboardCardTerminalInput
 } from '../../../../shared/dashboard-snapshot'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { AgentTerminalDialog, AgentTerminalPanel } from './AgentTerminalDialog'
+import { AgentTerminalPanel } from './AgentTerminalPanel'
 
 // Stub the preview so the assertion is on the props the dialog hands it, with
 // no xterm / IPC machinery in the way.
@@ -69,10 +69,10 @@ afterEach(() => {
 // Why: this is the only seam carrying the relayed host profile into the
 // emulator. Dropping the prop degrades every preview to client-OS byte routing
 // silently — nothing else in the app reads DashboardCard.terminalInput.
-describe('AgentTerminalDialog', () => {
+describe('AgentTerminalPanel', () => {
   it("hands the card's relayed host-input profile to the preview terminal", () => {
     render(
-      <AgentTerminalDialog
+      <AgentTerminalPanel
         card={card({ terminalInput: TERMINAL_INPUT })}
         onOpenChange={() => {}}
         onReveal={() => {}}
@@ -86,14 +86,14 @@ describe('AgentTerminalDialog', () => {
   })
 
   it('passes null when the card carries no profile, so the preview routes by client OS', () => {
-    render(<AgentTerminalDialog card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
+    render(<AgentTerminalPanel card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
 
     expect(screen.getByTestId('preview')).toHaveAttribute('data-terminal-input', 'null')
   })
 
   it('labels acknowledged completions idle without review or pin controls', () => {
     render(
-      <AgentTerminalDialog
+      <AgentTerminalPanel
         card={card({ bucket: 'idle', dotState: 'done', finishedAt: 100, unseen: false })}
         onOpenChange={() => {}}
         onReveal={() => {}}
@@ -108,7 +108,7 @@ describe('AgentTerminalDialog', () => {
 
   it('labels unseen completions done', () => {
     render(
-      <AgentTerminalDialog
+      <AgentTerminalPanel
         card={card({ bucket: 'done', dotState: 'done', finishedAt: 100, unseen: true })}
         onOpenChange={() => {}}
         onReveal={() => {}}
@@ -121,7 +121,7 @@ describe('AgentTerminalDialog', () => {
   it('preserves the execution host when revealing a colliding worktree ID', () => {
     const onReveal = vi.fn()
     render(
-      <AgentTerminalDialog
+      <AgentTerminalPanel
         card={card({ executionHostId: 'runtime:env-1' })}
         onOpenChange={() => {}}
         onReveal={onReveal}
@@ -138,7 +138,7 @@ describe('AgentTerminalDialog', () => {
     })
   })
 
-  it('reuses the terminal surface as a non-modal adjacent panel', () => {
+  it('renders as a non-modal adjacent panel', () => {
     render(<AgentTerminalPanel card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
 
     expect(screen.getByRole('dialog', { name: 'wt' })).toHaveAttribute('data-state', 'open')

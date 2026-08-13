@@ -41,7 +41,7 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Live interactive view of an agent's terminal, streaming from the main
  * process's per-PTY headless emulator. On open it claims the PTY grid for the
- * dialog's own box (see createPreviewGridClaim), so the terminal renders
+ * inspector's own box (see createPreviewGridClaim), so the terminal renders
  * properly sized rather than scaled. The terminal itself is always created at
  * the PTY's REAL cols/rows — serialized ANSI replayed into different
  * dimensions rewraps into garbage — and when someone else owns the grid (a
@@ -435,7 +435,7 @@ export function AgentTerminalPreview({
 
   return (
     // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden
-    // keeps the dialog stable no matter how wide/tall the pane's serialized
+    // keeps the inspector stable no matter how wide/tall the pane's serialized
     // buffer is. The terminal keeps the pane's true dimensions and is scaled/
     // clipped to fit; fitToBox anchors whichever end keeps the cursor in view.
     <div

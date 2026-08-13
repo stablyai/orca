@@ -55,6 +55,8 @@ export type DashboardCardSubagent = {
 }
 
 export type DashboardCardHostKind = 'local' | 'ssh' | 'wsl' | 'remote'
+export type DashboardCardViewMode = 'terminal' | 'chat'
+
 export type DashboardCardWorkspaceKind = 'worktree' | 'folder'
 
 export type DashboardWorkspace = {
@@ -99,8 +101,11 @@ export type DashboardCard = {
   parentWorktreeId?: string
   repoName: string
   worktreeName: string
-  /** Optional for preload compatibility with snapshots produced before Agent Map. */
+  /** Optional for preload compatibility with snapshots produced before Agent Map.
+   *  Also keeps the inspector from reading remote transcript paths locally. */
   hostKind?: DashboardCardHostKind
+  /** Initial dashboard inspector mode derived from the user's Chat UI default. */
+  viewMode?: DashboardCardViewMode
   /** Exact owner used by in-window workspace actions when IDs collide across hosts. */
   executionHostId?: ExecutionHostId
   /** Folder workspaces share the ring hierarchy without pretending to be git worktrees. */
@@ -125,11 +130,13 @@ export type DashboardCard = {
    *  pop-out uses it to request one refresh when a live state becomes stale. */
   statusUpdatedAt?: number
   /** Mirrors the sidebar's unvisited signal: the agent changed state since the
-   *  user last acknowledged it (visited its tab / opened its dashboard dialog).
+   *  user last acknowledged it (visited its tab / opened its dashboard drawer).
    *  Derived from the app-wide ack map so both surfaces mute in lockstep. */
   unseen: boolean
   /** Short summary of the pending question when bucket === 'attention'. */
   askSummary?: string
+  /** Tool discriminator paired with askSummary for registered question parsers. */
+  interactiveToolName?: string
   /** The tab's conversation name, resolved exactly as the sidebar's agent rows
    *  resolve it. Undefined when no usable name exists (status-only titles). */
   conversationName?: string
@@ -138,6 +145,10 @@ export type DashboardCard = {
    *  the main renderer owns the store these derive from, so they ride the
    *  snapshot to reach the pop-out. */
   terminalInput?: DashboardCardTerminalInput
+  /** Provider session identity used by the native dashboard chat. */
+  sessionId?: string
+  /** Authoritative on-disk transcript path for the provider session. */
+  transcriptPath?: string
 }
 
 /**

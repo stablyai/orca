@@ -3,7 +3,6 @@ import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { agentStateLabel } from '@/components/AgentStateDot'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
   dashboardCardDisplayState,
@@ -17,17 +16,15 @@ import { cn } from '@/lib/utils'
 /** Routing payload for focusing an agent's pane in the main window. */
 export type AgentRevealArgs = DashboardRevealAgentArgs
 
-type AgentTerminalDialogProps = {
-  /** The agent shown in the dialog; null renders the dialog closed. */
-  card: DashboardCard | null
+type AgentTerminalSurfaceProps = {
+  card: DashboardCard
   onOpenChange: (open: boolean) => void
   /** Focus the agent's pane. The pop-out relays over IPC; the in-window host
    *  activates the worktree/pane locally. */
   onReveal: (args: AgentRevealArgs) => void
 }
 
-type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
-  card: DashboardCard
+type AgentTerminalFrameProps = AgentTerminalSurfaceProps & {
   title: React.ReactNode
   previewClassName?: string
 }
@@ -97,70 +94,16 @@ function AgentTerminalFrame({
 }
 
 /**
- * The near-fullscreen live-terminal dialog for one agent. Hosted by the BOARD,
- * not the card: sending a message flips the agent's bucket, which remounts its
- * card in another column — a card-owned dialog would close mid-conversation.
- * Only an explicit close (button, click-outside, Esc outside the terminal)
- * dismisses it.
+ * The live-terminal surface for one agent, docked beside the map. Hosted by the
+ * VIEW, not the card: sending a message flips the agent's bucket, which remounts
+ * its card — a card-owned panel would close mid-conversation.
  */
-export function AgentTerminalDialog({
-  card,
-  onOpenChange,
-  onReveal
-}: AgentTerminalDialogProps): React.JSX.Element {
-  return (
-    <Dialog open={card !== null} onOpenChange={onOpenChange}>
-      {card ? (
-        <DialogContent
-          aria-describedby={undefined}
-          // Why: sm:max-w-lg in DialogContent's base classes would defeat a bare
-          // max-w-*, so the full-width override must carry the same breakpoint.
-          className="flex w-[calc(100vw-40px)] max-w-none flex-col gap-0 p-0 sm:max-w-none"
-          // Why: the default close X sits at top-4/right-4 (tuned for p-6
-          // dialogs), which misaligns against this p-0 compact header; render
-          // it inside the header row instead so it centers with the title.
-          showCloseButton={false}
-          // Why: Esc must reach the agent (interrupt) when typing in the
-          // terminal, not dismiss the dialog; xterm has already consumed the
-          // keystroke by the time Radix sees it. Click-outside still closes.
-          onEscapeKeyDown={(e) => {
-            if (e.target instanceof HTMLElement && e.target.closest('.xterm')) {
-              e.preventDefault()
-            }
-          }}
-          // Why: the preview focuses its terminal once the snapshot paints;
-          // Radix's default focus target would tug focus away first.
-          onOpenAutoFocus={(e) => {
-            if (card.ptyId) {
-              e.preventDefault()
-            }
-          }}
-        >
-          <AgentTerminalFrame
-            card={card}
-            title={
-              <DialogTitle className="text-[12px] leading-normal font-semibold">
-                {card.worktreeName}
-              </DialogTitle>
-            }
-            onOpenChange={onOpenChange}
-            onReveal={onReveal}
-          />
-        </DialogContent>
-      ) : null}
-    </Dialog>
-  )
-}
-
 export function AgentTerminalPanel({
   card,
   onOpenChange,
   onReveal,
   className
-}: Omit<AgentTerminalDialogProps, 'card'> & {
-  card: DashboardCard
-  className?: string
-}): React.JSX.Element {
+}: AgentTerminalSurfaceProps & { className?: string }): React.JSX.Element {
   const titleId = useId()
 
   useEffect(() => {

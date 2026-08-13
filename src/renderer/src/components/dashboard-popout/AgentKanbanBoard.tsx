@@ -14,7 +14,11 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { AgentKanbanCard } from './AgentKanbanCard'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
-import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
+import {
+  AgentDashboardInspectorDrawer,
+  type AgentRevealArgs
+} from './AgentDashboardInspectorDrawer'
+import { AGENT_DASHBOARD_INSPECTOR_DEFAULT_WIDTH } from './agent-dashboard-inspector-width'
 import {
   EMPTY_DASHBOARD_FILTERS,
   filterDashboardCards,
@@ -24,6 +28,7 @@ import './agent-board-transitions.css'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import type { NativeChatPtyWriter } from '@/components/native-chat/native-chat-pty-writer'
 
 export type AgentDashboardView = 'map' | 'board'
 
@@ -34,7 +39,7 @@ const AgentDashboardMapView = lazyWithRetry(
 )
 
 /** Ack an agent in the pop-out window: relayed over IPC to the main renderer.
- *  ?. shields dialog-opening from dev-HMR preload skew (renderer updates hot,
+ *  ?. shields inspector-opening from dev-HMR preload skew (renderer updates hot,
  *  the preload only on app restart) — acks just no-op until restart. */
 function ackAgentViaPopoutRelay(paneKey: string): void {
   void window.api.dashboard.ackAgent?.(paneKey)
@@ -166,6 +171,8 @@ type AgentKanbanBoardProps = {
   /** The shared sidebar workspace menu is available only in the main renderer. */
   workspaceContextMenusEnabled?: boolean
   onWorkspaceContextMenuOpenChange?: (open: boolean) => void
+  /** Authorized native-chat writer for a secondary renderer. */
+  chatPtyWriter?: NativeChatPtyWriter
 }
 
 /** The agent board: status columns fed by a snapshot. Shared by the pop-out
@@ -183,7 +190,8 @@ export function AgentKanbanBoard({
   headerActions,
   onOpenMap,
   workspaceContextMenusEnabled = false,
-  onWorkspaceContextMenuOpenChange
+  onWorkspaceContextMenuOpenChange,
+  chatPtyWriter
 }: AgentKanbanBoardProps): React.JSX.Element {
   const [view, setView] = useState(initialView)
   const visibleBuckets = useMemo(
@@ -240,13 +248,14 @@ export function AgentKanbanBoard({
     return () => document.removeEventListener('keydown', handleSearchShortcut)
   }, [])
 
-  // The open terminal dialog survives bucket moves: only the paneKey is
+  // The open inspector survives bucket moves: only the paneKey is
   // remembered, and the card data is re-resolved from each fresh snapshot.
-  // The opened card is kept as a fallback so the dialog also survives the
+  // The opened card is kept as a fallback so the drawer also survives the
   // card vanishing entirely (pane closed) — the user dismisses it explicitly.
   // Its live routing is cleared because daemon PTY ids can be reused.
   const [openedCard, setOpenedCard] = useState<DashboardCard | null>(null)
-  const dialogCard = useMemo(() => {
+  const [inspectorWidth, setInspectorWidth] = useState(AGENT_DASHBOARD_INSPECTOR_DEFAULT_WIDTH)
+  const inspectorCard = useMemo(() => {
     if (!openedCard) {
       return null
     }
@@ -258,7 +267,7 @@ export function AgentKanbanBoard({
       }
     )
   }, [snapshot.cards, openedCard])
-  const handleDialogOpenChange = useCallback((open: boolean) => {
+  const handleInspectorOpenChange = useCallback((open: boolean) => {
     if (!open) {
       setOpenedCard(null)
     }
@@ -279,7 +288,7 @@ export function AgentKanbanBoard({
   )
 
   // Seen-state is the app-wide ack map (same signal as the sidebar's bold/mute
-  // rows): opening a dialog acks the agent, and the next snapshot comes back
+  // rows): opening the inspector acks the agent, and the next snapshot comes back
   // with unseen=false.
   const handleOpenTerminal = useCallback(
     (card: DashboardCard) => {
@@ -288,13 +297,13 @@ export function AgentKanbanBoard({
     },
     [onAckAgent]
   )
-  // Watching the open dialog counts as seeing state changes as they happen —
+  // Watching the open inspector counts as seeing state changes as they happen —
   // without this, an agent finishing while you watch would re-flag its card.
   useEffect(() => {
-    if (dialogCard?.unseen) {
-      onAckAgent(dialogCard.paneKey)
+    if (inspectorCard?.unseen) {
+      onAckAgent(inspectorCard.paneKey)
     }
-  }, [dialogCard?.paneKey, dialogCard?.unseen, onAckAgent])
+  }, [inspectorCard?.unseen, inspectorCard?.paneKey, onAckAgent])
 
   return (
     // Why: the pop-out is its own React root with no app-level provider, and the
@@ -368,8 +377,8 @@ export function AgentKanbanBoard({
               onFiltersChange={setFilters}
               searchInputRef={searchInputRef}
               now={now}
-              dialogCard={dialogCard}
-              onDialogOpenChange={handleDialogOpenChange}
+              dialogCard={inspectorCard}
+              onDialogOpenChange={handleInspectorOpenChange}
               onRevealAgent={onRevealAgent}
               onOpenTerminal={handleOpenTerminal}
               onSpawnAgent={onSpawnAgent}
@@ -407,11 +416,15 @@ export function AgentKanbanBoard({
             </div>
           </>
         )}
-        {view === 'board' ? (
-          <AgentTerminalDialog
-            card={dialogCard}
-            onOpenChange={handleDialogOpenChange}
+        {view === 'board' && inspectorCard ? (
+          <AgentDashboardInspectorDrawer
+            key={`${inspectorCard.paneKey}:${inspectorCard.viewMode ?? 'terminal'}`}
+            card={inspectorCard}
+            width={inspectorWidth}
+            onOpenChange={handleInspectorOpenChange}
             onReveal={onRevealAgent}
+            onWidthChange={setInspectorWidth}
+            chatPtyWriter={chatPtyWriter}
           />
         ) : null}
       </div>

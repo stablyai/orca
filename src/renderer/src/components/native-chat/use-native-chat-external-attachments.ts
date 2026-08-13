@@ -9,6 +9,7 @@ import {
 
 export type UseNativeChatExternalAttachmentsArgs = {
   terminalTabId: string
+  attachmentOwner?: NativeChatAttachmentOwner
   /** Live composer-disabled state; read at await-resume via a ref so a flip
    *  mid-upload doesn't attach into a guarded composer. */
   disabled: boolean
@@ -23,6 +24,7 @@ export type UseNativeChatExternalAttachmentsArgs = {
  */
 export function useNativeChatExternalAttachments({
   terminalTabId,
+  attachmentOwner,
   disabled,
   attachResolvedPaths,
   setNotice
@@ -34,8 +36,9 @@ export function useNativeChatExternalAttachments({
   disabledRef.current = disabled
 
   const resolveAttachmentOwner = useCallback(
-    () => resolveNativeChatAttachmentOwner(useAppStore.getState(), terminalTabId),
-    [terminalTabId]
+    () =>
+      attachmentOwner ?? resolveNativeChatAttachmentOwner(useAppStore.getState(), terminalTabId),
+    [attachmentOwner, terminalTabId]
   )
 
   const attachExternalPaths = useCallback(

@@ -20,6 +20,9 @@ export function isMultilineDraft(text: string): boolean {
  *  SEPARATE pty write after the framed body (see buildNativeChatPasteBytes). */
 export const NATIVE_CHAT_SUBMIT = SUBMIT
 
+/** Ctrl+U empties the agent TUI input before a native composer writes its body. */
+export const NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT = '\x15'
+
 /**
  * Compute the bytes for `text` WITHOUT the trailing submit:
  *  - single-line → `text`

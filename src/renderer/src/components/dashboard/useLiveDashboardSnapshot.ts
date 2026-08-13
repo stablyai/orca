@@ -22,6 +22,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  const runtimeNativeChatLeafIdByTabId = useAppStore((s) => s.runtimeNativeChatLeafIdByTabId)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
   const prCache = useAppStore((s) => s.prCache)
@@ -74,6 +75,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           terminalLayoutsByTabId,
           ptyIdsByTabId,
           runtimePaneTitlesByTabId,
+          runtimeNativeChatLeafIdByTabId,
           acknowledgedAgentsByPaneKey,
           hostedReviewCache,
           prCache,
@@ -112,6 +114,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       terminalLayoutsByTabId,
       ptyIdsByTabId,
       runtimePaneTitlesByTabId,
+      runtimeNativeChatLeafIdByTabId,
       acknowledgedAgentsByPaneKey,
       hostedReviewCache,
       prCache,

@@ -32,6 +32,7 @@ export type NativeChatComposerFieldProps = {
   sendButtonDisabled: boolean
   isWorking: boolean
   attachDisabled: boolean
+  fileDropEnabled?: boolean
   dictationDisabled: boolean
   isDictating: boolean
   isDictationHoldMode: boolean
@@ -74,6 +75,7 @@ export function NativeChatComposerField({
   sendButtonDisabled,
   isWorking,
   attachDisabled,
+  fileDropEnabled = true,
   dictationDisabled,
   isDictating,
   isDictationHoldMode,
@@ -121,7 +123,9 @@ export function NativeChatComposerField({
             </div>
           ) : null}
           <div
-            data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
+            data-native-file-drop-target={
+              fileDropEnabled ? NATIVE_FILE_DROP_TARGET.composer : undefined
+            }
             className={cn(
               // Why: always-on hairline (token-level border, not focus ring) —
               // no focus/click border flash. The box is a container, not a

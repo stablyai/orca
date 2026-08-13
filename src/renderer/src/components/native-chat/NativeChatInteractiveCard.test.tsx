@@ -109,6 +109,8 @@ function chooseSpacesAndSubmit(): void {
 describe('NativeChatInteractiveCard answer lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.sendRaw.mockReturnValue(true)
+    mocks.cancel.mockReturnValue(true)
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = undefined
   })
@@ -208,6 +210,52 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     act(() => settleDelivery?.(false))
 
     expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+  })
+
+  it('blocks duplicate approval writes and restores the action after rejection', async () => {
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = JSON.stringify({
+      approval: { tool: 'Bash', summary: 'pnpm test' }
+    })
+    let settleDelivery!: (delivered: boolean) => void
+    mocks.sendRaw.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        settleDelivery = resolve
+      })
+    )
+    renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
+    expect(mocks.sendRaw).toHaveBeenCalledOnce()
+
+    await act(async () => settleDelivery(false))
+
+    expect(screen.getByText('Allow Bash?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled()
+  })
+
+  it('blocks duplicate question cancels while Escape acceptance is pending', async () => {
+    let settleDelivery!: (delivered: boolean) => void
+    mocks.cancel.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        settleDelivery = resolve
+      })
+    )
+    renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: /Spaces/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Sending…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mocks.cancel).toHaveBeenCalledOnce()
+    expect(mocks.sendAnswer).not.toHaveBeenCalled()
+
+    await act(async () => settleDelivery(false))
+
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
   })
 })

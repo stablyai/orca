@@ -64,7 +64,8 @@ function seedDrafts(store: ReturnType<typeof createTestStore>): void {
     nativeChatLaunchDraftByTabId: {
       [TAB1]: draft(TAB1, 'https://github.com/o/r/issues/1'),
       [TAB2]: draft(TAB2, 'https://github.com/o/r/issues/2')
-    }
+    },
+    runtimeNativeChatLeafIdByTabId: { [TAB1]: 'leaf-1', [TAB2]: 'leaf-2' }
   })
 }
 
@@ -94,6 +95,16 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
     const s = store.getState()
     expect(s.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
     expect(s.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
+  })
+
+  it('orphan cleanup drops runtime chat ownership for the removed tab only', () => {
+    const store = createTestStore()
+    seedDrafts(store)
+
+    const patch = buildOrphanTerminalCleanupPatch(store.getState(), WT1, new Set([TAB1]))
+
+    expect(patch.runtimeNativeChatLeafIdByTabId[TAB1]).toBeUndefined()
+    expect(patch.runtimeNativeChatLeafIdByTabId[TAB2]).toBe('leaf-2')
   })
 
   it('single removeWorktree drops drafts for the removed worktree only', async () => {

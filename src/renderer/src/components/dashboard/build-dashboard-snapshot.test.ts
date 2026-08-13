@@ -199,6 +199,119 @@ describe('buildDashboardSnapshot', () => {
     expect(card.unseen).toBe(true)
   })
 
+  it('carries native-chat session identity when the exact live leaf is in chat', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({
+            providerSession: {
+              key: 'session_id',
+              id: 'session-abc',
+              transcriptPath: '/home/dev/.claude/projects/orca/session-abc.jsonl'
+            }
+          })
+        },
+        runtimeNativeChatLeafIdByTabId: { [TAB_ID]: LEAF_ID },
+        settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: false } as never
+      } as unknown as Partial<DashboardSnapshotState>),
+      NOW
+    )
+
+    expect(snapshot.cards[0]).toMatchObject({
+      viewMode: 'chat',
+      sessionId: 'session-abc',
+      transcriptPath: expect.stringContaining('session-abc')
+    })
+  })
+
+  it.each([
+    ['the experiment is off', 'claude', false],
+    ['the leaf agent is unsupported', 'aider', true]
+  ] as const)('keeps native chat disabled when %s', (_case, agentType, experimentEnabled) => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: { [PANE_KEY]: entry({ agentType }) },
+        runtimeNativeChatLeafIdByTabId: { [TAB_ID]: LEAF_ID },
+        settings: { experimentalNativeChat: experimentEnabled, openAgentTabsInChatByDefault: true }
+      } as unknown as Partial<DashboardSnapshotState>),
+      NOW
+    )
+    expect(snapshot.cards[0].viewMode).toBeUndefined()
+  })
+
+  it('omits native-chat payload when the live leaf is terminal despite a chat default', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({
+            providerSession: {
+              key: 'session_id',
+              id: 'terminal-session',
+              transcriptPath: '/tmp/terminal-session.jsonl'
+            }
+          })
+        },
+        terminalLayoutsByTabId: {},
+        runtimeNativeChatLeafIdByTabId: { [TAB_ID]: LEAF_ID },
+        settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+      } as unknown as Partial<DashboardSnapshotState>),
+      NOW
+    )
+
+    expect(snapshot.cards[0]).not.toHaveProperty('viewMode')
+  })
+
+  it('marks only the native-chat owner in a split tab as chat', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({}),
+          [CHILD_PANE_KEY]: entry({ paneKey: CHILD_PANE_KEY })
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: LEAF_ID },
+              second: { type: 'leaf', leafId: CHILD_LEAF_ID }
+            },
+            ptyIdsByLeafId: { [LEAF_ID]: 'pty1', [CHILD_LEAF_ID]: 'pty-child' }
+          } as never
+        },
+        ptyIdsByTabId: { [TAB_ID]: ['pty1', 'pty-child'] },
+        runtimeNativeChatLeafIdByTabId: { [TAB_ID]: LEAF_ID },
+        settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true } as never
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards.find((card) => card.paneKey === PANE_KEY)?.viewMode).toBe('chat')
+    expect(snapshot.cards.find((card) => card.paneKey === CHILD_PANE_KEY)?.viewMode).toBeUndefined()
+  })
+
+  it('marks SSH transcript paths as remote from the dashboard renderer', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [
+          {
+            id: 'r1',
+            path: '/r1',
+            displayName: 'Repo One',
+            badgeColor: '#000',
+            addedAt: 0,
+            connectionId: 'staging'
+          }
+        ],
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+        settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true } as never
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0].hostKind).toBe('ssh')
+  })
+
   it('publishes terminal-backed orchestrated workers under their direct parent', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -462,7 +575,11 @@ describe('buildDashboardSnapshot', () => {
       const snapshot = buildDashboardSnapshot(
         baseState({
           agentStatusByPaneKey: {
-            [PANE_KEY]: entry({ state, interactivePrompt: 'Approve deploy?' })
+            [PANE_KEY]: entry({
+              state,
+              interactivePrompt: 'Approve deploy?',
+              toolName: 'AskUserQuestion'
+            })
           }
         }),
         NOW
@@ -470,6 +587,7 @@ describe('buildDashboardSnapshot', () => {
       expect(snapshot.cards[0].bucket).toBe('attention')
       expect(snapshot.cards[0].dotState).toBe(state)
       expect(snapshot.cards[0].askSummary).toBe('Approve deploy?')
+      expect(snapshot.cards[0].interactiveToolName).toBe('AskUserQuestion')
     }
   )
 
@@ -580,7 +698,15 @@ describe('buildDashboardSnapshot', () => {
       baseState({
         repos: [countRepo],
         worktreesByRepo: { r1: [countWorktree] },
-        agentStatusByPaneKey: { [PANE_KEY]: entry({}) }
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({
+            providerSession: {
+              key: 'session_id',
+              id: 'count-session',
+              transcriptPath: '/tmp/count-session.jsonl'
+            }
+          })
+        }
       }),
       NOW,
       { includeCardDetails: false, includeFilterOptions: false }
@@ -592,6 +718,9 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].parentWorktreeId).toBeUndefined()
     expect(snapshot.cards[0].hostKind).toBeUndefined()
     expect(snapshot.cards[0].workspaceKind).toBeUndefined()
+    expect(snapshot.cards[0].viewMode).toBeUndefined()
+    expect(snapshot.cards[0].sessionId).toBeUndefined()
+    expect(snapshot.cards[0].transcriptPath).toBeUndefined()
     // Why: the card has a live pty, so only the count-path gate keeps the
     // host-input resolution off the sidebar's per-status-tick rebuild.
     expect(snapshot.cards[0].ptyId).toBe('pty1')

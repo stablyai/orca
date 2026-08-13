@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
-import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
+import type { AgentRevealArgs } from '../dashboard-popout/AgentDashboardInspectorDrawer'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
@@ -17,8 +17,8 @@ import { launchDashboardAgent } from './launch-dashboard-agent'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 import { translate } from '@/i18n/i18n'
 
-// Why: Escape should dismiss interactive nested overlays (e.g. the terminal
-// preview dialog) before this companion sheet, which is excluded by its own
+// Why: Escape should dismiss interactive nested overlays (e.g. the agent
+// inspector) before this companion sheet, which is excluded by its own
 // data attribute because Radix marks it role="dialog" as well.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
   '[data-slot="dropdown-menu-content"][data-state="open"]',

@@ -17,8 +17,8 @@ import { AgentKanbanBoard } from './AgentKanbanBoard'
 
 const MAP_LOAD_TIMEOUT = { timeout: 5_000 }
 
-// Stub the card and dialog so the board test stays free of xterm / Radix
-// machinery while still exercising the board-owned dialog wiring.
+// Stub the card and inspector so the board test stays free of xterm / Radix
+// machinery while still exercising the board-owned inspector wiring.
 vi.mock('./AgentKanbanCard', () => ({
   AgentKanbanCard: ({
     card,
@@ -43,23 +43,31 @@ vi.mock('./AgentKanbanCard', () => ({
     </div>
   )
 }))
-vi.mock('./AgentTerminalDialog', () => ({
-  AgentTerminalDialog: ({
+vi.mock('./AgentDashboardInspectorDrawer', () => ({
+  AgentDashboardInspectorDrawer: ({
     card,
-    onOpenChange
+    width,
+    onOpenChange,
+    onWidthChange
   }: {
-    card: DashboardCard | null
+    card: DashboardCard
+    width: number
     onOpenChange: (open: boolean) => void
+    onWidthChange: (width: number) => void
   }) => (
     <div
-      data-testid="terminal-dialog"
-      data-open={card !== null}
-      data-bucket={card?.bucket}
-      data-pty-id={card?.ptyId ?? undefined}
+      data-testid="agent-inspector-drawer"
+      data-bucket={card.bucket}
+      data-pty-id={card.ptyId ?? undefined}
+      data-view-mode={card.viewMode}
+      data-width={width}
     >
-      <button data-testid="terminal-dialog-close" onClick={() => onOpenChange(false)} />
+      <button data-testid="agent-inspector-close" onClick={() => onOpenChange(false)} />
+      <button data-testid="agent-inspector-resize" onClick={() => onWidthChange(400)} />
     </div>
-  ),
+  )
+}))
+vi.mock('./AgentTerminalPanel', () => ({
   AgentTerminalPanel: ({
     card,
     onOpenChange
@@ -269,10 +277,10 @@ describe('AgentKanbanBoard', () => {
     )
     expect(screen.getByText('200%')).toBeInTheDocument()
     expect(screen.queryByText('Map filters')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('terminal-dialog')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('agent-inspector-drawer')).not.toBeInTheDocument()
   })
 
-  it('closes the adjacent terminal instead of turning it into a board dialog', async () => {
+  it('closes the adjacent terminal instead of turning it into a board inspector', async () => {
     const agent = card({ paneKey: 'map-agent', conversationName: 'Map agent' })
     render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} initialView="map" />)
 
@@ -284,7 +292,7 @@ describe('AgentKanbanBoard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }))
 
     expect(screen.queryByTestId('terminal-panel')).not.toBeInTheDocument()
-    expect(screen.getByTestId('terminal-dialog')).toHaveAttribute('data-open', 'false')
+    expect(screen.queryByTestId('agent-inspector-drawer')).not.toBeInTheDocument()
   })
 
   it('focuses search with Ctrl+K without taking focus from response fields', () => {
@@ -440,31 +448,48 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByTestId('card').dataset.now).toBe('190000')
   })
 
-  it('keeps the terminal dialog open across bucket moves and card removal', () => {
-    const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
-    const { rerender } = render(
-      <AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent], showIdle: true }} />
-    )
-    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
+  it('opens chat-mode cards in the dashboard inspector drawer', () => {
+    renderBoard([card({ viewMode: 'chat' })])
 
     fireEvent.click(screen.getByTestId('card'))
-    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
 
-    // Sending a message flips the agent done → working; the dialog must
+    expect(screen.getByTestId('agent-inspector-drawer')).toHaveAttribute('data-view-mode', 'chat')
+  })
+
+  it('retains the chosen inspector width across cards', () => {
+    renderBoard([card({ viewMode: 'chat' })])
+    fireEvent.click(screen.getByTestId('card'))
+    expect(screen.getByTestId('agent-inspector-drawer')).toHaveAttribute('data-width', '672')
+
+    fireEvent.click(screen.getByTestId('agent-inspector-resize'))
+    expect(screen.getByTestId('agent-inspector-drawer')).toHaveAttribute('data-width', '400')
+    fireEvent.click(screen.getByTestId('agent-inspector-close'))
+    fireEvent.click(screen.getByTestId('card'))
+
+    expect(screen.getByTestId('agent-inspector-drawer')).toHaveAttribute('data-width', '400')
+  })
+
+  it('keeps the inspector drawer open across bucket moves and card removal', () => {
+    const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
+    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
+    expect(screen.queryByTestId('agent-inspector-drawer')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('card'))
+    expect(screen.getByTestId('agent-inspector-drawer')).toBeInTheDocument()
+
+    // Sending a message flips the agent done → working; the drawer must
     // follow the card to its new bucket instead of closing.
     const moved = { ...agent, bucket: 'working' as const, dotState: 'working' as const }
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [moved] }} />)
-    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
-    expect(screen.getByTestId('terminal-dialog').dataset.bucket).toBe('working')
+    expect(screen.getByTestId('agent-inspector-drawer').dataset.bucket).toBe('working')
 
-    // Even a vanished card (pane closed) keeps the dialog up — the user
+    // Even a vanished card (pane closed) keeps the drawer up — the user
     // dismisses it explicitly, but stale live routing is cleared.
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [] }} />)
-    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
-    expect(screen.getByTestId('terminal-dialog').dataset.ptyId).toBeUndefined()
+    expect(screen.getByTestId('agent-inspector-drawer').dataset.ptyId).toBeUndefined()
   })
 
-  it('relays a seen-ack when a dialog opens and when the open agent changes state', () => {
+  it('relays a seen-ack when the drawer opens and when the open agent changes state', () => {
     const agent = card({ paneKey: 'pk-ack', bucket: 'done', unseen: true })
     const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
     // unseen comes straight from the snapshot (the shared ack map).
@@ -488,8 +513,8 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByTestId('card').dataset.bucket).toBe('idle')
     expect(ackAgent).not.toHaveBeenCalled()
 
-    // A state change while the dialog is open re-acks (watching counts as
-    // seeing), so the card never flips bold under an open dialog.
+    // A state change while the drawer is open re-acks (watching counts as
+    // seeing), so the card never flips bold under an open drawer.
     rerender(
       <AgentKanbanBoard
         snapshot={{

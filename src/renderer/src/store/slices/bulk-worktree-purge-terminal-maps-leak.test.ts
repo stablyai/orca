@@ -109,6 +109,7 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
       [TAB2]: { command: 'setup-b', direction: 'vertical' }
     },
     pendingStartupByTabId: { [TAB1]: { command: 'start-a' }, [TAB2]: { command: 'start-b' } },
+    runtimeNativeChatLeafIdByTabId: { [TAB1]: 'leaf-1', [TAB2]: 'leaf-2' },
     codexRestartNoticeByPtyId: {
       [PTY1]: { previousAccountLabel: 'a1', nextAccountLabel: 'a2' },
       [PTY2]: { previousAccountLabel: 'b1', nextAccountLabel: 'b2' }
@@ -173,6 +174,16 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
 describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previously leaked', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('drops native-chat ownership immediately when a tab closes', () => {
+    const store = createTestStore()
+    seedMaps(store)
+
+    store.getState().closeTab(TAB1, { remoteCloseOwnedByHost: true })
+
+    expect(store.getState().runtimeNativeChatLeafIdByTabId[TAB1]).toBeUndefined()
+    expect(store.getState().runtimeNativeChatLeafIdByTabId[TAB2]).toBe('leaf-2')
+  })
+
   it('drops removed worktree entries (both tabId- and ptyId-keyed), retains survivors', () => {
     const store = createTestStore()
     seedMaps(store)
@@ -188,6 +199,7 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingIssueCommandSplitByTabId[TAB1]).toBeUndefined()
     expect(s.pendingSetupSplitByTabId[TAB1]).toBeUndefined()
     expect(s.pendingStartupByTabId[TAB1]).toBeUndefined()
+    expect(s.runtimeNativeChatLeafIdByTabId[TAB1]).toBeUndefined()
     expect(s.codexRestartNoticeByPtyId[PTY1]).toBeUndefined()
     expect(s.migrationUnsupportedByPtyId[PTY1]).toBeUndefined()
     expect(s.suppressedPtyExitIds[PTY1]).toBeUndefined()
@@ -208,6 +220,7 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingIssueCommandSplitByTabId[TAB2]).toEqual({ command: 'b' })
     expect(s.pendingSetupSplitByTabId[TAB2]).toEqual({ command: 'setup-b', direction: 'vertical' })
     expect(s.pendingStartupByTabId[TAB2]).toEqual({ command: 'start-b' })
+    expect(s.runtimeNativeChatLeafIdByTabId[TAB2]).toBe('leaf-2')
     expect(s.codexRestartNoticeByPtyId[PTY2]).toBeDefined()
     expect(s.migrationUnsupportedByPtyId[PTY2]).toBeDefined()
     expect(s.suppressedPtyExitIds[PTY2]).toBe(true)

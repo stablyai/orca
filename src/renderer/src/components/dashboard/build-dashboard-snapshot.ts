@@ -39,6 +39,7 @@ import {
   resolveDashboardCardContext,
   type DashboardCardContextState
 } from './dashboard-card-context'
+import { dashboardCardNativeChatMetadata } from './dashboard-card-native-chat'
 import {
   dashboardCardMapWorkspaceMetadata,
   collectActiveDashboardWorkspaces
@@ -75,7 +76,11 @@ export type DashboardSnapshotState = Pick<
   | 'settings'
 > &
   DashboardCardContextState &
-  Partial<DashboardCardTerminalInputState & DashboardLaunchDetectionState>
+  Partial<
+    DashboardCardTerminalInputState &
+      DashboardLaunchDetectionState &
+      Pick<AppState, 'runtimeNativeChatLeafIdByTabId'>
+  >
 
 /**
  * Derive the serializable dashboard snapshot from the live renderer store.
@@ -271,6 +276,13 @@ export function buildDashboardSnapshot(
                 ptyId,
                 terminalInput ?? undefined,
                 clientHost.platform
+              ),
+              ...dashboardCardNativeChatMetadata(
+                row.agentType,
+                row.entry.providerSession,
+                state.settings?.experimentalNativeChat === true &&
+                  layoutPtyId !== null &&
+                  state.runtimeNativeChatLeafIdByTabId?.[tabId] === leafId
               )
             }
           : {}),
@@ -290,6 +302,7 @@ export function buildDashboardSnapshot(
         // board and the sidebar bold/mute the same agents at the same time.
         unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
+        interactiveToolName: bucket === 'attention' ? (row.entry.toolName ?? undefined) : undefined,
         conversationName: boundedLabelOrUndefined(rowConversationName(row, generatedTitlesEnabled)),
         ...(terminalInput ? { terminalInput } : {})
       })

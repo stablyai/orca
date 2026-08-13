@@ -53,6 +53,12 @@ export function patchDashboardSnapshotFromAgentStatus(
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),
+    ...(card.viewMode === 'chat' && event.providerSession
+      ? {
+          sessionId: event.providerSession.id || undefined,
+          transcriptPath: event.providerSession.transcriptPath || undefined
+        }
+      : {}),
     ...(event.prompt ? { task: event.prompt, lastUserMessage: event.prompt } : {}),
     ...(event.lastAssistantMessage !== undefined
       ? { lastAgentMessage: event.lastAssistantMessage || undefined }
@@ -71,6 +77,12 @@ export function patchDashboardSnapshotFromAgentStatus(
         ? event.interactivePrompt !== undefined
           ? event.interactivePrompt || undefined
           : card.askSummary
+        : undefined,
+    interactiveToolName:
+      bucket === 'attention'
+        ? event.toolName !== undefined
+          ? event.toolName || undefined
+          : card.interactiveToolName
         : undefined,
     subagents: patchedSubagents(card, event)
   }

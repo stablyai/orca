@@ -2,17 +2,19 @@ import { useCallback, useEffect } from 'react'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 
 export function useNativeChatFileAttachmentActions(
-  attachExternalPaths: (paths: string[]) => void
+  attachExternalPaths: (paths: string[]) => void,
+  fileDropEnabled = true
 ): { pickAttachment: () => void } {
-  useEffect(
-    () =>
-      window.api.ui.onFileDrop((payload) => {
-        if (payload.target === NATIVE_FILE_DROP_TARGET.composer) {
-          attachExternalPaths(payload.paths)
-        }
-      }),
-    [attachExternalPaths]
-  )
+  useEffect(() => {
+    if (!fileDropEnabled) {
+      return
+    }
+    return window.api.ui.onFileDrop((payload) => {
+      if (payload.target === NATIVE_FILE_DROP_TARGET.composer) {
+        attachExternalPaths(payload.paths)
+      }
+    })
+  }, [attachExternalPaths, fileDropEnabled])
 
   const pickAttachment = useCallback(() => {
     void (async () => {

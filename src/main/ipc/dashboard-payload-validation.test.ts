@@ -273,6 +273,39 @@ describe('dashboard payload validation', () => {
     ).toBe(false)
   })
 
+  it('validates optional native-chat routing and session identity', () => {
+    const withSession = {
+      ...SNAPSHOT,
+      cards: [
+        {
+          ...SNAPSHOT.cards[0],
+          hostKind: 'local',
+          viewMode: 'chat',
+          sessionId: 'b6e5f0aa-1f1e-4f6c-9f4d-2f3a5c7d9e11',
+          transcriptPath: '/Users/dev/.claude/projects/orca/session.jsonl',
+          interactiveToolName: 'AskUserQuestion'
+        }
+      ]
+    }
+    expect(isDashboardSnapshot(withSession)).toBe(true)
+    expect(admitDashboardSnapshot(withSession)?.droppedCardCount).toBe(0)
+
+    for (const invalid of [
+      { hostKind: 'satellite' },
+      { viewMode: 'canvas' },
+      { sessionId: 42 },
+      { transcriptPath: { path: '/tmp/x' } },
+      { interactiveToolName: 42 }
+    ]) {
+      expect(
+        isDashboardSnapshot({
+          ...SNAPSHOT,
+          cards: [{ ...SNAPSHOT.cards[0], ...invalid }]
+        })
+      ).toBe(false)
+    }
+  })
+
   it('validates the preview terminal input profile', () => {
     const terminalInput = {
       hostPlatform: 'win32',

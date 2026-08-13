@@ -510,6 +510,7 @@ function TerminalPane(
         ?.viewMode === 'chat'
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
+  const settings = useAppStore((store) => store.settings)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
   const unifiedTabLabel = useAppStore(
     (store) =>
@@ -707,7 +708,6 @@ function TerminalPane(
   const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
-  const settings = useAppStore((store) => store.settings)
   const updateSettings = useAppStore((store) => store.updateSettings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
@@ -2876,6 +2876,27 @@ function TerminalPane(
     applyNativeChatLeafRoute,
     isChatEligibleForLeaf
   ])
+  useEffect(() => {
+    const leafId =
+      settings?.experimentalAgentDashboardPopout === true &&
+      effectiveChatViewMode &&
+      chatLeafStillMounted
+        ? chatLeafId
+        : null
+    useAppStore.getState().setRuntimeNativeChatLeafId(tabId, leafId)
+  }, [
+    chatLeafId,
+    chatLeafStillMounted,
+    effectiveChatViewMode,
+    settings?.experimentalAgentDashboardPopout,
+    tabId
+  ])
+  useEffect(
+    () => () => {
+      useAppStore.getState().setRuntimeNativeChatLeafId(tabId, null)
+    },
+    [tabId]
+  )
   const chatPane =
     isChatViewMode && chatLeafId
       ? (managedPanes.find((pane) => pane.leafId === chatLeafId) ?? null)

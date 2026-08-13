@@ -75,9 +75,36 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith(
       { terminalTabId: 'tab-1' },
       'pty-1',
-      'B'
+      'B',
+      expect.objectContaining({ writer: expect.any(Object) })
     )
     expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+  })
+
+  it('reports a rejected secondary-writer answer instead of dismissing it', async () => {
+    mocks.sendNativeChatMessage.mockReturnValue({
+      cancel: mocks.cancel,
+      settleAfterMs: 500,
+      delivered: Promise.resolve(false)
+    })
+    const onDeliverySettled = vi.fn()
+    const writer = {
+      requiresWriteAcceptance: true,
+      write: vi.fn(() => true),
+      writeAccepted: vi.fn(async () => false)
+    }
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'grok', writer)
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    await act(async () => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }], onDeliverySettled)
+      await Promise.resolve()
+    })
+
+    expect(sendResult).toEqual({ settleAfterMs: 500, waitsForVerifiedDelivery: true })
+    expect(onDeliverySettled).toHaveBeenCalledExactlyOnceWith(false)
   })
 
   it('routes a Codex answer through the option-number keystroke path', () => {
@@ -93,7 +120,8 @@ describe('useNativeChatInteractiveSend', () => {
       { terminalTabId: 'tab-1' },
       'pty-1',
       [{ raw: '2' }],
-      expect.any(Function)
+      expect.any(Function),
+      expect.any(Object)
     )
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
@@ -126,7 +154,8 @@ describe('useNativeChatInteractiveSend', () => {
       { terminalTabId: 'tab-1' },
       'pty-1',
       [{ raw: '2' }],
-      expect.any(Function)
+      expect.any(Function),
+      expect.any(Object)
     )
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
@@ -197,6 +226,21 @@ describe('useNativeChatInteractiveSend', () => {
       'pty-1',
       '\x1b'
     )
+  })
+
+  it('reports a refused secondary-writer interrupt', async () => {
+    const writer = {
+      requiresWriteAcceptance: true,
+      write: vi.fn(() => true),
+      writeAccepted: vi.fn(async () => false)
+    }
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude', writer)
+    )
+
+    await expect(result.current.cancel()).resolves.toBe(false)
+    expect(writer.write).not.toHaveBeenCalled()
+    expect(writer.writeAccepted).toHaveBeenCalledWith({ terminalTabId: 'tab-1' }, 'pty-1', '\x1b')
   })
 
   it('can cancel delayed writes without interrupting the replacement prompt', () => {

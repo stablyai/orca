@@ -1,10 +1,12 @@
 import { translate } from '@/i18n/i18n'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import type { NativeChatPtyWriter } from './native-chat-pty-writer'
 
 export type NativeChatResolvedTarget = {
   ptyId: string
   settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
+  writer: NativeChatPtyWriter
 }
 
 /** Upper bound for clipboard text pulled into the composer via Cmd/Ctrl+V, so a

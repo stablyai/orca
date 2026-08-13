@@ -84,6 +84,7 @@ export async function retirePersistedModelMissingFromDiscovery(
 }
 
 export function useNativeChatSessionOptions(args: {
+  enabled?: boolean
   agent: AgentType
   terminalTabId: string
   targetPtyId: string | null
@@ -94,8 +95,15 @@ export function useNativeChatSessionOptions(args: {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
 } {
-  const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, readTerminalScreen } =
-    args
+  const {
+    enabled = true,
+    agent,
+    terminalTabId,
+    targetPtyId,
+    dispatchCommand,
+    onAgentPicker,
+    readTerminalScreen
+  } = args
   // The screen text that last parsed into reported values, so a later model
   // discovery can re-resolve it against the host's real ids.
   const reportedScreenRef = useRef<string | null>(null)
@@ -106,7 +114,7 @@ export function useNativeChatSessionOptions(args: {
   const surface = useMemo(() => {
     // Why: native chat currently attaches only after startup is already queued;
     // exposing a draft picker here would claim it can still mutate that command.
-    if (!targetPtyId) {
+    if (!enabled || !targetPtyId) {
       return null
     }
     const scopeKey = targetPtyId ?? terminalTabId
@@ -148,6 +156,7 @@ export function useNativeChatSessionOptions(args: {
     agent,
     dispatchCommand,
     discoveryContext,
+    enabled,
     onAgentPicker,
     readTerminalScreen,
     targetPtyId,

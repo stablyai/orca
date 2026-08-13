@@ -39,6 +39,7 @@ const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', '
 const DASHBOARD_HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])
 const DASHBOARD_WORKSPACE_KINDS = new Set(['worktree', 'folder'])
 const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
+const DASHBOARD_VIEW_MODES = new Set(['terminal', 'chat'])
 const DASHBOARD_HOST_PLATFORMS = new Set([
   'aix',
   'android',
@@ -269,6 +270,8 @@ function isDashboardCard(value: unknown): boolean {
     isBoundedString(card.worktreeName, MAX_LABEL_LENGTH, true) &&
     (card.hostKind === undefined ||
       (typeof card.hostKind === 'string' && DASHBOARD_HOST_KINDS.has(card.hostKind))) &&
+    (card.viewMode === undefined ||
+      (typeof card.viewMode === 'string' && DASHBOARD_VIEW_MODES.has(card.viewMode))) &&
     (card.executionHostId === undefined ||
       (isBoundedString(card.executionHostId, MAX_ID_LENGTH) &&
         normalizeExecutionHostId(card.executionHostId) !== null)) &&
@@ -287,7 +290,10 @@ function isDashboardCard(value: unknown): boolean {
     (card.statusUpdatedAt === undefined || isFiniteNumber(card.statusUpdatedAt)) &&
     typeof card.unseen === 'boolean' &&
     isOptionalBoundedString(card.askSummary, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH) &&
+    isOptionalBoundedString(card.interactiveToolName, AGENT_STATUS_MAX_FIELD_LENGTH) &&
     isOptionalBoundedString(card.conversationName, MAX_LABEL_LENGTH) &&
+    isOptionalBoundedString(card.sessionId, MAX_ID_LENGTH) &&
+    isOptionalBoundedString(card.transcriptPath, MAX_ID_LENGTH) &&
     isDashboardTerminalInput(card.terminalInput)
   )
 }

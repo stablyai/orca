@@ -15191,7 +15191,8 @@
           "max": "Max",
           "on": "On",
           "off": "Off"
-        }
+        },
+        "sendRejected": "The terminal did not accept the message. Try again."
       },
       "tool": {
         "running": "Running…",
@@ -15418,7 +15419,25 @@
       "clear": "Clear search",
       "results": "{{shown}} of {{total}} shown"
     },
-    "settingsLabel": "Agent Dashboard settings"
+    "settingsLabel": "Agent Dashboard settings",
+    "inspector": {
+      "title": "Agent details",
+      "resize": "Resize agent details"
+    },
+    "chat": {
+      "empty": "No messages in this transcript yet.",
+      "remoteHost": "This agent's transcript is on another host, so it is not readable here.",
+      "noSession": "This agent has not reported a session yet, so there is no transcript to read.",
+      "pendingQuestion": "Pending question",
+      "lastMessage": "Last message",
+      "noPane": "No live pane, so a reply cannot reach this agent.",
+      "placeholder": "Reply to this agent",
+      "send": "Send",
+      "sendFailed": "The reply did not reach the agent. Open the terminal to check it.",
+      "submitFailed": "The reply is in the terminal but could not be submitted. Open the terminal to finish sending it.",
+      "openTerminal": "Open terminal",
+      "close": "Close chat"
+    }
   },
   "dashboard": {
     "sidebar": {

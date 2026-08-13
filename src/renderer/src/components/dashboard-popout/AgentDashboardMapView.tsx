@@ -8,7 +8,7 @@ import type {
 import { cn } from '@/lib/utils'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
-import { AgentTerminalPanel, type AgentRevealArgs } from './AgentTerminalDialog'
+import { AgentTerminalPanel, type AgentRevealArgs } from './AgentTerminalPanel'
 import {
   EMPTY_DASHBOARD_FILTERS,
   filterDashboardWorkspaces,

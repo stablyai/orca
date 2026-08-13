@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AgentKanbanBoard, type AgentDashboardView } from './AgentKanbanBoard'
 import { useDashboardSnapshot } from './useDashboardSnapshot'
+import { dashboardNativeChatPtyWriter } from './dashboard-native-chat-pty-writer'
 
 type DashboardPopoutRootProps = {
   /** The layout requested via popout.html?view=<name>. */
@@ -17,5 +18,12 @@ export function DashboardPopoutRoot(_props: DashboardPopoutRootProps): React.JSX
     _props.view === 'map' || _props.view === 'rings' ? 'map' : 'board'
   )
   useEffect(() => window.api.dashboard.onViewRequested(setView), [])
-  return <AgentKanbanBoard key={view} snapshot={snapshot} initialView={view} />
+  return (
+    <AgentKanbanBoard
+      key={view}
+      snapshot={snapshot}
+      initialView={view}
+      chatPtyWriter={dashboardNativeChatPtyWriter}
+    />
+  )
 }

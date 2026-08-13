@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
     onStop?: () => void
     onCompositionStart?: () => void
     onCompositionEnd?: (event: { currentTarget: HTMLTextAreaElement }) => void
+    notice?: string | null
+    disabled?: boolean
+    sendButtonDisabled?: boolean
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
   } | null,
@@ -32,7 +35,11 @@ const mocks = vi.hoisted(() => ({
   discoverCommitMessageModels: vi.fn(),
   draft: 'hello',
   getMainBufferSnapshot: vi.fn(),
-  sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
+  sendHandle: {
+    cancel: vi.fn(),
+    settleAfterMs: 500,
+    delivered: undefined as Promise<boolean> | undefined
+  },
   sendNativeChatMessage: vi.fn(),
   sendNativeChatTypedCommand: vi.fn(),
   sendNativeChatMessageVerified: vi.fn(),
@@ -97,7 +104,7 @@ vi.mock('./native-chat-draft-cache', () => ({
   readNativeChatDraftCache: () => ''
 }))
 vi.mock('./NativeChatComposerField', () => ({
-  NativeChatComposerField: (props: { onSend?: () => void; onStop?: () => void }) => {
+  NativeChatComposerField: (props: NonNullable<typeof mocks.fieldProps>) => {
     mocks.fieldProps = props
     return null
   }
@@ -190,6 +197,7 @@ describe('NativeChatComposer', () => {
     mocks.sendNativeChatMessageVerified.mockResolvedValue(true)
     mocks.typeNativeChatCommand.mockResolvedValue(true)
     mocks.sendHandle.settleAfterMs = 500
+    mocks.sendHandle.delivered = undefined
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -224,6 +232,37 @@ describe('NativeChatComposer', () => {
     )
   })
 
+  it('blocks duplicate Stop writes while secondary acceptance is pending', async () => {
+    let settleStop!: (accepted: boolean) => void
+    const onStop = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          settleStop = resolve
+        })
+    )
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+        isWorking
+        onStop={onStop}
+      />
+    )
+
+    act(() => {
+      mocks.fieldProps?.onStop?.()
+      mocks.fieldProps?.onStop?.()
+    })
+
+    expect(onStop).toHaveBeenCalledOnce()
+    expect(mocks.fieldProps?.sendButtonDisabled).toBe(true)
+
+    await act(async () => settleStop(false))
+    expect(mocks.fieldProps?.sendButtonDisabled).toBe(false)
+  })
+
   it('associates a delayed submit with its optimistic cache entry', () => {
     const onOptimisticSend = vi.fn(() => 'pending-1')
     render(
@@ -242,8 +281,46 @@ describe('NativeChatComposer', () => {
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
   })
 
-  it('types Codex slash composer sends instead of pasting them', () => {
-    mocks.draft = '/status'
+  it('preserves the draft and optimistic state when a secondary writer rejects delivery', async () => {
+    let settleDelivery!: (delivered: boolean) => void
+    mocks.sendHandle.delivered = new Promise<boolean>((resolve) => {
+      settleDelivery = resolve
+    })
+    const onOptimisticSend = vi.fn()
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+        ptyWriter={{
+          requiresWriteAcceptance: true,
+          write: vi.fn(() => true),
+          writeAccepted: vi.fn(async () => false)
+        }}
+        onOptimisticSend={onOptimisticSend}
+      />
+    )
+
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle)
+    expect(mocks.setDraft).not.toHaveBeenCalled()
+    expect(onOptimisticSend).not.toHaveBeenCalled()
+    expect(mocks.fieldProps?.disabled).toBe(true)
+
+    await act(async () => settleDelivery(false))
+
+    expect(mocks.setDraft).not.toHaveBeenCalled()
+    expect(onOptimisticSend).not.toHaveBeenCalled()
+    expect(mocks.fieldProps?.notice).toMatch(/did not accept/)
+    expect(mocks.fieldProps?.disabled).toBe(false)
+  })
+
+  it('re-enables the composer when secondary delivery fails', async () => {
+    let rejectDelivery!: (error: Error) => void
+    mocks.sendHandle.delivered = new Promise<boolean>((_resolve, reject) => {
+      rejectDelivery = reject
+    })
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
@@ -254,8 +331,33 @@ describe('NativeChatComposer', () => {
     )
 
     act(() => mocks.fieldProps?.onSend?.())
+    expect(mocks.fieldProps?.disabled).toBe(true)
 
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    await act(async () => rejectDelivery(new Error('closed')))
+
+    expect(mocks.fieldProps?.notice).toMatch(/did not accept/)
+    expect(mocks.fieldProps?.disabled).toBe(false)
+  })
+
+  it('types Codex slash composer sends through the selected writer', () => {
+    mocks.draft = '/status'
+    const writer = {
+      write: vi.fn(() => true),
+      writeAccepted: vi.fn(async () => true)
+    }
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+        ptyWriter={writer}
+      />
+    )
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status', writer)
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
@@ -272,24 +374,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '$ref-oss', undefined)
-    expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
-  })
-
-  it.each(['claude', 'openclaude'] as const)('keeps %s slash composer sends pasted', (agent) => {
-    mocks.draft = '/clear'
-    render(
-      <NativeChatComposer
-        terminalTabId="tab-1"
-        paneKey="tab-1:leaf-1"
-        targetPtyId="pty-1"
-        agent={agent}
-      />
-    )
-
-    act(() => mocks.fieldProps?.onSend?.())
-
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/clear', undefined)
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalled()
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
@@ -530,15 +615,18 @@ describe('NativeChatComposer', () => {
       {},
       'pty-1',
       '/model opus',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.any(Object)
     )
     expect(onSlashCommand).toHaveBeenCalledWith('/model opus')
     expect(onOptimisticSend).not.toHaveBeenCalled()
-    expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
-      ptyId: 'pty-1',
-      settings: {},
-      expectedModelLabel: 'Opus'
-    })
+    expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ptyId: 'pty-1',
+        settings: {},
+        expectedModelLabel: 'Opus'
+      })
+    )
     expect(onSwitchToTerminal).not.toHaveBeenCalled()
   })
 
@@ -563,13 +651,16 @@ describe('NativeChatComposer', () => {
       {},
       'pty-1',
       '/model fable',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.any(Object)
     )
-    expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
-      ptyId: 'pty-1',
-      settings: {},
-      expectedModelLabel: 'Fable'
-    })
+    expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ptyId: 'pty-1',
+        settings: {},
+        expectedModelLabel: 'Fable'
+      })
+    )
     expect(mocks.confirmationObserver?.arm).toHaveBeenCalledOnce()
     expect(mocks.confirmationObserver?.arm.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.sendNativeChatMessageVerified.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
@@ -604,12 +695,13 @@ describe('NativeChatComposer', () => {
       {},
       'pty-1',
       '/model fable',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.any(Object)
     )
     expect(onSwitchToTerminal).toHaveBeenCalledOnce()
   })
 
-  it('types the Codex picker command and switches to the terminal', async () => {
+  it('types the Codex model picker command before switching to the terminal', async () => {
     mocks.sendHandle.settleAfterMs = 0
     const onSwitchToTerminal = vi.fn()
     render(
@@ -630,7 +722,8 @@ describe('NativeChatComposer', () => {
       {},
       'pty-1',
       '/model',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.any(Object)
     )
     expect(mocks.sendNativeChatMessageVerified).not.toHaveBeenCalled()
     expect(onSwitchToTerminal).toHaveBeenCalledOnce()

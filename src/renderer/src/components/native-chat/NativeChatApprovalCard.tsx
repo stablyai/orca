@@ -6,6 +6,7 @@ export type NativeChatApprovalCardProps = {
   approval: ChatApproval
   /** Send the chosen option's literal string to the agent's PTY. */
   onChoose: (send: string) => void
+  disabled?: boolean
 }
 
 /**
@@ -16,7 +17,8 @@ export type NativeChatApprovalCardProps = {
  */
 export function NativeChatApprovalCard({
   approval,
-  onChoose
+  onChoose,
+  disabled = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
   return (
     <div className="shrink-0 bg-background">
@@ -38,9 +40,10 @@ export function NativeChatApprovalCard({
               <button
                 key={`${opt.label}-${i}`}
                 type="button"
+                disabled={disabled}
                 onClick={() => onChoose(opt.send)}
                 className={cn(
-                  'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
                   i === 0
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'border border-border bg-background text-foreground hover:bg-accent'

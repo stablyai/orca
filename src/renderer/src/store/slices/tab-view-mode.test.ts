@@ -81,4 +81,23 @@ describe('tab view mode', () => {
     store.getState().toggleTabViewMode('missing-tab')
     expect(store.getState().unifiedTabsByWorktree[WT]).toBe(before)
   })
+
+  it('tracks and clears the exact runtime chat leaf without retaining stale tabs', () => {
+    store.getState().setRuntimeNativeChatLeafId('left-tab', 'leaf-chat')
+    expect(store.getState().runtimeNativeChatLeafIdByTabId).toEqual({
+      'left-tab': 'leaf-chat'
+    })
+
+    store.getState().setRuntimeNativeChatLeafId('left-tab', null)
+    expect(store.getState().runtimeNativeChatLeafIdByTabId).toEqual({})
+  })
+
+  it('preserves the runtime chat map reference for repeated ownership', () => {
+    store.getState().setRuntimeNativeChatLeafId('left-tab', 'leaf-chat')
+    const before = store.getState().runtimeNativeChatLeafIdByTabId
+
+    store.getState().setRuntimeNativeChatLeafId('left-tab', 'leaf-chat')
+
+    expect(store.getState().runtimeNativeChatLeafIdByTabId).toBe(before)
+  })
 })

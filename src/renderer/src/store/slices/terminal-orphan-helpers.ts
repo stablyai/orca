@@ -39,6 +39,7 @@ type OrphanTerminalCleanupState = Pick<
   | 'tabsByWorktree'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'runtimeNativeChatLeafIdByTabId'
   | 'expandedPaneByTabId'
   | 'canExpandPaneByTabId'
   | 'terminalLayoutsByTabId'
@@ -91,6 +92,7 @@ export function buildOrphanTerminalCleanupPatch(
   | 'tabsByWorktree'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'runtimeNativeChatLeafIdByTabId'
   | 'expandedPaneByTabId'
   | 'canExpandPaneByTabId'
   | 'terminalLayoutsByTabId'
@@ -111,6 +113,7 @@ export function buildOrphanTerminalCleanupPatch(
       tabsByWorktree: state.tabsByWorktree,
       ptyIdsByTabId: state.ptyIdsByTabId,
       runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+      runtimeNativeChatLeafIdByTabId: state.runtimeNativeChatLeafIdByTabId,
       expandedPaneByTabId: state.expandedPaneByTabId,
       canExpandPaneByTabId: state.canExpandPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,
@@ -133,6 +136,7 @@ export function buildOrphanTerminalCleanupPatch(
   )
   const nextPtyIdsByTabId = { ...state.ptyIdsByTabId }
   const nextRuntimePaneTitlesByTabId = { ...state.runtimePaneTitlesByTabId }
+  const nextRuntimeNativeChatLeafIdByTabId = { ...state.runtimeNativeChatLeafIdByTabId }
   const nextExpandedPaneByTabId = { ...state.expandedPaneByTabId }
   const nextCanExpandPaneByTabId = { ...state.canExpandPaneByTabId }
   const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
@@ -160,6 +164,7 @@ export function buildOrphanTerminalCleanupPatch(
   for (const orphanTabId of orphanTerminalIds) {
     delete nextPtyIdsByTabId[orphanTabId]
     delete nextRuntimePaneTitlesByTabId[orphanTabId]
+    delete nextRuntimeNativeChatLeafIdByTabId[orphanTabId]
     delete nextExpandedPaneByTabId[orphanTabId]
     delete nextCanExpandPaneByTabId[orphanTabId]
     delete nextTerminalLayoutsByTabId[orphanTabId]
@@ -191,6 +196,7 @@ export function buildOrphanTerminalCleanupPatch(
     },
     ptyIdsByTabId: nextPtyIdsByTabId,
     runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+    runtimeNativeChatLeafIdByTabId: nextRuntimeNativeChatLeafIdByTabId,
     expandedPaneByTabId: nextExpandedPaneByTabId,
     canExpandPaneByTabId: nextCanExpandPaneByTabId,
     terminalLayoutsByTabId: nextTerminalLayoutsByTabId,

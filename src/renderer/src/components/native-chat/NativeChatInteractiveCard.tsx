@@ -34,6 +34,8 @@ export function NativeChatInteractiveCard({
   canSend,
   messages,
   transcriptSettled,
+  liveInteractivePrompt,
+  liveInteractiveToolName,
   onShowingQuestionChange,
   answerInputRef
 }: {
@@ -44,6 +46,9 @@ export function NativeChatInteractiveCard({
    *  command-boundary-trimmed messages so an ask abandoned via `/clear` stays gone. */
   messages?: readonly NativeChatMessage[]
   transcriptSettled: boolean
+  /** Explicit live prompt for renderers whose Zustand store is not the pane owner. */
+  liveInteractivePrompt?: string | null
+  liveInteractiveToolName?: string | null
   /** Reports whether a question card is on screen so the view can replace the
    *  composer with it (the card's free-text row is the answer input). */
   onShowingQuestionChange?: (showing: boolean) => void
@@ -51,12 +56,18 @@ export function NativeChatInteractiveCard({
    *  a target while the composer is unmounted. */
   answerInputRef?: React.RefObject<HTMLInputElement | null>
 }): React.JSX.Element | null {
-  const interactivePrompt = useAppStore(
+  const storeInteractivePrompt = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.interactivePrompt ?? null
   )
   // Thread the sibling `toolName` from the same status entry so the question
   // parser can dispatch through the tool's registered parser (mobile parity).
-  const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
+  const storeInteractiveToolName = useAppStore(
+    (s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null
+  )
+  const interactivePrompt =
+    liveInteractivePrompt === undefined ? storeInteractivePrompt : liveInteractivePrompt
+  const interactiveToolName =
+    liveInteractiveToolName === undefined ? storeInteractiveToolName : liveInteractiveToolName
   const { sendAnswer, sendRaw, cancelPending, cancel } = send
 
   const card = useMemo(() => {
@@ -78,7 +89,9 @@ export function NativeChatInteractiveCard({
   // vanish mid-send. `submitting` also gates a second submit racing the first.
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submittingRef = useRef(false)
+  const rawPendingRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
+  const [rawPending, setRawPending] = useState(false)
   const clearDismissTimer = useCallback((): void => {
     if (dismissTimerRef.current) {
       clearTimeout(dismissTimerRef.current)
@@ -87,6 +100,30 @@ export function NativeChatInteractiveCard({
     submittingRef.current = false
     setSubmitting(false)
   }, [])
+  const settleRawWrite = useCallback(
+    (accepted: boolean | Promise<boolean>, onAccepted: () => void): void => {
+      if (typeof accepted === 'boolean') {
+        if (accepted) {
+          onAccepted()
+        }
+        return
+      }
+      rawPendingRef.current = true
+      setRawPending(true)
+      void accepted
+        .catch(() => false)
+        .then((delivered) => {
+          if (delivered) {
+            onAccepted()
+          }
+        })
+        .finally(() => {
+          rawPendingRef.current = false
+          setRawPending(false)
+        })
+    },
+    []
+  )
   // A replacement prompt, ownership loss, or unmount must stop both timers and
   // PTY writes during commit, before an old answer can type into the new prompt.
   useLayoutEffect(
@@ -122,10 +159,11 @@ export function NativeChatInteractiveCard({
       <NativeChatQuestionCard
         key={cardKey ?? 'question'}
         prompt={card.prompt}
-        isSubmitting={submitting}
+        isSubmitting={submitting || rawPending}
+        cancelDisabled={rawPending}
         answerInputRef={answerInputRef}
         onAnswer={(selections) => {
-          if (submittingRef.current) {
+          if (submittingRef.current || rawPendingRef.current) {
             return
           }
           submittingRef.current = true
@@ -167,9 +205,11 @@ export function NativeChatInteractiveCard({
           }, result.settleAfterMs)
         }}
         onCancel={() => {
+          if (rawPendingRef.current) {
+            return
+          }
           clearDismissTimer()
-          setDismissedKey(cardKey)
-          cancel()
+          settleRawWrite(cancel(), () => setDismissedKey(cardKey))
         }}
       />
     )
@@ -177,9 +217,12 @@ export function NativeChatInteractiveCard({
   return (
     <NativeChatApprovalCard
       approval={card.approval}
+      disabled={rawPending}
       onChoose={(raw) => {
-        setDismissedKey(cardKey)
-        sendRaw(raw)
+        if (rawPendingRef.current) {
+          return
+        }
+        settleRawWrite(sendRaw(raw), () => setDismissedKey(cardKey))
       }}
     />
   )
