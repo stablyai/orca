@@ -93,6 +93,11 @@ import { RecoverableRenderErrorBoundary } from './components/error-boundaries/Re
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
+import {
+  TAB_SPLIT_SHORTCUT_DIRECTIONS,
+  resolveActiveTabPaneColumnTarget
+} from './components/tab-bar/active-tab-pane-column-split'
+import { moveTabToNewPaneColumn } from './components/tab-bar/tab-move-to-pane-column'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
@@ -1881,6 +1886,25 @@ function App(): React.JSX.Element {
         requestFloatingTerminalOpenMaximized()
         setFloatingTerminalOpenWithFocus(true)
         return
+      }
+
+      // Keyboard path for "Move Tab to Split". Ahead of the editable-target guard because it is a
+      // layout command, not text input: Monaco's EditContext div passes the guard today, but its
+      // legacy textarea path would not. A single-tab group has nothing to split, so the chord falls through.
+      if (workspaceChromeActive && !isFloatingWorkspacePanelFocused()) {
+        for (const [actionId, direction] of TAB_SPLIT_SHORTCUT_DIRECTIONS) {
+          if (!matchShortcut(actionId)) {
+            continue
+          }
+          const target = resolveActiveTabPaneColumnTarget(activeWorktreeId)
+          if (!target) {
+            break
+          }
+          input.preventDefault()
+          notifyTerminalCapture(actionId)
+          moveTabToNewPaneColumn({ ...target, direction })
+          return
+        }
       }
 
       // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).

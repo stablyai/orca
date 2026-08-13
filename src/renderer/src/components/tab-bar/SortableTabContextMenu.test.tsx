@@ -19,6 +19,7 @@ const storeMock = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
   formatShortcutLabel: () => '⌘D',
+  formatOptionalShortcutLabel: () => '⌘D',
   useOptionalShortcutLabel: () => '⌘D'
 }))
 
@@ -261,6 +262,14 @@ describe('SortableTabContextMenu', () => {
 
     expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
     expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)
+  })
+
+  it('shows the bound shortcut on the Right split item only', () => {
+    const { container } = renderMenu()
+
+    const rightItem = getButton(container, 'Right')
+    expect(rightItem.textContent).toContain('⌘D')
+    expect(getButton(container, 'Left').textContent).not.toContain('⌘D')
   })
 
   it('hides move-tab split actions for a single-tab group', () => {

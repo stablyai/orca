@@ -68,6 +68,7 @@ export type KeybindingActionId =
   | 'tab.closeAll'
   | 'tab.rename'
   | 'tab.reopenClosed'
+  | 'tab.moveToSplitRight'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
   | 'tab.nextAllTypes'
@@ -632,6 +633,24 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'reopen', 'restore', 'closed'],
     defaultBindings: platformBindings(['Mod+Shift+T'])
+  },
+  {
+    id: 'tab.moveToSplitRight',
+    title: 'Move active tab to split right',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: [
+      'shortcut',
+      'tab',
+      'split',
+      'pane',
+      'column',
+      'editor',
+      'move',
+      'right',
+      'side by side'
+    ],
+    defaultBindings: platformBindings(['Mod+Backslash'])
   },
   {
     id: 'tab.nextSameType',
