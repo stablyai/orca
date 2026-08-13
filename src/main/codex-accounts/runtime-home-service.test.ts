@@ -12,6 +12,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -4170,5 +4171,160 @@ describe('CodexRuntimeHomeService', () => {
       .split('\n')
     expect(diagnostics).toHaveLength(2)
     expect(diagnostics[0]).toContain('"type":"session-conflict"')
+  })
+
+  describe('stale marketplace staging sweep', () => {
+    function getMarketplacesRoot(): string {
+      return join(getRuntimeCodexHomePath(), '.tmp', 'marketplaces')
+    }
+
+    function getStagingRoot(): string {
+      return join(getMarketplacesRoot(), '.staging')
+    }
+
+    function makeDir(path: string, ageMs: number): void {
+      mkdirSync(path, { recursive: true })
+      const markerPath = join(path, 'clone.txt')
+      writeFileSync(markerPath, 'x', 'utf-8')
+      setMtime(markerPath, ageMs)
+      setMtime(path, ageMs)
+    }
+
+    function setMtime(path: string, ageMs: number): void {
+      const time = (Date.now() - ageMs) / 1000
+      utimesSync(path, time, time)
+    }
+
+    async function construct(): Promise<void> {
+      const store = createStore(createSettings())
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      new CodexRuntimeHomeService(store as never)
+    }
+
+    it('removes aged marketplace-upgrade and marketplace-add staging dirs on startup', async () => {
+      const stagingRoot = getStagingRoot()
+      const staleUpgrade = join(stagingRoot, 'marketplace-upgrade-abc123')
+      const staleAdd = join(stagingRoot, 'marketplace-add-def456')
+      makeDir(staleUpgrade, 2 * 60 * 60 * 1000)
+      makeDir(staleAdd, 2 * 60 * 60 * 1000)
+
+      await construct()
+
+      expect(existsSync(staleUpgrade)).toBe(false)
+      expect(existsSync(staleAdd)).toBe(false)
+    })
+
+    it('removes aged marketplace-backup dirs at the marketplaces root', async () => {
+      const staleBackup = join(getMarketplacesRoot(), 'marketplace-backup-ghi789')
+      makeDir(staleBackup, 2 * 60 * 60 * 1000)
+
+      await construct()
+
+      expect(existsSync(staleBackup)).toBe(false)
+    })
+
+    it('preserves staging dirs just under the stale threshold', async () => {
+      const almostStale = join(getStagingRoot(), 'marketplace-add-almost-stale')
+      makeDir(almostStale, 60 * 60 * 1000 - 1_000)
+
+      await construct()
+
+      expect(existsSync(almostStale)).toBe(true)
+    })
+
+    it('preserves recent staging dirs that may belong to an in-flight sync', async () => {
+      const freshUpgrade = join(getStagingRoot(), 'marketplace-upgrade-fresh')
+      makeDir(freshUpgrade, 5 * 60 * 1000)
+
+      await construct()
+
+      expect(existsSync(freshUpgrade)).toBe(true)
+    })
+
+    it('preserves old staging dirs when nested clone activity is recent', async () => {
+      const activeUpgrade = join(getStagingRoot(), 'marketplace-upgrade-active')
+      const activePackDir = join(activeUpgrade, '.git', 'objects', 'pack')
+      mkdirSync(activePackDir, { recursive: true })
+      writeFileSync(join(activePackDir, 'tmp_pack_active'), 'x', 'utf-8')
+      setMtime(activeUpgrade, 2 * 60 * 60 * 1000)
+      setMtime(join(activeUpgrade, '.git'), 2 * 60 * 60 * 1000)
+      setMtime(join(activeUpgrade, '.git', 'objects'), 2 * 60 * 60 * 1000)
+      setMtime(activePackDir, 5 * 60 * 1000)
+
+      await construct()
+
+      expect(existsSync(activeUpgrade)).toBe(true)
+    })
+
+    it('removes staging dirs whose newest nested activity is stale', async () => {
+      const staleUpgrade = join(getStagingRoot(), 'marketplace-upgrade-nested-stale')
+      const stalePackDir = join(staleUpgrade, '.git', 'objects', 'pack')
+      mkdirSync(stalePackDir, { recursive: true })
+      const stalePackFile = join(stalePackDir, 'pack-stale.pack')
+      writeFileSync(stalePackFile, 'x', 'utf-8')
+      setMtime(stalePackFile, 2 * 60 * 60 * 1000)
+      setMtime(stalePackDir, 2 * 60 * 60 * 1000)
+      setMtime(join(staleUpgrade, '.git', 'objects'), 2 * 60 * 60 * 1000)
+      setMtime(join(staleUpgrade, '.git'), 2 * 60 * 60 * 1000)
+      setMtime(staleUpgrade, 2 * 60 * 60 * 1000)
+
+      await construct()
+
+      expect(existsSync(staleUpgrade)).toBe(false)
+    })
+
+    it('preserves unrelated dirs regardless of age', async () => {
+      const unrelated = join(getStagingRoot(), 'some-other-dir')
+      const promoted = join(getMarketplacesRoot(), 'claude-mem')
+      makeDir(unrelated, 2 * 60 * 60 * 1000)
+      makeDir(promoted, 2 * 60 * 60 * 1000)
+
+      await construct()
+
+      expect(existsSync(unrelated)).toBe(true)
+      expect(existsSync(promoted)).toBe(true)
+    })
+
+    it('does not throw when the marketplaces tree does not exist', async () => {
+      await expect(construct()).resolves.toBeUndefined()
+    })
+
+    it('sweeps the WSL runtime home staging dirs on selection sync', async () => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const wslHome = join(testState.userDataDir, 'wsl-home')
+      vi.doMock('../wsl', () => ({
+        getDefaultWslDistro: () => 'Ubuntu',
+        getWslHome: () => wslHome
+      }))
+      const wslRuntimeHomePath = join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home'
+      )
+      const staleWslUpgrade = join(
+        wslRuntimeHomePath,
+        '.tmp',
+        'marketplaces',
+        '.staging',
+        'marketplace-upgrade-wsl'
+      )
+      makeDir(staleWslUpgrade, 2 * 60 * 60 * 1000)
+      try {
+        const store = createStore(createSettings())
+        const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+        const service = new CodexRuntimeHomeService(store as never)
+        service.syncForCurrentSelection({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+        expect(existsSync(staleWslUpgrade)).toBe(false)
+      } finally {
+        if (originalPlatform) {
+          Object.defineProperty(process, 'platform', originalPlatform)
+        }
+      }
+    })
   })
 })

@@ -168,6 +168,22 @@ function codexAuthIsMonotonicallyFresher(
   }
   return codexAuthIsFresher(candidateAuthJson, baselineAuthJson)
 }
+// Why: Codex CLI stages git-sourced marketplace upgrades/adds by cloning the
+// full repo (~100-230MB each) into `<CODEX_HOME>/.tmp/marketplaces/.staging/`
+// before atomically swapping it into place. When the CLI is killed or a clone
+// times out mid-sync, the staging clone is orphaned and never reclaimed, so it
+// accumulates indefinitely under the runtime home Orca manages (openai/codex
+// #21005, #29994). Orca cannot fix the upstream lifecycle, but it owns the
+// runtime home, so it sweeps aged orphans on startup. Mirror the upstream
+// staging-dir prefixes exactly, but use a deliberately conservative 1h age
+// threshold (upstream's own cleanup uses ~10m): Orca's managed home can be
+// shared with externally-launched Codex processes whose long git clones must
+// never be razed mid-flight. The sweep compares the newest mtime anywhere in
+// the candidate subtree, not just the staging root, because git clone activity
+// may update deep `.git/objects` files without touching the root dir.
+const CODEX_MARKETPLACE_STAGING_PREFIXES = ['marketplace-upgrade-', 'marketplace-add-'] as const
+const CODEX_MARKETPLACE_BACKUP_PREFIX = 'marketplace-backup-'
+const CODEX_MARKETPLACE_STALE_AGE_MS = 60 * 60 * 1000
 
 export class CodexRuntimeHomeService {
   // Which managed account runtime auth.json mirrors; null means it follows system-default ~/.codex instead of a managed account.
@@ -195,6 +211,7 @@ export class CodexRuntimeHomeService {
     this.safeMigrateLegacyManagedState()
     this.safeMigrateLegacyActiveHomePointer()
     this.initializeLastSyncedState()
+    this.safeSweepStaleMarketplaceStagingDirs(this.getRuntimeHomePath())
     this.safeSyncForCurrentSelection()
   }
 
@@ -973,6 +990,7 @@ export class CodexRuntimeHomeService {
     this.wslRuntimeHomePathByDistro.set(distro, runtimeHomePath)
 
     mkdirSync(runtimeHomePath, { recursive: true })
+    this.safeSweepStaleMarketplaceStagingDirs(runtimeHomePath)
     this.safeMigrateLegacyWslActiveHomePointer(distro, runtimeHomePath)
     this.seedWslRuntimeHome(runtimeHomePath, activeAccount, distro)
 
@@ -1602,6 +1620,89 @@ export class CodexRuntimeHomeService {
     } catch (error) {
       // Why: diagnostics must not fail the one-shot migration after the session file is already preserved.
       console.warn('[codex-runtime-home] Failed to append migration diagnostic:', error)
+    }
+  }
+
+  private safeSweepStaleMarketplaceStagingDirs(runtimeHomePath: string): void {
+    try {
+      this.sweepStaleMarketplaceStagingDirs(runtimeHomePath)
+    } catch (error) {
+      // Why: the sweep is a best-effort disk-reclamation pass. A transient fs
+      // error (permissions, races with a live Codex sync) must never block
+      // runtime-home setup or launch.
+      console.warn('[codex-runtime-home] Failed to sweep stale marketplace staging dirs:', error)
+    }
+  }
+
+  private sweepStaleMarketplaceStagingDirs(runtimeHomePath: string): void {
+    const marketplacesRoot = join(runtimeHomePath, '.tmp', 'marketplaces')
+    const stagingRoot = join(marketplacesRoot, '.staging')
+    const now = Date.now()
+    this.removeStaleMarketplaceDirs(stagingRoot, CODEX_MARKETPLACE_STAGING_PREFIXES, now)
+    this.removeStaleMarketplaceDirs(marketplacesRoot, [CODEX_MARKETPLACE_BACKUP_PREFIX], now)
+  }
+
+  private getNewestMarketplaceDirMtimeMs(dirPath: string): number | null {
+    let newestMtimeMs: number
+    try {
+      newestMtimeMs = statSync(dirPath).mtimeMs
+    } catch {
+      return null
+    }
+
+    try {
+      for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+        const childPath = join(dirPath, entry.name)
+        let childMtimeMs: number | null = null
+        if (entry.isDirectory()) {
+          childMtimeMs = this.getNewestMarketplaceDirMtimeMs(childPath)
+          if (childMtimeMs === null) {
+            return null
+          }
+        } else if (entry.isFile()) {
+          childMtimeMs = statSync(childPath).mtimeMs
+        }
+        if (childMtimeMs !== null && childMtimeMs > newestMtimeMs) {
+          newestMtimeMs = childMtimeMs
+        }
+      }
+    } catch {
+      return null
+    }
+
+    return newestMtimeMs
+  }
+
+  private removeStaleMarketplaceDirs(
+    parentDir: string,
+    prefixes: readonly string[],
+    now: number
+  ): void {
+    if (!existsSync(parentDir)) {
+      return
+    }
+    for (const entry of readdirSync(parentDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !prefixes.some((prefix) => entry.name.startsWith(prefix))) {
+        continue
+      }
+      const dirPath = join(parentDir, entry.name)
+      const newestMtimeMs = this.getNewestMarketplaceDirMtimeMs(dirPath)
+      if (newestMtimeMs === null) {
+        // Why: the dir vanished between readdir and stat (a live Codex sync
+        // promoted/removed it). Nothing to reclaim — skip it.
+        continue
+      }
+      if (now - newestMtimeMs < CODEX_MARKETPLACE_STALE_AGE_MS) {
+        continue
+      }
+      try {
+        rmSync(dirPath, { recursive: true, force: true })
+      } catch (error) {
+        console.warn(
+          `[codex-runtime-home] Failed to remove stale marketplace staging dir ${dirPath}:`,
+          error
+        )
+      }
     }
   }
 
