@@ -195,6 +195,7 @@ import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
+import { GIT_HISTORY_DEFAULT_LIMIT, GIT_HISTORY_MAX_LIMIT } from '../../../../shared/git-history'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import {
@@ -1184,6 +1185,8 @@ function SourceControlInner(): React.JSX.Element {
   >({})
   const gitHistoryRequestSeqRef = useRef(0)
   const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
+  // Why: per worktree so paging into one branch's history doesn't leak into another's.
+  const gitHistoryLimitByWorktreeRef = useRef<Record<string, number>>({})
   const gitHistoryState = activeWorktreeId
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
@@ -4986,7 +4989,10 @@ function SourceControlInner(): React.JSX.Element {
           worktreePath,
           connectionId
         },
-        { limit: 50, baseRef: compareBaseRef }
+        {
+          limit: gitHistoryLimitByWorktreeRef.current[worktreeId] ?? GIT_HISTORY_DEFAULT_LIMIT,
+          baseRef: compareBaseRef
+        }
       )
       if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
         return
@@ -5020,6 +5026,22 @@ function SourceControlInner(): React.JSX.Element {
 
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   refreshGitHistoryRef.current = refreshGitHistory
+
+  const loadMoreGitHistory = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const current =
+      gitHistoryLimitByWorktreeRef.current[activeWorktreeId] ?? GIT_HISTORY_DEFAULT_LIMIT
+    if (current >= GIT_HISTORY_MAX_LIMIT) {
+      return
+    }
+    gitHistoryLimitByWorktreeRef.current[activeWorktreeId] = Math.min(
+      GIT_HISTORY_MAX_LIMIT,
+      current + GIT_HISTORY_DEFAULT_LIMIT
+    )
+    await refreshGitHistoryRef.current()
+  }, [activeWorktreeId])
 
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
@@ -6302,6 +6324,7 @@ function SourceControlInner(): React.JSX.Element {
                 collapsed={collapsedSections.has('history')}
                 onToggle={() => toggleSection('history')}
                 onRefresh={() => void refreshGitHistory()}
+                onLoadMore={() => void loadMoreGitHistory()}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
                 onLoadCommitFiles={loadCommitFiles}
                 onOpenCommitFile={openCommitFile}
