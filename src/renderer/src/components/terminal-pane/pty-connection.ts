@@ -4203,6 +4203,15 @@ export function connectPanePty(
         markAcceptedTerminalInputSent()
         observeAcceptedShellCommandInput(data)
         observeAcceptedTerminalInput(data, intent)
+        // Why: fire-and-forget transports (SSH) can't confirm delivery, but a
+        // DOM-captured Esc/Ctrl+C is a real user interrupt; without inference a
+        // Claude turn interrupted over SSH stays 'working' forever (no Stop
+        // hook fires on interrupt). The inference settle window re-checks the
+        // status entry, so an undelivered keystroke self-corrects on the next
+        // hook ping. Exact-byte inference stays excluded — bytes without a
+        // keydown are not proof of a user interrupt.
+        interruptInference.observeInputIntent(intent)
+        observeTitleOnlyInterrupt()
       } else {
         requestRecoveryForUndeliverableInput()
       }
