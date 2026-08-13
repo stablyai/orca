@@ -39,6 +39,7 @@ import type {
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   getRepoExecutionHostId,
+  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toSshExecutionHostId,
@@ -53,7 +54,8 @@ import {
   type HostQualifiedDetectedWorktreeResult,
   type ListKnownWorktreesForExecutionHostArgs,
   type ListDetectedWorktreesArgs,
-  type ProviderRequestId
+  type ProviderRequestId,
+  type RuntimeOwnedSshAuthorityValidationArgs
 } from '../../shared/detected-worktree-provider-contract'
 import type {
   HostLineageSnapshot,
@@ -1302,6 +1304,30 @@ function hasValidDirectSshAuthority(
   return isAdmissibleDirectSshAuthority(args.expectedAuthority)
 }
 
+function resolveDetectedWorktreeRequestSshAuthority(
+  args: ListDetectedWorktreesArgs,
+  targetId: string
+): DirectSshDetectedWorktreeRequest['expectedAuthority'] | null {
+  if ('authoritySource' in args) {
+    if (
+      args.authoritySource !== 'main-runtime-owned-ssh' ||
+      'expectedAuthority' in args ||
+      !isRuntimeOwnedSshTargetId(targetId)
+    ) {
+      return null
+    }
+    return { ...getSshProviderAuthority(targetId) }
+  }
+  const directArgs = args as DirectSshDetectedWorktreeRequest
+  if (
+    !hasValidDirectSshAuthority(directArgs) ||
+    directArgs.expectedAuthority.targetId !== targetId
+  ) {
+    return null
+  }
+  return { ...directArgs.expectedAuthority }
+}
+
 function hasValidLineageSshAuthority(
   args: ListDesktopLineageForHostArgs
 ): args is Extract<ListDesktopLineageForHostArgs, { expectedAuthority: unknown }> {
@@ -1690,6 +1716,7 @@ async function listDesktopLineageForHost(
 async function listHostQualifiedDetectedWorktrees(
   store: Store,
   args: ListDetectedWorktreesArgs,
+  capturedSshAuthority: DirectSshDetectedWorktreeRequest['expectedAuthority'] | null,
   providerAbort?: { signal: AbortSignal; status: () => 'canceled' | 'timed-out' }
 ): Promise<HostQualifiedDetectedWorktreeResult> {
   const parsedHost = parseExecutionHostId(args.executionHostId)
@@ -1707,17 +1734,11 @@ async function listHostQualifiedDetectedWorktrees(
   ) {
     return rejected('rejected')
   }
-  let capturedAuthority: DirectSshDetectedWorktreeRequest['expectedAuthority'] | null = null
   if (parsedHost.kind === 'ssh') {
-    const directArgs = args as DirectSshDetectedWorktreeRequest
-    if (
-      !hasValidDirectSshAuthority(directArgs) ||
-      directArgs.expectedAuthority.targetId !== parsedHost.targetId
-    ) {
+    if (!capturedSshAuthority || capturedSshAuthority.targetId !== parsedHost.targetId) {
       return rejected('rejected')
     }
-    capturedAuthority = { ...directArgs.expectedAuthority }
-    if (!isCurrentSshProviderAuthority(capturedAuthority)) {
+    if (!isCurrentSshProviderAuthority(capturedSshAuthority)) {
       return rejected('stale')
     }
   }
@@ -1753,9 +1774,9 @@ async function listHostQualifiedDetectedWorktrees(
       return true
     }
     return (
-      capturedAuthority !== null &&
+      capturedSshAuthority !== null &&
       getSshGitProvider(parsedHost.targetId) === provider &&
-      isCurrentSshProviderAuthority(capturedAuthority)
+      isCurrentSshProviderAuthority(capturedSshAuthority)
     )
   }
   const result = await listDetectedWorktreesForCapturedRepo(
@@ -1785,7 +1806,7 @@ async function listHostQualifiedDetectedWorktrees(
       result
     }
   }
-  if (!capturedAuthority) {
+  if (!capturedSshAuthority) {
     return rejected('rejected')
   }
   return {
@@ -1795,7 +1816,7 @@ async function listHostQualifiedDetectedWorktrees(
     authority: {
       kind: 'direct-ssh',
       executionHostId: args.executionHostId as `ssh:${string}`,
-      ...capturedAuthority
+      ...capturedSshAuthority
     },
     result
   }
@@ -1812,6 +1833,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:listAll')
   ipcMain.removeHandler('worktrees:list')
   ipcMain.removeHandler('worktrees:listDetected')
+  ipcMain.removeHandler('worktrees:isRuntimeOwnedSshAuthorityCurrent')
   ipcMain.removeHandler('worktrees:listKnownForExecutionHost')
   ipcMain.removeHandler('worktrees:forgetRemovedForExecutionHost')
   ipcMain.removeHandler('worktrees:cancelListDetected')
@@ -2064,6 +2086,20 @@ export function registerWorktreeHandlers(
   )
 
   ipcMain.handle(
+    'worktrees:isRuntimeOwnedSshAuthorityCurrent',
+    (_event, args: RuntimeOwnedSshAuthorityValidationArgs): boolean => {
+      const parsedHost = parseExecutionHostId(args?.executionHostId)
+      return (
+        parsedHost?.kind === 'ssh' &&
+        isRuntimeOwnedSshTargetId(parsedHost.targetId) &&
+        args?.authority?.targetId === parsedHost.targetId &&
+        isAdmissibleDirectSshAuthority(args.authority) &&
+        isCurrentSshProviderAuthority(args.authority)
+      )
+    }
+  )
+
+  ipcMain.handle(
     'worktrees:listDetected',
     async (
       event,
@@ -2075,13 +2111,13 @@ export function registerWorktreeHandlers(
         const controller = directSshRequest
           ? detectedWorktreeCancellations.begin(event, args.providerRequestId)
           : null
-        const directArgs = args as DirectSshDetectedWorktreeRequest
+        const requestAuthority =
+          parsedHost?.kind === 'ssh'
+            ? resolveDetectedWorktreeRequestSshAuthority(args, parsedHost.targetId)
+            : null
         const removeAuthorityAbort =
-          controller &&
-          parsedHost?.kind === 'ssh' &&
-          hasValidDirectSshAuthority(directArgs) &&
-          directArgs.expectedAuthority.targetId === parsedHost.targetId
-            ? registerSshProviderRequestAbort(directArgs.expectedAuthority, controller)
+          controller && requestAuthority
+            ? registerSshProviderRequestAbort(requestAuthority, controller)
             : undefined
         let timedOut = false
         let removeAbortListener: (() => void) | undefined
@@ -2108,6 +2144,7 @@ export function registerWorktreeHandlers(
           const providerResult = listHostQualifiedDetectedWorktrees(
             store,
             args,
+            requestAuthority,
             controller
               ? {
                   signal: controller.signal,

@@ -416,17 +416,12 @@ function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
-  const enrichedState = withSshRemotePlatform(targetId, state)
-  // Why: runtime-owned (ephemeral-VM) targets remain hidden from public and paired-client SSH surfaces,
-  // but the renderer still needs their authority tuple to reconcile runtime worktree providers.
+  // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, so broadcasting their state only triggers wasted listTargets() lookups.
   if (isRuntimeOwnedSshTargetId(targetId)) {
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
-    const win = getMainWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('ssh:runtime-owned-state-changed', { targetId, state: enrichedState })
-    }
     return
   }
+  const enrichedState = withSshRemotePlatform(targetId, state)
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })

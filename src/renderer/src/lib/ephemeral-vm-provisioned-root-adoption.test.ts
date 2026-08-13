@@ -1,29 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { SshConnectionState, SshProviderEpoch } from '../../../shared/ssh-types'
 
-const { prepareTarget, getSshState } = vi.hoisted(() => ({
-  prepareTarget: vi.fn(),
-  getSshState: vi.fn()
-}))
+const { prepareTarget } = vi.hoisted(() => ({ prepareTarget: vi.fn() }))
 
 const store = {
   fetchWorktrees: vi.fn(),
-  createWorktree: vi.fn(),
   updateWorktreeMeta: vi.fn(),
   updatePendingWorktreeCreation: vi.fn(),
   setupProjectExistingFolder: vi.fn(),
-  deleteProjectHostSetup: vi.fn(),
   repos: [] as unknown[],
   pendingWorktreeCreations: {} as Record<string, unknown>,
   worktreesByRepo: {} as Record<string, never[]>,
-  sshConnectionStates: new Map<string, SshConnectionState>(),
-  setSshConnectionState: vi.fn((targetId: string, state: SshConnectionState) => {
-    store.sshConnectionStates.set(targetId, state)
-  }),
-  clearSshConnectionState: vi.fn((targetId: string) => {
-    store.sshConnectionStates.delete(targetId)
-  }),
   sortBy: 'recent' as const
 }
 
@@ -34,23 +21,8 @@ vi.mock('@/lib/ephemeral-vm-workspace-target', () => ({
 
 import {
   adoptEphemeralVmProvisionedRoot,
-  cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
 } from './ephemeral-vm-worktree-creation'
-
-function makeConnectedRuntimeSshState(
-  overrides: Partial<SshConnectionState> = {}
-): SshConnectionState {
-  return {
-    targetId: 'runtime-ssh-1',
-    status: 'connected',
-    error: null,
-    reconnectAttempt: 0,
-    providerEpoch: 'provider-epoch-1' as SshProviderEpoch,
-    connectionGeneration: 1,
-    ...overrides
-  }
-}
 
 function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
   return {
@@ -76,27 +48,12 @@ function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): Worktree
     ...overrides
   }
 }
-function makeRuntimeSshRequest(
-  overrides: Partial<WorktreeCreationRequest> = {}
-): WorktreeCreationRequest {
-  return makeRequest({
-    ...overrides,
-    workspaceRunContext: {
-      ...makeRequest().workspaceRunContext!,
-      hostId: 'ssh:runtime-ssh-1',
-      path: '/work/notion-next',
-      ...overrides.workspaceRunContext
-    }
-  })
-}
 
 describe('provisioned-root adoption', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    getSshState.mockReset()
     store.worktreesByRepo = {}
     store.repos = []
-    store.sshConnectionStates = new Map()
     store.pendingWorktreeCreations = { 'creation-1': {} }
     store.fetchWorktrees.mockImplementation(async () => {
       store.worktreesByRepo = {
@@ -117,9 +74,6 @@ describe('provisioned-root adoption', () => {
         ephemeralVm: {
           onProvisionEvent: vi.fn(() => vi.fn()),
           cleanup: vi.fn()
-        },
-        ssh: {
-          getState: getSshState
         }
       }
     } as never
@@ -146,120 +100,25 @@ describe('provisioned-root adoption', () => {
     )
     expect(result.worktree.path).toBe('c:\\workspace\\repo\\')
   })
-  it('hydrates runtime SSH authority before adopting the exact main checkout', async () => {
-    const sshState = makeConnectedRuntimeSshState()
-    const callOrder: string[] = []
-    store.repos = [
-      {
-        id: 'repo-runtime',
-        path: '/work/notion-next',
-        connectionId: 'runtime-ssh-1',
-        executionHostId: 'ssh:runtime-ssh-1'
-      }
-    ]
-    getSshState.mockImplementation(async () => {
-      callOrder.push('getState')
-      return sshState
-    })
-    store.fetchWorktrees.mockImplementationOnce(async () => {
-      callOrder.push('fetchWorktrees')
-      store.worktreesByRepo = {
-        'repo-runtime': [
-          {
-            id: 'repo-runtime::/work/notion-next',
-            repoId: 'repo-runtime',
-            path: '/work/notion-next',
-            isMainWorktree: true
-          },
-          {
-            id: 'repo-runtime::/work/notion-next/child',
-            repoId: 'repo-runtime',
-            path: '/work/notion-next/child',
-            isMainWorktree: false
-          }
-        ] as never
-      }
-      return true
-    })
 
-    const result = await adoptEphemeralVmProvisionedRoot(
-      makeRuntimeSshRequest({ linkedIssue: 13044, workspaceStatus: 'in-progress' })
-    )
-
-    expect(callOrder).toEqual(['getState', 'fetchWorktrees'])
-    expect(getSshState).toHaveBeenCalledWith({ targetId: 'runtime-ssh-1' })
-    expect(store.fetchWorktrees).toHaveBeenCalledWith('repo-runtime', {
-      executionHostId: 'ssh:runtime-ssh-1',
-      requireAuthoritative: true
-    })
-    expect(store.sshConnectionStates.get('runtime-ssh-1')).toEqual(sshState)
-    expect(store.updateWorktreeMeta).toHaveBeenCalledWith(
-      'repo-runtime::/work/notion-next',
-      expect.objectContaining({
-        displayName: 'Feature workspace',
-        ephemeralVmCheckoutMode: 'provisioned-root',
-        baseRef: 'origin/main',
-        linkedIssue: 13044,
-        workspaceStatus: 'in-progress'
+  it('requests an authoritative scan for a runtime-owned SSH checkout', async () => {
+    await adoptEphemeralVmProvisionedRoot(
+      makeRequest({
+        workspaceRunContext: {
+          kind: 'workspace-run',
+          projectId: 'project-1',
+          hostId: 'ssh:runtime-ssh-vm-1',
+          projectHostSetupId: 'setup-1',
+          repoId: 'repo-runtime',
+          path: 'C:\\workspace\\repo'
+        }
       })
     )
-    expect(result.worktree).toMatchObject({
-      id: 'repo-runtime::/work/notion-next',
-      path: '/work/notion-next',
-      isMainWorktree: true
+
+    expect(store.fetchWorktrees).toHaveBeenCalledWith('repo-runtime', {
+      executionHostId: 'ssh:runtime-ssh-vm-1',
+      requireAuthoritative: true
     })
-    expect(store.createWorktree).not.toHaveBeenCalled()
-    expect(store.setupProjectExistingFolder).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['missing authority', null],
-    ['temporary authority', makeConnectedRuntimeSshState({ status: 'reconnecting' })],
-    [
-      'partial authority',
-      makeConnectedRuntimeSshState({ providerEpoch: null, connectionGeneration: undefined })
-    ]
-  ])('fails closed for %s', async (_label, authority) => {
-    store.repos = [
-      {
-        id: 'repo-runtime',
-        path: '/work/notion-next',
-        connectionId: 'runtime-ssh-1',
-        executionHostId: 'ssh:runtime-ssh-1'
-      }
-    ]
-    getSshState.mockResolvedValue(authority)
-
-    await expect(adoptEphemeralVmProvisionedRoot(makeRuntimeSshRequest())).rejects.toThrow(
-      'Could not verify the recipe-provisioned Git checkout.'
-    )
-
-    expect(getSshState).toHaveBeenCalledWith({ targetId: 'runtime-ssh-1' })
-    expect(store.fetchWorktrees).not.toHaveBeenCalled()
-    expect(store.updateWorktreeMeta).not.toHaveBeenCalled()
-    expect(store.createWorktree).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when authority lookup rejects and cleanup removes the runtime state', async () => {
-    const request = makeRuntimeSshRequest({ ephemeralVmRuntimeId: 'runtime-1' })
-    request.workspaceRunContext = {
-      ...request.workspaceRunContext!,
-      projectHostSetupId: ''
-    }
-    store.sshConnectionStates.set('runtime-ssh-1', makeConnectedRuntimeSshState())
-    getSshState.mockRejectedValue(new Error('temporary SSH state failure'))
-
-    await expect(adoptEphemeralVmProvisionedRoot(request)).rejects.toThrow(
-      'Could not verify the recipe-provisioned Git checkout.'
-    )
-    expect(store.fetchWorktrees).not.toHaveBeenCalled()
-    expect(store.updateWorktreeMeta).not.toHaveBeenCalled()
-
-    await cleanupEphemeralVmRuntimeForFailedCreate(request)
-
-    expect(window.api.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-1' })
-    expect(store.clearSshConnectionState).toHaveBeenCalledWith('runtime-ssh-1')
-    expect(store.sshConnectionStates.has('runtime-ssh-1')).toBe(false)
   })
 
   it('passes source intent to provisioning and keeps the adopted base ref', async () => {

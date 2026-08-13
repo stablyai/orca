@@ -18,7 +18,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult,
@@ -79,45 +79,32 @@ const TEST_SSH_AUTHORITY: DirectSshAuthority = {
   providerEpoch: 'provider-ssh-1' as SshProviderEpoch,
   connectionGeneration: 1
 }
-const RUNTIME_SSH_AUTHORITY_A: DirectSshAuthority = {
-  targetId: 'runtime-ssh-1',
-  providerEpoch: 'provider-runtime-ssh-a' as SshProviderEpoch,
-  connectionGeneration: 1
-}
-
-const RUNTIME_SSH_AUTHORITY_B: DirectSshAuthority = {
-  targetId: RUNTIME_SSH_AUTHORITY_A.targetId,
-  providerEpoch: 'provider-runtime-ssh-b' as SshProviderEpoch,
-  connectionGeneration: 2
-}
-
-const RUNTIME_SSH_EXECUTION_HOST_ID = 'ssh:runtime-ssh-1' as const
 
 function qualifyDetectedResult(
   args: ListDetectedWorktreesArgs,
   result: DetectedWorktreeListResult
 ): HostQualifiedDetectedWorktreeResult {
-  if (args.executionHostId === LOCAL_EXECUTION_HOST_ID) {
-    return {
-      status: result.authoritative ? 'complete' : 'non-authoritative',
-      providerRequestId: args.providerRequestId,
-      repoId: args.repoId,
-      authority: { kind: 'local', executionHostId: LOCAL_EXECUTION_HOST_ID },
-      result
-    }
-  }
-  if (!('expectedAuthority' in args)) {
-    throw new Error('Direct SSH test requests must include expected authority')
-  }
+  const parsedHost = parseExecutionHostId(args.executionHostId)
   return {
     status: result.authoritative ? 'complete' : 'non-authoritative',
     providerRequestId: args.providerRequestId,
     repoId: args.repoId,
-    authority: {
-      kind: 'direct-ssh',
-      executionHostId: args.executionHostId,
-      ...args.expectedAuthority
-    },
+    authority:
+      args.executionHostId === LOCAL_EXECUTION_HOST_ID
+        ? { kind: 'local', executionHostId: LOCAL_EXECUTION_HOST_ID }
+        : 'expectedAuthority' in args
+          ? {
+              kind: 'direct-ssh',
+              executionHostId: args.executionHostId,
+              ...args.expectedAuthority
+            }
+          : {
+              kind: 'direct-ssh',
+              executionHostId: args.executionHostId,
+              targetId: parsedHost?.kind === 'ssh' ? parsedHost.targetId : '',
+              providerEpoch: 'provider-runtime' as SshProviderEpoch,
+              connectionGeneration: 1
+            },
     result
   }
 }
@@ -147,6 +134,7 @@ const mockApi = {
     prefetchCreateBase: vi.fn().mockResolvedValue(undefined),
     list: worktreeListMock,
     listDetected: listDetectedMock,
+    isRuntimeOwnedSshAuthorityCurrent: vi.fn().mockResolvedValue(true),
     listKnownForExecutionHost: listKnownForExecutionHostMock,
     forgetRemovedForExecutionHost: forgetRemovedForExecutionHostMock,
     cancelListDetected: vi.fn().mockResolvedValue(undefined),
@@ -1522,345 +1510,6 @@ describe('fetchWorktrees', () => {
     expect(subscriber).not.toHaveBeenCalled()
     unsubscribe()
   })
-  it('uses published renderer authority as the sole source for runtime-owned SSH scans', async () => {
-    const store = createTestStore()
-    const repoId = 'repo-runtime-ssh'
-    const worktree = makeWorktree({
-      id: `${repoId}::/work/notion-next`,
-      repoId,
-      path: '/work/notion-next',
-      hostId: RUNTIME_SSH_EXECUTION_HOST_ID,
-      isMainWorktree: true
-    })
-    store.setState({
-      repos: [
-        {
-          id: repoId,
-          path: '/work/notion-next',
-          displayName: 'Runtime SSH Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: RUNTIME_SSH_AUTHORITY_A.targetId
-        }
-      ],
-      // Why: runtime-owned targets are hidden from normal SSH surfaces; this published renderer state is
-      // intentionally the only authority source supplied to fetchWorktrees.
-      sshConnectionStates: new Map([
-        [
-          RUNTIME_SSH_AUTHORITY_A.targetId,
-          {
-            targetId: RUNTIME_SSH_AUTHORITY_A.targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: RUNTIME_SSH_AUTHORITY_A.providerEpoch,
-            connectionGeneration: RUNTIME_SSH_AUTHORITY_A.connectionGeneration
-          }
-        ]
-      ])
-    } as Partial<AppState>)
-    mockApi.worktrees.listDetected.mockImplementationOnce(
-      async (args: ListDetectedWorktreesArgs) => {
-        expect(args).toEqual(
-          expect.objectContaining({ expectedAuthority: RUNTIME_SSH_AUTHORITY_A })
-        )
-        return qualifyDetectedResult(args, makeDetectedResult(repoId, [worktree]))
-      }
-    )
-
-    await expect(
-      store.getState().fetchWorktrees(repoId, {
-        executionHostId: RUNTIME_SSH_EXECUTION_HOST_ID,
-        requireAuthoritative: true
-      })
-    ).resolves.toBe(true)
-
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoId,
-        executionHostId: RUNTIME_SSH_EXECUTION_HOST_ID,
-        expectedAuthority: RUNTIME_SSH_AUTHORITY_A
-      })
-    )
-    expect(store.getState().worktreesByRepo[repoId]).toEqual([
-      expect.objectContaining({
-        id: worktree.id,
-        hostId: RUNTIME_SSH_EXECUTION_HOST_ID
-      })
-    ])
-    expect(store.getState().detectedWorktreesByRepo[repoId]).toEqual(
-      expect.objectContaining({
-        repoId,
-        authoritative: true,
-        source: 'git'
-      })
-    )
-  })
-
-  it('fails closed for missing, partial, or disconnected runtime-owned SSH authority without row replacement or purge', async () => {
-    const repoId = 'repo-runtime-ssh'
-    const existing = makeWorktree({
-      id: `${repoId}::/work/existing`,
-      repoId,
-      path: '/work/existing',
-      hostId: RUNTIME_SSH_EXECUTION_HOST_ID
-    })
-    const removed = makeWorktree({
-      id: `${repoId}::/work/removed`,
-      repoId,
-      path: '/work/removed',
-      hostId: RUNTIME_SSH_EXECUTION_HOST_ID
-    })
-    const cases = [
-      {
-        label: 'missing',
-        sshConnectionStates: new Map()
-      },
-      {
-        label: 'partial',
-        sshConnectionStates: new Map([
-          [
-            RUNTIME_SSH_AUTHORITY_A.targetId,
-            {
-              targetId: RUNTIME_SSH_AUTHORITY_A.targetId,
-              status: 'connected',
-              error: null,
-              reconnectAttempt: 0,
-              providerEpoch: RUNTIME_SSH_AUTHORITY_A.providerEpoch
-            }
-          ]
-        ])
-      },
-      {
-        label: 'disconnected',
-        sshConnectionStates: new Map([
-          [
-            RUNTIME_SSH_AUTHORITY_A.targetId,
-            {
-              targetId: RUNTIME_SSH_AUTHORITY_A.targetId,
-              status: 'disconnected',
-              error: null,
-              reconnectAttempt: 1,
-              providerEpoch: RUNTIME_SSH_AUTHORITY_B.providerEpoch,
-              connectionGeneration: RUNTIME_SSH_AUTHORITY_B.connectionGeneration
-            }
-          ]
-        ])
-      }
-    ]
-
-    for (const { label, sshConnectionStates } of cases) {
-      const store = createTestStore()
-      const worktreesByRepo = { [repoId]: [existing, removed] }
-      const detectedWorktreesByRepo = {
-        [repoId]: makeDetectedResult(repoId, [existing, removed])
-      }
-      const tabsByWorktree = {
-        [removed.id]: [makeTerminalTab({ id: 'runtime-tab', worktreeId: removed.id })]
-      }
-      store.setState({
-        repos: [
-          {
-            id: repoId,
-            path: '/work/notion-next',
-            displayName: 'Runtime SSH Repo',
-            badgeColor: '#000',
-            addedAt: 0,
-            connectionId: RUNTIME_SSH_AUTHORITY_A.targetId
-          }
-        ],
-        sshConnectionStates,
-        worktreesByRepo,
-        detectedWorktreesByRepo,
-        tabsByWorktree
-      } as Partial<AppState>)
-
-      await expect(
-        store.getState().fetchWorktrees(repoId, {
-          executionHostId: RUNTIME_SSH_EXECUTION_HOST_ID,
-          requireAuthoritative: true
-        })
-      ).resolves.toBe(false)
-
-      expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
-      expect(listKnownForExecutionHostMock).not.toHaveBeenCalled()
-      expect(store.getState().worktreesByRepo).toBe(worktreesByRepo)
-      expect(store.getState().detectedWorktreesByRepo).toBe(detectedWorktreesByRepo)
-      expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
-      expect(store.getState().tabsByWorktree[removed.id]).toEqual([
-        makeTerminalTab({ id: 'runtime-tab', worktreeId: removed.id })
-      ])
-      expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
-
-      // Keep the scenario label in the assertion message without introducing a second provider path.
-      expect(label).toMatch(/missing|partial|disconnected/)
-    }
-  })
-
-  it('fences runtime-owned SSH provider results across published authority rotation', async () => {
-    const store = createTestStore()
-    const repoId = 'repo-runtime-ssh'
-    const existing = makeWorktree({
-      id: `${repoId}::/work/existing`,
-      repoId,
-      path: '/work/existing',
-      hostId: RUNTIME_SSH_EXECUTION_HOST_ID
-    })
-    const removed = makeWorktree({
-      id: `${repoId}::/work/removed`,
-      repoId,
-      path: '/work/removed',
-      hostId: RUNTIME_SSH_EXECUTION_HOST_ID
-    })
-    const late = makeWorktree({
-      id: `${repoId}::/work/late`,
-      repoId,
-      path: '/work/late',
-      hostId: RUNTIME_SSH_EXECUTION_HOST_ID
-    })
-    const fresh = makeWorktree({
-      id: `${repoId}::/work/fresh`,
-      repoId,
-      path: '/work/fresh',
-      hostId: RUNTIME_SSH_EXECUTION_HOST_ID
-    })
-    store.setState({
-      repos: [
-        {
-          id: repoId,
-          path: '/work/notion-next',
-          displayName: 'Runtime SSH Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: RUNTIME_SSH_AUTHORITY_A.targetId
-        }
-      ],
-      sshConnectionStates: new Map([
-        [
-          RUNTIME_SSH_AUTHORITY_A.targetId,
-          {
-            targetId: RUNTIME_SSH_AUTHORITY_A.targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: RUNTIME_SSH_AUTHORITY_A.providerEpoch,
-            connectionGeneration: RUNTIME_SSH_AUTHORITY_A.connectionGeneration
-          }
-        ]
-      ]),
-      worktreesByRepo: { [repoId]: [existing, removed] },
-      detectedWorktreesByRepo: {
-        [repoId]: makeDetectedResult(repoId, [existing, removed])
-      },
-      tabsByWorktree: {
-        [removed.id]: [makeTerminalTab({ id: 'runtime-tab', worktreeId: removed.id })]
-      }
-    } as Partial<AppState>)
-
-    let requestA!: ListDetectedWorktreesArgs
-    let resolveProviderA!: (result: HostQualifiedDetectedWorktreeResult) => void
-    let providerStartedResolve!: () => void
-    const providerStarted = new Promise<void>((resolve) => {
-      providerStartedResolve = resolve
-    })
-    const providerA = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
-      resolveProviderA = resolve
-    })
-    mockApi.worktrees.listDetected.mockImplementationOnce(
-      async (args: ListDetectedWorktreesArgs) => {
-        requestA = args
-        providerStartedResolve()
-        return providerA
-      }
-    )
-
-    const refreshA = store.getState().fetchWorktrees(repoId, {
-      executionHostId: RUNTIME_SSH_EXECUTION_HOST_ID,
-      requireAuthoritative: true
-    })
-    await providerStarted
-    expect(requestA).toEqual(
-      expect.objectContaining({ expectedAuthority: RUNTIME_SSH_AUTHORITY_A })
-    )
-
-    // Why: the disconnect event carries the next tuple but must invalidate the in-flight request before it
-    // can publish rows or purge metadata.
-    store.setState({
-      sshConnectionStates: new Map([
-        [
-          RUNTIME_SSH_AUTHORITY_A.targetId,
-          {
-            targetId: RUNTIME_SSH_AUTHORITY_A.targetId,
-            status: 'disconnected',
-            error: null,
-            reconnectAttempt: 1,
-            providerEpoch: RUNTIME_SSH_AUTHORITY_B.providerEpoch,
-            connectionGeneration: RUNTIME_SSH_AUTHORITY_B.connectionGeneration
-          }
-        ]
-      ])
-    } as Partial<AppState>)
-    const beforeWorktrees = store.getState().worktreesByRepo
-    const beforeDetected = store.getState().detectedWorktreesByRepo
-    const beforeTabs = store.getState().tabsByWorktree
-    const subscriber = vi.fn()
-    const unsubscribe = store.subscribe(subscriber)
-
-    resolveProviderA(qualifyDetectedResult(requestA, makeDetectedResult(repoId, [late])))
-    await expect(refreshA).resolves.toBe(false)
-
-    expect(store.getState().worktreesByRepo).toBe(beforeWorktrees)
-    expect(store.getState().detectedWorktreesByRepo).toBe(beforeDetected)
-    expect(store.getState().tabsByWorktree).toBe(beforeTabs)
-    expect(store.getState().tabsByWorktree[removed.id]).toEqual([
-      makeTerminalTab({ id: 'runtime-tab', worktreeId: removed.id })
-    ])
-    expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
-    expect(subscriber).not.toHaveBeenCalled()
-    unsubscribe()
-
-    store.setState({
-      sshConnectionStates: new Map([
-        [
-          RUNTIME_SSH_AUTHORITY_B.targetId,
-          {
-            targetId: RUNTIME_SSH_AUTHORITY_B.targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: RUNTIME_SSH_AUTHORITY_B.providerEpoch,
-            connectionGeneration: RUNTIME_SSH_AUTHORITY_B.connectionGeneration
-          }
-        ]
-      ])
-    } as Partial<AppState>)
-    mockApi.worktrees.listDetected.mockImplementationOnce(
-      async (args: ListDetectedWorktreesArgs) => {
-        expect(args).toEqual(
-          expect.objectContaining({ expectedAuthority: RUNTIME_SSH_AUTHORITY_B })
-        )
-        return qualifyDetectedResult(args, makeDetectedResult(repoId, [fresh]))
-      }
-    )
-
-    await expect(
-      store.getState().fetchWorktrees(repoId, {
-        executionHostId: RUNTIME_SSH_EXECUTION_HOST_ID,
-        requireAuthoritative: true
-      })
-    ).resolves.toBe(true)
-
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
-    expect(store.getState().worktreesByRepo[repoId]).toEqual([
-      expect.objectContaining({
-        id: fresh.id,
-        hostId: RUNTIME_SSH_EXECUTION_HOST_ID
-      })
-    ])
-    expect(store.getState().detectedWorktreesByRepo[repoId]?.worktrees).toEqual([
-      expect.objectContaining({ id: fresh.id })
-    ])
-  })
 
   it('fails closed before provider acquisition when direct authority is partial', async () => {
     const store = createTestStore()
@@ -3196,6 +2845,215 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo['repo-missing']).toEqual([
       { ...remote, hostId: 'ssh:ssh-1' }
     ])
+  })
+
+  it('fetches a runtime-owned SSH repo without publishing its authority to renderer state', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-runtime::/workspace/repo',
+      repoId: 'repo-runtime',
+      path: '/workspace/repo',
+      isMainWorktree: true
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-runtime',
+          path: '/workspace/repo',
+          displayName: 'Runtime repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'runtime-ssh-vm-1'
+        }
+      ],
+      sshConnectionStates: new Map()
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) => ({
+      status: 'complete',
+      providerRequestId: args.providerRequestId,
+      repoId: args.repoId,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:runtime-ssh-vm-1',
+        targetId: 'runtime-ssh-vm-1',
+        providerEpoch: 'provider-runtime' as SshProviderEpoch,
+        connectionGeneration: 1
+      },
+      result: makeDetectedResult(args.repoId, [remote])
+    }))
+
+    await expect(
+      store.getState().fetchWorktrees('repo-runtime', {
+        executionHostId: 'ssh:runtime-ssh-vm-1',
+        requireAuthoritative: true
+      })
+    ).resolves.toBe(true)
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      providerRequestId: expect.any(String),
+      repoId: 'repo-runtime',
+      executionHostId: 'ssh:runtime-ssh-vm-1',
+      authoritySource: 'main-runtime-owned-ssh'
+    })
+    expect(store.getState().sshConnectionStates).toEqual(new Map())
+    expect(store.getState().worktreesByRepo['repo-runtime']).toEqual([
+      { ...remote, hostId: 'ssh:runtime-ssh-vm-1' }
+    ])
+  })
+
+  it('rejects a runtime-owned result whose main authority rotated before merge', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-runtime::/workspace/repo',
+      repoId: 'repo-runtime',
+      path: '/workspace/repo',
+      isMainWorktree: true
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-runtime',
+          path: '/workspace/repo',
+          displayName: 'Runtime repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'runtime-ssh-vm-1'
+        }
+      ],
+      sshConnectionStates: new Map()
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) => ({
+      status: 'complete',
+      providerRequestId: args.providerRequestId,
+      repoId: args.repoId,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:runtime-ssh-vm-1',
+        targetId: 'runtime-ssh-vm-1',
+        providerEpoch: 'provider-runtime' as SshProviderEpoch,
+        connectionGeneration: 1
+      },
+      result: makeDetectedResult(args.repoId, [remote])
+    }))
+    mockApi.worktrees.isRuntimeOwnedSshAuthorityCurrent.mockResolvedValueOnce(false)
+
+    await expect(
+      store.getState().fetchWorktrees('repo-runtime', {
+        executionHostId: 'ssh:runtime-ssh-vm-1',
+        requireAuthoritative: true
+      })
+    ).resolves.toBe(false)
+
+    expect(mockApi.worktrees.isRuntimeOwnedSshAuthorityCurrent).toHaveBeenCalledWith({
+      executionHostId: 'ssh:runtime-ssh-vm-1',
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:runtime-ssh-vm-1',
+        targetId: 'runtime-ssh-vm-1',
+        providerEpoch: 'provider-runtime',
+        connectionGeneration: 1
+      }
+    })
+    expect(store.getState().worktreesByRepo['repo-runtime']).toBeUndefined()
+  })
+
+  it('keeps ordinary SSH authoritative scans gated by renderer authority', async () => {
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-user-1'
+        }
+      ],
+      sshConnectionStates: new Map()
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchWorktrees('repo-ssh', {
+        executionHostId: 'ssh:ssh-user-1',
+        requireAuthoritative: true
+      })
+    ).resolves.toBe(false)
+
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+    expect(listKnownForExecutionHostMock).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.isRuntimeOwnedSshAuthorityCurrent).not.toHaveBeenCalled()
+  })
+
+  it('rejects a runtime-owned result stamped for another target', async () => {
+    const store = createTestStore()
+    store.setState({ sshConnectionStates: new Map() } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) => ({
+      status: 'complete',
+      providerRequestId: args.providerRequestId,
+      repoId: args.repoId,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:runtime-ssh-other',
+        targetId: 'runtime-ssh-other',
+        providerEpoch: 'provider-runtime' as SshProviderEpoch,
+        connectionGeneration: 1
+      },
+      result: makeDetectedResult(args.repoId, [])
+    }))
+
+    await expect(
+      store.getState().fetchWorktrees('repo-runtime', {
+        executionHostId: 'ssh:runtime-ssh-vm-1',
+        requireAuthoritative: true
+      })
+    ).resolves.toBe(false)
+
+    expect(store.getState().worktreesByRepo['repo-runtime']).toBeUndefined()
+  })
+
+  it('rejects a missing-owner runtime-owned result after the repo catalog changes', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-runtime::/workspace/repo',
+      repoId: 'repo-runtime',
+      path: '/workspace/repo',
+      isMainWorktree: true
+    })
+    let release!: () => void
+    const started = new Promise<void>((resolve) => {
+      mockApi.worktrees.listDetected.mockImplementationOnce(async (args) => {
+        resolve()
+        await new Promise<void>((resume) => {
+          release = resume
+        })
+        return {
+          status: 'complete',
+          providerRequestId: args.providerRequestId,
+          repoId: args.repoId,
+          authority: {
+            kind: 'direct-ssh',
+            executionHostId: 'ssh:runtime-ssh-vm-1',
+            targetId: 'runtime-ssh-vm-1',
+            providerEpoch: 'provider-runtime' as SshProviderEpoch,
+            connectionGeneration: 1
+          },
+          result: makeDetectedResult(args.repoId, [remote])
+        }
+      })
+    })
+    store.setState({ repos: [], sshConnectionStates: new Map() } as Partial<AppState>)
+
+    const refresh = store.getState().fetchWorktrees('repo-runtime', {
+      executionHostId: 'ssh:runtime-ssh-vm-1',
+      requireAuthoritative: true
+    })
+    await started
+    store.setState({ repos: [] })
+    release()
+
+    await expect(refresh).resolves.toBe(false)
+    expect(store.getState().worktreesByRepo['repo-runtime']).toBeUndefined()
   })
 
   it('rejects a missing-owner SSH result after the repo catalog changes', async () => {

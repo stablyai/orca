@@ -58,7 +58,7 @@ export type SshSlice = {
    *  connection ID. Updated from SSH IPC snapshots and push events. */
   detectedPortsByConnection: Record<string, EnrichedDetectedPort[]>
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
-  clearSshConnectionState: (targetId: string) => void
+  setSshTargetLabels: (labels: Map<string, string>) => void
   setRemovedSshTargetLabels: (labels: Record<string, string>) => void
   setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
   clearRemovedSshTargetState: (targetId: string) => void
@@ -116,15 +116,6 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
           : s.sshConnectedGeneration,
         transientClearedAgentStatusConnectionIds: blockedConnections
       }
-    }),
-  clearSshConnectionState: (targetId) =>
-    set((s) => {
-      if (!s.sshConnectionStates.has(targetId)) {
-        return s
-      }
-      const next = new Map(s.sshConnectionStates)
-      next.delete(targetId)
-      return { sshConnectionStates: next }
     }),
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),

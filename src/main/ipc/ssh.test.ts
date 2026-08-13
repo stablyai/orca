@@ -1759,7 +1759,7 @@ describe('SSH IPC handlers', () => {
     expect(runtime.notifySshRelayReady).toHaveBeenCalledWith('ssh-1')
   })
 
-  it('publishes runtime-owned authority on the dedicated renderer channel while invalidating runtime scans', async () => {
+  it('keeps runtime-owned SSH state off the renderer while invalidating runtime scans', async () => {
     const runtime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
@@ -1784,73 +1784,12 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:connect')!(null, { targetId: 'runtime-ssh-1' })
 
-    const runtimeBroadcasts = (): [string, { targetId: string; state: SshConnectionState }][] =>
-      mockWindow.webContents.send.mock.calls.filter(
-        ([channel]) => channel === 'ssh:runtime-owned-state-changed'
-      ) as [string, { targetId: string; state: SshConnectionState }][]
-    const connectedPayload = runtimeBroadcasts().find(
-      ([, payload]) => payload.state.status === 'connected'
-    )?.[1]
-    expect(connectedPayload).toEqual({
-      targetId: 'runtime-ssh-1',
-      state: expect.objectContaining({
-        targetId: 'runtime-ssh-1',
-        status: 'connected',
-        providerEpoch: expect.any(String),
-        connectionGeneration: expect.any(Number)
-      })
-    })
-    const connectedState = connectedPayload!.state
-
-    const callbacks = mockConnectionManager.callbacksRef.current as {
-      onStateChange: (targetId: string, state: SshConnectionState) => void
-    }
-    callbacks.onStateChange('runtime-ssh-1', {
-      targetId: 'runtime-ssh-1',
-      status: 'disconnected',
-      error: null,
-      reconnectAttempt: 1
-    })
-    callbacks.onStateChange('runtime-ssh-1', {
-      targetId: 'runtime-ssh-1',
-      status: 'reconnecting',
-      error: 'retrying',
-      reconnectAttempt: 2
-    })
-
-    const broadcasts = runtimeBroadcasts()
-    const disconnectedState = broadcasts.find(
-      ([, payload]) => payload.state.status === 'disconnected'
-    )?.[1].state
-    const reconnectingState = broadcasts.find(
-      ([, payload]) => payload.state.status === 'reconnecting'
-    )?.[1].state
-    expect(disconnectedState).toEqual(
-      expect.objectContaining({
-        targetId: 'runtime-ssh-1',
-        providerEpoch: connectedState.providerEpoch,
-        connectionGeneration: connectedState.connectionGeneration
-      })
-    )
-    expect(reconnectingState).toEqual(
-      expect.objectContaining({
-        targetId: 'runtime-ssh-1',
-        providerEpoch: expect.any(String),
-        connectionGeneration: expect.any(Number)
-      })
-    )
-    expect(reconnectingState!.providerEpoch).not.toBe(connectedState.providerEpoch)
-    expect(reconnectingState!.connectionGeneration).toBeGreaterThan(
-      connectedState.connectionGeneration!
-    )
-
-    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
-    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledTimes(broadcasts.length)
-    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
     expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
       'ssh:state-changed',
       expect.anything()
     )
+    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
   })
 
   it('invalidates runtime scans from hidden SSH state broadcasts', () => {
@@ -1878,15 +1817,6 @@ describe('SSH IPC handlers', () => {
       'ssh:state-changed',
       expect.anything()
     )
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:runtime-owned-state-changed', {
-      targetId: 'runtime-ssh-1',
-      state: expect.objectContaining({
-        targetId: 'runtime-ssh-1',
-        status: 'disconnected',
-        providerEpoch: expect.any(String),
-        connectionGeneration: expect.any(Number)
-      })
-    })
   })
 
   it('preserves active port forwards and live connections across handler re-registration', async () => {

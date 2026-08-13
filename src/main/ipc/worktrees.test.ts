@@ -2498,6 +2498,116 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('derives authority in main for an explicit runtime-owned SSH scan', async () => {
+    const targetId = 'runtime-ssh-vm-1'
+    const sshHostId = toSshExecutionHostId(targetId)
+    const sshRepo = {
+      id: 'runtime-repo',
+      path: '/workspace/repo',
+      displayName: 'runtime repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: targetId
+    }
+    const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
+    store.getRepos.mockReturnValue([sshRepo])
+    getSshGitProviderMock.mockReturnValue(provider)
+
+    const result = await handlers['worktrees:listDetected'](ipcEvent, {
+      providerRequestId: 'request-runtime' as ProviderRequestId,
+      repoId: sshRepo.id,
+      executionHostId: sshHostId,
+      authoritySource: 'main-runtime-owned-ssh'
+    })
+
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/workspace/repo', {
+      signal: expect.any(AbortSignal)
+    })
+    expect(result).toEqual({
+      status: 'complete',
+      providerRequestId: 'request-runtime',
+      repoId: sshRepo.id,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: sshHostId,
+        ...getSshProviderAuthority(targetId)
+      },
+      result: {
+        repoId: sshRepo.id,
+        authoritative: true,
+        source: 'git',
+        worktrees: []
+      }
+    })
+
+    provider.listWorktrees.mockClear()
+    const contradictory = await handlers['worktrees:listDetected'](ipcEvent, {
+      providerRequestId: 'request-contradictory' as ProviderRequestId,
+      repoId: sshRepo.id,
+      executionHostId: sshHostId,
+      authoritySource: 'main-runtime-owned-ssh',
+      expectedAuthority: getSshProviderAuthority(targetId)
+    })
+    expect(contradictory).toMatchObject({ status: 'rejected' })
+    expect(provider.listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('does not allow main-derived authority for an ordinary SSH target', async () => {
+    const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/remote/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'target-a'
+      }
+    ])
+    getSshGitProviderMock.mockReturnValue(provider)
+
+    const result = await handlers['worktrees:listDetected'](ipcEvent, {
+      providerRequestId: 'request-user-ssh' as ProviderRequestId,
+      repoId: 'repo-1',
+      executionHostId: toSshExecutionHostId('target-a'),
+      authoritySource: 'main-runtime-owned-ssh'
+    })
+
+    expect(result).toMatchObject({
+      status: 'rejected',
+      providerRequestId: 'request-user-ssh'
+    })
+    expect(provider.listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('validates runtime-owned authority at renderer commit time', () => {
+    const targetId = 'runtime-ssh-vm-1'
+    const executionHostId = toSshExecutionHostId(targetId)
+    const authority = getSshProviderAuthority(targetId)
+
+    expect(
+      handlers['worktrees:isRuntimeOwnedSshAuthorityCurrent'](ipcEvent, {
+        executionHostId,
+        authority
+      })
+    ).toBe(true)
+
+    rotateSshProviderAuthority(targetId)
+
+    expect(
+      handlers['worktrees:isRuntimeOwnedSshAuthorityCurrent'](ipcEvent, {
+        executionHostId,
+        authority
+      })
+    ).toBe(false)
+    expect(
+      handlers['worktrees:isRuntimeOwnedSshAuthorityCurrent'](ipcEvent, {
+        executionHostId: toSshExecutionHostId('target-a'),
+        authority: getSshProviderAuthority('target-a')
+      })
+    ).toBe(false)
+  })
+
   it('rejects malformed and contradictory repo host provenance', async () => {
     const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
     getSshGitProviderMock.mockReturnValue(provider)
@@ -3241,6 +3351,51 @@ describe('registerWorktreeHandlers', () => {
     await Promise.resolve()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+  })
+
+  it('aborts a main-authorized runtime-owned scan when its provider authority rotates', async () => {
+    const targetId = 'runtime-ssh-vm-1'
+    let providerSignal: AbortSignal | undefined
+    const provider = {
+      listWorktrees: vi.fn(
+        (_path: string, options?: { signal?: AbortSignal }) =>
+          new Promise<GitWorktreeInfo[]>((_resolve, reject) => {
+            providerSignal = options?.signal
+            providerSignal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('Canceled', 'AbortError')),
+              { once: true }
+            )
+          })
+      )
+    }
+    store.getRepos.mockReturnValue([
+      {
+        id: 'runtime-repo',
+        path: '/workspace/repo',
+        displayName: 'runtime repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: targetId
+      }
+    ])
+    getSshGitProviderMock.mockReturnValue(provider)
+
+    const pending = handlers['worktrees:listDetected'](ipcEvent, {
+      providerRequestId: 'request-runtime' as ProviderRequestId,
+      repoId: 'runtime-repo',
+      executionHostId: toSshExecutionHostId(targetId),
+      authoritySource: 'main-runtime-owned-ssh'
+    })
+    await Promise.resolve()
+    rotateSshProviderAuthority(targetId)
+
+    expect(providerSignal?.aborted).toBe(true)
+    await expect(pending).resolves.toMatchObject({
+      status: 'canceled',
+      providerRequestId: 'request-runtime'
+    })
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('cancels an SSH provider request by sender-scoped provider request ID', async () => {

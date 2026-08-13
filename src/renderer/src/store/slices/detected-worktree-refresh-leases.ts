@@ -3,7 +3,8 @@ import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs,
   LocalDetectedWorktreeRequest,
-  ProviderRequestId
+  ProviderRequestId,
+  RuntimeOwnedSshDetectedWorktreeRequest
 } from '../../../../shared/detected-worktree-provider-contract'
 
 export type WaiterLeaseId = string & {
@@ -28,6 +29,7 @@ export type DetectedWorktreeRefreshLease = {
 export type DetectedWorktreeRefreshProviderInput =
   | Omit<LocalDetectedWorktreeRequest, 'providerRequestId'>
   | Omit<DirectSshDetectedWorktreeRequest, 'providerRequestId'>
+  | Omit<RuntimeOwnedSshDetectedWorktreeRequest, 'providerRequestId'>
 
 export type DetectedWorktreeRefreshLeaseRegistryOptions = {
   startProviderRequest(
@@ -87,6 +89,11 @@ function requestsAreCompatible(
 ): boolean {
   if (request.repoId !== input.repoId || request.executionHostId !== input.executionHostId) {
     return false
+  }
+  const requestAuthoritySource = 'authoritySource' in request ? request.authoritySource : undefined
+  const inputAuthoritySource = 'authoritySource' in input ? input.authoritySource : undefined
+  if (requestAuthoritySource || inputAuthoritySource) {
+    return requestAuthoritySource === inputAuthoritySource
   }
   const requestAuthority = 'expectedAuthority' in request ? request.expectedAuthority : undefined
   const inputAuthority = 'expectedAuthority' in input ? input.expectedAuthority : undefined

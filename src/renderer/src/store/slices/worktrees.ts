@@ -84,6 +84,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -191,6 +192,7 @@ type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
   executionHostId: ExecutionHostId
   requireAuthoritative?: boolean
   directSshAuthority?: DirectSshAuthority
+  runtimeOwnedSsh?: true
   // Why (#10562): the caller's own view of what it is about to purge. Teardown is
   // requested per caller, so this must never be shared with a coalesced scan.
   connectionId?: string | null
@@ -203,6 +205,7 @@ type AdmittedDetectedWorktreeRefresh = {
   providerResult?: HostQualifiedDetectedWorktreeResult
   executionHostId: ExecutionHostId
   directSshAuthority?: DirectSshAuthority
+  runtimeOwnedSsh?: true
   runtimeAuthority?: {
     environmentId: string
     connectionGeneration: number
@@ -217,6 +220,7 @@ type DetectedWorktreeRefreshOutcome =
       providerResult: HostQualifiedDetectedWorktreeResult
       executionHostId: ExecutionHostId
       directSshAuthority?: DirectSshAuthority
+      runtimeOwnedSsh?: true
     }
 
 async function mapReposForWorktreeRefresh<TRepo extends { id: string }, TResult>(
@@ -1116,6 +1120,9 @@ function detectedWorktreeRefreshKey(
     targetKey,
     options.requireAuthoritative === true ? 'authoritative' : 'best-effort'
   ]
+  if (options.runtimeOwnedSsh) {
+    parts.push('main-runtime-owned-ssh')
+  }
   // Why: only remote targets run a compat preflight, so a foreground (reuse:false) refresh must re-probe not coalesce onto a stale-failure background scan; local targets have no preflight and stay coalesced.
   if (target.kind === 'environment') {
     parts.push(`connection:${getEnvironmentSshStateGeneration(target.environmentId)}`)
@@ -1211,6 +1218,20 @@ export function acquireDetectedWorktreeRefreshLeaseForRepo(
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
   }
+  if (options.runtimeOwnedSsh) {
+    if (
+      options.requireAuthoritative !== true ||
+      options.directSshAuthority ||
+      !isRuntimeOwnedSshTargetId(parsedHost.targetId)
+    ) {
+      throw new Error('Main-owned SSH authority requires an authoritative runtime target request')
+    }
+    return detectedWorktreeRefreshLeaseRegistry.acquire(publicKey, {
+      repoId,
+      executionHostId: options.executionHostId as SshExecutionHostId,
+      authoritySource: 'main-runtime-owned-ssh'
+    })
+  }
   if (
     !options.directSshAuthority ||
     !directSshAuthorityIsComplete(options.directSshAuthority, parsedHost.targetId)
@@ -1249,6 +1270,14 @@ function qualifiedProviderResultIsAdmitted(
     return (
       result.authority.kind === 'local' &&
       result.authority.executionHostId === LOCAL_EXECUTION_HOST_ID
+    )
+  }
+  if (parsedHost?.kind === 'ssh' && options.runtimeOwnedSsh) {
+    return (
+      isRuntimeOwnedSshTargetId(parsedHost.targetId) &&
+      result.authority.kind === 'direct-ssh' &&
+      result.authority.executionHostId === options.executionHostId &&
+      directSshAuthorityIsComplete(result.authority, parsedHost.targetId)
     )
   }
   const expected = options.directSshAuthority
@@ -1352,7 +1381,8 @@ async function listDetectedWorktreesForRepoCoalesced(
         status: 'rejected'
       },
       executionHostId: options.executionHostId,
-      directSshAuthority: options.directSshAuthority
+      directSshAuthority: options.directSshAuthority,
+      runtimeOwnedSsh: options.runtimeOwnedSsh
     }
   }
   if (
@@ -1366,7 +1396,8 @@ async function listDetectedWorktreesForRepoCoalesced(
         options.executionHostId
       ),
       executionHostId: options.executionHostId,
-      directSshAuthority: options.directSshAuthority
+      directSshAuthority: options.directSshAuthority,
+      runtimeOwnedSsh: options.runtimeOwnedSsh
     }
   }
   await teardownMissingWorktreeTerminalsBestEffort(
@@ -1381,7 +1412,8 @@ async function listDetectedWorktreesForRepoCoalesced(
     result: providerResult.result,
     providerResult,
     executionHostId: options.executionHostId,
-    directSshAuthority: options.directSshAuthority
+    directSshAuthority: options.directSshAuthority,
+    runtimeOwnedSsh: options.runtimeOwnedSsh
   }
 }
 
@@ -2789,6 +2821,10 @@ function isCurrentDetectedWorktreeRefresh(
       refresh.directSshAuthority
     )
   }
+  // Main-owned currency is checked after all awaits immediately before merge.
+  if (refresh.runtimeOwnedSsh) {
+    return true
+  }
   if (refresh.runtimeAuthority) {
     return (
       getEnvironmentSshStateGeneration(refresh.runtimeAuthority.environmentId) ===
@@ -2798,6 +2834,26 @@ function isCurrentDetectedWorktreeRefresh(
     )
   }
   return true
+}
+
+async function isMainOwnedSshRefreshCurrent(
+  refresh: AdmittedDetectedWorktreeRefresh
+): Promise<boolean> {
+  if (!refresh.runtimeOwnedSsh) {
+    return true
+  }
+  const providerResult = refresh.providerResult
+  const authority =
+    providerResult && 'authority' in providerResult ? providerResult.authority : null
+  if (authority?.kind !== 'direct-ssh') {
+    return false
+  }
+  return (
+    (await window.api.worktrees.isRuntimeOwnedSshAuthorityCurrent?.({
+      executionHostId: authority.executionHostId,
+      authority
+    })) === true
+  )
 }
 
 function staleDetectedWorktreeProviderResult(
@@ -2898,7 +2954,7 @@ type FencedWorktreeMergeArgs = {
   repoId: string
   hostId: ExecutionHostId
   ownerWasMissingAtStart: boolean
-  missingDirectSshOwnerReposSnapshot?: AppState['repos']
+  missingSshOwnerReposSnapshot?: AppState['repos']
   requestStartedWorktrees: readonly Worktree[] | undefined
   setup?: ProjectHostSetup
   refresh: AdmittedDetectedWorktreeRefresh
@@ -2921,7 +2977,8 @@ function mergeFetchedWorktrees(
         args.repoId,
         args.hostId,
         args.ownerWasMissingAtStart &&
-          (!args.refresh.directSshAuthority || s.repos === args.missingDirectSshOwnerReposSnapshot)
+          ((!args.refresh.directSshAuthority && !args.refresh.runtimeOwnedSsh) ||
+            s.repos === args.missingSshOwnerReposSnapshot)
       )
     ) {
       return s
@@ -3421,7 +3478,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             s,
             repoId,
             hostId,
-            ownerWasMissingAtStart && !refresh.directSshAuthority
+            ownerWasMissingAtStart && !refresh.directSshAuthority && !refresh.runtimeOwnedSsh
           )
         ) {
           return s
@@ -3496,7 +3553,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         parsedHost?.kind === 'ssh'
           ? (directCallerAuthority ?? getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
           : undefined
-      if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
+      const runtimeOwnedSsh =
+        parsedHost?.kind === 'ssh' &&
+        !directSshAuthority &&
+        options?.requireAuthoritative === true &&
+        isRuntimeOwnedSshTargetId(parsedHost.targetId)
+          ? true
+          : undefined
+      if (parsedHost?.kind === 'ssh' && !directSshAuthority && !runtimeOwnedSsh) {
         // Why: requireAuthoritative callers asked for authoritative-or-nothing, so writing non-authoritative
         // rows as a side effect before returning false would silently weaken that contract.
         if (!options?.requireAuthoritative) {
@@ -3508,6 +3572,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         executionHostId: hostId,
         requireAuthoritative: options?.requireAuthoritative,
         directSshAuthority,
+        runtimeOwnedSsh,
         connectionId: repoOwner?.connectionId,
         knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
       })
@@ -3517,18 +3582,24 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (options?.requireAuthoritative && !refresh.result.authoritative) {
         return directCallerAuthority ? refresh.providerResult : false
       }
+      const provisionedRootRuntimeWorkspaceKeys = await provisionedRootRuntimeWorkspaceKeysPromise
+      if (!(await isMainOwnedSshRefreshCurrent(refresh))) {
+        return directCallerAuthority
+          ? (staleDetectedWorktreeProviderResult(refresh) ?? false)
+          : false
+      }
       const admitted = mergeFetchedWorktrees(set, {
         repoId,
         hostId,
         ownerWasMissingAtStart,
-        missingDirectSshOwnerReposSnapshot:
+        missingSshOwnerReposSnapshot:
           ownerWasMissingAtStart && options?.executionHostId === hostId
             ? ownerState.repos
             : undefined,
         requestStartedWorktrees,
         setup,
         refresh,
-        provisionedRootRuntimeWorkspaceKeys: await provisionedRootRuntimeWorkspaceKeysPromise
+        provisionedRootRuntimeWorkspaceKeys
       })
       if (!admitted) {
         return directCallerAuthority
@@ -3537,7 +3608,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       // Direct SSH lineage requires its own qualified authority result.
       // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
-      if (!directSshAuthority && !options?.suppressRemoteLineageRefresh) {
+      if (!directSshAuthority && !runtimeOwnedSsh && !options?.suppressRemoteLineageRefresh) {
         await refreshRemoteWorktreeLineageBestEffort(settings, set)
       }
       return directCallerAuthority ? refresh.providerResult! : refresh.result.authoritative

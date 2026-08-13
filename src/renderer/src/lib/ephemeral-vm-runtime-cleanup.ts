@@ -40,24 +40,13 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
           (runtime.sshTargetId !== undefined && sshTargetIdSet.has(runtime.sshTargetId)))
     )
     for (const runtime of matchingRuntimes) {
-      try {
-        const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
-        if (cleaned.status !== 'cleaned') {
-          continue
-        }
-        matches.runtimeIds.push(runtime.id)
-        if (runtime.sshTargetId) {
-          matches.sshTargetIds.push(runtime.sshTargetId)
-        }
-      } finally {
-        const sshTargetId = runtime.sshTargetId
-        if (sshTargetId !== undefined && isRuntimeOwnedSshTargetId(sshTargetId)) {
-          // Keep this import lazy: the authority helper imports the store, so a static import
-          // would re-enter store slice initialization.
-          const { clearEphemeralVmSshAuthority } =
-            await import('@/runtime/ephemeral-vm-ssh-authority')
-          clearEphemeralVmSshAuthority(sshTargetId)
-        }
+      const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
+      if (cleaned.status !== 'cleaned') {
+        continue
+      }
+      matches.runtimeIds.push(runtime.id)
+      if (runtime.sshTargetId) {
+        matches.sshTargetIds.push(runtime.sshTargetId)
       }
     }
   } catch (error) {

@@ -228,7 +228,6 @@ import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-e
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
-import { isRuntimeOwnedSshTargetId } from '../shared/execution-host'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
   Automation,
@@ -785,6 +784,9 @@ const api = {
     list: (args) => ipcRenderer.invoke('worktrees:list', args),
 
     listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
+
+    isRuntimeOwnedSshAuthorityCurrent: (args) =>
+      ipcRenderer.invoke('worktrees:isRuntimeOwnedSshAuthorityCurrent', args),
 
     listKnownForExecutionHost: (args) =>
       ipcRenderer.invoke('worktrees:listKnownForExecutionHost', args),
@@ -4537,24 +4539,6 @@ const api = {
       }
       ipcRenderer.on('ssh:state-changed', listener)
       return () => ipcRenderer.removeListener('ssh:state-changed', listener)
-    },
-    onRuntimeOwnedStateChanged: (
-      callback: (data: { targetId: string; state: SshConnectionState }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { targetId: string; state: unknown }
-      ): void => {
-        if (!isRuntimeOwnedSshTargetId(data.targetId)) {
-          return
-        }
-        const state = admitSshConnectionStateForAuthorityReconciliation(data.state, data.targetId)
-        if (state) {
-          callback({ targetId: data.targetId, state })
-        }
-      }
-      ipcRenderer.on('ssh:runtime-owned-state-changed', listener)
-      return () => ipcRenderer.removeListener('ssh:runtime-owned-state-changed', listener)
     },
 
     addPortForward: (args: {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  DirectSshDetectedWorktreeRequest,
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs
 } from '../../../../shared/detected-worktree-provider-contract'
@@ -35,11 +36,19 @@ function authority(providerEpoch: string, connectionGeneration = 1): DirectSshAu
 
 function directInput(
   expectedAuthority = authority('epoch-a')
-): DetectedWorktreeRefreshProviderInput {
+): Omit<DirectSshDetectedWorktreeRequest, 'providerRequestId'> {
   return {
     repoId: 'repo-a',
     executionHostId: 'ssh:ssh-a',
     expectedAuthority
+  }
+}
+
+function runtimeOwnedInput(): DetectedWorktreeRefreshProviderInput {
+  return {
+    repoId: 'repo-a',
+    executionHostId: 'ssh:runtime-ssh-a',
+    authoritySource: 'main-runtime-owned-ssh'
   }
 }
 
@@ -236,6 +245,21 @@ describe('detected worktree refresh leases', () => {
       providerInvocations: 3,
       waiterLeases: 3
     })
+  })
+
+  it('joins only the explicit runtime-owned authority mode', () => {
+    const { registry, starts } = createHarness()
+
+    const first = registry.acquire('same-key', runtimeOwnedInput())
+    const second = registry.acquire('same-key', runtimeOwnedInput())
+    const direct = registry.acquire('same-key', {
+      ...directInput(),
+      executionHostId: 'ssh:runtime-ssh-a'
+    })
+
+    expect(first.providerRequestId).toBe(second.providerRequestId)
+    expect(direct.providerRequestId).not.toBe(first.providerRequestId)
+    expect(starts).toHaveLength(2)
   })
 
   it('removes settled invocations so a later acquire starts fresh', async () => {

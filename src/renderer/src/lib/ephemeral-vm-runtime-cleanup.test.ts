@@ -1,13 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const runtimeSshAuthorityMocks = vi.hoisted(() => ({
-  clearEphemeralVmSshAuthority: vi.fn()
-}))
-
-vi.mock('@/runtime/ephemeral-vm-ssh-authority', () => ({
-  clearEphemeralVmSshAuthority: runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority
-}))
-
 const listRuntimes = vi.fn()
 const cleanup = vi.fn().mockResolvedValue({ status: 'cleaned' })
 
@@ -24,7 +16,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
   beforeEach(() => {
     listRuntimes.mockReset()
     cleanup.mockReset().mockResolvedValue({ status: 'cleaned' })
-    runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority.mockReset()
   })
 
   it('cleans runtimes matched by workspace id and returns destroyed SSH target ids', async () => {
@@ -37,10 +28,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
 
     expect(cleanup).toHaveBeenCalledTimes(1)
     expect(cleanup).toHaveBeenCalledWith({ runtimeId: 'rt-1' })
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).toHaveBeenCalledTimes(1)
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).toHaveBeenCalledWith(
-      'runtime-ssh-a'
-    )
     expect(destroyed).toEqual({ runtimeIds: ['rt-1'], sshTargetIds: ['runtime-ssh-a'] })
   })
 
@@ -56,10 +43,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
     })
 
     expect(cleanup).toHaveBeenCalledWith({ runtimeId: 'rt-1' })
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).toHaveBeenCalledTimes(1)
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).toHaveBeenCalledWith(
-      'runtime-ssh-orca-1'
-    )
     expect(destroyed).toEqual({
       runtimeIds: ['rt-1'],
       sshTargetIds: ['runtime-ssh-orca-1']
@@ -78,7 +61,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
     })
 
     expect(cleanup).not.toHaveBeenCalled()
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).not.toHaveBeenCalled()
     expect(destroyed).toEqual({ runtimeIds: [], sshTargetIds: [] })
   })
 
@@ -87,7 +69,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
     await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
       { runtimeIds: [], sshTargetIds: [] }
     )
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).not.toHaveBeenCalled()
   })
 
   it('does not report runtime or SSH target ids when cleanup fails', async () => {
@@ -99,10 +80,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
     await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
       { runtimeIds: [], sshTargetIds: [] }
     )
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).toHaveBeenCalledTimes(1)
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).toHaveBeenCalledWith(
-      'runtime-ssh-a'
-    )
   })
 
   it('does not report runtime or SSH target ids when cleanup rejects', async () => {
@@ -113,10 +90,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
 
     await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
       { runtimeIds: [], sshTargetIds: [] }
-    )
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).toHaveBeenCalledTimes(1)
-    expect(runtimeSshAuthorityMocks.clearEphemeralVmSshAuthority).toHaveBeenCalledWith(
-      'runtime-ssh-a'
     )
   })
 })

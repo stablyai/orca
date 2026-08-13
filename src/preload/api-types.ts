@@ -43,7 +43,8 @@ import type {
   LegacyDetectedWorktreeRequest,
   ListKnownWorktreesForExecutionHostArgs,
   ListDetectedWorktreesArgs,
-  ProviderRequestId
+  ProviderRequestId,
+  RuntimeOwnedSshAuthorityValidationArgs
 } from '../shared/detected-worktree-provider-contract'
 import type {
   HostRepoCatalogSnapshot,
@@ -1350,6 +1351,9 @@ export type PreloadApi = {
       ): Promise<HostQualifiedDetectedWorktreeResult | DetectedWorktreeListResult>
       (args: LegacyDetectedWorktreeRequest): Promise<DetectedWorktreeListResult>
     }
+    isRuntimeOwnedSshAuthorityCurrent?: (
+      args: RuntimeOwnedSshAuthorityValidationArgs
+    ) => Promise<boolean>
     listKnownForExecutionHost?: (
       args: ListKnownWorktreesForExecutionHostArgs
     ) => Promise<HostQualifiedKnownWorktreeResult>
@@ -3454,9 +3458,6 @@ export type PreloadApi = {
       targetId: string
     }) => Promise<{ success: boolean; error?: string; state?: SshConnectionState }>
     onStateChanged: (
-      callback: (data: { targetId: string; state: SshConnectionState }) => void
-    ) => () => void
-    onRuntimeOwnedStateChanged?: (
       callback: (data: { targetId: string; state: SshConnectionState }) => void
     ) => () => void
     addPortForward: (args: {
