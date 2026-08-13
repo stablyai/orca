@@ -2637,6 +2637,55 @@ describe('project groups', () => {
     ])
   })
 
+  it('renders a very large unresolved-metadata repo bucket without exceeding V8 argument limits', () => {
+    // Why: every repo shares one unresolved projectGroupId, so the missing-metadata
+    // fallback accumulates them into a single bucket. Spreading that bucket into
+    // push(...entries) throws RangeError past ~126k entries; this guards the loop.
+    const loadedGroup: ProjectGroup = {
+      id: 'loaded-group',
+      name: 'Loaded',
+      parentPath: '/loaded',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const count = 130_000
+    const repos = new Map<string, Repo>()
+    const worktrees = Array.from({ length: count }, (_, index) => {
+      const repoId = `repo-${index}`
+      repos.set(repoId, {
+        ...repo,
+        id: repoId,
+        displayName: `repo ${index}`,
+        projectGroupId: 'missing-group'
+      })
+      return { ...worktree, id: `wt-${index}`, repoId, displayName: `workspace ${index}` }
+    })
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      repos,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      'manual',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [loadedGroup]
+    )
+
+    const repoHeaders = rows.filter((row) => row.type === 'header' && row.key.startsWith('repo:'))
+    expect(repoHeaders).toHaveLength(count)
+  })
+
   it('disambiguates duplicate top-level repo basenames without renaming repos', () => {
     const group: ProjectGroup = {
       id: 'group-1',

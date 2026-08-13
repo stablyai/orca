@@ -1478,7 +1478,11 @@ export function buildRows(
     }
     // Why: startup can have repos from hosts whose project-group metadata was
     // not fetched yet; missing metadata must not make those repos disappear.
-    remainingRepoEntries.push(...entries)
+    // Push entries individually: a large unresolved group can exceed V8's
+    // argument limit when spread into push (see ordered-groups loop above).
+    for (const entry of entries) {
+      remainingRepoEntries.push(entry)
+    }
   }
   appendOrderedGroups(
     withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)),
