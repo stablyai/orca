@@ -2108,6 +2108,74 @@ describe('orchestration RPC methods', () => {
       ).rejects.toThrow('no recognized agent detected')
     })
 
+    // Why (#10666): the preamble is Enter-terminated input. Injecting into a pane parked on
+    // Codex's directory-trust prompt answered the prompt — silently granting trust — and swallowed
+    // the TASK body, leaving the task dispatched forever while dispatch reported injected: true.
+    it('rejects inject when the target pane is parked on an interactive prompt', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'isTerminalBlockedOnInteractivePrompt').mockResolvedValue(true)
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      ).rejects.toThrow('waiting on an interactive prompt')
+
+      // Nothing may reach the terminal, and no dispatch may be recorded against the task.
+      expect(send).not.toHaveBeenCalled()
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+    })
+
+    it('still injects when the target pane reports no interactive prompt', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'isTerminalBlockedOnInteractivePrompt').mockResolvedValue(false)
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true
+      })) as { injected: boolean }
+
+      expect(result.injected).toBe(true)
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not block dispatch when pane readiness cannot be determined', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      // Readiness lookups throw for gone/exited/stale handles. Absence of evidence must not be
+      // treated as a blocking prompt, so the send path keeps surfacing its own precise error.
+      vi.spyOn(runtime, 'getTerminalAgentStatus').mockRejectedValue(new Error('terminal_gone'))
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true
+      })) as { injected: boolean }
+
+      expect(result.injected).toBe(true)
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+
     it('rejects dispatch to occupied terminal', async () => {
       setup()
       const t1 = db.createTask({ spec: 'first' })

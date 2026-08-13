@@ -16137,6 +16137,83 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('timeout')
   })
 
+  it('resolves tui-idle for an Antigravity lane past its dismissed trust prompt (#10666)', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    // Antigravity paints its banner once, then the trust prompt is drawn over it, then it repaints
+    // model/path/prompt lines WITHOUT repeating the header. Ready evidence must be read from the
+    // latest repaint, or the answered prompt keeps matching in scrollback forever.
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        'Antigravity CLI 1.0.3\n',
+        'user@example.com (Antigravity Business)\n',
+        'Gemini 3.5 Flash (High)\n',
+        '~/orca/workspaces/orca/agy-dispatch-issue\n',
+        '>\n',
+        'Do you trust the contents of this directory?\n',
+        '› 1. Yes, continue\n',
+        '  2. No, quit\n',
+        'Gemini 3.5 Flash (High)\n',
+        '~/orca/workspaces/orca/agy-dispatch-issue\n',
+        '>'
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running'
+    })
+  })
+
+  it('still reports blocked for an Antigravity lane sitting on a live trust prompt (#10666)', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    // Same banner, but the trust prompt is the newest thing on screen and nothing repainted after
+    // it. Reading the latest ready evidence must not weaken this into a false "ready".
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        'Antigravity CLI 1.0.3\n',
+        'user@example.com (Antigravity Business)\n',
+        'Gemini 3.5 Flash (High)\n',
+        '~/orca/workspaces/orca/agy-dispatch-issue\n',
+        '>\n',
+        'Do you trust the contents of this directory?\n',
+        '› 1. Yes, continue\n',
+        '  2. No, quit\n'
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: false,
+      status: 'running',
+      blockedReason: 'codex-trust-workspace'
+    })
+  })
+
   it('returns a blocked wait result for Codex cwd selection prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

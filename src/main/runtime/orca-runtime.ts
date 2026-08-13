@@ -31732,6 +31732,24 @@ export class OrcaRuntimeService {
     return this.titleObservationSequence
   }
 
+  /**
+   * Positive-evidence check for a pane parked on an interactive prompt — directory trust,
+   * permission, upgrade notice. Callers that deliver Enter-terminated input must refuse when this
+   * is true, because that Enter answers the prompt instead of submitting the input (#10666).
+   *
+   * Returns false when readiness cannot be determined (gone, exited, stale handle) so an
+   * unreachable terminal still surfaces its own precise error from the send path rather than a
+   * misleading "blocked on a prompt" one.
+   */
+  async isTerminalBlockedOnInteractivePrompt(handle: string): Promise<boolean> {
+    try {
+      const { status } = await this.getTerminalAgentStatus(handle)
+      return status === 'permission'
+    } catch {
+      return false
+    }
+  }
+
   // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.
   async isTerminalRunningAgent(handle: string): Promise<boolean> {
     try {
@@ -37195,14 +37213,17 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
       trimmedEnd -= 1
     }
     if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
-      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
+      // Why (#10666): keep the LAST match of each line, not the first. Antigravity paints its
+      // header, model, and prompt once, and a startup modal (directory trust) is drawn after that
+      // paint; it then repaints model/prompt lines without repeating the header. With first-match
+      // ordering the ready evidence stayed *behind* the modal text forever, so
+      // findDismissedStartupModalIndex never cleared the stale blocked signal and the pane
+      // reported blocked indefinitely after the prompt was answered. Last-match also matches the
+      // `lastIndexOf` semantics the Codex and Cursor probes in this file already use.
+      if (normalized.startsWith('gemini', trimmedStart)) {
         modelIndex = trimmedStart
       }
-      if (
-        promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
-      ) {
+      if (trimmedEnd - trimmedStart === 1 && normalized.charCodeAt(trimmedStart) === 62) {
         promptIndex = trimmedStart
       }
     }

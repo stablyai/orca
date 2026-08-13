@@ -1297,6 +1297,21 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               'or dispatch without --inject and send the prompt manually.'
           )
         }
+        // Why (#10666): the preamble is delivered as terminal input terminated by Enter. A pane
+        // parked on an interactive prompt (directory trust, permission, upgrade notice) consumes
+        // that Enter to answer the prompt — granting a trust decision as a side effect of task
+        // delivery — and swallows the TASK body, so the task stays dispatched forever with no
+        // error anywhere. Refuse loudly instead. The renderer's send path already gates on this
+        // same readiness signal; the dispatch path must not be weaker than the UI.
+        const blockedOnPrompt = await runtime.isTerminalBlockedOnInteractivePrompt(to)
+        if (blockedOnPrompt) {
+          throw new Error(
+            `Cannot dispatch --inject to terminal ${to}: the agent is waiting on an interactive ` +
+              'prompt (for example a directory-trust, permission, or upgrade prompt). Injecting now ' +
+              'would answer that prompt instead of delivering the task. Answer it in the terminal, ' +
+              'then dispatch again — or dispatch without --inject and send the prompt manually.'
+          )
+        }
       }
 
       const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
