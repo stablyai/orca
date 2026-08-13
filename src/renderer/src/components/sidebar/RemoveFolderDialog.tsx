@@ -9,6 +9,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 // Why: interpolated into the sentence so locales control where the name sits;
@@ -23,6 +25,11 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
 
   const isOpen = activeModal === 'confirm-remove-folder'
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
+  // Why: both openers carry the row's host so a repo id duplicated across hosts removes the
+  // intended row instead of whichever one the unique-candidate fallback picks (#13071).
+  const hostId =
+    normalizeExecutionHostId(typeof modalData.hostId === 'string' ? modalData.hostId : null) ??
+    undefined
   const displayName = typeof modalData.displayName === 'string' ? modalData.displayName : ''
 
   // Why: for an SSH project the files live on the remote host's disk, not the
@@ -30,7 +37,12 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   // removed-target label when it's a ghost) so the user knows where it remains
   // and that re-adding that host recovers it.
   const sshHostLabel = useAppStore((s) => {
-    const connectionId = s.repos.find((r) => r.id === repoId)?.connectionId?.trim()
+    // Why: a bare first-by-id lookup can name a different host's row in the confirmation text
+    // than the one removal actually targets (#13071).
+    const connectionId = findRepoForHost(s.repos, repoId, {
+      hostId,
+      settings: s.settings
+    })?.connectionId?.trim()
     if (!connectionId) {
       return null
     }
@@ -59,10 +71,10 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
 
   const handleConfirm = useCallback(() => {
     if (repoId) {
-      void removeProject(repoId, { errorFeedback: 'toast' })
+      void removeProject(repoId, { hostId, errorFeedback: 'toast' })
     }
     closeModal()
-  }, [closeModal, removeProject, repoId])
+  }, [closeModal, hostId, removeProject, repoId])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

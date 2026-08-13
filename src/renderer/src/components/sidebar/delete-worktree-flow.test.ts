@@ -12,9 +12,10 @@ const mocks = vi.hoisted(() => {
         path: string
         displayName: string
         isMainWorktree: boolean
+        hostId?: string
       }
     >(),
-    repos: [] as { id: string; displayName: string }[],
+    repos: [] as { id: string; displayName: string; connectionId?: string }[],
     worktreeLineageById: {},
     allWorktrees: () => Array.from(state.worktreeMap.values()),
     clearWorktreeDeleteState: vi.fn((worktreeId: string) => {
@@ -88,6 +89,7 @@ function setWorktrees(
     path?: string
     displayName?: string
     isMainWorktree?: boolean
+    hostId?: string
   }[]
 ): void {
   mocks.state.worktreeMap = new Map(
@@ -99,7 +101,8 @@ function setWorktrees(
         repoId: worktree.repoId ?? 'repo-1',
         path: worktree.path ?? `/workspaces/${worktree.id}`,
         displayName: worktree.displayName ?? worktree.id,
-        isMainWorktree: worktree.isMainWorktree ?? false
+        isMainWorktree: worktree.isMainWorktree ?? false,
+        ...(worktree.hostId ? { hostId: worktree.hostId } : {})
       }
     ])
   )
@@ -494,6 +497,34 @@ describe('delete worktree flow', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-remove-folder', {
       repoId: 'repo-1',
       displayName: 'orca'
+    })
+  })
+
+  // Why: repo ids can repeat across hosts. When the owning host's row has dropped from the
+  // catalog, a bare id lookup resolves to the *other* host's live row — and removal would then
+  // tear down that working project instead (#13071).
+  it('carries the owning host into project removal when the id exists on another host', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([
+      {
+        id: 'main',
+        repoId: 'repo-1',
+        displayName: 'orca on host A',
+        isMainWorktree: true,
+        hostId: 'ssh:host-a'
+      }
+    ])
+    // Host A's row has dropped from the catalog; only host B's live row remains under this id.
+    mocks.state.repos = [{ id: 'repo-1', displayName: 'orca on host B', connectionId: 'host-b' }]
+
+    runWorktreeDelete('main')
+
+    expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-remove-folder', {
+      repoId: 'repo-1',
+      hostId: 'ssh:host-a',
+      // Host B's name must not leak in — naming it here is the tell that removal resolved
+      // to the wrong row.
+      displayName: 'orca on host A'
     })
   })
 

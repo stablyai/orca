@@ -33,7 +33,11 @@ import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
 } from './recently-closed-tabs'
-import { findRepoForHost } from './repo-host-identity'
+import {
+  findRepoForHost,
+  getRepoHostIdentity,
+  getRepoHostIdentityForParts
+} from './repo-host-identity'
 import {
   dropWorktreeRowsForRemovedRuntimeEnvironments,
   isRemovedRuntimeHostId
@@ -1745,29 +1749,35 @@ async function purgeOrphanedRuntimeSshProjects(
   const destroyedHostIds = new Set<ExecutionHostId>(
     destroyedSshTargetIds.map((id) => toSshExecutionHostId(id))
   )
-  const orphanedSetupIds = get()
+  const orphanedSetups = get()
     .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
-    .map((setup) => setup.id)
-  const purgedRepoIds = new Set<string>()
-  for (const setupId of orphanedSetupIds) {
+    .map((setup) => ({ id: setup.id, hostId: setup.hostId }))
+  // Why: a bare id would let a purge on one destroyed host suppress the orphan sweep for the
+  // same id on another destroyed host, stranding that row.
+  const purgedRepoIdentities = new Set<string>()
+  for (const setup of orphanedSetups) {
     try {
-      const result = await get().deleteProjectHostSetup({ setupId })
+      const result = await get().deleteProjectHostSetup({ setupId: setup.id })
       if (result?.repo) {
-        purgedRepoIds.add(result.repo.id)
+        purgedRepoIdentities.add(getRepoHostIdentityForParts(result.repo.id, setup.hostId))
       }
     } catch (error) {
       console.error('Failed to purge orphaned per-workspace-env project:', error)
     }
   }
   // A repo whose only host was the destroyed runtime can outlive its setup (pruned first by a projection refresh); remove it directly so no dead project lingers.
-  const orphanedRepoIds = get()
+  // Why: keep each row's own host — purging by bare id can resolve to a live row on another
+  // host when the id is duplicated across hosts (#13071).
+  const orphanedRepos = get()
     .repos.filter(
-      (repo) => destroyedTargetIds.has(repo.connectionId ?? '') && !purgedRepoIds.has(repo.id)
+      (repo) =>
+        destroyedTargetIds.has(repo.connectionId ?? '') &&
+        !purgedRepoIdentities.has(getRepoHostIdentity(repo))
     )
-    .map((repo) => repo.id)
-  for (const repoId of orphanedRepoIds) {
+    .map((repo) => ({ id: repo.id, hostId: getRepoExecutionHostId(repo) }))
+  for (const orphaned of orphanedRepos) {
     try {
-      await get().removeProject(repoId)
+      await get().removeProject(orphaned.id, { hostId: orphaned.hostId })
     } catch (error) {
       console.error('Failed to purge orphaned per-workspace-env repo:', error)
     }

@@ -44,10 +44,15 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     return
   }
   if (target.isMainWorktree) {
-    const repo = state.repos.find((entry) => entry.id === target.repoId)
+    // Why: a bare id lookup can name (and later remove) another host's row when the id is duplicated across hosts (#13071).
+    const repo = findRepoForHost(state.repos, target.repoId, {
+      hostId: target.hostId,
+      settings: state.settings
+    })
     // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
     state.openModal('confirm-remove-folder', {
       repoId: target.repoId,
+      hostId: target.hostId,
       displayName: repo?.displayName ?? target.displayName
     })
     return
