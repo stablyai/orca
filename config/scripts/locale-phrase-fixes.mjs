@@ -384,8 +384,16 @@ export const LOCALE_PHRASE_FIXES = {
   // the 存放庫 the zh-TW catalog uses. Without them a repair run would preserve the
   // Mainland wording that zh-tw-traditional-usage.test.ts rejects.
   'zh-TW': [
-    { pattern: /倉庫/g, replacement: '存放庫', whenEnMatches: /repo/i },
-    { pattern: /儲存庫/g, replacement: '存放庫', whenEnMatches: /repo/i }
+    {
+      pattern: /倉庫/g,
+      replacement: '存放庫',
+      whenEnMatches: /\b(?:repo|repos|repository|repositories)\b/i
+    },
+    {
+      pattern: /儲存庫/g,
+      replacement: '存放庫',
+      whenEnMatches: /\b(?:repo|repos|repository|repositories)\b/i
+    }
   ],
   ja: JA_PHRASE_FIXES,
   es: [
