@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
@@ -32,24 +33,60 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
-  it('accepts max effort on Codex models whose ceiling allows it', () => {
-    expect(
-      resolveWorkerLaunchPreferences({
-        agent: 'codex',
-        model: 'gpt-5.6-luna',
-        effort: 'max'
-      }).preferences
-    ).toEqual({ model: 'gpt-5.6-luna', effort: 'max' })
-  })
+  it.each([
+    {
+      model: 'gpt-5.6-sol',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
+    },
+    {
+      model: 'gpt-5.6-terra',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
+    },
+    {
+      model: 'gpt-5.6-luna',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+      rejected: ['ultra', 'future-effort']
+    },
+    {
+      model: 'gpt-5.5',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'future-effort']
+    },
+    {
+      model: 'gpt-5.2-codex',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'future-effort']
+    },
+    {
+      model: 'future-codex-model',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
+    }
+  ])('enforces the Codex effort ceiling for $model', ({ model, accepted, rejected }) => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    const effort =
+      catalog.models
+        .find((candidate) => candidate.id === model)
+        ?.options.find((option) => option.id === 'effort') ??
+      catalog.unknownModelOptions?.find((option) => option.id === 'effort')
 
-  it('rejects model-specific effort combinations the catalog disproves', () => {
-    expect(() =>
-      resolveWorkerLaunchPreferences({
-        agent: 'codex',
-        model: 'gpt-5.5',
-        effort: 'max'
-      })
-    ).toThrow('does not support effort max')
+    expect(effort?.kind.type).toBe('select')
+    expect(
+      effort?.kind.type === 'select' ? effort.kind.choices.map(({ value }) => value) : []
+    ).toEqual(accepted)
+
+    for (const effortValue of accepted) {
+      expect(
+        resolveWorkerLaunchPreferences({ agent: 'codex', model, effort: effortValue }).preferences
+      ).toEqual({ model, effort: effortValue })
+    }
+    for (const effortValue of rejected) {
+      expect(() =>
+        resolveWorkerLaunchPreferences({ agent: 'codex', model, effort: effortValue })
+      ).toThrow(`does not support effort ${effortValue}`)
+    }
   })
 
   it('rejects effort without a model', () => {

@@ -186,12 +186,11 @@ const CODEX_EFFORT_CHOICES = [
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
   { value: 'xhigh', label: 'Extra high' },
-  { value: 'max', label: 'Max' }
+  { value: 'max', label: 'Max' },
+  { value: 'ultra', label: 'Ultra' }
 ]
 
-// Why: the effort ceiling varies per model generation — gpt-5.5 rejects max
-// (unsupported_value from the API) while the gpt-5.6 family accepts it.
-function codexEffort(ceiling: 'xhigh' | 'max'): CatalogOption {
+function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
   const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
   return {
     id: 'effort',
@@ -216,8 +215,8 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // Why: Codex model access depends on auth. Keep this seed short and allow
   // unknown persisted ids to pass through instead of claiming a complete list.
   models: [
-    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('max')] },
-    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('max')] },
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra')] },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('ultra')] },
     { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', options: [codexEffort('max')] },
     { id: 'gpt-5.5', label: 'GPT-5.5', options: [codexEffort('xhigh')] },
     {
@@ -234,5 +233,5 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // command and let its own picker apply the account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  unknownModelOptions: [codexEffort('max')]
+  unknownModelOptions: [codexEffort('ultra')]
 }
