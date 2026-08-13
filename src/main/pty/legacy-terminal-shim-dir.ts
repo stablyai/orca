@@ -65,7 +65,15 @@ exit /b %ERRORLEVEL%
 :orca_try_candidate
 if defined orca_real exit /b
 if "%~1"=="" exit /b
-for %%G in ("%~1") do if /I not "%%~fG\"=="%~dp0" if exist "%%~fG\__ORCA_COMMAND__.exe" set "orca_real=%%~fG\__ORCA_COMMAND__.exe"
+rem Why: a relative entry resolves against the current directory, same exposure as an empty one.
+echo "%~1" | findstr /R /C:"^\"[A-Za-z]:[\\/]" /C:"^\"[\\][\\]" >nul || exit /b
+rem Why: %~dp0 is rebound to this label inside CALL, so compare against the cached wrapper dir.
+for %%G in ("%~1") do (
+  if /I not "%%~fG\"=="%orca_wrapper_dir%" (
+    if exist "%%~fG\__ORCA_COMMAND__.exe" set "orca_real=%%~fG\__ORCA_COMMAND__.exe"
+    if not defined orca_real if exist "%%~fG\__ORCA_COMMAND__.cmd" set "orca_real=%%~fG\__ORCA_COMMAND__.cmd"
+  )
+)
 exit /b
 
 :orca_append_path
@@ -105,9 +113,14 @@ if (-not $realCommand -or -not (Test-Path -LiteralPath $realCommand)) {
   $realCommand = $null
   foreach ($dir in ($env:PATH -split ';')) {
     if (-not $dir) { continue }
+    # Why: a relative entry resolves against the current directory, same exposure as an empty one.
+    if (-not [IO.Path]::IsPathRooted($dir)) { continue }
     if ($wrapperDirs | Where-Object { [string]::Equals($_, $dir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) }) { continue }
-    $candidate = Join-Path $dir "$commandName.exe"
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $realCommand = $candidate; break }
+    foreach ($ext in @('.exe', '.cmd')) {
+      $candidate = Join-Path $dir "$commandName$ext"
+      if (Test-Path -LiteralPath $candidate -PathType Leaf) { $realCommand = $candidate; break }
+    }
+    if ($realCommand) { break }
   }
 }
 if (-not $realCommand) {

@@ -113,12 +113,16 @@ describe('legacy terminal shim neutralization', () => {
       expect(cmd).not.toContain('where.exe')
       expect(cmd).toContain('for %%P in ("%orca_clean_path:;=" "%") do call :orca_try_candidate')
       expect(cmd).toContain(`if exist "%%~fG\\${command}.exe"`)
-      // A candidate inside the wrapper directory must still be rejected.
-      expect(cmd).toContain('if /I not "%%~fG\\"=="%~dp0"')
+      // A candidate inside the wrapper directory must still be rejected, compared against the
+      // cached wrapper dir because %~dp0 is rebound inside a CALL.
+      expect(cmd).toContain('if /I not "%%~fG\\"=="%orca_wrapper_dir%"')
+      // Relative entries resolve against the cwd, so they must be rejected like empty ones.
+      expect(cmd).toContain('findstr /R')
 
       const powershell = readFileSync(join(win32Dir, `${command}-wrapper.ps1`), 'utf8')
       expect(powershell).not.toContain('Get-Command')
       expect(powershell).toContain("($env:PATH -split ';')")
+      expect(powershell).toContain('[IO.Path]::IsPathRooted($dir)')
       expect(powershell).toContain('Test-Path -LiteralPath $candidate -PathType Leaf')
     }
   })
@@ -168,6 +172,13 @@ describe('legacy terminal shim neutralization', () => {
     writeFileSync(join(hostile, 'git'), "#!/usr/bin/env bash\nprintf 'HOSTILE\\n'\n", {
       mode: 0o755
     })
+    // Reachable only through a relative PATH entry resolved against the hostile cwd.
+    mkdirSync(join(hostile, 'node_modules', '.bin'), { recursive: true })
+    writeFileSync(
+      join(hostile, 'node_modules', '.bin', 'git'),
+      "#!/usr/bin/env bash\nprintf 'HOSTILE\\n'\n",
+      { mode: 0o755 }
+    )
 
     const result = spawnSync(join(shimDir, 'git'), ['--version'], {
       cwd: hostile,
@@ -179,6 +190,24 @@ describe('legacy terminal shim neutralization', () => {
 
     expect(result.stdout).toContain('REAL')
     expect(result.stdout).not.toContain('HOSTILE')
+
+    // Why: every spelling that means "current directory" must lose — a leading/trailing empty
+    // element, and any relative entry (`.`, or a repo-local bin dir).
+    for (const cwdSpelling of [
+      `:${realBin}:/usr/bin:/bin`,
+      `${realBin}:/usr/bin:/bin:`,
+      `.:${realBin}:/usr/bin:/bin`,
+      `..:${realBin}:/usr/bin:/bin`,
+      `node_modules/.bin:${realBin}:/usr/bin:/bin`
+    ]) {
+      const run = spawnSync(join(shimDir, 'git'), ['--version'], {
+        cwd: hostile,
+        env: { ...process.env, PATH: cwdSpelling },
+        encoding: 'utf8'
+      })
+      expect(run.stdout, `PATH=${cwdSpelling}`).toContain('REAL')
+      expect(run.stdout, `PATH=${cwdSpelling}`).not.toContain('HOSTILE')
+    }
   })
 
   it('removes every Windows PATH occurrence of both captured wrapper directories', () => {

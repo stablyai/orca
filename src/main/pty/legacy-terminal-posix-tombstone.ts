@@ -4,7 +4,12 @@ const POSIX_TOMBSTONE = String.raw`#!/usr/bin/env bash
 set -u
 
 command_name="__ORCA_COMMAND__"
-wrapper_dir="$(cd -- "$(dirname -- "${SHELL_DOLLAR}{BASH_SOURCE[0]}")" && pwd)"
+# Why: parameter expansion, not the external dirname — if that were unresolvable the substitution
+# would be empty and cd into it succeeds, silently making wrapper_dir the cwd so the wrapper
+# fails to exclude itself from PATH.
+wrapper_src="${SHELL_DOLLAR}{BASH_SOURCE[0]}"
+wrapper_dir="$(cd -- "${SHELL_DOLLAR}{wrapper_src%/*}" 2>/dev/null && pwd)"
+[[ -n "$wrapper_dir" ]] || wrapper_dir="${SHELL_DOLLAR}{wrapper_src%/*}"
 legacy_wrapper_dir="${SHELL_DOLLAR}{ORCA_ATTRIBUTION_SHIM_DIR:-}"
 cleaned_path="${SHELL_DOLLAR}{PATH:-}"
 
@@ -32,9 +37,9 @@ filter_path() {
       normalized="${SHELL_DOLLAR}{normalized%/}"
     done
     candidate="${SHELL_DOLLAR}{entry:-.}"
-    if [[ -z "$entry" ]]; then
-      # Why: an empty PATH element means the current directory, so keeping it would let a
-      # repository-local git/gh win the lookup below.
+    if [[ "$entry" != /* ]]; then
+      # Why: an empty or relative PATH element resolves against the current directory, so keeping
+      # it would let a repository-local git/gh win the lookup below.
       :
     elif [[ -n "$legacy_target" && "$normalized" == "$legacy_target" ]]; then
       :
