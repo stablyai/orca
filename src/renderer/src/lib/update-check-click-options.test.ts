@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from './update-check-click-options'
+import {
+  getUpdateCheckClickOptions,
+  getUpdateCheckHint,
+  getUpdateCheckMenuHint
+} from './update-check-click-options'
 
 function clickEvent(
   overrides: Partial<Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>>
@@ -55,12 +59,17 @@ describe('getUpdateCheckClickOptions', () => {
     })
   })
 
-  it('formats the tooltip hint by platform', () => {
+  it('formats the visible channel hint by platform', () => {
     expect(getUpdateCheckHint(true)).toBe(
       '⇧+click checks the latest RC; ⌘+click checks the latest perf build. ⌥+click chooses a local macOS build.'
     )
     expect(getUpdateCheckHint(false)).toBe(
       'Shift+click checks the latest RC; Ctrl+click checks the latest perf build.'
     )
+  })
+
+  it('formats a compact menu/tray hint by platform', () => {
+    expect(getUpdateCheckMenuHint(true)).toBe('⇧ RC · ⌘ Perf')
+    expect(getUpdateCheckMenuHint(false)).toBe('Shift RC · Ctrl Perf')
   })
 })

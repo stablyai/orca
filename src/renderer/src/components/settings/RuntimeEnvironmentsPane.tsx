@@ -867,52 +867,59 @@ export function RuntimeEnvironmentsPane({
               )}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              {environments.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  title={updateCheckHint}
+                  onClick={(event) => {
+                    setRemoteServerUpdateDialogOpen(true)
+                    void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
+                  }}
+                  disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
+                >
+                  {remoteServerUpdatesChecking || remoteServerUpdatesRunning ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <RefreshCw />
+                  )}
+                  {remoteServerUpdatesRunning
+                    ? translate(
+                        'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
+                        'Updating servers…'
+                      )
+                    : translate(
+                        'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
+                        'Check for Server Updates'
+                      )}
+                </Button>
+              ) : null}
+              {addServerFormOpen ? null : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setAddServerFormOpen(true)}
+                  disabled={isBusy}
+                >
+                  <Plus />
+                  {translate(
+                    'auto.components.settings.RuntimeEnvironmentsPane.9bee6bbeeb',
+                    'Add Server'
+                  )}
+                </Button>
+              )}
+            </div>
             {environments.length > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                title={updateCheckHint}
-                onClick={(event) => {
-                  setRemoteServerUpdateDialogOpen(true)
-                  void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
-                }}
-                disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
-              >
-                {remoteServerUpdatesChecking || remoteServerUpdatesRunning ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <RefreshCw />
-                )}
-                {remoteServerUpdatesRunning
-                  ? translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
-                      'Updating servers…'
-                    )
-                  : translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
-                      'Check for Server Updates'
-                    )}
-              </Button>
+              <p className="max-w-[16rem] text-right text-[10px] text-muted-foreground">
+                {updateCheckHint}
+              </p>
             ) : null}
-            {addServerFormOpen ? null : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => setAddServerFormOpen(true)}
-                disabled={isBusy}
-              >
-                <Plus />
-                {translate(
-                  'auto.components.settings.RuntimeEnvironmentsPane.9bee6bbeeb',
-                  'Add Server'
-                )}
-              </Button>
-            )}
           </div>
         </div>
 

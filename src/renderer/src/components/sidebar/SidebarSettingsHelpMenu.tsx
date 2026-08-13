@@ -308,16 +308,26 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               onPointerDown={handleCheckForUpdatesPointerDown}
               onSelect={handleCheckForUpdates}
               title={updateCheckHint}
+              className="items-start"
             >
               {updateStatus.state === 'checking' ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 className="mt-0.5 size-3.5 animate-spin" />
               ) : (
-                <RefreshCw className="size-3.5" />
+                <RefreshCw className="mt-0.5 size-3.5" />
               )}
-              {translate(
-                'auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee',
-                'Check for Updates'
-              )}
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span>
+                  {translate(
+                    'auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee',
+                    'Check for Updates'
+                  )}
+                </span>
+                {/* Why: menus are clicked immediately so title tooltips never
+                    dwell; keep RC/perf modifiers as always-visible copy (#10590). */}
+                <span className="text-[10px] font-normal text-muted-foreground">
+                  {updateCheckHint}
+                </span>
+              </span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={handleRestartOrca} disabled={isRestartingOrca}>

@@ -100,64 +100,69 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
         keywords={['update', 'version', 'release notes', 'download']}
         className="space-y-3"
       >
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            // Why: modifier-click channels are power-user update affordances, not
-            // persistent settings toggles.
-            onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
-            title={updateCheckHint}
-            disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
-            className="gap-2"
-          >
-            {updateStatus.state === 'checking' ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3.5" />
-            )}
-            {translate(
-              'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
-              'Check for Updates'
-            )}
-          </Button>
-
-          {updateStatus.state === 'available' ? (
+        <div className="flex flex-col items-start gap-1.5">
+          <div className="flex items-center gap-3">
             <Button
-              variant="default"
+              variant="outline"
               size="sm"
-              onClick={() => {
-                void window.api.updater.download().catch((error) => {
-                  toast.error(
-                    translate(
-                      'auto.components.settings.GeneralUpdateSettingsSection.02dc082e70',
-                      'Could not start the update download.'
-                    ),
-                    {
-                      description: String((error as Error)?.message ?? error)
-                    }
-                  )
-                })
-              }}
+              // Why: modifier-click channels are power-user update affordances, not
+              // persistent settings toggles.
+              onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
+              title={updateCheckHint}
+              disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
               className="gap-2"
             >
-              <Download className="size-3.5" />
-              {translate(
-                'auto.components.settings.GeneralUpdateSettingsSection.42717918f4',
-                'Install Update ('
+              {updateStatus.state === 'checking' ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
               )}
-              {updateStatus.version})
-            </Button>
-          ) : updateStatus.state === 'downloaded' ? (
-            <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
-              <Download className="size-3.5" />
               {translate(
-                'auto.components.settings.GeneralUpdateSettingsSection.f44299636f',
-                'Restart to Update ('
+                'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
+                'Check for Updates'
               )}
-              {updateStatus.version})
             </Button>
-          ) : null}
+
+            {updateStatus.state === 'available' ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  void window.api.updater.download().catch((error) => {
+                    toast.error(
+                      translate(
+                        'auto.components.settings.GeneralUpdateSettingsSection.02dc082e70',
+                        'Could not start the update download.'
+                      ),
+                      {
+                        description: String((error as Error)?.message ?? error)
+                      }
+                    )
+                  })
+                }}
+                className="gap-2"
+              >
+                <Download className="size-3.5" />
+                {translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.42717918f4',
+                  'Install Update ('
+                )}
+                {updateStatus.version})
+              </Button>
+            ) : updateStatus.state === 'downloaded' ? (
+              <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
+                <Download className="size-3.5" />
+                {translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.f44299636f',
+                  'Restart to Update ('
+                )}
+                {updateStatus.version})
+              </Button>
+            ) : null}
+          </div>
+          {/* Why: native title tooltips need hover dwell and vanish while disabled;
+            keep RC/perf modifiers as always-visible muted copy (#10590). */}
+          <p className="text-xs text-muted-foreground">{updateCheckHint}</p>
         </div>
 
         <p className="text-xs text-muted-foreground">

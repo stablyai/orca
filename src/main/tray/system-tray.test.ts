@@ -111,7 +111,15 @@ vi.mock('./tray-dev-badge', () => ({
 }))
 
 type TrayModule = typeof SystemTrayModule
-type MenuItem = { label?: string; type?: string; click?: () => void }
+type MenuItem = {
+  label?: string
+  type?: string
+  click?: (
+    menuItem?: unknown,
+    browserWindow?: unknown,
+    event?: Partial<Electron.KeyboardEvent>
+  ) => void
+}
 
 const originalPlatform = process.platform
 
@@ -231,7 +239,7 @@ describe('createSystemTray', () => {
       'Open Orca',
       undefined,
       'Settings',
-      'Check for Updates...',
+      'Check for Updates... (⇧ RC · ⌘ Perf)',
       undefined,
       'Quit'
     ])
@@ -241,7 +249,6 @@ describe('createSystemTray', () => {
     for (const [label, callback] of [
       ['Open Orca', options.onOpen],
       ['Settings', options.onOpenSettings],
-      ['Check for Updates...', options.onCheckForUpdates],
       ['Quit', options.onQuit]
     ] as const) {
       builtMenuItems()
@@ -249,6 +256,44 @@ describe('createSystemTray', () => {
         ?.click?.()
       expect(callback).toHaveBeenCalledOnce()
     }
+
+    const checkForUpdates = builtMenuItems().find((item) =>
+      item.label?.startsWith('Check for Updates...')
+    )
+    checkForUpdates?.click?.()
+    expect(options.onCheckForUpdates).toHaveBeenCalledOnce()
+    expect(options.onCheckForUpdates).toHaveBeenCalledWith({
+      includePrerelease: false,
+      includePerfPrerelease: false
+    })
+  })
+
+  it('routes Check for Updates modifier clicks to prerelease and perf checks', async () => {
+    setPlatform('darwin')
+    const { createSystemTray } = await loadModule()
+    const options = createOptions()
+    createSystemTray(options)
+
+    const item = builtMenuItems().find((entry) => entry.label?.startsWith('Check for Updates...'))
+    item?.click?.({}, undefined, { shiftKey: true })
+    item?.click?.({}, undefined, {})
+    item?.click?.({}, undefined, { shiftKey: true, metaKey: true })
+    item?.click?.({}, undefined, { metaKey: true })
+    item?.click?.({}, undefined, { ctrlKey: true })
+    item?.click?.({}, undefined, {
+      triggeredByAccelerator: true,
+      shiftKey: true,
+      metaKey: true
+    })
+
+    expect(options.onCheckForUpdates.mock.calls).toEqual([
+      [{ includePrerelease: true, includePerfPrerelease: false }],
+      [{ includePrerelease: false, includePerfPrerelease: false }],
+      [{ includePrerelease: true, includePerfPrerelease: true }],
+      [{ includePrerelease: false, includePerfPrerelease: true }],
+      [{ includePrerelease: false, includePerfPrerelease: false }],
+      [{ includePrerelease: false, includePerfPrerelease: false }]
+    ])
   })
 
   it('does not create a blank macOS item when the template asset fails to load', async () => {

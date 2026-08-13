@@ -108,8 +108,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     })
   }
 
+  // Why: native menus cannot show tooltips; append RC/perf modifiers so the
+  // power-user channels are discoverable from the app/Help menu (#10590).
+  const checkForUpdatesChannelHint = isMac
+    ? translateMain('menu.checkForUpdatesChannelsMac', '⇧ RC · ⌘ Perf')
+    : translateMain('menu.checkForUpdatesChannels', 'Shift RC · Ctrl Perf')
   const checkForUpdatesItem: Electron.MenuItemConstructorOptions = {
-    label: translateMain('menu.checkForUpdates', 'Check for Updates...'),
+    label: `${translateMain('menu.checkForUpdates', 'Check for Updates...')} (${checkForUpdatesChannelHint})`,
     click: checkForUpdatesClick
   }
 

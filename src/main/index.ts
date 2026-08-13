@@ -1246,10 +1246,10 @@ function getSystemTrayOptions(): SystemTrayOptions | null {
     devInstanceLabel: devInstanceIdentity.devLabel,
     onOpen: showMainWindowFromTray,
     onOpenSettings: openSettingsFromSystemMenu,
-    onCheckForUpdates: () => {
+    onCheckForUpdates: (options) => {
       // Why: updater status renders in the main window, so a bare check would complete invisibly.
       showMainWindowFromTray()
-      runUserInitiatedUpdateCheck()
+      runUserInitiatedUpdateCheck(options)
     },
     onQuit: quitFromSystemTray
   }

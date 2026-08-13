@@ -1,6 +1,7 @@
 import { Menu, Tray, nativeImage, nativeTheme, type NativeImage } from 'electron'
 import menuBarIconPath from '../../../resources/tray/orca-menu-barTemplate.png?asset&asarUnpack'
 import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate@2x.png?asset&asarUnpack'
+import type { UpdateCheckOptions } from '../../shared/types'
 import { deferAppKitSceneMutation } from '../appkit-scene-mutation'
 import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
@@ -18,8 +19,8 @@ export type SystemTrayOptions = {
   onOpen: () => void
   /** Restore the main window and open its Settings surface. */
   onOpenSettings: () => void
-  /** Run the existing user-initiated update check. */
-  onCheckForUpdates: () => void
+  /** Run the existing user-initiated update check (same channel routing as the app menu). */
+  onCheckForUpdates: (options: UpdateCheckOptions) => void
   /** Quit Orca for real (caller must set the quitting latch before quitting). */
   onQuit: () => void
 }
@@ -208,14 +209,28 @@ function stopWatchingMacAppearance(): void {
 // Why: Electron Menu/Tray click callbacks are plain event listeners (not
 // promise-wrapped like ipcMain.handle), so an uncaught throw here is fatal to
 // the main process; contain it to a logged, failed menu action instead.
-function safeMenuAction(action: () => void): () => void {
-  return () => {
+function safeMenuAction<TArgs extends unknown[]>(
+  action: (...args: TArgs) => void
+): (...args: TArgs) => void {
+  return (...args: TArgs) => {
     try {
-      action()
+      action(...args)
     } catch (error) {
       console.error('[system-tray] menu action failed', error)
     }
   }
+}
+
+// Why: tray and app-menu must share identical RC/perf modifier routing (#10590).
+function updateCheckOptionsFromMenuEvent(
+  event: Electron.KeyboardEvent | undefined
+): UpdateCheckOptions {
+  const modifierClick = event?.triggeredByAccelerator !== true
+  const includePerfPrerelease =
+    modifierClick &&
+    (process.platform === 'darwin' ? event?.metaKey === true : event?.ctrlKey === true)
+  const includePrerelease = modifierClick && event?.shiftKey === true
+  return { includePrerelease, includePerfPrerelease }
 }
 
 /**
@@ -273,8 +288,16 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
             click: safeMenuAction(() => opts.onOpenSettings())
           },
           {
-            label: translateMain('menu.checkForUpdates', 'Check for Updates...'),
-            click: safeMenuAction(() => opts.onCheckForUpdates())
+            // Why: tray menus cannot show tooltips; surface RC/perf modifiers
+            // in the label so channels stay discoverable (#10590).
+            label: `${translateMain('menu.checkForUpdates', 'Check for Updates...')} (${
+              process.platform === 'darwin'
+                ? translateMain('menu.checkForUpdatesChannelsMac', '⇧ RC · ⌘ Perf')
+                : translateMain('menu.checkForUpdatesChannels', 'Shift RC · Ctrl Perf')
+            })`,
+            click: safeMenuAction((_menuItem, _window, event) => {
+              opts.onCheckForUpdates(updateCheckOptionsFromMenuEvent(event))
+            })
           },
           { type: 'separator' }
         ] as Electron.MenuItemConstructorOptions[])
