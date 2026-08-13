@@ -41,6 +41,7 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
+import { DiffCommentSchema } from '../../shared/diff-comment-schema'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
@@ -951,7 +952,8 @@ const FolderWorkspaceUpdateArgs = z.object({
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),
-      lastActivityAt: z.number().finite().optional()
+      lastActivityAt: z.number().finite().optional(),
+      diffComments: z.array(DiffCommentSchema).optional()
     })
     .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 })
@@ -2124,6 +2126,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'externalWorktreeInboxBaselinePaths'
             | 'importedExternalWorktreePaths'
+            | 'agentWorktreeVisibility'
             | 'projectGroupId'
             | 'projectGroupOrder'
           >
@@ -2193,6 +2196,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.externalWorktreeVisibility !== 'show'
       ) {
         delete updates.externalWorktreeVisibility
+      }
+      if (
+        'agentWorktreeVisibility' in updates &&
+        updates.agentWorktreeVisibility !== undefined &&
+        updates.agentWorktreeVisibility !== 'hide' &&
+        updates.agentWorktreeVisibility !== 'show'
+      ) {
+        delete updates.agentWorktreeVisibility
       }
       if (
         'externalWorktreeVisibilityPromptDismissedAt' in updates &&

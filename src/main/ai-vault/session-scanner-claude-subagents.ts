@@ -1,5 +1,3 @@
-import { createReadStream } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type {
@@ -8,6 +6,14 @@ import type {
   AiVaultSubagentListResult,
   AiVaultSubagentRunStatus
 } from '../../shared/ai-vault-types'
+import {
+  openTranscriptReadStream,
+  wslGatedReaddir,
+  wslGatedReadFile,
+  wslGatedStat
+} from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { recordSessionScanIssue } from './session-scan-issues'
 import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumulator'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import {
@@ -29,6 +35,10 @@ const SUBAGENT_RUNNING_RECENCY_MS = 5 * 60_000
 // Match the main scanner's deliberate parse batching (SESSION_PARSE_CONCURRENCY):
 // opening every subagent read stream at once stalls over SSH/WSL UNC paths.
 const SUBAGENT_PARSE_CONCURRENCY = 8
+// 'scan', not 'exact', even though a user expands this on demand: it is bulk
+// directory work feeding the same parsers as the main scan, and the exact lane
+// stays reserved for live transcript probes.
+const SUBAGENT_FS_PRIORITY = 'scan'
 
 const TASK_NOTIFICATION_MARKER = '<task-notification>'
 const TOOL_USE_RESULT_MARKER = '"toolUseResult"'
@@ -71,8 +81,13 @@ export async function listClaudeSubagentSessions(args: {
 
   let entries
   try {
-    entries = await readdir(subagentsDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(subagentsDir, SUBAGENT_FS_PRIORITY)
+  } catch (err) {
+    // A gate refusal is a stalled distro, not a session without subagents —
+    // report it so the panel offers a retry instead of showing an empty list.
+    if (err instanceof WslTranscriptFsError) {
+      recordSessionScanIssue(issues, { agent: 'claude', path: subagentsDir, message: err.message })
+    }
     return { sessions: [], issues }
   }
 
@@ -130,7 +145,7 @@ async function parseSubagentTranscript(args: {
   issues: AiVaultScanIssue[]
 }): Promise<AiVaultSession | null> {
   try {
-    const fileStat = await stat(args.filePath)
+    const fileStat = await wslGatedStat(args.filePath, SUBAGENT_FS_PRIORITY)
     const session = await parseClaudeSessionFile(
       {
         path: args.filePath,
@@ -161,7 +176,11 @@ async function parseSubagentTranscript(args: {
       }
     }
   } catch (err) {
-    args.issues.push({ agent: 'claude', path: args.filePath, message: errorMessage(err) })
+    recordSessionScanIssue(args.issues, {
+      agent: 'claude',
+      path: args.filePath,
+      message: errorMessage(err)
+    })
     return null
   }
 }
@@ -187,11 +206,13 @@ function resolveSubagentStatus(args: {
 // 'async_launched', notification 'running') are superseded by terminal ones.
 async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<string, string>> {
   const statuses = new Map<string, string>()
+  const input = openTranscriptReadStream(
+    parentFilePath,
+    { encoding: 'utf-8' },
+    SUBAGENT_FS_PRIORITY
+  )
+  const lines = createInterface({ input, crlfDelay: Infinity })
   try {
-    const lines = createInterface({
-      input: createReadStream(parentFilePath, { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
     for await (const line of lines) {
       const hasNotification = line.includes(TASK_NOTIFICATION_MARKER)
       const hasTaskResult =
@@ -232,6 +253,11 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
     }
   } catch {
     // A missing/unreadable parent transcript degrades to recency-only status.
+  } finally {
+    // readline.close() leaves the underlying stream open; destroy it so a
+    // mid-read failure cannot leak the gated transcript handle.
+    lines.close()
+    input.destroy()
   }
   return statuses
 }
@@ -269,7 +295,8 @@ function taskNotificationBlockText(block: unknown): string {
 async function readSubagentMeta(transcriptPath: string): Promise<ClaudeSubagentMeta> {
   const metaPath = `${transcriptPath.slice(0, -extname(transcriptPath).length)}.meta.json`
   try {
-    const record = asRecord(JSON.parse(await readFile(metaPath, 'utf-8')) as unknown)
+    const raw = await wslGatedReadFile(metaPath, 'utf-8', SUBAGENT_FS_PRIORITY)
+    const record = asRecord(JSON.parse(raw) as unknown)
     return {
       description: normalizeTitleText(extractString(record?.description) ?? ''),
       agentType: extractString(record?.agentType)

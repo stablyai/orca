@@ -29,6 +29,17 @@ describe('SshPtyProvider process listings and events', () => {
     provider = new SshPtyProvider('conn-1', mux as never)
   })
 
+  // Why: a reconnect builds a fresh provider with an empty set, so a miss before the
+  // first completed listing is ignorance about the host, not a dead PTY.
+  it('answers unknown liveness until a completed listing makes absence provable', async () => {
+    expect(provider.hasPty(scopedPty1)).toBe(null)
+
+    mux.request.mockResolvedValueOnce([])
+    await provider.listProcesses()
+
+    expect(provider.hasPty(scopedPty1)).toBe(false)
+  })
+
   it('scopes process listings and bounds the relay RPC by the teardown deadline', async () => {
     const processes = [{ id: 'pty-1', cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }]
     mux.request.mockResolvedValue(processes)

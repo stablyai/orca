@@ -47,7 +47,7 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   return {
     command: addClaudeTeammateModeAuto(args.command),
     env,
-    envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+    envToDelete: ['TERM_PROGRAM']
   }
 }
 

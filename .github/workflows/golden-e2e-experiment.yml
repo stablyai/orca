@@ -23,10 +23,9 @@ jobs:
             platform: linux
           - os: macos-15
             platform: mac
-          # Why: Windows golden E2E is temporarily disabled on CI while its
-          # flaky runner-only failures are investigated.
-          # - os: windows-latest
-          #   platform: windows
+          # Match the release gate: Windows runs the fresh-startup golden only.
+          - os: windows-2022
+            platform: windows
 
     steps:
       - name: Checkout
@@ -62,17 +61,29 @@ jobs:
       - name: Build Electron app for E2E
         run: npx electron-vite build --mode e2e
 
+      # Why: this workflow can check out an older ref than the YAML that
+      # invoked it. Skip goldens the checked-out tree does not define.
       - name: Run golden E2E tests on Linux
         if: runner.os == 'Linux'
         run: |
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
 
       - name: Run golden E2E tests on macOS
         if: runner.os == 'macOS'
         run: |
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
+
+      - name: Run golden E2E tests on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:SKIP_BUILD = '1'
+          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          pnpm run --if-present test:e2e:windows-fresh-startup-golden
 
       - name: Upload Playwright traces
         if: failure()

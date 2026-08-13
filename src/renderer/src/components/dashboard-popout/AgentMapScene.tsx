@@ -15,6 +15,7 @@ import { selectVisibleAgentMapLabels } from './agent-map-label-declutter'
 import { agentMapDirectLineageChevronPath } from './agent-map-lineage-chevron-path'
 import { AgentMapWorktreeLabel } from './AgentMapWorktreeLabel'
 import { AgentMapWorktreeRingNode } from './AgentMapWorktreeRingNode'
+import { DashboardHostBadge } from './DashboardHostBadge'
 
 type AgentMapSceneProps = {
   layout: AgentMapLayout
@@ -129,6 +130,13 @@ export const AgentMapScene = memo(function AgentMapScene({
       {layout.projects.map((project) => {
         const worktreesById = new Map(project.worktrees.map((worktree) => [worktree.id, worktree]))
         const projectLabelHalfWidth = project.radius * mapScale
+        const projectHostsById = new Map<string, AgentMapWorktreeRing>()
+        for (const worktree of project.worktrees) {
+          if (worktree.hostKind === 'ssh' || worktree.hostKind === 'remote') {
+            projectHostsById.set(`${worktree.hostKind}:${worktree.executionHostId ?? ''}`, worktree)
+          }
+        }
+        const projectHosts = [...projectHostsById.values()]
         const projectCountText = translate(
           'dashboardPopout.map.projectCount',
           '{{agents}} agents · {{workspaces}} workspaces',
@@ -253,6 +261,16 @@ export const AgentMapScene = memo(function AgentMapScene({
                   <span className="agent-map-project-name min-w-0 truncate">
                     {project.name.toUpperCase()}
                   </span>
+                  {projectHosts.map((host) => (
+                    <DashboardHostBadge
+                      key={`${host.hostKind}:${host.executionHostId ?? ''}`}
+                      hostKind={host.hostKind}
+                      executionHostId={host.executionHostId}
+                      hostLabel={host.hostLabel}
+                      keyboardFocusable
+                      className="agent-map-project-host-badge"
+                    />
+                  ))}
                 </div>
               </foreignObject>
               {visibleLabels.projectCountIds.has(project.id) ? (

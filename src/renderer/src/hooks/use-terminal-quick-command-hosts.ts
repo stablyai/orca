@@ -47,11 +47,11 @@ type TerminalQuickCommandHostState = {
   remoteEnvironmentId: string | null
   remoteHostId: ExecutionHostId | null
   remoteState: RuntimeTerminalQuickCommands | undefined
-  runtimeEnvironments: PublicKnownRuntimeEnvironment[]
+  runtimeEnvironments: readonly PublicKnownRuntimeEnvironment[]
   settings: GlobalSettings | null
 }
 
-const EMPTY_RUNTIME_ENVIRONMENTS: PublicKnownRuntimeEnvironment[] = []
+const EMPTY_RUNTIME_ENVIRONMENTS: readonly PublicKnownRuntimeEnvironment[] = []
 const DISABLED_TERMINAL_QUICK_COMMAND_HOSTS: TerminalQuickCommandHost[] = []
 const DISABLED_TERMINAL_QUICK_COMMAND_HOST_STATE: TerminalQuickCommandHostState = {
   executionHostId: LOCAL_EXECUTION_HOST_ID,

@@ -19,6 +19,75 @@ function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName
 }
 
 describe('project host setup projection', () => {
+  it('keeps timestamps stable when addedAt is 0 across different now values', () => {
+    const target = repo({
+      id: 'repo-1',
+      path: '/Users/alice/orca',
+      displayName: 'orca',
+      addedAt: 0
+    })
+    const first = projectHostSetupProjectionFromRepos([target], 1_000)
+    const second = projectHostSetupProjectionFromRepos([target], 9_999)
+
+    expect(first.projects[0]?.createdAt).toBe(0)
+    expect(first.projects[0]?.updatedAt).toBe(0)
+    expect(first.setups[0]?.createdAt).toBe(0)
+    expect(second.projects[0]?.createdAt).toBe(first.projects[0]?.createdAt)
+    expect(second.projects[0]?.updatedAt).toBe(first.projects[0]?.updatedAt)
+    expect(second.setups[0]?.createdAt).toBe(first.setups[0]?.createdAt)
+    expect(second.setups[0]?.updatedAt).toBe(first.setups[0]?.updatedAt)
+  })
+
+  // Why both orders: repo order comes from disk/host enumeration, so it must not decide the
+  // project's timestamps. The accumulator carries 0 when the *first* sibling is the unknown one.
+  const timestampedSibling = repo({
+    id: 'local-repo',
+    path: '/Users/alice/orca',
+    displayName: 'Orca',
+    addedAt: 100,
+    upstream: { owner: 'StablyAI', repo: 'Orca' }
+  })
+  const unknownSibling = repo({
+    id: 'remote-repo',
+    path: '/home/alice/orca',
+    displayName: 'orca',
+    addedAt: 0,
+    connectionId: 'gpu-vm',
+    upstream: { owner: 'stablyai', repo: 'orca' }
+  })
+
+  it('does not wipe a persisted createdAt when a sibling repo has addedAt 0', () => {
+    const projection = projectHostSetupProjectionFromRepos([timestampedSibling, unknownSibling])
+
+    expect(projection.projects).toHaveLength(1)
+    expect(projection.projects[0]?.createdAt).toBe(100)
+    expect(projection.projects[0]?.updatedAt).toBe(100)
+  })
+
+  it('does not wipe a persisted createdAt when the addedAt 0 sibling comes first', () => {
+    const projection = projectHostSetupProjectionFromRepos([unknownSibling, timestampedSibling])
+
+    expect(projection.projects).toHaveLength(1)
+    expect(projection.projects[0]?.createdAt).toBe(100)
+    expect(projection.projects[0]?.updatedAt).toBe(100)
+  })
+
+  it('keeps per-repo setup timestamps independent of sibling order', () => {
+    for (const repos of [
+      [timestampedSibling, unknownSibling],
+      [unknownSibling, timestampedSibling]
+    ]) {
+      const { setups } = projectHostSetupProjectionFromRepos(repos)
+      const timestamped = setups.find((setup) => setup.repoId === 'local-repo')
+      const unknown = setups.find((setup) => setup.repoId === 'remote-repo')
+      expect(timestamped?.createdAt).toBe(100)
+      expect(timestamped?.updatedAt).toBe(100)
+      // Setups are per repo and never merged, so the unknown one keeps its own 0 either way.
+      expect(unknown?.createdAt).toBe(0)
+      expect(unknown?.updatedAt).toBe(0)
+    }
+  })
+
   it('projects a legacy local repo into one project and one ready local setup', () => {
     const projection = projectHostSetupProjectionFromRepos(
       [repo({ id: 'repo-1', path: '/Users/alice/orca', displayName: 'orca' })],

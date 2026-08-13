@@ -199,7 +199,6 @@ describe('SshRelaySession model migration', () => {
 
     expect(attachForReconnectMock).toHaveBeenCalledWith(
       'pty-1',
-      undefined,
       Object.freeze({
         status: 'checkpoint',
         clientGeneration: 1,
@@ -259,7 +258,6 @@ describe('SshRelaySession model migration', () => {
 
     expect(attachForReconnectMock).toHaveBeenCalledWith(
       'pty-1',
-      undefined,
       Object.freeze({ status: 'checkpointUnavailable' })
     )
   })

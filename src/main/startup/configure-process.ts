@@ -66,6 +66,20 @@ export function configureElectronNetworkCompatibility(
   app.commandLine.appendSwitch('disable-http2')
 }
 
+export function disableUnsupportedChromiumFeatures(): void {
+  appendDisabledChromiumFeatures(['FedCm'])
+}
+
+function appendDisabledChromiumFeatures(features: string[]): void {
+  const existingFeatures = app.commandLine
+    .getSwitchValue('disable-features')
+    .split(',')
+    .map((feature) => feature.trim())
+    .filter(Boolean)
+  const disabledFeatures = Array.from(new Set([...features, ...existingFeatures])).join(',')
+  app.commandLine.appendSwitch('disable-features', disabledFeatures)
+}
+
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'
 }
@@ -300,11 +314,7 @@ export function enableMainProcessGpuFeatures(): void {
     app.commandLine.appendSwitch('enable-features', features)
   }
 
-  const existingDisabledFeatures = app.commandLine.getSwitchValue('disable-features')
   // Why: IntensiveWakeUpThrottling clamps hidden-page timers to 1/min after 5min, delaying agent-done/bell notifications ~60s.
   // This opt-out is skipped under GPU fallback (win32-only today); if throttling ever reaches Windows it must move out of this path.
-  const disabledFeatures = ['IntensiveWakeUpThrottling', existingDisabledFeatures]
-    .filter(Boolean)
-    .join(',')
-  app.commandLine.appendSwitch('disable-features', disabledFeatures)
+  appendDisabledChromiumFeatures(['IntensiveWakeUpThrottling'])
 }

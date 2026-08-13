@@ -239,7 +239,8 @@ jobs:
 
       - name: Test real shell contracts
         run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+            src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty-shell-ready.test.ts \
@@ -275,6 +276,7 @@ jobs:
       - name: Test shard
         run: |
           pnpm exec vitest run --config config/vitest.config.ts \
+            --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             --exclude=src/main/daemon/shell-ready.test.ts \
             --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
             --exclude=src/main/providers/local-pty-shell-ready.test.ts \
@@ -424,8 +426,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test Windows PowerShell CLI boundary
-        run: pnpm exec vitest run --config config/vitest.config.ts src/main/cli/wsl-cli-powershell-boundary.test.ts
+      - name: Test Windows-specific boundaries
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          src/main/cli/wsl-cli-powershell-boundary.test.ts
+          src/main/orca-profiles/profile-index-store.test.ts
+          src/shared/secure-file-fsync-flags.test.ts
 
       - name: Build package inputs
         run: pnpm run build:release

@@ -45,6 +45,21 @@ export function execDockerSshRelayTargetCommand(
   })
 }
 
+export function execDockerSshRelayTargetControlCommand(
+  target: DockerSshRelayTarget,
+  command: string
+): string {
+  return run('docker', [
+    'exec',
+    target.containerName,
+    'bash',
+    '--noprofile',
+    '--norc',
+    '-c',
+    command
+  ])
+}
+
 function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
   return [
     '-i',
@@ -122,7 +137,23 @@ export function writeDockerSshRelayTargetFile(
   )
 }
 
-export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTarget {
+export type DockerSshRelayTargetOptions = {
+  /**
+   * `MaxSessions` for the container's sshd. OpenSSH caps *concurrent* session
+   * channels per network connection, so `1` forces every extra channel onto a
+   * new connection and makes a multiplexing failure observable instead of silent.
+   */
+  sshdMaxSessions?: number
+}
+
+export function startDockerSshRelayTarget(
+  testInfo: TestInfo,
+  options: DockerSshRelayTargetOptions = {}
+): DockerSshRelayTarget {
+  const { sshdMaxSessions } = options
+  if (sshdMaxSessions !== undefined && !Number.isInteger(sshdMaxSessions)) {
+    throw new Error(`sshdMaxSessions must be an integer: ${sshdMaxSessions}`)
+  }
   const host = process.env.ORCA_E2E_SSH_TARGET_HOST?.trim() || '127.0.0.1'
   if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {
     if (process.env.ORCA_E2E_SSH_TARGET_HOST) {
@@ -158,6 +189,9 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
           'chmod 600 /root/.ssh/authorized_keys',
           'git config --global user.email e2e@test.local',
           'git config --global user.name "Orca Docker SSH E2E"',
+          ...(sshdMaxSessions === undefined
+            ? []
+            : [`printf '\\nMaxSessions %d\\n' ${sshdMaxSessions} >> /etc/ssh/sshd_config`]),
           'exec /usr/sbin/sshd -D -e'
         ].join(' && ')
       ],

@@ -77,12 +77,15 @@ export class DaemonPtyRouter implements IPtyProvider {
     return await this.adapterFor(id).attach(id)
   }
 
-  hasPty(id: string): boolean {
+  hasPty(id: string): boolean | null {
     const routed = this.sessionAdapters.get(id)
     if (routed) {
       return routed.hasPty(id)
     }
-    return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
+    // Why: one adapter's ignorance is not another's absence proof — only a unanimous
+    // proven-absence across every generation may read as false.
+    const answers = this.allAdapters().map((adapter) => adapter.hasPty(id))
+    return answers.includes(true) ? true : answers.includes(null) ? null : false
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
@@ -314,14 +317,19 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   private adapterForInspection(sessionId: string): DaemonPtyAdapter {
-    const adapter =
+    const owner =
       this.sessionAdapters.get(sessionId) ??
-      this.allAdapters().find((candidate) => candidate.hasPty(sessionId))
-    if (!adapter) {
+      this.allAdapters().find((candidate) => candidate.hasPty(sessionId) === true)
+    if (owner) {
+      this.sessionAdapters.set(sessionId, owner)
+      return owner
+    }
+    // Why: only unanimous proven absence is gone; an adapter that cannot answer routes
+    // to current without memoizing a route we never established.
+    if (this.hasPty(sessionId) === false) {
       throw new Error('terminal_gone')
     }
-    this.sessionAdapters.set(sessionId, adapter)
-    return adapter
+    return this.current
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

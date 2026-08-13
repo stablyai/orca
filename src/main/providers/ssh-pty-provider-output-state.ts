@@ -11,6 +11,7 @@ import {
   type SshPtyReceivingActivationLease
 } from './ssh-pty-notification-routing'
 import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
+import { SYNTHESIZED_PTY_INCARNATION_PREFIX } from '../../shared/pty-incarnation'
 
 export class SshPtyProviderOutputState {
   private readonly dataListeners = new Set<SshPtyDataCallback>()
@@ -132,7 +133,7 @@ export class SshPtyProviderOutputState {
     this.rememberPtyIncarnation(relayPtyId, incarnationId)
     let resolved = this.incarnationByRelayPtyId.get(relayPtyId)
     if (!resolved) {
-      resolved = `legacy:${this.providerGeneration}:${this.legacyIncarnationSerial++}:${relayPtyId}`
+      resolved = `${SYNTHESIZED_PTY_INCARNATION_PREFIX}${this.providerGeneration}:${this.legacyIncarnationSerial++}:${relayPtyId}`
       this.incarnationByRelayPtyId.set(relayPtyId, resolved)
     }
     return resolved

@@ -78,6 +78,12 @@ const ResolveTerminalPath = WorktreeSelector.extend({
   crossWorkspace: z
     .unknown()
     .transform((v) => v === true)
+    .optional(),
+  nativeChatContext: z
+    .object({
+      tabId: z.string().min(1),
+      sessionId: z.string().min(1)
+    })
     .optional()
 })
 
@@ -257,7 +263,8 @@ export const FILE_METHODS: RpcAnyMethod[] = [
         params.cwd ?? null,
         clientId,
         params.terminal ?? null,
-        params.crossWorkspace === true
+        params.crossWorkspace === true,
+        params.nativeChatContext ?? null
       )
   }),
   defineMethod({

@@ -141,7 +141,9 @@ export async function launchPairedWebClient(
 export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
-  name: string
+  name: string,
+  /** Repo root of the build to launch; defaults to this working tree. */
+  appRoot: string = process.cwd()
 ): Promise<PairedElectronClient> {
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
@@ -157,7 +159,7 @@ export async function launchPairedElectronClient(
     extraEnv: {},
     userDataDir
   })
-  const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+  const mainPath = path.join(appRoot, 'out', 'main', 'index.js')
   const app = await electron.launch({
     args: getOrcaElectronLaunchArgs(mainPath, false),
     env: {

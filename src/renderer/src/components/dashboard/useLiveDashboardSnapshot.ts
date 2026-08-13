@@ -41,6 +41,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   // these two instead of worktreesByRepo.
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const projectGroups = useAppStore((s) => s.projectGroups)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
@@ -82,6 +83,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           detectedWorktreesByRepo,
           folderWorkspaces,
           projectGroups,
+          sshTargetLabels,
           sshConnectionStates,
           sshStateByEnvironment,
           runtimeStatusByEnvironmentId,
@@ -120,6 +122,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       detectedWorktreesByRepo,
       folderWorkspaces,
       projectGroups,
+      sshTargetLabels,
       sshConnectionStates,
       sshStateByEnvironment,
       runtimeStatusByEnvironmentId,

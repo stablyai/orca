@@ -96,6 +96,24 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('threads provider command ownership through the spawn IPC', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      command: 'printf ready',
+      commandDelivery: 'provider'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(window.api.pty.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'printf ready',
+        commandDelivery: 'provider'
+      })
+    )
+    transport.disconnect()
+  })
+
   it('routes a rejected daemon write to the owning transport recovery callback', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const recovery = vi.fn()
@@ -240,6 +258,29 @@ describe('createIpcPtyTransport', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] })
+    )
+  })
+
+  it('drops a retired launch token from a suppressed fresh spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({
+      env: {
+        ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111',
+        ORCA_AGENT_LAUNCH_TOKEN: 'retired-token'
+      },
+      launchToken: 'retired-token'
+    })
+
+    await transport.connect({ url: '', callbacks: {}, suppressSavedStartup: true })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: { ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111' }
+      })
+    )
+    expect(spawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ launchToken: 'retired-token' })
     )
   })
 

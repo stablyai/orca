@@ -75,12 +75,12 @@ import type {
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
 import {
-  bulkClearCookiesExcept,
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain,
   NON_TRANSPLANTABLE_HOST_KEY_SQL,
   normalizeCookieDomain,
   normalizeCookieImportDomain,
+  removeTransplantableCookies,
   replaceCookiesForImportedDomains,
   restoreImportedDomainCookies,
   type CookieImportMode
@@ -1780,11 +1780,7 @@ export async function importCookiesFromBrowser(
     // Why: clear stale cookies first; mixing them with the imported set makes sites reject the
     // session. Non-transplantable families are exempt — nothing was imported for them, and their
     // live session is the only one that works.
-    await bulkClearCookiesExcept(targetSession, (cookie) =>
-      isNonTransplantableCookieDomain(cookie.domain ?? '')
-    )
-    // Why: after excluded cookies survive this boundary, restart staging owns later set failures;
-    // restoring stale non-Google cookies would recreate the mixed jar this import must replace.
+    await removeTransplantableCookies(targetSession)
     diag(
       `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
     )

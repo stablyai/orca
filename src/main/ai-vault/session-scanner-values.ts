@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join } from 'node:path'
-import { readFile } from 'node:fs/promises'
+import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { asRecord } from './session-scanner-record-value'
 
 export { asRecord }
@@ -76,8 +77,15 @@ export async function readJsonObjectIfExists(
   filePath: string
 ): Promise<Record<string, unknown> | null> {
   try {
-    return asRecord(JSON.parse(await readFile(filePath, 'utf-8')) as unknown)
-  } catch {
+    return asRecord(JSON.parse(await wslGatedReadFile(filePath, 'utf-8', 'scan')) as unknown)
+  } catch (error) {
+    // A missing or malformed file is genuinely "no enrichment", but a gate
+    // refusal must reach `parseSessionCandidate` as an issue — degrading it to
+    // null caches the un-enriched session under an unchanged mtime, and the
+    // non-resumable agents that use this never re-read it.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return null
   }
 }

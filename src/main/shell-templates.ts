@@ -5,11 +5,17 @@ function quotePosixSingle(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `if [[ "\${ORCA_SHELL_STARTUP_IDENTITY:-0}" == "1" ]]; then
+  unset ORCA_SHELL_STARTUP_IDENTITY
+  printf "\\033]777;orca-shell-start:%s\\007" "$$"
+fi`
+
 export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
   const header = headerPrefix
     ? `Orca ${headerPrefix} zsh shell-ready wrapper`
     : 'Orca zsh shell-ready wrapper'
   return `# ${header}
+${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 # Why: capture the runtime wrapper dir before it is unset below. On WSL this
 # file is generated with a Windows path but sourced via /mnt/c, so the baked
 # literal is unusable there and ZDOTDIR must be restored from this value.

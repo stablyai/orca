@@ -13,6 +13,7 @@ import {
 } from './agent-scratch-worktrees'
 import { isExplicitlyImportedExternalWorktreePath } from './external-worktree-inbox'
 import {
+  effectiveAgentWorktreeVisibility,
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from './external-worktree-visibility'
@@ -27,6 +28,7 @@ import type {
 } from './types'
 
 export {
+  effectiveAgentWorktreeVisibility,
   effectiveExternalWorktreeVisibility,
   EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT,
   isLegacyRepoForExternalWorktreeVisibility
@@ -221,10 +223,8 @@ export function shouldShowWorktree(args: {
   ) {
     return true
   }
-  // Why: agent scratch stays hidden even when the repo shows non-Orca
-  // worktrees; only an explicit import or selected checkout reveals it.
   if (args.ownership === 'agent-scratch') {
-    return false
+    return effectiveAgentWorktreeVisibility(args.repo) === 'show'
   }
   if (args.ownership === 'unknown-legacy' && args.isLegacyRepoForVisibility) {
     return true

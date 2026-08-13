@@ -75,6 +75,33 @@ export function mergeAiVaultListResults(
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
       .slice(0, limit),
     issues,
-    scannedAt: new Date().toISOString()
+    // Why: a merge is not a new scan. Reminting here made every all-host cache
+    // hit look fresh to the renderer, which only skipped apply when scannedAt
+    // matched. Keep the latest input stamp so identical legs stay a no-op.
+    scannedAt: latestAiVaultScannedAt(results)
   }
+}
+
+function latestAiVaultScannedAt(results: readonly AiVaultListResult[]): string {
+  const nowMs = Date.now()
+  let latest: string | undefined
+  let latestMs = Number.NEGATIVE_INFINITY
+  for (const result of results) {
+    const stamp = result.scannedAt
+    const stampMs = Date.parse(stamp)
+    // Remote legs carry their own clock and only `z.string()` validation. An
+    // unparsable or future stamp would pin the merged stamp above every local
+    // rescan and silently freeze the renderer's scannedAt equality guard.
+    // Compare parsed instants, not strings: `z.string()` does not pin the stamp
+    // to the exact `toISOString()` shape, and a legal variant (no milliseconds,
+    // a `+00:00` offset) orders wrongly under lexicographic compare.
+    if (Number.isNaN(stampMs) || stampMs > nowMs) {
+      continue
+    }
+    if (stampMs > latestMs) {
+      latestMs = stampMs
+      latest = stamp
+    }
+  }
+  return latest ?? new Date(nowMs).toISOString()
 }

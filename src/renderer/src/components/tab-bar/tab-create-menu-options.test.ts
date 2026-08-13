@@ -53,6 +53,25 @@ describe('tab create menu options', () => {
     ).toEqual(['new-browser'])
   })
 
+  it('keeps terminal and markdown results when client-impossible actions are omitted', () => {
+    const options = buildTabCreateMenuOptions({
+      terminalOnly: false,
+      hasNewBrowser: false,
+      hasNewMarkdown: true,
+      hasOpenMarkdown: true,
+      hasSimulator: false,
+      simulatorIsGoTo: false
+    })
+
+    expect(options.map((option) => option.kind)).toEqual([
+      'new-terminal',
+      'new-markdown',
+      'open-markdown'
+    ])
+    expect(findMatchingTabCreateMenuOptions('browser', options)).toEqual([])
+    expect(findMatchingTabCreateMenuOptions('mobile emulator', options)).toEqual([])
+  })
+
   it('preserves default Windows shell order for tied terminal matches', () => {
     const options = buildTabCreateMenuOptions({
       terminalOnly: false,

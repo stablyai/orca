@@ -102,6 +102,23 @@ describe('AgentKanbanCard', () => {
     expect(container.querySelector('.lucide-message-circle-question-mark')).toBeNull()
   })
 
+  it('shows the saved SSH host beside the repository metadata', () => {
+    const { container } = renderCard({
+      card: card({
+        hostKind: 'ssh',
+        executionHostId: 'ssh:opaque-target',
+        hostLabel: 'openclaw'
+      }),
+      now: 2_000
+    })
+
+    expect(screen.getByLabelText('SSH host · openclaw')).toHaveAttribute(
+      'data-dashboard-host-badge',
+      'ssh'
+    )
+    expect(container.querySelector('.lucide-server')).toBeInTheDocument()
+  })
+
   it('shows review metadata and expands grouped subagents without opening the terminal', () => {
     const onOpenTerminal = vi.fn()
     renderCard({
