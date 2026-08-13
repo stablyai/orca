@@ -68,6 +68,7 @@ import {
 } from '../ipc/worktree-base-directory-watcher'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
+import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -500,11 +501,7 @@ function registerRuntimeWindowLifecycle(
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver })
   })
-  // Why: fail closed during renderer reload so CLI calls can't act on stale terminal mappings.
-  mainWebContents.on('did-start-loading', () => {
-    if (!mainWebContents.isLoadingMainFrame()) {
-      return
-    }
+  registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     runtime.markRendererReloading(mainWindow.id)
   })

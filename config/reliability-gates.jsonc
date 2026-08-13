@@ -1161,28 +1161,31 @@
       "providers": ["local", "daemon", "ssh", "paired-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "paired-runtime"],
-      "coverageNotes": "Deterministic lifecycle, IPC, window-notification, and runtime ownership tests cover generation replacement, stale callbacks, same-frame old-document publication, process loss, timeout cleanup, headless fallback, and competing windows. Isolated macOS Electron validation covers forced renderer recovery and headless serve promotion with live daemon-backed PTY identity and I/O. Linux, Windows, WSL, SSH promotion, and mixed-version desktop/server live runs remain uncollected; the renderer generation stays local to Electron IPC and does not change the remote wire.",
+      "coverageNotes": "Deterministic lifecycle, IPC, window-notification, and runtime ownership tests cover generation replacement, stale callbacks, same-frame old-document publication, cancelled external navigation, process loss, timeout cleanup, headless fallback, and competing windows. Isolated macOS Electron validation covers forced renderer recovery and headless serve promotion with live daemon-backed PTY identity and I/O. Linux, Windows, WSL, SSH promotion, and mixed-version desktop/server live runs remain uncollected; the renderer generation stays local to Electron IPC and does not change the remote wire.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/14066",
         "https://linear.app/stably/issue/STA-4016",
         "https://github.com/stablyai/orca/pull/14070"
       ],
-      "invariant": "Every renderer graph reload revision settles exactly once. Replacing a reload cancels only the prior revision; its timer and callbacks cannot settle a newer revision. A desktop reload succeeds only from a publication carrying a new renderer-document generation, while a failed headless promotion may recover only from its originating window. Timeout, renderer loss, and close reach a terminal graph state, and successful desktop publication permanently retires headless sentinel fallback until a new headless runtime is established.",
-      "oracle": "Drive two reloads half a timeout apart and require the first deadline to leave the second revision reloading while the second deadline alone makes it unavailable. During the second revision publish from the prior renderer document through the still-current main frame and require rejection without graph mutation or timeout cancellation. Restore headless authority after failed promotion, publish from a competing window, and require rejection while the sentinel remains authoritative. Then force a real renderer crash and separately promote an isolated headless serve owner; require runtime graph readiness, stable runtime/main/daemon/PTY identities, recovered visible terminal output, and post-recovery input/output.",
+      "invariant": "Every genuine renderer graph reload revision settles exactly once, while a blocked navigation that preserves the current document never starts a revision. Replacing a reload cancels only the prior revision; its timer and callbacks cannot settle a newer revision. A desktop reload succeeds only from a publication carrying a new renderer-document generation, while a failed headless promotion may recover only from its originating window. Timeout, renderer loss, and close reach a terminal graph state, and successful desktop publication permanently retires headless sentinel fallback until a new headless runtime is established.",
+      "oracle": "Start a blocked external main-frame navigation and require the current renderer graph and notification path to remain authoritative. Drive two genuine reloads half a timeout apart and require the first deadline to leave the second revision reloading while the second deadline alone makes it unavailable. During the second revision publish from the prior renderer document through the still-current main frame and require rejection without graph mutation or timeout cancellation. Restore headless authority after failed promotion, publish from a competing window, and require rejection while the sentinel remains authoritative. Then force a real renderer crash and separately promote an isolated headless serve owner; require runtime graph readiness, stable runtime/main/daemon/PTY identities, recovered visible terminal output, and post-recovery input/output.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-graph-reload-lifecycle.test.ts src/main/window/runtime-renderer-notification-sender.test.ts src/main/ipc/runtime.test.ts src/main/window/attach-main-window-services.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-graph-reload-lifecycle.test.ts src/main/window/runtime-renderer-notification-sender.test.ts src/main/window/renderer-document-navigation.test.ts src/main/ipc/runtime.test.ts src/main/window/attach-main-window-services.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
         "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/renderer-blocked-navigation-graph-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test e2e/renderer-crash-recovery-terminal-input.spec.ts tests/e2e/renderer-crash-recovery-terminal-input.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test e2e/headless-serve-desktop-activation.spec.ts tests/e2e/headless-serve-desktop-activation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/runtime/runtime-graph-reload-lifecycle.test.ts",
         "src/main/window/runtime-renderer-notification-sender.test.ts",
+        "src/main/window/renderer-document-navigation.test.ts",
         "src/main/ipc/runtime.test.ts",
         "src/main/window/attach-main-window-services.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts",
         "src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
+        "tests/e2e/renderer-blocked-navigation-graph-authority.spec.ts",
         "tests/e2e/renderer-crash-recovery-terminal-input.spec.ts",
         "tests/e2e/headless-serve-desktop-activation.spec.ts"
       ],
@@ -1219,6 +1222,20 @@
           ]
         },
         {
+          "file": "src/main/window/renderer-document-navigation.test.ts",
+          "assertions": [
+            "blocked external navigation does not start a renderer generation",
+            "only the packaged renderer file or development origin starts a renderer generation"
+          ]
+        },
+        {
+          "file": "tests/e2e/renderer-blocked-navigation-graph-authority.spec.ts",
+          "assertions": [
+            "blocked external navigation starts and stops loading without replacing the renderer document",
+            "runtime graph epoch, readiness, and authoritative window remain unchanged"
+          ]
+        },
+        {
           "file": "tests/e2e/renderer-crash-recovery-terminal-input.spec.ts",
           "assertions": [
             "main observes renderer process loss and a completed recovery load",
@@ -1238,10 +1255,19 @@
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-graph-reload-lifecycle.test.ts src/main/window/runtime-renderer-notification-sender.test.ts src/main/ipc/runtime.test.ts src/main/window/attach-main-window-services.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-graph-reload-lifecycle.test.ts src/main/window/runtime-renderer-notification-sender.test.ts src/main/window/renderer-document-navigation.test.ts src/main/ipc/runtime.test.ts src/main/window/attach-main-window-services.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
           "result": "passed",
-          "durationSeconds": 24,
-          "summary": "Seven focused files passed with 1,154 tests and one pre-existing skip after the local rebase onto latest main. The suite covers exact reload settlement, timeout replacement, document and window authority, notification containment, preload IPC, and renderer publication scheduling."
+          "durationSeconds": 13,
+          "summary": "Eight focused files passed with 1,157 tests and one pre-existing skip after the local rebase onto latest main. The suite covers exact reload settlement, timeout replacement, blocked-navigation exclusion, document and window authority, notification containment, preload IPC, and renderer publication scheduling."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/renderer-blocked-navigation-graph-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 4,
+          "summary": "A real main-window navigation began and was cancelled without document replacement; the renderer canary survived while runtime graph readiness, epoch, and authoritative window identity remained unchanged."
         },
         {
           "date": "2026-08-13",
@@ -1272,7 +1298,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "A byte-identical three-case oracle was run on 2026-08-13. Latest main ca9777093b failed all three: reload remained reloading after 22.5 seconds, the prior renderer document settled the replacement, and a competing window stole failed-promotion authority. Submitted PR head feeca6c22f passed the bounded replacement timeout but failed both authority cases. The locally rewritten candidate passed all three. Disabling the local document-generation and pending-window fences reproduces the submitted-head failures."
+        "evidence": "A byte-identical three-case oracle was rerun on 2026-08-13. Latest main ee8dd4796e failed all three: reload remained reloading after 22.5 seconds, the prior renderer document settled the replacement, and a competing window stole failed-promotion authority. Submitted PR head feeca6c22f passed the bounded replacement timeout but failed both authority cases. The locally rewritten candidate passed all three. Disabling the local document-generation and pending-window fences reproduces the submitted-head failures; disabling the cancelled-navigation classifier leaves the graph reloading and increments its epoch in the new live oracle."
       },
       "performanceBudget": {
         "required": true,
