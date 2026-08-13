@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import type { AgentType } from '../../shared/native-chat-types'
+import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
@@ -28,6 +29,8 @@ type CachedTranscript = {
 }
 
 const cache = new Map<string, CachedTranscript>()
+const transcriptReadsInFlight = new InFlightPromiseDedupe<ReadTranscriptResult>()
+let cacheGeneration = 0
 
 // Why: cap the cache so a long-lived process browsing many sessions can't grow
 // it unbounded. Map preserves insertion order, so evicting the first key drops
@@ -113,15 +116,25 @@ export async function readNativeChatTranscriptCached(
     return cached.result
   }
 
-  const result = await readNativeChatTranscript(agent, sessionId, { filePath })
-  if (Number.isFinite(mtimeMs)) {
-    setCached(key, { result, mtimeMs, bytes })
-  }
-  return result
+  const generation = cacheGeneration
+  // Why: desktop panes and paired clients can request one large transcript at
+  // once; share only the exact on-disk snapshot so newer appends read afresh.
+  return transcriptReadsInFlight.run(
+    stableInFlightKey([key, mtimeMs, bytes, generation]),
+    async () => {
+      const result = await readNativeChatTranscript(agent, sessionId, { filePath })
+      if (generation === cacheGeneration && Number.isFinite(mtimeMs)) {
+        setCached(key, { result, mtimeMs, bytes })
+      }
+      return result
+    }
+  )
 }
 
 /** Test-only: drop the transcript parse cache between runs. */
 export function clearNativeChatTranscriptCache(): void {
+  cacheGeneration += 1
+  transcriptReadsInFlight.clear()
   cache.clear()
 }
 

@@ -85,6 +85,18 @@ describe('readNativeChatTranscriptCached', () => {
     expect(second).toBe(first)
   })
 
+  it('coalesces concurrent cache misses for the same transcript snapshot', async () => {
+    const filePath = await seedSession('sess-concurrent', 3)
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        readNativeChatTranscriptCached('claude', 'sess-concurrent', filePath)
+      )
+    )
+
+    expect(readSpy).toHaveBeenCalledTimes(1)
+    expect(results.every((result) => result === results[0])).toBe(true)
+  })
+
   it('re-reads when the file mtime changes', async () => {
     const filePath = await seedSession('sess-mtime', 2)
     await readNativeChatTranscriptCached('claude', 'sess-mtime')
@@ -171,9 +183,12 @@ describe('readNativeChatTranscriptCached', () => {
         : ''
 
     // Same sessionId, different transcript files (worktree A resumed into C).
-    const a = await readNativeChatTranscriptCached('claude', 'shared-session', fileA)
-    const c = await readNativeChatTranscriptCached('claude', 'shared-session', fileC)
+    const [a, c] = await Promise.all([
+      readNativeChatTranscriptCached('claude', 'shared-session', fileA),
+      readNativeChatTranscriptCached('claude', 'shared-session', fileC)
+    ])
 
+    expect(readSpy).toHaveBeenCalledTimes(2)
     expect(readText(a)).toContain('from-worktree-A')
     expect(readText(c)).toContain('from-worktree-C')
     expect(readText(c)).not.toContain('from-worktree-A')
