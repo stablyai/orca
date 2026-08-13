@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import type { GitHistoryResult } from '../../../../shared/git-history'
+import { GIT_HISTORY_MAX_LIMIT, type GitHistoryResult } from '../../../../shared/git-history'
 import { GitHistoryPanel } from './GitHistoryPanel'
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -75,5 +75,74 @@ describe('GitHistoryPanel', () => {
 
     expect(markup).toContain('Fix tab overflow')
     expect(markup).toContain('52ad492')
+  })
+
+  it('offers Load more commits when the history is truncated', () => {
+    const result = makeHistoryResult()
+    result.hasMore = true
+
+    const markup = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result }}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+        onLoadMore={vi.fn()}
+        onOpenCommit={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('Load more commits')
+  })
+
+  it('hides Load more commits when every commit is already shown', () => {
+    const markup = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result: makeHistoryResult() }}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+        onLoadMore={vi.fn()}
+        onOpenCommit={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Load more commits')
+  })
+
+  it('hides Load more commits at the git layer maximum, where paging cannot go further', () => {
+    const result = makeHistoryResult()
+    result.hasMore = true
+    result.limit = GIT_HISTORY_MAX_LIMIT
+
+    const markup = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result }}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+        onLoadMore={vi.fn()}
+        onOpenCommit={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Load more commits')
+  })
+
+  it('omits Load more commits when no handler is wired', () => {
+    const result = makeHistoryResult()
+    result.hasMore = true
+
+    const markup = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result }}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+        onOpenCommit={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Load more commits')
   })
 })

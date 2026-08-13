@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import type { GitHistoryItem, GitHistoryResult } from '../../../../shared/git-history'
+import {
+  GIT_HISTORY_MAX_LIMIT,
+  type GitHistoryItem,
+  type GitHistoryResult
+} from '../../../../shared/git-history'
 import type { GitBranchChangeEntry } from '../../../../shared/types'
 import {
   buildDefaultGitHistoryColorMap,
@@ -45,6 +49,7 @@ export function GitHistoryPanel({
   collapsed,
   onToggle,
   onRefresh,
+  onLoadMore,
   onOpenCommit,
   onLoadCommitFiles,
   onOpenCommitFile,
@@ -54,6 +59,7 @@ export function GitHistoryPanel({
   collapsed: boolean
   onToggle: () => void
   onRefresh: () => void
+  onLoadMore?: () => void
   onOpenCommit?: (item: GitHistoryItem) => void
   onLoadCommitFiles?: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
   onOpenCommitFile?: (
@@ -81,6 +87,8 @@ export function GitHistoryPanel({
   }, [result])
 
   const loading = state.status === 'loading' || state.status === 'refreshing'
+  // Why: the git layer clamps at GIT_HISTORY_MAX_LIMIT, so stop offering paging once there.
+  const canLoadMore = Boolean(onLoadMore && result?.hasMore && result.limit < GIT_HISTORY_MAX_LIMIT)
   const count = result?.items.length ?? 0
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
@@ -379,6 +387,23 @@ export function GitHistoryPanel({
               </React.Fragment>
             )
           })}
+          {canLoadMore && (
+            <div className="flex justify-center px-6 py-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="h-auto py-0.5 text-[11px] text-muted-foreground"
+                disabled={loading}
+                onClick={onLoadMore}
+              >
+                {translate(
+                  'auto.components.right.sidebar.GitHistoryPanel.loadMoreCommits',
+                  'Load more commits'
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
