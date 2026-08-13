@@ -162,7 +162,10 @@ import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
 } from './orchestration/environment-transport'
-import { clearFederationAckCheckpoints } from './orchestration/federation-ack-checkpoints'
+import {
+  clearFederationAckCheckpoints,
+  releaseFederationAckCheckpoint
+} from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
 import { formatMessagePointer } from './orchestration/formatter'
 import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoint-scheduler'
@@ -4739,8 +4742,12 @@ export class OrcaRuntimeService {
         throw error
       })
       .finally(() => {
-        if (this.orchestrationFederationSyncs.get(dispatchId)?.promise === sync) {
-          this.orchestrationFederationSyncs.delete(dispatchId)
+        if (this.orchestrationFederationSyncs.get(dispatchId)?.promise !== sync) {
+          return
+        }
+        this.orchestrationFederationSyncs.delete(dispatchId)
+        if (!db.isFederatedDispatchRelayEligible(dispatchId)) {
+          releaseFederationAckCheckpoint(this, dispatchId)
         }
       })
     this.orchestrationFederationSyncs.set(dispatchId, { db, promise: sync })
