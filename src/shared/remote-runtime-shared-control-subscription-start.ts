@@ -14,7 +14,6 @@ export async function startSharedControlSubscription<TResult>(args: {
   deviceToken: string
   method: string
   params: unknown
-  expectedRuntimeId?: string
   callbacks: SharedControlSubscriptionCallbacks<TResult>
   ensureReady: () => Promise<void>
   sendSubscription: (subscription: SharedControlLogicalSubscription<unknown>) => void
@@ -24,15 +23,13 @@ export async function startSharedControlSubscription<TResult>(args: {
     subscriptions: args.subscriptions,
     deviceToken: args.deviceToken,
     method: args.method,
-    params: args.params,
-    expectedRuntimeId: args.expectedRuntimeId
+    params: args.params
   })
   const requestId = randomUUID()
   const subscription = createSharedControlSubscription({
     requestId,
     method: args.method,
     params: args.params,
-    expectedRuntimeId: args.expectedRuntimeId,
     retainedParamsBytes,
     callbacks: args.callbacks
   })

@@ -90,7 +90,6 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         timeoutMs?: number
         subscriptionId?: string
         expectedEnvironmentPairingRevision?: number
-        expectedRuntimeId?: string
       }
     ): Promise<{ subscriptionId: string; requestId: string }> => {
       const subscriptionId =
@@ -181,8 +180,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
               retained?.removeDestroyedListener()
               remoteRuntimeSubscriptions.delete(subscriptionId)
             }
-          },
-          args.expectedRuntimeId
+          }
         )
       } catch (error) {
         removeDestroyedListener()

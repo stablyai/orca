@@ -3,11 +3,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import {
-  callRuntimeRpc,
-  clearRuntimeCompatibilityCacheForTests,
-  probeLiveRuntimeEnvironmentCapabilities
-} from './runtime-rpc-client'
+import { callRuntimeRpc, clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 
 const runtimeEnvironmentCall = vi.fn()
@@ -64,59 +60,5 @@ it('captures the pairing revision before awaiting the compatibility probe', asyn
     params: undefined,
     timeoutMs: undefined,
     expectedEnvironmentPairingRevision: 10
-  })
-})
-
-it('live capability probes ignore a warm cache and pin the captured pairing revision', async () => {
-  replaceRuntimeEnvironmentRevisions([{ id: 'env-live', createdAt: 1, pairingRevision: 20 }])
-  runtimeEnvironmentCall
-    .mockResolvedValueOnce({
-      id: 'warm-status',
-      ok: true,
-      result: {
-        runtimeId: 'runtime-a',
-        graphStatus: 'ready',
-        runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-        minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-        capabilities: ['terminal.attribution-removed.v1']
-      }
-    })
-    .mockResolvedValueOnce({ id: 'repo', ok: true, result: { repos: [] } })
-    .mockImplementationOnce(async () => {
-      replaceRuntimeEnvironmentRevisions([{ id: 'env-live', createdAt: 1, pairingRevision: 21 }])
-      return {
-        id: 'live-status',
-        ok: true,
-        result: {
-          runtimeId: 'runtime-b',
-          graphStatus: 'ready',
-          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-          capabilities: []
-        }
-      }
-    })
-
-  await callRuntimeRpc({ kind: 'environment', environmentId: 'env-live' }, 'repo.list')
-  await expect(
-    probeLiveRuntimeEnvironmentCapabilities({
-      environmentId: 'env-live',
-      requiredCapabilities: ['terminal.attribution-removed.v1']
-    })
-  ).resolves.toEqual({
-    supported: false,
-    authority: {
-      runtimeId: 'runtime-b',
-      expectedEnvironmentPairingRevision: 20,
-      capabilities: []
-    }
-  })
-
-  expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
-    selector: 'env-live',
-    method: 'status.get',
-    params: undefined,
-    timeoutMs: undefined,
-    expectedEnvironmentPairingRevision: 20
   })
 })

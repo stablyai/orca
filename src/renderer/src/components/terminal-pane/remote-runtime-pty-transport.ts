@@ -20,11 +20,8 @@ import type {
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
 import {
-  AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-  TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY,
-  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  type RuntimeCapability
+  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
@@ -37,11 +34,7 @@ import type {
   PtyTransportRecoveryState
 } from './pty-transport-types'
 import { createPtyOutputProcessor } from './pty-transport'
-import {
-  RuntimeRpcCallError,
-  unwrapRuntimeRpcResult,
-  type LiveRuntimeEnvironmentAuthority
-} from '../../runtime/runtime-rpc-client'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
@@ -90,10 +83,6 @@ import {
   ptyShutdownLifecycleHandlers
 } from './pty-shutdown-data-suspension'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import {
-  addLegacyTerminalAttributionDisableRequest,
-  withLegacyTerminalAttributionDisabledEnv
-} from '../../../../shared/legacy-terminal-attribution-env'
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
@@ -103,8 +92,6 @@ const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
 const HOST_SESSION_INVENTORY_MAX_WINDOWS_PER_RECOVERY = 2
 const HOST_SESSION_SAME_HANDLE_END_REUSE_LIMIT = 2
 const TERMINAL_CREATE_RETRY_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000] as const
-const AGENT_SESSION_REPLAY_UPDATE_REQUIRED_MESSAGE =
-  'Remote agent recovery requires the same updated Orca server that accepted the launch. Update the workspace host and try again; no fallback launch was attempted.'
 
 type HostHandleReplacementPolicy = 'reuse' | 'prefer-replacement' | 'require-replacement'
 
@@ -371,7 +358,6 @@ export function createRemoteRuntimePtyTransport(
   // Why: reconnect retries must replay one host operation instead of creating
   // another fresh agent when the first response was lost.
   const agentCreateOperation = createAgentSessionCreateOperation()
-  let agentSessionCreateAuthority: LiveRuntimeEnvironmentAuthority | null = null
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -866,16 +852,14 @@ export function createRemoteRuntimePtyTransport(
     environmentId: string,
     method: string,
     params?: unknown,
-    timeoutMs = 15_000,
-    expectedRuntimeId?: string
+    timeoutMs = 15_000
   ): Promise<TResult> {
     const response = await window.api.runtimeEnvironments.call({
       selector: environmentId,
       method,
       params,
       timeoutMs,
-      expectedEnvironmentPairingRevision: runtimeEnvironmentPairingRevision,
-      ...(expectedRuntimeId ? { expectedRuntimeId } : {})
+      expectedEnvironmentPairingRevision: runtimeEnvironmentPairingRevision
     })
     return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<TResult>)
   }
@@ -924,8 +908,7 @@ export function createRemoteRuntimePtyTransport(
       reconcileExisting: boolean
     ) => Promise<RemoteAgentSessionLaunchResult>,
     environmentId: string,
-    expectedLifecycleEpoch: number,
-    beforeReplay?: (timeoutMs: number) => Promise<void>
+    expectedLifecycleEpoch: number
   ): Promise<RemoteAgentSessionLaunchResult | null> {
     let retryAttempt = 0
     // Structured operations already carry their replay proof; ordinary terminal.create
@@ -1010,9 +993,6 @@ export function createRemoteRuntimePtyTransport(
         break
       }
       try {
-        if (reconcileExisting) {
-          await beforeReplay?.(Math.min(5_000, createRemainingMs ?? 5_000))
-        }
         return await invoke(Math.min(15_000, createRemainingMs ?? 15_000), reconcileExisting)
       } catch (error) {
         lastError = error
@@ -1995,10 +1975,8 @@ export function createRemoteRuntimePtyTransport(
         const commandToSend = options.command ?? command
         const startupCommandDeliveryToSend =
           options.startupCommandDelivery ?? startupCommandDelivery
-        const envToSend = withLegacyTerminalAttributionDisabledEnv(options.env ?? env)
-        const envToDeleteToSend = addLegacyTerminalAttributionDisableRequest(
-          options.envToDelete ?? envToDelete
-        )
+        const envToSend = options.env ?? env
+        const envToDeleteToSend = options.envToDelete ?? envToDelete
         const launchConfigToSend = options.launchConfig ?? launchConfig
         const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
         const launchTokenToSend = options.launchToken ?? launchToken
@@ -2026,7 +2004,7 @@ export function createRemoteRuntimePtyTransport(
           presentation: 'background' as const,
           ...(activate === true ? { activate: true } : {})
         }
-        const legacyCreate = ({ authority }: { authority: LiveRuntimeEnvironmentAuthority }) =>
+        const legacyCreate = () =>
           createWithUnknownOutcomeRecovery(
             'terminal',
             (timeoutMs, reconcileExisting) =>
@@ -2037,49 +2015,13 @@ export function createRemoteRuntimePtyTransport(
                   ...legacyCreateParams,
                   ...(reconcileExisting ? { reconcileExisting: true } : {})
                 },
-                timeoutMs,
-                authority.runtimeId
+                timeoutMs
               ),
             createEnvironmentId,
             connectLifecycleEpoch
           )
-        const requiredAgentSessionCapabilities: readonly RuntimeCapability[] =
-          resumeProviderSessionToSend && launchAgentToSend === 'omp'
-            ? [AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY]
-            : []
-        const revalidateAgentSessionReplay = async (
-          timeoutMs: number,
-          authority: LiveRuntimeEnvironmentAuthority
-        ): Promise<void> => {
-          const status = await callRuntimeForEnvironment<RuntimeStatus>(
-            createEnvironmentId,
-            'status.get',
-            undefined,
-            timeoutMs,
-            authority.runtimeId
-          )
-          const requiredCapabilities = [
-            AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
-            TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY,
-            ...requiredAgentSessionCapabilities
-          ]
-          const capabilities = Array.isArray(status.capabilities) ? status.capabilities : []
-          if (
-            status.runtimeId !== authority.runtimeId ||
-            requiredCapabilities.some((capability) => !capabilities.includes(capability))
-          ) {
-            throw new Error(AGENT_SESSION_REPLAY_UPDATE_REQUIRED_MESSAGE)
-          }
-        }
-        const hostAuthorityCreate = (authority: LiveRuntimeEnvironmentAuthority) => {
-          if (
-            agentSessionCreateAuthority &&
-            agentSessionCreateAuthority.runtimeId !== authority.runtimeId
-          ) {
-            throw new Error(AGENT_SESSION_REPLAY_UPDATE_REQUIRED_MESSAGE)
-          }
-          agentSessionCreateAuthority ??= authority
-          return createWithUnknownOutcomeRecovery(
+        const hostAuthorityCreate = () =>
+          createWithUnknownOutcomeRecovery(
             'agent-session',
             (timeoutMs) =>
               resumeProviderSessionToSend
@@ -2101,8 +2043,7 @@ export function createRemoteRuntimePtyTransport(
                       placement: { tabId, leafId },
                       presentation: 'background'
                     },
-                    timeoutMs,
-                    authority.runtimeId
+                    timeoutMs
                   )
                 : callRuntimeForEnvironment<RuntimeCreateAgentSessionResult>(
                     createEnvironmentId,
@@ -2124,37 +2065,23 @@ export function createRemoteRuntimePtyTransport(
                       },
                       agentCreateOperation.clientOperationId
                     ),
-                    timeoutMs,
-                    authority.runtimeId
+                    timeoutMs
                   ),
             createEnvironmentId,
-            connectLifecycleEpoch,
-            (timeoutMs) => revalidateAgentSessionReplay(timeoutMs, authority)
+            connectLifecycleEpoch
           )
-        }
         const created = launchAgentToSend
           ? agentSessionRequiresHostAuthorityReplay
-            ? agentSessionCreateAuthority
-              ? await hostAuthorityCreate(agentSessionCreateAuthority)
-              : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
-                  environmentId: createEnvironmentId,
-                  expectedEnvironmentPairingRevision: runtimeEnvironmentPairingRevision,
-                  hostAuthority: hostAuthorityCreate,
-                  requiredHostAuthorityCapabilities: requiredAgentSessionCapabilities,
-                  legacy: legacyCreate
-                })
+            ? await hostAuthorityCreate()
             : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
                 environmentId: createEnvironmentId,
-                expectedEnvironmentPairingRevision: runtimeEnvironmentPairingRevision,
                 hostAuthority: hostAuthorityCreate,
-                requiredHostAuthorityCapabilities: requiredAgentSessionCapabilities,
+                ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
+                  ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+                  : {}),
                 legacy: legacyCreate
               })
-          : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
-              environmentId: createEnvironmentId,
-              expectedEnvironmentPairingRevision: runtimeEnvironmentPairingRevision,
-              legacy: legacyCreate
-            })
+          : await legacyCreate()
         if (!created) {
           if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
             connecting = false
@@ -2230,21 +2157,13 @@ export function createRemoteRuntimePtyTransport(
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
           connecting = false
           const message = runtimeTerminalErrorMessage(error)
-          const recoverable = isRecoverableRemoteRuntimeConnectionError(
-            toRemoteRuntimeClientErrorLike(error)
-          )
           if (isRemoteTerminalGoneMessage(message)) {
             recovery.cancel()
             handleRemoteTerminalError(error)
           } else if (
-            recoverable ||
-            terminalCreateNeedsReconciliation ||
-            agentSessionRequiresHostAuthorityReplay
+            isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))
           ) {
             recovery.markDisconnected()
-            if (!recoverable) {
-              surfaceErrorMessage(message)
-            }
           } else {
             recovery.cancel()
             emitRecoveryState()

@@ -78,10 +78,6 @@ vi.mock('../providers/windows-conpty-process-membership', () => ({
 import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
-import {
-  LEGACY_TERMINAL_SHIM_ENV_KEYS,
-  stripLegacyTerminalShimEnv
-} from '../pty/legacy-terminal-shim-dir'
 
 const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_OPENCODE_CONFIG_DIR',
@@ -1279,35 +1275,6 @@ describe('createPtySubprocess', () => {
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 
-  it('does not inherit legacy attribution state from a pre-upgrade daemon', () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-    const saved = Object.fromEntries(
-      [...LEGACY_TERMINAL_SHIM_ENV_KEYS, 'PATH'].map((key) => [key, process.env[key]])
-    )
-    process.env.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
-    process.env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-terminal-attribution/posix'
-    process.env.PATH = `/tmp/orca-terminal-attribution/posix${delimiter}/usr/bin`
-
-    try {
-      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    } finally {
-      for (const [key, value] of Object.entries(saved)) {
-        if (value === undefined) {
-          delete process.env[key]
-        } else {
-          process.env[key] = value
-        }
-      }
-    }
-
-    const env = spawnMock.mock.calls.at(-1)?.[2].env
-    expect(env.PATH).toBe('/usr/bin')
-    for (const key of LEGACY_TERMINAL_SHIM_ENV_KEYS) {
-      expect(env[key]).toBeUndefined()
-    }
-  })
-
   it('does not inherit NODE_ENV from the daemon process env', () => {
     // Why: a dev-mode Orca forks the daemon with NODE_ENV=development; leaking
     // Orca's build mode into user shells breaks `next build` and Vitest.
@@ -1328,9 +1295,7 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.NODE_ENV).toBeUndefined()
-    const expectedEnv = { PATH: process.env.PATH ?? '' }
-    stripLegacyTerminalShimEnv(expectedEnv, process.platform)
-    expect(env.PATH).toBe(expectedEnv.PATH)
+    expect(env.PATH).toBe(process.env.PATH)
   })
 
   it('keeps an explicitly requested NODE_ENV for daemon PTY shells', () => {
@@ -2242,8 +2207,6 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    const expectedEnv = { PATH: process.env.PATH ?? '' }
-    stripLegacyTerminalShimEnv(expectedEnv, 'win32')
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
     try {
@@ -2255,7 +2218,7 @@ describe('createPtySubprocess', () => {
     }
 
     const env = spawnMock.mock.calls.at(-1)![2].env
-    expect(env.PATH).toBe(expectedEnv.PATH)
+    expect(env.PATH).toBe(process.env.PATH)
   })
 
   it('preserves a duplicated path block supplied by main', () => {

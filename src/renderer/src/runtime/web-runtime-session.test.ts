@@ -56,11 +56,8 @@ const mocks = vi.hoisted(() => ({
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn(),
-  hasMaterializedWebRuntimeBrowserPage: vi.fn(),
-  toastError: vi.fn()
+  hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
-
-vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 vi.mock('../store', () => ({
   useAppStore: {
@@ -112,21 +109,6 @@ function makeSnapshot(): RuntimeMobileSessionTabsResult {
     activeTabId: null,
     activeTabType: null,
     tabs: []
-  }
-}
-
-function makeAttributionSafeStatus(capabilities: string[] = ['terminal.attribution-removed.v1']) {
-  return {
-    id: 'status',
-    ok: true,
-    result: {
-      runtimeId: 'runtime-1',
-      graphStatus: 'ready',
-      runtimeProtocolVersion: 3,
-      minCompatibleRuntimeClientVersion: 2,
-      appVersion: '1.4.181',
-      capabilities
-    }
   }
 }
 
@@ -1448,7 +1430,6 @@ describe('createWebRuntimeSessionTerminal', () => {
     })
     const runtimeCall = vi
       .fn()
-      .mockResolvedValueOnce(makeAttributionSafeStatus())
       .mockResolvedValueOnce({
         id: 'create',
         ok: true,
@@ -1467,43 +1448,6 @@ describe('createWebRuntimeSessionTerminal', () => {
     ).resolves.toEqual({ status: 'created' })
 
     expect(selectedHosts).toEqual([RUNTIME_EXECUTION_HOST_ID])
-  })
-
-  it('refuses session-tab creation when an older host drops terminal environment fields', async () => {
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'status',
-      ok: true,
-      result: { capabilities: ['mobile.tasks.v1'] }
-    })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
-
-    await expect(createWebRuntimeSessionTerminal({ worktreeId: WORKTREE_ID })).resolves.toEqual({
-      status: 'failed',
-      message:
-        'Creating terminals requires a newer workspace host that can verify safe terminal environment forwarding. Update the host and try again.'
-    })
-
-    expect(runtimeCall.mock.calls.map(([request]) => request.method)).toEqual(['status.get'])
-  })
-
-  it('returns a failed outcome when attribution cleanup exceeds the deletion limit', async () => {
-    const runtimeCall = vi.fn()
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
-
-    await expect(
-      createWebRuntimeSessionTerminal({
-        worktreeId: WORKTREE_ID,
-        envToDelete: Array.from({ length: 32 }, (_, index) => `KEY_${index}`)
-      })
-    ).resolves.toEqual({
-      status: 'failed',
-      message: 'Terminal environment deletion limit leaves no room for attribution cleanup'
-    })
-    expect(runtimeCall).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -1525,7 +1469,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               graphStatus: 'ready',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+              capabilities: ['agent-session.host-authority.v1']
             }
           }
         }
@@ -1614,7 +1558,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           graphStatus: 'ready',
           runtimeProtocolVersion: 3,
           minCompatibleRuntimeClientVersion: 2,
-          capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+          capabilities: ['agent-session.host-authority.v1']
         }
       })
       .mockResolvedValueOnce({
@@ -1678,7 +1622,6 @@ describe('createWebRuntimeSessionTerminal', () => {
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
       expectedEnvironmentPairingRevision: undefined,
-      expectedRuntimeId: 'runtime-1',
       method: 'terminal.createAgentSession',
       params: {
         clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
@@ -1723,7 +1666,6 @@ describe('createWebRuntimeSessionTerminal', () => {
   it('keeps exact legacy ordering when structured creation cannot express afterTabId', async () => {
     const runtimeCall = vi
       .fn()
-      .mockResolvedValueOnce(makeAttributionSafeStatus())
       .mockResolvedValueOnce({
         id: 'legacy-create',
         ok: true,
@@ -1749,10 +1691,8 @@ describe('createWebRuntimeSessionTerminal', () => {
       })
     ).resolves.toEqual({ status: 'created' })
 
-    expect(runtimeCall).toHaveBeenNthCalledWith(2, {
+    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
       selector: ENVIRONMENT_ID,
-      expectedEnvironmentPairingRevision: undefined,
-      expectedRuntimeId: 'runtime-1',
       method: 'session.tabs.createTerminal',
       params: {
         worktree: `id:${WORKTREE_ID}`,
@@ -1760,8 +1700,6 @@ describe('createWebRuntimeSessionTerminal', () => {
         targetGroupId: 'group-left',
         command: undefined,
         cwd: undefined,
-        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
-        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         startupCommandDelivery: undefined,
         agent: 'codex',
         activate: false,
@@ -1771,7 +1709,6 @@ describe('createWebRuntimeSessionTerminal', () => {
       timeoutMs: 15_000
     })
     expect(runtimeCall.mock.calls.map(([request]) => request.method)).toEqual([
-      'status.get',
       'session.tabs.createTerminal',
       'session.tabs.list'
     ])
@@ -1788,7 +1725,6 @@ describe('createWebRuntimeSessionTerminal', () => {
     })
     const runtimeCall = vi
       .fn()
-      .mockResolvedValueOnce(makeAttributionSafeStatus())
       .mockResolvedValueOnce({
         id: 'create-terminal',
         ok: true,
@@ -1845,7 +1781,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               graphStatus: 'ready',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+              capabilities: ['agent-session.host-authority.v1']
             }
           }
         }
@@ -1906,7 +1842,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: ['agent-session.host-authority.v1']
           }
         }
       }
@@ -1959,7 +1895,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['terminal.attribution-removed.v1']
+            capabilities: []
           }
         }
       }
@@ -1990,8 +1926,6 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
-      expectedEnvironmentPairingRevision: undefined,
-      expectedRuntimeId: 'old-runtime',
       method: 'session.tabs.createTerminal',
       params: {
         worktree: `id:${WORKTREE_ID}`,
@@ -1999,8 +1933,6 @@ describe('createWebRuntimeSessionTerminal', () => {
         targetGroupId: 'group-left',
         command: undefined,
         cwd: undefined,
-        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
-        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         startupCommandDelivery: undefined,
         launchAgent: 'codex',
         activate: false,
@@ -2027,7 +1959,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['terminal.attribution-removed.v1']
+            capabilities: []
           }
         }
       }
@@ -2062,8 +1994,6 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
-      expectedEnvironmentPairingRevision: undefined,
-      expectedRuntimeId: 'old-runtime',
       method: 'session.tabs.createTerminal',
       params: {
         worktree: `id:${WORKTREE_ID}`,
@@ -2071,8 +2001,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         targetGroupId: undefined,
         command: "codex resume 'session-1'",
         cwd: undefined,
-        env: { CODEX_PROFILE: 'captured', ORCA_ATTRIBUTION_BYPASS: '1' },
-        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: undefined,
         launchConfig: {
           agentCommand: 'codex',
@@ -2101,7 +2030,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: ['agent-session.host-authority.v1']
           }
         }
       }
@@ -2142,14 +2071,9 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     expect(methods).toEqual(['status.get', 'session.tabs.createTerminal', 'session.tabs.list'])
     expect(runtimeCall.mock.calls[1]?.[0]).toMatchObject({
-      expectedRuntimeId: 'new-runtime',
       params: {
         command: "omp --resume '/custom/omp/project/session.jsonl'",
-        env: {
-          PI_CODING_AGENT_DIR: '/custom/omp',
-          ORCA_ATTRIBUTION_BYPASS: '1'
-        },
-        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        env: { PI_CODING_AGENT_DIR: '/custom/omp' },
         launchAgent: 'omp'
       }
     })
@@ -2166,7 +2090,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: ['agent-session.host-authority.v1']
           }
         }
       }
@@ -2228,7 +2152,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: ['agent-session.host-authority.v1']
           }
         }
       }
@@ -2858,25 +2782,17 @@ describe('splitWebRuntimeTerminal', () => {
   })
 
   it('passes telemetry source to the host split while allowing the mirrored split event to be suppressed', async () => {
-    const runtimeCall = vi.fn(async (request: { method: string }) =>
-      request.method === 'status.get'
-        ? {
-            id: 'status',
-            ok: true,
-            result: { capabilities: ['terminal.attribution-removed.v1'] }
-          }
-        : {
-            id: 'split',
-            ok: true,
-            result: {
-              split: {
-                handle: 'terminal-2',
-                tabId: 'tab-1',
-                paneRuntimeId: -1
-              }
-            }
-          }
-    )
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'split',
+      ok: true,
+      result: {
+        split: {
+          handle: 'terminal-2',
+          tabId: 'tab-1',
+          paneRuntimeId: -1
+        }
+      }
+    })
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -2895,22 +2811,13 @@ describe('splitWebRuntimeTerminal', () => {
       consumePendingWebRuntimeSplitMirrorTelemetry('remote:web-env-1@@terminal-1', 'horizontal')
     ).toBe(true)
 
-    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
-    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    expect(runtimeCall).toHaveBeenCalledWith({
       selector: 'web-env-1',
-      expectedEnvironmentPairingRevision: undefined,
-      method: 'status.get',
-      timeoutMs: 15_000
-    })
-    expect(runtimeCall).toHaveBeenNthCalledWith(2, {
-      selector: 'web-env-1',
-      expectedEnvironmentPairingRevision: undefined,
       method: 'terminal.split',
       params: {
         terminal: 'terminal-1',
         direction: 'horizontal',
-        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
-        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         telemetrySource: 'keyboard'
       },
       timeoutMs: 15_000
@@ -2919,19 +2826,11 @@ describe('splitWebRuntimeTerminal', () => {
 
   it('does not track rejected host split RPCs', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const runtimeCall = vi.fn(async (request: { method: string }) =>
-      request.method === 'status.get'
-        ? {
-            id: 'status',
-            ok: true,
-            result: { capabilities: ['terminal.attribution-removed.v1'] }
-          }
-        : {
-            id: 'split',
-            ok: false,
-            error: { code: 'terminal_exited', message: 'Terminal exited' }
-          }
-    )
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'split',
+      ok: false,
+      error: { code: 'terminal_exited', message: 'Terminal exited' }
+    })
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -2944,53 +2843,23 @@ describe('splitWebRuntimeTerminal', () => {
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'context_menu')
     ).toBe(true)
 
-    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(warnSpy).toHaveBeenCalledTimes(1))
-    expect(mocks.toastError).toHaveBeenCalledWith('Terminal exited')
     expect(mocks.trackTerminalPaneSplit).not.toHaveBeenCalled()
   })
 
-  it('refuses legacy hosts because renderer-owned splits discard environment fields', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'status',
-      ok: true,
-      result: { appVersion: '1.4.181', capabilities: ['mobile.tasks.v1'] }
-    })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
-
-    expect(splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard')).toBe(
-      true
-    )
-
-    await vi.waitFor(() => expect(warnSpy).toHaveBeenCalledTimes(1))
-    expect(runtimeCall).toHaveBeenCalledTimes(1)
-    expect(runtimeCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'terminal.split' })
-    )
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      expect.stringContaining('Update the host and try again')
-    )
-  })
-
   it('ignores local panes but delegates remote runtime panes from desktop or web clients', async () => {
-    const runtimeCall = vi.fn(async (request: { method: string }) =>
-      request.method === 'status.get'
-        ? { id: 'status', ok: true, result: { capabilities: ['terminal.attribution-removed.v1'] } }
-        : {
-            id: 'split',
-            ok: true,
-            result: {
-              split: {
-                handle: 'terminal-2',
-                tabId: 'tab-1',
-                ptyId: 'pty-2'
-              }
-            }
-          }
-    )
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'split',
+      ok: true,
+      result: {
+        split: {
+          handle: 'terminal-2',
+          tabId: 'tab-1',
+          ptyId: 'pty-2'
+        }
+      }
+    })
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -3005,7 +2874,7 @@ describe('splitWebRuntimeTerminal', () => {
       true
     )
 
-    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
   })
 })
 

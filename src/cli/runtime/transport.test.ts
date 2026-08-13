@@ -50,48 +50,6 @@ describe('runtime transport timeout validation', () => {
 // Why: these tests create Unix domain socket servers in temp directories.
 // Windows does not support Unix domain sockets in the same way.
 describe.skipIf(process.platform === 'win32')('runtime transport', () => {
-  it('forwards the expected runtime fence in local requests', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
-    let receivedRequest: Record<string, unknown> | null = null
-    const server = createServer((socket) => {
-      sockets.add(socket)
-      socket.once('close', () => sockets.delete(socket))
-      socket.once('data', (data) => {
-        receivedRequest = JSON.parse(String(data).trim()) as Record<string, unknown>
-        socket.write(
-          `${JSON.stringify({
-            id: receivedRequest.id,
-            ok: true,
-            result: { terminal: { handle: 'terminal-1' } },
-            _meta: { runtimeId: 'runtime-1' }
-          })}\n`
-        )
-      })
-    })
-    servers.add(server)
-    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-
-    await sendRequest(
-      {
-        runtimeId: 'runtime-1',
-        pid: 123,
-        transports: [{ kind: 'unix', endpoint }],
-        authToken: 'token',
-        startedAt: 1
-      },
-      'terminal.create',
-      { worktree: 'id:worktree-1' },
-      1_000,
-      { expectedRuntimeId: 'runtime-1' }
-    )
-
-    expect(receivedRequest).toMatchObject({
-      method: 'terminal.create',
-      expectedRuntimeId: 'runtime-1'
-    })
-  })
-
   it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
     const endpoint = join(userDataPath, 'runtime.sock')

@@ -193,14 +193,11 @@ export async function subscribeRuntimeEnvironment(
         | { type: 'close' }
     ) => void
     onClose: () => void
-  },
-  expectedRuntimeId?: string
+  }
 ): Promise<RemoteRuntimeSubscription> {
   const environment = resolveEnvironment(userDataPath, selector)
   const pairing = getPreferredPairingOffer(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
-  const envelope: RuntimeOrchestrationEnvelope | undefined =
-    expectedRuntimeId === undefined ? undefined : { expectedRuntimeId }
   let markedUsed = false
   const markUsedOnce = (runtimeId: string): void => {
     if (markedUsed) {
@@ -243,8 +240,7 @@ export async function subscribeRuntimeEnvironment(
         method,
         params,
         effectiveTimeoutMs,
-        callbacksWithMarkUsed,
-        envelope
+        callbacksWithMarkUsed
       )
     }
     return await subscribeRemoteRuntimeRequest(
@@ -252,9 +248,7 @@ export async function subscribeRuntimeEnvironment(
       method,
       params,
       effectiveTimeoutMs,
-      callbacksWithMarkUsed,
-      undefined,
-      envelope
+      callbacksWithMarkUsed
     )
   } catch (error) {
     if (error instanceof Error) {

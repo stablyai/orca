@@ -46,7 +46,6 @@ export type RpcRequest = {
   authToken: string
   method: string
   params?: unknown
-  expectedRuntimeId?: string
   orchestrationCapability?: string
   orchestrationContractVersion?: number
   orchestrationRequestId?: string

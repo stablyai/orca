@@ -5,8 +5,6 @@ type RuntimeEnvironmentSubscribeArgs = {
   method: string
   params?: unknown
   timeoutMs?: number
-  expectedEnvironmentPairingRevision?: number
-  expectedRuntimeId?: string
 }
 
 type RuntimeEnvironmentSubscriptionCallbacks = {

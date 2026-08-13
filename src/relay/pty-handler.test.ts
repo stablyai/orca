@@ -11,7 +11,6 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
-import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -309,56 +308,7 @@ describe('PtyHandler', () => {
 
     const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(spawnOptions.env.NODE_ENV).toBeUndefined()
-    const expectedEnv = { PATH: process.env.PATH ?? '' }
-    stripLegacyTerminalShimEnv(expectedEnv, process.platform)
-    expect(spawnOptions.env.PATH).toBe(expectedEnv.PATH)
-  })
-
-  it('does not inherit legacy attribution state from the relay process', async () => {
-    const keys = ['ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_ATTRIBUTION_SHIM_DIR', 'PATH'] as const
-    const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
-    process.env.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
-    process.env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-terminal-attribution/posix'
-    process.env.PATH = '/tmp/orca-terminal-attribution/posix:/usr/bin'
-
-    try {
-      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
-      const spawnedEnv = mockPtySpawn.mock.calls.at(-1)?.[2] as {
-        env: Record<string, string>
-      }
-      expect(spawnedEnv.env.PATH).toBe('/usr/bin')
-      expect(spawnedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-      expect(spawnedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
-
-      const state = (await dispatcher.callRequest('pty.serialize', {
-        ids: ['pty-1']
-      })) as string
-      await handler.dispose({ waitForPhysicalExit: false })
-      mockPtySpawn.mockClear()
-      dispatcher = createMockDispatcher()
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
-      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-      try {
-        await dispatcher.callRequest('pty.revive', { state })
-      } finally {
-        killSpy.mockRestore()
-      }
-
-      const revivedEnv = mockPtySpawn.mock.calls.at(-1)?.[2] as {
-        env: Record<string, string>
-      }
-      expect(revivedEnv.env.PATH).toBe('/usr/bin')
-      expect(revivedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-      expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
-    } finally {
-      for (const [key, value] of Object.entries(saved)) {
-        if (value === undefined) {
-          delete process.env[key]
-        } else {
-          process.env[key] = value
-        }
-      }
-    }
+    expect(spawnOptions.env.PATH).toBe(process.env.PATH)
   })
 
   it('keeps a renderer-supplied NODE_ENV for the spawned shell', async () => {

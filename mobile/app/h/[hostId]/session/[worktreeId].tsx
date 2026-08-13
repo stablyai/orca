@@ -127,15 +127,6 @@ import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
-import {
-  addLegacyTerminalAttributionDisableRequest,
-  MOBILE_TERMINAL_CREATE_ATTRIBUTION_UPDATE_REQUIRED_MESSAGE,
-  withLegacyTerminalAttributionDisabledEnv
-} from '../../../../../src/shared/legacy-terminal-attribution-env'
-import {
-  assertMobileTerminalAttributionDisableSupported,
-  MOBILE_TERMINAL_CREATE_RPC_OPTIONS
-} from '../../../../src/session/mobile-terminal-attribution-compat'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
 import {
@@ -3674,27 +3665,20 @@ export default function SessionScreen() {
       .slice(2, 10)}`
 
     try {
-      const authority = await assertMobileTerminalAttributionDisableSupported(client)
-      const response = await client.sendRequest(
-        'session.tabs.createTerminal',
-        {
-          worktree: `id:${worktreeId}`,
-          afterTabId: activeSessionTabId ?? undefined,
-          clientMutationId,
-          ...(options?.startupCommand ? { command: options.startupCommand } : {}),
-          ...(options?.startupCommandDelivery
-            ? { startupCommandDelivery: options.startupCommandDelivery }
-            : {}),
-          env: withLegacyTerminalAttributionDisabledEnv(undefined),
-          envToDelete: addLegacyTerminalAttributionDisableRequest(undefined),
-          ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
-          ...(agent ? { agent } : {}),
-          activate: false,
-          select: true,
-          navigation: 'caller'
-        },
-        { ...MOBILE_TERMINAL_CREATE_RPC_OPTIONS, expectedRuntimeId: authority.runtimeId }
-      )
+      const response = await client.sendRequest('session.tabs.createTerminal', {
+        worktree: `id:${worktreeId}`,
+        afterTabId: activeSessionTabId ?? undefined,
+        clientMutationId,
+        ...(options?.startupCommand ? { command: options.startupCommand } : {}),
+        ...(options?.startupCommandDelivery
+          ? { startupCommandDelivery: options.startupCommandDelivery }
+          : {}),
+        ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
+        ...(agent ? { agent } : {}),
+        activate: false,
+        select: true,
+        navigation: 'caller'
+      })
       if (response.ok) {
         const result = (response as RpcSuccess).result as TerminalCreateResult
         const created = result.tab
@@ -3794,17 +3778,10 @@ export default function SessionScreen() {
           showToast(message, 1800)
         }
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : null
-      const message =
-        errorMessage === MOBILE_TERMINAL_CREATE_ATTRIBUTION_UPDATE_REQUIRED_MESSAGE
-          ? errorMessage
-          : (options?.errorToast ?? errorMessage ?? 'Failed to create terminal')
+    } catch {
+      const message = options?.errorToast ?? 'Failed to create terminal'
       setCreateError(message)
-      if (
-        options?.errorToast ||
-        errorMessage === MOBILE_TERMINAL_CREATE_ATTRIBUTION_UPDATE_REQUIRED_MESSAGE
-      ) {
+      if (options?.errorToast) {
         triggerError()
         showToast(message, 1800)
       }

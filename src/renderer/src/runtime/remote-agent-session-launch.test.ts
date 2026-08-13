@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ probe: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  supportsCapability: vi.fn()
+}))
 
 vi.mock('./runtime-rpc-client', () => ({
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
@@ -10,110 +12,75 @@ vi.mock('./runtime-rpc-client', () => ({
       this.code = response.error.code
     }
   },
-  probeLiveRuntimeEnvironmentCapabilities: mocks.probe
+  runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
 import { RuntimeRpcCallError } from './runtime-rpc-client'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 
-const authority = {
-  runtimeId: 'runtime-1',
-  expectedEnvironmentPairingRevision: 7,
-  capabilities: [
-    'terminal.attribution-removed.v1',
-    'agent-session.host-authority.v1',
-    'agent-session.omp-resume-path.v1'
-  ]
-} as const
-
 describe('remote agent-session launch routing', () => {
   beforeEach(() => {
-    mocks.probe.mockReset()
-    mocks.probe.mockResolvedValue({ supported: true, authority })
+    mocks.supportsCapability.mockReset()
   })
 
-  it('uses one live all-capability probe before host authority', async () => {
+  it('uses host authority only when the host advertises it', async () => {
     const hostAuthority = vi.fn().mockResolvedValue('structured')
     const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockResolvedValue(true)
 
     await expect(
       runRemoteAgentSessionLaunch({
         environmentId: 'env-1',
-        expectedEnvironmentPairingRevision: 7,
         hostAuthority,
-        requiredHostAuthorityCapabilities: ['agent-session.omp-resume-path.v1'],
+        hostAuthorityCapability: 'agent-session.omp-resume-path.v1',
         legacy
       })
     ).resolves.toBe('structured')
-
-    expect(mocks.probe).toHaveBeenCalledWith({
-      environmentId: 'env-1',
-      requiredCapabilities: [
-        'terminal.attribution-removed.v1',
-        'agent-session.host-authority.v1',
-        'agent-session.omp-resume-path.v1'
-      ],
-      timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: 7
-    })
-    expect(hostAuthority).toHaveBeenCalledWith(authority)
+    expect(mocks.supportsCapability).toHaveBeenCalledWith(
+      'env-1',
+      'agent-session.omp-resume-path.v1'
+    )
+    expect(hostAuthority).toHaveBeenCalledOnce()
     expect(legacy).not.toHaveBeenCalled()
   })
 
-  it('uses fenced legacy when a structured-only capability is absent', async () => {
-    mocks.probe.mockResolvedValue({ supported: false, authority })
+  it('preserves the exact legacy path when the capability is absent', async () => {
     const hostAuthority = vi.fn().mockResolvedValue('structured')
     const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockResolvedValue(false)
+
+    await expect(
+      runRemoteAgentSessionLaunch({ environmentId: 'env-1', hostAuthority, legacy })
+    ).resolves.toBe('legacy')
+    expect(legacy).toHaveBeenCalledOnce()
+    expect(hostAuthority).not.toHaveBeenCalled()
+  })
+
+  it('keeps legacy behavior when a read-only capability probe fails', async () => {
+    const hostAuthority = vi.fn().mockResolvedValue('structured')
+    const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockRejectedValue(new Error('status temporarily unavailable'))
+
+    await expect(
+      runRemoteAgentSessionLaunch({ environmentId: 'env-1', hostAuthority, legacy })
+    ).resolves.toBe('legacy')
+    expect(legacy).toHaveBeenCalledOnce()
+    expect(hostAuthority).not.toHaveBeenCalled()
+  })
+
+  it('does not bypass an incompatible runtime protocol', async () => {
+    const compatibilityError = Object.assign(new Error('runtime incompatible'), {
+      code: 'runtime_compat_block'
+    })
+    const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockRejectedValue(compatibilityError)
 
     await expect(
       runRemoteAgentSessionLaunch({
         environmentId: 'env-1',
-        hostAuthority,
-        requiredHostAuthorityCapabilities: ['agent-session.omp-resume-path.v1'],
+        hostAuthority: vi.fn(),
         legacy
       })
-    ).resolves.toBe('legacy')
-
-    expect(hostAuthority).not.toHaveBeenCalled()
-    expect(legacy).toHaveBeenCalledWith({ skipCompatibilityCheck: true, authority })
-  })
-
-  it('fails closed without attribution-removal capability evidence', async () => {
-    mocks.probe.mockResolvedValue({
-      supported: false,
-      authority: { ...authority, capabilities: ['agent-session.host-authority.v1'] }
-    })
-    const legacy = vi.fn().mockResolvedValue('legacy')
-
-    await expect(
-      runRemoteAgentSessionLaunch({ environmentId: 'env-1', hostAuthority: vi.fn(), legacy })
-    ).rejects.toThrow('Update the host and try again')
-    expect(legacy).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when the live capability probe fails', async () => {
-    mocks.probe.mockRejectedValue(
-      Object.assign(new Error('status temporarily unavailable'), { code: 'runtime_timeout' })
-    )
-    const legacy = vi.fn().mockResolvedValue('legacy')
-
-    const result = expect(
-      runRemoteAgentSessionLaunch({ environmentId: 'env-1', hostAuthority: vi.fn(), legacy })
-    ).rejects
-    await result.toThrow('Update the host and try again')
-    await result.toMatchObject({ code: 'runtime_timeout' })
-    expect(legacy).not.toHaveBeenCalled()
-  })
-
-  it('preserves an incompatible runtime protocol error', async () => {
-    const compatibilityError = Object.assign(new Error('runtime incompatible'), {
-      code: 'runtime_compat_block'
-    })
-    mocks.probe.mockRejectedValue(compatibilityError)
-    const legacy = vi.fn().mockResolvedValue('legacy')
-
-    await expect(
-      runRemoteAgentSessionLaunch({ environmentId: 'env-1', hostAuthority: vi.fn(), legacy })
     ).rejects.toBe(compatibilityError)
     expect(legacy).not.toHaveBeenCalled()
   })
@@ -121,6 +88,7 @@ describe('remote agent-session launch routing', () => {
   it('never downgrades after structured dispatch has started', async () => {
     const structuredError = new Error('structured response was lost')
     const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockResolvedValue(true)
 
     await expect(
       runRemoteAgentSessionLaunch({
@@ -132,13 +100,14 @@ describe('remote agent-session launch routing', () => {
     expect(legacy).not.toHaveBeenCalled()
   })
 
-  it('uses fenced legacy for the pre-side-effect lower-owner response', async () => {
+  it('uses legacy only for the host pre-side-effect lower-owner response', async () => {
+    const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockResolvedValue(true)
     const legacyRequired = new RuntimeRpcCallError({
       id: 'request-1',
       ok: false,
       error: { code: 'agent_session_legacy_required', message: 'legacy required' }
     })
-    const legacy = vi.fn().mockResolvedValue('legacy')
 
     await expect(
       runRemoteAgentSessionLaunch({
@@ -147,16 +116,17 @@ describe('remote agent-session launch routing', () => {
         legacy
       })
     ).resolves.toBe('legacy')
-    expect(legacy).toHaveBeenCalledWith({ skipCompatibilityCheck: true, authority })
+    expect(legacy).toHaveBeenCalledOnce()
   })
 
-  it('does not downgrade when a replacement host rejects the structured method', async () => {
+  it('uses legacy when a replaced old host does not recognize the structured method', async () => {
+    const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockResolvedValue(true)
     const methodNotFound = new RuntimeRpcCallError({
       id: 'request-1',
       ok: false,
       error: { code: 'method_not_found', message: 'Unknown method' }
     })
-    const legacy = vi.fn().mockResolvedValue('legacy')
 
     await expect(
       runRemoteAgentSessionLaunch({
@@ -164,16 +134,16 @@ describe('remote agent-session launch routing', () => {
         hostAuthority: vi.fn().mockRejectedValue(methodNotFound),
         legacy
       })
-    ).rejects.toBe(methodNotFound)
-    expect(legacy).not.toHaveBeenCalled()
+    ).resolves.toBe('legacy')
+    expect(legacy).toHaveBeenCalledOnce()
   })
 
-  it('probes and fences legacy when no structured form exists', async () => {
+  it('uses legacy directly when no structured form exists', async () => {
     const legacy = vi.fn().mockResolvedValue('legacy')
 
     await expect(runRemoteAgentSessionLaunch({ environmentId: 'env-1', legacy })).resolves.toBe(
       'legacy'
     )
-    expect(legacy).toHaveBeenCalledWith({ skipCompatibilityCheck: true, authority })
+    expect(mocks.supportsCapability).not.toHaveBeenCalled()
   })
 })

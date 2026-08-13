@@ -77,15 +77,13 @@ export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError: (error: { code: string; message: string }) => void
     onClose?: () => void
-  },
-  envelope?: RuntimeOrchestrationEnvelope
+  }
 ): Promise<RemoteRuntimeSharedSubscription> {
   return getSharedControlConnection(environmentId, pairing).subscribe(
     method,
     params,
     timeoutMs,
-    callbacks,
-    envelope?.expectedRuntimeId
+    callbacks
   )
 }
 

@@ -228,13 +228,6 @@ describe('resumeAiVaultSessionInTerminal', () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        result: {
-          runtimeId: 'runtime',
-          capabilities: ['terminal.attribution-removed.v1']
-        }
-      })
-      .mockResolvedValueOnce({
-        ok: true,
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
       })
       .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
@@ -256,20 +249,13 @@ describe('resumeAiVaultSessionInTerminal', () => {
         navigation: 'caller'
       })
     ).resolves.toMatchObject({ id: 'tab-1', terminal: 'pty-1' })
-    expect(sendRequest).toHaveBeenNthCalledWith(1, 'status.get', undefined, {
-      timeoutMs: 30_000,
-      budgetSpansConnect: true
-    })
     expect(sendRequest).toHaveBeenNthCalledWith(
-      2,
+      1,
       'session.tabs.createTerminal',
       {
         worktree: 'id:worktree-1',
-        env: {
-          ANTHROPIC_BASE_URL: 'http://localhost:3000',
-          ORCA_ATTRIBUTION_BYPASS: '1'
-        },
-        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME', 'ORCA_ENABLE_GIT_ATTRIBUTION'],
+        env: { ANTHROPIC_BASE_URL: 'http://localhost:3000' },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         launchConfig: {
           agentCommand: 'claude',
           agentArgs: '',
@@ -283,14 +269,10 @@ describe('resumeAiVaultSessionInTerminal', () => {
       },
       // Why: a socket drop mid-resume must reject within the request timeout
       // instead of parking on the reconnect waiter with the spinner pinned.
-      {
-        timeoutMs: RESUME_RPC_TIMEOUT_MS,
-        budgetSpansConnect: true,
-        expectedRuntimeId: 'runtime'
-      }
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
     )
     expect(sendRequest).toHaveBeenNthCalledWith(
-      3,
+      2,
       'terminal.send',
       {
         terminal: 'pty-1',
@@ -302,35 +284,17 @@ describe('resumeAiVaultSessionInTerminal', () => {
   })
 
   it('throws when terminal creation fails', async () => {
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        result: {
-          runtimeId: 'runtime',
-          capabilities: ['terminal.attribution-removed.v1']
-        }
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        error: { message: 'no terminal' }
-      })
+    const sendRequest = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      error: { message: 'no terminal' }
+    })
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', { command: 'command' })
     ).rejects.toThrow('no terminal')
   })
 
   it('throws when the created terminal response is malformed', async () => {
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        result: {
-          runtimeId: 'runtime',
-          capabilities: ['terminal.attribution-removed.v1']
-        }
-      })
-      .mockResolvedValueOnce({ ok: true, result: { tab: { id: 'x' } } })
+    const sendRequest = vi.fn().mockResolvedValueOnce({ ok: true, result: { tab: { id: 'x' } } })
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', { command: 'command' })
     ).rejects.toThrow('Created terminal response was invalid')
@@ -339,13 +303,6 @@ describe('resumeAiVaultSessionInTerminal', () => {
   it('throws when terminal send fails or is locked', async () => {
     const failedSend = vi
       .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        result: {
-          runtimeId: 'runtime',
-          capabilities: ['terminal.attribution-removed.v1']
-        }
-      })
       .mockResolvedValueOnce({
         ok: true,
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
@@ -361,13 +318,6 @@ describe('resumeAiVaultSessionInTerminal', () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        result: {
-          runtimeId: 'runtime',
-          capabilities: ['terminal.attribution-removed.v1']
-        }
-      })
-      .mockResolvedValueOnce({
-        ok: true,
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
       })
       .mockResolvedValueOnce({ ok: true, result: { send: { accepted: false } } })
@@ -376,17 +326,6 @@ describe('resumeAiVaultSessionInTerminal', () => {
         command: 'command'
       })
     ).rejects.toThrow('Terminal input is locked')
-  })
-
-  it('refuses an old host before creating a resume terminal', async () => {
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, result: { appVersion: '1.4.89' } })
-
-    await expect(
-      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', { command: 'command' })
-    ).rejects.toThrow('Update the host and try again')
-    expect(sendRequest).toHaveBeenCalledTimes(1)
   })
 })
 

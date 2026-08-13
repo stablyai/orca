@@ -985,7 +985,6 @@ const TerminalSplit = TerminalHandle.extend({
     .optional(),
   command: OptionalString,
   env: z.record(z.string(), z.string()).optional(),
-  envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
   telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional()
 })
 
@@ -1473,7 +1472,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         direction: params.direction,
         command: params.command,
         env: params.env,
-        envToDelete: params.envToDelete,
         telemetrySource: params.telemetrySource
       })
     })

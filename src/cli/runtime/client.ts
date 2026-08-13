@@ -87,7 +87,6 @@ export class RuntimeClient {
         }
       : {}
     const envelope = {
-      expectedRuntimeId: options?.expectedRuntimeId,
       orchestrationCapability: options?.orchestrationCapability,
       orchestrationContractVersion: method.startsWith('orchestration.')
         ? ORCHESTRATION_CONTRACT_VERSION

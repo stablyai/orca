@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
-import { sendSharedControlSubscription } from './remote-runtime-shared-control-send'
 import {
   closeSharedControlLogicalSubscription,
   createSharedControlSubscription,
@@ -34,39 +33,6 @@ function okResponse(subscriptionId: string): RuntimeRpcResponse<unknown> {
 }
 
 describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
-  it('preserves the runtime fence when reconnect replay resends a subscription', () => {
-    const subscriptions = new Map<string, SharedControlLogicalSubscription<unknown>>()
-    const subscription = createSharedControlSubscription({
-      requestId: 'req-fenced',
-      method: 'runtime.clientEvents.subscribe',
-      params: null,
-      expectedRuntimeId: 'runtime-1',
-      retainedParamsBytes: 0,
-      callbacks: { onResponse: vi.fn(), onError: vi.fn() }
-    })
-    subscriptions.set(subscription.requestId, subscription)
-    const payloads: unknown[] = []
-    const send = (current: SharedControlLogicalSubscription<unknown>): void =>
-      sendSharedControlSubscription({
-        subscriptions,
-        subscription: current,
-        deviceToken: 'device-token',
-        send: (payload) => {
-          payloads.push(payload)
-          return true
-        }
-      })
-
-    send(subscription)
-    replaySharedControlSubscriptions({ subscriptions, send })
-
-    expect(payloads).toHaveLength(2)
-    expect(payloads).toEqual([
-      expect.objectContaining({ expectedRuntimeId: 'runtime-1' }),
-      expect.objectContaining({ expectedRuntimeId: 'runtime-1' })
-    ])
-  })
-
   it('sends the unsubscribe when closed after an established subscribe replay completes', () => {
     const { subscriptions, subscription } = makeSubscriptions()
     // First establishment: server assigned a concrete subscription id.

@@ -68,12 +68,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
 
     const cleanupPromise = subscribeRuntimeEnvironmentFromPreload(
       ipc,
-      {
-        selector: 'desk',
-        method: 'terminal.subscribe',
-        expectedEnvironmentPairingRevision: 7,
-        expectedRuntimeId: 'runtime-1'
-      },
+      { selector: 'desk', method: 'terminal.subscribe' },
       { onResponse, onBinary },
       () => 'sub-1'
     )
@@ -85,8 +80,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:subscribe', {
       selector: 'desk',
       method: 'terminal.subscribe',
-      expectedEnvironmentPairingRevision: 7,
-      expectedRuntimeId: 'runtime-1',
       subscriptionId: 'sub-1'
     })
 

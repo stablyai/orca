@@ -497,16 +497,14 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   callbacks: RemoteRuntimeSubscriptionCallbacks<TResult>,
-  livenessOptions?: RemoteRuntimeSocketLivenessOptions,
-  envelope?: RuntimeOrchestrationEnvelope
+  livenessOptions?: RemoteRuntimeSocketLivenessOptions
 ): Promise<RemoteRuntimeSubscription> {
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,
     deviceToken: pairing.deviceToken,
     method,
-    params,
-    envelope
+    params
   })
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',

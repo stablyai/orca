@@ -14,12 +14,7 @@ import {
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
-import {
-  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-  RUNTIME_PROTOCOL_VERSION,
-  TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY,
-  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 describe('createRemoteRuntimePtyTransport', () => {
   const runtimeCall = vi.fn()
@@ -118,19 +113,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   }
 
-  function currentRuntimeStatus(capabilities: string[] = []): unknown {
-    return {
-      ok: true,
-      result: {
-        runtimeId: 'runtime-1',
-        graphStatus: 'ready',
-        runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-        minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-        capabilities: [TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY, ...capabilities]
-      }
-    }
-  }
-
   function emitOutput(streamId: number, data: string): void {
     subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
@@ -205,18 +187,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     subscriptionSendBinary.mockReset()
     refreshSessionTabsSnapshot.mockClear()
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
-      if (request.method === 'status.get') {
-        return {
-          ok: true,
-          result: {
-            runtimeId: 'runtime-1',
-            graphStatus: 'ready',
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: [TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY]
-          }
-        }
-      }
       if (request.method === 'session.tabs.activate') {
         const params = request.params as { tabId: string; leafId?: string }
         const resolvedLeafId = params.leafId ?? 'pane:1'
@@ -571,7 +541,10 @@ describe('createRemoteRuntimePtyTransport', () => {
     let createCalls = 0
     runtimeCall.mockImplementation(async (args: { method: string; params?: unknown }) => {
       if (args.method === 'status.get') {
-        return currentRuntimeStatus([TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY])
+        return {
+          ok: true,
+          result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
+        }
       }
       if (args.method === 'terminal.create') {
         createCalls += 1
@@ -619,14 +592,13 @@ describe('createRemoteRuntimePtyTransport', () => {
     try {
       const startedAt = Date.now()
       let createCalls = 0
-      let statusCalls = 0
       runtimeCall.mockImplementation(async (args: { method: string }) => {
         if (args.method === 'status.get') {
-          statusCalls += 1
-          if (statusCalls > 1) {
-            vi.setSystemTime(startedAt + 59_000)
+          vi.setSystemTime(startedAt + 59_000)
+          return {
+            ok: true,
+            result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
           }
-          return currentRuntimeStatus([TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY])
         }
         if (args.method === 'terminal.create') {
           createCalls += 1
@@ -660,7 +632,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('does not retry an unknown create outcome against an older runtime', async () => {
     runtimeCall.mockImplementation(async (args: { method: string }) => {
       if (args.method === 'status.get') {
-        return currentRuntimeStatus()
+        return { ok: true, result: { capabilities: [] } }
       }
       throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
         code: 'runtime_timeout'
@@ -681,15 +653,11 @@ describe('createRemoteRuntimePtyTransport', () => {
   })
 
   it('surfaces an authoritative capability-probe failure after an unknown create outcome', async () => {
-    let statusCalls = 0
     runtimeCall.mockImplementation(async (args: { method: string }) => {
-      if (args.method === 'status.get' && ++statusCalls > 1) {
+      if (args.method === 'status.get') {
         throw Object.assign(new Error('Remote runtime pairing credentials expired.'), {
           code: 'unauthorized'
         })
-      }
-      if (args.method === 'status.get') {
-        return currentRuntimeStatus([TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY])
       }
       throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
         code: 'runtime_timeout'
@@ -726,7 +694,10 @@ describe('createRemoteRuntimePtyTransport', () => {
               }, args.timeoutMs)
             })
           }
-          return currentRuntimeStatus([TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY])
+          return {
+            ok: true,
+            result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
+          }
         }
         if (args.method === 'terminal.create' && reachable) {
           return { ok: true, result: { terminal: { handle: 'terminal-recovered' } } }
@@ -792,10 +763,9 @@ describe('createRemoteRuntimePtyTransport', () => {
           return {
             ok: true,
             result: {
-              runtimeId: 'runtime-1',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+              capabilities: ['agent-session.host-authority.v1']
             }
           }
         }
@@ -843,65 +813,9 @@ describe('createRemoteRuntimePtyTransport', () => {
         .filter((args) => args.method === 'terminal.createAgentSession')
       expect(allCreates.every((args) => args.params?.clientOperationId === operationId)).toBe(true)
       expect(runtimeCall.mock.calls.some(([args]) => args.method === 'terminal.create')).toBe(false)
-      expect(
-        runtimeCall.mock.calls.filter(([args]) => args.method === 'status.get').length
-      ).toBeGreaterThan(1)
-      transport.destroy?.()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('refuses structured replay after an in-place host downgrade', async () => {
-    vi.useFakeTimers()
-    try {
-      let statusCalls = 0
-      const onError = vi.fn()
-      runtimeCall.mockImplementation(async (args: { method: string }) => {
-        if (args.method === 'status.get') {
-          statusCalls += 1
-          return {
-            ok: true,
-            result: {
-              runtimeId: 'runtime-1',
-              runtimeProtocolVersion: 3,
-              minCompatibleRuntimeClientVersion: 2,
-              capabilities:
-                statusCalls === 1
-                  ? ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
-                  : ['agent-session.host-authority.v1']
-            }
-          }
-        }
-        if (args.method === 'terminal.createAgentSession') {
-          throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
-            code: 'runtime_timeout'
-          })
-        }
-        return { ok: true, result: {} }
-      })
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1',
-        launchAgent: 'codex'
-      })
-
-      const connect = transport.connect({ url: '', callbacks: { onError } })
-      await vi.advanceTimersByTimeAsync(250)
-      await connect
-
-      expect(onError).toHaveBeenCalledWith(
-        expect.stringContaining('no fallback launch was attempted')
-      )
-      expect(
-        runtimeCall.mock.calls.filter(([args]) => args.method === 'terminal.createAgentSession')
-      ).toHaveLength(1)
       expect(runtimeCall.mock.calls.filter(([args]) => args.method === 'status.get')).toHaveLength(
-        2
+        1
       )
-      expect(runtimeCall.mock.calls.some(([args]) => args.method === 'terminal.create')).toBe(false)
       transport.destroy?.()
     } finally {
       vi.useRealTimers()
@@ -3941,9 +3855,6 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('closes a remote terminal created after the pane was destroyed', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
     runtimeCall.mockImplementation((args) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve(currentRuntimeStatus())
-      }
       if (args.method === 'terminal.create') {
         return new Promise((resolve) => {
           resolveCreate = resolve
@@ -3959,11 +3870,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     const connect = transport.connect({ url: '', callbacks: {} })
-    await vi.waitFor(() =>
-      expect(runtimeCall).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'terminal.create' })
-      )
-    )
     transport.destroy?.()
     resolveCreate({ ok: true, result: { terminal: { handle: 'terminal-late' } } })
     await connect
@@ -3972,17 +3878,13 @@ describe('createRemoteRuntimePtyTransport', () => {
       selector: 'env-1',
       method: 'terminal.close',
       params: { terminal: 'terminal-late' },
-      timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: undefined
+      timeoutMs: 15_000
     })
   })
 
   it('cannot let a stale create completion replace a newer attached terminal', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
     runtimeCall.mockImplementation((args) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve(currentRuntimeStatus())
-      }
       if (args.method === 'terminal.create') {
         return new Promise((resolve) => {
           resolveCreate = resolve
@@ -3998,11 +3900,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     const connect = transport.connect({ url: '', callbacks: {} })
-    await vi.waitFor(() =>
-      expect(runtimeCall).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'terminal.create' })
-      )
-    )
     transport.attach({ existingPtyId: 'remote:env-2@@terminal-attached', callbacks: {} })
     resolveCreate({ ok: true, result: { terminal: { handle: 'terminal-late' } } })
     await connect
@@ -4013,8 +3910,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       selector: 'env-1',
       method: 'terminal.close',
       params: { terminal: 'terminal-late' },
-      timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: undefined
+      timeoutMs: 15_000
     })
     transport.destroy?.()
   })
@@ -4028,7 +3924,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           result: {
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: ['agent-session.host-authority.v1']
           }
         })
       }
@@ -4078,7 +3974,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           result: {
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: ['agent-session.host-authority.v1']
           }
         })
       }
@@ -4193,7 +4089,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         method: 'terminal.create',
         params: expect.objectContaining({
           command: "codex 'linked issue context'",
-          envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME', 'ORCA_ENABLE_GIT_ATTRIBUTION'],
+          envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
           startupCommandDelivery: 'shell-ready',
           terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
         })
@@ -4209,11 +4105,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: [
-                'agent-session.host-authority.v1',
-                'agent-session.omp-resume-path.v1',
-                'terminal.attribution-removed.v1'
-              ]
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.omp-resume-path.v1']
             }
           }
         : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
@@ -4277,7 +4169,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+              capabilities: ['agent-session.host-authority.v1']
             }
           }
         : {
@@ -4327,10 +4219,9 @@ describe('createRemoteRuntimePtyTransport', () => {
         ? {
             ok: true,
             result: {
-              runtimeId: 'runtime-1',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: [TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY]
+              capabilities: []
             }
           }
         : { ok: true, result: { terminal: { handle: 'terminal-legacy' } } }
@@ -4366,12 +4257,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         worktree: 'id:wt-1',
         clientMutationId: expect.any(String),
         command: "codex '--model' 'gpt-5' 'resume' 'session-1'",
-        env: {
-          CODEX_PROFILE: 'captured',
-          ORCA_AGENT_LAUNCH_TOKEN: 'fresh-token',
-          ORCA_ATTRIBUTION_BYPASS: '1'
-        },
-        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        env: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'fresh-token' },
         launchConfig: {
           agentArgs: '--model gpt-5',
           agentEnv: { CODEX_PROFILE: 'captured' }
@@ -4383,9 +4269,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         focus: false,
         presentation: 'background'
       },
-      timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: undefined,
-      expectedRuntimeId: 'runtime-1'
+      timeoutMs: 15_000
     })
     expect(runtimeCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'terminal.createAgentSession' })
@@ -5802,9 +5686,6 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('returns runtime acceptance for acknowledged terminal input', async () => {
     runtimeCall.mockImplementation((args) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve(currentRuntimeStatus())
-      }
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
@@ -5844,9 +5725,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     vi.useFakeTimers()
     try {
       runtimeCall.mockImplementation((args) => {
-        if (args.method === 'status.get') {
-          return Promise.resolve(currentRuntimeStatus())
-        }
         if (args.method === 'terminal.create') {
           return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
         }
@@ -5892,9 +5770,6 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('returns false when acknowledged terminal input is rejected by the runtime', async () => {
     runtimeCall.mockImplementation((args) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve(currentRuntimeStatus())
-      }
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
@@ -5920,9 +5795,6 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('splits large acknowledged remote input before terminal.send RPCs', async () => {
     runtimeCall.mockImplementation((args) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve(currentRuntimeStatus())
-      }
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
@@ -5962,9 +5834,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     vi.useFakeTimers()
     try {
       runtimeCall.mockImplementation((args) => {
-        if (args.method === 'status.get') {
-          return Promise.resolve(currentRuntimeStatus())
-        }
         if (args.method === 'terminal.create') {
           return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
         }
@@ -6014,9 +5883,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     const firstChunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
     const rejectedChunk = `tail${'y'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES - 4)}`
     runtimeCall.mockImplementation((args) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve(currentRuntimeStatus())
-      }
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
@@ -6055,9 +5921,6 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('rejects oversized acknowledged remote input before runtime RPCs', async () => {
     runtimeCall.mockImplementation((args) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve(currentRuntimeStatus())
-      }
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }

@@ -18,7 +18,6 @@ export type RpcRequest = {
   deviceToken: string
   method: string
   params?: unknown
-  expectedRuntimeId?: string
 }
 
 export type RpcSuccess = {

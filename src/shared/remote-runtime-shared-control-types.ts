@@ -33,7 +33,6 @@ export type SharedControlLogicalSubscription<TResult = unknown> = {
   requestId: string
   method: string
   params: unknown
-  expectedRuntimeId?: string
   retainedParamsBytes: number
   callbacks: SharedControlSubscriptionCallbacks<TResult>
   sent: boolean

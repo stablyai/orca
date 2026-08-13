@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
-import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
 
 const {
   existsSyncMock,
@@ -577,9 +576,7 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.NODE_ENV).toBeUndefined()
-      const expectedEnv = { PATH: process.env.PATH ?? '' }
-      stripLegacyTerminalShimEnv(expectedEnv, process.platform)
-      expect(spawnCall[2].env.PATH).toBe(expectedEnv.PATH)
+      expect(spawnCall[2].env.PATH).toBe(process.env.PATH)
     })
 
     it('keeps an explicitly requested NODE_ENV for spawned terminals', async () => {
@@ -753,19 +750,6 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
       expect(spawnCall[2].env.ORCA_STALE_TEST_ENV).toBeUndefined()
-    })
-
-    it('does not re-promote a legacy attribution path for Agent Teams', async () => {
-      await provider.spawn({
-        cols: 80,
-        rows: 24,
-        env: {
-          PATH: '/tmp/orca-terminal-attribution/posix:/usr/bin',
-          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
-        }
-      })
-
-      expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe('/usr/bin')
     })
 
     it('drops stale inherited Git config indices behind a smaller explicit count', async () => {
