@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { gitHubPRToChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
+import {
+  gitHubPRToChecksPanelReview,
+  selectChecksPanelBranchRefs,
+  selectChecksPanelReview
+} from './checks-panel-review'
 import type { PRInfo } from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
@@ -58,6 +62,38 @@ describe('gitHubPRToChecksPanelReview', () => {
     expect(review.number).toBe(42)
     expect(review.status).toBe('success')
     expect(review.headSha).toBe('abc123')
+  })
+})
+
+describe('selectChecksPanelBranchRefs', () => {
+  // Regression: `pr` is GitHub-only cache data. A GitLab active review sitting
+  // next to a populated GitHub PR cache must not leak the GitHub head/base
+  // branch — GitLab shows only its own target branch.
+  it('ignores GitHub PR branch refs for a GitLab review', () => {
+    const refs = selectChecksPanelBranchRefs(
+      makeGitLabReview({ baseRefName: 'main' }),
+      makePR({ headRefName: 'feature/gh', baseRefName: 'develop' })
+    )
+
+    expect(refs).toEqual({ baseRefName: 'main', headRefName: undefined })
+  })
+
+  it('leaves both refs undefined for a GitLab review with no target branch', () => {
+    const refs = selectChecksPanelBranchRefs(
+      makeGitLabReview({ baseRefName: undefined }),
+      makePR({ headRefName: 'feature/gh', baseRefName: 'develop' })
+    )
+
+    expect(refs).toEqual({ baseRefName: undefined, headRefName: undefined })
+  })
+
+  it('surfaces GitHub PR head and base refs for a GitHub review', () => {
+    const refs = selectChecksPanelBranchRefs(
+      gitHubPRToChecksPanelReview(makePR()),
+      makePR({ headRefName: 'feature/gh', baseRefName: 'develop' })
+    )
+
+    expect(refs).toEqual({ baseRefName: 'develop', headRefName: 'feature/gh' })
   })
 })
 

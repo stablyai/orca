@@ -109,8 +109,13 @@ import { normalizeGlobalWindowsRuntimeDefault } from '../../../../shared/project
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
+
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { type ChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
+import {
+  type ChecksPanelReview,
+  selectChecksPanelBranchRefs,
+  selectChecksPanelReview
+} from './checks-panel-review'
 import { selectReviewCacheEntry } from './review-cache-entry-selection'
 import {
   checksPanelAsyncResultKey,
@@ -201,6 +206,7 @@ import {
   type ChecksPanelHostedReviewModifierDestination
 } from './checks-panel-hosted-review-click-routing'
 import { ChecksPanelUpdatedAtMetadata } from './checks-panel-updated-at-metadata'
+import { ChecksPanelBranchRow } from './checks-panel-branch-row'
 import {
   clearPullRequestGenerationRequiresPushBeforeCreate,
   createRunningPullRequestGenerationRecord,
@@ -4567,6 +4573,9 @@ export default function ChecksPanel(): React.JSX.Element {
             <Pencil className="size-3 text-muted-foreground/40 can-hover:opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0 mt-0.5" />
           </div>
         )}
+
+        {/* Merge target (and head branch when the linked PR carries it) */}
+        <ChecksPanelBranchRow {...selectChecksPanelBranchRefs(activeReview, pr)} />
 
         {/* Updated at */}
         {activeReview.updatedAt && (
