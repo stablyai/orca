@@ -43,6 +43,7 @@ import { ARTIFACT_METHODS } from './artifacts'
 import { AGENT_REGISTRY_METHODS } from './agent-registry'
 import { AGENT_MESSAGE_BROKER_METHODS } from './agent-message-broker'
 import { AGENT_CONSENT_METHODS } from './agent-consent'
+import { AGENT_COLLABORATIVE_SESSION_METHODS } from './agent-collaborative-session'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -51,6 +52,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...AGENT_REGISTRY_METHODS,
   ...AGENT_MESSAGE_BROKER_METHODS,
   ...AGENT_CONSENT_METHODS,
+  ...AGENT_COLLABORATIVE_SESSION_METHODS,
   ...STATUS_METHODS,
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,
