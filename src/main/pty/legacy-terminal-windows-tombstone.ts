@@ -50,21 +50,41 @@ if "%orca_candidate:~1,2%"==":\" goto orca_candidate_rooted
 if "%orca_candidate:~1,2%"==":/" goto orca_candidate_rooted
 exit /b
 :orca_candidate_rooted
-rem Why: %~dp0 is rebound to this label inside CALL, so compare against the cached wrapper dir.
-for %%G in ("%~1") do (
-  if /I not "%%~fG\"=="%orca_wrapper_dir%" (
-    if exist "%%~fG\__ORCA_COMMAND__.exe" set "orca_real=%%~fG\__ORCA_COMMAND__.exe"
-    if not defined orca_real if exist "%%~fG\__ORCA_COMMAND__.cmd" set "orca_real=%%~fG\__ORCA_COMMAND__.cmd"
-    if not defined orca_real if exist "%%~fG\__ORCA_COMMAND__.bat" set "orca_real=%%~fG\__ORCA_COMMAND__.bat"
-  )
-)
+for %%G in ("%~1") do set "orca_candidate_dir=%%~fG"
+rem Why: full-path expansion preserves a trailing separator, so without normalizing, the
+rem self-exclusion below misses a wrapper-dir entry spelled with one and the wrapper resolves
+rem to itself, looping forever.
+set "orca_candidate_dir=%orca_candidate_dir%#"
+set "orca_candidate_dir=%orca_candidate_dir:\#=#%"
+set "orca_candidate_dir=%orca_candidate_dir:~0,-1%"
+rem Why: the script-dir operator is rebound to this label inside CALL, so compare against the
+rem cached wrapper dir captured at top level.
+if /I "%orca_candidate_dir%\"=="%orca_wrapper_dir%" exit /b
+if exist "%orca_candidate_dir%\__ORCA_COMMAND__.exe" set "orca_real=%orca_candidate_dir%\__ORCA_COMMAND__.exe"
+if not defined orca_real if exist "%orca_candidate_dir%\__ORCA_COMMAND__.cmd" set "orca_real=%orca_candidate_dir%\__ORCA_COMMAND__.cmd"
+if not defined orca_real if exist "%orca_candidate_dir%\__ORCA_COMMAND__.bat" set "orca_real=%orca_candidate_dir%\__ORCA_COMMAND__.bat"
 exit /b
 
 :orca_append_path
-for %%G in ("%~1") do set "orca_path_entry_dir=%%~fG\"
+for %%G in ("%~1") do set "orca_path_entry_dir=%%~fG"
+rem Why: full-path expansion preserves a trailing separator; normalize before comparing.
+set "orca_path_entry_dir=%orca_path_entry_dir%#"
+set "orca_path_entry_dir=%orca_path_entry_dir:\#=#%"
+set "orca_path_entry_dir=%orca_path_entry_dir:~0,-1%"
+set "orca_path_entry_dir=%orca_path_entry_dir%\"
 if /I "%orca_path_entry_dir%"=="%orca_wrapper_dir%" exit /b
-if defined orca_legacy_wrapper_dir for %%G in ("%orca_legacy_wrapper_dir%") do if /I "%orca_path_entry_dir%"=="%%~fG\" exit /b
+set "orca_skip_entry="
+if defined orca_legacy_wrapper_dir call :orca_reject_legacy_dir
+if defined orca_skip_entry exit /b
 if defined orca_clean_path (set "orca_clean_path=%orca_clean_path%;%~1") else set "orca_clean_path=%~1"
+exit /b
+
+:orca_reject_legacy_dir
+for %%G in ("%orca_legacy_wrapper_dir%") do set "orca_legacy_norm=%%~fG"
+set "orca_legacy_norm=%orca_legacy_norm%#"
+set "orca_legacy_norm=%orca_legacy_norm:\#=#%"
+set "orca_legacy_norm=%orca_legacy_norm:~0,-1%"
+if /I "%orca_path_entry_dir%"=="%orca_legacy_norm%\" set "orca_skip_entry=1"
 exit /b
 `
 
@@ -124,10 +144,19 @@ function renderWindowsWrapper(template: string, command: string, upperCommand: s
     .replaceAll('__ORCA_COMMAND__', command)
 }
 
+// Why: cmd locates `call :label` targets by byte offset and that lookup is unreliable in
+// LF-only files — the same script worked at 2.4 KB and failed with "cannot find the batch label"
+// once it grew. Emit CRLF, which is what cmd expects.
+function toCrlf(text: string): string {
+  return text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')
+}
+
 export function renderLegacyTerminalWindowsCmdTombstone(command: 'git' | 'gh'): string {
-  return renderWindowsWrapper(WIN32_PASSTHROUGH_WRAPPER, command, command.toUpperCase())
+  return toCrlf(renderWindowsWrapper(WIN32_PASSTHROUGH_WRAPPER, command, command.toUpperCase()))
 }
 
 export function renderLegacyTerminalWindowsPowerShellTombstone(command: 'git' | 'gh'): string {
-  return renderWindowsWrapper(POWERSHELL_PASSTHROUGH_WRAPPER, command, command.toUpperCase())
+  return toCrlf(
+    renderWindowsWrapper(POWERSHELL_PASSTHROUGH_WRAPPER, command, command.toUpperCase())
+  )
 }

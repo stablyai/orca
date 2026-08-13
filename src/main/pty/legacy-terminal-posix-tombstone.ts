@@ -1,6 +1,31 @@
+import { accessSync, constants } from 'node:fs'
+
 const SHELL_DOLLAR = '$'
 
-const POSIX_TOMBSTONE = String.raw`#!/usr/bin/env bash
+// Why: the shebang is the one command resolved before any of the script's own PATH hygiene runs.
+// `env` uses execvp, so an empty or relative PATH element means the current directory and an
+// untrusted checkout can supply the interpreter. Bake an absolute one when we can verify it.
+const POSIX_INTERPRETER_CANDIDATES = [
+  '/bin/bash',
+  '/usr/bin/bash',
+  '/usr/local/bin/bash',
+  '/opt/homebrew/bin/bash'
+] as const
+
+export function resolvePosixTombstoneInterpreter(): string {
+  for (const candidate of POSIX_INTERPRETER_CANDIDATES) {
+    try {
+      accessSync(candidate, constants.X_OK)
+      return candidate
+    } catch {
+      // Try the next well-known location.
+    }
+  }
+  // Why: distributions without any of the above (NixOS, Guix) still need a working wrapper.
+  return '/usr/bin/env bash'
+}
+
+const POSIX_TOMBSTONE = String.raw`#!__ORCA_INTERPRETER__
 set -u
 
 command_name="__ORCA_COMMAND__"
@@ -78,6 +103,12 @@ fi
 PATH="$cleaned_path" exec "$real_command" "$@"
 `
 
-export function renderLegacyTerminalPosixTombstone(command: 'git' | 'gh'): string {
-  return POSIX_TOMBSTONE.replaceAll('__ORCA_COMMAND__', command)
+export function renderLegacyTerminalPosixTombstone(
+  command: 'git' | 'gh',
+  interpreter = resolvePosixTombstoneInterpreter()
+): string {
+  return POSIX_TOMBSTONE.replaceAll('__ORCA_INTERPRETER__', interpreter).replaceAll(
+    '__ORCA_COMMAND__',
+    command
+  )
 }

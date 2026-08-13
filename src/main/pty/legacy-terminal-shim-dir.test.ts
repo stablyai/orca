@@ -112,10 +112,15 @@ describe('legacy terminal shim neutralization', () => {
       // No where.exe at all: it searches cwd first, so the wrapper walks the cleaned PATH.
       expect(cmd).not.toContain('where.exe')
       expect(cmd).toContain('for %%P in ("%orca_clean_path:;=" "%") do call :orca_try_candidate')
-      expect(cmd).toContain(`if exist "%%~fG\\${command}.exe"`)
+      expect(cmd).toContain(`if exist "%orca_candidate_dir%\\${command}.exe"`)
+      // Why: %~f preserves a trailing separator; without normalizing, a wrapper-dir entry
+      // spelled with one escapes self-exclusion and the wrapper tail-loops on itself.
+      // Why: `if "%var:~-1%"=="\\"` breaks cmd's parser, so the trailing separator is stripped
+      // with a sentinel instead. Verified on Windows.
+      expect(cmd).toContain('set "orca_candidate_dir=%orca_candidate_dir:\\#=#%"')
       // A candidate inside the wrapper directory must still be rejected, compared against the
       // cached wrapper dir because %~dp0 is rebound inside a CALL.
-      expect(cmd).toContain('if /I not "%%~fG\\"=="%orca_wrapper_dir%"')
+      expect(cmd).toContain('if /I "%orca_candidate_dir%\\"=="%orca_wrapper_dir%" exit /b')
       // Relative entries resolve against the cwd, so they must be rejected like empty ones.
       // Why: the rooted-path test must not shell out — an external tool would itself be
       // resolved from the cwd, reintroducing the hijack.
@@ -135,6 +140,23 @@ describe('legacy terminal shim neutralization', () => {
       expect(powershell).toContain("-notmatch '^([A-Za-z]:")
       expect(powershell).toContain('if (-not $dir) { continue }')
       expect(powershell).toContain('Test-Path -LiteralPath $candidate -PathType Leaf')
+    }
+  })
+
+  it('emits Windows wrappers with CRLF line endings', () => {
+    // Why: cmd resolves `call :label` by byte offset and that lookup is unreliable in LF-only
+    // files — the same script worked at 2.4 KB and failed with "cannot find the batch label"
+    // once it grew past ~3.7 KB. Verified on Windows.
+    const userData = makeUserDataDir()
+    const win32Dir = join(userData, 'orca-terminal-attribution', 'win32')
+    mkdirSync(win32Dir, { recursive: true })
+
+    neutralizeLegacyTerminalShimDir(userData)
+
+    for (const file of ['git.cmd', 'gh.cmd', 'git-wrapper.ps1', 'gh-wrapper.ps1']) {
+      const body = readFileSync(join(win32Dir, file), 'utf8')
+      expect(body, file).toContain('\r\n')
+      expect(body.replaceAll('\r\n', ''), file).not.toContain('\n')
     }
   })
 
@@ -162,6 +184,41 @@ describe('legacy terminal shim neutralization', () => {
         expect(cmd.indexOf(guard)).toBeGreaterThan(-1)
         expect(cmd.indexOf(guard)).toBeLessThan(cmd.indexOf(loop))
       }
+    }
+  })
+
+  itOnPosix('does not let the cwd supply the script interpreter', async () => {
+    // Why: the shebang is resolved before any of the script's own PATH hygiene runs, so with
+    // `env` an empty or relative PATH element lets an untrusted checkout supply bash itself.
+    const userData = makeUserDataDir()
+    const shimDir = join(userData, 'orca-terminal-attribution', 'posix')
+    const realBin = join(userData, 'real-bin')
+    const hostile = join(userData, 'hostile')
+    for (const dir of [shimDir, realBin, hostile]) {
+      mkdirSync(dir, { recursive: true })
+    }
+    writeFileSync(join(shimDir, 'git'), 'legacy attribution wrapper')
+
+    neutralizeLegacyTerminalShimDir(userData)
+
+    expect(readFileSync(join(shimDir, 'git'), 'utf8').split('\n')[0]).not.toContain('/usr/bin/env')
+
+    writeFileSync(join(realBin, 'git'), "#!/bin/bash\nprintf 'REAL\\n'\n", { mode: 0o755 })
+    writeFileSync(join(hostile, 'bash'), "#!/bin/sh\nprintf 'HOSTILE-BASH\\n'\nexit 66\n", {
+      mode: 0o755
+    })
+
+    for (const hostilePath of [
+      `${shimDir}::${realBin}:/usr/bin:/bin`,
+      `${shimDir}:.:${realBin}:/usr/bin:/bin`
+    ]) {
+      const run = spawnSync(join(shimDir, 'git'), ['--version'], {
+        cwd: hostile,
+        env: { ...process.env, PATH: hostilePath },
+        encoding: 'utf8'
+      })
+      expect(run.stdout, `PATH=${hostilePath}`).toContain('REAL')
+      expect(run.stdout, `PATH=${hostilePath}`).not.toContain('HOSTILE-BASH')
     }
   })
 
@@ -242,9 +299,11 @@ describe('legacy terminal shim neutralization', () => {
     expect(cmd.indexOf(cmdCapture)).toBeLessThan(cmd.indexOf('set "ORCA_ATTRIBUTION_SHIM_DIR="'))
     expect(cmd).toContain('for %%P in ("%PATH:;=" "%") do call :orca_append_path "%%~P"')
     expect(cmd).toContain('if /I "%orca_path_entry_dir%"=="%orca_wrapper_dir%" exit /b')
-    expect(cmd).toContain(
-      'if defined orca_legacy_wrapper_dir for %%G in ("%orca_legacy_wrapper_dir%") do if /I "%orca_path_entry_dir%"=="%%~fG\\" exit /b'
-    )
+    expect(cmd).toContain('if defined orca_legacy_wrapper_dir call :orca_reject_legacy_dir')
+    // Why: `call :label && ...` is not valid cmd; the flag variable is what makes it work.
+    expect(cmd).toContain('if defined orca_skip_entry exit /b')
+    expect(cmd).not.toContain('call :orca_reject_legacy_dir &&')
+    expect(cmd).toContain('set "orca_path_entry_dir=%orca_path_entry_dir:\\#=#%"')
 
     const powershell = readFileSync(join(win32Dir, 'git-wrapper.ps1'), 'utf8')
     expect(powershell.indexOf('$legacyWrapperDir = $env:ORCA_ATTRIBUTION_SHIM_DIR')).toBeLessThan(
