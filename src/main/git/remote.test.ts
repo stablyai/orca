@@ -566,7 +566,7 @@ describe('git remote operations', () => {
       )
 
     await expect(gitPull('/repo')).rejects.toThrow(
-      'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+      'Pull would overwrite local changes. Commit or discard them before pulling.'
     )
   })
 

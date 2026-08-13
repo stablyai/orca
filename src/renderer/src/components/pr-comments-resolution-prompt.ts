@@ -149,7 +149,7 @@ export function buildPRCommentsResolutionPrompt({
     '- Some selected comments may be standalone summaries rather than host-resolvable threads. Fix them only when they describe a concrete, current issue; otherwise report why no code change was needed.',
     '- For outdated comments, inspect the current file and nearby code before editing. Apply the reviewer intent only if it still matches the current code.',
     '- Keep changes minimal and coherent. If multiple selected comments conflict or require a larger design decision, stop and report the tradeoff instead of guessing.',
-    '- Preserve unrelated staged and unstaged work. Do not run destructive cleanup commands such as git reset --hard, git checkout ., git restore ., or git stash.',
+    '- Preserve unrelated staged and unstaged work. Do not run destructive cleanup commands such as git reset --hard, git checkout ., git restore ., or git stash (refs/stash is shared across every worktree of this repository).',
     '- Orca acknowledges this feedback on the host itself after launch. Do not resolve or unresolve threads on the host, reply on the host, edit host comments, or use provider APIs/CLIs just to change review state.',
     '- Do not push, create commits, or rewrite history.',
     '- Run git diff --check before finishing. Run the most focused relevant tests, typecheck, or lint command you can reasonably identify; if validation is impractical, explain why.',

@@ -116,6 +116,10 @@ export function classifyWorktreeForceDeleteReason(
   if (
     error.includes('Worktree has uncommitted or untracked changes') ||
     error.includes('contains modified or untracked files') ||
+    // Why: branch-attributed shared stash is recoverable only via force or
+    // explicit recovery — same force affordance as dirty, distinct message.
+    error.includes('Worktree has shared stash entries recorded on its branch') ||
+    error.includes('Could not verify shared git stash safety for this worktree') ||
     FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error)
   ) {
     return 'dirty'

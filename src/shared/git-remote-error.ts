@@ -166,7 +166,9 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     raw.includes('Your local changes to the following files would be overwritten') ||
     raw.includes('Your local changes would be overwritten')
   ) {
-    return 'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+    // Why not "stash": refs/stash is shared across every worktree of a repo
+    // (#13695), so recommending stash under Orca multi-worktree fleets is unsafe.
+    return 'Pull would overwrite local changes. Commit or discard them before pulling.'
   }
 
   if (raw.includes('untracked working tree files would be overwritten')) {

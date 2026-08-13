@@ -250,12 +250,12 @@ function localBaseRefRefreshFailureDetail(result: LocalBaseRefRefreshResult): st
       return ownerWorktreePath
         ? translate(
             'auto.store.slices.worktrees.localBaseRefRefreshFailedDetailDirtyNamed',
-            'The worktree at {{value0}} (where local {{value1}} is checked out) has uncommitted changes. Commit, stash, or discard those changes, then update local {{value1}} manually.',
+            'The worktree at {{value0}} (where local {{value1}} is checked out) has uncommitted changes. Commit or discard those changes, then update local {{value1}} manually.',
             { value0: ownerWorktreePath, value1: result.localBranch }
           )
         : translate(
             'auto.store.slices.worktrees.localBaseRefRefreshFailedDetailDirty',
-            'The worktree where local {{value0}} is checked out has uncommitted changes. Commit, stash, or discard those changes, then update local {{value0}} manually.',
+            'The worktree where local {{value0}} is checked out has uncommitted changes. Commit or discard those changes, then update local {{value0}} manually.',
             { value0: result.localBranch }
           )
     case 'skipped_not_fast_forward':

@@ -30,6 +30,14 @@ import {
   isUnsupportedRevParsePathFormatError,
   isUnsupportedWorktreeListZError
 } from '../../shared/git-worktree-command-capabilities'
+import {
+  countStashSubjectsForBranch,
+  formatWorktreeStashRemovalDetail,
+  formatWorktreeStashVerificationDetail,
+  parseStashListSubjects,
+  WORKTREE_STASH_REMOVAL_ERROR,
+  WORKTREE_STASH_VERIFICATION_ERROR
+} from '../../shared/git-stash-branch-attribution'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir, runWithGitReadCacheInvalidation } from './status'
@@ -52,6 +60,8 @@ export type GitWorktreeExecOptions = {
 
 type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
   ignoredUntrackedPaths?: readonly string[]
+  /** Prefer worktree-list / knownRemovedWorktree branch over re-probing HEAD. */
+  knownBranch?: string
 }
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
@@ -1142,6 +1152,18 @@ async function performRemoveWorktree(
   // Why: callers outside the IPC/runtime preflight must not bypass Git's lock contract or rely on localized stderr after side effects.
   assertWorktreeUnlockedForRemoval(removedWorktree)
 
+  // Why hard and separate from dirty porcelain: Git re-checks dirtiness on remove
+  // but ignores shared refs/stash. Soft-failing stash would orphan WIP (#13695).
+  // Dirty trees still soft-fail into `git worktree remove` so the dirty error
+  // contract stays Git's "contains modified or untracked files" on this path.
+  if (!force) {
+    // Prefer worktree-list / knownRemovedWorktree branch; never re-probe when known empty.
+    await assertBranchAttributedStashSafeForRemoval(worktreePath, branchName, {
+      ...options,
+      probeBranchWhenUnknown: false
+    })
+  }
+
   if (
     !(await tryRemoveWorktreeWithDeferredDirectoryDeletion(repoPath, worktreePath, force, options))
   ) {
@@ -1157,7 +1179,10 @@ async function performRemoveWorktree(
         throw error
       }
       // Why: Git refuses non-force removal of a worktree with an initialised submodule even when clean; re-prove cleanliness, then --force.
-      await assertWorktreeCleanForRemoval(worktreePath, false, options)
+      await assertWorktreeCleanForRemoval(worktreePath, false, {
+        ...options,
+        knownBranch: branchName
+      })
       await gitExecFileAsync(
         ['worktree', 'remove', '--force', worktreePath],
         gitExecOptions(repoPath, options)
@@ -1196,8 +1221,10 @@ async function tryRemoveWorktreeWithDeferredDirectoryDeletion(
   }
   if (!force) {
     try {
-      // Why: `git worktree remove` re-checks cleanliness as it removes; prove the same thing here or leave removal to Git.
-      await assertWorktreeCleanForRemoval(worktreePath, false, options)
+      // Why: `git worktree remove` re-checks porcelain dirtiness; prove the same
+      // here or leave removal to Git (preserves dirty-tree error contract).
+      // Stash safety is hard-checked earlier and is not soft-failed.
+      await assertWorktreeStatusCleanForRemoval(worktreePath, options)
     } catch {
       return false
     }
@@ -1430,7 +1457,8 @@ async function isLocalBranchCheckedOut(
 }
 
 /**
- * Assert a worktree is clean enough for non-force removal.
+ * Assert a worktree is clean enough for non-force removal (IPC / submodule retry).
+ * Dirty trees keep the existing Orca dirty message; stash uses a distinct error.
  */
 export async function assertWorktreeCleanForRemoval(
   worktreePath: string,
@@ -1441,14 +1469,29 @@ export async function assertWorktreeCleanForRemoval(
     return
   }
 
+  await assertWorktreeStatusCleanForRemoval(worktreePath, options)
+  await assertBranchAttributedStashSafeForRemoval(worktreePath, options.knownBranch, {
+    ...options,
+    // Why: IPC may omit knownBranch; only then probe HEAD. An explicit empty
+    // string means detached/unknown metadata — do not invent attribution.
+    probeBranchWhenUnknown: options.knownBranch === undefined
+  })
+}
+
+/** Porcelain dirty check only — preserves the existing dirty-tree error contract. */
+async function assertWorktreeStatusCleanForRemoval(
+  worktreePath: string,
+  options: WorktreeRemovalPreflightOptions = {}
+): Promise<void> {
   const { ignoredUntrackedPaths = [], ...gitOptions } = options
+  const execOpts = {
+    ...gitExecOptions(worktreePath, gitOptions),
+    timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
+  }
   const useNullTerminatedStatus = ignoredUntrackedPaths.length > 0
   const { stdout } = await gitExecFileAsync(
     ['status', '--porcelain', ...(useNullTerminatedStatus ? ['-z'] : []), '--untracked-files=all'],
-    {
-      ...gitExecOptions(worktreePath, gitOptions),
-      timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
-    }
+    execOpts
   )
   // Why one parse feeds both: the clean verdict and the error text must never
   // disagree about which entries block removal.
@@ -1467,6 +1510,60 @@ export async function assertWorktreeCleanForRemoval(
   ;(error as Error & { stdout?: string }).stdout = blockingEntries
     ? blockingEntries.join('\n')
     : stdout
+  throw error
+}
+
+/**
+ * When the branch is known, refuse non-force removal if stash subjects were
+ * recorded on that branch, or if stash cannot be listed (fail closed).
+ * Detached / unknown branch: no attribution — skip (do not invent).
+ */
+export async function assertBranchAttributedStashSafeForRemoval(
+  worktreePath: string,
+  knownBranch: string | undefined,
+  options: GitWorktreeExecOptions & { probeBranchWhenUnknown?: boolean } = {}
+): Promise<void> {
+  let branch = knownBranch?.trim() ?? ''
+  if (!branch && options.probeBranchWhenUnknown) {
+    try {
+      const { stdout } = await gitExecFileAsync(['branch', '--show-current'], {
+        ...gitExecOptions(worktreePath, options),
+        timeout: options.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
+      })
+      branch = stdout.trim()
+    } catch {
+      // Probe failed — treat as unknown; do not invent attribution.
+      return
+    }
+  }
+  if (!branch) {
+    // Known-empty (detached) or unknown without probe: skip.
+    return
+  }
+
+  let subjects: string[]
+  try {
+    // Why %gs only: stash@{N} is positional and concurrent sibling stashes shift
+    // indices; subject strings carry the branch recorded at stash time.
+    const { stdout } = await gitExecFileAsync(['stash', 'list', '--format=%gs'], {
+      ...gitExecOptions(worktreePath, options),
+      timeout: options.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
+    })
+    subjects = parseStashListSubjects(stdout)
+  } catch {
+    const error = new Error(WORKTREE_STASH_VERIFICATION_ERROR)
+    ;(error as Error & { stdout?: string }).stdout =
+      formatWorktreeStashVerificationDetail(branch)
+    throw error
+  }
+
+  const count = countStashSubjectsForBranch(subjects, branch)
+  if (count === 0) {
+    return
+  }
+
+  const error = new Error(WORKTREE_STASH_REMOVAL_ERROR)
+  ;(error as Error & { stdout?: string }).stdout = formatWorktreeStashRemovalDetail(count, branch)
   throw error
 }
 

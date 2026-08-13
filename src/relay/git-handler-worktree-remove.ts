@@ -1,5 +1,13 @@
 import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/types'
+import {
+  countStashSubjectsForBranch,
+  formatWorktreeStashRemovalDetail,
+  formatWorktreeStashVerificationDetail,
+  parseStashListSubjects,
+  WORKTREE_STASH_REMOVAL_ERROR,
+  WORKTREE_STASH_VERIFICATION_ERROR
+} from '../shared/git-stash-branch-attribution'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree-removal'
 import { isSubmoduleWorktreeRemovalRefusal } from '../shared/worktree-submodule-removal'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
@@ -83,6 +91,41 @@ async function listRelayWorktreesForRemoval(
   }
 }
 
+/**
+ * When the branch is known, fail closed if stash list fails; refuse when subjects
+ * match the branch. Unknown/detached branch: skip — do not invent attribution.
+ */
+async function assertRelayBranchAttributedStashSafe(
+  git: GitExec,
+  worktreePath: string,
+  knownBranch: string
+): Promise<void> {
+  const branch = knownBranch.trim()
+  if (!branch) {
+    return
+  }
+
+  let subjects: string[]
+  try {
+    const { stdout } = await git(['stash', 'list', '--format=%gs'], worktreePath)
+    subjects = parseStashListSubjects(stdout)
+  } catch {
+    const error = new Error(WORKTREE_STASH_VERIFICATION_ERROR)
+    ;(error as Error & { stdout?: string }).stdout =
+      formatWorktreeStashVerificationDetail(branch)
+    throw error
+  }
+
+  const count = countStashSubjectsForBranch(subjects, branch)
+  if (count === 0) {
+    return
+  }
+
+  const error = new Error(WORKTREE_STASH_REMOVAL_ERROR)
+  ;(error as Error & { stdout?: string }).stdout = formatWorktreeStashRemovalDetail(count, branch)
+  throw error
+}
+
 async function deleteRelayBranchAfterWorktreeRemoval(
   git: GitExec,
   repoPath: string,
@@ -152,6 +195,12 @@ export async function removeWorktreeOp(
 
   assertWorktreeUnlockedForRemoval(removedWorktree)
 
+  // Why: Git's own remove dirty check ignores refs/stash; use known branch from
+  // the worktree list (no re-probe) and fail closed when list fails (#13695).
+  if (!force) {
+    await assertRelayBranchAttributedStashSafe(git, worktreePath, branchName)
+  }
+
   const args = ['worktree', 'remove']
   if (force) {
     args.push('--force')
@@ -172,6 +221,7 @@ export async function removeWorktreeOp(
       ;(dirtyError as Error & { stdout?: string }).stdout = stdout
       throw dirtyError
     }
+    await assertRelayBranchAttributedStashSafe(git, worktreePath, branchName)
     await git(['worktree', 'remove', '--force', worktreePath], repoPath)
   }
 

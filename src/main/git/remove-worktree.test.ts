@@ -295,6 +295,8 @@ branch refs/heads/main
     const calls = getGitCalls()
     expect(calls).toEqual([
       'git worktree list --porcelain -z',
+      // Known branch from the list → stash safety before any rename/remove.
+      'git stash list --format=%gs',
       // The cleanliness probe that decides whether the checkout may be renamed aside.
       'git status --porcelain --untracked-files=all',
       'git worktree remove /repo-feature',
@@ -485,7 +487,9 @@ branch refs/heads/main
     await removeWorktree('/repo', '/repo-feature', false, { wslDistro: 'Ubuntu' })
 
     expect(moveWorktreeDirectoryToTrashMock).not.toHaveBeenCalled()
+    // WSL skips deferred status rename; stash safety still runs from known branch.
     expect(getGitCalls()).not.toContain('git status --porcelain --untracked-files=all')
+    expect(getGitCalls()).toContain('git stash list --format=%gs')
     expect(getGitCalls()).toContain('git worktree remove /repo-feature')
   })
 
@@ -496,6 +500,7 @@ branch refs/heads/main
     try {
       mockGitCommands({})
 
+      // Empty known branch: detached/unknown — no inventable stash attribution.
       await removeWorktree('C:\\repo', worktreePath, false, {
         knownRemovedWorktree: { branch: '', head: '', locked: false }
       })
