@@ -49,7 +49,7 @@ import {
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
-import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import { agentHookServer, type AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -21862,6 +21862,25 @@ export class OrcaRuntimeService {
             ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
             surface: 'background'
           }
+          // Why: Codex fires no hook until its first prompt submission, so a
+          // runtime-built spawn (CLI/automation — no renderer pane to seed) shows
+          // no card status until the first turn (#6643). UI-built startups
+          // (args.startup) seed through the renderer's initialAgentStatus path.
+          // Local only: remote pane status arrives relay-stamped with a
+          // connectionId, which a local-connection seed row would contradict.
+          if (
+            !args.startup &&
+            !repoIsRemote(repo) &&
+            effectiveCreatedWithAgent === 'codex' &&
+            terminal.paneKey
+          ) {
+            agentHookServer.seedCodexLaunchStatus({
+              paneKey: terminal.paneKey,
+              ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
+              worktreeId: worktree.id,
+              ...(agentStartup && args.startupPrompt ? { prompt: args.startupPrompt } : {})
+            })
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
@@ -22612,6 +22631,25 @@ export class OrcaRuntimeService {
         startupTerminalTabId = terminal.tabId ?? null
         startupTerminalPaneKey = terminal.paneKey ?? null
         startupTerminalPtyId = terminal.ptyId ?? null
+        // Why: Codex fires no hook until its first prompt submission, so a
+        // runtime-built spawn (CLI/automation — no renderer pane to seed) shows
+        // no card status until the first turn (#6643). UI-built startups
+        // (args.startup) seed through the renderer's initialAgentStatus path.
+        // Local only: remote pane status arrives relay-stamped with a
+        // connectionId, which a local-connection seed row would contradict.
+        if (
+          !args.startup &&
+          !repoIsRemote(repo) &&
+          effectiveCreatedWithAgent === 'codex' &&
+          terminal.paneKey
+        ) {
+          agentHookServer.seedCodexLaunchStatus({
+            paneKey: terminal.paneKey,
+            ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
+            worktreeId: worktree.id,
+            ...(agentStartup && args.startupPrompt ? { prompt: args.startupPrompt } : {})
+          })
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning

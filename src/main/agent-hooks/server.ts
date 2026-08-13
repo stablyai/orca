@@ -1859,6 +1859,51 @@ export class AgentHookServer {
     })
   }
 
+  /** Seed a status row for a freshly spawned local Codex pane. Codex emits no hook
+   *  until the first prompt submission (SessionStart only fires alongside the first
+   *  UserPromptSubmit), so a spawned pane otherwise has no status row during the
+   *  spawn window (#6643). An existing row always wins — a real PermissionRequest
+   *  waiting is never overwritten — and any later hook/OSC status replaces the seed. */
+  seedCodexLaunchStatus(seed: {
+    paneKey: string
+    tabId?: string
+    worktreeId?: string
+    prompt?: string
+    launchToken?: string
+  }): void {
+    const paneKey = seed.paneKey.trim()
+    if (paneKey.length === 0 || paneKey.length > MAX_PANE_KEY_LEN || !parsePaneKey(paneKey)) {
+      return
+    }
+    if (
+      this.state.lastStatusByPaneKey.has(paneKey) ||
+      this.getAgentStatusDisposition(paneKey) !== 'accept'
+    ) {
+      return
+    }
+    const prompt = seed.prompt?.trim() ?? ''
+    // Why: an idle spawn mirrors Claude's SessionStart row — 'working' would show a
+    // phantom spinner on an idle TUI, and sessionBoundary keeps completion-reactive
+    // consumers (notifications, automation runs) out of it (STA-3386).
+    const payload = normalizeAgentStatusPayload(
+      prompt
+        ? { state: 'working', prompt, agentType: 'codex' }
+        : { state: 'done', prompt: '', agentType: 'codex', sessionBoundary: true }
+    )
+    if (!payload) {
+      return
+    }
+    this.applyNormalizedStatus({
+      paneKey,
+      source: 'codex',
+      ...(seed.launchToken ? { launchToken: seed.launchToken } : {}),
+      ...(seed.tabId ? { tabId: seed.tabId } : {}),
+      ...(seed.worktreeId ? { worktreeId: seed.worktreeId } : {}),
+      connectionId: null,
+      payload
+    })
+  }
+
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
   ingestRemote(
     envelope: {

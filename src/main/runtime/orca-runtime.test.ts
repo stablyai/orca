@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { agentHookServer } from '../agent-hooks/server'
 import type * as GitUsernameModule from '../git/git-username'
 import { performance } from 'node:perf_hooks'
 import { EventEmitter } from 'node:events'
@@ -42915,6 +42916,86 @@ describe('OrcaRuntimeService', () => {
       })
     )
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
+  })
+
+  it('seeds the Codex spawn-window status for a CLI-created local worktree', async () => {
+    // Why: Codex emits no hook until its first prompt, so the runtime must seed
+    // the card status from launch metadata at spawn (#6643).
+    const seedSpy = vi.spyOn(agentHookServer, 'seedCodexLaunchStatus').mockImplementation(() => {})
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: {}
+      }),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli-codex-seed' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-cli-codex-seed' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
+      handle: 'term-cli-codex-seed',
+      tabId: 'tab-cli-codex-seed',
+      paneKey: 'tab-cli-codex-seed:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ptyId: 'pty-cli-codex-seed',
+      worktreeId: 'unused',
+      title: null,
+      surface: 'background'
+    } as never)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-cli-codex-seed')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-cli-codex-seed')
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-cli-codex-seed',
+        head: 'def',
+        branch: 'runtime-cli-codex-seed',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: TEST_REPO_ID,
+      name: 'runtime-cli-codex-seed',
+      startupAgent: 'codex',
+      startupPrompt: 'hi'
+    })
+
+    expect(seedSpy).toHaveBeenCalledTimes(1)
+    expect(seedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneKey: 'tab-cli-codex-seed:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        worktreeId: result.worktree.id,
+        prompt: 'hi'
+      })
+    )
   })
 
   it('sends follow-up prompts for CLI-created stdin-after-start startup agents', async () => {
