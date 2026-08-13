@@ -19,6 +19,8 @@ export {
   RuntimeRpcCallError,
   unwrapRuntimeRpcResult
 } from './runtime-rpc-result'
+export { probeLiveRuntimeEnvironmentCapabilities } from './runtime-environment-authority'
+export type { LiveRuntimeEnvironmentAuthority } from './runtime-environment-authority'
 
 const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
 const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
@@ -54,6 +56,7 @@ export async function callRuntimeRpc<TResult>(
     skipCompatibilityCheck?: boolean
     signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number
+    expectedRuntimeId?: string
   } = {}
 ): Promise<TResult> {
   const expectedEnvironmentPairingRevision =
@@ -88,7 +91,8 @@ export async function callRuntimeRpc<TResult>(
           params: nextParams,
           timeoutMs: options.timeoutMs,
           signal: options.signal,
-          expectedEnvironmentPairingRevision
+          expectedEnvironmentPairingRevision,
+          expectedRuntimeId: options.expectedRuntimeId
         })
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }

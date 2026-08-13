@@ -104,6 +104,9 @@ type PtyCallbacks = {
   /** Called before an adopted PTY can publish buffered/live bytes. */
   onReattachDetermined?: () => void
   onConnect?: () => void
+  /** A stream re-established after loss carries only new bytes, so the pane must
+   *  re-pull the host's retained buffer or an idle/exited pane paints nothing. */
+  onStreamRecovered?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
   onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
@@ -141,6 +144,7 @@ export type PtyTransport = {
      *  Ignored by remote-runtime transports (not gate-markable). */
     initiallyHidden?: boolean
     command?: string
+    commandDelivery?: 'renderer' | 'provider'
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
@@ -221,6 +225,7 @@ export type IpcPtyTransportOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   agentPrompt?: string

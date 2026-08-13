@@ -163,6 +163,74 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(setSendSheet).toHaveBeenCalledWith(null)
   })
 
+  it('creates an unattributed terminal before sending review notes', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'status',
+        ok: true,
+        result: {
+          runtimeId: 'runtime',
+          capabilities: ['terminal.attribution-removed.v1']
+        },
+        _meta: { runtimeId: 'runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'terminal-1' } },
+        _meta: { runtimeId: 'runtime' }
+      })
+      .mockResolvedValueOnce(sendResponse(true))
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+
+    expect(sendRequest).toHaveBeenNthCalledWith(1, 'status.get', undefined, {
+      timeoutMs: 30_000,
+      budgetSpansConnect: true
+    })
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      2,
+      'session.tabs.createTerminal',
+      {
+        worktree: 'id:wt-1',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        activate: false,
+        select: true,
+        navigation: 'caller'
+      },
+      { timeoutMs: 30_000, budgetSpansConnect: true, expectedRuntimeId: 'runtime' }
+    )
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      3,
+      'terminal.send',
+      expect.objectContaining({ terminal: 'terminal-1', enter: true })
+    )
+  })
+
+  it('refuses to create review terminals on hosts that strip the bypass', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: { appVersion: '1.4.89' },
+      _meta: { runtimeId: 'runtime' }
+    })
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    let error: unknown
+    await act(async () => {
+      error = await actions?.createTerminalAndSend([COMMENT]).catch((err) => err)
+    })
+
+    expect((error as Error).message).toContain('Update the host and try again')
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).not.toHaveBeenCalledWith('terminal.send', expect.anything())
+  })
+
   it('only heals the terminal that was marked', async () => {
     const sendRequest = vi.fn().mockResolvedValue(sendResponse(true))
     await mount({ sendRequest } as unknown as RpcClient)

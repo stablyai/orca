@@ -3112,6 +3112,10 @@ describe('orca cli worktree awareness', () => {
   it('passes explicit focus through terminal.create', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3136,13 +3140,19 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: undefined,
-      title: 'RUNNER',
-      focus: true,
-      presentation: 'focused'
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: undefined,
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'RUNNER',
+        focus: true,
+        presentation: 'focused'
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('prints terminal.read fallback screen lines in json mode', async () => {
@@ -3184,6 +3194,10 @@ describe('orca cli worktree awareness', () => {
   it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3209,19 +3223,29 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'codex',
-      title: 'Codex',
-      focus: false,
-      rendererBacked: true,
-      activate: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'codex',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Codex',
+        focus: false,
+        rendererBacked: true,
+        activate: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('keeps explicit focus semantics when forcing Codex through the renderer path', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3248,20 +3272,30 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'codex',
-      title: 'Codex',
-      focus: true,
-      presentation: 'focused',
-      rendererBacked: true,
-      activate: true
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'codex',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Codex',
+        focus: true,
+        presentation: 'focused',
+        rendererBacked: true,
+        activate: true
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('does not force the visible terminal path for explicit Codex exec commands', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3287,17 +3321,27 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'codex exec summarize',
-      title: 'Codex exec',
-      focus: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'codex exec summarize',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Codex exec',
+        focus: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('does not force the visible terminal path for Codex exec commands after global options', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3323,17 +3367,27 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'codex -m gpt-5 --sandbox workspace-write exec summarize',
-      title: 'Codex exec',
-      focus: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'codex -m gpt-5 --sandbox workspace-write exec summarize',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Codex exec',
+        focus: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('does not force the visible terminal path for Codex review commands after long options', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3359,17 +3413,27 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'codex --model=gpt-5 --sandbox=workspace-write review',
-      title: 'Codex review',
-      focus: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'codex --model=gpt-5 --sandbox=workspace-write review',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Codex review',
+        focus: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('does not force the visible terminal path for Codex help commands', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3395,17 +3459,27 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'codex --help',
-      title: 'Codex help',
-      focus: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'codex --help',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Codex help',
+        focus: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('keeps Codex prompts after global options backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3431,19 +3505,29 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'codex -m gpt-5 "fix the flaky test"',
-      title: 'Codex prompt',
-      focus: false,
-      rendererBacked: true,
-      activate: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'codex -m gpt-5 "fix the flaky test"',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Codex prompt',
+        focus: false,
+        rendererBacked: true,
+        activate: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('keeps interactive Claude startup commands backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3469,19 +3553,29 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'claude',
-      title: 'Claude',
-      focus: false,
-      rendererBacked: true,
-      activate: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'claude',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Claude',
+        focus: false,
+        rendererBacked: true,
+        activate: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('keeps Claude print commands on the background terminal path', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3507,12 +3601,18 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'path:/tmp/repo/feature',
-      command: 'claude -p "summarize"',
-      title: 'Claude print',
-      focus: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'path:/tmp/repo/feature',
+        command: 'claude -p "summarize"',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Claude print',
+        focus: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('uses the resolved enclosing worktree for other worktree consumers', async () => {
@@ -3819,6 +3919,10 @@ describe('orca cli worktree awareness', () => {
   it('sends explicit remote terminal create worktree selectors unchanged', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3842,12 +3946,18 @@ describe('orca cli worktree awareness', () => {
       '/tmp/client/repo/src'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'id:repo-1::/srv/orca/feature',
-      command: undefined,
-      title: undefined,
-      focus: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'id:repo-1::/srv/orca/feature',
+        command: undefined,
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: undefined,
+        focus: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('collects and formats memory diagnostics', async () => {
@@ -3955,6 +4065,10 @@ describe('orca cli worktree awareness', () => {
   it('does not force remote Codex terminal creates through a local renderer path', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_status', {
+        runtimeId: 'runtime-1',
+        capabilities: ['terminal.attribution-removed.v1']
+      }),
       okFixture('req_terminal_create', {
         terminal: {
           handle: 'term_1',
@@ -3982,12 +4096,18 @@ describe('orca cli worktree awareness', () => {
       '/tmp/client/repo/src'
     )
 
-    expect(callMock).toHaveBeenCalledWith('terminal.create', {
-      worktree: 'id:repo-1::/srv/orca/feature',
-      command: 'codex',
-      title: 'Codex',
-      focus: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      {
+        worktree: 'id:repo-1::/srv/orca/feature',
+        command: 'codex',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
+        title: 'Codex',
+        focus: false
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
   })
 
   it('does not resolve implicit remote browser targets from client cwd', async () => {

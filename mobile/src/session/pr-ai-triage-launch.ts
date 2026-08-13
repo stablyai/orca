@@ -3,6 +3,14 @@ import {
   readMobileReviewCreatedTerminal,
   readMobileReviewTerminalSendAccepted
 } from './mobile-diff-review-rpc'
+import {
+  addLegacyTerminalAttributionDisableRequest,
+  withLegacyTerminalAttributionDisabledEnv
+} from '../../../src/shared/legacy-terminal-attribution-env'
+import {
+  assertMobileTerminalAttributionDisableSupported,
+  MOBILE_TERMINAL_CREATE_RPC_OPTIONS
+} from './mobile-terminal-attribution-compat'
 
 // Pure launch path for the PR triage actions ("Fix checks with AI" / "Resolve
 // conflicts with AI"). Reuses the same two RPCs the diff-review send flow uses —
@@ -15,12 +23,19 @@ export async function createTerminalAndSendPrompt(
   worktreeId: string,
   prompt: string
 ): Promise<void> {
-  const created = await client.sendRequest('session.tabs.createTerminal', {
-    worktree: `id:${worktreeId}`,
-    activate: false,
-    select: true,
-    navigation: 'caller'
-  })
+  const authority = await assertMobileTerminalAttributionDisableSupported(client)
+  const created = await client.sendRequest(
+    'session.tabs.createTerminal',
+    {
+      worktree: `id:${worktreeId}`,
+      env: withLegacyTerminalAttributionDisabledEnv(undefined),
+      envToDelete: addLegacyTerminalAttributionDisableRequest(undefined),
+      activate: false,
+      select: true,
+      navigation: 'caller'
+    },
+    { ...MOBILE_TERMINAL_CREATE_RPC_OPTIONS, expectedRuntimeId: authority.runtimeId }
+  )
   if (!created.ok) {
     throw new Error(created.error?.message || 'Failed to create terminal')
   }

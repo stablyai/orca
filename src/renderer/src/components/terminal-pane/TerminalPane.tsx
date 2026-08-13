@@ -1562,6 +1562,7 @@ function TerminalPane(
         worktreeId,
         cwd,
         startup: CODEX_ACCOUNT_RESTART_STARTUP,
+        mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,
         paneKittyKeyboardModesRef,

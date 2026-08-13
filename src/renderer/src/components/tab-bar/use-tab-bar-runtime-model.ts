@@ -26,6 +26,7 @@ import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-la
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 const isWindows = navigator.userAgent.includes('Windows')
 export const isMacOs = navigator.userAgent.includes('Mac')
@@ -77,6 +78,8 @@ export type TabBarRuntimeModel = {
   workspaceHasSimulatorTab: boolean
   toggleTabViewMode: (tabId: string) => void
   nativeChatTranscriptIsLocalReadable: boolean
+  managedBrowserCreationEnabled: boolean
+  mobileEmulatorCreationEnabled: boolean
 } & TabBarAgentProjections
 
 export function useTabBarRuntimeModel({
@@ -221,6 +224,15 @@ export function useTabBarRuntimeModel({
     () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),
     [unifiedTabs]
   )
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
+    useShallow((state) => {
+      const policy = getClientCreationActionPolicy(state, worktreeId)
+      return [
+        policy['managed-browser'].state === 'enabled',
+        policy['mobile-emulator'].state === 'enabled'
+      ] as const
+    })
+  )
   // Why: tab-wide launch/title hints are safe only before split; gate the view-mode toggle to the active leaf's agent.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
   // Why: every retained TabBar observes the same hot maps; one feature-gated selector shares their projections.
@@ -256,6 +268,8 @@ export function useTabBarRuntimeModel({
     nativeChatEnabled,
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
-    nativeChatTranscriptIsLocalReadable
+    nativeChatTranscriptIsLocalReadable,
+    managedBrowserCreationEnabled,
+    mobileEmulatorCreationEnabled
   }
 }

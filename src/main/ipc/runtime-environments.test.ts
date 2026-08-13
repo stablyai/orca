@@ -1094,7 +1094,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const subscribe = handler<
-      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      {
+        selector: string
+        method: string
+        params?: unknown
+        subscriptionId?: string
+        expectedRuntimeId?: string
+      },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
     await subscribe(
@@ -1107,7 +1113,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           removeListener: vi.fn()
         }
       },
-      { selector: 'desk', method: 'browser.screencast', params: { pageId: 'page-1' } }
+      {
+        selector: 'desk',
+        method: 'browser.screencast',
+        params: { pageId: 'page-1' },
+        expectedRuntimeId: 'runtime-1'
+      }
     )
     await subscribe(
       {
@@ -1127,14 +1138,18 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'browser.screencast',
       { pageId: 'page-1' },
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      { expectedRuntimeId: 'runtime-1' }
     )
     expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledWith(
       expect.any(Object),
       'terminal.multiplex',
       { client: { id: 'client-1' } },
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      undefined
     )
     expect(subscribeRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -1163,7 +1178,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const subscribe = handler<
-      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      {
+        selector: string
+        method: string
+        params?: unknown
+        subscriptionId?: string
+        expectedRuntimeId?: string
+      },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
     await expect(
@@ -1177,7 +1198,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
             removeListener: vi.fn()
           }
         },
-        { selector: 'desk', method: 'session.tabs.subscribeAll' }
+        {
+          selector: 'desk',
+          method: 'session.tabs.subscribeAll',
+          expectedRuntimeId: 'runtime-1'
+        }
       )
     ).resolves.toMatchObject({ requestId: 'tabs-shared' })
 
@@ -1187,7 +1212,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.subscribeAll',
       undefined,
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      { expectedRuntimeId: 'runtime-1' }
     )
     expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })
@@ -1315,7 +1341,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.subscribeAll',
       undefined,
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      undefined
     )
     expect(subscribeRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -1659,7 +1687,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'terminal.subscribe',
       { terminal: 't1' },
       25,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      undefined
     )
     expect(sent).toEqual([
       expect.objectContaining({ subscriptionId: result.subscriptionId, type: 'response' }),

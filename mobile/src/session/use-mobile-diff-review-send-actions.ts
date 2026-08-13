@@ -13,6 +13,14 @@ import {
 } from './mobile-diff-review-rpc'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
+import {
+  addLegacyTerminalAttributionDisableRequest,
+  withLegacyTerminalAttributionDisabledEnv
+} from '../../../src/shared/legacy-terminal-attribution-env'
+import {
+  assertMobileTerminalAttributionDisableSupported,
+  MOBILE_TERMINAL_CREATE_RPC_OPTIONS
+} from './mobile-terminal-attribution-compat'
 
 type SendActionsInput = {
   client: RpcClient | null
@@ -104,12 +112,19 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
-      const response = await client.sendRequest('session.tabs.createTerminal', {
-        worktree: `id:${worktreeId}`,
-        activate: false,
-        select: true,
-        navigation: 'caller'
-      })
+      const authority = await assertMobileTerminalAttributionDisableSupported(client)
+      const response = await client.sendRequest(
+        'session.tabs.createTerminal',
+        {
+          worktree: `id:${worktreeId}`,
+          env: withLegacyTerminalAttributionDisabledEnv(undefined),
+          envToDelete: addLegacyTerminalAttributionDisableRequest(undefined),
+          activate: false,
+          select: true,
+          navigation: 'caller'
+        },
+        { ...MOBILE_TERMINAL_CREATE_RPC_OPTIONS, expectedRuntimeId: authority.runtimeId }
+      )
       if (!response.ok) {
         throw new Error(response.error?.message || 'Failed to create terminal')
       }

@@ -231,6 +231,28 @@ describe('RpcDispatcher streaming', () => {
     expect(response.streaming).toBeUndefined()
   })
 
+  it('rejects a replacement runtime before streaming dispatch invokes a mutation', async () => {
+    const messages: string[] = []
+    const handler = vi.fn(() => ({ terminal: { handle: 'terminal-1' } }))
+    const dispatcher = new RpcDispatcher({
+      runtime: stubRuntime(),
+      methods: [defineMethod({ name: 'terminal.create', params: z.object({}), handler })]
+    })
+
+    await dispatcher.dispatchStreaming(
+      { ...makeRequest('terminal.create', {}), expectedRuntimeId: 'previous-runtime' },
+      (message) => messages.push(message)
+    )
+
+    expect(messages).toHaveLength(1)
+    expect(JSON.parse(messages[0]!)).toMatchObject({
+      ok: false,
+      error: { code: 'runtime_replaced' },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+    expect(handler).not.toHaveBeenCalled()
+  })
+
   it('returns error for unknown method via dispatchStreaming', async () => {
     const messages: string[] = []
     const dispatcher = new RpcDispatcher({

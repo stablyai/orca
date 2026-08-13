@@ -486,6 +486,23 @@ describe('local preflight context', () => {
     ).toBeUndefined()
   })
 
+  it('keeps Floating on the host despite global and explicit WSL agent settings', () => {
+    const state = {
+      ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
+      settings: {
+        terminalWindowsShell: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian',
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' },
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Ubuntu'
+      }
+    } as AppState
+
+    expect(
+      getLocalAgentPreflightContext(state, 'win32', {}, FLOATING_TERMINAL_WORKTREE_ID)
+    ).toBeUndefined()
+  })
+
   it('keeps the active project runtime fallback for a detected-only worktree', () => {
     const state = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),

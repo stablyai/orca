@@ -281,7 +281,7 @@ describe('orchestration skill guidance', () => {
     expect(workerLoop).toContain('opaque provider model id with `--model`')
     expect(workerLoop).toContain('`--effort` requires `--model`')
     expect(workerLoop).toContain('neither option can combine with `--terminal`')
-    expect(workerLoop).toContain('--agent claude --model aws-bedrock-opus-5 --effort high --json')
+    expect(workerLoop).toContain('--agent claude --model opus --effort high --json')
     expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
   })
 

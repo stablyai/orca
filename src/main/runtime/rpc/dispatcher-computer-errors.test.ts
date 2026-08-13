@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
 import { defineMethod, InvalidArgumentError, type RpcRequest } from './core'
@@ -41,6 +41,26 @@ const METHODS = [
 ]
 
 describe('RpcDispatcher computer-use validation errors', () => {
+  it('rejects a replacement runtime before invoking a one-shot handler', async () => {
+    const handler = vi.fn(() => ({ ok: true }))
+    const dispatcher = new RpcDispatcher({
+      runtime: makeRuntime(),
+      methods: [defineMethod({ name: 'terminal.create', params: z.object({}), handler })]
+    })
+
+    const response = await dispatcher.dispatch({
+      ...makeRequest('terminal.create', {}),
+      expectedRuntimeId: 'previous-runtime'
+    })
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'runtime_replaced' },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+    expect(handler).not.toHaveBeenCalled()
+  })
+
   it('adds recovery steps to one-shot computer schema failures', async () => {
     const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
 

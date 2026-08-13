@@ -861,6 +861,7 @@ function getFolderWorkspaceMetaUpdates(
     | 'createdWithAgent'
     | 'pendingFirstAgentMessageRename'
     | 'firstAgentMessageRenameError'
+    | 'diffComments'
   >
 > {
   const next: Partial<
@@ -878,6 +879,7 @@ function getFolderWorkspaceMetaUpdates(
       | 'createdWithAgent'
       | 'pendingFirstAgentMessageRename'
       | 'firstAgentMessageRenameError'
+      | 'diffComments'
     >
   > = {}
   if (updates.displayName !== undefined) {
@@ -918,6 +920,9 @@ function getFolderWorkspaceMetaUpdates(
   }
   if (updates.firstAgentMessageRenameError !== undefined) {
     next.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
+  }
+  if (updates.diffComments !== undefined) {
+    next.diffComments = updates.diffComments
   }
   return next
 }
@@ -6075,7 +6080,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const reposChanged = survivingRepos.length !== s.repos.length
 
       // Why: a repoId-less setup on the removed host can still split a surviving project group, so drop every setup it owns.
-      const survivingSetups: AppState['projectHostSetups'] = []
+      const survivingSetups: ProjectHostSetup[] = []
       for (const setup of s.projectHostSetups) {
         if (isRemovedRuntimeHostId(setup.hostId, removed)) {
           if (setup.repoId) {

@@ -651,6 +651,11 @@ type LegacyTerminalScrollbackSettings = {
   terminalScrollbackBytes?: unknown
 }
 
+type RetiredGlobalSettings = {
+  terminalScrollbackBytes?: unknown
+  enableGitHubAttribution?: unknown
+}
+
 const LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT = 3
 
 function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminalScrollbackSettings {
@@ -659,12 +664,16 @@ function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminal
     : {}
 }
 
-function stripLegacyTerminalScrollbackBytes(
+function stripRetiredGlobalSettings(
   settings: Partial<GlobalSettings> | undefined
 ): Partial<GlobalSettings> {
-  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...rest } = (settings ??
-    {}) as Partial<GlobalSettings> & { terminalScrollbackBytes?: unknown }
+  const {
+    terminalScrollbackBytes: _legacyScrollbackBytes,
+    enableGitHubAttribution: _legacyGitHubAttribution,
+    ...rest
+  } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _legacyScrollbackBytes
+  void _legacyGitHubAttribution
   return rest
 }
 
@@ -3149,6 +3158,13 @@ export class Store {
         if (migratedTerminalScrollback.needsSave) {
           this.loadNeedsSave = true
         }
+        if (
+          parsed.settings &&
+          typeof parsed.settings === 'object' &&
+          Object.hasOwn(parsed.settings, 'enableGitHubAttribution')
+        ) {
+          this.loadNeedsSave = true
+        }
         const migratedTerminalTuiScrollSensitivity = migrateTerminalTuiScrollSensitivityDefault(
           parsed.settings
         )
@@ -3421,7 +3437,7 @@ export class Store {
           settings: {
             ...defaults.settings,
             // Why (#7977): keep persisted experimentalNewWorktreeCardStyle:true — v1.4.130's onboarding auto-wrote it as a plain boolean, so it's indistinguishable from a real opt-in; only the default changed.
-            ...stripLegacyTerminalScrollbackBytes(parsed.settings),
+            ...stripRetiredGlobalSettings(parsed.settings),
             prBotAuthorOverrides: normalizePRBotAuthorOverrides(
               parsed.settings?.prBotAuthorOverrides
             ),
@@ -4013,7 +4029,7 @@ export class Store {
         )
       })),
       settings: {
-        ...this.state.settings,
+        ...stripRetiredGlobalSettings(this.state.settings),
         opencodeSessionCookie: encryptToSentinel(
           PROTECTED_SECRET_SLOT.opencodeSessionCookie,
           this.state.settings.opencodeSessionCookie
@@ -4551,6 +4567,7 @@ export class Store {
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
+        | 'diffComments'
       >
     >
   ): FolderWorkspace | null {
@@ -4623,6 +4640,9 @@ export class Store {
     }
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
+    }
+    if (updates.diffComments !== undefined) {
+      workspace.diffComments = updates.diffComments
     }
     workspace.updatedAt = Date.now()
     this.scheduleSave()
@@ -4915,6 +4935,7 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
+        | 'agentWorktreeVisibility'
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
@@ -5814,7 +5835,7 @@ export class Store {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
-    const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
+    const sanitizedUpdates = stripRetiredGlobalSettings(updates)
     if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
       this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
     }

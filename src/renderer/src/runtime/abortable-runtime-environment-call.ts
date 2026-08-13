@@ -12,7 +12,8 @@ export async function callAbortableRuntimeEnvironment(
   params: unknown,
   timeoutMs: number | undefined,
   signal: AbortSignal,
-  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentPairingRevision?: number,
+  expectedRuntimeId?: string
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (signal.aborted) {
     throw createRuntimeRpcAbortError()
@@ -47,7 +48,14 @@ export async function callAbortableRuntimeEnvironment(
     signal.addEventListener('abort', onAbort, { once: true })
     void window.api.runtimeEnvironments
       .subscribe(
-        { selector: environmentId, method, params, timeoutMs, expectedEnvironmentPairingRevision },
+        {
+          selector: environmentId,
+          method,
+          params,
+          timeoutMs,
+          expectedEnvironmentPairingRevision,
+          expectedRuntimeId
+        },
         {
           onResponse: (response) => finish(() => resolve(response)),
           onError: (error) => finish(() => reject(new Error(error.message))),

@@ -398,6 +398,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     )
     expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
+      expectedEnvironmentPairingRevision: undefined,
+      expectedRuntimeId: 'remote-runtime',
       method: 'terminal.createAgentSession',
       params: expect.objectContaining({
         clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
@@ -459,7 +461,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: []
+            capabilities: ['terminal.attribution-removed.v1']
           }
         })
       }
@@ -481,6 +483,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
     expect(mockRuntimeEnvironmentTransportCall).toHaveBeenCalledWith(
       expect.objectContaining({
+        expectedRuntimeId: 'old-runtime',
         method: 'terminal.create',
         params: expect.objectContaining({
           worktree: 'id:wt-1',

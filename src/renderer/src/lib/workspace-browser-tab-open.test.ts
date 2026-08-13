@@ -4,7 +4,10 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host'
-import { openWorkspaceBrowserTab } from './workspace-browser-tab-open'
+import {
+  canOpenWorkspaceBrowserTabOnRuntime,
+  openWorkspaceBrowserTab
+} from './workspace-browser-tab-open'
 
 const mocks = vi.hoisted(() => ({
   createRemote: vi.fn(),
@@ -34,6 +37,14 @@ function ownerState(hostId?: string, runtimeOwnerEnvironmentId?: string): Record
         }
       ]
     }
+  }
+}
+
+function browserCapableRuntime(environmentId: string): Record<string, unknown> {
+  return {
+    runtimeStatusByEnvironmentId: new Map([
+      [environmentId, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+    ])
   }
 }
 
@@ -80,10 +91,15 @@ describe('openWorkspaceBrowserTab', () => {
     const createBrowserTab = vi.fn()
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      ...browserCapableRuntime('hub-a'),
       createBrowserTab,
       defaultBrowserSessionProfileId: 'client-profile',
       defaultBrowserSessionProfileIdByHostId: {}
     }
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.state as never, WORKSPACE_ID, 'hub-a')).toBe(
+      true
+    )
 
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
@@ -102,6 +118,50 @@ describe('openWorkspaceBrowserTab', () => {
       failureLogMode: 'operation-only'
     })
     expect(createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('fails closed instead of opening on a runtime other than the asserted owner', async () => {
+    mocks.state = {
+      ...ownerState(toRuntimeExecutionHostId('hub-b')),
+      ...browserCapableRuntime('hub-b'),
+      createBrowserTab: vi.fn(),
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'https://example.com/',
+        intent: { kind: 'url' },
+        expectedRuntimeEnvironmentId: 'hub-a'
+      })
+    ).rejects.toThrow('Unable to open URL.')
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back to a client browser for an incapable asserted runtime', async () => {
+    mocks.state = {
+      ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      createBrowserTab: vi.fn(),
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.state as never, WORKSPACE_ID, 'hub-a')).toBe(
+      false
+    )
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'https://example.com/',
+        intent: { kind: 'url' },
+        expectedRuntimeEnvironmentId: 'hub-a'
+      })
+    ).rejects.toThrow('Unable to open URL.')
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
   })
 
   // Two dev servers on one host must not share a tab title.
@@ -124,7 +184,7 @@ describe('openWorkspaceBrowserTab', () => {
     ])
   })
 
-  it('keeps the worktree session profile when a runtime open soft-fails', async () => {
+  it('uses the desktop provider when the runtime cannot stream browsers', async () => {
     const createBrowserTab = vi.fn()
     const sshHost = toSshExecutionHostId('ssh-target')
     mocks.state = {
@@ -141,12 +201,34 @@ describe('openWorkspaceBrowserTab', () => {
       intent: { kind: 'search', engine: 'google' }
     })
 
-    expect(mocks.createRemote).toHaveBeenCalledOnce()
+    expect(mocks.createRemote).not.toHaveBeenCalled()
     expect(createBrowserTab).toHaveBeenCalledWith(
       WORKSPACE_ID,
       'https://www.google.com/search?q=hooks',
       expect.objectContaining({ sessionProfileId: 'ssh-profile', title: 'Search Google' })
     )
+  })
+
+  it('does not fall back locally when the runtime create outcome is unknown', async () => {
+    const createBrowserTab = vi.fn()
+    mocks.state = {
+      ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      ...browserCapableRuntime('hub-a'),
+      createBrowserTab,
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+    mocks.createRemote.mockRejectedValue(new Error('create outcome unknown'))
+
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'https://example.com/',
+        intent: { kind: 'url' }
+      })
+    ).rejects.toThrow('Unable to open URL.')
+
+    expect(createBrowserTab).not.toHaveBeenCalled()
   })
 
   it('fails closed for invalid targets and unresolved owners, then falls back locally', async () => {
@@ -184,19 +266,13 @@ describe('openWorkspaceBrowserTab', () => {
 
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      ...browserCapableRuntime('hub-a'),
       createBrowserTab: vi.fn(),
       defaultBrowserSessionProfileId: 'focused-profile',
       defaultBrowserSessionProfileIdByHostId: { local: 'local-profile' }
     }
     mocks.createRemote.mockResolvedValue(false)
-    await openWorkspaceBrowserTab(request)
-    expect(mocks.state.createBrowserTab).toHaveBeenCalledWith(WORKSPACE_ID, secretUrl, {
-      activate: true,
-      browserRuntimeEnvironmentId: null,
-      focusAddressBar: false,
-      sessionProfileId: 'local-profile',
-      targetGroupId: undefined,
-      title: 'Search Kagi'
-    })
+    await expect(openWorkspaceBrowserTab(request)).rejects.toThrow('Unable to search with Kagi.')
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
   })
 })

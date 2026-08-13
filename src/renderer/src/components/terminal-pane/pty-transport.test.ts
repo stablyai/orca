@@ -9,6 +9,7 @@ import {
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
+import { TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
@@ -93,6 +94,24 @@ describe('createIpcPtyTransport', () => {
 
     expect(onData).not.toBeNull()
     expect(onExit).not.toBeNull()
+    transport.disconnect()
+  })
+
+  it('threads provider command ownership through the spawn IPC', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      command: 'printf ready',
+      commandDelivery: 'provider'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(window.api.pty.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'printf ready',
+        commandDelivery: 'provider'
+      })
+    )
     transport.disconnect()
   })
 
@@ -2494,7 +2513,10 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: [
+                'agent-session.host-authority.v1',
+                TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY
+              ]
             },
             _meta: { runtimeId: 'runtime-remote' }
           }
@@ -2593,12 +2615,14 @@ describe('createRemoteRuntimePtyTransport', () => {
         worktree: 'id:repo1::/remote/wt',
         clientMutationId: expect.any(String),
         command: 'claude',
-        env: { ORCA_TAB_ID: 'tab-1' },
+        env: { ORCA_TAB_ID: 'tab-1', ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         tabId: 'tab-1',
         leafId: '11111111-1111-4111-8111-111111111111',
         focus: false,
         presentation: 'background'
       },
+      expectedEnvironmentPairingRevision: undefined,
       timeoutMs: 15_000
     })
     expect(runtimeSubscribe).toHaveBeenCalledWith(
@@ -2650,20 +2674,34 @@ describe('createRemoteRuntimePtyTransport', () => {
   })
 
   it('reports a host stable-pane adoption as reattach without fresh-spawn ownership', async () => {
-    runtimeCall.mockResolvedValue({
-      id: 'rpc-create',
-      ok: true,
-      result: {
-        terminal: {
-          handle: 'term-original',
-          worktreeId: 'repo1::/remote/wt',
-          title: 'Original',
-          surface: 'background',
-          isReattach: true
-        }
-      },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
+    runtimeCall.mockImplementation(async (args: { method?: string }) =>
+      args.method === 'status.get'
+        ? {
+            id: 'rpc-status',
+            ok: true,
+            result: {
+              runtimeId: 'runtime-remote',
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: [TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY]
+            },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+        : {
+            id: 'rpc-create',
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'term-original',
+                worktreeId: 'repo1::/remote/wt',
+                title: 'Original',
+                surface: 'background',
+                isReattach: true
+              }
+            },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+    )
     const onPtySpawn = vi.fn()
     const onReattachDetermined = vi.fn()
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -2791,6 +2829,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         },
         presentation: 'background'
       },
+      expectedEnvironmentPairingRevision: undefined,
       timeoutMs: 15_000
     })
     expect(runtimeCall).not.toHaveBeenCalledWith(
@@ -2816,9 +2855,13 @@ describe('createRemoteRuntimePtyTransport', () => {
             id: 'rpc-status',
             ok: true,
             result: {
+              runtimeId: 'runtime-remote',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: [
+                'agent-session.host-authority.v1',
+                TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY
+              ]
             }
           }
     )
@@ -2864,6 +2907,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         },
         presentation: 'background'
       },
+      expectedEnvironmentPairingRevision: undefined,
       timeoutMs: 15_000
     })
     expect(runtimeCall).not.toHaveBeenCalledWith(

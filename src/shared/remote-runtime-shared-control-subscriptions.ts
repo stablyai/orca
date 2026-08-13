@@ -14,6 +14,7 @@ export function createSharedControlSubscription<TResult>(args: {
   requestId: string
   method: string
   params: unknown
+  expectedRuntimeId?: string
   retainedParamsBytes: number
   callbacks: SharedControlSubscriptionCallbacks<TResult>
 }): SharedControlLogicalSubscription<TResult> {
@@ -21,6 +22,7 @@ export function createSharedControlSubscription<TResult>(args: {
     requestId: args.requestId,
     method: args.method,
     params: args.params,
+    expectedRuntimeId: args.expectedRuntimeId,
     retainedParamsBytes: args.retainedParamsBytes,
     callbacks: args.callbacks,
     sent: false,

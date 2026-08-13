@@ -1,5 +1,6 @@
 import type { Cookie, Cookies, Session } from 'electron'
 import { parse as parseDomain } from 'psl'
+import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   'SIDCC',
@@ -58,11 +59,17 @@ export function normalizeCookieImportDomain(domain: string): string | null {
 // it is copied. Signing in directly inside Orca is the only path that produces a working
 // session, so an import must never write these cookies and never remove them either — the
 // live session is always more valuable than anything an import could put in its place.
+// Entries must be canonical lowercase ASCII (punycode) registrable domains, never subdomains or
+// public suffixes, because clearData derives one excluded origin and matches at that boundary.
 // Adding a site is one entry here.
 // youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
 // its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
 // users actually asked for.
 const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
+const NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `https://${root}`
+)
+const COOKIE_CLEAR_CONCURRENCY = 8
 
 export function isNonTransplantableCookieDomain(domain: string): boolean {
   const normalized = normalizeCookieDomain(domain)
@@ -194,53 +201,79 @@ export async function restoreImportedDomainCookies(
   }
 }
 
-type CookieClearSession = {
-  cookies: Pick<Cookies, 'get' | 'set'>
-  clearStorageData: Session['clearStorageData']
+// Why (STA-4061): 'set' stays out so the lossy partition-dropping reconstruction cannot return.
+export type CookieClearSession = {
+  cookies: Pick<Cookies, 'get' | 'remove'>
+  clearData: Session['clearData']
 }
 
-async function restoreCookieClearSnapshot(
-  store: Pick<Cookies, 'set'>,
-  snapshot: readonly Cookie[],
-  originalError: unknown,
-  rollbackMessage: string
-): Promise<never> {
-  try {
-    await restoreImportedDomainCookies(store, snapshot)
-  } catch (rollbackError) {
-    throw new AggregateError([originalError, rollbackError], rollbackMessage)
-  }
-  throw originalError
-}
-
-// Why: after a bulk clear starts, Electron cannot reveal whether a rejected operation mutated
-// the jar, so keep the complete snapshot until excluded cookies have been restored.
-export async function bulkClearCookiesExcept(
-  targetSession: CookieClearSession,
-  isExcluded: (cookie: Cookie) => boolean
+// Why: Electron cannot round-trip partition identity, so excluded cookies must never be removed.
+// Why (STA-4061): the same gap forbids rolling a partial clear back. cookies.get() omits
+// partitionKey and cookies.set() silently drops it, so every reconstruction is a coin flip that
+// can downgrade a partitioned (CHIPS) cookie into an unpartitioned one — and nothing in the
+// snapshot says which cookies are at risk. A partially cleared jar is a retryable import failure;
+// a downgraded cookie is unrecoverable auth-state corruption that survives restart.
+// Why (STA-4065): the exclusion is module state rather than a parameter so the predicate and the
+// origins the bulk clear preserves cannot drift apart — a caller-supplied predicate that disagreed
+// with NON_TRANSPLANTABLE_DOMAINS would silently delete a cookie the bulk call is meant to keep.
+export async function removeTransplantableCookies(
+  targetSession: CookieClearSession
 ): Promise<void> {
-  const snapshot = await targetSession.cookies.get({})
-  const excludedCookies = snapshot.filter(isExcluded)
-
-  try {
-    await targetSession.clearStorageData({ storages: ['cookies'] })
-  } catch (clearError) {
-    await restoreCookieClearSnapshot(
-      targetSession.cookies,
-      snapshot,
-      new AggregateError([clearError], 'Could not clear existing cookies'),
-      'Cookie bulk clear and rollback failed'
-    )
+  const store = targetSession.cookies
+  const initialCookies = await store.get({})
+  if (initialCookies.length === 0) {
+    return
   }
 
+  // Why (STA-4065): measured on Electron 43, excludeOrigins preserves the whole registrable
+  // family — host, leading-dot, subdomain, and partitioned Google cookies — so one call replaces a
+  // remove() per cookie even when the jar holds cookies to keep. That is the ordinary case here:
+  // this import exists for Google, so a Google cookie is usually present.
   try {
-    await restoreImportedDomainCookies(targetSession.cookies, excludedCookies)
-  } catch (preservationError) {
-    await restoreCookieClearSnapshot(
-      targetSession.cookies,
-      snapshot,
-      new AggregateError([preservationError], 'Could not preserve excluded cookies'),
-      'Cookie preservation and rollback failed'
+    await targetSession.clearData({
+      dataTypes: ['cookies'],
+      excludeOrigins: NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS
+    })
+    return
+  } catch {
+    // Why: a rejected bulk clear can still have changed the jar, so the fallback must act on the
+    // survivors rather than stale removal coordinates from before the attempt.
+  }
+
+  const existingCookies = await store.get({})
+  const removableGroups = new Map<string, { cookie: Cookie; url: string }[]>()
+  for (const cookie of existingCookies) {
+    if (isNonTransplantableCookieDomain(cookie.domain ?? '')) {
+      continue
+    }
+    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
+    const url = domain ? cookieRemovalUrl(cookie, domain) : null
+    if (!url) {
+      continue
+    }
+    const key = JSON.stringify([url, cookie.name])
+    const group = removableGroups.get(key) ?? []
+    group.push({ cookie, url })
+    removableGroups.set(key, group)
+  }
+
+  const results = await mapSettledWithConcurrency(
+    [...removableGroups.values()],
+    COOKIE_CLEAR_CONCURRENCY,
+    async (group) => {
+      // Why: identical removal coordinates must stay ordered instead of racing.
+      for (const { cookie, url } of group) {
+        await store.remove(url, cookie.name)
+      }
+    }
+  )
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : []
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      'Could not clear existing cookies; the session was left partially cleared'
     )
   }
 }

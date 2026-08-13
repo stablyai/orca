@@ -115,6 +115,13 @@
       "port": "Port",
       "pr": "PR"
     },
+    "linearIssue": {
+      "createLabel": "Create worktree from Linear issue {{value0}}: {{value1}}",
+      "pendingLabel": "Create worktree from Linear issue {{value0}}",
+      "loadingLabel": "Loading Linear issue {{value0}}",
+      "createHint": "Create worktree from Linear issue",
+      "loadingHint": "Loading Linear issue…"
+    },
     "renderCapOverflow": "{{value0}} more — scroll or keep typing to narrow",
     "filter": {
       "emptyTitle": "No results match the active filter",
@@ -141,6 +148,10 @@
       "clearProjects": "Clear projects",
       "back": "Back",
       "ariaActive": "Filter: {{value0}} active."
+    },
+    "taskUrl": {
+      "loadingHint": "Loading {{value0}}…",
+      "createHint": "Create worktree from {{value0}}"
     }
   },
   "auto": {
@@ -757,9 +768,7 @@
             "toast": {
               "restartFallbackUnavailableNone": "None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.",
               "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.",
-              "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca with this profile, then sign into Google.",
-              "googleDirectSignInAction": "Sign in to Google",
-              "googleDirectSignInUnavailable": "Could not open the browser profile. Open it and sign in at accounts.google.com."
+              "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google."
             }
           }
         }
@@ -870,7 +879,7 @@
         "a9fb10afca": "Terminal",
         "5235c215ca": "Choose which task providers appear in the Tasks page and sidebar.",
         "85f4fd7710": "Task Sources",
-        "ab4b21b58e": "Branch naming, base refs, attribution, and Git AI Author.",
+        "ab4b21b58e": "Branch naming, base refs, and Git AI Author.",
         "09607cb0fe": "Git & Source Control",
         "33a5e1d597": "Connect GitHub, GitLab, Linear, and source-hosting services.",
         "2b043783ef": "Integrations",
@@ -912,7 +921,8 @@
         "artifactsTitle": "Artifacts",
         "artifactsDescription": "Share HTML and Markdown files with your team and manage their public links.",
         "automationsTitle": "Automations",
-        "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar."
+        "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -4901,14 +4911,28 @@
           "bff3bdd00c": "Rename workspace",
           "8df295a78d": "Failed to rename workspace."
         },
+        "WorktreeVisibilityHelpPopover": {
+          "c41f2d7e90": "Which worktrees are hidden by default?",
+          "8db4e19a26": "This setting never hides worktrees created through Orca.",
+          "54a7c2f183": "For newly added repositories, worktrees created manually or by another tool are hidden by default to avoid unexpected sidebar clutter.",
+          "b9e0d43675": "Always show includes current and future non-Orca worktrees, including agent worktrees under .claude/worktrees/* and .gsd-workspaces/*. When it is off, use Show below to add one individually."
+        },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Non-Orca worktrees",
-          "f1f71b9f02": "Import",
+          "f1f71b9f02": "Always show",
           "759371df43": "Hide",
-          "25ddf19920": "{{value0}} available to import",
+          "25ddf19920": "{{value0}} currently hidden",
           "8372e4bbd9": "{{value0}} currently shown",
           "5d02a5647f": "Hidden from sidebar",
-          "3e045d4cb8": "Shown in sidebar"
+          "3e045d4cb8": "Shown in sidebar",
+          "a3f19c07d2": "Checking…",
+          "b8d24e61f5": "Could not list this repo's worktrees.",
+          "c5e70a93b1": "Try again",
+          "7d21c5e848": "Hidden worktrees ({{value0}})",
+          "9b53f7a160": "Choose which hidden worktrees to show individually.",
+          "2f80cd4b97": "Showing…",
+          "e64b81d3a9": "Show",
+          "d40d436fc2": "Could not update worktree visibility. Try again."
         },
         "add": {
           "repo": {
@@ -6344,14 +6368,6 @@
           "808f9a726e": "No prefix will be applied"
         },
         "GitPane": {
-          "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
-          "e02ea23a32": "Orca Attribution",
-          "e71ce09c42": "orca",
-          "b9b5771bb1": "attribution",
-          "b5f534717a": "coauthored",
-          "9838c921ed": "co-author",
-          "afada55042": "issue",
-          "b4ef5428a7": "pr",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Current GitLab CLI REST rate-limit headers when available.",
@@ -7264,7 +7280,7 @@
           "3de4bbb841": "Terminal",
           "dd72ed437a": "Choose which task providers appear in the Tasks page and sidebar.",
           "11faa2f7dd": "Task Sources",
-          "cfa34f4465": "Branch naming, base refs, attribution, and Git AI Author.",
+          "cfa34f4465": "Branch naming, base refs, and Git AI Author.",
           "70100f94c7": "Git & Source Control",
           "b07041697f": "Connect GitHub, GitLab, Linear, and source-hosting services.",
           "c9ca101a3b": "Integrations",
@@ -8650,16 +8666,8 @@
         },
         "git": {
           "search": {
-            "61eab13403": "orca",
-            "1b93c1143c": "attribution",
-            "8461c908ae": "coauthored",
-            "61f9f5d1fc": "co-author",
-            "af0a144bfb": "issue",
-            "6bdea421bb": "pr",
             "16f53f7323": "gh",
             "d088806071": "github",
-            "118c23484b": "Add Orca attribution to commits, PRs, and issues.",
-            "bc7d9f69ce": "Orca Attribution",
             "40f9b815fd": "api budget",
             "b7e52124c7": "rate limit",
             "ead733645f": "glab",
@@ -12385,7 +12393,8 @@
             "searchJira": "Search Jira issues or paste an issue URL",
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
-            "emoji": "Emoji"
+            "emoji": "Emoji",
+            "loadingLinearIssue": "Loading Linear issue…"
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
@@ -14361,9 +14370,7 @@
           "33741dd973": "Back to runs"
         },
         "AutomationSchedulePicker": {
-          "22359b186a": "AM or PM",
           "9e677335b0": "Minute",
-          "6b802ecc99": "Hour",
           "d90981f766": "Time",
           "6b914c5fbb": "Day",
           "233b8c94b6": "Cadence",
@@ -14372,6 +14379,11 @@
           "57e83307d0": "Weekdays",
           "837d902bba": "Weekly",
           "ddba78647e": "Custom cron"
+        },
+        "AutomationTimeField": {
+          "39ec1383f6": "AM or PM",
+          "32a5e4e35e": "Minute",
+          "aa593eb5e2": "Hour"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reuse",
@@ -14471,7 +14483,9 @@
           "tableStatus": "Status",
           "tableActions": "Actions",
           "newAutomation": "New Automation",
-          "rowActions": "Automation actions"
+          "rowActions": "Automation actions",
+          "tableLastRun": "Last run",
+          "noListMatches": "No automations match."
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "Loading automations"
@@ -14565,6 +14579,14 @@
               "name": "Hourly maintenance check",
               "prompt": "Check for stuck work, stale generated files, failing validation, and anything that needs human attention. Report only actionable issues."
             }
+          },
+          "list": {
+            "last": {
+              "run": {
+                "done": "Done",
+                "failed": "Failed"
+              }
+            }
           }
         },
         "external": {
@@ -14597,6 +14619,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "Automation actions"
+        },
+        "AutomationListFilterMenu": {
+          "removeFilter": "Remove {{value0}} filter",
+          "failed": "Failed",
+          "succeeded": "Succeeded",
+          "neverRan": "Never ran",
+          "filters": "Filters",
+          "all": "All",
+          "clear": "Clear filters"
+        },
+        "AutomationListSortHeader": {
+          "sortedAscending": "{{value0}}, sorted ascending",
+          "sortedDescending": "{{value0}}, sorted descending"
         }
       },
       "agent": {

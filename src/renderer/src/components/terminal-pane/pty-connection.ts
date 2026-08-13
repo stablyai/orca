@@ -128,7 +128,6 @@ import {
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
-import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
@@ -280,7 +279,6 @@ import {
   setCommandCodeDoneSettleExecutor
 } from './command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
-import { isTerminalTabParked } from './terminal-parked-watcher-registry'
 import {
   getExecutionHostIdForWorktree,
   getSettingsForWorktreeRuntimeOwner
@@ -346,7 +344,6 @@ const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS = 31_000
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const PTY_CONNECT_DIAG_LIMIT = 200
-const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
 // Why: the notice deliberately omits the rejected path — saved cwds can
@@ -1088,6 +1085,25 @@ function isSetupSplitGeometryReady(
   )
 }
 
+/** Start time of the newest completed turn, counting turns already folded into history.
+ *  Why: batched publications coalesce done→working→done into a single store notification,
+ *  so the done EDGE survives only in stateHistory; comparing `state` alone misses it. */
+function resolveLatestAgentDoneStartedAt(entry: AgentStatusEntry | undefined): number | undefined {
+  if (!entry) {
+    return undefined
+  }
+  if (entry.state === 'done') {
+    return entry.stateStartedAt
+  }
+  const history = entry.stateHistory ?? []
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index].state === 'done') {
+      return history[index].startedAt
+    }
+  }
+  return undefined
+}
+
 /**
  * Establishes a binding between a terminal pane and its corresponding PTY stream,
  * managing input, output, title synchronization, and agent status tracking.
@@ -1102,10 +1118,7 @@ export function connectPanePty(
   // settles after remount must not remount its already-replaced successor.
   const terminalRecoveryGeneration = captureTerminalPaneRecoveryGeneration(deps.tabId)
   const terminalRecoveryInstance = registerTerminalPaneRecoveryInstance(deps.tabId)
-  // Why sampled here: the host disposes this tab's park watcher in the effect
-  // that follows this mount, so connect time is the only moment a pane can tell
-  // a reveal remount from an in-place reattach.
-  let mountFollowsTerminalPark = isTerminalTabParked(deps.tabId)
+  let mountFollowsTerminalPark = deps.mountFollowsTerminalPark
   let authoritativeReattachGeneration = 0
   exposeE2eTerminalPtyOutputDebug()
   let disposed = false
@@ -1133,7 +1146,6 @@ export function connectPanePty(
   let disposeActiveColdRestoreDraft = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
-  let sshShellReadyFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationMaxTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteStatusUnsubscribe: (() => void) | null = null
@@ -3614,10 +3626,10 @@ export function connectPanePty(
   const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
   const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
-  let lastAgentStatusState = state.agentStatusByPaneKey[cacheKey]?.state
   let unsubscribeWindowsDoneTerminalModeReset: (() => void) | null = null
   if (isNativeWindowsConpty) {
     const initialAgentStatus = state.agentStatusByPaneKey[cacheKey]
+    let lastAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(initialAgentStatus)
     if (
       !initialAgentStatus &&
       paneStartup?.telemetry?.launch_source === 'sidebar' &&
@@ -3636,13 +3648,18 @@ export function connectPanePty(
       const nextAgentStatusState = nextAgentStatus?.state
       if (nextAgentStatusState === 'done') {
         setFocusReportSuppressionForAgentCompletion(undefined, nextAgentStatus.agentType)
-        if (lastAgentStatusState !== 'done') {
-          queueAgentIdleTerminalModeReset()
-        }
       } else if (nextAgentStatusState) {
         suppressNativeWindowsIdleCodexFocusReports = false
       }
-      lastAgentStatusState = nextAgentStatusState
+      const nextAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(nextAgentStatus)
+      // Why: a NEW completed turn — same-state `done` pings keep stateStartedAt, so they no-op.
+      if (
+        nextAgentDoneStartedAt !== undefined &&
+        nextAgentDoneStartedAt !== lastAgentDoneStartedAt
+      ) {
+        queueAgentIdleTerminalModeReset()
+      }
+      lastAgentDoneStartedAt = nextAgentDoneStartedAt
     })
   }
 
@@ -3751,6 +3768,8 @@ export function connectPanePty(
         onDone: scheduleCommandCodeOutputDoneStatus
       })
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
+  const shouldUseProviderSshStartupDelivery =
+    Boolean(connectionId) && !shouldDeliverStartupViaTerminalPaste
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   let hasReceivedPtyOutput = false
@@ -3804,6 +3823,7 @@ export function connectPanePty(
     env: paneEnv,
     ...(paneStartup?.envToDelete ? { envToDelete: paneStartup.envToDelete } : {}),
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
+    ...(shouldUseProviderSshStartupDelivery ? { commandDelivery: 'provider' as const } : {}),
     startupCommandDelivery: shouldDeliverStartupViaTerminalPaste
       ? undefined
       : connectionId && paneStartup?.command
@@ -4821,51 +4841,13 @@ export function connectPanePty(
         .catch(() => {})
     }
 
-    // Why: for ordinary local startup commands, the local PTY provider already
-    // writes via the shell-ready barrier. terminal-paste and SSH startup
-    // commands stay renderer-delivered so xterm/relay can apply their handling.
-    let pendingStartupCommand: PendingStartupCommand | null =
-      shouldDeliverStartupViaTerminalPaste || connectionId
-        ? paneStartup?.command
-          ? { command: paneStartup.command }
-          : null
+    // Why: local and ordinary SSH startup commands are provider-owned so delivery
+    // survives renderer replacement. Only explicit terminal-paste stays renderer-owned.
+    let pendingStartupCommand: PendingStartupCommand | null = shouldDeliverStartupViaTerminalPaste
+      ? paneStartup?.command
+        ? { command: paneStartup.command }
         : null
-    // Why: every renderer-delivered SSH command needs the relay's readiness marker;
-    // the existing fallback preserves shells that cannot emit it.
-    const shouldWaitForSshShellReady =
-      Boolean(connectionId) &&
-      Boolean(pendingStartupCommand) &&
-      !shouldDeliverStartupViaTerminalPaste
-    let sshShellReadyMarkerScan = shouldWaitForSshShellReady
-      ? createShellReadyMarkerScanState()
       : null
-    let sshStartupShellReady = !shouldWaitForSshShellReady
-    const armSshStartupShellReady = (): void => {
-      if (!connectionId || !pendingStartupCommand || shouldDeliverStartupViaTerminalPaste) {
-        return
-      }
-      if (startupInjectTimer !== null) {
-        clearTimeout(startupInjectTimer)
-        startupInjectTimer = null
-      }
-      if (sshShellReadyFallbackTimer !== null) {
-        clearTimeout(sshShellReadyFallbackTimer)
-        sshShellReadyFallbackTimer = null
-      }
-      sshShellReadyMarkerScan = createShellReadyMarkerScanState()
-      sshStartupShellReady = false
-    }
-    const markSshStartupShellReady = (): void => {
-      if (sshStartupShellReady) {
-        return
-      }
-      sshStartupShellReady = true
-      if (sshShellReadyFallbackTimer !== null) {
-        clearTimeout(sshShellReadyFallbackTimer)
-        sshShellReadyFallbackTimer = null
-      }
-      schedulePendingStartupCommandDelivery()
-    }
     const startupDraftReadyScanner = ownsStartupDraftPaste
       ? createDraftPasteReadyScanner(
           startupDraftAgentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
@@ -5481,18 +5463,6 @@ export function connectPanePty(
       if (!startup) {
         return
       }
-      if (!sshStartupShellReady) {
-        if (sshShellReadyFallbackTimer === null) {
-          // Why: some SSH shells cannot emit Orca's ready marker. Prefer the
-          // marker when available, but fall back to the old renderer delivery
-          // behavior instead of dropping the startup command forever.
-          sshShellReadyFallbackTimer = setTimeout(() => {
-            sshShellReadyFallbackTimer = null
-            markSshStartupShellReady()
-          }, SSH_SHELL_READY_STARTUP_FALLBACK_MS)
-        }
-        return
-      }
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
       }
@@ -5636,12 +5606,15 @@ export function connectPanePty(
       // a restart-in-place would leak the old TUI's flags into a fresh shell.
       kittyKeyboardModes.reset()
       prepareFreshShellViewportForSpawn(options)
-      if (connectionId && startupOverride?.command) {
-        // Why: SSH providers use `command` only as spawn metadata; the renderer
-        // must still submit the resume command to the fresh remote shell.
+      if (connectionId && startupOverride?.command && shouldDeliverStartupViaTerminalPaste) {
+        // Why: ordinary SSH resumes are provider-owned (commandDelivery: 'provider'
+        // below) — the transport submits the command once it sees shell-ready.
+        // Only the explicit terminal-paste delivery mode stays renderer-owned and
+        // needs pendingStartupCommand so schedulePendingStartupCommandDelivery
+        // pastes it in. Setting this unconditionally would double-submit the
+        // command: once via the provider, once via sendInput.
         pendingStartupCommand = { command: startupOverride.command }
       }
-      armSshStartupShellReady()
       // Why: pre-signal the main process so its cooperation gate suppresses
       // the daemon-snapshot seed for this paneKey. We issue declare and the
       // spawn back-to-back without awaiting, because Electron's
@@ -5669,6 +5642,9 @@ export function connectPanePty(
         cols,
         rows,
         ...(startupOverride?.command ? { command: startupOverride.command } : {}),
+        ...(connectionId && startupOverride?.command && !shouldDeliverStartupViaTerminalPaste
+          ? { commandDelivery: 'provider' as const }
+          : {}),
         ...(connectionId && startupOverride?.command
           ? { startupCommandDelivery: 'shell-ready' as const }
           : {}),
@@ -5798,6 +5774,12 @@ export function connectPanePty(
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
           }
           if (resolvedPtyId && connectionId) {
+            if (
+              shouldUseProviderSshStartupDelivery &&
+              (startupOverride?.command || paneStartup?.command)
+            ) {
+              armStartupDraftReadinessObservation()
+            }
             schedulePendingStartupCommandDelivery()
           }
           finishReattachLiveDataDeferral(Boolean(resolvedPtyId), outputCallbacks.generation)
@@ -6179,6 +6161,11 @@ export function connectPanePty(
           onConnect: (): void => {
             if (isCurrent()) {
               reportRemoteRendererSerializerReady()
+            }
+          },
+          onStreamRecovered: (): void => {
+            if (isCurrent()) {
+              markHiddenOutputRestoreNeeded()
             }
           },
           onData: (data: string, meta?: PtyDataMeta): void => {
@@ -7676,13 +7663,16 @@ export function connectPanePty(
             skippedAltFrame =
               snapshot.alternateScreen === true &&
               snapshot.frameRestoreAnsi !== undefined &&
-              shouldSkipAltFrameForWidthMismatch(snapshot.cols, readProposedTerminalCols(pane), {
-                skipIfTargetUnknown: true
-              })
-            for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
-              skipAltFrame: skippedAltFrame
-            })) {
-              writeReplayData(replayChunk)
+              shouldSkipAltFrameForWidthMismatch(snapshot.cols, readProposedTerminalCols(pane))
+            // Why: an imageless success is not proof the pane is empty; normal replay clears screen and scrollback.
+            const snapshotCarriesNoImage =
+              snapshot.alternateScreen !== true && snapshot.data === '' && !snapshot.scrollbackAnsi
+            if (!snapshotCarriesNoImage) {
+              for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
+                skipAltFrame: skippedAltFrame
+              })) {
+                writeReplayData(replayChunk)
+              }
             }
             // Why: live agents own ?25l/?1004h; a forced ?1004l here would silence focus events until restart (agents enable focus reporting only at startup).
             writeReplayData(
@@ -8071,13 +8061,6 @@ export function connectPanePty(
         recordAgentHibernationPaneOutput(cacheKey)
         // Why: output is the agent-start signal that ends the relaxed no-evidence process-scan cadence (a starting agent always prints).
         agentCompletionCoordinator.observeOutputActivity()
-      }
-      if (sshShellReadyMarkerScan) {
-        const scanned = scanForShellReadyMarker(sshShellReadyMarkerScan, data)
-        if (scanned.matched) {
-          markSshStartupShellReady()
-        }
-        data = scanned.output
       }
       observeStartupDraftPasteReadiness(data)
       observeColdRestoreSessionRulesReadiness(data)
@@ -8630,8 +8613,7 @@ export function connectPanePty(
             typeof snapshotFrameRestoreAnsi === 'string' &&
             shouldSkipAltFrameForWidthMismatch(
               connectResult.snapshotCols,
-              readProposedTerminalCols(pane),
-              { skipIfTargetUnknown: true }
+              readProposedTerminalCols(pane)
             )
           writeReplayData(
             daemonAltFrameSkippable
@@ -8700,10 +8682,7 @@ export function connectPanePty(
             for (const replayChunk of buildMainModelSnapshotReplayWrites(modelSnapshot, {
               skipAltFrame: shouldSkipAltFrameForWidthMismatch(
                 modelCols,
-                readProposedTerminalCols(pane),
-                {
-                  skipIfTargetUnknown: true
-                }
+                readProposedTerminalCols(pane)
               )
             })) {
               writeReplayData(replayChunk)
@@ -9772,10 +9751,6 @@ export function connectPanePty(
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
-      }
-      if (sshShellReadyFallbackTimer !== null) {
-        clearTimeout(sshShellReadyFallbackTimer)
-        sshShellReadyFallbackTimer = null
       }
       cleanupStartupDraftPasteTimers()
       releaseUnattemptedStartupDraftPasteDelivery()

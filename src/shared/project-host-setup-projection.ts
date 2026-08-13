@@ -13,8 +13,8 @@ type ProjectAccumulator = {
 }
 
 export type ProjectHostSetupProjection = {
-  projects: Project[]
-  setups: ProjectHostSetup[]
+  projects: readonly Project[]
+  setups: readonly ProjectHostSetup[]
 }
 
 function getProjectProviderIdentity(

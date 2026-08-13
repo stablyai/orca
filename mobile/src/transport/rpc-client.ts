@@ -54,6 +54,7 @@ type ConnectWaiter = {
 
 export type SendRequestOptions = {
   timeoutMs?: number
+  expectedRuntimeId?: string
   /** Spend `timeoutMs` across connect-wait AND the request instead of giving each
    *  phase its own. Interactive chat writes need it: they run as sequential loops
    *  under one shared budget, so a per-phase clock lets the composer sit `sending`
@@ -1013,7 +1014,15 @@ export function connect(
           }
         })
 
-        if (!sendEncrypted({ id, deviceToken, method, params })) {
+        if (
+          !sendEncrypted({
+            id,
+            deviceToken,
+            method,
+            params,
+            ...(options?.expectedRuntimeId ? { expectedRuntimeId: options.expectedRuntimeId } : {})
+          })
+        ) {
           pending.delete(id)
           clearTimeout(timeout)
           reject(new Error('Connection interrupted'))

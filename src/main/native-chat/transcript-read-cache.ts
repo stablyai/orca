@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 // Why: both the desktop IPC handler and the runtime RPC handler read the same
 // host-filesystem transcript, so a single process-global cache keyed by the
@@ -89,7 +90,14 @@ export async function readNativeChatTranscriptCached(
   /** Hook-reported authoritative transcript path, preferred over the id glob. */
   transcriptPath?: string
 ): Promise<ReadTranscriptResult> {
-  const filePath = await resolveSessionFilePath(agent, sessionId, { transcriptPath })
+  let filePath: string | null
+  try {
+    filePath = await resolveSessionFilePath(agent, sessionId, { transcriptPath })
+  } catch (err) {
+    // Why: gate refusal is transient unavailability — report it without caching
+    // or `notFound` so the next call re-resolves.
+    return { error: wslTranscriptFsRefusal(err).message }
+  }
   if (!filePath) {
     // Not cached (see below): a not-yet-flushed transcript should be re-checked
     // on the next call, not pinned as a settled miss (#8401).

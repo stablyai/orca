@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
+import { TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { useAppStore } from '@/store'
 import {
   activateAndRevealWorktree,
@@ -21,6 +22,35 @@ function makeWebRuntimeWorktree() {
     hostId: 'local' as const,
     runtimeOwnerEnvironmentId: 'web-runtime-1'
   }
+}
+
+function makeWakeTerminalRuntimeCall(worktreeId: string) {
+  return vi.fn(async (args: { method?: string }) => {
+    if (args.method === 'status.get') {
+      return {
+        ok: true,
+        result: { capabilities: [TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY] }
+      }
+    }
+    if (args.method === 'session.tabs.list') {
+      return {
+        ok: true,
+        result: {
+          worktree: worktreeId,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      }
+    }
+    return {
+      ok: true,
+      result: { tab: { id: 'host-tab-1::leaf-1', leafId: 'leaf-1' } }
+    }
+  })
 }
 
 /** Activates and asserts a focusable tab appeared with no queued startup, returning its id. */
@@ -536,16 +566,7 @@ describe('activateAndRevealWorktree', () => {
 
   it('respawns a host terminal when waking a slept web workspace with dead local PTYs', async () => {
     const worktree = makeWebRuntimeWorktree()
-    const callRuntimeEnvironment = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        result: { tabId: 'host-tab-1', terminal: 'term_host' }
-      })
+    const callRuntimeEnvironment = makeWakeTerminalRuntimeCall(worktree.id)
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {
@@ -612,9 +633,19 @@ describe('activateAndRevealWorktree', () => {
     })
 
     ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.waitFor(() => {
+      expect(callRuntimeEnvironment).toHaveBeenCalledTimes(3)
+    })
 
-    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
+    expect(callRuntimeEnvironment).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        selector: 'web-runtime-1',
+        method: 'status.get'
+      })
+    )
+    expect(callRuntimeEnvironment).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         selector: 'web-runtime-1',
         method: 'session.tabs.createTerminal'
@@ -624,10 +655,7 @@ describe('activateAndRevealWorktree', () => {
 
   it('respawns wake terminals on the explicit owner runtime when focus changed', async () => {
     const worktree = makeWorktree()
-    const callRuntimeEnvironment = vi.fn().mockResolvedValue({
-      ok: true,
-      result: { tabId: 'host-tab-1', terminal: 'term_host' }
-    })
+    const callRuntimeEnvironment = makeWakeTerminalRuntimeCall(worktree.id)
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {
@@ -676,9 +704,19 @@ describe('activateAndRevealWorktree', () => {
     })
 
     ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.waitFor(() => {
+      expect(callRuntimeEnvironment).toHaveBeenCalledTimes(3)
+    })
 
-    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
+    expect(callRuntimeEnvironment).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        selector: 'owner-runtime',
+        method: 'status.get'
+      })
+    )
+    expect(callRuntimeEnvironment).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         selector: 'owner-runtime',
         method: 'session.tabs.createTerminal'

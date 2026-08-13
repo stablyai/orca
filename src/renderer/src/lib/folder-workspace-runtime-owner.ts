@@ -16,7 +16,7 @@ type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 export type FolderWorkspaceRuntimeOwnerState = SingleRuntimeLegacyOwnerState & {
   folderWorkspaces?: readonly Pick<
     FolderWorkspace,
-    'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+    'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
   >[]
   projectGroups?: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
@@ -41,7 +41,10 @@ export function findFolderWorkspaceOwner(
   state: FolderWorkspaceRuntimeOwnerState,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'> | null {
+): Pick<
+  FolderWorkspace,
+  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
+> | null {
   return findIndexedFolderWorkspaceOwner(
     state.folderWorkspaces,
     folderWorkspaceId,

@@ -3847,13 +3847,14 @@ function normalizePiCompatibleEvent(
     return null
   }
 
-  // Why: gate on the event's own tool_name (not a merged snapshot) so a stale cached ask_user_question can't re-enter blocked.
-  const isPiAskUserQuestion =
-    agentType === 'pi' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
+  // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
+  const toolName = readString(hookPayload, 'tool_name')
+  const isPiCompatibleAsk =
+    ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
+      (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 
-  const stateName = isPiAskUserQuestion
+  const stateName = isPiCompatibleAsk
     ? 'blocked'
     : eventName === 'before_agent_start' ||
         eventName === 'agent_start' ||

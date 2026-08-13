@@ -4770,6 +4770,25 @@ describe('Store', () => {
     expect(updated!.externalWorktreeVisibilityLegacy).toBe(true)
   })
 
+  it('persists agent worktree visibility independently from external visibility', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ externalWorktreeVisibility: 'hide' }))
+
+    const updated = store.updateRepo('r1', { agentWorktreeVisibility: 'show' })
+
+    expect(updated).toMatchObject({
+      externalWorktreeVisibility: 'hide',
+      agentWorktreeVisibility: 'show'
+    })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')).toMatchObject({
+      externalWorktreeVisibility: 'hide',
+      agentWorktreeVisibility: 'show'
+    })
+  })
+
   it('updateRepo clears source-control AI overrides independently from other clearable fields', async () => {
     const store = await createStore()
     store.addRepo(
@@ -5076,7 +5095,19 @@ describe('Store', () => {
     const updated = store.updateFolderWorkspace(workspace.id, {
       comment: 'Coordinate api and web',
       isPinned: true,
-      lastActivityAt: 123
+      lastActivityAt: 123,
+      diffComments: [
+        {
+          id: 'note-1',
+          worktreeId: folderWorkspaceKey(workspace.id),
+          filePath: 'README.md',
+          source: 'markdown',
+          lineNumber: 1,
+          body: 'Review this paragraph',
+          createdAt: 100,
+          side: 'modified'
+        }
+      ]
     })
 
     expect(workspace.folderPath).toBe('/workspace/platform')
@@ -5088,9 +5119,16 @@ describe('Store', () => {
       linkedTask,
       comment: 'Coordinate api and web',
       isPinned: true,
-      lastActivityAt: 123
+      lastActivityAt: 123,
+      diffComments: [expect.objectContaining({ id: 'note-1', body: 'Review this paragraph' })]
     })
     expect(store.getFolderWorkspaces()).toHaveLength(1)
+    store.flush()
+
+    const restored = await createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.diffComments).toEqual([
+      expect.objectContaining({ id: 'note-1', body: 'Review this paragraph' })
+    ])
   })
 
   it('round-trips Jira item and source context for repo-less folder workspaces', async () => {
@@ -5651,6 +5689,50 @@ describe('Store', () => {
     const persisted = readDataFile() as { settings?: Record<string, unknown> }
     expect(persisted.settings?.terminalScrollbackRows).toBe(50_000)
     expect(persisted.settings).not.toHaveProperty('terminalScrollbackBytes')
+  })
+
+  it('retires the persisted GitHub attribution setting without dropping unknown settings', async () => {
+    const settledStore = await createStore()
+    settledStore.flush()
+    const settled = readDataFile() as { settings: Record<string, unknown> }
+    settled.settings.enableGitHubAttribution = true
+    settled.settings.futureSetting = { enabled: true }
+    writeDataFile(settled)
+
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+
+      expect(store.getSettings()).not.toHaveProperty('enableGitHubAttribution')
+      expect(store.getSettings()).toHaveProperty('futureSetting', { enabled: true })
+      vi.advanceTimersByTime(5_000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+    const persisted = readDataFile() as { settings?: Record<string, unknown> }
+    expect(persisted.settings).not.toHaveProperty('enableGitHubAttribution')
+    expect(persisted.settings).toHaveProperty('futureSetting', { enabled: true })
+  })
+
+  it('ignores retired GitHub attribution updates and strips stale in-memory values on save', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    const updated = store.updateSettings({ enableGitHubAttribution: true } as never, {
+      notifyListeners: true
+    })
+
+    expect(updated).not.toHaveProperty('enableGitHubAttribution')
+    expect(listener).not.toHaveBeenCalled()
+    const settings = store.getSettings() as GlobalSettings & Record<string, unknown>
+    settings.enableGitHubAttribution = false
+    settings.futureSetting = 'kept'
+    store.flush()
+    const persisted = readDataFile() as { settings?: Record<string, unknown> }
+    expect(persisted.settings).not.toHaveProperty('enableGitHubAttribution')
+    expect(persisted.settings?.futureSetting).toBe('kept')
   })
 
   it('normalizes terminal cursor style before persistence and listener broadcasts', async () => {

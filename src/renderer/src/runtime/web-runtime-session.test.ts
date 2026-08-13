@@ -55,8 +55,12 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn()
+  getRuntimeEnvironmentIdForWorktree: vi.fn(),
+  hasMaterializedWebRuntimeBrowserPage: vi.fn(),
+  toastError: vi.fn()
 }))
+
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 vi.mock('../store', () => ({
   useAppStore: {
@@ -87,7 +91,12 @@ vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
 
+vi.mock('./web-runtime-browser-materialization', () => ({
+  hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
+}))
+
 const ENVIRONMENT_ID = 'web-env-1'
+const SECOND_ENVIRONMENT_ID = 'web-env-2'
 const RUNTIME_EXECUTION_HOST_ID = toRuntimeExecutionHostId(ENVIRONMENT_ID)
 const WORKTREE_ID = 'repo::/worktree'
 const FOCUS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -103,6 +112,21 @@ function makeSnapshot(): RuntimeMobileSessionTabsResult {
     activeTabId: null,
     activeTabType: null,
     tabs: []
+  }
+}
+
+function makeAttributionSafeStatus(capabilities: string[] = ['terminal.attribution-removed.v1']) {
+  return {
+    id: 'status',
+    ok: true,
+    result: {
+      runtimeId: 'runtime-1',
+      graphStatus: 'ready',
+      runtimeProtocolVersion: 3,
+      minCompatibleRuntimeClientVersion: 2,
+      appVersion: '1.4.181',
+      capabilities
+    }
   }
 }
 
@@ -257,6 +281,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
+      runtimeStatusByEnvironmentId: new Map([
+        [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+      ]),
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: RUNTIME_EXECUTION_HOST_ID,
       activeTabType: 'editor',
@@ -296,6 +323,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
     mocks.resolveHostSessionTabIdForWebSessionTab.mockReturnValue(null)
     mocks.deliverLaunchPromptToAgentTab.mockResolvedValue(true)
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -304,6 +332,27 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     resetWebSessionBrowserPlacementsForTests()
     resetWebSessionFocusIntentForTests()
     vi.clearAllMocks()
+  })
+
+  it('rejects before RPC when the selected runtime does not advertise screencast', async () => {
+    mocks.getState.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID },
+      runtimeStatusByEnvironmentId: new Map([
+        [ENVIRONMENT_ID, { status: { capabilities: [] }, checkedAt: 1 }]
+      ])
+    })
+    const runtimeCall = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID
+      })
+    ).rejects.toThrow('does not support browser streaming')
+
+    expect(runtimeCall).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })
 
   it('applies an empty host snapshot without retaining delayed browser focus', async () => {
@@ -586,25 +635,52 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     }
   )
 
-  it('does not retry a failed browser create', async () => {
+  it.each([
+    'remote_runtime_unavailable',
+    'runtime_timeout',
+    'invalid_runtime_response',
+    'runtime_error'
+  ])('reports a browser-create %s as ambiguous without retrying', async (code) => {
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'create-lost',
       ok: false,
-      error: { code: 'remote_runtime_unavailable', message: 'response lost' }
+      error: { code, message: 'response lost' }
     })
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await expect(
       createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID, url: 'https://example.com/' })
-    ).resolves.toBe(false)
+    ).rejects.toThrow('did not confirm whether the browser tab was created')
 
     expect(runtimeCall).toHaveBeenCalledOnce()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })
 
+  it.each(['browser_error', 'invalid_argument', 'method_not_found'])(
+    'reports a definitive browser-create %s as a soft failure',
+    async (code) => {
+      const runtimeCall = vi.fn().mockResolvedValue({
+        id: 'create-rejected',
+        ok: false,
+        error: { code, message: 'host rejected before creation' }
+      })
+      vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID, url: 'https://example.com/' })
+      ).resolves.toBe(false)
+
+      expect(runtimeCall).toHaveBeenCalledOnce()
+      expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    }
+  )
+
   it('creates an unfocused browser while preserving its requested split', async () => {
     mocks.getState.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID },
+      runtimeStatusByEnvironmentId: new Map([
+        [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+      ]),
       activeWorktreeId: WORKTREE_ID,
       browserPagesByWorkspace: {
         'host-browser-workspace': [
@@ -664,16 +740,15 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     )
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'client-preview-group'
       })
-    ).toBe(true)
+    ).toBe(false)
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
     expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
   })
 
-  it('releases and removes a newly-created split when host creation fails', async () => {
+  it('releases and removes a newly-created split when host creation is ambiguous', async () => {
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -689,16 +764,362 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         clientTargetGroupId: 'client-preview-group',
         clientTargetGroupCreated: true
       })
-    ).resolves.toBe(false)
+    ).rejects.toThrow('did not confirm whether the browser tab was created')
 
     expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'client-preview-group'
       })
     ).toBe(false)
+  })
+
+  it('cleans up and reports failure when the created browser cannot reconcile', async () => {
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: false,
+        error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
+      })
+      .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
+      .mockResolvedValueOnce({ id: 'list-after-close', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
+        clientTargetGroupId: 'client-preview-group',
+        clientTargetGroupCreated: true,
+        focusOnCreate: false
+      })
+    ).resolves.toBe(false)
+
+    expect(runtimeCall).toHaveBeenNthCalledWith(3, {
+      selector: ENVIRONMENT_ID,
+      method: 'browser.tabClose',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        page: 'remote-browser-page-1'
+      },
+      timeoutMs: 15_000
+    })
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
+    expect(
+      isWebSessionBrowserPlacementGroupReserved({
+        worktreeId: WORKTREE_ID,
+        groupId: 'client-preview-group'
+      })
+    ).toBe(false)
+  })
+
+  it('keeps a split reserved after ownership moves to an overlapping browser creation', async () => {
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      runtimeStatusByEnvironmentId: new Map(
+        [ENVIRONMENT_ID, SECOND_ENVIRONMENT_ID].map((environmentId) => [
+          environmentId,
+          { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }
+        ])
+      )
+    })
+    let resolveFirstList!: (response: unknown) => void
+    let resolveSecondList!: (response: unknown) => void
+    const firstList = new Promise((resolve) => {
+      resolveFirstList = resolve
+    })
+    const secondList = new Promise((resolve) => {
+      resolveSecondList = resolve
+    })
+    let createCount = 0
+    let listCount = 0
+    const runtimeCall = vi.fn((request: { method: string }) => {
+      if (request.method === 'browser.tabCreate') {
+        createCount += 1
+        return Promise.resolve({
+          id: `create-${createCount}`,
+          ok: true,
+          result: { browserPageId: `remote-browser-page-${createCount}` }
+        })
+      }
+      if (request.method === 'session.tabs.list') {
+        listCount += 1
+        if (listCount === 1) {
+          return firstList
+        }
+        if (listCount === 2) {
+          return secondList
+        }
+        return Promise.resolve({ id: 'list-after-close', ok: true, result: makeSnapshot() })
+      }
+      return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
+    })
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(
+      (_state, _environmentId, _worktreeId, remotePageId) =>
+        remotePageId === 'remote-browser-page-2'
+    )
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    const first = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: true,
+      focusOnCreate: false
+    })
+    await vi.waitFor(() => expect(listCount).toBe(1))
+    const second = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: SECOND_ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: false,
+      focusOnCreate: false
+    })
+    await vi.waitFor(() => expect(createCount).toBe(2))
+    expect(
+      isWebSessionBrowserPlacementGroupReserved({
+        worktreeId: WORKTREE_ID,
+        groupId: 'client-preview-group'
+      })
+    ).toBe(true)
+
+    resolveFirstList({
+      id: 'first-list',
+      ok: false,
+      error: { code: 'remote_runtime_timeout', message: 'first preview timed out' }
+    })
+    await vi.waitFor(() => expect(listCount).toBeGreaterThanOrEqual(2))
+    resolveSecondList({ id: 'second-list', ok: true, result: makeSnapshot() })
+    await expect(second).resolves.toBe(true)
+    await expect(first).resolves.toBe(false)
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
+    expect(mocks.hasMaterializedWebRuntimeBrowserPage).toHaveBeenCalledWith(
+      expect.anything(),
+      SECOND_ENVIRONMENT_ID,
+      WORKTREE_ID,
+      'remote-browser-page-2',
+      'client-preview-group'
+    )
+  })
+
+  it('transfers empty-split cleanup when both overlapping creations fail', async () => {
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      runtimeStatusByEnvironmentId: new Map(
+        [ENVIRONMENT_ID, SECOND_ENVIRONMENT_ID].map((environmentId) => [
+          environmentId,
+          { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }
+        ])
+      )
+    })
+    let rejectFirst!: (error: Error) => void
+    let rejectSecond!: (error: Error) => void
+    const runtimeCall = vi
+      .fn()
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectSecond = reject
+        })
+      )
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    const first = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: true,
+      focusOnCreate: false
+    })
+    const second = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: SECOND_ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: false,
+      focusOnCreate: false
+    })
+    rejectFirst(new Error('first host offline'))
+    await expect(first).rejects.toThrow('did not confirm whether the browser tab was created')
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
+
+    rejectSecond(new Error('second host offline'))
+    await expect(second).rejects.toThrow('did not confirm whether the browser tab was created')
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledOnce()
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
+  })
+
+  it('rechecks split reservations after delayed host rollback', async () => {
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      runtimeStatusByEnvironmentId: new Map(
+        [ENVIRONMENT_ID, SECOND_ENVIRONMENT_ID].map((environmentId) => [
+          environmentId,
+          { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }
+        ])
+      )
+    })
+    let resolveClose!: (response: unknown) => void
+    const closeResponse = new Promise((resolve) => {
+      resolveClose = resolve
+    })
+    let createCount = 0
+    let listCount = 0
+    const runtimeCall = vi.fn((request: { method: string }) => {
+      if (request.method === 'browser.tabCreate') {
+        createCount += 1
+        return Promise.resolve({
+          id: `create-${createCount}`,
+          ok: true,
+          result: { browserPageId: `remote-browser-page-${createCount}` }
+        })
+      }
+      if (request.method === 'browser.tabClose') {
+        return closeResponse
+      }
+      listCount += 1
+      return Promise.resolve(
+        listCount === 1
+          ? {
+              id: 'first-list',
+              ok: false,
+              error: { code: 'remote_runtime_timeout', message: 'first preview timed out' }
+            }
+          : { id: `list-${listCount}`, ok: true, result: makeSnapshot() }
+      )
+    })
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(
+      (_state, _environmentId, _worktreeId, remotePageId) =>
+        remotePageId === 'remote-browser-page-2'
+    )
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    const first = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: true,
+      focusOnCreate: false
+    })
+    await vi.waitFor(() =>
+      expect(
+        runtimeCall.mock.calls.some(([request]) => request.method === 'browser.tabClose')
+      ).toBe(true)
+    )
+    const second = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: SECOND_ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: false,
+      focusOnCreate: false
+    })
+    await vi.waitFor(() => expect(createCount).toBe(2))
+
+    resolveClose({ id: 'close', ok: true, result: { closed: true } })
+    await expect(second).resolves.toBe(true)
+    await expect(first).resolves.toBe(false)
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
+  })
+
+  it('accepts subscription materialization when the eager reconciliation fails', async () => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: false,
+        error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
+      })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(true)
+
+    expect(mocks.hasMaterializedWebRuntimeBrowserPage).toHaveBeenCalledWith(
+      expect.anything(),
+      ENVIRONMENT_ID,
+      WORKTREE_ID,
+      'remote-browser-page-1',
+      undefined
+    )
+    expect(runtimeCall).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports ambiguous failure when exact host cleanup is not confirmed', async () => {
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: false,
+        error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
+      })
+      .mockResolvedValueOnce({
+        id: 'close',
+        ok: false,
+        error: { code: 'remote_runtime_timeout', message: 'close timed out' }
+      })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        clientTargetGroupId: 'client-preview-group',
+        clientTargetGroupCreated: true
+      })
+    ).rejects.toThrow('could not recover the failed browser creation')
+
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
+  })
+
+  it('cleans up when applying the host snapshot fails before materialization', async () => {
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
+    mocks.applyFreshWebSessionTabsSnapshot.mockImplementationOnce(() => {
+      throw new Error('store reconcile failed')
+    })
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+      .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
+      .mockResolvedValueOnce({ id: 'list-after-close', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(
+      false
+    )
+
+    expect(runtimeCall.mock.calls.map(([request]) => request.method)).toEqual([
+      'browser.tabCreate',
+      'session.tabs.list',
+      'browser.tabClose',
+      'session.tabs.list'
+    ])
   })
 
   it('keeps the requested worktree selected while the browser snapshot catches up', async () => {
@@ -770,6 +1191,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   it('does not reselect an already active browser worktree on the same runtime', async () => {
     mocks.getState.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID },
+      runtimeStatusByEnvironmentId: new Map([
+        [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+      ]),
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: RUNTIME_EXECUTION_HOST_ID,
       browserPagesByWorkspace: {},
@@ -851,6 +1275,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
+      runtimeStatusByEnvironmentId: new Map([
+        [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+      ]),
       activeWorktreeId,
       browserPagesByWorkspace: {},
       remoteBrowserPageHandlesByPageId: {},
@@ -974,7 +1401,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         url: 'https://example.com/?q=private',
         failureLogMode: 'operation-only'
       })
-    ).resolves.toBe(false)
+    ).rejects.toThrow('did not confirm whether the browser tab was created')
 
     expect(consoleWarn).toHaveBeenCalledWith('[web-runtime-session] failed to create browser tab')
     expect(JSON.stringify(consoleWarn.mock.calls)).not.toContain('private')
@@ -1021,6 +1448,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     })
     const runtimeCall = vi
       .fn()
+      .mockResolvedValueOnce(makeAttributionSafeStatus())
       .mockResolvedValueOnce({
         id: 'create',
         ok: true,
@@ -1039,6 +1467,43 @@ describe('createWebRuntimeSessionTerminal', () => {
     ).resolves.toEqual({ status: 'created' })
 
     expect(selectedHosts).toEqual([RUNTIME_EXECUTION_HOST_ID])
+  })
+
+  it('refuses session-tab creation when an older host drops terminal environment fields', async () => {
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: { capabilities: ['mobile.tasks.v1'] }
+    })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await expect(createWebRuntimeSessionTerminal({ worktreeId: WORKTREE_ID })).resolves.toEqual({
+      status: 'failed',
+      message:
+        'Creating terminals requires a newer workspace host that can verify safe terminal environment forwarding. Update the host and try again.'
+    })
+
+    expect(runtimeCall.mock.calls.map(([request]) => request.method)).toEqual(['status.get'])
+  })
+
+  it('returns a failed outcome when attribution cleanup exceeds the deletion limit', async () => {
+    const runtimeCall = vi.fn()
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await expect(
+      createWebRuntimeSessionTerminal({
+        worktreeId: WORKTREE_ID,
+        envToDelete: Array.from({ length: 32 }, (_, index) => `KEY_${index}`)
+      })
+    ).resolves.toEqual({
+      status: 'failed',
+      message: 'Terminal environment deletion limit leaves no room for attribution cleanup'
+    })
+    expect(runtimeCall).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -1089,7 +1554,8 @@ describe('createWebRuntimeSessionTerminal', () => {
               capabilities: [
                 'agent-session.host-authority.v1',
                 'agent-session.client-default-rules.v1',
-                'agent-session.prompt-delivery-owner.v1'
+                'agent-session.prompt-delivery-owner.v1',
+                'terminal.attribution-removed.v1'
               ]
             }
           }
@@ -1189,7 +1655,11 @@ describe('createWebRuntimeSessionTerminal', () => {
           graphStatus: 'ready',
           runtimeProtocolVersion: 3,
           minCompatibleRuntimeClientVersion: 2,
-          capabilities: ['agent-session.client-default-rules.v1']
+          capabilities: [
+            'agent-session.host-authority.v1',
+            'agent-session.client-default-rules.v1',
+            'terminal.attribution-removed.v1'
+          ]
         }
       })
       .mockResolvedValueOnce({
@@ -1253,6 +1723,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
       expectedEnvironmentPairingRevision: undefined,
+      expectedRuntimeId: 'runtime-1',
       method: 'terminal.createAgentSession',
       params: {
         clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
@@ -1302,6 +1773,7 @@ describe('createWebRuntimeSessionTerminal', () => {
   it('keeps exact legacy ordering when structured creation cannot express afterTabId', async () => {
     const runtimeCall = vi
       .fn()
+      .mockResolvedValueOnce(makeAttributionSafeStatus())
       .mockResolvedValueOnce({
         id: 'legacy-create',
         ok: true,
@@ -1327,8 +1799,10 @@ describe('createWebRuntimeSessionTerminal', () => {
       })
     ).resolves.toEqual({ status: 'created' })
 
-    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
+    expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
+      expectedEnvironmentPairingRevision: undefined,
+      expectedRuntimeId: 'runtime-1',
       method: 'session.tabs.createTerminal',
       params: {
         worktree: `id:${WORKTREE_ID}`,
@@ -1336,6 +1810,8 @@ describe('createWebRuntimeSessionTerminal', () => {
         targetGroupId: 'group-left',
         command: undefined,
         cwd: undefined,
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         startupCommandDelivery: undefined,
         agent: 'codex',
         activate: false,
@@ -1345,6 +1821,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       timeoutMs: 15_000
     })
     expect(runtimeCall.mock.calls.map(([request]) => request.method)).toEqual([
+      'status.get',
       'session.tabs.createTerminal',
       'session.tabs.list'
     ])
@@ -1361,6 +1838,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     })
     const runtimeCall = vi
       .fn()
+      .mockResolvedValueOnce(makeAttributionSafeStatus())
       .mockResolvedValueOnce({
         id: 'create-terminal',
         ok: true,
@@ -1417,7 +1895,11 @@ describe('createWebRuntimeSessionTerminal', () => {
               graphStatus: 'ready',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.client-default-rules.v1']
+              capabilities: [
+                'agent-session.host-authority.v1',
+                'agent-session.client-default-rules.v1',
+                'terminal.attribution-removed.v1'
+              ]
             }
           }
         }
@@ -1478,7 +1960,11 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.client-default-rules.v1']
+            capabilities: [
+              'agent-session.host-authority.v1',
+              'agent-session.client-default-rules.v1',
+              'terminal.attribution-removed.v1'
+            ]
           }
         }
       }
@@ -1531,7 +2017,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: []
+            capabilities: ['terminal.attribution-removed.v1']
           }
         }
       }
@@ -1562,6 +2048,8 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
+      expectedEnvironmentPairingRevision: undefined,
+      expectedRuntimeId: 'old-runtime',
       method: 'session.tabs.createTerminal',
       params: {
         worktree: `id:${WORKTREE_ID}`,
@@ -1569,6 +2057,8 @@ describe('createWebRuntimeSessionTerminal', () => {
         targetGroupId: 'group-left',
         command: undefined,
         cwd: undefined,
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         startupCommandDelivery: undefined,
         launchAgent: 'codex',
         activate: false,
@@ -1621,7 +2111,10 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.client-default-rules.v1']
+            capabilities: [
+              'agent-session.client-default-rules.v1',
+              'terminal.attribution-removed.v1'
+            ]
           }
         }
       }
@@ -1697,7 +2190,10 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.client-default-rules.v1']
+            capabilities: [
+              'agent-session.client-default-rules.v1',
+              'terminal.attribution-removed.v1'
+            ]
           }
         }
       }
@@ -1750,7 +2246,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: []
+            capabilities: ['terminal.attribution-removed.v1']
           }
         }
       }
@@ -1786,6 +2282,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
       expectedEnvironmentPairingRevision: undefined,
+      expectedRuntimeId: 'old-runtime',
       method: 'session.tabs.createTerminal',
       params: {
         worktree: `id:${WORKTREE_ID}`,
@@ -1793,7 +2290,8 @@ describe('createWebRuntimeSessionTerminal', () => {
         targetGroupId: undefined,
         command: "codex resume 'session-1'",
         cwd: undefined,
-        env: { CODEX_PROFILE: 'captured' },
+        env: { CODEX_PROFILE: 'captured', ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         startupCommandDelivery: undefined,
         launchConfig: {
           agentCommand: 'codex',
@@ -1822,7 +2320,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
+            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
           }
         }
       }
@@ -1863,9 +2361,14 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     expect(methods).toEqual(['status.get', 'session.tabs.createTerminal', 'session.tabs.list'])
     expect(runtimeCall.mock.calls[1]?.[0]).toMatchObject({
+      expectedRuntimeId: 'new-runtime',
       params: {
         command: "omp --resume '/custom/omp/project/session.jsonl'",
-        env: { PI_CODING_AGENT_DIR: '/custom/omp' },
+        env: {
+          PI_CODING_AGENT_DIR: '/custom/omp',
+          ORCA_ATTRIBUTION_BYPASS: '1'
+        },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         launchAgent: 'omp'
       }
     })
@@ -1883,8 +2386,10 @@ describe('createWebRuntimeSessionTerminal', () => {
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
             capabilities: [
+              'agent-session.host-authority.v1',
               'agent-session.client-default-rules.v1',
-              'agent-session.prompt-delivery-owner.v1'
+              'agent-session.prompt-delivery-owner.v1',
+              'terminal.attribution-removed.v1'
             ]
           }
         }
@@ -1950,7 +2455,11 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.client-default-rules.v1']
+            capabilities: [
+              'agent-session.host-authority.v1',
+              'agent-session.client-default-rules.v1',
+              'terminal.attribution-removed.v1'
+            ]
           }
         }
       }
@@ -2580,17 +3089,25 @@ describe('splitWebRuntimeTerminal', () => {
   })
 
   it('passes telemetry source to the host split while allowing the mirrored split event to be suppressed', async () => {
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'split',
-      ok: true,
-      result: {
-        split: {
-          handle: 'terminal-2',
-          tabId: 'tab-1',
-          paneRuntimeId: -1
-        }
-      }
-    })
+    const runtimeCall = vi.fn(async (request: { method: string }) =>
+      request.method === 'status.get'
+        ? {
+            id: 'status',
+            ok: true,
+            result: { capabilities: ['terminal.attribution-removed.v1'] }
+          }
+        : {
+            id: 'split',
+            ok: true,
+            result: {
+              split: {
+                handle: 'terminal-2',
+                tabId: 'tab-1',
+                paneRuntimeId: -1
+              }
+            }
+          }
+    )
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -2609,13 +3126,22 @@ describe('splitWebRuntimeTerminal', () => {
       consumePendingWebRuntimeSplitMirrorTelemetry('remote:web-env-1@@terminal-1', 'horizontal')
     ).toBe(true)
 
-    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
-    expect(runtimeCall).toHaveBeenCalledWith({
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
+    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
       selector: 'web-env-1',
+      expectedEnvironmentPairingRevision: undefined,
+      method: 'status.get',
+      timeoutMs: 15_000
+    })
+    expect(runtimeCall).toHaveBeenNthCalledWith(2, {
+      selector: 'web-env-1',
+      expectedEnvironmentPairingRevision: undefined,
       method: 'terminal.split',
       params: {
         terminal: 'terminal-1',
         direction: 'horizontal',
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION'],
         telemetrySource: 'keyboard'
       },
       timeoutMs: 15_000
@@ -2624,11 +3150,19 @@ describe('splitWebRuntimeTerminal', () => {
 
   it('does not track rejected host split RPCs', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'split',
-      ok: false,
-      error: { code: 'terminal_exited', message: 'Terminal exited' }
-    })
+    const runtimeCall = vi.fn(async (request: { method: string }) =>
+      request.method === 'status.get'
+        ? {
+            id: 'status',
+            ok: true,
+            result: { capabilities: ['terminal.attribution-removed.v1'] }
+          }
+        : {
+            id: 'split',
+            ok: false,
+            error: { code: 'terminal_exited', message: 'Terminal exited' }
+          }
+    )
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -2641,23 +3175,53 @@ describe('splitWebRuntimeTerminal', () => {
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'context_menu')
     ).toBe(true)
 
-    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(warnSpy).toHaveBeenCalledTimes(1))
+    expect(mocks.toastError).toHaveBeenCalledWith('Terminal exited')
     expect(mocks.trackTerminalPaneSplit).not.toHaveBeenCalled()
   })
 
-  it('ignores local panes but delegates remote runtime panes from desktop or web clients', async () => {
+  it('refuses legacy hosts because renderer-owned splits discard environment fields', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'split',
+      id: 'status',
       ok: true,
-      result: {
-        split: {
-          handle: 'terminal-2',
-          tabId: 'tab-1',
-          ptyId: 'pty-2'
-        }
-      }
+      result: { appVersion: '1.4.181', capabilities: ['mobile.tasks.v1'] }
     })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    expect(splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard')).toBe(
+      true
+    )
+
+    await vi.waitFor(() => expect(warnSpy).toHaveBeenCalledTimes(1))
+    expect(runtimeCall).toHaveBeenCalledTimes(1)
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.split' })
+    )
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      expect.stringContaining('Update the host and try again')
+    )
+  })
+
+  it('ignores local panes but delegates remote runtime panes from desktop or web clients', async () => {
+    const runtimeCall = vi.fn(async (request: { method: string }) =>
+      request.method === 'status.get'
+        ? { id: 'status', ok: true, result: { capabilities: ['terminal.attribution-removed.v1'] } }
+        : {
+            id: 'split',
+            ok: true,
+            result: {
+              split: {
+                handle: 'terminal-2',
+                tabId: 'tab-1',
+                ptyId: 'pty-2'
+              }
+            }
+          }
+    )
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -2672,7 +3236,7 @@ describe('splitWebRuntimeTerminal', () => {
       true
     )
 
-    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
   })
 })
 

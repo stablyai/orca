@@ -186,6 +186,7 @@ export async function sendRequest<TResult>(
           authToken: metadata.authToken,
           method,
           params,
+          expectedRuntimeId: envelope?.expectedRuntimeId,
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,

@@ -61,3 +61,67 @@ describe('terminal close CLI', () => {
     expect(help).toContain('durable persistence')
   })
 })
+
+describe('terminal split CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('sends the old-host attribution bypass through the legacy-compatible env field', async () => {
+    const call = vi.fn(async (method: string) =>
+      method === 'status.get'
+        ? {
+            result: {
+              runtimeId: 'runtime-1',
+              capabilities: ['terminal.attribution-removed.v1']
+            }
+          }
+        : { result: { split: { handle: 'term-2', parentHandle: 'term-1' } } }
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal split']({
+      flags: new Map([
+        ['terminal', 'term-1'],
+        ['direction', 'horizontal']
+      ]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(call).toHaveBeenNthCalledWith(
+      2,
+      'terminal.split',
+      {
+        terminal: 'term-1',
+        direction: 'horizontal',
+        command: undefined,
+        env: { ORCA_ATTRIBUTION_BYPASS: '1' },
+        envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION']
+      },
+      { expectedRuntimeId: 'runtime-1' }
+    )
+  })
+
+  it('refuses legacy hosts because renderer-owned splits discard environment fields', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: { appVersion: '1.4.181', capabilities: ['mobile.tasks.v1'] }
+    })
+
+    await expect(
+      TERMINAL_HANDLERS['terminal split']({
+        flags: new Map([['terminal', 'term-1']]),
+        client: { call } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({
+      code: 'runtime_update_required',
+      message: expect.stringContaining('Update the host and try again')
+    })
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(call).not.toHaveBeenCalledWith('terminal.split', expect.anything())
+  })
+})

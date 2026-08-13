@@ -8,6 +8,10 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { SEARCH_ENGINE_LABELS, type SearchEngine } from '../../../shared/browser-url'
+import {
+  getClientCreationActionPolicy,
+  type ClientCreationActionAvailability
+} from './client-creation-action-policy'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
 
 export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engine: SearchEngine }
@@ -17,6 +21,36 @@ export type OpenWorkspaceBrowserTabRequest = {
   targetGroupId?: string
   url: string
   intent: WorkspaceBrowserTabIntent
+  expectedRuntimeEnvironmentId?: string
+}
+
+function isExpectedRuntimeBrowserRoute(
+  availability: ClientCreationActionAvailability,
+  route: ReturnType<typeof resolveWorktreeOperationRoute>,
+  expectedRuntimeEnvironmentId: string
+): boolean {
+  if (availability.state !== 'enabled' || availability.provider !== 'paired-runtime' || !route) {
+    return false
+  }
+  const environmentId = route.runtimeEnvironmentId?.trim() || null
+  if (environmentId !== expectedRuntimeEnvironmentId.trim()) {
+    return false
+  }
+  const host = parseExecutionHostId(route.executionHostId)
+  return (
+    !route.executionHostId ||
+    Boolean(host && (host.kind !== 'runtime' || host.environmentId === environmentId))
+  )
+}
+
+export function canOpenWorkspaceBrowserTabOnRuntime(
+  state: AppState,
+  workspaceId: string,
+  expectedRuntimeEnvironmentId: string
+): boolean {
+  const availability = getClientCreationActionPolicy(state, workspaceId)['managed-browser']
+  const route = resolveWorktreeOperationRoute(state, workspaceId)
+  return isExpectedRuntimeBrowserRoute(availability, route, expectedRuntimeEnvironmentId)
 }
 
 // Why: concurrent URL tabs are indistinguishable under a shared "Open URL"
@@ -105,6 +139,15 @@ function createClientBrowserTab(
   }
 }
 
+function assertManagedBrowserEnabled(
+  availability: ClientCreationActionAvailability,
+  presentation: { error: string }
+): asserts availability is Extract<ClientCreationActionAvailability, { state: 'enabled' }> {
+  if (availability.state !== 'enabled') {
+    throw openFailure(presentation.error, availability.reason)
+  }
+}
+
 export async function openWorkspaceBrowserTab(
   request: OpenWorkspaceBrowserTabRequest
 ): Promise<void> {
@@ -113,11 +156,20 @@ export async function openWorkspaceBrowserTab(
     throw openFailure(presentation.error, 'target is not an http(s) URL')
   }
   const state = useAppStore.getState()
+  const availability = getClientCreationActionPolicy(state, request.workspaceId)['managed-browser']
+  assertManagedBrowserEnabled(availability, presentation)
   const route = resolveWorktreeOperationRoute(state, request.workspaceId)
   if (!route) {
     throw openFailure(presentation.error, 'no active worktree route')
   }
   const environmentId = route.runtimeEnvironmentId?.trim() || null
+  const expectedEnvironmentId = request.expectedRuntimeEnvironmentId?.trim() || null
+  if (
+    expectedEnvironmentId &&
+    !isExpectedRuntimeBrowserRoute(availability, route, expectedEnvironmentId)
+  ) {
+    throw openFailure(presentation.error, 'asserted runtime cannot provide this managed browser')
+  }
   const host = parseExecutionHostId(route.executionHostId)
   if (!environmentId) {
     if (!host || host.kind === 'runtime') {
@@ -134,6 +186,11 @@ export async function openWorkspaceBrowserTab(
       presentation.error,
       `host ${route.executionHostId} does not own runtime ${environmentId}`
     )
+  }
+  if (availability.provider === 'local-client') {
+    const localHostId = host && host.kind !== 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID
+    createClientBrowserTab(state, request, localHostId, presentation)
+    return
   }
   let created = false
   try {
@@ -153,10 +210,6 @@ export async function openWorkspaceBrowserTab(
     throw openFailure(presentation.error, 'runtime browser tab creation failed', error)
   }
   if (!created) {
-    // Why: a soft runtime failure still opens client-side, so keep the
-    // workspace's own session profile rather than collapsing every remote
-    // host onto the local cookie jar.
-    const fallbackHostId = host && host.kind !== 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID
-    createClientBrowserTab(state, request, fallbackHostId, presentation)
+    throw openFailure(presentation.error, 'runtime browser tab creation was unavailable')
   }
 }

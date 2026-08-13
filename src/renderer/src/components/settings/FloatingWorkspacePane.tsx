@@ -10,6 +10,7 @@ import { getFloatingWorkspaceSearchEntries } from './floating-workspace-search'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 type FloatingWorkspacePaneProps = {
   settings: GlobalSettings
@@ -35,6 +36,7 @@ export function FloatingWorkspacePane({
   updateSettings
 }: FloatingWorkspacePaneProps): React.JSX.Element | null {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const includeBrowser = !isWebClientLocation()
   const [resolvedFloatingWorkspacePath, setResolvedFloatingWorkspacePath] = useState('')
 
   useEffect(() => {
@@ -72,7 +74,7 @@ export function FloatingWorkspacePane({
     resolvedFloatingWorkspacePath
   })
 
-  if (!matchesSettingsSearch(searchQuery, getFloatingWorkspaceSearchEntries())) {
+  if (!matchesSettingsSearch(searchQuery, getFloatingWorkspaceSearchEntries({ includeBrowser }))) {
     return null
   }
 
@@ -91,7 +93,7 @@ export function FloatingWorkspacePane({
           'floating workspace',
           'floating terminal',
           'terminal',
-          'browser',
+          ...(includeBrowser ? ['browser'] : []),
           'markdown',
           'note',
           'global',

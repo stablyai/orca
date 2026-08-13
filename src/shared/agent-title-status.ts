@@ -16,6 +16,7 @@ import {
   containsAgentName,
   containsAgentSpinnerGlyph,
   containsAny,
+  containsQuarterCircleSpinner,
   containsLegacyAgentName,
   isClaudeManagementTitle,
   isGeminiTerminalTitle,
@@ -222,4 +223,16 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   }
 
   return 'idle'
+}
+
+/**
+ * True when a quarter-circle spinner frame is the only agent evidence a title carries.
+ * Any TUI animates those glyphs, so they prove activity, not identity — callers that
+ * authorize writes into the pane need independent evidence (STA-4028, regression #13925).
+ */
+export function isQuarterCircleSpinnerOnlyAgentTitle(title: string | null | undefined): boolean {
+  if (!title || !containsQuarterCircleSpinner(title)) {
+    return false
+  }
+  return detectAgentStatusFromTitle(title.replace(QUARTER_CIRCLE_SPINNER_RE, '').trim()) === null
 }

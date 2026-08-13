@@ -30,7 +30,7 @@ Fixes #
 
 
 ## AI Disclosure
-<!-- For all external contributors only: Which AI model if anyone was used, please state the details -->
+<!-- DO NOT FILL IN IF !INTERNAL! CONTRIBUTOR: Which AI model if anyone was used, please state the details -->
 
 ## Review
 

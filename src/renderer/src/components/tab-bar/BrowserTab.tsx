@@ -142,7 +142,7 @@ export default function BrowserTab({
   onCloseOthers: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
-  onDuplicate: () => void
+  onDuplicate?: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
@@ -307,11 +307,15 @@ export default function BrowserTab({
             groupId={dragData.groupId}
             trailingSeparator
           />
-          <DropdownMenuItem onSelect={onDuplicate}>
-            <Copy className="size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {onDuplicate ? (
+            <>
+              <DropdownMenuItem onSelect={onDuplicate}>
+                <Copy className="size-3.5" />
+                {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <DropdownMenuItem onSelect={onTogglePin}>
             {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
             {isPinned

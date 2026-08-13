@@ -43,6 +43,14 @@ export class RpcDispatcher {
 
   async dispatch(request: RpcRequest, options?: { signal?: AbortSignal }): Promise<RpcResponse> {
     const meta = this.meta()
+    if (request.expectedRuntimeId && request.expectedRuntimeId !== meta.runtimeId) {
+      return errorResponse(
+        request.id,
+        meta,
+        'runtime_replaced',
+        'The runtime changed before the request could be applied. Refresh and try again.'
+      )
+    }
     const method = this.registry.get(request.method)
     if (!method) {
       return errorResponse(
@@ -139,6 +147,19 @@ export class RpcDispatcher {
     options?: RpcDispatchStreamingOptions
   ): Promise<void> {
     const meta = this.meta()
+    if (request.expectedRuntimeId && request.expectedRuntimeId !== meta.runtimeId) {
+      reply(
+        JSON.stringify(
+          errorResponse(
+            request.id,
+            meta,
+            'runtime_replaced',
+            'The runtime changed before the request could be applied. Refresh and try again.'
+          )
+        )
+      )
+      return
+    }
     const method = this.registry.get(request.method)
     if (!method) {
       reply(

@@ -126,6 +126,10 @@ playwright-report/
 /.agents/skills/
 /skills-lock.json
 
+# Generated Clawpatch state includes machine-local paths and review records.
+/.clawpatch/
+/mobile/.clawpatch/
+
 # Agent hook runtime endpoints (machine-local secrets)
 /agent-hooks/
 validation-screenshots/

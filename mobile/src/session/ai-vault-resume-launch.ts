@@ -16,6 +16,10 @@ import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-res
 import type { TuiAgent } from '../../../src/shared/types'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
+import {
+  addLegacyTerminalAttributionDisableRequest,
+  withLegacyTerminalAttributionDisabledEnv
+} from '../../../src/shared/legacy-terminal-attribution-env'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   readMobileReviewCreatedTerminal,
@@ -23,6 +27,7 @@ import {
   type MobileReviewTerminalTab
 } from './mobile-diff-review-rpc'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
+import { assertMobileTerminalAttributionDisableSupported } from './mobile-terminal-attribution-compat'
 
 const NODE_PLATFORMS = new Set<NodeJS.Platform>([
   'aix',
@@ -169,12 +174,13 @@ export async function resumeAiVaultSessionInTerminal(
   worktreeId: string,
   launch: MobileAiVaultResumeLaunch & { clientMutationId?: string }
 ): Promise<MobileReviewTerminalTab> {
+  const authority = await assertMobileTerminalAttributionDisableSupported(client)
   const created = await client.sendRequest(
     'session.tabs.createTerminal',
     {
       worktree: `id:${worktreeId}`,
-      ...(launch.env ? { env: launch.env } : {}),
-      ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
+      env: withLegacyTerminalAttributionDisabledEnv(launch.env),
+      envToDelete: addLegacyTerminalAttributionDisableRequest(launch.envToDelete),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
       ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
       ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
@@ -182,7 +188,11 @@ export async function resumeAiVaultSessionInTerminal(
       select: true,
       navigation: 'caller'
     },
-    { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    {
+      timeoutMs: RESUME_RPC_TIMEOUT_MS,
+      budgetSpansConnect: true,
+      expectedRuntimeId: authority.runtimeId
+    }
   )
   if (!created.ok) {
     throw new Error(created.error?.message || 'Failed to create terminal')

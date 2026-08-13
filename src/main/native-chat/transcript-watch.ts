@@ -11,6 +11,7 @@ import type {
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 export { getActiveNativeChatWatcherCount } from './transcript-watch-engine'
@@ -207,7 +208,16 @@ export async function subscribeNativeChatTranscript(
     return { unsubscribe: () => {}, watching: false }
   }
 
-  const installed = await attemptInstall(args, decode, setupSignal)
+  let installed: NativeChatTranscriptSubscription | null
+  try {
+    installed = await attemptInstall(args, decode, setupSignal)
+  } catch (error) {
+    setupSignal?.throwIfAborted()
+    // Why: a gate-refused resolve (stalled WSL distro) must degrade to the
+    // resolve-poll fallback below, not fail the subscribe outright.
+    void wslTranscriptFsRefusal(error) // rethrows anything that is not a gate refusal
+    installed = null
+  }
   if (installed) {
     return installed
   }

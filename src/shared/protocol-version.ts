@@ -54,6 +54,7 @@ export const AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY = 'aiVault.session-title
 // offscreen backend). Advertised only when that backend is actually available, so
 // clients never fall back to a local desktop browser tab for a remote-owned page.
 export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as const
+export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
 export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
@@ -87,6 +88,9 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 export const AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY =
   'agent-session.prompt-delivery-owner.v1' as const
+// Why: old host-authority launches cannot accept env deletions and may still inject attribution.
+export const TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY =
+  'terminal.attribution-removed.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -101,7 +105,7 @@ export const RUNTIME_CAPABILITIES = [
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  'browser.screencast.v1',
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1',
   'workspace-ports.v1',
@@ -126,6 +130,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY,
+  TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY

@@ -35,6 +35,25 @@ afterEach(async () => {
 })
 
 describe('subscribeRemoteRuntimeRequest', () => {
+  it('serializes the expected runtime fence on subscription requests', async () => {
+    const server = await createSubscriptionServer()
+    const subscription = await subscribeRemoteRuntimeRequest(
+      server.pairing,
+      'terminal.subscribe',
+      {},
+      1000,
+      { onResponse: vi.fn(), onError: vi.fn() },
+      undefined,
+      { expectedRuntimeId: 'runtime-1' }
+    )
+
+    await expect(server.nextRequest).resolves.toMatchObject({
+      method: 'terminal.subscribe',
+      expectedRuntimeId: 'runtime-1'
+    })
+    subscription.close()
+  })
+
   it('includes WebSocket close details when subscription admission is rejected', async () => {
     const server = await createClosingServer(1013, 'Maximum connections reached')
 
@@ -335,6 +354,7 @@ async function createSubscriptionServer(
   pairing: PairingOffer
   nextBinary: Promise<Uint8Array>
   nextAuth: Promise<unknown>
+  nextRequest: Promise<Record<string, unknown>>
 }> {
   const serverKeyPair = generateKeyPair()
   let resolveBinary: (bytes: Uint8Array) => void = () => {}
@@ -344,6 +364,10 @@ async function createSubscriptionServer(
   let resolveAuth: (auth: unknown) => void = () => {}
   const nextAuth = new Promise<unknown>((resolve) => {
     resolveAuth = resolve
+  })
+  let resolveRequest: (request: Record<string, unknown>) => void = () => {}
+  const nextRequest = new Promise<Record<string, unknown>>((resolve) => {
+    resolveRequest = resolve
   })
   const wss = new WebSocketServer({ port: 0, autoPong: options.disableAutoPong !== true })
   servers.push(wss)
@@ -386,7 +410,8 @@ async function createSubscriptionServer(
         return
       }
 
-      const request = JSON.parse(plaintext) as { id: string }
+      const request = JSON.parse(plaintext) as { id: string } & Record<string, unknown>
+      resolveRequest(request)
       sendEncrypted(ws, sharedKey, {
         id: request.id,
         ok: true,
@@ -419,7 +444,7 @@ async function createSubscriptionServer(
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing, nextBinary, nextAuth }
+  return { pairing, nextBinary, nextAuth, nextRequest }
 }
 
 function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {

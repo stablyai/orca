@@ -7,6 +7,7 @@ export async function callRuntimeEnvironmentWithRevision(args: {
   timeoutMs?: number
   signal?: AbortSignal
   expectedEnvironmentPairingRevision?: number
+  expectedRuntimeId?: string
 }): Promise<unknown> {
   if (args.signal) {
     return callAbortableRuntimeEnvironment(
@@ -15,7 +16,8 @@ export async function callRuntimeEnvironmentWithRevision(args: {
       args.params,
       args.timeoutMs,
       args.signal,
-      args.expectedEnvironmentPairingRevision
+      args.expectedEnvironmentPairingRevision,
+      args.expectedRuntimeId
     )
   }
   return window.api.runtimeEnvironments.call({
@@ -23,6 +25,7 @@ export async function callRuntimeEnvironmentWithRevision(args: {
     method: args.method,
     params: args.params,
     timeoutMs: args.timeoutMs,
-    expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+    expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision,
+    expectedRuntimeId: args.expectedRuntimeId
   })
 }

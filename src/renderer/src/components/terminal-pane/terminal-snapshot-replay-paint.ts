@@ -35,8 +35,8 @@ export function resolvePositiveTerminalDimensions(
  * The column count the post-replay fit will land on. Why not terminal.cols: a
  * pane that has not been fitted yet still reads xterm's 80-column default, so
  * comparing against it would drop frames whose width actually matches the
- * container. Returns undefined when the pane cannot be measured; callers with
- * a repaint owner can clear and defer, while offline preconnect paint cannot.
+ * container. Returns undefined when the pane cannot be measured, so replay can
+ * retain the frame at its capture grid until a final fit exists.
  */
 export function readProposedTerminalCols(pane: ManagedPane): number | undefined {
   return readProposedPaneFitDimensions(pane)?.cols
@@ -44,15 +44,14 @@ export function readProposedTerminalCols(pane: ManagedPane): number | undefined 
 
 export function shouldSkipAltFrameForWidthMismatch(
   snapshotCols: number | undefined,
-  targetCols: number | undefined,
-  options: { skipIfTargetUnknown?: boolean } = {}
+  targetCols: number | undefined
 ): boolean {
   if (typeof snapshotCols !== 'number' || !Number.isFinite(snapshotCols) || snapshotCols <= 0) {
     return false
   }
   if (typeof targetCols !== 'number' || !Number.isFinite(targetCols) || targetCols <= 0) {
-    // A hidden pane has no final grid; its live app can repaint after the deferred fit.
-    return options.skipIfTargetUnknown === true
+    // Keep the frame at its capture grid until a real fit can replace that grid.
+    return false
   }
   // Fixed-grid alt rows clip at narrower columns; normal history remains reflowable.
   return snapshotCols > targetCols

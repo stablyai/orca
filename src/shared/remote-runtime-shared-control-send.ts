@@ -36,7 +36,8 @@ export function sendSharedControlSubscription(args: {
       id: args.subscription.requestId,
       deviceToken: args.deviceToken,
       method: args.subscription.method,
-      params: args.subscription.params
+      params: args.subscription.params,
+      expectedRuntimeId: args.subscription.expectedRuntimeId
     })
   ) {
     args.subscription.sent = true

@@ -8,7 +8,8 @@ import type {
   RuntimeTerminalSend,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
-  RuntimeTerminalWait
+  RuntimeTerminalWait,
+  RuntimeStatus
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
@@ -37,6 +38,14 @@ import {
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
+import {
+  addLegacyTerminalAttributionDisableRequest,
+  hostSupportsTerminalCreateAttributionDisable,
+  hostSupportsTerminalSplitAttributionDisable,
+  TERMINAL_CREATE_ATTRIBUTION_UPDATE_REQUIRED_MESSAGE,
+  TERMINAL_SPLIT_ATTRIBUTION_UPDATE_REQUIRED_MESSAGE,
+  withLegacyTerminalAttributionDisabledEnv
+} from '../../shared/legacy-terminal-attribution-env'
 
 // Why: terminal wait legitimately needs to outlive the CLI's default RPC
 // timeout. Even without an explicit server timeout, the client must allow
@@ -137,17 +146,30 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const useRendererBackedInteractiveTerminal =
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
-    const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-      worktree: await getBrowserWorktreeSelector(flags, cwd, client),
-      command,
-      title: getOptionalStringFlag(flags, 'title'),
-      // Why: interactive local agent TUIs need the renderer-backed terminal
-      // path for browser-side features, but CLI creates must stay backgrounded
-      // unless the caller explicitly asks for focus.
-      focus,
-      ...(focus ? { presentation: 'focused' } : {}),
-      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
-    })
+    const status = await client.call<RuntimeStatus>('status.get')
+    if (!hostSupportsTerminalCreateAttributionDisable(status.result)) {
+      throw new RuntimeClientError(
+        'runtime_update_required',
+        TERMINAL_CREATE_ATTRIBUTION_UPDATE_REQUIRED_MESSAGE
+      )
+    }
+    const result = await client.call<{ terminal: RuntimeTerminalCreate }>(
+      'terminal.create',
+      {
+        worktree: await getBrowserWorktreeSelector(flags, cwd, client),
+        command,
+        env: withLegacyTerminalAttributionDisabledEnv(undefined),
+        envToDelete: addLegacyTerminalAttributionDisableRequest(undefined),
+        title: getOptionalStringFlag(flags, 'title'),
+        // Why: interactive local agent TUIs need the renderer-backed terminal
+        // path for browser-side features, but CLI creates must stay backgrounded
+        // unless the caller explicitly asks for focus.
+        focus,
+        ...(focus ? { presentation: 'focused' } : {}),
+        ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
+      },
+      { expectedRuntimeId: status.result.runtimeId }
+    )
     printResult(result, json, formatTerminalCreate)
   },
   // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
@@ -168,11 +190,24 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     ) {
       throw new RuntimeClientError('invalid_argument', '--direction must be horizontal or vertical')
     }
-    const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
-      terminal: await getTerminalHandle(flags, cwd, client),
-      direction: directionFlag,
-      command: getOptionalStringFlag(flags, 'command')
-    })
+    const status = await client.call<RuntimeStatus>('status.get')
+    if (!hostSupportsTerminalSplitAttributionDisable(status.result)) {
+      throw new RuntimeClientError(
+        'runtime_update_required',
+        TERMINAL_SPLIT_ATTRIBUTION_UPDATE_REQUIRED_MESSAGE
+      )
+    }
+    const result = await client.call<{ split: RuntimeTerminalSplit }>(
+      'terminal.split',
+      {
+        terminal: await getTerminalHandle(flags, cwd, client),
+        direction: directionFlag,
+        command: getOptionalStringFlag(flags, 'command'),
+        env: withLegacyTerminalAttributionDisabledEnv(undefined),
+        envToDelete: addLegacyTerminalAttributionDisableRequest(undefined)
+      },
+      { expectedRuntimeId: status.result.runtimeId }
+    )
     printResult(result, json, formatTerminalSplit)
   }
 }
