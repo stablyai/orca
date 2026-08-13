@@ -57,6 +57,22 @@ describe('useBrowserScreencastReconnectSignal', () => {
     expect(signal).toBe(0)
   })
 
+  it('records the first connect, then bumps on each later reconnect from disconnected', () => {
+    const { client, emit } = createMockClient('disconnected')
+    act(() => {
+      renderer = create(createElement(Harness, { client }))
+    })
+    expect(signal).toBe(0)
+    act(() => emit('connected')) // first connect: recorded, not yet a reconnect
+    expect(signal).toBe(0)
+    act(() => emit('disconnected'))
+    act(() => emit('connected')) // first reconnect after the initial connect
+    expect(signal).toBe(1)
+    act(() => emit('disconnected'))
+    act(() => emit('connected')) // a second reconnect bumps again
+    expect(signal).toBe(2)
+  })
+
   it('bumps once per reconnect (connected -> away -> connected)', () => {
     const { client, emit } = createMockClient('connected')
     act(() => {
