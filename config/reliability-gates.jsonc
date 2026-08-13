@@ -8278,8 +8278,8 @@
       "coveredProviders": ["local"],
       "coverageNotes": "Local macOS evidence covers the runtime PTY write contract, a live dev-runtime CLI repro, and a Haiku composer trace. The Claude render gate stays on the PTY-owning runtime, so paired and SSH callers use the same provider write/output path without a wire change. SSH, daemon, remote-runtime, Linux, and Windows live journeys remain gaps.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/7226"],
-      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Claude must acknowledge the post-paste composer render or reach the bounded fallback first.",
-      "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, and a Claude-shaped delayed render where Enter at the legacy 500 ms boundary is premature but the post-paste show-cursor marker submits exactly once. Orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
+      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Claude must emit a post-paste composer marker and then settle, or reach the bounded fallback first.",
+      "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, and a Claude-shaped multi-frame render where the legacy 500 ms delay and first show-cursor marker are both premature. The candidate waits for post-marker output quiescence before one submit, resets that window on later frames, and still submits once at the hard deadline if output never settles. Orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
@@ -8305,8 +8305,9 @@
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "runtime writes bracketed paste before a delayed submit",
-            "Claude ignores unrelated and split pre-marker output, then submits once after the post-paste show-cursor render",
+            "Claude ignores unrelated and split pre-marker output, then waits for post-marker render quiescence before one submit",
             "a silent Claude composer reaches one bounded fallback submit",
+            "a marked Claude composer with continuous render output reaches one bounded fallback submit",
             "large prompt frames are chunked and reconstructed before submit",
             "partial prompt write failure closes the paste frame and does not submit"
           ]
@@ -8336,6 +8337,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "result": "passed",
+          "durationSeconds": 13.3,
+          "summary": "4 files and 1,283 tests passed. The hardened multi-frame oracle failed on the first-marker candidate because it submitted at 751 ms during an intermediate Claude frame; the quiescence candidate waited through the final 1,000 ms frame and submitted once at 2,500 ms. Continuous render output remained bounded to one fallback submit at 8 seconds. An isolated Claude Code 2.1.231 Haiku probe saw the first marker at 400 ms, continued output through 1,500 ms, sent one Enter at 3,000 ms after 1.5 seconds quiet, and created the expected marker; no Fable or Opus probe was used."
+        },
         {
           "date": "2026-08-13",
           "runner": "local",
@@ -8374,11 +8384,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The Claude-shaped runtime oracle fails on unmodified main and passes with the render gate; the earlier live harness also reproduced the unsafe raw multiline contract before its framing fix. Intentional-break evidence remains local rather than a separate CI job."
+        "evidence": "The original Claude-shaped oracle fails on unmodified main and passes with the render gate. The hardened multi-frame oracle then fails on the first-marker candidate, which submits at 751 ms during an intermediate frame, and passes when the gate requires post-marker quiescence. The earlier live harness also reproduced the unsafe raw multiline contract before its framing fix. Intentional-break evidence remains local rather than a separate CI job."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude adds one PTY-local output listener until its normal post-paste show-cursor frame or an 8s fallback; other agents retain the platform delay. No polling, provider listing, subprocess churn, hidden-pane wakeups, renderer work, or wire traffic is added."
+        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude adds one PTY-local output listener until 1.5s of post-marker output quiescence or an 8s fallback; each later frame resets one timer. Other agents retain the platform delay. No polling, provider listing, subprocess churn, hidden-pane wakeups, renderer work, or wire traffic is added."
       },
       "promotionCriteria": [
         "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",

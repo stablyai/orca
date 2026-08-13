@@ -1831,7 +1831,8 @@ const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
 const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
-// Why: Claude emits show-cursor only after its composer has rendered the pasted draft.
+const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
+// Why: Claude emits show-cursor while rendering its composer; output must settle afterward.
 const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
@@ -17444,23 +17445,50 @@ export class OrcaRuntimeService {
       return null
     }
     let armed = false
-    let observed = false
+    let observedMarker = false
+    let settled = false
     let markerCarry = ''
+    let quietTimer: NodeJS.Timeout | null = null
+    let hardTimer: NodeJS.Timeout | null = null
     let resolveRender!: () => void
     const rendered = new Promise<void>((resolve) => {
       resolveRender = resolve
     })
-    const dispose = this.subscribeToTerminalData(ptyId, (data) => {
-      if (!armed || observed) {
+
+    const finish = (): void => {
+      if (settled) {
         return
       }
-      const combined = markerCarry + data
-      markerCarry = combined.slice(-(CLAUDE_AGENT_PROMPT_RENDER_MARKER.length - 1))
-      if (!combined.includes(CLAUDE_AGENT_PROMPT_RENDER_MARKER)) {
-        return
+      settled = true
+      if (quietTimer) {
+        clearTimeout(quietTimer)
+        quietTimer = null
       }
-      observed = true
+      if (hardTimer) {
+        clearTimeout(hardTimer)
+        hardTimer = null
+      }
       resolveRender()
+    }
+    const armQuietTimer = (): void => {
+      if (quietTimer) {
+        clearTimeout(quietTimer)
+      }
+      quietTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
+    }
+    const unsubscribe = this.subscribeToTerminalData(ptyId, (data) => {
+      if (!armed || settled) {
+        return
+      }
+      if (!observedMarker) {
+        const combined = markerCarry + data
+        markerCarry = combined.slice(-(CLAUDE_AGENT_PROMPT_RENDER_MARKER.length - 1))
+        if (!combined.includes(CLAUDE_AGENT_PROMPT_RENDER_MARKER)) {
+          return
+        }
+        observedMarker = true
+      }
+      armQuietTimer()
     })
     return {
       arm: () => {
@@ -17468,25 +17496,23 @@ export class OrcaRuntimeService {
         markerCarry = ''
       },
       wait: async () => {
-        if (observed) {
+        if (settled) {
           return
         }
-        await new Promise<void>((resolve) => {
-          let settled = false
-          let timer: NodeJS.Timeout
-          const finish = (): void => {
-            if (settled) {
-              return
-            }
-            settled = true
-            clearTimeout(timer)
-            resolve()
-          }
-          timer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS)
-          void rendered.then(finish)
-        })
+        hardTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS)
+        await rendered
       },
-      dispose
+      dispose: () => {
+        unsubscribe()
+        if (quietTimer) {
+          clearTimeout(quietTimer)
+          quietTimer = null
+        }
+        if (hardTimer) {
+          clearTimeout(hardTimer)
+          hardTimer = null
+        }
+      }
     }
   }
 
