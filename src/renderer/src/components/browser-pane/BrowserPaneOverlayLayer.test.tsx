@@ -246,6 +246,8 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
     expect(markup).toContain('data-browser-pane-active="false"')
+    // Why (#10546): off-screen parking keeps CDP paint without covering the agent surface.
+    expect(markup).toContain('left:-10000px')
   })
 
   it('parks browser panes when their worktree is hidden', () => {

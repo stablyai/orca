@@ -53,7 +53,22 @@ function createTestStore() {
         activeTabType: 'terminal',
         activeTabTypeByWorktree: {},
         worktreesByRepo: {},
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {},
+        agentStatusByPaneKey: {},
         createUnifiedTab: vi.fn(),
+        createUnifiedTabInSplit: vi.fn().mockReturnValue({
+          id: 'unified-browser-split',
+          entityId: 'workspace-split',
+          groupId: 'group-split',
+          worktreeId: 'wt-1',
+          contentType: 'browser',
+          label: 'split',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }),
         closeUnifiedTab: vi.fn(),
         activateTab: vi.fn(),
         setTabLabel: vi.fn(),
@@ -276,8 +291,75 @@ describe('createBrowserSlice annotations', () => {
       'browser',
       expect.objectContaining({ activate: false })
     )
+    expect(store.getState().createUnifiedTabInSplit).not.toHaveBeenCalled()
     expect(store.getState().activeTabType).toBe('terminal')
     expect(store.getState().activeBrowserTabIdByWorktree['wt-1']).toBeNull()
+  })
+
+  it('opens an activated browser beside a live agent instead of replacing it', () => {
+    const store = createTestStore()
+    store.setState({
+      activeTabType: 'terminal',
+      tabsByWorktree: { 'wt-1': [{ id: 'agent-tab' }] as AppState['tabsByWorktree'][string] },
+      activeGroupIdByWorktree: { 'wt-1': 'group-agent' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-agent',
+            worktreeId: 'wt-1',
+            activeTabId: 'unified-agent',
+            tabOrder: ['unified-agent']
+          }
+        ]
+      },
+      agentStatusByPaneKey: {
+        'agent-tab:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee': {
+          state: 'working',
+          prompt: 'review UI',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          paneKey: 'agent-tab:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          tabId: 'agent-tab',
+          worktreeId: 'wt-1'
+        }
+      }
+    })
+
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      activate: true,
+      title: 'Review target'
+    })
+
+    expect(store.getState().createUnifiedTabInSplit).toHaveBeenCalledWith(
+      'wt-1',
+      'browser',
+      { sourceGroupId: 'group-agent', splitDirection: 'right' },
+      expect.objectContaining({
+        entityId: tab.id,
+        label: 'Review target',
+        activate: true
+      })
+    )
+    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('does not surface a browser tab from a background worktree as the global active surface', () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-active',
+      activeTabType: 'terminal'
+    })
+    const backgroundTab = store.getState().createBrowserTab('wt-bg', 'https://example.com', {
+      activate: false,
+      title: 'Background'
+    })
+
+    store.getState().setActiveBrowserTab(backgroundTab.id)
+
+    expect(store.getState().activeBrowserTabIdByWorktree['wt-bg']).toBe(backgroundTab.id)
+    expect(store.getState().activeTabType).toBe('terminal')
+    expect(store.getState().activeBrowserTabId).not.toBe(backgroundTab.id)
   })
 
   it('uses local browser profile defaults for client-local fallback pages', () => {

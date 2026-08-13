@@ -58,31 +58,60 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   const shouldMountPane = isWorktreeActive || automationVisible || mobileDriven
   // Why: CSS anchor positioning pins the overlay to its owning group's body — a tab move only swaps positionAnchor, no measurement/state.
   // Orphan branch (no anchorName) stays display:none until the tab is reassigned or destroyed.
-  const style: React.CSSProperties = useMemo(
-    () =>
-      anchorName
-        ? {
-            position: 'absolute',
-            positionAnchor: anchorName,
-            top: `anchor(${anchorName} top)`,
-            left: `anchor(${anchorName} left)`,
-            width: `anchor-size(${anchorName} width)`,
-            height: `anchor-size(${anchorName} height)`,
-            display: isPaintable ? 'flex' : 'none',
-            pointerEvents: isActive ? 'auto' : 'none',
-            opacity: isActive ? 1 : 0
-          }
-        : {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 0,
-            height: 0,
-            display: 'none',
-            pointerEvents: 'none'
-          },
-    [anchorName, isActive, isPaintable]
-  )
+  // Why (#10546): non-active paintable panes (automation/mobile) used to sit opacity-0 over the
+  // agent terminal. Electron webviews ignore parent pointer-events, so they stole focus and
+  // made the live agent conversation appear dismissed. Park them off-screen while still
+  // paintable for CDP/screencast.
+  const style: React.CSSProperties = useMemo(() => {
+    if (!anchorName) {
+      return {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: 0,
+        height: 0,
+        display: 'none',
+        pointerEvents: 'none'
+      }
+    }
+    if (isActive) {
+      return {
+        position: 'absolute',
+        positionAnchor: anchorName,
+        top: `anchor(${anchorName} top)`,
+        left: `anchor(${anchorName} left)`,
+        width: `anchor-size(${anchorName} width)`,
+        height: `anchor-size(${anchorName} height)`,
+        display: 'flex',
+        pointerEvents: 'auto',
+        opacity: 1
+      }
+    }
+    if (isPaintable) {
+      return {
+        position: 'fixed',
+        top: 0,
+        left: -10000,
+        width: 1280,
+        height: 720,
+        display: 'flex',
+        // Why: off-screen + no pointer events keeps CDP paint without covering the agent.
+        pointerEvents: 'none',
+        opacity: 1
+      }
+    }
+    return {
+      position: 'absolute',
+      positionAnchor: anchorName,
+      top: `anchor(${anchorName} top)`,
+      left: `anchor(${anchorName} left)`,
+      width: `anchor-size(${anchorName} width)`,
+      height: `anchor-size(${anchorName} height)`,
+      display: 'none',
+      pointerEvents: 'none',
+      opacity: 0
+    }
+  }, [anchorName, isActive, isPaintable])
   const handleFocus = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
       onFocusOwningGroup(groupId)

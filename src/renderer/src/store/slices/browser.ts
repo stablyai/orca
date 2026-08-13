@@ -42,6 +42,7 @@ import type {
   BrowserProfileListResult
 } from '../../../../shared/runtime-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { shouldOpenBrowserBesideLiveAgent } from '@/lib/browser-open-beside-live-agent'
 import { translate } from '@/i18n/i18n'
 import {
   getExecutionHostLabel,
@@ -622,6 +623,19 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       options?.sessionPartition
     )
 
+    const shouldActivate = options?.activate ?? true
+    // Why (#10546): decide before set() — activating flips activeTabType to browser and
+    // would hide the live agent surface we are trying to preserve.
+    const preCreateState = get()
+    const openBesideLiveAgent =
+      shouldActivate &&
+      options?.targetGroupId === undefined &&
+      shouldOpenBrowserBesideLiveAgent(preCreateState, worktreeId)
+    const sourceGroupIdForSplit = openBesideLiveAgent
+      ? (preCreateState.activeGroupIdByWorktree[worktreeId] ??
+        preCreateState.groupsByWorktree[worktreeId]?.[0]?.id)
+      : undefined
+
     set((s) => {
       const existingTabs = s.browserTabsByWorktree[worktreeId] ?? []
       const nextTabBarOrder = (() => {
@@ -644,7 +658,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         return base
       })()
 
-      const shouldActivate = options?.activate ?? true
       const shouldUpdateGlobalActiveSurface = shouldActivate && s.activeWorktreeId === worktreeId
       const shouldFocusFloatingTab = shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const shouldFocusAddressBar =
@@ -697,11 +710,32 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       (t) => t.contentType === 'browser' && t.entityId === workspaceId
     )
     if (!alreadyHasUnifiedTab) {
+      // Why (#10546): open a right split so the live agent conversation stays visible beside
+      // the browser instead of being replaced in the same group.
+      if (
+        openBesideLiveAgent &&
+        sourceGroupIdForSplit &&
+        typeof state.createUnifiedTabInSplit === 'function'
+      ) {
+        const splitTab = state.createUnifiedTabInSplit(
+          worktreeId,
+          'browser',
+          { sourceGroupId: sourceGroupIdForSplit, splitDirection: 'right' },
+          {
+            entityId: workspaceId,
+            label: browserTab.title,
+            activate: true
+          }
+        )
+        if (splitTab) {
+          return browserTab
+        }
+      }
       state.createUnifiedTab(worktreeId, 'browser', {
         entityId: workspaceId,
         label: browserTab.title,
         targetGroupId: options?.targetGroupId,
-        activate: options?.activate ?? true
+        activate: shouldActivate
       })
     }
     return browserTab
@@ -1041,13 +1075,16 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!browserTab) {
         return s
       }
+      // Why (#10546): only surface the browser pane when the tab's worktree is already
+      // active — never yank the global agent/terminal surface from another worktree.
+      const isActiveWorktree = s.activeWorktreeId === browserTab.worktreeId
       return {
-        activeBrowserTabId: tabId,
+        activeBrowserTabId: isActiveWorktree ? tabId : s.activeBrowserTabId,
         activeBrowserTabIdByWorktree: {
           ...s.activeBrowserTabIdByWorktree,
           [browserTab.worktreeId]: tabId
         },
-        activeTabType: 'browser',
+        activeTabType: isActiveWorktree ? 'browser' : s.activeTabType,
         activeTabTypeByWorktree: {
           ...s.activeTabTypeByWorktree,
           [browserTab.worktreeId]: 'browser'
