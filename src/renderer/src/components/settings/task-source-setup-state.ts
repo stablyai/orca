@@ -5,9 +5,18 @@ export type TaskProviderReadiness = {
   connected: boolean
   checking: boolean
   unavailable?: boolean
-  /** Linear only — agent skill install. Other providers leave this undefined. */
+  /** Linear and Huly — agent skill install. Other providers leave this undefined. */
   skillInstalled?: boolean
   skillChecking?: boolean
+  /** Huly — CLI binary installed on the Orca server. */
+  cliInstalled?: boolean
+  /**
+   * Whether the agent skill counts as a required step. Linear requires it; Huly
+   * exposes it as optional. Without this flag the Huly readiness object — which
+   * always carries a defined `skillInstalled` — would falsely inflate the
+   * required step count.
+   */
+  skillRequired?: boolean
   visible: boolean
 }
 
@@ -42,7 +51,7 @@ export function getTaskProviderCompletedSteps(readiness: TaskProviderReadiness):
   completed: number
   total: number
 } {
-  const skillRequired = readiness.skillInstalled !== undefined
+  const skillRequired = readiness.skillRequired === true
   const total = skillRequired ? 3 : 2
   let completed = 0
   if (readiness.connected) {

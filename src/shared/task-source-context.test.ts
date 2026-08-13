@@ -151,6 +151,86 @@ describe('task source context', () => {
     ).toContain(encodeURIComponent('https://example.atlassian.net/OPS'))
   })
 
+  it('serializes Huly provider identity into the cache scope', () => {
+    const scope = getTaskSourceCacheScope({
+      projectId: 'project-1',
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      provider: 'huly',
+      providerIdentity: {
+        provider: 'huly',
+        connectionId: 'huly-a',
+        workspaceId: 'wsp-1',
+        teamId: 'team-1'
+      }
+    })
+    expect(scope).toContain(encodeURIComponent('huly'))
+    expect(scope).toContain(encodeURIComponent('huly-a/wsp-1/team-1'))
+  })
+
+  it('isolates Huly cache scopes per connection when workspace and team match', () => {
+    const a = getTaskSourceCacheScope({
+      projectId: 'project-1',
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      provider: 'huly',
+      providerIdentity: {
+        provider: 'huly',
+        connectionId: 'huly-a',
+        workspaceId: 'wsp-1',
+        teamId: 'team-1'
+      }
+    })
+    const b = getTaskSourceCacheScope({
+      projectId: 'project-1',
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      provider: 'huly',
+      providerIdentity: {
+        provider: 'huly',
+        connectionId: 'huly-b',
+        workspaceId: 'wsp-1',
+        teamId: 'team-1'
+      }
+    })
+    expect(a).not.toBe(b)
+  })
+
+  it('normalizes a Huly TaskSourceContext with identity and hostId', () => {
+    const result = normalizeTaskSourceContext({
+      provider: 'huly',
+      projectId: 'project-1',
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      providerIdentity: { provider: 'huly', connectionId: 'huly-a' }
+    })
+    expect(result).toMatchObject({
+      kind: 'task-source',
+      provider: 'huly',
+      projectId: 'project-1',
+      hostId: LOCAL_EXECUTION_HOST_ID
+    })
+    expect(result?.providerIdentity).toEqual({
+      provider: 'huly',
+      connectionId: 'huly-a',
+      workspaceId: null,
+      workspaceName: null,
+      teamId: null,
+      teamKey: null
+    })
+  })
+
+  it('drops providerIdentity on a Huly context whose identity has no connectionId', () => {
+    const result = normalizeTaskSourceContext({
+      provider: 'huly',
+      projectId: 'project-1',
+      providerIdentity: {
+        provider: 'huly',
+        connectionId: '',
+        workspaceId: 'wsp'
+      } as never
+    })
+    expect(result).not.toBeNull()
+    expect(result?.provider).toBe('huly')
+    expect(result?.providerIdentity).toBeNull()
+  })
+
   it('drops provider identities that do not match the source provider', () => {
     expect(
       normalizeTaskSourceContext({

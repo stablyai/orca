@@ -6,7 +6,11 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
+import { useHulyProviderConnected } from '@/hooks/useHulyProviderConnected'
+import {
+  HULY_AGENT_SKILL_NAMES,
+  LINEAR_AGENT_SKILL_NAMES
+} from '@/lib/agent-feature-install-commands'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
@@ -60,6 +64,19 @@ export function useTaskSourceProviderReadiness(
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
+  const hulyConnected = useHulyProviderConnected()
+  const hulyStatus = useAppStore((s) => s.hulyStatus)
+  const hulyStatusChecked = useAppStore((s) => s.hulyStatusChecked)
+  const hulyStatusContextKey = useAppStore((s) => s.hulyStatusContextKey)
+  const hulyChecking = hulyStatusContextKey !== providerRuntimeContextKey || !hulyStatusChecked
+  const {
+    installed: hulySkillInstalled,
+    loading: hulySkillLoading,
+    settled: hulySkillSettled
+  } = useInstalledAgentSkillNames(HULY_AGENT_SKILL_NAMES, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
   // Normalization returns a new array, so memoize by provider contents.
   const visibleProvidersKey = visibleProviders.join(',')
 
@@ -89,11 +106,26 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      huly: {
+        connected: hulyConnected,
+        checking: hulyChecking,
+        cliInstalled: hulyStatus.cliInstalled,
+        skillInstalled: hulySkillInstalled,
+        skillChecking: hulySkillLoading && !hulySkillSettled,
+        skillRequired: false,
+        visible: visible.has('huly')
       }
     }
   }, [
     githubConnected,
     gitlabConnected,
+    hulyChecking,
+    hulyConnected,
+    hulySkillInstalled,
+    hulySkillLoading,
+    hulySkillSettled,
+    hulyStatus.cliInstalled,
     jiraChecking,
     jiraConnected,
     linearChecking,

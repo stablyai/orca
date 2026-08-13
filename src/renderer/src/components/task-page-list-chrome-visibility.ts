@@ -30,5 +30,8 @@ export function shouldHideTaskPageListChrome({
       return hasJiraDetail
     case 'linear':
       return hasLinearIssueDetail || hasLinearProjectContext || hasLinearViewContext
+    case 'huly':
+      // Why: Huly has no separate chrome-detail state yet; default to visible.
+      return false
   }
 }

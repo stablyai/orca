@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildHulyWorkspaceSource,
   buildJiraWorkspaceSource,
   buildLinearWorkspaceSource,
   buildWorkspaceSourceSelection,
@@ -122,5 +123,75 @@ describe('workspace source policy', () => {
     expect(
       shouldApplyWorkspaceSourceAutoName({ currentName: 'my workspace', lastAutoName: 'old' })
     ).toBe(false)
+  })
+
+  it('builds a Huly workspace source with the connection id and identifier', () => {
+    const huly = buildHulyWorkspaceSource({
+      identifier: 'CORE-7',
+      title: 'Auth refactor',
+      url: 'https://huly.app/CORE-7',
+      connectionId: 'huly-a'
+    })
+    expect(huly).toEqual({
+      provider: 'huly',
+      type: 'issue',
+      number: 0,
+      title: 'Auth refactor',
+      url: 'https://huly.app/CORE-7',
+      hulyIdentifier: 'CORE-7',
+      hulyConnectionId: 'huly-a'
+    })
+  })
+
+  it('resolves Huly as the provider when hulyIdentifier is set', () => {
+    expect(
+      getWorkspaceSourceProvider({
+        provider: undefined,
+        type: 'issue',
+        number: 0,
+        title: 't',
+        url: 'https://huly.app/CORE-7',
+        hulyIdentifier: 'CORE-7'
+      })
+    ).toBe('huly')
+  })
+
+  it('builds a workspace source selection for Huly using the issue title', () => {
+    const huly = buildHulyWorkspaceSource({
+      identifier: 'CORE-7',
+      title: 'Auth refactor',
+      url: 'https://huly.app/CORE-7',
+      connectionId: 'huly-a'
+    })
+    const selection = buildWorkspaceSourceSelection({ linkedWorkItem: huly })
+    expect(selection).toEqual({
+      kind: 'huly',
+      label: 'Auth refactor',
+      url: 'https://huly.app/CORE-7'
+    })
+  })
+
+  it('preserves Huly workspace sources across repo changes', () => {
+    const huly = buildHulyWorkspaceSource({
+      identifier: 'CORE-7',
+      title: 'Auth refactor',
+      url: 'https://huly.app/CORE-7',
+      connectionId: 'huly-a'
+    })
+    expect(shouldPreserveWorkspaceSourceOnRepoChange(huly)).toBe(true)
+  })
+
+  it('uses Huly identifier + title for the auto-name seed', () => {
+    const huly = buildHulyWorkspaceSource({
+      identifier: 'CORE-7',
+      title: 'Auth refactor',
+      url: 'https://huly.app/CORE-7',
+      connectionId: 'huly-a'
+    })
+    const seed = getWorkspaceSourceName(huly)
+    // Why: Huly uses the same identifier+title seed shape as Linear/Jira so the
+    // workspace folder/branch names stay unambiguous across providers.
+    expect(seed.seedName).toBe('core-7-auth-refactor')
+    expect(seed.displayName).toBe('CORE-7 Auth refactor')
   })
 })

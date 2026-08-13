@@ -816,6 +816,35 @@ import {
   updateIssue as updateJiraIssue
 } from '../jira/issues'
 import {
+  connect as connectHuly,
+  disconnect as disconnectHuly,
+  getStatus as getHulyStatus,
+  getPreflightStatus as getHulyPreflightStatus,
+  selectConnection as selectHulyConnection
+} from '../huly/client'
+import {
+  addComment as addHulyComment,
+  createIssue as createHulyIssue,
+  getIssue as getHulyIssue,
+  listComments as listHulyComments,
+  listIssues as listHulyIssues,
+  searchIssues as searchHulyIssues,
+  updateIssue as updateHulyIssue
+} from '../huly/issues'
+import type { HulyListFilter } from '../../shared/types'
+import {
+  createProject as createHulyProject,
+  getProject as getHulyProject,
+  listProjectIssues as listHulyProjectIssues,
+  listProjects as listHulyProjects
+} from '../huly/projects'
+import {
+  getTeamLabels as getHulyTeamLabels,
+  getTeamMembers as getHulyTeamMembers,
+  getTeamStates as getHulyTeamStates,
+  listTeams as listHulyTeams
+} from '../huly/teams'
+import {
   clearProjectItemFieldValue,
   getProjectViewTable,
   getWorkItemDetailsBySlug,
@@ -35327,6 +35356,129 @@ export class OrcaRuntimeService {
     siteId?: string
   ): ReturnType<typeof getJiraProjectStatusOrder> {
     return getJiraProjectStatusOrder(projectKey, siteId)
+  }
+
+  // ── Huly integration ──
+
+  hulyConnect(input: {
+    name: string
+    url: string
+    workspace: string
+    email: string | null
+    secret: string
+  }): ReturnType<typeof connectHuly> {
+    return connectHuly(input)
+  }
+
+  hulyDisconnect(connectionId?: string): { ok: true } {
+    disconnectHuly(connectionId)
+    return { ok: true }
+  }
+
+  hulySelectConnection(connectionId: string): ReturnType<typeof getHulyStatus> {
+    return selectHulyConnection(connectionId as never)
+  }
+
+  hulyStatus(): ReturnType<typeof getHulyStatus> {
+    return getHulyStatus()
+  }
+
+  hulyPreflight(): ReturnType<typeof getHulyPreflightStatus> {
+    return getHulyPreflightStatus()
+  }
+
+  hulyListIssues(
+    filter?: HulyListFilter,
+    limit?: number,
+    connectionId?: string
+  ): ReturnType<typeof listHulyIssues> {
+    return listHulyIssues(filter, Math.min(Math.max(1, limit ?? 50), 200), connectionId ?? null)
+  }
+
+  hulySearchIssues(
+    query: string,
+    limit?: number,
+    connectionId?: string
+  ): ReturnType<typeof searchHulyIssues> {
+    return searchHulyIssues(query, Math.min(Math.max(1, limit ?? 20), 50), connectionId ?? null)
+  }
+
+  hulyGetIssue(id: string, connectionId?: string): ReturnType<typeof getHulyIssue> {
+    return getHulyIssue(id, connectionId ?? null)
+  }
+
+  hulyCreateIssue(
+    input: Parameters<typeof createHulyIssue>[0],
+    connectionId?: string
+  ): ReturnType<typeof createHulyIssue> {
+    return createHulyIssue(input, connectionId ?? null)
+  }
+
+  hulyUpdateIssue(
+    id: string,
+    updates: Parameters<typeof updateHulyIssue>[1],
+    connectionId?: string
+  ): ReturnType<typeof updateHulyIssue> {
+    return updateHulyIssue(id, updates, connectionId ?? null)
+  }
+
+  hulyAddComment(
+    issueId: string,
+    body: string,
+    connectionId?: string
+  ): ReturnType<typeof addHulyComment> {
+    return addHulyComment(issueId, body, connectionId ?? null)
+  }
+
+  hulyListComments(issueId: string, connectionId?: string): ReturnType<typeof listHulyComments> {
+    return listHulyComments(issueId, connectionId ?? null)
+  }
+
+  hulyListProjects(
+    query?: string,
+    limit?: number,
+    connectionId?: string
+  ): ReturnType<typeof listHulyProjects> {
+    return listHulyProjects(query, Math.min(Math.max(1, limit ?? 20), 50), connectionId ?? null)
+  }
+
+  hulyGetProject(id: string, connectionId?: string): ReturnType<typeof getHulyProject> {
+    return getHulyProject(id, connectionId ?? null)
+  }
+
+  hulyCreateProject(
+    input: Parameters<typeof createHulyProject>[0],
+    connectionId?: string
+  ): ReturnType<typeof createHulyProject> {
+    return createHulyProject(input, connectionId ?? null)
+  }
+
+  hulyListProjectIssues(
+    projectId: string,
+    limit?: number,
+    connectionId?: string
+  ): ReturnType<typeof listHulyProjectIssues> {
+    return listHulyProjectIssues(
+      projectId,
+      Math.min(Math.max(1, limit ?? 50), 200),
+      connectionId ?? null
+    )
+  }
+
+  hulyListTeams(connectionId?: string): ReturnType<typeof listHulyTeams> {
+    return listHulyTeams(connectionId ?? null)
+  }
+
+  hulyTeamMembers(teamId: string, connectionId?: string): ReturnType<typeof getHulyTeamMembers> {
+    return getHulyTeamMembers(teamId, connectionId ?? null)
+  }
+
+  hulyTeamStates(teamId: string, connectionId?: string): ReturnType<typeof getHulyTeamStates> {
+    return getHulyTeamStates(teamId, connectionId ?? null)
+  }
+
+  hulyTeamLabels(teamId: string, connectionId?: string): ReturnType<typeof getHulyTeamLabels> {
+    return getHulyTeamLabels(teamId, connectionId ?? null)
   }
 
   // ── Browser automation ──

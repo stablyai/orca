@@ -29,6 +29,13 @@ type StoreState = {
   checkJiraConnection: () => Promise<void>
   testJiraConnection: () => Promise<{ ok: boolean; error?: string }>
   disconnectJira: () => Promise<void>
+  hulyStatus: { connected: boolean; connections?: unknown[] }
+  hulyStatusChecked: boolean
+  hulyStatusContextKey: string | null
+  checkHulyConnection: () => Promise<void>
+  disconnectHuly: () => Promise<void>
+  hulyPreflightStatus: { installed: boolean; authenticated: boolean }
+  refreshHulyPreflight: () => Promise<void>
 }
 
 const { storeState } = vi.hoisted(() => ({
@@ -107,7 +114,14 @@ function installStore(preflightStatus: PreflightStatus): void {
     jiraStatusContextKey: providerContextKey,
     checkJiraConnection: vi.fn(async () => {}),
     testJiraConnection: vi.fn(async () => ({ ok: true })),
-    disconnectJira: vi.fn(async () => {})
+    disconnectJira: vi.fn(async () => {}),
+    hulyStatus: { connected: false, connections: [] },
+    hulyStatusChecked: true,
+    hulyStatusContextKey: providerContextKey,
+    checkHulyConnection: vi.fn(async () => {}),
+    disconnectHuly: vi.fn(async () => {}),
+    hulyPreflightStatus: { installed: false, authenticated: false },
+    refreshHulyPreflight: vi.fn(async () => {})
   }
 }
 
@@ -179,12 +193,13 @@ describe('ConnectIntegrationsList', () => {
 
     expect(markup).toContain('GitHub')
     expect(markup).toContain('issues available as tasks')
-    expect(markup).toContain('add Linear or Jira if your team plans work there')
+    expect(markup).toContain('add Linear, Jira, or Huly if your team plans work there')
     expect(markup).not.toContain('Use GitHub issues')
     // The step is done but stays expanded so Linear/Jira remain discoverable
     // for teams that plan work in a dedicated tracker.
     expect(markup).toContain('Add Linear access')
     expect(markup).toContain('Connect Jira')
+    expect(markup).toContain('Add Huly access')
   })
 
   it('offers GitHub and GitLab as task sources when review came from a non-task provider', async () => {

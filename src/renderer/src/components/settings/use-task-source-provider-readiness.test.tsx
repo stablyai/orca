@@ -40,12 +40,16 @@ vi.mock('@/hooks/useLinearProviderConnected', () => ({
   useLinearProviderConnected: () => Boolean(mocks.state.linearConnected)
 }))
 
+vi.mock('@/hooks/useHulyProviderConnected', () => ({
+  useHulyProviderConnected: () => Boolean(mocks.state.hulyConnected)
+}))
+
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   GLOBAL_AGENT_SKILL_SOURCE_KINDS: ['home'],
   useInstalledAgentSkillNames: () => mocks.skill
 }))
 
-const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'huly']
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -85,7 +89,11 @@ beforeEach(() => {
     jiraStatusContextKey: 'local',
     linearStatusChecked: true,
     linearStatusContextKey: 'local',
-    linearConnected: true
+    linearConnected: true,
+    hulyStatus: { connected: false, cliInstalled: false, cliAuthenticated: false },
+    hulyStatusChecked: true,
+    hulyStatusContextKey: 'local',
+    hulyConnected: false
   }
   mocks.skill = {
     installed: true,
@@ -168,5 +176,35 @@ describe('useTaskSourceProviderReadiness', () => {
 
     await renderProbe(['github', 'linear', 'jira'])
     expect(latest?.jira.visible).toBe(true)
+  })
+
+  it('reports Huly as disconnected and skill-uninstalled by default', async () => {
+    mocks.skill = { ...mocks.skill, installed: false }
+    await renderProbe()
+    expect(latest?.huly.connected).toBe(false)
+    expect(latest?.huly.skillInstalled).toBe(false)
+    expect(latest?.huly.skillRequired).toBe(false)
+    expect(latest?.huly.visible).toBe(true)
+  })
+
+  it('reports Huly as connected when hulyConnected flips on', async () => {
+    mocks.state.hulyConnected = true
+    await renderProbe()
+    expect(latest?.huly.connected).toBe(true)
+    expect(latest?.huly.checking).toBe(false)
+  })
+
+  it('reports Huly as still checking when the status context key does not match', async () => {
+    mocks.skill = { ...mocks.skill, installed: false }
+    mocks.state.hulyStatusContextKey = 'remote'
+    mocks.state.hulyConnected = false
+    await renderProbe()
+    expect(latest?.huly.checking).toBe(true)
+  })
+
+  it('marks Huly hidden when the visible list excludes it', async () => {
+    mocks.state.hulyConnected = true
+    await renderProbe(['github', 'linear', 'jira'])
+    expect(latest?.huly.visible).toBe(false)
   })
 })

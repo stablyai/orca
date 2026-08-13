@@ -133,10 +133,12 @@ describe('TasksPane', () => {
         connected: true,
         checking: false,
         skillInstalled: false,
+        skillRequired: true,
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      huly: { connected: false, checking: false, visible: false }
     }
   })
 
@@ -171,6 +173,7 @@ describe('TasksPane', () => {
       connected: false,
       checking: false,
       skillInstalled: false,
+      skillRequired: true,
       skillChecking: false,
       visible: true
     }
@@ -201,6 +204,7 @@ describe('TasksPane', () => {
       connected: false,
       checking: true,
       skillInstalled: false,
+      skillRequired: true,
       skillChecking: true,
       visible: true
     }
@@ -267,6 +271,7 @@ describe('TasksPane', () => {
       connected: true,
       checking: false,
       skillInstalled: false,
+      skillRequired: true,
       skillChecking: false,
       visible: false
     }
@@ -284,6 +289,7 @@ describe('TasksPane', () => {
       connected: true,
       checking: false,
       skillInstalled: false,
+      skillRequired: true,
       skillChecking: true,
       visible: true
     }
@@ -303,6 +309,7 @@ describe('TasksPane', () => {
       connected: true,
       checking: false,
       skillInstalled: false,
+      skillRequired: true,
       skillChecking: false,
       visible: false
     }
@@ -322,6 +329,7 @@ describe('TasksPane', () => {
       connected: false,
       checking: true,
       skillInstalled: false,
+      skillRequired: true,
       skillChecking: true,
       visible: true
     }
@@ -333,6 +341,7 @@ describe('TasksPane', () => {
       connected: true,
       checking: false,
       skillInstalled: false,
+      skillRequired: true,
       skillChecking: false,
       visible: true
     }

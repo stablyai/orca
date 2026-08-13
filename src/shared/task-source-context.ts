@@ -19,6 +19,7 @@ import type { GlobalSettings, Repo } from './types'
 export type {
   GitHubTaskProviderIdentity,
   GitLabTaskProviderIdentity,
+  HulyTaskProviderIdentity,
   JiraTaskProviderIdentity,
   LinearTaskProviderIdentity,
   TaskProviderIdentity
@@ -207,6 +208,7 @@ function normalizeTaskProvider(value: unknown): TaskProvider | null {
     case 'gitlab':
     case 'linear':
     case 'jira':
+    case 'huly':
       return value
     default:
       return null
