@@ -5,6 +5,7 @@ import {
   isOrchestrationMutation,
   orchestrationMigrationData
 } from '../../shared/orchestration-rpc-contract'
+import { attachMutationRecovery, attachSlowMutationCompletionWarning } from './client-response-loss'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
@@ -107,10 +108,13 @@ export class RuntimeClient {
           envelope
         })
       } catch (error) {
-        throw attachMutationRecovery(error, orchestrationRequestId)
+        throw attachSlowMutationCompletionWarning(
+          attachMutationRecovery(error, orchestrationRequestId),
+          method
+        )
       }
       if (response.ok === false) {
-        throw new RuntimeRpcFailureError(response)
+        throw attachSlowMutationCompletionWarning(new RuntimeRpcFailureError(response), method)
       }
       if (this.environmentSelector) {
         markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
@@ -124,10 +128,13 @@ export class RuntimeClient {
     try {
       response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)
     } catch (error) {
-      throw attachMutationRecovery(error, orchestrationRequestId)
+      throw attachSlowMutationCompletionWarning(
+        attachMutationRecovery(error, orchestrationRequestId),
+        method
+      )
     }
     if (response.ok === false) {
-      throw new RuntimeRpcFailureError(response)
+      throw attachSlowMutationCompletionWarning(new RuntimeRpcFailureError(response), method)
     }
     return response
   }
@@ -245,20 +252,6 @@ export class RuntimeClient {
       'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
     )
   }
-}
-
-function attachMutationRecovery(error: unknown, requestId: string | undefined): unknown {
-  if (!requestId || !(error instanceof RuntimeClientError)) {
-    return error
-  }
-  return new RuntimeClientError(
-    error.code,
-    `${error.message} Orchestration mutation request ID: ${requestId}.`,
-    {
-      ...(error.data && typeof error.data === 'object' ? error.data : {}),
-      orchestrationRequestId: requestId
-    }
-  )
 }
 
 function throwDesktopActivationBlocked(): never {

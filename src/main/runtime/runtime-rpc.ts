@@ -17,6 +17,7 @@ import type { RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
 import type { RpcMessageContext, RpcTransport } from './rpc/transport'
 import { UnixSocketTransport } from './rpc/unix-socket-transport'
+import { isSlowDispatchMethod } from '../../shared/runtime-slow-dispatch'
 import { WebSocketTransport } from './rpc/ws-transport'
 import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
@@ -73,8 +74,10 @@ type OrcaRuntimeRpcServerOptions = {
   // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
   exposeNetworkByDefault?: boolean
   webClientRoot?: string
-  // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
+  // Why: test-only overrides for the transport and long-poll constants below; production must not pass these.
   keepaliveIntervalMs?: number
+  socketIdleTimeoutMs?: number
+  slowDispatchKeepaliveMaxMs?: number
   longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
@@ -148,6 +151,10 @@ export type MobilePairingConnectionContext = Readonly<{
 
 // Why: keepalive frames count as socket activity, resetting both idle timers so long-polls outlive the 30s/60s idle caps. See §3.1.
 const KEEPALIVE_INTERVAL_MS = 10_000
+
+// Why: slow non-abortable dispatches may outlive the idle window, but liveness
+// must not hold a client connection forever when the underlying operation hangs.
+export const SLOW_DISPATCH_KEEPALIVE_MAX_MS = 5 * 60_000
 
 // Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 const LONG_POLL_CAP = 16
@@ -496,6 +503,8 @@ export class OrcaRuntimeRpcServer {
   private stopping = false
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
+  private readonly socketIdleTimeoutMs: number | undefined
+  private readonly slowDispatchKeepaliveMaxMs: number
   private readonly longPollCap: number
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
@@ -546,6 +555,8 @@ export class OrcaRuntimeRpcServer {
     exposeNetworkByDefault = false,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
+    socketIdleTimeoutMs,
+    slowDispatchKeepaliveMaxMs = SLOW_DISPATCH_KEEPALIVE_MAX_MS,
     longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
   }: OrcaRuntimeRpcServerOptions) {
@@ -560,6 +571,8 @@ export class OrcaRuntimeRpcServer {
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
+    this.socketIdleTimeoutMs = socketIdleTimeoutMs
+    this.slowDispatchKeepaliveMaxMs = slowDispatchKeepaliveMaxMs
     this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
@@ -1138,7 +1151,8 @@ export class OrcaRuntimeRpcServer {
     const socketTransport = new UnixSocketTransport({
       endpoint: transportMeta.endpoint,
       kind: transportMeta.kind as 'unix' | 'named-pipe',
-      keepaliveIntervalMs: this.keepaliveIntervalMs
+      keepaliveIntervalMs: this.keepaliveIntervalMs,
+      idleTimeoutMs: this.socketIdleTimeoutMs
     })
 
     // Why: the `.catch` guarantees reply() always fires so a throw can't strand the client or leak the AbortController.
@@ -1538,8 +1552,11 @@ export class OrcaRuntimeRpcServer {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
     if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
+    } else if (isSlowDispatchMethod(request.method)) {
+      // Why: slow I/O-bound methods need liveness frames but are not long polls.
+      // Keep them outside capacity admission and abort-signal wiring.
+      context?.startKeepalive(this.slowDispatchKeepaliveMaxMs)
     }
 
     try {

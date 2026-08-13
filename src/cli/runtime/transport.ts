@@ -33,6 +33,7 @@ export async function sendRequest<TResult>(
     const socket = createConnection(transport.endpoint)
     let buffer = ''
     let settled = false
+    let requestSent = false
     const requestId = randomUUID()
 
     const timeout = setTimeout(() => {
@@ -44,7 +45,8 @@ export async function sendRequest<TResult>(
       reject(
         new RuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the Orca runtime to respond.'
+          'Timed out waiting for the Orca runtime to respond.',
+          { requestPhase: requestSent ? 'awaiting_response' : 'not_sent', method }
         )
       )
     }, timeoutMs)
@@ -71,7 +73,8 @@ export async function sendRequest<TResult>(
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
+          'Could not connect to the running Orca app. Restart Orca and try again.',
+          { requestPhase: requestSent ? 'awaiting_response' : 'not_sent', method }
         )
       })
     })
@@ -84,7 +87,8 @@ export async function sendRequest<TResult>(
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+          'The Orca runtime closed the connection before responding. Restart Orca and try again.',
+          { requestPhase: requestSent ? 'awaiting_response' : 'not_sent', method }
         )
       })
     })
@@ -180,6 +184,7 @@ export async function sendRequest<TResult>(
       }
     })
     socket.on('connect', () => {
+      // Why: this marks bytes accepted by the client socket, not server acknowledgement.
       socket.write(
         `${JSON.stringify({
           id: requestId,
@@ -193,6 +198,7 @@ export async function sendRequest<TResult>(
           orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
         })}\n`
       )
+      requestSent = true
     })
   })
 }

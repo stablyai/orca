@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -33,6 +34,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
+import { addWorktreeCreateRecovery } from './worktree-response-recovery'
 
 type HookWarningResult = {
   warning?: string
@@ -208,6 +210,16 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
     const setupDecision = getOptionalSetupDecision(flags)
+    const worktreeName = getRequiredStringFlag(flags, 'name')
+    // Why: route retries into the runtime's existing dedupe window; fresh commands get fresh ids.
+    const explicitMutationId = getOptionalStringFlag(flags, 'mutation-id')
+    if (explicitMutationId && explicitMutationId.length > 128) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--mutation-id must be 128 characters or fewer'
+      )
+    }
+    const clientMutationId = explicitMutationId ?? randomUUID()
     const noParent = flags.get('no-parent') === true
     const envParentWorkspace =
       !noParent && !explicitParentWorkspace && !explicitParentWorktree
@@ -229,32 +241,38 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
-    const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
-      name: getRequiredStringFlag(flags, 'name'),
-      baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      linkedIssue: getOptionalNumberFlag(flags, 'issue'),
-      ...linearIssueLink,
-      comment: getOptionalStringFlag(flags, 'comment'),
-      runHooks: flags.get('run-hooks') === true,
-      activate: flags.get('activate') === true || flags.get('run-hooks') === true,
-      ...(setupDecision ? { setupDecision } : {}),
-      parentWorktree: explicitParentWorktree,
-      ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
-      ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
-      noParent,
-      callerTerminalHandle,
-      // Why: marks the workspace as CLI-created so the sidebar can badge and
-      // filter it. Sent on every `worktree create` — hand-typed or agent-run.
-      cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
-      ...(startupAgent
-        ? {
-            startupAgent,
-            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
-          }
-        : {})
-    })
+    let result: Awaited<ReturnType<typeof client.call<RuntimeWorktreeCreateResult>>>
+    try {
+      result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
+        repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
+        name: worktreeName,
+        clientMutationId,
+        baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+        linkedIssue: getOptionalNumberFlag(flags, 'issue'),
+        ...linearIssueLink,
+        comment: getOptionalStringFlag(flags, 'comment'),
+        runHooks: flags.get('run-hooks') === true,
+        activate: flags.get('activate') === true || flags.get('run-hooks') === true,
+        ...(setupDecision ? { setupDecision } : {}),
+        parentWorktree: explicitParentWorktree,
+        ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
+        ...(envParentWorkspace ? { envParentWorkspace } : {}),
+        ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
+        noParent,
+        callerTerminalHandle,
+        // Why: marks the workspace as CLI-created so the sidebar can badge and
+        // filter it. Sent on every `worktree create` — hand-typed or agent-run.
+        cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
+        ...(startupAgent
+          ? {
+              startupAgent,
+              startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
+            }
+          : {})
+      })
+    } catch (error) {
+      throw addWorktreeCreateRecovery(error, clientMutationId)
+    }
     printHookWarning(result.result, json)
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)

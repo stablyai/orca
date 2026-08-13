@@ -2,6 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
@@ -9,6 +10,13 @@ import { sendRequest } from './transport'
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
+
+function testEndpoint(label: string): string {
+  if (process.platform === 'win32') {
+    return `\\\\.\\pipe\\orca-t7410-${process.pid}-${label}-${randomUUID()}`
+  }
+  return join(mkdtempSync(join(tmpdir(), `orca-runtime-transport-${label}-`)), 'runtime.sock')
+}
 
 afterEach(async () => {
   for (const socket of sockets) {
@@ -135,5 +143,51 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       code: 'runtime_unavailable'
     })
     expect(Date.now() - start).toBeLessThan(5000)
+  })
+})
+
+describe('runtime transport response phase', () => {
+  it('marks a clean close after request write as awaiting_response', async () => {
+    const endpoint = testEndpoint('close')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', () => socket.end())
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+
+    const metadata: RuntimeMetadata = {
+      runtimeId: 'runtime-1',
+      pid: 123,
+      transports: [{ kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint }],
+      authToken: 'token',
+      startedAt: 1
+    }
+
+    await expect(sendRequest(metadata, 'worktree.create', {}, 2_000)).rejects.toMatchObject({
+      code: 'runtime_unavailable',
+      data: { requestPhase: 'awaiting_response', method: 'worktree.create' }
+    })
+  })
+
+  it('marks a refused connection as not_sent', async () => {
+    const metadata: RuntimeMetadata = {
+      runtimeId: 'runtime-1',
+      pid: 123,
+      transports: [
+        {
+          kind: process.platform === 'win32' ? 'named-pipe' : 'unix',
+          endpoint: testEndpoint('refused')
+        }
+      ],
+      authToken: 'token',
+      startedAt: 1
+    }
+
+    await expect(sendRequest(metadata, 'worktree.create', {}, 2_000)).rejects.toMatchObject({
+      code: 'runtime_unavailable',
+      data: { requestPhase: 'not_sent', method: 'worktree.create' }
+    })
   })
 })

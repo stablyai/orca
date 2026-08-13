@@ -1224,6 +1224,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'feature',
       baseBranch: undefined,
@@ -1274,6 +1275,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'feature',
       baseBranch: undefined,
@@ -1399,6 +1401,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'feature',
       baseBranch: undefined,
@@ -1471,6 +1474,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-gpu',
       name: 'feature',
       baseBranch: undefined,
@@ -1611,6 +1615,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -1657,6 +1662,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -1724,6 +1730,7 @@ describe('orca cli worktree awareness', () => {
 
       expect(callMock).toHaveBeenCalledTimes(1)
       expect(callMock).toHaveBeenCalledWith('worktree.create', {
+        clientMutationId: expect.any(String),
         repo: 'id:repo-1',
         name: 'child',
         baseBranch: undefined,
@@ -1768,6 +1775,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -1813,6 +1821,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -1874,6 +1883,7 @@ describe('orca cli worktree awareness', () => {
       )
 
       expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+        clientMutationId: expect.any(String),
         repo: 'id:repo-1',
         name: 'child',
         baseBranch: undefined,
@@ -2022,6 +2032,7 @@ describe('orca cli worktree awareness', () => {
 
     const output = String(logSpy.mock.calls[0][0])
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -2064,6 +2075,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -2099,6 +2111,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenCalledTimes(2)
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -2872,6 +2885,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'feature',
       baseBranch: undefined,
@@ -2919,6 +2933,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'agent-task',
       baseBranch: undefined,
@@ -2966,6 +2981,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      clientMutationId: expect.any(String),
       repo: 'id:repo-1',
       name: 'agent-task',
       baseBranch: undefined,
