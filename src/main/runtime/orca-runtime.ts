@@ -21517,7 +21517,9 @@ export class OrcaRuntimeService {
     repo: Repo | null,
     connectionId: string | null,
     targetPlatform: NodeJS.Platform,
-    wslDistro: string | null = null
+    wslDistro: string | null = null,
+    // Why: a resume launch can never consume a rules file — see the guard below.
+    launchKind: 'fresh' | 'resume' = 'fresh'
   ): Promise<{
     agentSessionRulesFilePath: string | null
     agentSessionRulesText: string | null
@@ -21532,7 +21534,16 @@ export class OrcaRuntimeService {
     }
     const cannotReachLocalRulesFile =
       !connectionId && targetPlatform !== process.platform && !wslDistro
-    if (!TUI_AGENT_CONFIG[agent].sessionRulesFileFlag || cannotReachLocalRulesFile) {
+    // Why: buildAgentResumeStartupPlan never reads agentSessionRulesFilePath (a resume command has
+    // no prompt to attach an argv flag to, so only a config-override ever applies) and never appends
+    // appendSessionRulesFileCleanup either. Writing the file anyway orphans it on the launch host —
+    // permanently, since the name carries a randomUUID and nothing ever sweeps it — on every single
+    // resume, in /tmp on each SSH remote, and costs a needless remote round-trip to boot.
+    if (
+      launchKind === 'resume' ||
+      !TUI_AGENT_CONFIG[agent].sessionRulesFileFlag ||
+      cannotReachLocalRulesFile
+    ) {
       return { agentSessionRulesFilePath: null, agentSessionRulesText: rulesText }
     }
     try {
@@ -25358,7 +25369,8 @@ export class OrcaRuntimeService {
       workspace.repo,
       workspace.connectionId,
       platform,
-      wslDistro
+      wslDistro,
+      'resume'
     )
     const startup = buildAgentResumeStartupPlan({
       agent: request.agent,
@@ -26660,7 +26672,9 @@ export class OrcaRuntimeService {
       workspace.repo,
       workspace.connectionId,
       platform,
-      wslDistro
+      wslDistro,
+      // Why: matches the resume/fresh split the rules-only draft below already branches on.
+      launchIntent?.kind === 'resume' ? 'resume' : 'fresh'
     )
     const startupArgs = {
       agent,

@@ -13903,6 +13903,70 @@ describe('OrcaRuntimeService', () => {
     expect(new Set(rulesPaths).size).toBe(1)
   })
 
+  it('writes no orphan session-rules file for a resume launch that cannot use one', async () => {
+    await withPlatform('linux', async () => {
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-resume-rules-orphan' })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {},
+          agentDefaultArgs: {},
+          agentDefaultEnv: {},
+          agentSessionRules: {
+            enabled: true,
+            rules: [
+              {
+                id: 'resume-orphan-probe',
+                label: 'Resume orphan probe',
+                content: 'Probe rule for the resume orphan-file check.',
+                enabled: true,
+                source: 'custom' as const
+              }
+            ],
+            seenBuiltinRuleIds: ['builtin-graphify']
+          }
+        })
+      } as never)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+      // Why: buildAgentResumeStartupPlan never consumes agentSessionRulesFilePath (resume has no
+      // prompt to attach an argv flag to) and never appends the file cleanup, so any file written
+      // for a resume is orphaned on disk forever — locally, and in /tmp on every SSH remote.
+      const writeFileSpy = vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined)
+      try {
+        await runtime.ensureAgentSession({
+          kind: 'explicit',
+          worktree: `id:${TEST_WORKTREE_ID}`,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'resume-rules-orphan' }
+        })
+
+        expect(spawn).toHaveBeenCalledTimes(1)
+        const command = (spawn.mock.calls[0]?.[0] as { command?: string } | undefined)?.command
+        expect(command).toContain('--resume')
+        // The resume command demonstrably never references a rules file...
+        expect(command).not.toContain('--append-system-prompt-file')
+        expect(command).not.toContain('orca-agent-session-rules-')
+        // ...so nothing should have written one.
+        expect(
+          writeFileSpy.mock.calls.filter(([target]) =>
+            String(target).includes('orca-agent-session-rules-')
+          )
+        ).toEqual([])
+      } finally {
+        writeFileSpy.mockRestore()
+      }
+    })
+  })
+
   it('injects session rules into bare Codex terminal creates', async () => {
     setPlatform('linux')
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-codex-rules' })

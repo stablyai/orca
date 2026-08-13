@@ -58,6 +58,7 @@ import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from './AutomationsSettingsPane'
 import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
+import { AgentSessionRulesPane } from './AgentSessionRulesPane'
 import { AccountsPane } from './AccountsPane'
 import { StatsPane } from '../stats/StatsPane'
 import { IntegrationsPane } from './IntegrationsPane'
@@ -1312,6 +1313,27 @@ function Settings(): React.JSX.Element {
                     {isSectionMounted('linear') ? <LinearAgentSkillPane /> : null}
                   </SettingsSection>
                 ) : null}
+
+                {/* Why: unconditional, matching this section's entry in
+                    buildSettingsNavigationMetadata — the sidebar lists it on web and
+                    desktop alike, so gating the pane would reopen the blank-content
+                    dead end this section is here to close. */}
+                <SettingsSection
+                  id="agentSessionRules"
+                  title={translate(
+                    'auto.hooks.useSettingsNavigationMetadata.agentSessionRulesTitle',
+                    'Agent Session Rules'
+                  )}
+                  description={translate(
+                    'auto.hooks.useSettingsNavigationMetadata.agentSessionRulesDescription',
+                    'Custom rules for supported agent launches, plus per-repo overrides.'
+                  )}
+                  searchEntries={getSectionSearchEntries('agentSessionRules')}
+                >
+                  {isSectionMounted('agentSessionRules') ? (
+                    <AgentSessionRulesPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
 
                 {showDesktopOnlySettings ? (
                   <>

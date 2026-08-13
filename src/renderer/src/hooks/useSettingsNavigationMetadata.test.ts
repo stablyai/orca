@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
+import { isSettingsNavigationTarget } from '../lib/settings-navigation-types'
 import type { Repo } from '../../../shared/types'
 
 const repo = {
@@ -31,7 +32,67 @@ function ids(
   }).map((section) => section.id)
 }
 
+/** Every section id the metadata can advertise, across the flag combinations that gate them.
+ *  Excludes the dynamic per-project `repo-<id>` rows, which are rendered by their own pane. */
+function allAdvertisedSectionIds(): string[] {
+  const combos = [
+    {},
+    { isMac: true, isWindows: true, isDev: true, isLinearConnected: true },
+    { isWebClient: true, isLinearConnected: true },
+    { isWebClient: true, isDev: true }
+  ]
+  const collected = new Set<string>()
+  for (const combo of combos) {
+    for (const id of ids(combo)) {
+      if (!id.startsWith('repo-')) {
+        collected.add(id)
+      }
+    }
+  }
+  return [...collected]
+}
+
+function renderedSettingsSectionIds(): Set<string> {
+  const rendered = new Set<string>()
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!/\.tsx?$/.test(entry.name) || /\.test\./.test(entry.name)) {
+        continue
+      }
+      const source = readFileSync(full, 'utf8')
+      for (const match of source.matchAll(/<SettingsSection[\s\S]{0,500}?\bid="([^"]+)"/g)) {
+        rendered.add(match[1]!)
+      }
+    }
+  }
+  walk(resolve(import.meta.dirname, '../components'))
+  return rendered
+}
+
 describe('settings navigation metadata', () => {
+  // Why: the metadata table is what the sidebar, settings search and the Cmd+J palette
+  // all enumerate, but neither companion table is compile-checked against it —
+  // SettingsNavSection['id'] and SettingsSectionProps['id'] are both plain `string`.
+  // Advertising a section that no <SettingsSection> renders opens a blank content pane,
+  // and one missing from SETTINGS_NAV_TARGETS makes openSettingsTarget throw in dev and
+  // silently no-op in production. agentSessionRules shipped in this table with neither.
+  it('advertises only sections that are navigable and actually rendered', () => {
+    const advertised = allAdvertisedSectionIds()
+    const rendered = renderedSettingsSectionIds()
+
+    // Why: mirrors WorktreeJumpPalette's getSettingsTargetFromSectionId, which casts a
+    // section id straight to a nav target and hands it to openSettingsTarget unchecked.
+    expect(
+      advertised.filter((id) => !isSettingsNavigationTarget({ pane: id, repoId: null }))
+    ).toEqual([])
+    expect(advertised.filter((id) => !rendered.has(id))).toEqual([])
+  })
+
   it('puts AI capability panes at the top on desktop', () => {
     expect(ids().slice(0, 11)).toEqual([
       'agents',
