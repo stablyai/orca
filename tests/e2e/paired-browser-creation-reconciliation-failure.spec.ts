@@ -337,33 +337,6 @@ test('rolls back a headed-host browser when client reconciliation times out @hea
   })
 })
 
-test('keeps the same browser rollback contract on a headless host', async ({
-  testRepoPath
-}, testInfo) => {
-  test.setTimeout(300_000)
-  writeFileSync(
-    path.join(testRepoPath, FIXTURE_NAME),
-    '<!doctype html><html><body><h1>headless browser reconciliation fault</h1></body></html>\n'
-  )
-  const host: HeadlessPairedRuntimeHost = await launchHeadlessPairedRuntimeHost()
-  try {
-    await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
-    await host.client.call('terminal.create', {
-      worktree: `path:${testRepoPath}`,
-      title: 'Browser rollback canary'
-    })
-    await runReconciliationFailureJourney({
-      hostClient: host.client,
-      offer: host.offer,
-      repoPath: testRepoPath,
-      testInfo,
-      topology: 'headless'
-    })
-  } finally {
-    await host.dispose()
-  }
-})
-
 test('cleans up a headed-host preview when capability rejects after preflight @headful', async ({
   electronApp,
   orcaPage,
@@ -388,9 +361,7 @@ test('cleans up a headed-host preview when capability rejects after preflight @h
   })
 })
 
-test('keeps capability-rejection cleanup on a headless host', async ({
-  testRepoPath
-}, testInfo) => {
+test('keeps browser failure cleanup on a headless host', async ({ testRepoPath }, testInfo) => {
   test.setTimeout(300_000)
   writeFileSync(
     path.join(testRepoPath, FIXTURE_NAME),
@@ -401,7 +372,14 @@ test('keeps capability-rejection cleanup on a headless host', async ({
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     await host.client.call('terminal.create', {
       worktree: `path:${testRepoPath}`,
-      title: 'Browser capability cleanup canary'
+      title: 'Browser failure cleanup canary'
+    })
+    await runReconciliationFailureJourney({
+      hostClient: host.client,
+      offer: host.offer,
+      repoPath: testRepoPath,
+      testInfo,
+      topology: 'headless'
     })
     await runCapabilityFailureJourney({
       hostClient: host.client,
