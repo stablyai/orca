@@ -386,8 +386,7 @@ const runtimeRpcStartFailedSchema = z
   .object({ error_class: runtimeRpcStartErrorClassSchema })
   .strict()
 
-// Why: this 1013 close kills a remote user's whole session and no emission site is instrumented
-// today, so incidence is unmeasurable. `emitter` separates a producer size bug from a wedged link.
+// Why: classify session-killing 1013 closures as producer size failures or queue backpressure.
 const remoteOutboundBudgetCloseSchema = z.object({ emitter: z.enum(['size', 'queue']) }).strict()
 
 // Why: a deadlocked main thread never crashes, so it produces no crash report and no user report

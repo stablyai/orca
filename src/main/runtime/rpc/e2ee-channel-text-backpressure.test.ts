@@ -115,6 +115,7 @@ describe('E2EE text reply backpressure', () => {
     expect(() =>
       emitReply(ctx, 'x'.repeat(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES + 1))
     ).not.toThrow()
+    expect(trackMock).toHaveBeenCalledWith('remote_outbound_budget_close', { emitter: 'size' })
     expect(ctx.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
   })
 
