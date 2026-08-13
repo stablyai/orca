@@ -2859,7 +2859,7 @@
             "removedBody": "このワークスペースの SSH ホストが削除されたため、接続できません。ワークスペースを削除してクリアしてください — リモートファイルはそのまま残ります。",
             "removeWorkspaceButton": "ワークスペースを削除"
           },
-          "TerminalPaneDisconnectedBanner": {
+          "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "リモートランタイムに再接続中",
             "disconnectedTitle": "リモートランタイムが切断されました",
             "retryingBody": "Orca は最大1分間再試行します。接続が復元されると、このターミナルが再開されます。",
@@ -5039,14 +5039,7 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "{{value0}} の外部ワークツリーを完全に非表示にする",
-          "d9f7b2a14c": "{{value0}} の外部で作成された新規ワークツリーを折りたたむ",
-          "e2c4a8d91f": "{{value0}} の外部で作成された新規ワークツリーを展開",
-          "7c4e9b2a81": "外部で作成された新規ワークツリー",
           "5e1b8d3f62": "外部ワークツリーを完全に非表示にする",
-          "4d7a1c9e53": "これらのワークツリーは Orca の外部で作成されました。",
-          "8b3f2e1d74": "インポート",
-          "1c9e7a4b28": "非表示のままにする",
-          "6f2d8c1e95": "すべてインポート",
           "c3e8a1f4b2": "今後表示しない"
         },
         "newExternalWorktreesInboxActions": {
@@ -14332,6 +14325,7 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
+          "ultra": "ウルトラ",
           "on": "オン",
           "off": "オフ"
         },

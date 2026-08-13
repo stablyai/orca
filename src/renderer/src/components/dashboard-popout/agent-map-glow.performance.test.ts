@@ -42,31 +42,44 @@ describe('Agent Map glow performance boundary', () => {
     expect(markRule).not.toMatch(/filter:|animation:|transition:/)
   })
 
-  it('confines the finish flare to nodes inside the recency window', () => {
+  it('keeps the waiting badge on the native SVG paint path', () => {
+    const marker = source('AgentMapQuestionMarker.tsx')
+    const css = source('agent-map.css')
+    const markerRules = css.match(/\.agent-map-agent-question-[^{}]*\{[^}]+\}/gs) ?? []
+
+    expect(marker).not.toContain('<foreignObject')
+    expect(marker).toContain('<AgentQuestionIcon')
+    expect(markerRules).toHaveLength(2)
+    for (const rule of markerRules) {
+      expect(rule).not.toMatch(/filter:|animation:|transition:/)
+    }
+  })
+
+  it('confines status flares to nodes inside the recency window', () => {
     const component = source('AgentMapWorktreeRingNode.tsx')
     const metadata = source('agent-map-node-metadata.ts')
 
     // The flare is the one animated element on an agent node, so it must stay gated on
-    // the globally capped recent-finish set rather than on status alone.
-    expect(component.match(/data-agent-map-agent-finish-flare/g)).toHaveLength(1)
-    expect(component).toMatch(/recentFinishPaneKeys\.has\(agent\.card\.paneKey\)\s*&&/)
+    // the globally capped recent-status map rather than on status alone.
+    expect(component.match(/data-agent-map-agent-status-flare/g)).toHaveLength(1)
+    expect(component).toMatch(/recentFlareStatuses\.get\(agent\.card\.paneKey\)/)
     expect(component).not.toMatch(/<filter|filter=/)
 
     const css = source('agent-map.css')
-    const flareRule = css.match(/\.agent-map-agent-finish-flare\s*\{[^}]+\}/s)?.[0] ?? ''
+    const flareRule = css.match(/\.agent-map-agent-status-flare\s*\{[^}]+\}/s)?.[0] ?? ''
     expect(flareRule).toContain('pointer-events: none')
     expect(flareRule).toContain('vector-effect: non-scaling-stroke')
     // Transform and opacity only — no filter or layout-affecting paint work.
     expect(flareRule).not.toMatch(/filter:/)
-    expect(css).toMatch(/@keyframes agent-map-finish-flare/)
+    expect(css).toMatch(/@keyframes agent-map-status-flare/)
 
     // The mount window and the CSS duration are declared in different languages and
     // drift silently: too short a window unmounts the element mid-ripple, too long
     // leaves an invisible node animating. Pin them to the same number.
     const windowMs = Number(
-      metadata.match(/AGENT_MAP_FINISH_FLARE_MS = ([\d_]+)/)?.[1].replaceAll('_', '')
+      metadata.match(/AGENT_MAP_STATUS_FLARE_MS = ([\d_]+)/)?.[1].replaceAll('_', '')
     )
-    const cssMs = Number(flareRule.match(/animation: agent-map-finish-flare (\d+)ms/)?.[1])
+    const cssMs = Number(flareRule.match(/animation: agent-map-status-flare (\d+)ms/)?.[1])
     expect(windowMs).toBeGreaterThan(0)
     expect(cssMs).toBe(windowMs)
   })
@@ -75,7 +88,7 @@ describe('Agent Map glow performance boundary', () => {
     const map = source('AgentMap.tsx')
     const scene = source('AgentMapScene.tsx')
 
-    expect(map).toMatch(/selectAgentMapRecentFinishPaneKeys\(visibleCards\)/)
-    expect(scene).not.toContain('selectAgentMapRecentFinishPaneKeys')
+    expect(map).toMatch(/selectAgentMapRecentFlareStatuses\(visibleCards\)/)
+    expect(scene).not.toContain('selectAgentMapRecentFlareStatuses')
   })
 })

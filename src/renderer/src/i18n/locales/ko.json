@@ -2859,7 +2859,7 @@
             "removedBody": "이 워크트리의 SSH 호스트가 제거되어 더 이상 연결할 수 없습니다. 워크트리를 제거하여 정리하세요 — 원격 파일은 그대로 남아 있습니다.",
             "removeWorkspaceButton": "워크트리 제거"
           },
-          "TerminalPaneDisconnectedBanner": {
+          "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "원격 런타임에 다시 연결 중",
             "disconnectedTitle": "원격 런타임 연결 끊김",
             "retryingBody": "Orca는 최대 1분간 재시도합니다. 연결이 복원되면 이 터미널이 재개됩니다.",
@@ -5039,14 +5039,7 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "{{value0}}의 외부 워크트리를 영구적으로 숨기기",
-          "d9f7b2a14c": "{{value0}}의 외부에서 생성된 새 워크트리 접기",
-          "e2c4a8d91f": "{{value0}}의 외부에서 생성된 새 워크트리 펼치기",
-          "7c4e9b2a81": "외부에서 생성된 새 워크트리",
           "5e1b8d3f62": "외부 워크트리를 영구적으로 숨기기",
-          "4d7a1c9e53": "이 워크트리는 Orca 외부에서 생성되었습니다.",
-          "8b3f2e1d74": "가져오기",
-          "1c9e7a4b28": "숨긴 상태 유지",
-          "6f2d8c1e95": "모두 가져오기",
           "c3e8a1f4b2": "다시 표시하지 않기"
         },
         "newExternalWorktreesInboxActions": {
@@ -14343,6 +14336,7 @@
           "high": "높음",
           "xhigh": "매우 높음",
           "max": "최대",
+          "ultra": "울트라",
           "on": "켜짐",
           "off": "꺼짐"
         },

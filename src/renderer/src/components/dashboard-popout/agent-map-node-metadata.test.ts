@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import {
-  AGENT_MAP_FINISH_FLARE_MS,
-  AGENT_MAP_MAX_CONCURRENT_FINISH_FLARES,
+  AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES,
+  AGENT_MAP_STATUS_FLARE_MS,
+  agentMapRecentFlareStatus,
   agentMapNodeStatus,
   agentMapQuietCount,
   emptyAgentMapStatusCounts,
-  isAgentMapRecentFinish,
-  selectAgentMapRecentFinishPaneKeys
+  selectAgentMapRecentFlareStatuses
 } from './agent-map-node-metadata'
 
 const NOW = 2_000_000_000
@@ -59,7 +59,7 @@ describe('agentMapNodeStatus', () => {
   })
 })
 
-describe('isAgentMapRecentFinish', () => {
+describe('agentMapRecentFlareStatus', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
@@ -70,47 +70,84 @@ describe('isAgentMapRecentFinish', () => {
     vi.setSystemTime(NOW)
     const justFinished = card({ dotState: 'done', unseen: true, stateChangedAt: NOW })
 
-    expect(isAgentMapRecentFinish(justFinished)).toBe(true)
-    vi.setSystemTime(NOW + AGENT_MAP_FINISH_FLARE_MS - 1)
-    expect(isAgentMapRecentFinish(justFinished)).toBe(true)
-    vi.setSystemTime(NOW + AGENT_MAP_FINISH_FLARE_MS + 1)
-    expect(isAgentMapRecentFinish(justFinished)).toBe(false)
+    expect(agentMapRecentFlareStatus(justFinished)).toBe('done')
+    vi.setSystemTime(NOW + AGENT_MAP_STATUS_FLARE_MS - 1)
+    expect(agentMapRecentFlareStatus(justFinished)).toBe('done')
+    vi.setSystemTime(NOW + AGENT_MAP_STATUS_FLARE_MS + 1)
+    expect(agentMapRecentFlareStatus(justFinished)).toBeNull()
   })
 
-  it('samples the wall clock once and caps bursty fleet updates', () => {
+  it('flares on the transition into a question', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+
+    expect(
+      agentMapRecentFlareStatus(
+        card({ bucket: 'attention', dotState: 'waiting', unseen: true, stateChangedAt: NOW })
+      )
+    ).toBe('waiting')
+  })
+
+  it('does not reuse an earlier finish timestamp for a question with unknown timing', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+
+    expect(
+      agentMapRecentFlareStatus(
+        card({ dotState: 'waiting', stateChangedAt: 0, finishedAt: NOW, unseen: true })
+      )
+    ).toBeNull()
+  })
+
+  it('samples the wall clock once and caps mixed bursty fleet updates', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
-    const selected = selectAgentMapRecentFinishPaneKeys(
+    const selected = selectAgentMapRecentFlareStatuses(
       Array.from({ length: 200 }, (_, index) =>
-        card({ paneKey: `pane-${index}`, unseen: true, stateChangedAt: NOW - index })
+        card({
+          paneKey: `pane-${index}`,
+          bucket: index % 2 === 0 ? 'done' : 'attention',
+          dotState: index % 2 === 0 ? 'done' : 'waiting',
+          unseen: true,
+          stateChangedAt: NOW - index
+        })
       )
     )
 
     expect(clock).toHaveBeenCalledOnce()
-    expect(selected.size).toBe(AGENT_MAP_MAX_CONCURRENT_FINISH_FLARES)
-    expect([...selected]).toEqual(['pane-0', 'pane-1', 'pane-2', 'pane-3'])
+    expect(selected.size).toBe(AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES)
+    expect([...selected]).toEqual([
+      ['pane-0', 'done'],
+      ['pane-1', 'waiting'],
+      ['pane-2', 'done'],
+      ['pane-3', 'waiting']
+    ])
   })
 
-  it('does not flare work that finished before this session', () => {
+  it('does not flare status changes from before this session', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
     expect(
-      isAgentMapRecentFinish(card({ dotState: 'done', unseen: true, stateChangedAt: NOW - 60_000 }))
-    ).toBe(false)
+      agentMapRecentFlareStatus(
+        card({ dotState: 'done', unseen: true, stateChangedAt: NOW - 60_000 })
+      )
+    ).toBeNull()
     // A clock skew that puts the finish in the future must not latch a flare on forever.
     expect(
-      isAgentMapRecentFinish(card({ dotState: 'done', unseen: true, stateChangedAt: NOW + 5_000 }))
-    ).toBe(false)
+      agentMapRecentFlareStatus(
+        card({ dotState: 'done', unseen: true, stateChangedAt: NOW + 5_000 })
+      )
+    ).toBeNull()
   })
 
-  it('never flares a state that is not an unread finish', () => {
+  it('never flares a state that is not a question or unread finish', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
     expect(
-      isAgentMapRecentFinish(card({ dotState: 'done', unseen: false, stateChangedAt: NOW }))
-    ).toBe(false)
+      agentMapRecentFlareStatus(card({ dotState: 'done', unseen: false, stateChangedAt: NOW }))
+    ).toBeNull()
     expect(
-      isAgentMapRecentFinish(card({ dotState: 'working', unseen: true, stateChangedAt: NOW }))
-    ).toBe(false)
+      agentMapRecentFlareStatus(card({ dotState: 'working', unseen: true, stateChangedAt: NOW }))
+    ).toBeNull()
   })
 })
 

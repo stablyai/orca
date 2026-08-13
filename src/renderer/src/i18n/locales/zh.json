@@ -2871,7 +2871,7 @@
             "removedBody": "此工作区的 SSH 主机已被移除，无法再连接。请移除工作区以清理 — 远程文件不会受影响。",
             "removeWorkspaceButton": "移除工作区"
           },
-          "TerminalPaneDisconnectedBanner": {
+          "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "正在重新连接到远程运行时",
             "disconnectedTitle": "远程运行时已断开连接",
             "retryingBody": "Orca 将重试最多一分钟。如果连接恢复，此终端将恢复。",
@@ -5051,14 +5051,7 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "永久隐藏 {{value0}} 的外部工作树",
-          "d9f7b2a14c": "折叠 {{value0}} 的外部创建的新工作树",
-          "e2c4a8d91f": "展开 {{value0}} 的外部创建的新工作树",
-          "7c4e9b2a81": "外部创建的新工作树",
           "5e1b8d3f62": "永久隐藏外部工作树",
-          "4d7a1c9e53": "这些工作树是在 Orca 外部创建的。",
-          "8b3f2e1d74": "导入",
-          "1c9e7a4b28": "保持隐藏",
-          "6f2d8c1e95": "全部导入",
           "c3e8a1f4b2": "不再显示"
         },
         "newExternalWorktreesInboxActions": {
@@ -14352,6 +14345,7 @@
           "high": "高",
           "xhigh": "极高",
           "max": "最大",
+          "ultra": "极致",
           "on": "开",
           "off": "关"
         },

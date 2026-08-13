@@ -42,10 +42,12 @@ set "ORCA_ATTRIBUTION_BYPASS="
 set "ORCA_REAL_GIT="
 set "ORCA_REAL_GH="
 if defined orca_real for %%G in ("%orca_real%") do if /I "%%~dpG"=="%~dp0" set "orca_real="
-rem Why: clear a captured path that no longer exists, or the where.exe fallback below is skipped.
+rem Why: clear a captured path that no longer exists, or the PATH walk below is skipped.
 if defined orca_real if not exist "%orca_real%" set "orca_real="
 if defined orca_real goto run
-for /f "delims=" %%G in ('where.exe __ORCA_COMMAND__.exe 2^>nul') do if not defined orca_real set "orca_real=%%G"
+rem Why: an unqualified Windows command lookup searches the current directory before PATH, so a
+rem repository-local __ORCA_COMMAND__.exe would win. Walk the cleaned PATH ourselves instead.
+for %%P in ("%orca_clean_path:;=" "%") do call :orca_try_candidate "%%~P"
 if not defined orca_real (
   echo Orca compatibility wrapper could not locate __ORCA_COMMAND__ on PATH. 1>&2
   exit /b 127
@@ -53,6 +55,12 @@ if not defined orca_real (
 :run
 "%orca_real%" %*
 exit /b %ERRORLEVEL%
+
+:orca_try_candidate
+if defined orca_real exit /b
+if "%~1"=="" exit /b
+for %%G in ("%~1") do if /I not "%%~fG\"=="%~dp0" if exist "%%~fG\__ORCA_COMMAND__.exe" set "orca_real=%%~fG\__ORCA_COMMAND__.exe"
+exit /b
 
 :orca_append_path
 for %%G in ("%~1") do set "orca_path_entry_dir=%%~fG\"
@@ -86,8 +94,15 @@ if ($realCommand) {
   }
 }
 if (-not $realCommand -or -not (Test-Path -LiteralPath $realCommand)) {
-  $resolved = Get-Command "$commandName.exe" -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  $realCommand = if ($resolved) { $resolved.Source } else { $null }
+  # Why: resolve only against the cleaned PATH directories. Ambient lookup could pick up a
+  # repository-local git.exe/gh.exe from the current directory.
+  $realCommand = $null
+  foreach ($dir in ($env:PATH -split ';')) {
+    if (-not $dir) { continue }
+    if ($wrapperDirs | Where-Object { [string]::Equals($_, $dir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) }) { continue }
+    $candidate = Join-Path $dir "$commandName.exe"
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $realCommand = $candidate; break }
+  }
 }
 if (-not $realCommand) {
   [Console]::Error.WriteLine("Orca compatibility wrapper could not locate $commandName on PATH.")

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
@@ -87,13 +87,71 @@ describe('legacy terminal shim neutralization', () => {
     // Why: a captured path that no longer exists must be cleared, or the where.exe fallback below
     // is skipped and the wrapper execs a missing binary.
     expect(cmd).toContain('if defined orca_real if not exist "%orca_real%" set "orca_real="')
-    expect(cmd.indexOf('if not exist "%orca_real%"')).toBeLessThan(cmd.indexOf('where.exe git.exe'))
+    expect(cmd.indexOf('if not exist "%orca_real%"')).toBeLessThan(
+      cmd.indexOf(':orca_try_candidate')
+    )
     const powershell = readFileSync(join(win32Dir, 'git-wrapper.ps1'), 'utf8')
     expect(powershell).toContain('[StringComparison]::OrdinalIgnoreCase')
     expect(powershell).toContain('$realCommand = $null')
     expect(powershell.indexOf('[StringComparison]::OrdinalIgnoreCase')).toBeLessThan(
       powershell.indexOf('Test-Path -LiteralPath $realCommand')
     )
+  })
+
+  it('resolves Windows fallbacks against PATH only, never the current directory', () => {
+    // Why (STA-4169): bare `where.exe git.exe` searches cwd before PATH, so a repository-local
+    // git.exe/gh.exe could be executed with the user's arguments.
+    const userData = makeUserDataDir()
+    const win32Dir = join(userData, 'orca-terminal-attribution', 'win32')
+    mkdirSync(win32Dir, { recursive: true })
+
+    neutralizeLegacyTerminalShimDir(userData)
+
+    for (const command of ['git', 'gh'] as const) {
+      const cmd = readFileSync(join(win32Dir, `${command}.cmd`), 'utf8')
+      // No where.exe at all: it searches cwd first, so the wrapper walks the cleaned PATH.
+      expect(cmd).not.toContain('where.exe')
+      expect(cmd).toContain('for %%P in ("%orca_clean_path:;=" "%") do call :orca_try_candidate')
+      expect(cmd).toContain(`if exist "%%~fG\\${command}.exe"`)
+      // A candidate inside the wrapper directory must still be rejected.
+      expect(cmd).toContain('if /I not "%%~fG\\"=="%~dp0"')
+
+      const powershell = readFileSync(join(win32Dir, `${command}-wrapper.ps1`), 'utf8')
+      expect(powershell).not.toContain('Get-Command')
+      expect(powershell).toContain("($env:PATH -split ';')")
+      expect(powershell).toContain('Test-Path -LiteralPath $candidate -PathType Leaf')
+    }
+  })
+
+  itOnPosix('does not let an empty PATH element resolve the command from the cwd', async () => {
+    // Why (STA-4169): an empty PATH element means the current directory on POSIX.
+    const userData = makeUserDataDir()
+    const shimDir = join(userData, 'orca-terminal-attribution', 'posix')
+    const realBin = join(userData, 'real-bin')
+    mkdirSync(shimDir, { recursive: true })
+    mkdirSync(realBin, { recursive: true })
+    writeFileSync(join(shimDir, 'git'), 'legacy attribution wrapper')
+    writeFileSync(join(realBin, 'git'), "#!/usr/bin/env bash\nprintf 'REAL\\n'\n", { mode: 0o755 })
+
+    neutralizeLegacyTerminalShimDir(userData)
+
+    // A hostile cwd containing its own `git`, reached only via the empty PATH element.
+    const hostile = join(userData, 'hostile')
+    mkdirSync(hostile, { recursive: true })
+    writeFileSync(join(hostile, 'git'), "#!/usr/bin/env bash\nprintf 'HOSTILE\\n'\n", {
+      mode: 0o755
+    })
+
+    const result = spawnSync(join(shimDir, 'git'), ['--version'], {
+      cwd: hostile,
+      // Why: keep real system dirs so the fixture's `env bash` shebang still resolves; the
+      // empty element between shimDir and realBin is the cwd exposure under test.
+      env: { ...process.env, PATH: `${shimDir}::${realBin}:/usr/bin:/bin` },
+      encoding: 'utf8'
+    })
+
+    expect(result.stdout).toContain('REAL')
+    expect(result.stdout).not.toContain('HOSTILE')
   })
 
   it('removes every Windows PATH occurrence of both captured wrapper directories', () => {

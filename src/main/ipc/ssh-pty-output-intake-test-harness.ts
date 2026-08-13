@@ -3,7 +3,7 @@ import {
   SshPtyOutputIntake,
   type SshPtyOutputDataEvent,
   type SshPtyOutputIntakeDependencies
-} from '../ssh-pty-output-intake'
+} from './ssh-pty-output-intake'
 
 export function sshPtyOutputEvent(
   overrides: Partial<SshPtyOutputDataEvent> = {}

@@ -14,6 +14,8 @@ import type {
   AgentMapWorktreeRing
 } from './agent-map-layout'
 import { AGENT_MAP_LINEAGE_RELATION, shouldAggregateAgentMapWorktree } from './agent-map-layout'
+import { AgentMapQuestionMarker } from './AgentMapQuestionMarker'
+import type { AgentMapFlareStatus } from './agent-map-node-metadata'
 import {
   agentMapAttentionMarkerScale,
   agentMapStatusLabel,
@@ -33,7 +35,7 @@ type AgentMapWorktreeRingNodeProps = {
   selectedPaneKey: string | null
   allowAggregation: boolean
   showOrchestrationLinks: boolean
-  recentFinishPaneKeys: ReadonlySet<string>
+  recentFlareStatuses: ReadonlyMap<string, AgentMapFlareStatus>
   launchableAgents?: readonly TuiAgent[]
   nodeRefs: MutableRefObject<Map<string, SVGGElement>>
   onSelectAgent: (card: DashboardCard) => void
@@ -166,7 +168,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
   selectedPaneKey,
   allowAggregation,
   showOrchestrationLinks,
-  recentFinishPaneKeys,
+  recentFlareStatuses,
   launchableAgents,
   nodeRefs,
   onSelectAgent,
@@ -295,6 +297,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
             {worktree.agents.map((agent) => {
               const iconSize = Math.max(12, Math.min(22, agent.radius * 1.05))
               const agentExiting = exiting || agent.motionState === 'exiting'
+              const flareStatus = recentFlareStatuses.get(agent.card.paneKey)
               // `done` here is the unread finish only — `done-seen` demotes to a bare
               // emerald ring so the halo keeps meaning "this one is still unread".
               const hasStatusGlow =
@@ -344,12 +347,11 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
                         aria-hidden="true"
                       />
                     ) : null}
-                    {/* One-shot ripple at the moment of finishing. Mounted only inside the
-                        flare window so animated paint stays off the resting fleet. */}
-                    {recentFinishPaneKeys.has(agent.card.paneKey) && !agentExiting ? (
+                    {/* One-shot ripple for fresh questions and finishes. */}
+                    {flareStatus && !agentExiting ? (
                       <circle
-                        className="agent-map-agent-finish-flare"
-                        data-agent-map-agent-finish-flare=""
+                        className={`agent-map-agent-status-flare fleet-status-${flareStatus}`}
+                        data-agent-map-agent-status-flare=""
                         r={agent.radius + 1}
                         aria-hidden="true"
                       />
@@ -380,6 +382,12 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
                         r={agent.radius * 0.225 * agentMapAttentionMarkerScale(mapScale)}
                         vectorEffect="none"
                         aria-hidden="true"
+                      />
+                    ) : null}
+                    {agent.status === 'waiting' ? (
+                      <AgentMapQuestionMarker
+                        radius={agent.radius}
+                        markerScale={agentMapAttentionMarkerScale(mapScale)}
                       />
                     ) : null}
                   </g>

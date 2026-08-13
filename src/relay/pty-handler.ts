@@ -26,7 +26,6 @@ import {
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
 import { splitWorktreeId } from '../shared/worktree-id'
-import { formatPtyExitedError } from '../shared/ssh-pty-failure-tokens'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
 import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'
 import {
@@ -176,12 +175,6 @@ type RelayAgentSessionCreateResult = {
   agentSessionEnsure?: unknown
   sourceActivation?: PtySourceReceivingActivation
 }
-
-/** Enough to cover every pane a host could plausibly have lost since the client last looked. */
-const MAX_REMEMBERED_PTY_EXITS = 256
-
-/** No exit status to report: the relay found the pid gone rather than watching it go. */
-const PTY_EXIT_CODE_OBSERVED_GONE = -1
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
@@ -349,11 +342,12 @@ export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 
 type PtyIdentity = { paneKey?: string; tabId?: string }
 
-/** Fallback fence for a client too old to name a shell by incarnation. It froze paneKey/tabId at
- *  spawn, so it refuses a pane that merely moved tabs — which is why a client that CAN name the
- *  shell is fenced on that instead. Not deleted, because the relay is shared: an upgraded host
- *  would otherwise leave every not-yet-updated client attaching a recycled id unchecked. */
-function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
+/**
+ * True when a reattach's expected pane identity contradicts the target PTY's own.
+ * Rejects cross-relay-generation id collisions (a reset relay reuses `pty-N`).
+ * Only compares fields present on both sides; absent identity stays permissive.
+ */
+export function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
   return Boolean(
     (expected.paneKey && managed.paneKey && expected.paneKey !== managed.paneKey) ||
     (expected.tabId && managed.tabId && expected.tabId !== managed.tabId)
@@ -383,10 +377,6 @@ export class PtyHandler {
   private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
   private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
-  /** Exits this process WATCHED, kept past publication so attach can prove death rather than report
-   *  an unknown id. Bounded and oldest-evicted; losing one costs a user-asked respawn, never a
-   *  wrong one, and a crash losing all of them correctly reads as no knowledge. */
-  private exitedPtys = new Map<string, { code: number; incarnationId: string }>()
   private pausedOutputPtys = new Set<string>()
   private consumerPausedOutputPtys = new Set<string>()
   private removeLegacyCapacityListener: (() => void) | null = null
@@ -810,7 +800,6 @@ export class PtyHandler {
         code: exitCode,
         incarnationId: managed.incarnationId
       })
-      this.rememberPtyExit(managed.id, exitCode, managed.incarnationId)
       this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
@@ -819,29 +808,6 @@ export class PtyHandler {
       // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
       disposeManagedPty(managed)
     })
-  }
-
-  /** Proof must name the caller's own shell: present and matching. Both gone-paths ask this, so a
-   *  change to the rule cannot reach one and miss the other. */
-  private exitProofAnswersCaller(
-    expectedIncarnationId: string | undefined,
-    exitedIncarnationId: string,
-    clientUnderstandsExitProof: boolean
-  ): boolean {
-    return clientUnderstandsExitProof && expectedIncarnationId === exitedIncarnationId
-  }
-
-  /** Oldest-evicted: a Map iterates in insertion order, so the first key is the oldest. */
-  private rememberPtyExit(id: string, code: number, incarnationId: string): void {
-    this.exitedPtys.delete(id)
-    this.exitedPtys.set(id, { code, incarnationId })
-    while (this.exitedPtys.size > MAX_REMEMBERED_PTY_EXITS) {
-      const oldest = this.exitedPtys.keys().next()
-      if (oldest.done) {
-        break
-      }
-      this.exitedPtys.delete(oldest.value)
-    }
   }
 
   private releaseRelayIngress(managed: ManagedPty): void {
@@ -1711,29 +1677,9 @@ export class PtyHandler {
     sourceActivation?: PtySourceReceivingActivation
   }> {
     const id = params.id as string
-    const expectedIncarnationId =
-      typeof params.expectedIncarnationId === 'string' ? params.expectedIncarnationId : undefined
-    // Gated because the host's answer reaches clients predating it, which read an unrecognized
-    // attach error as neither death nor recovery and strand the pane.
-    const clientUnderstandsExitProof = params.exitProofSupported === true
     const managed = this.ptys.get(id)
     // Why: after dispose, pty.kill is a POSIX no-op; treat disposed as not-found so failures aren't silent.
     if (!managed || managed.disposed) {
-      // `disposed` is teardown, not an observed exit, so only a genuinely absent pty may be
-      // answered from what this process watched exit.
-      if (!managed) {
-        const exited = this.exitedPtys.get(id)
-        if (
-          exited &&
-          this.exitProofAnswersCaller(
-            expectedIncarnationId,
-            exited.incarnationId,
-            clientUnderstandsExitProof
-          )
-        ) {
-          throw new Error(formatPtyExitedError(id, exited.code, exited.incarnationId))
-        }
-      }
       throw new Error(`PTY "${id}" not found`)
     }
 
@@ -1747,43 +1693,19 @@ export class PtyHandler {
       disposeManagedPty(managed)
       this.removePty(id)
       this.clearPtyFlowState(id)
-      // The reap runs whoever asked, but the ANSWER depends on whose shell died: under this id a
-      // replacement relay may hold a different one entirely, and the caller's may be orphaned and
-      // alive under the relay this one replaced.
-      this.rememberPtyExit(id, PTY_EXIT_CODE_OBSERVED_GONE, managed.incarnationId)
-      if (expectedIncarnationId && expectedIncarnationId !== managed.incarnationId) {
-        throw new Error(`PTY "${id}" identity mismatch`)
-      }
-      throw new Error(
-        this.exitProofAnswersCaller(
-          expectedIncarnationId,
-          managed.incarnationId,
-          clientUnderstandsExitProof
-        )
-          ? formatPtyExitedError(id, PTY_EXIT_CODE_OBSERVED_GONE, managed.incarnationId)
-          : `PTY "${id}" not found`
-      )
+      throw new Error(`PTY "${id}" not found`)
     }
 
-    // A reset relay restarts ids at pty-1, so an id alone can name somebody else's shell. The
-    // incarnation is the shell's own identity, so it catches that without caring where the pane
-    // lives — unlike the pane identity below, which froze the tab at spawn and refused moved panes.
-    if (
-      !expectedIncarnationId &&
-      attachIdentityMismatches(
-        {
-          paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
-          tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
-        },
-        managed.attachIdentity ?? { paneKey: managed.paneKey, tabId: managed.tabId }
-      )
-    ) {
-      throw new Error(`PTY "${id}" identity mismatch`)
-    }
-    if (expectedIncarnationId && expectedIncarnationId !== managed.incarnationId) {
-      // Deliberately NOT worded "not found": that phrasing is what the client maps to an expired
-      // session, and expiry authorizes a respawn onto a shell this branch just proved is alive.
-      throw new Error(`PTY "${id}" identity mismatch`)
+    // Why: generation resets can reuse PTY IDs; reject conflicting identities.
+    const mismatch = attachIdentityMismatches(
+      {
+        paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
+        tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
+      },
+      managed.attachIdentity ?? { paneKey: managed.paneKey, tabId: managed.tabId }
+    )
+    if (mismatch) {
+      throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
     managed.startupIngress?.snapshotBarrier()

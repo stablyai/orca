@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Folder, Grid2X2, SquareTerminal, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -200,19 +200,8 @@ export default function WorktreeVisibilitySourceList({
           return (
             <div
               key={key}
-              className={`grid min-h-14 grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2.5 px-2.5 py-2 ${index > 0 ? 'border-t border-border' : ''}`}
+              className={`grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 px-2.5 py-2 ${index > 0 ? 'border-t border-border' : ''}`}
             >
-              <span className="flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
-                {source.kind === 'built-in' ? (
-                  source.id === 'claude' ? (
-                    <SquareTerminal className="size-3.5" />
-                  ) : (
-                    <Grid2X2 className="size-3.5" />
-                  )
-                ) : (
-                  <Folder className="size-3.5" />
-                )}
-              </span>
               <span className="min-w-0">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-[13px] font-medium">{label}</span>

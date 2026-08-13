@@ -165,6 +165,7 @@ import type {
 import { clearFederationAckCheckpoints } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
 import { formatMessagePointer } from './orchestration/formatter'
+import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoint-scheduler'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import type {
   Automation,
@@ -2776,6 +2777,7 @@ export class OrcaRuntimeService {
     }
   >()
   private terminalSleepGeneration = 0
+  private terminalPaneRecoveryByIdentity = new Map<string, Promise<RuntimeTerminalResolvePane>>()
   // Why: idempotency map for worktree.create — a create interrupted by a mobile
   // connection migration is retried with the same clientMutationId and returns
   // the in-flight (or just-finished) operation instead of a duplicate worktree.
@@ -2837,6 +2839,11 @@ export class OrcaRuntimeService {
   private handleByPtyId = new Map<string, string>()
   // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
   private readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
+  // Why: a waiter can reserve an older row while a newer row advances the sequence watermark.
+  private readonly pointedMessageIdsByHandle = new Map<string, Set<string>>()
+  private readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
+    this.repointPendingMessagesForHandle(handle)
+  )
   private syntheticTerminalHandles = new Set<string>()
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
@@ -3857,14 +3864,19 @@ export class OrcaRuntimeService {
       const dbPath = join(app.getPath('userData'), 'orchestration.db')
       this._orchestrationDb = new OrchestrationDb(dbPath)
       this.ensureOrchestrationFederationRelay()
+      this.scheduleRestoredMessageRepoints()
     }
     return this._orchestrationDb
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this.stopOrchestrationFederationRelay()
+    this.mailPointerRepointScheduler.clear()
+    this.lastPointedMessageSequenceByHandle.clear()
+    this.pointedMessageIdsByHandle.clear()
     this._orchestrationDb = db
     this.ensureOrchestrationFederationRelay()
+    this.scheduleRestoredMessageRepoints()
   }
 
   private getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {
@@ -5563,6 +5575,7 @@ export class OrcaRuntimeService {
       throw new Error('Runtime graph publisher does not match the authoritative window')
     }
 
+    const graphWasReady = this.graphStatus === 'ready'
     const previousTabs = this.tabs
     const previousLeaves = this.leaves
     this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
@@ -5733,6 +5746,20 @@ export class OrcaRuntimeService {
     this.refreshWritableFlags()
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
+      const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      if (
+        this._orchestrationDb &&
+        leaf.lastAgentStatus === 'idle' &&
+        leaf.lastAgentStatusObservedLive &&
+        leaf.writable &&
+        (!graphWasReady ||
+          previousLeaf?.ptyId !== leaf.ptyId ||
+          !previousLeaf.writable ||
+          previousLeaf.lastAgentStatus !== 'idle' ||
+          !previousLeaf.lastAgentStatusObservedLive)
+      ) {
+        this.deliverPendingMessagesForLeaf(leaf)
+      }
     }
 
     // Why: createTerminal waits for the renderer's graph sync to populate the
@@ -6265,7 +6292,8 @@ export class OrcaRuntimeService {
   private getRecentExpiredSshLease(
     worktreeId: string,
     tabId: string,
-    leafId: string | undefined
+    leafId: string | undefined,
+    ptyId?: string
   ): ReturnType<NonNullable<RuntimeStore['getSshRemotePtyLeases']>>[number] | null {
     const now = Date.now()
     return (
@@ -6276,6 +6304,7 @@ export class OrcaRuntimeService {
             lease.state === 'expired' &&
             lease.worktreeId === worktreeId &&
             lease.tabId === tabId &&
+            (ptyId === undefined || lease.ptyId === ptyId) &&
             (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId) &&
             lease.updatedAt <= now &&
             now - lease.updatedAt <= SSH_PANE_RECOVERY_GRACE_MS
@@ -16585,17 +16614,46 @@ export class OrcaRuntimeService {
     ) {
       throw new Error('terminal_not_found')
     }
+    const recoveryKey = `${expectedWorktreeId}\0${paneKey}`
+    const pending = this.terminalPaneRecoveryByIdentity.get(recoveryKey)
+    if (pending) {
+      return pending
+    }
     if (pty?.connected) {
       const current = this.resolveTerminalPane(paneKey, expectedWorktreeId)
       if (expectedHandle === undefined || current.handle !== expectedHandle) {
         return current
       }
+      throw new Error('terminal_not_recoverable')
     }
-    // A disconnected pane is never silently replaced. The grant this used to hold could not fire:
-    // it compared a relay-native lease id against an app-form runtime id (STA-3077 S6/S8, oracle in
-    // ssh-pane-recovery-grant-reachability.test.ts). The pane surfaces as disconnected instead, and
-    // spawning a replacement is the user's explicit choice.
-    throw new Error('terminal_not_recoverable')
+    if (
+      !this.getRecentExpiredSshLease(expectedWorktreeId, parsed.tabId, parsed.leafId, pty.ptyId)
+    ) {
+      // Why: an explicit close leaves a terminated lease; only relay expiry authorizes shell recreation.
+      throw new Error('terminal_not_recoverable')
+    }
+    // Why: disconnected PTYs can reissue handles during graph cleanup; only a connected replacement satisfies the pane CAS.
+    const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
+      tabId: parsed.tabId,
+      leafId: parsed.leafId,
+      focus: false,
+      // Why: the HUB renderer may publish its exited layout while recovery is in flight; persist the replacement before that stale graph can orphan it.
+      persistHostSessionBinding: true
+    }).then((terminal) => ({
+      handle: terminal.handle,
+      tabId: parsed.tabId,
+      leafId: parsed.leafId,
+      ptyId: terminal.ptyId ?? null,
+      worktreeId: expectedWorktreeId
+    }))
+    this.terminalPaneRecoveryByIdentity.set(recoveryKey, recovery)
+    const clearRecovery = (): void => {
+      if (this.terminalPaneRecoveryByIdentity.get(recoveryKey) === recovery) {
+        this.terminalPaneRecoveryByIdentity.delete(recoveryKey)
+      }
+    }
+    void recovery.then(clearRecovery, clearRecovery)
+    return recovery
   }
 
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
@@ -30179,20 +30237,13 @@ export class OrcaRuntimeService {
     // The sync hasPty rescue closes the spawn/list race: a just-spawned PTY can
     // register after the inventory snapshot, and federation reads one
     // connected:false as exited.
-    let directLiveness: boolean | null | undefined
-    try {
-      directLiveness = leaf.ptyId ? this.ptyController?.hasPty?.(leaf.ptyId) : undefined
-    } catch {
-      directLiveness = null
-    }
     const provenAbsent =
       provenLivePtyIds !== null &&
       leaf.ptyId !== null &&
       !provenLivePtyIds.has(leaf.ptyId) &&
       !leaf.ptyId.startsWith('remote:') &&
       parseAppSshPtyId(leaf.ptyId) === null &&
-      directLiveness !== true &&
-      directLiveness !== null
+      this.ptyController?.hasPty?.(leaf.ptyId) !== true
     return {
       handle: this.issueHandle(leaf),
       ptyId: leaf.ptyId,
@@ -31934,6 +31985,23 @@ export class OrcaRuntimeService {
     }
   }
 
+  private scheduleRestoredMessageRepoints(): void {
+    const handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
+    for (const handle of handles) {
+      if (!handle.startsWith('dispatch:')) {
+        this.mailPointerRepointScheduler.schedule(handle)
+      }
+    }
+  }
+
+  private repointPendingMessagesForHandle(handle: string): void {
+    try {
+      this.deliverPendingMessagesForHandle(handle)
+    } catch {
+      // The unref'd repair can outlive a test/runtime-owned database during shutdown.
+    }
+  }
+
   private deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
     this.deliverPendingMessages(leaf)
     if (!this._orchestrationDb) {
@@ -31947,6 +32015,9 @@ export class OrcaRuntimeService {
 
   // Why: wake blocking orchestration.check --wait calls on this handle so they return the new message immediately instead of polling.
   notifyMessageArrived(handle: string, messageType?: string): void {
+    if (!handle.startsWith('dispatch:')) {
+      this.mailPointerRepointScheduler.schedule(handle)
+    }
     // Why: push-on-idle is driven by status transitions; a message that
     // arrives while the recipient is already idle never sees a transition, so
     // deliver now (#12536). deliverPendingMessagesForHandle no-ops when the
@@ -32617,15 +32688,19 @@ export class OrcaRuntimeService {
       const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
       if (handle) {
         this.lastPointedMessageSequenceByHandle.delete(handle)
+        this.pointedMessageIdsByHandle.delete(handle)
+        this.mailPointerRepointScheduler.schedule(handle)
       }
       const run = this._orchestrationDb?.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
       if (run) {
         this.lastPointedMessageSequenceByHandle.delete(`run:${run.id}`)
+        this.pointedMessageIdsByHandle.delete(`run:${run.id}`)
+        this.mailPointerRepointScheduler.schedule(`run:${run.id}`)
       }
     }
   }
 
-  // Why: push-on-idle delivery is event-driven (no polling) because the runtime owns both the message store and terminal status detection.
+  // Why: normal delivery stays event-driven; the bounded mailbox retry only repairs missed liveness edges.
   private deliverPendingMessages(
     leaf: RuntimeLeafRecord,
     options: {
@@ -32665,14 +32740,35 @@ export class OrcaRuntimeService {
     // still-blocked case; reservedTypes carries the notify-time snapshot for a
     // waiter resolved later in the same drain, which is already gone from the map.
     const waiters = this.messageWaitersByHandle.get(mailboxHandle)
-    const unread = this._orchestrationDb
-      .getUndeliveredUnreadMessages(mailboxHandle)
-      .filter(
-        (message) =>
-          !options.reservedTypes?.has(message.type) &&
-          !messageTypeHasLiveWaiter(waiters, message.type)
-      )
+    const pending = this._orchestrationDb.getUndeliveredUnreadMessages(mailboxHandle)
+    const pendingIds = new Set(pending.map((message) => message.id))
+    const pointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
+    if (pointedIds) {
+      for (const id of pointedIds) {
+        if (!pendingIds.has(id)) {
+          pointedIds.delete(id)
+        }
+      }
+      if (pointedIds.size === 0) {
+        this.pointedMessageIdsByHandle.delete(mailboxHandle)
+      }
+    }
+    const unread = pending.filter(
+      (message) =>
+        !options.reservedTypes?.has(message.type) &&
+        !messageTypeHasLiveWaiter(waiters, message.type)
+    )
     if (unread.length === 0) {
+      return
+    }
+
+    const watermark = this.lastPointedMessageSequenceByHandle.get(mailboxHandle) ?? -1
+    const priorPointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
+    if (
+      !unread.some(
+        (message) => message.sequence > watermark || priorPointedIds?.has(message.id) !== true
+      )
+    ) {
       return
     }
 
@@ -32680,10 +32776,7 @@ export class OrcaRuntimeService {
       return
     }
     const newestSequence = unread.at(-1)?.sequence
-    if (
-      newestSequence === undefined ||
-      newestSequence <= (this.lastPointedMessageSequenceByHandle.get(mailboxHandle) ?? -1)
-    ) {
+    if (newestSequence === undefined) {
       return
     }
 
@@ -32754,7 +32847,16 @@ export class OrcaRuntimeService {
       if (!wrote) {
         return
       }
-      this.lastPointedMessageSequenceByHandle.set(mailboxHandle, newestSequence)
+      this.lastPointedMessageSequenceByHandle.set(
+        mailboxHandle,
+        Math.max(watermark, newestSequence)
+      )
+      const pointedIdsAfterWrite =
+        this.pointedMessageIdsByHandle.get(mailboxHandle) ?? new Set<string>()
+      for (const message of unread) {
+        pointedIdsAfterWrite.add(message.id)
+      }
+      this.pointedMessageIdsByHandle.set(mailboxHandle, pointedIdsAfterWrite)
 
       const tabTitle = this.tabs.get(leaf.tabId)?.title
       if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
@@ -37395,14 +37497,16 @@ function runtimePathsEqual(left: string, right: string): boolean {
  * Windows/WSL/SSH ids still match themselves across hosts.
  */
 function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
-  // Why: derived from the key rather than re-parsed, so equality and the sleep /
-  // mutation-queue keying can never drift apart into two different identity rules.
-  return runtimeWorktreeIdentityKey(left) === runtimeWorktreeIdentityKey(right)
+  const parsedLeft = splitWorktreeId(left)
+  const parsedRight = splitWorktreeId(right)
+  return parsedLeft && parsedRight
+    ? parsedLeft.repoId === parsedRight.repoId &&
+        runtimePathsEqual(parsedLeft.worktreePath, parsedRight.worktreePath)
+    : left === right
 }
 
 function runtimeWorktreeIdentityKey(worktreeId: string): string {
   // Same suffix rule: this keys PTY refresh, sleep, and mutation-queue state per session.
-  // NUL cannot occur in a repoId or a path, so the joined key is unambiguous.
   const parsed = splitWorktreeId(worktreeId)
   return parsed
     ? `${parsed.repoId}\0${normalizeRuntimePathForComparison(parsed.worktreePath)}`

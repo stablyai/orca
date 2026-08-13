@@ -25,56 +25,65 @@ export function agentMapNodeStatus(card: DashboardCard): AgentMapNodeStatus {
   return dashboardCardDisplayState(card)
 }
 
-/** How long a fresh finish keeps its one-shot flare. Long enough to catch the eye from
- *  across the map, short enough that a busy fleet is never permanently animating.
- *  Must stay in step with the `agent-map-finish-flare` duration in `agent-map.css`, or
- *  the element unmounts mid-ripple; the glow performance test asserts the two match. */
-export const AGENT_MAP_FINISH_FLARE_MS = 1_400
-// Static completion emphasis remains uncapped; this bounds animated SVG paint only.
-export const AGENT_MAP_MAX_CONCURRENT_FINISH_FLARES = 4
+export type AgentMapFlareStatus = Extract<DashboardCardDotState, 'waiting' | 'done'>
 
-/** Uses wall time because the map's relative-timestamp clock advances only every 30s. */
-export function isAgentMapRecentFinish(card: DashboardCard, currentTime = Date.now()): boolean {
-  if (card.dotState !== 'done' || !card.unseen) {
-    return false
-  }
-  const changedAt = card.stateChangedAt || card.finishedAt || 0
-  if (changedAt <= 0) {
-    return false
-  }
-  const elapsed = currentTime - changedAt
-  // A fleet that loads with finished work already on it must not flare all at once, so a
-  // finish that happened before this render window is never treated as fresh.
-  return elapsed >= 0 && elapsed < AGENT_MAP_FINISH_FLARE_MS
+/** How long a fresh question or finish keeps its one-shot flare. Long enough to catch
+ *  the eye from across the map, short enough that a busy fleet is never permanently
+ *  animating. Must stay in step with the `agent-map-status-flare` duration in
+ *  `agent-map.css`, or the element unmounts mid-ripple. */
+export const AGENT_MAP_STATUS_FLARE_MS = 1_400
+// Static status emphasis remains uncapped; this bounds animated SVG paint only.
+export const AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES = 4
+
+function agentMapFlareChangedAt(card: DashboardCard): number {
+  return card.stateChangedAt || (card.dotState === 'done' ? card.finishedAt : 0) || 0
 }
 
-/** Selects only the freshest finishes so burst updates cannot animate the whole fleet. */
-export function selectAgentMapRecentFinishPaneKeys(
+/** Uses wall time because the map's relative-timestamp clock advances only every 30s. */
+export function agentMapRecentFlareStatus(
+  card: DashboardCard,
+  currentTime = Date.now()
+): AgentMapFlareStatus | null {
+  if (card.dotState !== 'waiting' && (card.dotState !== 'done' || !card.unseen)) {
+    return null
+  }
+  const changedAt = agentMapFlareChangedAt(card)
+  if (changedAt <= 0) {
+    return null
+  }
+  const elapsed = currentTime - changedAt
+  // A fleet that loads with old status changes must not flare all at once.
+  return elapsed >= 0 && elapsed < AGENT_MAP_STATUS_FLARE_MS ? card.dotState : null
+}
+
+/** Selects only the freshest question/finish changes so bursts cannot animate the fleet. */
+export function selectAgentMapRecentFlareStatuses(
   cards: readonly DashboardCard[]
-): ReadonlySet<string> {
+): ReadonlyMap<string, AgentMapFlareStatus> {
   const currentTime = Date.now()
-  const recent: { paneKey: string; changedAt: number }[] = []
+  const recent: { paneKey: string; changedAt: number; status: AgentMapFlareStatus }[] = []
   for (const card of cards) {
-    if (!isAgentMapRecentFinish(card, currentTime)) {
+    const status = agentMapRecentFlareStatus(card, currentTime)
+    if (!status) {
       continue
     }
-    const changedAt = card.stateChangedAt || card.finishedAt || 0
+    const changedAt = agentMapFlareChangedAt(card)
     const index = recent.findIndex(
       (item) =>
         changedAt > item.changedAt || (changedAt === item.changedAt && card.paneKey < item.paneKey)
     )
     if (index === -1) {
-      if (recent.length < AGENT_MAP_MAX_CONCURRENT_FINISH_FLARES) {
-        recent.push({ paneKey: card.paneKey, changedAt })
+      if (recent.length < AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES) {
+        recent.push({ paneKey: card.paneKey, changedAt, status })
       }
       continue
     }
-    recent.splice(index, 0, { paneKey: card.paneKey, changedAt })
-    if (recent.length > AGENT_MAP_MAX_CONCURRENT_FINISH_FLARES) {
+    recent.splice(index, 0, { paneKey: card.paneKey, changedAt, status })
+    if (recent.length > AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES) {
       recent.pop()
     }
   }
-  return new Set(recent.map((item) => item.paneKey))
+  return new Map(recent.map((item) => [item.paneKey, item.status]))
 }
 
 export type AgentMapStatusCounts = Record<AgentMapNodeStatus, number>

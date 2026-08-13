@@ -45,7 +45,7 @@ describe('AgentMapScene project labels', () => {
           selectedPaneKey={null}
           allowAggregation
           showOrchestrationLinks
-          recentFinishPaneKeys={new Set()}
+          recentFlareStatuses={new Map()}
           nodeRefs={{ current: new Map() }}
           onSelectAgent={vi.fn()}
           onAgentKeyDown={vi.fn()}
@@ -109,7 +109,7 @@ describe('AgentMapScene project labels', () => {
             selectedPaneKey={null}
             allowAggregation
             showOrchestrationLinks
-            recentFinishPaneKeys={new Set()}
+            recentFlareStatuses={new Map()}
             nodeRefs={{ current: new Map() }}
             onSelectAgent={vi.fn()}
             onAgentKeyDown={vi.fn()}

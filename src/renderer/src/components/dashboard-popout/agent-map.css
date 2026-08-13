@@ -153,7 +153,7 @@
 }
 
 .agent-map-worktree-status-glow.fleet-status-waiting {
-  stroke: color-mix(in srgb, var(--color-amber-500) 28%, transparent);
+  stroke: color-mix(in srgb, var(--agent-question) 32%, transparent);
 }
 
 .agent-map-worktree-status-glow.fleet-status-working {
@@ -199,7 +199,7 @@
 }
 
 .agent-map-worktree-ring.is-waiting {
-  stroke: var(--color-amber-500);
+  stroke: var(--agent-question);
 }
 
 .agent-map-worktree-ring.is-blocked {
@@ -329,20 +329,27 @@
   vector-effect: non-scaling-stroke;
 }
 
-.agent-map-agent-finish-flare {
+.agent-map-agent-status-flare {
   fill: none;
   pointer-events: none;
-  stroke: var(--color-emerald-500);
   stroke-width: 2;
   transform-box: fill-box;
   transform-origin: center;
   vector-effect: non-scaling-stroke;
-  /* Keep in step with AGENT_MAP_FINISH_FLARE_MS, which gates how long the element stays
+  /* Keep in step with AGENT_MAP_STATUS_FLARE_MS, which gates how long the element stays
      mounted. The performance test asserts the two agree. */
-  animation: agent-map-finish-flare 1400ms cubic-bezier(0.25, 0.5, 0.25, 1) both;
+  animation: agent-map-status-flare 1400ms cubic-bezier(0.25, 0.5, 0.25, 1) both;
 }
 
-@keyframes agent-map-finish-flare {
+.agent-map-agent-status-flare.fleet-status-waiting {
+  stroke: var(--agent-question);
+}
+
+.agent-map-agent-status-flare.fleet-status-done {
+  stroke: var(--color-emerald-500);
+}
+
+@keyframes agent-map-status-flare {
   0% {
     opacity: 0.9;
     transform: scale(0.62);
@@ -366,7 +373,7 @@
 }
 
 .agent-map-agent-status-glow.fleet-status-waiting {
-  stroke: color-mix(in srgb, var(--color-amber-500) 42%, transparent);
+  stroke: color-mix(in srgb, var(--agent-question) 48%, transparent);
 }
 
 .agent-map-agent-status-glow.fleet-status-blocked {
@@ -418,7 +425,7 @@
 }
 
 .fleet-status-waiting .agent-map-agent-mark {
-  stroke: var(--color-amber-500);
+  stroke: var(--agent-question);
 }
 
 /* Unread: filled core. Fill survives zoom-out further than a halo does, and it is the
@@ -443,6 +450,19 @@
   pointer-events: none;
   stroke: var(--background);
   stroke-width: 2;
+}
+
+/* Shape cue for 'waiting': hue alone can't carry it at low zoom or for
+   red-green CVD, where orange and blocked-red converge. */
+.agent-map-agent-question-backdrop {
+  fill: var(--background);
+  pointer-events: none;
+  stroke: none;
+}
+
+.agent-map-agent-question-icon {
+  overflow: visible;
+  pointer-events: none;
 }
 
 .agent-map-aggregate-node circle {
@@ -482,8 +502,8 @@
 }
 
 .agent-map-legend-dot.fleet-status-waiting {
-  background: var(--color-amber-500);
-  box-shadow: 0 0 4px color-mix(in srgb, var(--color-amber-500) 72%, transparent);
+  background: var(--agent-question);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--agent-question) 72%, transparent);
   opacity: 1;
 }
 
@@ -540,7 +560,7 @@
   .agent-map-agent-node,
   .agent-map-agent-visual,
   .agent-map-agent-mark,
-  .agent-map-agent-finish-flare,
+  .agent-map-agent-status-flare,
   .agent-map-lineage-link,
   .agent-map-worktree-lineage-link {
     animation: none;
@@ -548,7 +568,7 @@
   }
 
   /* No flare without motion — the halo and filled core already carry the state. */
-  .agent-map-agent-finish-flare {
+  .agent-map-agent-status-flare {
     display: none;
   }
 
