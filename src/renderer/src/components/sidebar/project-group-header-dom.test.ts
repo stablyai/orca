@@ -47,4 +47,23 @@ describe('Project Group header drag DOM source', () => {
       /isDraggableRepoHeader \|\| isDraggableProjectGroupHeader\s*\?\s*'cursor-grab/
     )
   })
+
+  it('scopes select-none to headers that can arm a reorder drag', () => {
+    // Why: behavior lives in project-group-manual-sort.spec.ts; this only guards the scoping,
+    // so an unconditional select-none cannot creep back and strip copyable text from rows
+    // (lone projects, Pinned, workspace-status) that never had the selection-anchor bug.
+    const source = readWorktreeListSource()
+
+    expect(source).toMatch(
+      /\(isDraggableRepoHeader \|\| isDraggableProjectGroupHeader\) && 'select-none'/
+    )
+    expect(source).toMatch(/onDragPointerDown && '[^']*\bselect-none\b/)
+    // Base row classes must stay selectable; only the guarded entries may add select-none.
+    for (const base of [
+      /'group relative flex h-7 w-full[^']*'/,
+      /'group\/host-header flex h-8 w-full[^']*'/
+    ]) {
+      expect(source.match(base)?.[0]).not.toContain('select-none')
+    }
+  })
 })

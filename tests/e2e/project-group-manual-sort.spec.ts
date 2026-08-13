@@ -244,6 +244,35 @@ async function dragProjectIntoProjectBody(args: {
   await args.page.mouse.up()
 }
 
+async function dragProjectLabelBefore(args: {
+  page: Page
+  draggedProjectId: string
+  targetProjectId: string
+}): Promise<string> {
+  const label = args.page
+    .locator(`[data-repo-header-id="${args.draggedProjectId}"] [data-repo-header-title]`)
+    .first()
+  const target = args.page.locator(`[data-repo-header-id="${args.targetProjectId}"]`)
+  await label.scrollIntoViewIfNeeded()
+  await target.scrollIntoViewIfNeeded()
+  const labelBox = await label.boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!labelBox || !targetBox) {
+    throw new Error('Project header label bounding box was not available')
+  }
+
+  // Why: press mid-label, not row center — the regression anchored the selection at the
+  // pressed character, so how much text highlighted depended on the grab point.
+  await args.page.mouse.move(labelBox.x + labelBox.width / 2, labelBox.y + labelBox.height / 2)
+  await args.page.mouse.down()
+  await args.page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 3, { steps: 8 })
+  await args.page.mouse.up()
+
+  // Why: read after pointerup — body user-select only hides the range during the drag, so
+  // the stale selection resurfaces here once the drag styles are torn down.
+  return await args.page.evaluate(() => window.getSelection()?.toString() ?? '')
+}
+
 async function dragProjectGroupBefore(args: {
   page: Page
   draggedGroupId: string
@@ -357,5 +386,36 @@ test.describe('Project Group manual sorting', () => {
         message: 'Dragged Project Group header did not persist the requested visible order'
       })
       .toEqual([groups.alphaId, groups.bravoId, groups.deltaId, groups.charlieId])
+  })
+
+  test('dragging a project header by its label leaves no text selection behind', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const repoPaths = await createProjectHeaderSortFixture()
+    const projects = await seedProjectHeaderSortScenario(orcaPage, repoPaths)
+
+    await expect
+      .poll(() => getProjectHeaderOrder(orcaPage, projects), {
+        timeout: 12_000,
+        message: 'Project headers did not render in manual order'
+      })
+      .toEqual([projects.alphaId, projects.bravoId, projects.charlieId])
+
+    const selectionAfterDrag = await dragProjectLabelBefore({
+      page: orcaPage,
+      draggedProjectId: projects.charlieId,
+      targetProjectId: projects.bravoId
+    })
+
+    expect(selectionAfterDrag).toBe('')
+
+    // Why: the reorder must still work — a fix that killed the drag would also pass above.
+    await expect
+      .poll(() => getProjectHeaderOrder(orcaPage, projects), {
+        timeout: 12_000,
+        message: 'Label-initiated drag did not persist the requested visible order'
+      })
+      .toEqual([projects.alphaId, projects.charlieId, projects.bravoId])
   })
 })

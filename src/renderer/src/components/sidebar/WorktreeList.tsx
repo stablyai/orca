@@ -844,7 +844,8 @@ function HostSectionHeader({
         aria-expanded={!row.collapsed}
         className={cn(
           'group/host-header flex h-8 w-full cursor-pointer items-center gap-2 rounded-md border px-2 text-left transition-all',
-          onDragPointerDown && 'cursor-grab active:cursor-grabbing',
+          // select-none only when draggable: same reorder-drag selection anchor as repo/group headers.
+          onDragPointerDown && 'cursor-grab active:cursor-grabbing select-none',
           isBlocked
             ? 'border-destructive/40 bg-destructive/10'
             : isDisconnected
@@ -4317,6 +4318,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       // actions use cursor-pointer so … / + never look reorderable.
                       'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
                       !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
+                      // Why: pointerdown arms drag without preventDefault and body user-select only
+                      // lands once the 4px threshold promotes, so the label anchors a selection that
+                      // resurfaces on pointerup. Non-draggable rows have no such gap — keep them
+                      // selectable rather than removing copyable text for free.
+                      (isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'select-none',
                       highlightedRevealRowKey === row.key &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
                       (isDraggingThis || isDraggingThisProjectGroup) &&
@@ -4409,7 +4415,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
+                          <div
+                            data-repo-header-title=""
+                            className="min-w-0 truncate text-[13px] font-semibold leading-none"
+                          >
                             {row.label}
                           </div>
                           <RepoForkIndicator upstream={row.repo?.upstream} />
