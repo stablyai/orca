@@ -1656,6 +1656,77 @@ describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
 })
 
 describe('OrcaRuntimeService', () => {
+  it.each([
+    {
+      name: 'host-local repository',
+      selected: {
+        id: TEST_REPO_ID,
+        path: '/local/repo',
+        displayName: 'Local',
+        badgeColor: 'blue',
+        addedAt: 1
+      },
+      sibling: {
+        id: TEST_REPO_ID,
+        path: '/remote/repo',
+        displayName: 'SSH',
+        badgeColor: 'blue',
+        addedAt: 1,
+        connectionId: 'ssh-1'
+      },
+      authority: { path: '/local/repo', connectionId: null }
+    },
+    {
+      name: 'nested SSH repository',
+      selected: {
+        id: TEST_REPO_ID,
+        path: '/remote/repo',
+        displayName: 'SSH',
+        badgeColor: 'blue',
+        addedAt: 1,
+        connectionId: 'ssh-1'
+      },
+      sibling: {
+        id: TEST_REPO_ID,
+        path: '/local/repo',
+        displayName: 'Local',
+        badgeColor: 'blue',
+        addedAt: 1
+      },
+      authority: { path: '/remote/repo', connectionId: 'ssh-1' }
+    }
+  ])('resolves selected $name authority among duplicate ids', async (scenario) => {
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => [scenario.sibling, scenario.selected]
+    } as never)
+
+    await expect(runtime.showRepo(TEST_REPO_ID, scenario.authority)).resolves.toBe(
+      scenario.selected
+    )
+  })
+
+  it('fails selected repository authority closed before creation', async () => {
+    const duplicate = {
+      id: TEST_REPO_ID,
+      path: '/local/repo',
+      displayName: 'Local',
+      badgeColor: 'blue',
+      addedAt: 1
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => [duplicate, { ...duplicate }]
+    } as never)
+
+    await expect(
+      runtime.showRepo(TEST_REPO_ID, { path: duplicate.path, connectionId: null })
+    ).rejects.toThrow('selector_ambiguous')
+    await expect(
+      runtime.showRepo(TEST_REPO_ID, { path: '/stale/repo', connectionId: null })
+    ).rejects.toThrow('repo_not_found')
+  })
+
   it('projects runtime-backed settings to paired clients', () => {
     const terminalQuickCommands = [
       {
@@ -5303,7 +5374,21 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).not.toHaveBeenCalled()
   })
 
-  it('records lineage for SSH-backed CLI-created worktrees', async () => {
+  it.each([
+    { name: 'records paired-runtime lineage on nested SSH', postCreateState: 'present' },
+    {
+      name: 'keeps nested SSH creation at root when its parent disappears',
+      postCreateState: 'missing'
+    },
+    {
+      name: 'keeps nested SSH creation at root when its parent becomes prunable',
+      postCreateState: 'prunable'
+    },
+    {
+      name: 'keeps nested SSH creation at root when its parent scan fails',
+      postCreateState: 'scan-failed'
+    }
+  ])('$name', async ({ postCreateState }) => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
     const remoteRepo = {
@@ -5337,7 +5422,11 @@ describe('OrcaRuntimeService', () => {
     const parentId = `${TEST_REPO_ID}::${parent.path}`
     const childId = `${TEST_REPO_ID}::${created.path}`
     const metaById: Record<string, WorktreeMeta> = {
-      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
+      [parentId]: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        projectId: `repo:${TEST_REPO_ID}`,
+        hostId: 'ssh:ssh-1'
+      })
     }
     const lineageById: Record<string, WorktreeLineage> = {}
     const remoteStore = {
@@ -5356,6 +5445,7 @@ describe('OrcaRuntimeService', () => {
         return lineage
       })
     }
+    let worktreeScanCount = 0
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
@@ -5376,7 +5466,19 @@ describe('OrcaRuntimeService', () => {
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValueOnce([parent]).mockResolvedValue([parent, created])
+      listWorktrees: vi.fn(async () => {
+        worktreeScanCount += 1
+        if (worktreeScanCount <= 2) {
+          return [parent]
+        }
+        if (worktreeScanCount === 3 || postCreateState === 'present') {
+          return [parent, created]
+        }
+        if (postCreateState === 'scan-failed') {
+          throw new Error('post-create scan failed')
+        }
+        return postCreateState === 'prunable' ? [{ ...parent, prunable: true }, created] : [created]
+      })
     }
     registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
@@ -5386,28 +5488,526 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.createManagedWorktree({
         repoSelector: TEST_REPO_ID,
         name: 'child-feature',
-        lineage: { parentWorktree: `id:${parentId}` }
+        lineage: {
+          parentWorkspace: `worktree:${parentId}`,
+          parentWorkspaceCaptureSource: 'manual-action'
+        }
       })
 
-      expect(result.worktree).toMatchObject({
-        id: childId,
-        parentWorktreeId: parentId,
-        lineage: expect.objectContaining({
-          worktreeId: childId,
+      if (postCreateState === 'present') {
+        expect(result.worktree).toMatchObject({
+          id: childId,
           parentWorktreeId: parentId,
-          worktreeInstanceId: metaById[childId].instanceId,
-          parentWorktreeInstanceId: 'parent-instance',
-          origin: 'cli'
+          lineage: expect.objectContaining({
+            worktreeId: childId,
+            parentWorktreeId: parentId,
+            worktreeInstanceId: metaById[childId].instanceId,
+            parentWorktreeInstanceId: 'parent-instance',
+            origin: 'manual',
+            capture: { source: 'manual-action', confidence: 'explicit' }
+          })
         })
-      })
-      expect(result.lineage).toBe(result.worktree.lineage)
-      expect(result.warnings).toEqual([])
-      expect(remoteStore.setWorktreeLineage).toHaveBeenCalledWith(childId, expect.any(Object))
+        expect(result.lineage).toBe(result.worktree.lineage)
+        expect(result.warnings).toEqual([])
+        expect(remoteStore.setWorktreeLineage).toHaveBeenCalledWith(childId, expect.any(Object))
+      } else {
+        const scanFailed = postCreateState === 'scan-failed'
+        expect(result.worktree).toMatchObject({
+          id: childId,
+          parentWorktreeId: null,
+          lineage: null,
+          workspaceLineage: null
+        })
+        expect(result.lineage).toBeNull()
+        expect(result.workspaceLineage).toBeNull()
+        expect(result.warnings).toEqual([
+          expect.objectContaining({
+            code: scanFailed ? 'LINEAGE_PARENT_CONTEXT_MISSING' : 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+            details: expect.objectContaining({
+              reason: scanFailed ? 'LINEAGE_PARENT_CONTEXT_MISSING' : 'LINEAGE_PARENT_NOT_FOUND',
+              parentWorktreeId: parentId
+            })
+          })
+        ])
+        expect(remoteStore.setWorktreeLineage).not.toHaveBeenCalled()
+      }
+      expect(provider.addWorktree).toHaveBeenCalled()
+      expect(provider.listWorktrees).toHaveBeenCalledTimes(4)
       expect(addWorktree).not.toHaveBeenCalled()
       expect(listWorktrees).not.toHaveBeenCalled()
     } finally {
       unregisterSshGitProvider('ssh-1')
     }
+  })
+
+  it('keeps local creation at root when its parent disappears after Git mutation', async () => {
+    const parent = MOCK_GIT_WORKTREES[0]
+    const created = {
+      path: '/tmp/workspaces/local-child',
+      head: 'def',
+      branch: 'refs/heads/local-child',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const parentId = `${TEST_REPO_ID}::${parent.path}`
+    const childId = `${TEST_REPO_ID}::${created.path}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
+    }
+    const setWorktreeLineage = vi.fn()
+    const setWorkspaceLineage = vi.fn()
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage,
+      setWorkspaceLineage
+    }
+    computeWorktreePathMock.mockReturnValue(created.path)
+    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
+    let worktreeScanCount = 0
+    vi.mocked(listWorktrees).mockImplementation(async () => {
+      worktreeScanCount += 1
+      if (worktreeScanCount <= 2) {
+        return [parent]
+      }
+      return worktreeScanCount === 3 ? [parent, created] : [created]
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: TEST_REPO_ID,
+      name: 'local-child',
+      baseBranch: 'origin/main',
+      lineage: {
+        parentWorkspace: `worktree:${parentId}`,
+        parentWorkspaceCaptureSource: 'manual-action'
+      }
+    })
+
+    expect(addWorktree).toHaveBeenCalled()
+    expect(listWorktrees).toHaveBeenCalledTimes(4)
+    expect(result.worktree).toMatchObject({
+      id: childId,
+      parentWorktreeId: null,
+      lineage: null,
+      workspaceLineage: null
+    })
+    expect(result.lineage).toBeNull()
+    expect(result.workspaceLineage).toBeNull()
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        details: expect.objectContaining({
+          reason: 'LINEAGE_PARENT_NOT_FOUND',
+          parentWorktreeId: parentId
+        })
+      })
+    ])
+    expect(setWorktreeLineage).not.toHaveBeenCalled()
+    expect(setWorkspaceLineage).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      name: 'archived parent',
+      snapshotMeta: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        projectId: `repo:${TEST_REPO_ID}`,
+        hostId: 'ssh:ssh-1',
+        isArchived: true
+      }),
+      code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      error: 'Archived worktrees cannot be used as parents.'
+    },
+    {
+      name: 'parent from another project',
+      snapshotMeta: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        projectId: 'repo:other',
+        hostId: 'ssh:ssh-1'
+      }),
+      code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      error: 'same repository, execution host, and project'
+    },
+    {
+      name: 'parent from another nested SSH host',
+      snapshotMeta: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        projectId: `repo:${TEST_REPO_ID}`,
+        hostId: 'ssh:ssh-2'
+      }),
+      code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      error: 'same repository, execution host, and project'
+    },
+    {
+      name: 'stale parent identity',
+      snapshotMeta: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        projectId: `repo:${TEST_REPO_ID}`,
+        hostId: 'ssh:ssh-1'
+      }),
+      currentMeta: makeWorktreeMeta({
+        instanceId: 'replacement-instance',
+        projectId: `repo:${TEST_REPO_ID}`,
+        hostId: 'ssh:ssh-1'
+      }),
+      code: 'LINEAGE_PARENT_NOT_FOUND',
+      error: 'Parent worktree identity is stale.'
+    },
+    {
+      name: 'parent removed after selection',
+      snapshotMeta: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        projectId: `repo:${TEST_REPO_ID}`,
+        hostId: 'ssh:ssh-1'
+      }),
+      activeOnRecheck: false,
+      code: 'LINEAGE_PARENT_NOT_FOUND',
+      error: 'Parent worktree is no longer active.'
+    }
+  ])('rejects a $name before nested SSH Git mutation', async (scenario) => {
+    const remoteRepo = {
+      id: TEST_REPO_ID,
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const parent = {
+      path: '/remote/repo-parent',
+      head: 'abc',
+      branch: 'refs/heads/repo-parent',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const parentId = `${TEST_REPO_ID}::${parent.path}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: scenario.snapshotMeta
+    }
+    const currentParentMeta = scenario.currentMeta ?? scenario.snapshotMeta
+    const remoteStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === parentId ? currentParentMeta : metaById[worktreeId]
+    }
+    const listRemoteWorktrees = vi
+      .fn()
+      .mockResolvedValueOnce([parent])
+      .mockResolvedValue(scenario.activeOnRecheck === false ? [] : [parent])
+    const provider = {
+      exec: vi.fn(),
+      addWorktree: vi.fn(),
+      listWorktrees: listRemoteWorktrees
+    }
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: TEST_REPO_ID,
+          name: 'child-feature',
+          lineage: { parentWorkspace: `worktree:${parentId}` }
+        })
+      ).rejects.toMatchObject({
+        code: scenario.code,
+        message: expect.stringContaining(scenario.error)
+      })
+      expect(provider.addWorktree).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
+  })
+
+  it('returns created success without lineage when the parent boundary changes after creation', () => {
+    const setWorktreeLineage = vi.fn()
+    const setWorkspaceLineage = vi.fn()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage,
+      setWorkspaceLineage
+    } as never)
+    const parentId = `${TEST_REPO_ID}::/remote/parent`
+    const childId = `${TEST_REPO_ID}::/remote/child`
+    const parent = {
+      id: parentId,
+      repoId: TEST_REPO_ID,
+      path: '/remote/parent',
+      projectId: `repo:${TEST_REPO_ID}`,
+      hostId: 'ssh:ssh-1',
+      instanceId: 'parent-instance'
+    }
+    const child = {
+      id: childId,
+      repoId: TEST_REPO_ID,
+      projectId: `repo:${TEST_REPO_ID}`,
+      hostId: 'ssh:ssh-2',
+      instanceId: 'child-instance'
+    }
+
+    const result = runtime['recordCreatedWorktreeLineage'](
+      child as never,
+      {
+        kind: 'lineage',
+        parent: {
+          type: 'worktree',
+          workspaceKey: `worktree:${parentId}`,
+          worktree: parent as never,
+          instanceId: parent.instanceId
+        },
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+      },
+      [parent.path]
+    )
+
+    expect(result).toEqual({
+      lineage: null,
+      workspaceLineage: null,
+      warnings: [
+        expect.objectContaining({
+          code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          details: expect.objectContaining({
+            reason: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+            parentWorktreeId: parentId
+          })
+        })
+      ]
+    })
+    expect(setWorktreeLineage).not.toHaveBeenCalled()
+    expect(setWorkspaceLineage).not.toHaveBeenCalled()
+  })
+
+  it('returns created success without lineage when a parent cycle appears after creation', () => {
+    const parentId = `${TEST_REPO_ID}::/tmp/worktree-parent`
+    const childId = `${TEST_REPO_ID}::/tmp/workspaces/child`
+    const setWorktreeLineage = vi.fn()
+    const setWorkspaceLineage = vi.fn()
+    const lineageById: Record<string, WorktreeLineage> = {
+      [parentId]: {
+        worktreeId: parentId,
+        worktreeInstanceId: 'parent-instance',
+        parentWorktreeId: childId,
+        parentWorktreeInstanceId: 'child-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === parentId ? makeWorktreeMeta({ instanceId: 'parent-instance' }) : undefined,
+      getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
+      setWorktreeLineage,
+      setWorkspaceLineage
+    } as never)
+    const parent = {
+      id: parentId,
+      repoId: TEST_REPO_ID,
+      path: '/tmp/worktree-parent',
+      projectId: `repo:${TEST_REPO_ID}`,
+      hostId: 'local',
+      instanceId: 'parent-instance'
+    }
+    const child = {
+      id: childId,
+      repoId: TEST_REPO_ID,
+      projectId: `repo:${TEST_REPO_ID}`,
+      hostId: 'local',
+      instanceId: 'child-instance'
+    }
+    runtime['resolvedWorktreeCache'] = {
+      worktrees: [parent as never],
+      platformByRepoId: new Map(),
+      expiresAt: Date.now() + 1_000
+    }
+
+    const result = runtime['recordCreatedWorktreeLineage'](
+      child as never,
+      {
+        kind: 'lineage',
+        parent: {
+          type: 'worktree',
+          workspaceKey: `worktree:${parentId}`,
+          worktree: parent as never,
+          instanceId: parent.instanceId
+        },
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+      },
+      [parent.path]
+    )
+
+    expect(result).toEqual({
+      lineage: null,
+      workspaceLineage: null,
+      warnings: [
+        expect.objectContaining({
+          code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          details: expect.objectContaining({
+            reason: 'LINEAGE_PARENT_CYCLE',
+            parentWorktreeId: parentId
+          })
+        })
+      ]
+    })
+    expect(setWorktreeLineage).not.toHaveBeenCalled()
+    expect(setWorkspaceLineage).not.toHaveBeenCalled()
+  })
+
+  it('returns created success without lineage when the parent disappears after creation', () => {
+    const parentPath = '/tmp/worktree-parent'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::/tmp/workspaces/child`
+    const setWorktreeLineage = vi.fn()
+    const setWorkspaceLineage = vi.fn()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === parentId ? makeWorktreeMeta({ instanceId: 'parent-instance' }) : undefined,
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage,
+      setWorkspaceLineage
+    } as never)
+    const parent = {
+      id: parentId,
+      repoId: TEST_REPO_ID,
+      path: parentPath,
+      projectId: `repo:${TEST_REPO_ID}`,
+      hostId: 'local',
+      instanceId: 'parent-instance'
+    }
+    const child = {
+      id: childId,
+      repoId: TEST_REPO_ID,
+      projectId: `repo:${TEST_REPO_ID}`,
+      hostId: 'local',
+      instanceId: 'child-instance'
+    }
+
+    const result = runtime['recordCreatedWorktreeLineage'](
+      child as never,
+      {
+        kind: 'lineage',
+        parent: {
+          type: 'worktree',
+          workspaceKey: `worktree:${parentId}`,
+          worktree: parent as never,
+          instanceId: parent.instanceId
+        },
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+      },
+      []
+    )
+
+    expect(result).toEqual({
+      lineage: null,
+      workspaceLineage: null,
+      warnings: [
+        expect.objectContaining({
+          code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          details: expect.objectContaining({
+            reason: 'LINEAGE_PARENT_NOT_FOUND',
+            parentWorktreeId: parentId,
+            validationMessage: 'Parent worktree is no longer active.'
+          })
+        })
+      ]
+    })
+    expect(setWorktreeLineage).not.toHaveBeenCalled()
+    expect(setWorkspaceLineage).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      name: 'archived',
+      currentMeta: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        isArchived: true
+      }),
+      warningCode: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      reason: 'LINEAGE_PARENT_CONTEXT_CONFLICT'
+    },
+    {
+      name: 'identity-replaced',
+      currentMeta: makeWorktreeMeta({ instanceId: 'replacement-instance' }),
+      warningCode: 'LINEAGE_PARENT_INSTANCE_STALE',
+      reason: 'LINEAGE_PARENT_INSTANCE_STALE'
+    }
+  ])('returns created success without lineage when the parent becomes $name', (scenario) => {
+    const parentId = `${TEST_REPO_ID}::/tmp/worktree-parent`
+    const childId = `${TEST_REPO_ID}::/tmp/workspaces/child`
+    const setWorktreeLineage = vi.fn()
+    const setWorkspaceLineage = vi.fn()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === parentId ? scenario.currentMeta : undefined,
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage,
+      setWorkspaceLineage
+    } as never)
+    const parent = {
+      id: parentId,
+      repoId: TEST_REPO_ID,
+      path: '/tmp/worktree-parent',
+      projectId: `repo:${TEST_REPO_ID}`,
+      hostId: 'local',
+      instanceId: 'parent-instance',
+      isArchived: false
+    }
+    const child = {
+      id: childId,
+      repoId: TEST_REPO_ID,
+      projectId: `repo:${TEST_REPO_ID}`,
+      hostId: 'local',
+      instanceId: 'child-instance'
+    }
+
+    const result = runtime['recordCreatedWorktreeLineage'](
+      child as never,
+      {
+        kind: 'lineage',
+        parent: {
+          type: 'worktree',
+          workspaceKey: `worktree:${parentId}`,
+          worktree: parent as never,
+          instanceId: parent.instanceId
+        },
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+      },
+      [parent.path]
+    )
+
+    expect(result).toEqual({
+      lineage: null,
+      workspaceLineage: null,
+      warnings: [
+        expect.objectContaining({
+          code: scenario.warningCode,
+          details: expect.objectContaining({
+            reason: scenario.reason,
+            parentWorktreeId: parentId
+          })
+        })
+      ]
+    })
+    expect(setWorktreeLineage).not.toHaveBeenCalled()
+    expect(setWorkspaceLineage).not.toHaveBeenCalled()
   })
 
   it('records folder workspace lineage inferred from environment context', async () => {

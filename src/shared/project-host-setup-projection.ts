@@ -296,8 +296,12 @@ export function getProjectHostSetupForRepo(
   setups: readonly ProjectHostSetup[],
   repo: Repo
 ): ProjectHostSetup {
+  const hostId = getRepoExecutionHostId(repo)
   return (
-    setups.find((setup) => setup.repoId === repo.id) ??
+    setups.find(
+      (setup) => setup.repoId === repo.id && setup.hostId === hostId && setup.path === repo.path
+    ) ??
+    setups.find((setup) => setup.repoId === repo.id && setup.hostId === hostId) ??
     projectHostSetupProjectionFromRepos([repo]).setups[0]
   )
 }

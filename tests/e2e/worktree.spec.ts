@@ -28,6 +28,7 @@ import {
   ensureTerminalVisible,
   worktreeExists
 } from './helpers/store'
+import { worktreeRow } from './worktree-row-locators'
 
 test.describe('Create Workspace', () => {
   test.beforeEach(async ({ orcaPage }) => {
@@ -475,6 +476,115 @@ test.describe('Create Workspace', () => {
         .evaluate(() => {
           window.__store?.getState().closeModal()
         })
+        .catch(() => {
+          /* page may already be torn down */
+        })
+    }
+  })
+
+  test('creates a child worktree under a selected recent parent', async ({
+    orcaPage
+  }, testInfo) => {
+    const workspaceName = `E2E child ${Date.now().toString().slice(-6)}`
+    const parents = await orcaPage.evaluate(async () => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      const state = store.getState()
+      const active = state.activeWorktreeId
+        ? Object.values(state.worktreesByRepo)
+            .flat()
+            .find((worktree) => worktree.id === state.activeWorktreeId)
+        : null
+      const alternate = active
+        ? (state.worktreesByRepo[active.repoId] ?? []).find(
+            (worktree) => worktree.id !== active.id && !worktree.isArchived
+          )
+        : null
+      if (!active || !alternate) {
+        throw new Error('Child worktree E2E requires two eligible worktrees')
+      }
+
+      await Promise.all([
+        state.updateWorktreeMeta(active.id, { displayName: 'Atlas parent' }),
+        state.updateWorktreeMeta(alternate.id, { displayName: 'Beacon parent' })
+      ])
+      const next = store.getState()
+      next.setGroupBy('none')
+      next.setSortBy('recent')
+      next.setShowActiveOnly(false)
+      next.setShowSleepingWorkspaces(true)
+      next.setHideDefaultBranchWorkspace(false)
+      next.setFilterRepoIds([])
+      next.setSidebarOpen(true)
+      next.setActiveWorktree(active.id, active.hostId ?? 'local')
+      store.setState((current) => ({
+        lastVisitedAtByWorktreeId: {
+          ...current.lastVisitedAtByWorktreeId,
+          [active.id]: 100,
+          [alternate.id]: 200
+        }
+      }))
+      return { activeId: active.id, alternateId: alternate.id }
+    })
+
+    try {
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+      await expect(dialog).toBeVisible()
+
+      const childSwitch = dialog.getByRole('switch', { name: 'Make this a child worktree' })
+      await expect(childSwitch).toBeChecked()
+      const parentField = dialog.getByRole('combobox', { name: 'Parent worktree' })
+      await expect(parentField.locator('..')).toContainText('Atlas parent')
+
+      await parentField.click()
+      const parentList = orcaPage.getByRole('listbox', { name: 'Parent worktrees' })
+      await expect(parentList).toBeVisible()
+      await expect(parentList.getByText('Recent', { exact: true })).toBeVisible()
+      const parentOptions = parentList.getByRole('option')
+      await expect.poll(() => parentOptions.count()).toBeGreaterThanOrEqual(2)
+      await expect(parentOptions.nth(0)).toContainText('Beacon parent')
+      await expect(parentOptions.nth(1)).toContainText('Atlas parent')
+      await parentOptions.filter({ hasText: 'Beacon parent' }).click()
+      await expect(parentField.locator('..')).toContainText('Beacon parent')
+
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
+      await nameInput.fill(workspaceName)
+      await orcaPage.screenshot({ path: testInfo.outputPath('child-worktree-dialog.png') })
+
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
+      await expect(createButton).toBeEnabled()
+      await createButton.click()
+      await expect(dialog).toBeHidden({ timeout: 15_000 })
+
+      const parentRow = worktreeRow(orcaPage, parents.alternateId)
+      const childRow = orcaPage
+        .locator('[data-worktree-sidebar]')
+        .getByText(workspaceName, { exact: true })
+        .locator('xpath=ancestor::*[@data-worktree-id][1]')
+      const hideChild = parentRow.getByRole('button', { name: 'Hide 1 child workspace' })
+      await expect(hideChild).toBeVisible({ timeout: 10_000 })
+      await expect(childRow).toBeVisible()
+      await hideChild.click()
+      await expect(childRow).toBeHidden()
+      await parentRow.getByRole('button', { name: 'Show 1 child workspace' }).click()
+      await expect(childRow).toBeVisible()
+      await expect
+        .poll(async () => {
+          const [parentBox, childBox] = await Promise.all([
+            parentRow.boundingBox(),
+            childRow.boundingBox()
+          ])
+          return parentBox && childBox ? childBox.y > parentBox.y : false
+        })
+        .toBe(true)
+      await orcaPage.screenshot({ path: testInfo.outputPath('child-worktree-created.png') })
+      await orcaPage.waitForTimeout(750)
+    } finally {
+      await orcaPage
+        .evaluate(() => window.__store?.getState().closeModal())
         .catch(() => {
           /* page may already be torn down */
         })

@@ -5,7 +5,10 @@ import type { PreloadApi } from '../../../preload/api-types'
 import type { FeatureInteractionState } from '../../../shared/feature-interactions'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
+import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  WORKTREE_CREATE_PARENT_AUTHORITY_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 
 const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
 
@@ -3296,6 +3299,14 @@ describe('web worktree preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+          if (method === 'status.get') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { capabilities: [WORKTREE_CREATE_PARENT_AUTHORITY_RUNTIME_CAPABILITY] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
           if (method === 'worktree.resolvePrBase') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -3341,6 +3352,7 @@ describe('web worktree preload API', () => {
       compareBaseRef: 'refs/remotes/origin/main',
       setupDecision: 'inherit',
       createdWithAgent: 'codex',
+      parentWorktreeId: 'repo-1::/workspace/parent',
       startup: {
         command: "codex 'summarize repo'",
         env: { ORCA_AGENT_MODE: 'direct' },
@@ -3369,12 +3381,18 @@ describe('web worktree preload API', () => {
 
     expect(runtimeCalls).toEqual([
       {
+        method: 'status.get',
+        params: undefined
+      },
+      {
         method: 'worktree.create',
         params: expect.objectContaining({
           repo: 'repo-1',
           baseBranch: TEST_COMMIT_OID,
           compareBaseRef: 'refs/remotes/origin/main',
           createdWithAgent: 'codex',
+          parentWorkspace: 'worktree:repo-1::/workspace/parent',
+          parentWorkspaceCaptureSource: 'manual-action',
           startupCommand: "codex 'summarize repo'",
           startupEnv: { ORCA_AGENT_MODE: 'direct' },
           startupLaunchConfig: {
@@ -3407,6 +3425,124 @@ describe('web worktree preload API', () => {
         }
       }
     ])
+  })
+
+  it('rejects an explicit child parent before calling an older runtime', async () => {
+    const runtimeCalls: string[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push(method)
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { capabilities: [] },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.worktrees.create({
+        repoId: 'repo-1',
+        name: 'child',
+        parentWorktreeId: 'repo-1::/workspace/parent'
+      })
+    ).rejects.toThrow('Child worktree creation requires a newer Orca server')
+    expect(runtimeCalls).toEqual(['status.get'])
+  })
+
+  it('does not create an explicit child against a newly paired server', async () => {
+    const runtimeCalls: { method: string; server: string }[] = []
+    let resolveServerAStatus: ((response: RuntimeRpcResponse<unknown>) => void) | undefined
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        constructor(private readonly offer: { publicKeyB64: string }) {}
+
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, server: this.offer.publicKeyB64 })
+          if (this.offer.publicKeyB64 === 'public-key' && method === 'status.get') {
+            return new Promise((resolve) => {
+              resolveServerAStatus = resolve
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result:
+              method === 'status.get'
+                ? { capabilities: [WORKTREE_CREATE_PARENT_AUTHORITY_RUNTIME_CAPABILITY] }
+                : { worktree: { id: 'repo-1::/workspace/child', path: '/workspace/child' } },
+            _meta: { runtimeId: 'runtime-b' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const create = globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'child',
+      parentWorktreeId: 'repo-1::/workspace/parent'
+    })
+    await vi.waitFor(() => expect(resolveServerAStatus).toBeTypeOf('function'))
+    await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Server B',
+      pairingCode: encodePairingCode({ publicKeyB64: 'server-b-key' })
+    })
+    resolveServerAStatus?.({
+      id: 'server-a-status',
+      ok: true,
+      result: { capabilities: [WORKTREE_CREATE_PARENT_AUTHORITY_RUNTIME_CAPABILITY] },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+
+    await expect(create).rejects.toThrow(
+      'The paired Orca server changed while the request was in progress.'
+    )
+    expect(runtimeCalls).toEqual([{ method: 'status.get', server: 'public-key' }])
+  })
+
+  it('keeps root worktree creation compatible with an older runtime', async () => {
+    const runtimeCalls: string[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push(method)
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { worktree: { id: 'repo-1::/workspace/root', path: '/workspace/root' } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.create({ repoId: 'repo-1', name: 'root' })
+
+    expect(runtimeCalls).toEqual(['worktree.create'])
   })
 
   it('encodes explicit push target clears for runtime worktree updates', async () => {

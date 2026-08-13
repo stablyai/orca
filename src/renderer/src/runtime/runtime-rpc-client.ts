@@ -233,7 +233,8 @@ export function markRuntimeEnvironmentCompatible(environmentId: string): void {
 
 export async function getRuntimeEnvironmentStatus(
   environmentId: string,
-  timeoutMs?: number
+  timeoutMs?: number,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<RuntimeStatus> {
   const trimmed = environmentId.trim()
   const entry: RuntimeCompatibilityCacheEntry = {
@@ -250,7 +251,8 @@ export async function getRuntimeEnvironmentStatus(
     const response = await window.api.runtimeEnvironments.call({
       selector: trimmed,
       method: 'status.get',
-      timeoutMs
+      timeoutMs,
+      expectedEnvironmentPairingRevision
     })
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(
       response as RuntimeRpcResponse<RuntimeStatus>
@@ -323,14 +325,17 @@ export async function assertRuntimeEnvironmentCapability(
   environmentId: string,
   capability: RuntimeCapability,
   message: string,
-  timeoutMs?: number
+  timeoutMs?: number,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<void> {
-  const status = await getRuntimeEnvironmentStatus(environmentId, timeoutMs)
+  const status = await getRuntimeEnvironmentStatus(
+    environmentId,
+    timeoutMs,
+    expectedEnvironmentPairingRevision
+  )
   if (!status.capabilities?.includes(capability)) {
     throw new Error(message)
   }
 }
 
-export function clearRuntimeCompatibilityCacheForTests(): void {
-  clearRuntimeCompatibilityCache()
-}
+export const clearRuntimeCompatibilityCacheForTests = (): void => clearRuntimeCompatibilityCache()

@@ -280,7 +280,8 @@ import {
   LINEAGE_HYDRATION_TIMEOUT_MS,
   __getDetectedWorktreeScanCacheStatsForTests,
   __resetDetectedWorktreeScanCacheForTests,
-  registerWorktreeHandlers
+  registerWorktreeHandlers,
+  resolveSelectedWorktreeCreateRepo
 } from './worktrees'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
 import {
@@ -290,6 +291,80 @@ import {
 } from '../ssh/ssh-provider-authority'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
+
+describe('selected worktree create repository', () => {
+  const localRepo: Repo = {
+    id: 'duplicate',
+    path: '/local/repo',
+    displayName: 'Local',
+    badgeColor: 'blue',
+    addedAt: 1
+  }
+  const sshRepo: Repo = {
+    ...localRepo,
+    path: '/remote/repo',
+    displayName: 'SSH',
+    connectionId: 'ssh-1'
+  }
+
+  it.each([
+    {
+      name: 'local repository after an SSH sibling',
+      repos: [sshRepo, localRepo],
+      authority: { path: localRepo.path, connectionId: null },
+      expected: localRepo
+    },
+    {
+      name: 'SSH repository after a local sibling',
+      repos: [localRepo, sshRepo],
+      authority: { path: sshRepo.path, connectionId: 'ssh-1' },
+      expected: sshRepo
+    }
+  ])('resolves the exact $name', ({ repos, authority, expected }) => {
+    const selectionStore = {
+      getRepos: () => repos,
+      getRepo: () => repos[0]
+    }
+
+    expect(
+      resolveSelectedWorktreeCreateRepo(selectionStore as never, {
+        repoId: 'duplicate',
+        repoAuthority: authority
+      })
+    ).toBe(expected)
+  })
+
+  it('fails closed for stale or duplicate authority', () => {
+    const selectionStore = {
+      getRepos: () => [localRepo, { ...localRepo }],
+      getRepo: () => localRepo
+    }
+
+    expect(() =>
+      resolveSelectedWorktreeCreateRepo(selectionStore as never, {
+        repoId: 'duplicate',
+        repoAuthority: { path: localRepo.path, connectionId: null }
+      })
+    ).toThrow('ambiguous')
+    expect(() =>
+      resolveSelectedWorktreeCreateRepo(selectionStore as never, {
+        repoId: 'duplicate',
+        repoAuthority: { path: '/stale/repo', connectionId: null }
+      })
+    ).toThrow('no longer available')
+  })
+
+  it('preserves the legacy store selection without authority', () => {
+    const selectionStore = {
+      getRepos: () => [localRepo, sshRepo],
+      getRepo: () => sshRepo
+    }
+
+    expect(
+      resolveSelectedWorktreeCreateRepo(selectionStore as never, { repoId: 'duplicate' })
+    ).toBe(sshRepo)
+  })
+})
 
 describe('registerWorktreeHandlers', () => {
   const handlers: HandlerMap = {}

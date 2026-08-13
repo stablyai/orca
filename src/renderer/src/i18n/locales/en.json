@@ -308,6 +308,7 @@
           "localBaseRefRefreshFailedDetailDirty": "The worktree where local {{value0}} is checked out has uncommitted changes. Commit, stash, or discard those changes, then update local {{value0}} manually.",
           "localBaseRefRefreshFailedDetailNotFastForward": "Local {{value0}} does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.",
           "localBaseRefRefreshFailedDetailError": "Git returned an error while updating local {{value0}}. Check the repo for locked refs or unusual worktree state, then update local {{value0}} manually.",
+          "worktreeCreatedWithWarning": "Worktree created with a warning",
           "0216895fb5": "Failed to delete branch",
           "c6cf133786": "This workspace is no longer available.",
           "19db0085fb": "Local branch deleted",
@@ -12391,6 +12392,21 @@
             "browse": "Browse projects",
             "listLabel": "Projects",
             "noProjects": "No projects yet."
+          },
+          "ChildWorktreeParentField": {
+            "all": "All worktrees",
+            "browse": "Browse parent worktrees",
+            "current": "Current",
+            "description": "Group this worktree under a parent.",
+            "empty": "No worktrees match your search.",
+            "listLabel": "Parent worktrees",
+            "parentLabel": "Parent worktree",
+            "placeholder": "Choose a parent worktree",
+            "recent": "Recent",
+            "selectedParent": "Selected parent: {{value0}} on {{value1}}",
+            "toggleLabel": "Make this a child worktree",
+            "unavailable": "No eligible parent worktrees on this project and host.",
+            "updateRequired": "Update the connected Orca server to choose a child worktree parent."
           },
           "RunTargetCombobox": {
             "listLabel": "Run targets",

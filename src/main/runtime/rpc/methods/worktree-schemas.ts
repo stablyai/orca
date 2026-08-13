@@ -103,6 +103,12 @@ export const WorktreeCreate = z
       .unknown()
       .transform((v) => (typeof v === 'string' ? v : ''))
       .pipe(z.string().min(1, 'Missing repo selector')),
+    repoAuthority: z
+      .object({
+        path: z.string().min(1).max(32_768),
+        connectionId: z.string().max(1_024).nullable()
+      })
+      .optional(),
     name: OptionalString,
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
@@ -146,6 +152,7 @@ export const WorktreeCreate = z
     runHooks: OptionalBoolean,
     activate: OptionalBoolean,
     parentWorkspace: OptionalString,
+    parentWorkspaceCaptureSource: z.literal('manual-action').optional(),
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,

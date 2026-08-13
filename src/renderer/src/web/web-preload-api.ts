@@ -100,6 +100,10 @@ import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
 import {
+  WORKTREE_CREATE_PARENT_AUTHORITY_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_PARENT_AUTHORITY_UPDATE_REQUIRED_MESSAGE
+} from '../../../shared/protocol-version'
+import {
   findKeybindingConflicts,
   formatKeybindingList,
   getKeybindingPlatform,
@@ -154,6 +158,7 @@ import {
   parseRuntimeNativeChatTurnLifecycle
 } from '@/components/native-chat/native-chat-runtime-contract'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -1775,50 +1780,70 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
+      const runtimeSession = captureWebWorktreeCreateRuntimeSession()
+      if (args.parentWorktreeId) {
+        const status = await runtimeSession.callRuntimeResult<RuntimeStatus>(
+          'status.get',
+          undefined,
+          15_000
+        )
+        if (!status.capabilities?.includes(WORKTREE_CREATE_PARENT_AUTHORITY_RUNTIME_CAPABILITY)) {
+          throw new Error(WORKTREE_CREATE_PARENT_AUTHORITY_UPDATE_REQUIRED_MESSAGE)
+        }
+      }
       invalidateRuntimeWorktreeCaches()
-      const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
-        repo: args.repoId,
-        name: args.name,
-        baseBranch: args.baseBranch,
-        compareBaseRef: args.compareBaseRef,
-        branchNameOverride: args.branchNameOverride,
-        linkedIssue: args.linkedIssue,
-        linkedPR: args.linkedPR,
-        linkedLinearIssue: args.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabIssue: args.linkedGitLabIssue,
-        linkedGitLabMR: args.linkedGitLabMR,
-        linkedBitbucketPR: args.linkedBitbucketPR,
-        linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
-        linkedGiteaPR: args.linkedGiteaPR,
-        displayName: args.displayName,
-        sparseCheckout: args.sparseCheckout,
-        pushTarget: args.pushTarget,
-        setupDecision: args.setupDecision,
-        createdWithAgent: args.createdWithAgent,
-        pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
-        ...(args.startup
-          ? {
-              startupCommand: args.startup.command,
-              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
-              ...(args.startup.launchConfig
-                ? { startupLaunchConfig: args.startup.launchConfig }
-                : {}),
-              ...(args.startup.startupCommandDelivery
-                ? { startupCommandDelivery: args.startup.startupCommandDelivery }
-                : {}),
-              activate: true
-            }
-          : {}),
-        parentWorkspace: args.parentWorkspace,
-        workspaceStatus: args.workspaceStatus,
-        manualOrder: args.manualOrder,
-        automationProvenanceRequest: args.automationProvenanceRequest
-      })
+      const result = await runtimeSession.callRuntimeResult<{ worktree: Worktree }>(
+        'worktree.create',
+        {
+          repo: args.repoId,
+          ...(args.repoAuthority ? { repoAuthority: args.repoAuthority } : {}),
+          name: args.name,
+          baseBranch: args.baseBranch,
+          compareBaseRef: args.compareBaseRef,
+          branchNameOverride: args.branchNameOverride,
+          linkedIssue: args.linkedIssue,
+          linkedPR: args.linkedPR,
+          linkedLinearIssue: args.linkedLinearIssue,
+          linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
+          linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
+          linkedGitLabIssue: args.linkedGitLabIssue,
+          linkedGitLabMR: args.linkedGitLabMR,
+          linkedBitbucketPR: args.linkedBitbucketPR,
+          linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
+          linkedGiteaPR: args.linkedGiteaPR,
+          displayName: args.displayName,
+          sparseCheckout: args.sparseCheckout,
+          pushTarget: args.pushTarget,
+          setupDecision: args.setupDecision,
+          createdWithAgent: args.createdWithAgent,
+          pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+          ...(args.startup
+            ? {
+                startupCommand: args.startup.command,
+                ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+                ...(args.startup.launchConfig
+                  ? { startupLaunchConfig: args.startup.launchConfig }
+                  : {}),
+                ...(args.startup.startupCommandDelivery
+                  ? { startupCommandDelivery: args.startup.startupCommandDelivery }
+                  : {}),
+                activate: true
+              }
+            : {}),
+          parentWorkspace: args.parentWorktreeId
+            ? worktreeWorkspaceKey(args.parentWorktreeId)
+            : args.parentWorkspace,
+          ...(args.parentWorktreeId
+            ? { parentWorkspaceCaptureSource: 'manual-action' as const }
+            : {}),
+          workspaceStatus: args.workspaceStatus,
+          manualOrder: args.manualOrder,
+          automationProvenanceRequest: args.automationProvenanceRequest
+        }
+      )
       return {
-        ...owned.result,
-        worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
+        ...result,
+        worktree: withRuntimeWorktreeOwner(result.worktree, runtimeSession.hostId)
       }
     },
     // Why: the runtime create path emits no two-phase progress, so the panel falls back to an indeterminate spinner.
@@ -3494,6 +3519,40 @@ function withRuntimeWorktreeOwner<T extends Worktree>(worktree: T, hostId: Execu
     return worktree
   }
   return { ...worktree, runtimeOwnerEnvironmentId: runtimeOwner.environmentId }
+}
+
+function captureWebWorktreeCreateRuntimeSession(): {
+  callRuntimeResult: WebRuntimeResultCaller
+  hostId: ExecutionHostId
+} {
+  const environment = requireActiveEnvironment()
+  const client = getClientForEnvironment(environment)
+  const assertCurrent = (): void => {
+    if (activeClient !== client || requireActiveEnvironmentOrNull()?.id !== environment.id) {
+      throw new Error('The paired Orca server changed while the request was in progress.')
+    }
+  }
+  const callBoundRuntimeResult: WebRuntimeResultCaller = async <TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs?: number
+  ): Promise<TResult> => {
+    assertCurrent()
+    const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
+      assertCurrent()
+      return client.call(method, params, { timeoutMs })
+    })
+    assertCurrent()
+    updateEnvironmentFromResponse(environment, response)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result as TResult
+  }
+  return {
+    callRuntimeResult: callBoundRuntimeResult,
+    hostId: toRuntimeExecutionHostId(environment.id)
+  }
 }
 
 function captureWebFileMutationSession(): {

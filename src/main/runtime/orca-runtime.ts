@@ -463,6 +463,10 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import {
+  resolveSelectedRepositoryAuthority,
+  type SelectedRepositoryAuthority
+} from '../../shared/selected-repository-authority'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
@@ -2482,6 +2486,7 @@ type TerminalWorkspaceLaunchScope = {
 
 type WorktreeLineageInput = {
   parentWorkspace?: string
+  parentWorkspaceCaptureSource?: 'manual-action'
   envParentWorkspace?: string
   parentWorktree?: string
   cwdParentWorktree?: string
@@ -19109,8 +19114,8 @@ export class OrcaRuntimeService {
     return this.store.getRepo(repo.id) ?? repo
   }
 
-  async showRepo(repoSelector: string): Promise<Repo> {
-    return await this.resolveRepoSelector(repoSelector)
+  async showRepo(repoSelector: string, repoAuthority?: SelectedRepositoryAuthority): Promise<Repo> {
+    return await this.resolveRepoSelector(repoSelector, repoAuthority)
   }
 
   async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
@@ -21450,8 +21455,9 @@ export class OrcaRuntimeService {
   }
 
   private recordCreatedWorktreeLineage(
-    worktree: Pick<Worktree, 'id' | 'instanceId'>,
-    lineageResolution: WorktreeLineageResolution
+    worktree: Worktree,
+    lineageResolution: WorktreeLineageResolution,
+    activeWorktreePaths: readonly string[] | null
   ): {
     lineage: WorktreeLineage | null
     workspaceLineage: WorkspaceLineage | null
@@ -21462,6 +21468,43 @@ export class OrcaRuntimeService {
     let workspaceLineage: WorkspaceLineage | null = null
     if (lineageResolution.kind !== 'lineage') {
       return { lineage, workspaceLineage, warnings }
+    }
+
+    if (
+      lineageResolution.parent.type === 'worktree' &&
+      lineageResolution.capture.confidence === 'explicit'
+    ) {
+      try {
+        this.validateCreatedWorktreeLineageParent(
+          worktree,
+          lineageResolution.parent.worktree,
+          lineageResolution.parent.instanceId,
+          activeWorktreePaths
+        )
+      } catch (error) {
+        if (!(error instanceof RuntimeLineageError)) {
+          throw error
+        }
+        warnings.push({
+          code:
+            error.code === 'LINEAGE_PARENT_INSTANCE_STALE'
+              ? 'LINEAGE_PARENT_INSTANCE_STALE'
+              : error.code === 'LINEAGE_PARENT_CONTEXT_MISSING'
+                ? 'LINEAGE_PARENT_CONTEXT_MISSING'
+                : 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          message:
+            error.code === 'LINEAGE_PARENT_CONTEXT_MISSING'
+              ? 'Worktree created, but Orca could not verify the selected parent after creation. It was left at the root.'
+              : 'Worktree created, but Orca could not record lineage because the selected parent changed during creation.',
+          details: {
+            reason: error.code,
+            parentWorkspaceKey: lineageResolution.parent.workspaceKey,
+            parentWorktreeId: lineageResolution.parent.worktree.id,
+            validationMessage: error.message
+          }
+        })
+        return { lineage, workspaceLineage, warnings }
+      }
     }
 
     const childInstanceId = worktree.instanceId
@@ -21794,6 +21837,7 @@ export class OrcaRuntimeService {
 
   async createManagedWorktree(args: {
     repoSelector: string
+    repoAuthority?: SelectedRepositoryAuthority
     name: string
     baseBranch?: string
     compareBaseRef?: string
@@ -21839,7 +21883,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
 
-    const repo = await this.resolveRepoSelector(args.repoSelector)
+    const repo = await this.resolveRepoSelector(args.repoSelector, args.repoAuthority)
     const createSettings = this.store.getSettings()
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
     const requestedAgentEnabled =
@@ -22018,6 +22062,7 @@ export class OrcaRuntimeService {
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
+    await this.validateWorktreeCreateLineageAuthority(repo, lineageResolution)
     if (repo.connectionId) {
       const result = await this.createManagedRemoteWorktree(repo, {
         ...args,
@@ -22027,7 +22072,25 @@ export class OrcaRuntimeService {
         ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
         ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
       })
-      const recordedLineage = this.recordCreatedWorktreeLineage(result.worktree, lineageResolution)
+      let postCreateScan: RuntimeWorktreeScanResult | undefined
+      if (
+        lineageResolution.kind === 'lineage' &&
+        lineageResolution.parent.type === 'worktree' &&
+        lineageResolution.capture.confidence === 'explicit'
+      ) {
+        postCreateScan = await this.listRepoWorktreesForResolutionUncached(repo, undefined)
+      }
+      const recordedLineage = this.recordCreatedWorktreeLineage(
+        result.worktree,
+        lineageResolution,
+        postCreateScan === undefined
+          ? []
+          : postCreateScan.ok
+            ? postCreateScan.worktrees
+                .filter((worktree) => !worktree.prunable)
+                .map((worktree) => worktree.path)
+            : null
+      )
       this.emitWorktreeLifecycle({
         kind: 'created',
         worktreeId: result.worktree.id,
@@ -22534,11 +22597,32 @@ export class OrcaRuntimeService {
       ...mergeWorktree(repo.id, created, meta),
       hostId: meta.hostId ?? getRepoExecutionHostId(repo)
     }
+    let postCreateLineageScan: RuntimeWorktreeScanResult | undefined
+    if (
+      lineageResolution.kind === 'lineage' &&
+      lineageResolution.parent.type === 'worktree' &&
+      lineageResolution.capture.confidence === 'explicit'
+    ) {
+      postCreateLineageScan = await this.listRepoWorktreesForResolutionUncached(
+        repo,
+        resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+      )
+    }
     const {
       lineage,
       workspaceLineage,
       warnings: lineageWarnings
-    } = this.recordCreatedWorktreeLineage(worktree, lineageResolution)
+    } = this.recordCreatedWorktreeLineage(
+      worktree,
+      lineageResolution,
+      postCreateLineageScan === undefined
+        ? []
+        : postCreateLineageScan.ok
+          ? postCreateLineageScan.worktrees
+              .filter((candidate) => !candidate.prunable)
+              .map((candidate) => candidate.path)
+          : null
+    )
 
     const symlinkPaths = repo.symlinkPaths ?? []
     if (symlinkPaths.length > 0) {
@@ -28612,7 +28696,7 @@ export class OrcaRuntimeService {
     }
   }
 
-  private validateLineageParent(child: ResolvedWorktree, parent: ResolvedWorktree): void {
+  private validateLineageParent(child: Worktree, parent: Worktree): void {
     const childWorktreeId = child.id
     const parentWorktreeId = parent.id
     if (childWorktreeId === parentWorktreeId) {
@@ -28625,14 +28709,12 @@ export class OrcaRuntimeService {
       )
     }
     const instanceByWorktreeId = new Map(
-      this.resolvedWorktreeCache?.worktrees.map((worktree) => [
-        worktree.id,
-        worktree.instanceId
-      ]) ?? [
-        [child.id, child.instanceId],
-        [parent.id, parent.instanceId]
-      ]
+      this.resolvedWorktreeCache?.worktrees.map(
+        (worktree) => [worktree.id, worktree.instanceId] as const
+      ) ?? []
     )
+    instanceByWorktreeId.set(child.id, child.instanceId)
+    instanceByWorktreeId.set(parent.id, parent.instanceId)
     let cursor: string | undefined = parentWorktreeId
     const visited = new Set<string>([childWorktreeId])
     while (cursor) {
@@ -28656,6 +28738,123 @@ export class OrcaRuntimeService {
         break
       }
       cursor = lineage.parentWorktreeId
+    }
+  }
+
+  private validateCreatedWorktreeLineageParent(
+    child: Worktree,
+    parent: ResolvedWorktree,
+    parentInstanceId: string | null,
+    activeWorktreePaths: readonly string[] | null
+  ): void {
+    const parentMeta = this.store?.getWorktreeMeta(parent.id)
+    const currentParent: Worktree = {
+      ...parent,
+      ...(parentMeta?.projectId !== undefined ? { projectId: parentMeta.projectId } : {}),
+      ...(parentMeta?.hostId !== undefined ? { hostId: parentMeta.hostId } : {}),
+      ...(parentMeta?.instanceId !== undefined ? { instanceId: parentMeta.instanceId } : {}),
+      isArchived: parentMeta?.isArchived ?? parent.isArchived
+    }
+    if (currentParent.isArchived) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'Archived worktrees cannot be used as parents.'
+      )
+    }
+    if (activeWorktreePaths === null) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_MISSING',
+        'The authoritative worktree scan failed after creation.'
+      )
+    }
+    if (!activeWorktreePaths.some((pathValue) => runtimePathsEqual(pathValue, parent.path))) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_NOT_FOUND',
+        'Parent worktree is no longer active.'
+      )
+    }
+    this.validateLineageParent(child, currentParent)
+    if (parentInstanceId && parentMeta?.instanceId !== parentInstanceId) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_INSTANCE_STALE',
+        'Parent worktree identity changed during creation.'
+      )
+    }
+  }
+
+  private validateWorktreeCreateParentBoundary(repo: Repo, parent: ResolvedWorktree): void {
+    const parentMeta = this.store?.getWorktreeMeta(parent.id)
+    if (parent.isArchived || parentMeta?.isArchived) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'Archived worktrees cannot be used as parents.'
+      )
+    }
+
+    const targetBoundary = getProjectHostSetupWorktreeMeta(
+      this.store?.getProjectHostSetups?.() ?? [],
+      repo
+    )
+    const parentProjectId = parentMeta?.projectId ?? parent.projectId ?? targetBoundary.projectId
+    const parentHostId = parentMeta?.hostId ?? parent.hostId ?? targetBoundary.hostId
+    if (
+      parent.repoId !== repo.id ||
+      parentProjectId !== targetBoundary.projectId ||
+      parentHostId !== targetBoundary.hostId
+    ) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'Parent worktree must belong to the same repository, execution host, and project.'
+      )
+    }
+  }
+
+  private validateExplicitWorktreeCreateParentIdentity(parent: ResolvedWorktree): void {
+    const parentMeta = this.store?.getWorktreeMeta(parent.id)
+    if (!parentMeta) {
+      throw new RuntimeLineageError('LINEAGE_PARENT_NOT_FOUND', 'Parent worktree was not found.')
+    }
+    if (
+      !parent.instanceId ||
+      !parentMeta.instanceId ||
+      parent.instanceId !== parentMeta.instanceId
+    ) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_NOT_FOUND',
+        'Parent worktree identity is stale.'
+      )
+    }
+  }
+
+  private async validateWorktreeCreateLineageAuthority(
+    repo: Repo,
+    lineageResolution: WorktreeLineageResolution
+  ): Promise<void> {
+    if (lineageResolution.kind !== 'lineage' || lineageResolution.parent.type !== 'worktree') {
+      return
+    }
+
+    const parent = lineageResolution.parent.worktree
+    this.validateWorktreeCreateParentBoundary(repo, parent)
+    if (lineageResolution.capture.confidence !== 'explicit') {
+      return
+    }
+
+    this.validateExplicitWorktreeCreateParentIdentity(parent)
+    const projectRuntime = repo.connectionId
+      ? undefined
+      : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+    const scan = await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
+    const parentIsActive =
+      scan.ok &&
+      scan.worktrees.some(
+        (worktree) => !worktree.prunable && runtimePathsEqual(worktree.path, parent.path)
+      )
+    if (!parentIsActive) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_NOT_FOUND',
+        'Parent worktree is no longer active.'
+      )
     }
   }
 
@@ -28694,11 +28893,15 @@ export class OrcaRuntimeService {
 
     if (input.parentWorkspace) {
       try {
+        const fromManualAction = input.parentWorkspaceCaptureSource === 'manual-action'
         return {
           kind: 'lineage',
           parent: await this.resolveWorkspaceParentSelector(input.parentWorkspace),
-          origin: 'cli',
-          capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+          origin: fromManualAction ? 'manual' : 'cli',
+          capture: {
+            source: fromManualAction ? 'manual-action' : 'explicit-cli-flag',
+            confidence: 'explicit'
+          }
         }
       } catch (err) {
         throw new RuntimeLineageError(
@@ -29015,11 +29218,24 @@ export class OrcaRuntimeService {
     )
   }
 
-  private async resolveRepoSelector(selector: string): Promise<Repo> {
+  private async resolveRepoSelector(
+    selector: string,
+    authority?: SelectedRepositoryAuthority
+  ): Promise<Repo> {
     if (!this.store) {
       throw new Error('repo_not_found')
     }
     const candidates = this.selectReposBySelector(selector)
+
+    const authorityResolution = resolveSelectedRepositoryAuthority(candidates, authority)
+    if (authorityResolution.status === 'resolved') {
+      return authorityResolution.candidate
+    }
+    if (authorityResolution.status === 'rejected') {
+      throw new Error(
+        authorityResolution.reason === 'ambiguous' ? 'selector_ambiguous' : 'repo_not_found'
+      )
+    }
 
     if (candidates.length === 1) {
       return candidates[0]

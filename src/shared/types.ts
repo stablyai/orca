@@ -54,6 +54,7 @@ import type { TaskSourceContext } from './task-source-context'
 import type { SetupRunnerShell } from './setup-runner-command'
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import type { ComputerAwakeMode } from './computer-awake-mode'
+import type { SelectedRepositoryAuthority } from './selected-repository-authority'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -2285,6 +2286,8 @@ export type SparsePreset = {
 
 export type CreateWorktreeArgs = {
   repoId: string
+  /** Exact physical repository selected by the create surface. Optional for older clients. */
+  repoAuthority?: SelectedRepositoryAuthority
   name: string
   /** Optional user-facing label to persist separately from the git-safe
    *  branch/path seed. Used when a workspace is created from a GitHub or
@@ -2316,6 +2319,8 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** Explicit worktree parent selected in the desktop create dialog. */
+  parentWorktreeId?: string
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Set when the renderer knows this auto-generated branch should be renamed

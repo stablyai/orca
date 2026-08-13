@@ -1,4 +1,5 @@
 import type {
+  CreateWorktreeArgs,
   CreateSparseCheckoutRequest,
   GitPushTarget,
   SetupDecision,
@@ -11,6 +12,7 @@ import type {
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
@@ -30,6 +32,10 @@ export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
  */
 export type WorktreeCreationRequest = {
   repoId: string
+  repoAuthority?: CreateWorktreeArgs['repoAuthority']
+  repoExecutionHostId?: ExecutionHostId
+  /** Worktree parent selected by the create surface. Null explicitly creates a root workspace. */
+  parentWorktreeId?: string | null
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null

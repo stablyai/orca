@@ -2,6 +2,7 @@
 import type { StateCreator, StoreApi } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  CreateWorktreeResult,
   DetectedWorktreeListResult,
   LocalBaseRefRefreshResult,
   ForceDeleteWorktreeBranchResult,
@@ -52,6 +53,8 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_PARENT_AUTHORITY_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_PARENT_AUTHORITY_UPDATE_REQUIRED_MESSAGE,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
@@ -95,6 +98,7 @@ import {
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
 import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
+import { captureRuntimeEnvironmentRequestRevision } from '../../runtime/runtime-environment-revision'
 import {
   folderWorkspaceKey,
   getActiveSidebarWorkspaceId,
@@ -103,6 +107,10 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import {
+  projectResolvedWorktreeLineage,
+  sharesResolvedWorktreeLineageBoundary
+} from '../../../../shared/resolved-worktree-lineage'
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
@@ -318,6 +326,94 @@ function showLocalBaseRefRefreshToast(
       dismissible: true
     }
   )
+}
+
+function showWorktreeCreateWarningToast(
+  result: Pick<CreateWorktreeResult, 'warning' | 'warnings'>,
+  worktreeId: string
+): void {
+  const messages = [
+    result.warning,
+    ...(result.warnings ?? []).map(({ message }) => message)
+  ].filter(
+    (message, index, all): message is string => Boolean(message) && all.indexOf(message) === index
+  )
+  if (messages.length === 0) {
+    return
+  }
+  toast.warning(
+    translate(
+      'auto.store.slices.worktrees.worktreeCreatedWithWarning',
+      'Worktree created with a warning'
+    ),
+    {
+      id: `worktree-create-warning:${worktreeId}`,
+      description: messages.join(' '),
+      duration: Infinity,
+      dismissible: true
+    }
+  )
+}
+
+function getValidatedCreatedWorktreeLineage(
+  worktrees: readonly Worktree[],
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  createdWorktree: Worktree,
+  returnedLineage: WorktreeLineage | null | undefined
+): WorktreeLineage | null {
+  if (!returnedLineage) {
+    return null
+  }
+  const candidateLineageById = {
+    ...lineageById,
+    [createdWorktree.id]: returnedLineage
+  }
+  return (
+    projectResolvedWorktreeLineage(worktrees, candidateLineageById).find(
+      (worktree) => worktree.id === createdWorktree.id
+    )?.lineage ?? null
+  )
+}
+
+function getValidatedReturnedWorkspaceLineage(
+  worktrees: readonly Worktree[],
+  createdWorktree: Worktree,
+  returnedWorkspaceLineage: WorkspaceLineage | null | undefined,
+  validatedWorktreeLineage: WorktreeLineage | null
+): WorkspaceLineage | null {
+  if (!returnedWorkspaceLineage) {
+    return null
+  }
+  const childScope = parseWorkspaceKey(returnedWorkspaceLineage.childWorkspaceKey)
+  const parentScope = parseWorkspaceKey(returnedWorkspaceLineage.parentWorkspaceKey)
+  if (
+    childScope?.type !== 'worktree' ||
+    childScope.worktreeId !== createdWorktree.id ||
+    returnedWorkspaceLineage.childInstanceId !== createdWorktree.instanceId
+  ) {
+    return null
+  }
+  if (validatedWorktreeLineage) {
+    return parentScope?.type === 'worktree' &&
+      parentScope.worktreeId === validatedWorktreeLineage.parentWorktreeId &&
+      returnedWorkspaceLineage.parentInstanceId ===
+        validatedWorktreeLineage.parentWorktreeInstanceId
+      ? returnedWorkspaceLineage
+      : null
+  }
+  if (parentScope?.type !== 'worktree') {
+    return returnedWorkspaceLineage
+  }
+  const child = worktrees.find((worktree) => worktree.id === createdWorktree.id)
+  const parent = worktrees.find((worktree) => worktree.id === parentScope.worktreeId)
+  return child &&
+    parent &&
+    child.id !== parent.id &&
+    sharesResolvedWorktreeLineageBoundary(child, parent) &&
+    child.instanceId === returnedWorkspaceLineage.childInstanceId &&
+    parent.instanceId === returnedWorkspaceLineage.parentInstanceId
+    ? returnedWorkspaceLineage
+    : null
 }
 
 function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
@@ -3908,8 +4004,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     options
   ) => {
     const automationProvenanceRequest = options?.automationProvenanceRequest
+    const repoAuthority = options?.repoAuthority
+    const repoExecutionHostId = options?.repoExecutionHostId
     const linkedWorkItem = options?.linkedWorkItem
     const linkedTaskSourceContext = options?.linkedTaskSourceContext
+    const parentWorktreeId = options?.parentWorktreeId
     const startupDraft = options?.startupDraft
     try {
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
@@ -3923,11 +4022,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
           const activeScope = parseWorkspaceKey(get().activeWorkspaceKey ?? '')
           const parentWorkspace =
-            activeScope?.type === 'folder'
-              ? folderWorkspaceKey(activeScope.folderWorkspaceId)
-              : undefined
+            parentWorktreeId !== undefined
+              ? undefined
+              : activeScope?.type === 'folder'
+                ? folderWorkspaceKey(activeScope.folderWorkspaceId)
+                : undefined
+          const runtimeParentWorkspace =
+            typeof parentWorktreeId === 'string'
+              ? worktreeWorkspaceKey(parentWorktreeId)
+              : parentWorkspace
           const createArgs = {
             repoId,
+            ...(repoAuthority ? { repoAuthority } : {}),
             name: candidateName,
             baseBranch,
             ...(compareBaseRef ? { compareBaseRef } : {}),
@@ -3951,6 +4057,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               ? { linkedLinearIssueOrganizationUrlKey }
               : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
+            ...(typeof parentWorktreeId === 'string' ? { parentWorktreeId } : {}),
             ...(parentWorkspace ? { parentWorkspace } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
@@ -3964,7 +4071,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(creationId ? { creationId } : {}),
             ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
           }
-          const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+          const target = getActiveRuntimeTarget(
+            settingsForRepoOwner(get(), repoId, repoExecutionHostId, true)
+          )
+          const expectedEnvironmentPairingRevision =
+            target.kind === 'environment'
+              ? captureRuntimeEnvironmentRequestRevision(target.environmentId)
+              : undefined
           if (
             target.kind === 'environment' &&
             (linkedWorkItem?.provider === 'jira' || linkedTaskSourceContext?.provider === 'jira')
@@ -3972,7 +4085,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             await assertRuntimeEnvironmentCapability(
               target.environmentId,
               WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-              'Update the remote runtime to link Jira'
+              'Update the remote runtime to link Jira',
+              undefined,
+              expectedEnvironmentPairingRevision
+            )
+          }
+          if (target.kind === 'environment' && typeof parentWorktreeId === 'string') {
+            await assertRuntimeEnvironmentCapability(
+              target.environmentId,
+              WORKTREE_CREATE_PARENT_AUTHORITY_RUNTIME_CAPABILITY,
+              WORKTREE_CREATE_PARENT_AUTHORITY_UPDATE_REQUIRED_MESSAGE,
+              undefined,
+              expectedEnvironmentPairingRevision
             )
           }
           const result =
@@ -3983,6 +4107,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                   'worktree.create',
                   {
                     repo: repoId,
+                    ...(repoAuthority ? { repoAuthority } : {}),
                     name: candidateName,
                     baseBranch,
                     ...(compareBaseRef ? { compareBaseRef } : {}),
@@ -4008,7 +4133,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                       ? { linkedLinearIssueOrganizationUrlKey }
                       : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
-                    ...(parentWorkspace ? { parentWorkspace } : {}),
+                    ...(runtimeParentWorkspace
+                      ? {
+                          parentWorkspace: runtimeParentWorkspace,
+                          ...(typeof parentWorktreeId === 'string'
+                            ? { parentWorkspaceCaptureSource: 'manual-action' as const }
+                            : {})
+                        }
+                      : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
                     ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
@@ -4033,38 +4165,120 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                         }
                       : {})
                   },
-                  { timeoutMs: 10 * 60_000 }
+                  { timeoutMs: 10 * 60_000, expectedEnvironmentPairingRevision }
                 )
           // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
           set((s) => {
-            const hostId = repoHostId(s, repoId)
-            const createdWorktree = withRepoHostOwnership(
-              result.worktree,
+            const hostId = repoHostId(s, repoId, repoExecutionHostId)
+            const returnedLineage = result.lineage ?? result.worktree.lineage
+            const returnedWorkspaceLineage =
+              result.workspaceLineage ?? result.worktree.workspaceLineage
+            const unparentedCreatedWorktree = withRepoHostOwnership(
+              returnedLineage || returnedWorkspaceLineage
+                ? {
+                    ...result.worktree,
+                    ...(returnedLineage
+                      ? {
+                          parentWorktreeId: null,
+                          childWorktreeIds: [],
+                          lineage: null
+                        }
+                      : {}),
+                    ...(returnedWorkspaceLineage ? { workspaceLineage: null } : {})
+                  }
+                : result.worktree,
               hostId,
               getProjectHostSetupForRepoHost(s, repoId, hostId)
             )
             const current = s.worktreesByRepo[repoId] ?? []
-            const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
-            const nextWorktrees = alreadyPresent
+            const hostMatchOptions = worktreeHostMatchOptions(s, repoId, hostId)
+            const matchesCreateHost = (worktree: Worktree): boolean =>
+              worktreeMatchesHost(worktree, hostId, hostMatchOptions)
+            const alreadyPresent = current.some(
+              (worktree) =>
+                worktree.id === unparentedCreatedWorktree.id && matchesCreateHost(worktree)
+            )
+            const unparentedWorktrees = alreadyPresent
               ? current.map((worktree) =>
-                  worktree.id === createdWorktree.id
-                    ? { ...worktree, ...createdWorktree }
+                  worktree.id === unparentedCreatedWorktree.id && matchesCreateHost(worktree)
+                    ? { ...worktree, ...unparentedCreatedWorktree }
                     : worktree
                 )
-              : [...current, createdWorktree]
+              : [...current, unparentedCreatedWorktree]
+            const createHostWorktrees = unparentedWorktrees.filter(matchesCreateHost)
+            const validatedLineage = getValidatedCreatedWorktreeLineage(
+              createHostWorktrees,
+              s.worktreeLineageById,
+              unparentedCreatedWorktree,
+              returnedLineage
+            )
+            const validatedWorkspaceLineage = returnedLineage
+              ? validatedLineage
+                ? getValidatedReturnedWorkspaceLineage(
+                    createHostWorktrees,
+                    unparentedCreatedWorktree,
+                    returnedWorkspaceLineage,
+                    validatedLineage
+                  )
+                : null
+              : getValidatedReturnedWorkspaceLineage(
+                  createHostWorktrees,
+                  unparentedCreatedWorktree,
+                  returnedWorkspaceLineage,
+                  null
+                )
+            const createdWorktree = {
+              ...unparentedCreatedWorktree,
+              ...(validatedLineage
+                ? {
+                    parentWorktreeId: validatedLineage.parentWorktreeId,
+                    lineage: validatedLineage
+                  }
+                : {}),
+              ...(returnedWorkspaceLineage ? { workspaceLineage: validatedWorkspaceLineage } : {})
+            }
+            const nextWorktrees = unparentedWorktrees.map((worktree) => {
+              if (worktree.id === createdWorktree.id && matchesCreateHost(worktree)) {
+                return createdWorktree
+              }
+              if (
+                validatedLineage?.parentWorktreeId !== worktree.id ||
+                !matchesCreateHost(worktree)
+              ) {
+                return worktree
+              }
+              return {
+                ...worktree,
+                childWorktreeIds: Array.from(
+                  new Set([
+                    ...((worktree as WorktreeWithLineage).childWorktreeIds ?? []),
+                    createdWorktree.id
+                  ])
+                )
+              }
+            })
+            const nextWorktreeLineageById = { ...s.worktreeLineageById }
+            if (validatedLineage) {
+              nextWorktreeLineageById[validatedLineage.worktreeId] = validatedLineage
+            } else if (returnedLineage) {
+              delete nextWorktreeLineageById[unparentedCreatedWorktree.id]
+            }
+            const nextWorkspaceLineageByChildKey = { ...s.workspaceLineageByChildKey }
+            if (validatedWorkspaceLineage) {
+              nextWorkspaceLineageByChildKey[validatedWorkspaceLineage.childWorkspaceKey] =
+                validatedWorkspaceLineage
+            } else if (returnedLineage || returnedWorkspaceLineage) {
+              delete nextWorkspaceLineageByChildKey[
+                worktreeWorkspaceKey(unparentedCreatedWorktree.id)
+              ]
+            }
             return {
               worktreesByRepo: {
                 ...s.worktreesByRepo,
                 [repoId]: nextWorktrees
               },
-              ...(result.workspaceLineage
-                ? {
-                    workspaceLineageByChildKey: {
-                      ...s.workspaceLineageByChildKey,
-                      [result.workspaceLineage.childWorkspaceKey]: result.workspaceLineage
-                    }
-                  }
-                : {}),
+              worktreeLineageById: nextWorktreeLineageById,
+              workspaceLineageByChildKey: nextWorkspaceLineageByChildKey,
               ...(result.initialBaseStatus
                 ? {
                     baseStatusByWorktreeId: {
@@ -4077,6 +4291,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               sortEpoch: s.sortEpoch + 1
             }
           })
+          showWorktreeCreateWarningToast(result, result.worktree.id)
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)

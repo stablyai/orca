@@ -135,11 +135,20 @@ async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          ...(preparedRequest.repoAuthority
+            ? { repoAuthority: preparedRequest.repoAuthority }
+            : {}),
+          ...(preparedRequest.repoExecutionHostId
+            ? { repoExecutionHostId: preparedRequest.repoExecutionHostId }
+            : {}),
           ...(preparedRequest.linkedWorkItem !== undefined
             ? { linkedWorkItem: preparedRequest.linkedWorkItem }
             : {}),
           ...(preparedRequest.linkedTaskSourceContext !== undefined
             ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
+            : {}),
+          ...(preparedRequest.parentWorktreeId !== undefined
+            ? { parentWorktreeId: preparedRequest.parentWorktreeId }
             : {}),
           // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
           ...(!backendStartup && preparedRequest.agent && preparedRequest.launchDraftPrompt

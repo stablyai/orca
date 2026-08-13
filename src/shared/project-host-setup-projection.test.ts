@@ -468,6 +468,33 @@ describe('project host setup projection', () => {
       projectHostSetupId: 'remote-repo'
     })
   })
+
+  it('selects setup metadata by execution host when repo ids overlap', () => {
+    const targetRepo = repo({
+      id: 'shared-repo-id',
+      path: '/srv/orca',
+      displayName: 'orca',
+      connectionId: 'builder'
+    })
+    const targetSetup = {
+      ...projectHostSetupProjectionFromRepos([targetRepo]).setups[0],
+      id: 'ssh-setup',
+      projectId: 'ssh-project'
+    }
+    const siblingSetup = {
+      ...targetSetup,
+      id: 'local-setup',
+      projectId: 'local-project',
+      hostId: 'local' as const,
+      path: '/Users/alice/orca'
+    }
+
+    expect(getProjectHostSetupWorktreeMeta([siblingSetup, targetSetup], targetRepo)).toEqual({
+      projectId: 'ssh-project',
+      hostId: 'ssh:builder',
+      projectHostSetupId: 'ssh-setup'
+    })
+  })
 })
 
 describe('isGitHubBackedRepo', () => {

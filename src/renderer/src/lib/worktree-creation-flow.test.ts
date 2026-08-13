@@ -470,8 +470,8 @@ describe('staged background worktree creation', () => {
       },
       accountLabel: 'dev@company.test'
     }
-    const request = makeRequest({ linkedWorkItem, linkedTaskSourceContext })
-    const expectedOptions = { linkedWorkItem, linkedTaskSourceContext }
+    const request = makeRequest({ linkedWorkItem, linkedTaskSourceContext, parentWorktreeId: 'p' })
+    const expectedOptions = { linkedWorkItem, linkedTaskSourceContext, parentWorktreeId: 'p' }
 
     expect(continueBackgroundWorktreeCreation('creation-1', request)).toBe(true)
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))

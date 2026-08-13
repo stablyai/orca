@@ -42,7 +42,8 @@ import type {
   SetupAgentStartupPolicy,
   OrcaHooks,
   SparsePreset,
-  TuiAgent
+  TuiAgent,
+  Worktree
 } from '../../../shared/types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
@@ -51,6 +52,7 @@ import SmartWorkspaceNameField, {
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
+import ChildWorktreeParentField from '@/components/new-workspace/ChildWorktreeParentField'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
@@ -75,6 +77,10 @@ type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[numb
 const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
 const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
 const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
+const EMPTY_PARENT_WORKTREES: Worktree[] = []
+const EMPTY_WORKTREE_VISITS: Record<string, number> = {}
+const NOOP_BOOLEAN_CHANGE = (): void => {}
+const NOOP_PARENT_WORKTREE_CHANGE = (): void => {}
 
 type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -124,6 +130,15 @@ type NewWorkspaceComposerCardProps = {
   canReuseSelectedBranch: boolean
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  showChildWorktreeParent?: boolean
+  childWorktreeParentSelectionSupported?: boolean
+  parentWorktreeCandidates?: readonly Worktree[]
+  makeChildWorktree?: boolean
+  parentWorktreeId?: string | null
+  activeWorktreeId?: string | null
+  lastVisitedAtByWorktreeId?: Readonly<Record<string, number>>
+  onMakeChildWorktreeChange?: (next: boolean) => void
+  onParentWorktreeIdChange?: (worktreeId: string) => void
   /** Shows the footer "Create more" switch — worktree targets only. */
   showCreateMultiple?: boolean
   createMultiple?: boolean
@@ -337,6 +352,15 @@ export default function NewWorkspaceComposerCard({
   canReuseSelectedBranch,
   reuseSelectedBranch,
   onReuseSelectedBranchChange,
+  showChildWorktreeParent = false,
+  childWorktreeParentSelectionSupported = true,
+  parentWorktreeCandidates = EMPTY_PARENT_WORKTREES,
+  makeChildWorktree = false,
+  parentWorktreeId = null,
+  activeWorktreeId = null,
+  lastVisitedAtByWorktreeId = EMPTY_WORKTREE_VISITS,
+  onMakeChildWorktreeChange = NOOP_BOOLEAN_CHANGE,
+  onParentWorktreeIdChange = NOOP_PARENT_WORKTREE_CHANGE,
   showCreateMultiple = false,
   createMultiple = false,
   onCreateMultipleChange,
@@ -863,6 +887,19 @@ export default function NewWorkspaceComposerCard({
             </div>
           </div>
         </div>
+
+        {showChildWorktreeParent ? (
+          <ChildWorktreeParentField
+            candidates={parentWorktreeCandidates}
+            enabled={makeChildWorktree}
+            selectionSupported={childWorktreeParentSelectionSupported}
+            value={parentWorktreeId}
+            activeWorktreeId={activeWorktreeId}
+            lastVisitedAtByWorktreeId={lastVisitedAtByWorktreeId}
+            onEnabledChange={onMakeChildWorktreeChange}
+            onValueChange={onParentWorktreeIdChange}
+          />
+        ) : null}
 
         <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
           <div className="flex items-center justify-between gap-2">

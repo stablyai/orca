@@ -205,8 +205,12 @@ export type WorktreeSlice = {
     compareBaseRef?: string,
     options?: {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+      repoAuthority?: CreateWorktreeArgs['repoAuthority']
+      repoExecutionHostId?: ExecutionHostId
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      /** Null explicitly suppresses active-folder parenting; undefined preserves legacy inference. */
+      parentWorktreeId?: string | null
       /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
       startupDraft?: string
     }

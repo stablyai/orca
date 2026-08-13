@@ -54,6 +54,7 @@ import type {
   SetupRunPolicy,
   SparsePreset,
   TuiAgent,
+  Worktree,
   WorktreeMeta,
   WorkspaceStatus,
   WorkspaceCreateTelemetrySource,
@@ -212,6 +213,15 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspa
 import { resolveJiraSourceHostId } from '@/lib/jira-source-host'
 import { buildTrustedComposerIssueCommand } from '@/lib/composer-issue-command'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
+import {
+  getChildWorktreeParentCandidates,
+  getDefaultChildWorktreeParentId,
+  rankChildWorktreeParentCandidates,
+  resolveChildWorktreeCreateParentId,
+  resolvePreferredChildWorktreeParentId,
+  shouldShowChildWorktreeParentField,
+  supportsChildWorktreeParentSelection
+} from '@/components/new-workspace/child-worktree-parent-options'
 
 const NEVER_CANCEL_COMPOSER_SUBMIT = (): boolean => false
 
@@ -313,6 +323,15 @@ export type ComposerCardProps = {
   /** Whether the selected existing local branch is reused (checked out) rather than branched from. */
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  showChildWorktreeParent: boolean
+  childWorktreeParentSelectionSupported: boolean
+  parentWorktreeCandidates: readonly Worktree[]
+  makeChildWorktree: boolean
+  parentWorktreeId: string | null
+  activeWorktreeId: string | null
+  lastVisitedAtByWorktreeId: Readonly<Record<string, number>>
+  onMakeChildWorktreeChange: (next: boolean) => void
+  onParentWorktreeIdChange: (worktreeId: string) => void
   /** Whether the "create multiple" toggle shows — worktree (git) targets only; folder workspaces create-and-close. */
   showCreateMultiple: boolean
   /** When on, the modal stays open after each create and resets identity fields to allow creating several in a row. */
@@ -659,6 +678,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const settings = useAppStore((s) => s.settings)
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
+  const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
   const sparsePresetsByRepo = useAppStore((s) => s.sparsePresetsByRepo)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -947,6 +969,114 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projectGroupTarget: isProjectGroupTarget,
     initialRecipeId: initialEphemeralVmRecipeId
   })
+  const showChildWorktreeParent = shouldShowChildWorktreeParentField(
+    isProjectGroupTarget,
+    selectedRepoIsGit,
+    selectedEphemeralVmRecipeId !== null
+  )
+  const selectedRepoHost = parseExecutionHostId(selectedRepoExecutionHostId)
+  const selectedRuntimeCapabilities =
+    selectedRepoHost?.kind === 'runtime'
+      ? runtimeStatusByEnvironmentId.get(selectedRepoHost.environmentId)?.status?.capabilities
+      : undefined
+  const childWorktreeParentSelectionSupported = supportsChildWorktreeParentSelection(
+    selectedRepoExecutionHostId,
+    selectedRuntimeCapabilities
+  )
+  const parentWorktreeCandidates = useMemo(() => {
+    if (!showChildWorktreeParent || !selectedRepo || !selectedRepoExecutionHostId) {
+      return []
+    }
+    const eligible = getChildWorktreeParentCandidates({
+      worktrees: worktreesByRepo[repoId] ?? [],
+      repoId,
+      projectId: selectedRepoProjectId,
+      executionHostId: selectedRepoExecutionHostId,
+      repo: selectedRepo
+    })
+    return rankChildWorktreeParentCandidates(eligible, '', lastVisitedAtByWorktreeId)
+  }, [
+    lastVisitedAtByWorktreeId,
+    repoId,
+    selectedRepo,
+    selectedRepoExecutionHostId,
+    selectedRepoProjectId,
+    showChildWorktreeParent,
+    worktreesByRepo
+  ])
+  const activeParentWorktreeId = selectedRepo
+    ? getDefaultChildWorktreeParentId(
+        parentWorktreeCandidates,
+        activeWorktreeId,
+        activeWorkspaceExecutionHostId,
+        selectedRepo
+      )
+    : null
+  const initialParentWorktreeId = childWorktreeParentSelectionSupported
+    ? activeParentWorktreeId
+    : null
+  const [wantsChildWorktree, setWantsChildWorktree] = useState(initialParentWorktreeId !== null)
+  const [preferredParentWorktreeId, setPreferredParentWorktreeId] = useState<string | null>(
+    initialParentWorktreeId ?? parentWorktreeCandidates[0]?.id ?? null
+  )
+  const [childWorktreeParentTouched, setChildWorktreeParentTouched] = useState(false)
+
+  useEffect(() => {
+    const defaultId = activeParentWorktreeId
+    if (!childWorktreeParentTouched) {
+      setWantsChildWorktree(defaultId !== null)
+      setPreferredParentWorktreeId(defaultId ?? parentWorktreeCandidates[0]?.id ?? null)
+      return
+    }
+    setPreferredParentWorktreeId((currentId) =>
+      resolvePreferredChildWorktreeParentId(
+        currentId,
+        parentWorktreeCandidates,
+        activeParentWorktreeId
+      )
+    )
+  }, [activeParentWorktreeId, childWorktreeParentTouched, parentWorktreeCandidates])
+
+  const handleMakeChildWorktreeChange = useCallback(
+    (next: boolean): void => {
+      setChildWorktreeParentTouched(true)
+      setWantsChildWorktree(next)
+      if (next) {
+        setPreferredParentWorktreeId((currentId) =>
+          resolvePreferredChildWorktreeParentId(
+            currentId,
+            parentWorktreeCandidates,
+            activeParentWorktreeId
+          )
+        )
+      }
+    },
+    [activeParentWorktreeId, parentWorktreeCandidates]
+  )
+  const handleParentWorktreeIdChange = useCallback((worktreeId: string): void => {
+    setChildWorktreeParentTouched(true)
+    setPreferredParentWorktreeId(worktreeId)
+    setWantsChildWorktree(true)
+  }, [])
+  const reconciledParentWorktreeId = resolvePreferredChildWorktreeParentId(
+    preferredParentWorktreeId,
+    parentWorktreeCandidates,
+    activeParentWorktreeId
+  )
+  const effectiveWantsChildWorktree = childWorktreeParentTouched
+    ? wantsChildWorktree
+    : initialParentWorktreeId !== null
+  const makeChildWorktree =
+    showChildWorktreeParent &&
+    childWorktreeParentSelectionSupported &&
+    effectiveWantsChildWorktree &&
+    reconciledParentWorktreeId !== null
+  const parentWorktreeId = makeChildWorktree ? reconciledParentWorktreeId : null
+  const creationParentWorktreeId = resolveChildWorktreeCreateParentId(
+    childWorktreeParentTouched,
+    makeChildWorktree,
+    parentWorktreeId
+  )
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
@@ -3883,6 +4013,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         undefined,
         submitCompareBaseRef,
         {
+          ...(selectedRepo
+            ? {
+                repoAuthority: {
+                  path: selectedRepo.path,
+                  connectionId: selectedRepo.connectionId ?? null
+                },
+                repoExecutionHostId: selectedRepoExecutionHostId ?? undefined
+              }
+            : {}),
+          parentWorktreeId: creationParentWorktreeId,
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           ...(!backendStartup && startupPlan?.draftPrompt
@@ -3994,6 +4134,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     normalizedSparseDirectories,
     note,
     onCreated,
+    creationParentWorktreeId,
     parsedLinkedIssueNumber,
     persistSetupAgentStartupPolicy,
     persistDraft,
@@ -4486,6 +4627,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
         const request: WorktreeCreationRequest = {
           repoId,
+          ...(selectedRepo
+            ? {
+                repoAuthority: {
+                  path: selectedRepo.path,
+                  connectionId: selectedRepo.connectionId ?? null
+                },
+                repoExecutionHostId: selectedRepoExecutionHostId ?? undefined
+              }
+            : {}),
+          parentWorktreeId: creationParentWorktreeId,
           ...(ephemeralVmRecipe ? { ephemeralVmRecipe } : {}),
           worktreeCreateProgressMode:
             activeEphemeralVmRecipeId ||
@@ -4587,6 +4738,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       normalizedSparseDirectories,
       note,
       onCreated,
+      creationParentWorktreeId,
       parsedLinkedIssueNumber,
       persistSetupAgentStartupPolicy,
       persistDraft,
@@ -4696,6 +4848,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       smartNameSelection?.kind === 'branch',
     reuseSelectedBranch,
     onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
+    showChildWorktreeParent,
+    childWorktreeParentSelectionSupported,
+    parentWorktreeCandidates,
+    makeChildWorktree,
+    parentWorktreeId,
+    activeWorktreeId: activeParentWorktreeId,
+    lastVisitedAtByWorktreeId,
+    onMakeChildWorktreeChange: handleMakeChildWorktreeChange,
+    onParentWorktreeIdChange: handleParentWorktreeIdChange,
     // Why: "create multiple" applies only to worktree (git) targets; folder-workspace keeps create-and-close.
     showCreateMultiple: !isProjectGroupTarget,
     createMultiple,

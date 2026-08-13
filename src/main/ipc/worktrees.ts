@@ -13,6 +13,7 @@ import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
+import { resolveSelectedRepositoryAuthority } from '../../shared/selected-repository-authority'
 import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
 import { isPathInsideOrEqual, isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
@@ -1801,6 +1802,27 @@ async function listHostQualifiedDetectedWorktrees(
   }
 }
 
+export function resolveSelectedWorktreeCreateRepo(
+  store: Pick<Store, 'getRepo' | 'getRepos'>,
+  args: Pick<CreateWorktreeArgs, 'repoId' | 'repoAuthority'>
+): Repo | undefined {
+  if (!args.repoAuthority) {
+    return store.getRepo(args.repoId)
+  }
+  const resolution = resolveSelectedRepositoryAuthority(
+    store.getRepos().filter((repo) => repo.id === args.repoId),
+    args.repoAuthority
+  )
+  if (resolution.status === 'resolved') {
+    return resolution.candidate
+  }
+  throw new Error(
+    resolution.status === 'rejected' && resolution.reason === 'ambiguous'
+      ? `Repository selection is ambiguous: ${args.repoId}`
+      : `Selected repository is no longer available: ${args.repoId}`
+  )
+}
+
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
   store: Store,
@@ -2189,7 +2211,7 @@ export function registerWorktreeHandlers(
       const args = normalizeLinkedWorkItemFields(rawArgs)
       // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
       return withWorktreeSpan({ stage: 'create' }, async () => {
-        const repo = store.getRepo(args.repoId)
+        const repo = resolveSelectedWorktreeCreateRepo(store, args)
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
         }
