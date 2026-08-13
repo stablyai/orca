@@ -4,6 +4,8 @@ export type PresenceThrottle = {
   (activity: DiscordActivity | null): void
   flush(): void
   cancel(): void
+  /** Clears all throttle state so the next call publishes immediately (leading edge). Use on reconnect. */
+  reset(): void
 }
 
 const DEFAULT_INTERVAL_MS = 15000
@@ -80,6 +82,16 @@ export function createPresenceThrottle(
       timer = null
     }
     pending = undefined
+  }
+
+  throttled.reset = () => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    pending = undefined
+    lastPublished = undefined
+    lastTime = 0
   }
 
   return throttled

@@ -195,6 +195,7 @@ describe('createDiscordRpcClient', () => {
     expect(pong).toBeDefined()
     const header = pong.slice(0, 8)
     expect(header.readInt32LE(0)).toBe(OP_PONG)
+    expect(pong.subarray(8).toString('utf8')).toBe('{}')
   })
 
   it('calls onDisconnect on post-connect socket error without throwing', async () => {
@@ -208,7 +209,9 @@ describe('createDiscordRpcClient', () => {
     const cb = vi.fn()
     client.onDisconnect(cb)
 
-    // Emit an error AFTER handshake completes — should not throw
+    // Emit an error AFTER handshake completes — should not throw, and disconnect cb must fire
     expect(() => sock.emit('error', new Error('ECONNRESET'))).not.toThrow()
+    sock.emit('close')
+    expect(cb).toHaveBeenCalledTimes(1)
   })
 })

@@ -15,6 +15,8 @@ export type DiscordPresenceManagerDeps = {
   getActiveTerminalCount?: () => number
   /** Override the throttle interval (ms) for tests. */
   throttleIntervalMs?: number
+  /** Override the base reconnect delay (ms) for tests. */
+  reconnectBaseDelayMs?: number
 }
 
 const RECONNECT_BASE_DELAY_MS = 1000
@@ -92,18 +94,20 @@ export class DiscordPresenceManager {
 
   private scheduleReconnect(): void {
     if (this.stopped || this.reconnectTimer) return
-    console.log('[discord-presence] reconnect in', this.reconnectDelay, 'ms')
+    const delay = this.deps.reconnectBaseDelayMs ?? this.reconnectDelay
+    console.log('[discord-presence] reconnect in', delay, 'ms')
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_DELAY_MS)
       void this.connectAndPublish()
-    }, this.reconnectDelay)
+    }, delay)
   }
 
   private onDisconnect(): void {
     console.log('[discord-presence] disconnected')
     if (!this.connected) return
     this.connected = false
+    this.throttle.reset()
     this.scheduleReconnect()
   }
 

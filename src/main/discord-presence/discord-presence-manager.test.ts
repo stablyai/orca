@@ -212,6 +212,40 @@ describe('DiscordPresenceManager', () => {
     expect(connectCount).toBe(1)
   })
 
+  it('publishes immediately after reconnect (throttle reset on disconnect)', async () => {
+    const getSnapshot = vi.fn().mockReturnValue([workingEntry()])
+    const subscribeChanges = vi.fn()
+    const client = makeClient()
+
+    const mgr = new DiscordPresenceManager({
+      getSnapshot,
+      subscribeChanges,
+      client,
+      isEnabled: () => true,
+      assetKey: 'orca',
+      throttleIntervalMs: 60_000, // long interval so trailing never fires on its own
+      reconnectBaseDelayMs: 0
+    })
+
+    mgr.start()
+    await flush()
+
+    // First publish went through (leading edge)
+    expect(client.setActivity).toHaveBeenCalledTimes(1)
+    client.setActivity.mockClear()
+
+    // Simulate disconnect — reset() clears lastTime so next publish is a leading edge
+    client.onDisconnectCbs.forEach((cb) => cb())
+    // flush once for the 0ms reconnect timer, once for the connect() microtask
+    await flush()
+    await flush()
+
+    // After reconnect, onChange fires again — throttle was reset, so publishes immediately
+    expect(client.setActivity).toHaveBeenCalledTimes(1)
+    const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
+    expect(activity.details).toBe('1 agent active')
+  })
+
   it('stop() unsubscribes and disconnects', async () => {
     const getSnapshot = vi.fn()
     const unsubscribe = vi.fn()
