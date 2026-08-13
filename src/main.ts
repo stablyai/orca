@@ -7,8 +7,5 @@ if (platform() === 'win32') {
 conemu.on('error', (err) => {
   console.error('Error launching ConEmu:', err);
 });
-  conemu.on('error', (err) => {
-    console.error('Error launching ConEmu:', err);
-  });
   // existing code
 }
