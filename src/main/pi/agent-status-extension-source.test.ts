@@ -868,7 +868,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_end', { willContinue: true }, context)
     expect(harness.fetchMock).not.toHaveBeenCalled()
 
-    await harness.callHook('agent_end', { willContinue: false }, context)
+    await harness.callHook('agent_end', {}, context)
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
   })
 
