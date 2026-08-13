@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -38,11 +39,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
+import type { AppState } from '@/store/types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   GlobalSettings
 } from '../../../../shared/types'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget,
@@ -566,6 +569,38 @@ export function resolveClaudeStatusAccountState(
   return getClaudeStatusAccountsFromSettings(settings) ?? runtimeState
 }
 
+type ClaudeStatusSshScopeState = Pick<
+  AppState,
+  | 'activeRepoId'
+  | 'activeWorktreeId'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'repos'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+  | 'settings'
+  | 'sshTargetLabels'
+  | 'worktreesByRepo'
+>
+
+export function getActiveClaudeSshTargetLabel(state: ClaudeStatusSshScopeState): string | null {
+  const activeWorktreeHost = parseExecutionHostId(
+    getExecutionHostIdForWorktree(state, state.activeWorktreeId)
+  )
+  if (activeWorktreeHost?.kind === 'ssh') {
+    return state.sshTargetLabels.get(activeWorktreeHost.targetId) ?? activeWorktreeHost.targetId
+  }
+
+  const activeRepo = state.repos.find((repo) => repo.id === state.activeRepoId)
+  const activeRepoHost = parseExecutionHostId(
+    activeRepo ? getRepoExecutionHostId(activeRepo) : null
+  )
+  if (activeRepoHost?.kind === 'ssh') {
+    return state.sshTargetLabels.get(activeRepoHost.targetId) ?? activeRepoHost.targetId
+  }
+
+  return null
+}
+
 function CodexRestartStatusPrompt(): React.JSX.Element | null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
@@ -709,7 +744,9 @@ export function ClaudeSwitcherMenu({
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const activeClaudeSshTargetLabel = useAppStore((s) => getActiveClaudeSshTargetLabel(s))
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  const remoteSshClaudeTargetLabel = hasActiveRuntimeEnvironment ? null : activeClaudeSshTargetLabel
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (runtimeEnvironments.find(
@@ -770,10 +807,15 @@ export function ClaudeSwitcherMenu({
   const handleAccountsExpandedToggle = useCallback((): void => {
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
-    if (nextExpanded && !hasActiveRuntimeEnvironment) {
+    if (nextExpanded && !hasActiveRuntimeEnvironment && !remoteSshClaudeTargetLabel) {
       void fetchInactiveClaudeAccountUsage()
     }
-  }, [accountsExpanded, fetchInactiveClaudeAccountUsage, hasActiveRuntimeEnvironment])
+  }, [
+    accountsExpanded,
+    fetchInactiveClaudeAccountUsage,
+    hasActiveRuntimeEnvironment,
+    remoteSshClaudeTargetLabel
+  ])
 
   const handleSelectAccount = async (
     accountId: string | null,
@@ -856,15 +898,17 @@ export function ClaudeSwitcherMenu({
         'Open Claude details and account switcher'
       )}
       topContent={
-        <AccountRuntimeToggle
-          groups={switchGroups}
-          value={selectedGroup?.key ?? selectedRuntimeKey}
-          onChange={(group) => void handleSelectRuntime(group)}
-          ariaLabel={translate(
-            'auto.components.status.bar.StatusBar.11e2354daf',
-            'Claude usage runtime'
-          )}
-        />
+        remoteSshClaudeTargetLabel ? null : (
+          <AccountRuntimeToggle
+            groups={switchGroups}
+            value={selectedGroup?.key ?? selectedRuntimeKey}
+            onChange={(group) => void handleSelectRuntime(group)}
+            ariaLabel={translate(
+              'auto.components.status.bar.StatusBar.11e2354daf',
+              'Claude usage runtime'
+            )}
+          />
+        )
       }
       open={open}
       onOpenChange={handleOpenChange}
@@ -879,8 +923,13 @@ export function ClaudeSwitcherMenu({
         }}
       >
         <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {activeTarget?.label ??
-            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
+          {remoteSshClaudeTargetLabel
+            ? translate(
+                'auto.components.status.bar.StatusBar.remoteSshClaudeSystemDefault',
+                'Remote system default'
+              )
+            : (activeTarget?.label ??
+              translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'))}
         </span>
         {accountsExpanded ? (
           <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
@@ -890,59 +939,91 @@ export function ClaudeSwitcherMenu({
       </DropdownMenuItem>
       {accountsExpanded ? (
         <div className="px-1 pb-1">
-          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            {translate('auto.components.status.bar.StatusBar.9332ba8684', 'Switch to')}
-          </div>
-          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
-            {selectedGroup?.targets.length === 0 ? (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                {translate('auto.components.status.bar.StatusBar.c98ea88392', 'No other accounts')}
+          {remoteSshClaudeTargetLabel ? (
+            <div className="rounded-md border border-border/60 bg-accent/5 px-3 py-2 text-[11px] text-muted-foreground">
+              <div className="font-medium text-foreground">
+                {translate(
+                  'auto.components.status.bar.StatusBar.remoteSshClaudeSystemDefault',
+                  'Remote system default'
+                )}
               </div>
-            ) : null}
-            {selectedGroup?.targets.map((target) => {
-              const inactiveUsage = target.id
-                ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
-                : null
-
-              return (
-                <DropdownMenuItem
-                  key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-                  disabled={isSwitching || target.active}
-                  onSelect={(event) => {
-                    event.preventDefault()
-                    if (!target.active) {
-                      void handleSelectAccount(target.id, target.runtimeTarget)
-                    }
-                  }}
-                >
-                  <div className="flex w-full flex-col gap-0.5">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate">{target.label}</span>
-                      {target.active ? (
-                        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
-                          {translate('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}
-                        </span>
-                      ) : null}
-                    </div>
-                    {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-                      <InlineUsageSkeleton />
-                    ) : inactiveUsage?.rateLimits ? (
-                      <InlineUsageBars
-                        limits={inactiveUsage.rateLimits}
-                        isFetching={inactiveUsage.isFetching}
-                      />
-                    ) : null}
+              <div className="mt-1">
+                {translate(
+                  'auto.components.status.bar.StatusBar.remoteSshClaudeExplanation',
+                  'Claude uses the login already configured on {{value0}}.',
+                  { value0: remoteSshClaudeTargetLabel }
+                )}
+              </div>
+              <div className="mt-1">
+                {translate(
+                  'auto.components.status.bar.StatusBar.remoteSshClaudeFollowup',
+                  'Change the Claude login on that host to affect new Remote SSH sessions.'
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                {translate('auto.components.status.bar.StatusBar.9332ba8684', 'Switch to')}
+              </div>
+              <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
+                {selectedGroup?.targets.length === 0 ? (
+                  <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                    {translate(
+                      'auto.components.status.bar.StatusBar.c98ea88392',
+                      'No other accounts'
+                    )}
                   </div>
-                </DropdownMenuItem>
-              )
-            })}
-          </div>
-          <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-            {translate(
-              'auto.components.status.bar.StatusBar.8295903d17',
-              'Restart live Claude terminals before continuing old conversations after switching.'
-            )}
-          </div>
+                ) : null}
+                {selectedGroup?.targets.map((target) => {
+                  const inactiveUsage = target.id
+                    ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
+                    : null
+
+                  return (
+                    <DropdownMenuItem
+                      key={`${selectedGroup.key}:${target.id ?? 'system'}`}
+                      disabled={isSwitching || target.active}
+                      onSelect={(event) => {
+                        event.preventDefault()
+                        if (!target.active) {
+                          void handleSelectAccount(target.id, target.runtimeTarget)
+                        }
+                      }}
+                    >
+                      <div className="flex w-full flex-col gap-0.5">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                          {target.active ? (
+                            <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                              {translate(
+                                'auto.components.status.bar.StatusBar.ff0fbe9311',
+                                'Active'
+                              )}
+                            </span>
+                          ) : null}
+                        </div>
+                        {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                          <InlineUsageSkeleton />
+                        ) : inactiveUsage?.rateLimits ? (
+                          <InlineUsageBars
+                            limits={inactiveUsage.rateLimits}
+                            isFetching={inactiveUsage.isFetching}
+                          />
+                        ) : null}
+                      </div>
+                    </DropdownMenuItem>
+                  )
+                })}
+              </div>
+              <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
+                {translate(
+                  'auto.components.status.bar.StatusBar.8295903d17',
+                  'Restart live Claude terminals before continuing old conversations after switching.'
+                )}
+              </div>
+            </>
+          )}
         </div>
       ) : null}
       <DropdownMenuSeparator />

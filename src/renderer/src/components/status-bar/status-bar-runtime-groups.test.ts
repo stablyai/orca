@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
@@ -7,6 +8,7 @@ import type {
 import {
   buildClaudeStatusSwitchGroups,
   buildCodexStatusSwitchGroups,
+  getActiveClaudeSshTargetLabel,
   getStatusBarPreferredWslDistro,
   resolveClaudeStatusAccountState,
   resolveCodexStatusAccountState
@@ -245,5 +247,57 @@ describe('status bar runtime switch groups', () => {
         remoteState
       ).accounts.map((account) => account.id)
     ).toEqual(['desktop-claude-1'])
+  })
+
+  it('uses the active SSH worktree label for Claude account scope', () => {
+    expect(
+      getActiveClaudeSshTargetLabel({
+        activeRepoId: 'repo-ssh',
+        activeWorktreeId: 'wt-ssh',
+        folderWorkspaces: [],
+        projectGroups: [],
+        repos: [
+          {
+            id: 'repo-ssh',
+            connectionId: 'builder',
+            executionHostId: toSshExecutionHostId('builder')
+          } as never
+        ],
+        restoredRuntimeHostIdByWorkspaceSessionKey: {},
+        settings: null,
+        sshTargetLabels: new Map([['builder', 'Build box']]),
+        worktreesByRepo: {
+          'repo-ssh': [
+            {
+              id: 'wt-ssh',
+              repoId: 'repo-ssh',
+              hostId: toSshExecutionHostId('builder')
+            } as never
+          ]
+        }
+      })
+    ).toBe('Build box')
+  })
+
+  it('falls back to the active SSH repo label when no worktree is focused', () => {
+    expect(
+      getActiveClaudeSshTargetLabel({
+        activeRepoId: 'repo-ssh',
+        activeWorktreeId: null,
+        folderWorkspaces: [],
+        projectGroups: [],
+        repos: [
+          {
+            id: 'repo-ssh',
+            connectionId: 'builder',
+            executionHostId: toSshExecutionHostId('builder')
+          } as never
+        ],
+        restoredRuntimeHostIdByWorkspaceSessionKey: {},
+        settings: null,
+        sshTargetLabels: new Map([['builder', 'Build box']]),
+        worktreesByRepo: {}
+      })
+    ).toBe('Build box')
   })
 })
