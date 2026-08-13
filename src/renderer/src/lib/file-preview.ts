@@ -63,16 +63,14 @@ export function useWorkspaceFileBrowserActionPredicate(
   )
 }
 
-function reportRemoteFileBrowserOpen(result: Promise<boolean>, onFailure?: () => void): void {
+function reportRemoteFileBrowserOpen(result: Promise<boolean>): void {
   void result
     .then((created) => {
       if (!created) {
-        onFailure?.()
         toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
       }
     })
     .catch(() => {
-      onFailure?.()
       toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
     })
 }
@@ -227,8 +225,7 @@ export function openFilePreviewToSide(params: {
         focusOnCreate: false,
         stagedTitle: target.title,
         stagedFocusAddressBar: false
-      }),
-      existingSibling ? undefined : () => state.closeEmptyGroup(worktreeId, targetGroupId)
+      })
     )
     return
   }

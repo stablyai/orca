@@ -806,6 +806,87 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     ).toBe(false)
   })
 
+  it('keeps a split reserved by an overlapping browser creation', async () => {
+    let resolveFirstList!: (response: unknown) => void
+    let resolveSecondList!: (response: unknown) => void
+    const firstList = new Promise((resolve) => {
+      resolveFirstList = resolve
+    })
+    const secondList = new Promise((resolve) => {
+      resolveSecondList = resolve
+    })
+    let createCount = 0
+    let listCount = 0
+    const runtimeCall = vi.fn((request: { method: string }) => {
+      if (request.method === 'browser.tabCreate') {
+        createCount += 1
+        return Promise.resolve({
+          id: `create-${createCount}`,
+          ok: true,
+          result: { browserPageId: `remote-browser-page-${createCount}` }
+        })
+      }
+      if (request.method === 'session.tabs.list') {
+        listCount += 1
+        if (listCount === 1) {
+          return firstList
+        }
+        if (listCount === 2) {
+          return secondList
+        }
+        return Promise.resolve({ id: 'list-after-close', ok: true, result: makeSnapshot() })
+      }
+      return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
+    })
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(
+      (_state, _environmentId, _worktreeId, remotePageId) =>
+        remotePageId === 'remote-browser-page-2'
+    )
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    const first = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: true,
+      focusOnCreate: false
+    })
+    await vi.waitFor(() => expect(listCount).toBe(1))
+    const second = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: false,
+      focusOnCreate: false
+    })
+    await vi.waitFor(() => expect(createCount).toBe(2))
+    expect(
+      isWebSessionBrowserPlacementGroupReserved({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        groupId: 'client-preview-group'
+      })
+    ).toBe(true)
+
+    resolveFirstList({
+      id: 'first-list',
+      ok: false,
+      error: { code: 'remote_runtime_timeout', message: 'first preview timed out' }
+    })
+    await vi.waitFor(() => expect(listCount).toBe(2))
+    resolveSecondList({ id: 'second-list', ok: true, result: makeSnapshot() })
+    await expect(second).resolves.toBe(true)
+    await expect(first).resolves.toBe(false)
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
+    expect(mocks.hasMaterializedWebRuntimeBrowserPage).toHaveBeenCalledWith(
+      expect.anything(),
+      ENVIRONMENT_ID,
+      WORKTREE_ID,
+      'remote-browser-page-2',
+      'client-preview-group'
+    )
+  })
+
   it('accepts subscription materialization when the eager reconciliation fails', async () => {
     const runtimeCall = vi
       .fn()

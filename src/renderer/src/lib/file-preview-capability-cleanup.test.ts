@@ -68,8 +68,7 @@ describe('paired HTML side-preview capability cleanup', () => {
     await vi.waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
     )
-    expect(mocks.closeEmptyGroup).toHaveBeenCalledOnce()
-    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith('wt-1', 'preview-group')
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })
 

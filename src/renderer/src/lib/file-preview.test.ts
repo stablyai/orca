@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   createWebRuntimeSessionBrowserTab: vi.fn(),
   environmentId: null as string | null,
   connectionId: null as string | null,
+  layoutByWorktree: {} as Record<string, unknown>,
   toastError: vi.fn()
 }))
 
@@ -52,7 +53,7 @@ vi.mock('@/store', () => ({
       createBrowserTab: mocks.createBrowserTab,
       createEmptySplitGroup: mocks.createEmptySplitGroup,
       groupsByWorktree: {},
-      layoutByWorktree: {},
+      layoutByWorktree: mocks.layoutByWorktree,
       repos: [{ id: 'repo-1', connectionId: mocks.connectionId }],
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
@@ -67,6 +68,7 @@ beforeEach(() => {
   mocks.browserAvailability = { state: 'enabled', provider: 'local-client' }
   mocks.environmentId = null
   mocks.connectionId = null
+  mocks.layoutByWorktree = {}
 })
 
 describe('openFileInBrowserTab', () => {
@@ -137,8 +139,67 @@ describe('openFileInBrowserTab', () => {
     await vi.waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
     )
-    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith('wt-1', 'group-2')
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('does not delete a split owned by an overlapping paired preview', async () => {
+    mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+    mocks.createEmptySplitGroup.mockImplementationOnce(() => {
+      mocks.layoutByWorktree = {
+        'wt-1': {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group-1' },
+          second: { type: 'leaf', groupId: 'group-2' }
+        }
+      }
+      return 'group-2'
+    })
+    let rejectFirst!: (error: Error) => void
+    let resolveSecond!: (created: boolean) => void
+    mocks.createWebRuntimeSessionBrowserTab
+      .mockReturnValueOnce(
+        new Promise<boolean>((_resolve, reject) => {
+          rejectFirst = reject
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise<boolean>((resolve) => {
+          resolveSecond = resolve
+        })
+      )
+
+    const preview = {
+      language: 'html',
+      filePath: '/srv/repo/example.html',
+      worktreeId: 'wt-1',
+      sourceGroupId: 'group-1'
+    }
+    openFilePreviewToSide(preview)
+    openFilePreviewToSide(preview)
+    expect(mocks.createWebRuntimeSessionBrowserTab).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        clientTargetGroupId: 'group-2',
+        clientTargetGroupCreated: true
+      })
+    )
+    rejectFirst(new Error('first preview failed'))
+
+    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
+    expect(mocks.createWebRuntimeSessionBrowserTab).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        clientTargetGroupId: 'group-2',
+        clientTargetGroupCreated: false
+      })
+    )
+
+    resolveSecond(true)
+    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
   })
 
   it('does not send a runtime-owned file path to the Electron browser provider', () => {

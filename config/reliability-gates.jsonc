@@ -1653,7 +1653,14 @@
           "file": "src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
           "assertions": [
             "known unavailability reports visibly without creating a split",
-            "capability loss after caller preflight reports visibly and removes the new split"
+            "capability loss after caller preflight reports visibly without duplicating transaction cleanup"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/file-preview.test.ts",
+          "assertions": [
+            "a failed side preview reports visibly without caller-owned split cleanup",
+            "overlapping side previews reuse the split without the first failure deleting it"
           ]
         },
         {
@@ -1668,7 +1675,8 @@
           "assertions": [
             "a post-create timeout returns false only after exact host close and a confirming snapshot",
             "unconfirmed cleanup rejects so callers cannot create a competing local fallback",
-            "the canonical placement and a newly-created empty split are released on rollback"
+            "the canonical placement and a newly-created empty split are released on rollback",
+            "one failed preview cannot remove a shared split still reserved by an overlapping creation"
           ]
         },
         {
