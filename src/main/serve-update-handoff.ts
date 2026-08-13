@@ -8,7 +8,11 @@ import {
   type ServeSupervisorMessage,
   type ServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
-import { SERVE_SUPERVISOR_ENV, type ServeSupervisorHealth } from '../shared/serve-supervision'
+import {
+  SERVE_SUPERVISOR_ENV,
+  SERVE_SUPERVISOR_STOP_EXIT_CODE,
+  type ServeSupervisorHealth
+} from '../shared/serve-supervision'
 import { getCanonicalUserDataPath } from './persistence'
 
 function getConfiguredHandoffPath(): string | null {
@@ -90,7 +94,13 @@ export function installServeSupervisorDisconnectQuit(
   if (!isServeMode || (!hasServeUpdateSupervisor() && !foregroundSupervised)) {
     return () => undefined
   }
-  const quit = (): void => app.quit()
+  const quit = (): void => {
+    if (foregroundSupervised && !app.isReady()) {
+      app.exit(SERVE_SUPERVISOR_STOP_EXIT_CODE)
+      return
+    }
+    app.quit()
+  }
   if (foregroundSupervised && parent.connected === false) {
     quit()
     return () => undefined

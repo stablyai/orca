@@ -9,10 +9,15 @@ import {
   parseServeSupervisorMessage,
   parseServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
-import { SERVE_SUPERVISOR_ENV } from '../shared/serve-supervision'
+import { SERVE_SUPERVISOR_ENV, SERVE_SUPERVISOR_STOP_EXIT_CODE } from '../shared/serve-supervision'
 
 const { appMock, getCanonicalUserDataPathMock } = vi.hoisted(() => ({
-  appMock: { getVersion: vi.fn(() => '1.0.51'), quit: vi.fn() },
+  appMock: {
+    exit: vi.fn(),
+    getVersion: vi.fn(() => '1.0.51'),
+    isReady: vi.fn(() => true),
+    quit: vi.fn()
+  },
   getCanonicalUserDataPathMock: vi.fn()
 }))
 
@@ -24,7 +29,9 @@ describe('serve update handoff', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    appMock.exit.mockReset()
     appMock.getVersion.mockReturnValue('1.0.51')
+    appMock.isReady.mockReturnValue(true)
     appMock.quit.mockReset()
     root = mkdtempSync(join(tmpdir(), 'orca-serve-handoff-'))
     getCanonicalUserDataPathMock.mockReturnValue(root)
@@ -125,16 +132,31 @@ describe('serve update handoff', () => {
     removeListener()
   })
 
-  it('quits immediately when the foreground supervisor disconnected before startup wiring', async () => {
+  it('exits immediately when the foreground supervisor disconnected before startup wiring', async () => {
     const parent = Object.assign(new EventEmitter(), { connected: false })
     process.env[SERVE_SUPERVISOR_ENV] = '1'
+    appMock.isReady.mockReturnValue(false)
     const { installServeSupervisorDisconnectQuit } = await import('./serve-update-handoff')
 
     const removeListener = installServeSupervisorDisconnectQuit(true, parent)
 
-    expect(appMock.quit).toHaveBeenCalledOnce()
+    expect(appMock.exit).toHaveBeenCalledWith(SERVE_SUPERVISOR_STOP_EXIT_CODE)
+    expect(appMock.quit).not.toHaveBeenCalled()
     expect(parent.listenerCount('disconnect')).toBe(0)
     removeListener()
+  })
+
+  it('exits immediately when the foreground supervisor disconnects before Electron is ready', async () => {
+    const parent = new EventEmitter()
+    process.env[SERVE_SUPERVISOR_ENV] = '1'
+    appMock.isReady.mockReturnValue(false)
+    const { installServeSupervisorDisconnectQuit } = await import('./serve-update-handoff')
+
+    installServeSupervisorDisconnectQuit(true, parent)
+    parent.emit('disconnect')
+
+    expect(appMock.exit).toHaveBeenCalledWith(SERVE_SUPERVISOR_STOP_EXIT_CODE)
+    expect(appMock.quit).not.toHaveBeenCalled()
   })
 })
 
