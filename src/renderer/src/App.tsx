@@ -46,6 +46,7 @@ import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
+import { useRemoteAccountUsageSync } from './hooks/remote-account-usage-sync'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from './components/AiVaultTabTitleSyncGate'
@@ -775,6 +776,8 @@ function App(): React.JSX.Element {
   useIpcEvents()
   useRemoteRuntimeRecoveryTriggers()
   useAutomationDispatchEvents()
+  // Why: usage surfaces read the account owner's rate limits; with a Remote Orca Server active those live server-side and only arrive via accounts.subscribe (#7973).
+  useRemoteAccountUsageSync()
   // Why: retention runs at App level (in <RetainedAgentsSyncGate />, a null leaf) so "done" agents survive card collapse and its high-churn subscriptions don't re-render App.
   // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.
   useGitStatusPolling({ enabled: workspaceSessionReady })

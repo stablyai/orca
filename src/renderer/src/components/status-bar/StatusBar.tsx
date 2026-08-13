@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
+import { selectAccountOwnerRateLimits } from '../../store/slices/rate-limits'
 import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
 import type {
   ClaudeRateLimitAccountsState,
@@ -705,8 +706,10 @@ export function ClaudeSwitcherMenu({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
-  const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
-  const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
+  const inactiveClaudeAccounts = useAppStore(
+    (s) => selectAccountOwnerRateLimits(s).inactiveClaudeAccounts
+  )
+  const claudeTarget = useAppStore((s) => selectAccountOwnerRateLimits(s).claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
@@ -1371,8 +1374,10 @@ export function CodexSwitcherMenu({
   const refreshCodexRateLimitsForTarget = useAppStore((s) => s.refreshCodexRateLimitsForTarget)
   const consumeCodexRateLimitResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
-  const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
-  const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
+  const inactiveCodexAccounts = useAppStore(
+    (s) => selectAccountOwnerRateLimits(s).inactiveCodexAccounts
+  )
+  const codexTarget = useAppStore((s) => selectAccountOwnerRateLimits(s).codexTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
@@ -1975,9 +1980,10 @@ function useStatusBarMenuFocusHandoff(): {
 
 function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
-  const rateLimits = useAppStore((s) => s.rateLimits)
+  const rateLimits = useAppStore(selectAccountOwnerRateLimits)
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
+  const refreshRemoteAccountUsage = useAppStore((s) => s.refreshRemoteAccountUsage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const usagePercentageDisplay = normalizeUsagePercentageDisplay(
@@ -2048,6 +2054,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   }, [])
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
+  // Why: with a Remote Orca Server the server owns the accounts doing the work;
+  // refreshing this desktop's usage cannot move their bars (#7973).
+  const refreshUsageEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) {
       return
@@ -2055,13 +2064,24 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     setIsRefreshing(true)
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
+      await Promise.all([
+        refreshUsageEnvironmentId
+          ? refreshRemoteAccountUsage(refreshUsageEnvironmentId)
+          : refreshRateLimits(),
+        refreshDetectedAgents()
+      ])
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
+  }, [
+    isRefreshing,
+    refreshUsageEnvironmentId,
+    refreshRemoteAccountUsage,
+    refreshRateLimits,
+    refreshDetectedAgents
+  ])
 
   if (!statusBarVisible) {
     return null

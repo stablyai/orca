@@ -262,6 +262,42 @@ describe('watchProviderAccounts', () => {
     expect(snapshots).toHaveLength(2)
   })
 
+  it('notifies onClosed when the remote stream ends after delivering a snapshot', async () => {
+    const errors: unknown[] = []
+    const closes: number[] = []
+    watchProviderAccounts(REMOTE, {
+      onSnapshot: () => {},
+      onError: (error) => errors.push(error),
+      onClosed: () => closes.push(1)
+    })
+    await flushMicrotasks()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'ready', snapshot: snapshotFixture('ready') }
+    })
+    subscriptionCallbacks?.onClose?.()
+
+    expect(closes).toHaveLength(1)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('reports a close before any snapshot as an error, not onClosed', async () => {
+    const errors: unknown[] = []
+    const closes: number[] = []
+    watchProviderAccounts(REMOTE, {
+      onSnapshot: () => {},
+      onError: (error) => errors.push(error),
+      onClosed: () => closes.push(1)
+    })
+    await flushMicrotasks()
+
+    subscriptionCallbacks?.onClose?.()
+
+    expect(closes).toHaveLength(0)
+    expect(errors).toHaveLength(1)
+  })
+
   it('surfaces remote subscription failures as errors', async () => {
     const errors: unknown[] = []
     watchProviderAccounts(REMOTE, {

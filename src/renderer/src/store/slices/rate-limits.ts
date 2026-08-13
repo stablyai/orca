@@ -1,9 +1,21 @@
 import type { StateCreator } from 'zustand'
 import type { RateLimitRuntimeTarget, RateLimitState } from '../../../../shared/rate-limit-types'
 import type { AppState } from '../types'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+
+// Why: forcing a server-side usage refresh serially re-fetches every provider
+// and the inactive-account caches; give it the same headroom as mobile.
+const REMOTE_USAGE_REFRESH_TIMEOUT_MS = 60_000
+
+export type RemoteAccountRateLimits = {
+  environmentId: string
+  state: RateLimitState
+}
 
 export type RateLimitSlice = {
   rateLimits: RateLimitState
+  // The active Remote Orca Server's usage snapshot (see #7973); null while local accounts own usage.
+  remoteRateLimits: RemoteAccountRateLimits | null
   fetchRateLimits: () => Promise<void>
   refreshRateLimits: () => Promise<void>
   refreshGrokRateLimits: () => Promise<void>
@@ -13,6 +25,20 @@ export type RateLimitSlice = {
   fetchInactiveClaudeAccountUsage: () => Promise<void>
   fetchInactiveCodexAccountUsage: () => Promise<void>
   setRateLimitsFromPush: (state: RateLimitState) => void
+  setRemoteRateLimits: (environmentId: string, state: RateLimitState) => void
+  clearRemoteRateLimits: () => void
+  refreshRemoteAccountUsage: (environmentId: string) => Promise<void>
+}
+
+// Why: with a Remote Orca Server active the server owns provider accounts
+// (#7973), so usage surfaces must read its snapshot — the local state describes
+// this desktop's credentials, which are not the ones doing the remote work.
+export function selectAccountOwnerRateLimits(s: AppState): RateLimitState {
+  const environmentId = s.settings?.activeRuntimeEnvironmentId?.trim() || null
+  if (environmentId && s.remoteRateLimits?.environmentId === environmentId) {
+    return s.remoteRateLimits.state
+  }
+  return s.rateLimits
 }
 
 export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice> = (set, get) => ({
@@ -32,6 +58,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: []
   },
+  remoteRateLimits: null,
 
   fetchRateLimits: async () => {
     try {
@@ -148,5 +175,39 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
 
   setRateLimitsFromPush: (state) => {
     set({ rateLimits: state })
+  },
+
+  setRemoteRateLimits: (environmentId, state) => {
+    // Why: a slow subscription frame or refresh can resolve after the user
+    // switches account owners; a stale owner's snapshot must not be presented
+    // as the new owner's usage.
+    const active = get().settings?.activeRuntimeEnvironmentId?.trim() || null
+    if (active !== environmentId) {
+      return
+    }
+    set({ remoteRateLimits: { environmentId, state } })
+  },
+
+  clearRemoteRateLimits: () => {
+    set({ remoteRateLimits: null })
+  },
+
+  refreshRemoteAccountUsage: async (environmentId) => {
+    try {
+      // Why: refreshUsage forces the server's OAuth fetch lane (bypassing its
+      // poll throttle), which is the only way the Fable/weekly windows move on
+      // a headless host between statusline posts.
+      const snapshot = await callRuntimeRpc<{ rateLimits: RateLimitState | null }>(
+        { kind: 'environment', environmentId },
+        'accounts.list',
+        { refreshUsage: true },
+        { timeoutMs: REMOTE_USAGE_REFRESH_TIMEOUT_MS }
+      )
+      if (snapshot.rateLimits) {
+        get().setRemoteRateLimits(environmentId, snapshot.rateLimits)
+      }
+    } catch (error) {
+      console.error('Failed to refresh remote account usage:', error)
+    }
   }
 })
