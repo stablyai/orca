@@ -86,6 +86,10 @@ import {
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { OPEN_WORKSPACE_BOARD_EVENT } from './components/sidebar/useWorkspaceBoardPanel'
+import {
+  focusAttentionTarget,
+  resolveNextAttentionTarget
+} from './components/sidebar/next-attention-target'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
@@ -1646,6 +1650,20 @@ function App(): React.JSX.Element {
             return claim('worktree.history.forward', () =>
               useAppStore.getState().goForwardWorktree()
             )
+          }
+        ],
+        [
+          'worktree.jumpToNextAttention',
+          () => {
+            if (creationLayoutActive) {
+              return false
+            }
+            // Why resolve before claiming: with no agent waiting the chord must reach the terminal unclaimed.
+            const target = resolveNextAttentionTarget()
+            if (target === null) {
+              return false
+            }
+            return claim('worktree.jumpToNextAttention', () => focusAttentionTarget(target))
           }
         ],
         ['sidebar.left.toggle', () => claim('sidebar.left.toggle', () => actions.toggleSidebar())],

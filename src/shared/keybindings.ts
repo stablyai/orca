@@ -31,6 +31,7 @@ export type KeybindingActionId =
   | 'worktree.palette'
   | 'worktree.navigateUp'
   | 'worktree.navigateDown'
+  | 'worktree.jumpToNextAttention'
   | 'app.settings'
   | 'app.forceReload'
   | 'workspace.create'
@@ -254,6 +255,24 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'down'],
     defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
+  },
+  {
+    id: 'worktree.jumpToNextAttention',
+    title: 'Jump to agent needing input',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'worktree',
+      'agent',
+      'attention',
+      'waiting',
+      'blocked',
+      'needs input',
+      'jump'
+    ],
+    defaultBindings: platformBindings(['Mod+Shift+K'])
   },
   {
     id: 'workspace.create',

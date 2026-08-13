@@ -125,6 +125,7 @@ import {
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from './legacy-worker-terminal-recovery-event'
 import type { AppState } from '../store/types'
+import { activateTerminalInitiatedWorktree } from '@/lib/terminal-initiated-worktree-activation'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
   closeWebRuntimeSessionTab,
@@ -339,16 +340,6 @@ function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<stri
 function focusTerminalInitiatedTab(tabId: string, leafId?: string | null): void {
   if (!focusRuntimeTerminalSurface(tabId, leafId)) {
     focusTerminalTabSurface(tabId, leafId)
-  }
-}
-
-function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
-  store.setActiveView('terminal')
-  store.setActiveWorktree(worktreeId)
-  // Why: CLI/runtime terminal focus is user-visible navigation, so feed both Cmd+J recency and the back/forward stack.
-  store.markWorktreeVisited(worktreeId)
-  if (!store.isNavigatingHistory) {
-    store.recordWorktreeVisit(worktreeId)
   }
 }
 
