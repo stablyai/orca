@@ -2550,10 +2550,11 @@ type RuntimeWorktreeScanCache = {
   result: RuntimeWorktreeScanResult
   expiresAt: number
   /**
-   * Git-admin state read as of the scan's start, kept unresolved so no caller ever waits on the
-   * probe to receive a scan result. Resolves to `null` when the state could not be read.
+   * Git-admin state read as of the scan's start, written back once the probe settles. Never holds a
+   * pending promise: a wedged mount would otherwise poison every later refresh that awaits it.
+   * `null` means "cannot prove unchanged" (unreadable layout, still probing, probe timed out).
    */
-  adminFingerprint: Promise<string | null>
+  adminFingerprint: string | null
   /** When the Git scan behind `result` actually ran, so reconciliation can be bounded. */
   scannedAt: number
 }
@@ -2566,7 +2567,9 @@ type RuntimeWorktreeScanInFlight = {
 
 type RuntimeWorktreeScanRefresh = {
   result: RuntimeWorktreeScanResult
-  adminFingerprint: Promise<string | null>
+  adminFingerprint: string | null
+  /** Still-running probe whose value the cache entry adopts if it settles; never awaited by a caller. */
+  adminFingerprintProbe: Promise<string | null> | null
   scannedAt: number
 }
 
@@ -2884,6 +2887,8 @@ export class OrcaRuntimeService {
   private worktreeScanGenerations = new Map<string, number>()
   private worktreeScanCache = new Map<string, RuntimeWorktreeScanCache>()
   private worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
+  /** Repos whose Git-admin probe has not settled yet; caps abandoned fs work at one per repo. */
+  private worktreeAdminFingerprintProbes = new Set<string>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
   private agentDetector: AgentDetector | null = null
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
@@ -29569,13 +29574,21 @@ export class OrcaRuntimeService {
         generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
         this.worktreeScanInFlight.get(repo.id)?.promise === promise
       ) {
-        this.worktreeScanCache.set(repo.id, {
+        const entry: RuntimeWorktreeScanCache = {
           generation,
           runtimeKey,
           result: refresh.result,
           expiresAt: Date.now() + resolveWorktreeScanCacheTtlMs(repo),
           adminFingerprint: refresh.adminFingerprint,
           scannedAt: refresh.scannedAt
+        }
+        this.worktreeScanCache.set(repo.id, entry)
+        // Why a writeback instead of storing the promise: a probe that never settles must not be
+        // awaited by a later refresh. Identity check keeps a stale probe out of a newer entry.
+        void refresh.adminFingerprintProbe?.then((fingerprint) => {
+          if (this.worktreeScanCache.get(repo.id) === entry) {
+            entry.adminFingerprint = fingerprint
+          }
         })
       }
       return refresh.result
@@ -29605,29 +29618,44 @@ export class OrcaRuntimeService {
       !getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime).wslDistro
     // Why issue it before the scan: a change landing while the scan runs must not be stamped as
     // already-observed, or the next probe would mask it until the reconciliation deadline.
-    const adminFingerprint = fingerprintCapable
-      ? readRepoWorktreeAdminFingerprint(repo.path)
-      : UNFINGERPRINTED_WORKTREE_SCAN
+    const probe = fingerprintCapable ? this.startRepoWorktreeAdminFingerprintProbe(repo) : null
     const reusable =
-      fingerprintCapable &&
       cached?.result.ok === true &&
       scannedAt - cached.scannedAt < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
         ? cached
         : null
-    if (reusable) {
+    if (probe && reusable) {
       // Why await only here: this is the one branch whose decision needs the probe. A scan-bound
       // caller must never wait on it, or every cold read pays filesystem latency it cannot use.
-      const [current, previous] = await Promise.all([adminFingerprint, reusable.adminFingerprint])
-      if (current !== null && current === previous) {
+      const current = await withTimeout(probe, WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS, null)
+      if (current !== null && current === reusable.adminFingerprint) {
         return {
           result: reusable.result,
-          adminFingerprint: reusable.adminFingerprint,
+          adminFingerprint: current,
+          adminFingerprintProbe: null,
           scannedAt: reusable.scannedAt
         }
       }
     }
     const result = await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
-    return { result, adminFingerprint, scannedAt }
+    return { result, adminFingerprint: null, adminFingerprintProbe: probe, scannedAt }
+  }
+
+  /**
+   * Read one repo's Git-admin fingerprint, unless that repo's previous read is still outstanding.
+   * Why the gate: `withTimeout` abandons a probe without cancelling it, and readdir/stat take no
+   * AbortSignal — on a wedged mount a fresh probe per refresh would pin every libuv fs thread.
+   */
+  private startRepoWorktreeAdminFingerprintProbe(repo: Repo): Promise<string | null> | null {
+    if (this.worktreeAdminFingerprintProbes.has(repo.id)) {
+      return null
+    }
+    this.worktreeAdminFingerprintProbes.add(repo.id)
+    return readRepoWorktreeAdminFingerprint(repo.path)
+      .catch(() => null)
+      .finally(() => {
+        this.worktreeAdminFingerprintProbes.delete(repo.id)
+      })
   }
 
   private async listRepoWorktreesForResolutionUncached(
@@ -36011,8 +36039,10 @@ const WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS = 5 * 60_000
 // edits are invisible to it and a tip living in packed-refs or reftable only gets an mtime + size
 // stamp, so a real scan still runs on this interval even while the probe reports "unchanged".
 export const WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS = 5 * 60_000
-/** Stand-in for a repo the local admin probe cannot or need not describe; never matches a real read. */
-const UNFINGERPRINTED_WORKTREE_SCAN: Promise<string | null> = Promise.resolve(null)
+// Why so generous: a healthy but slow host (100+ linked worktrees, Windows Defender, cold dentry
+// cache, cloud placeholders) must still get to reuse its scan. Well under WORKTREE_LIST_TIMEOUT_MS,
+// and expiring yields `null` — the existing "cannot prove unchanged" sentinel, so a real scan runs.
+export const WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS = 10_000
 const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
 
 export function resolveWorktreeScanCacheTtlMs(repo: Pick<Repo, 'path' | 'connectionId'>): number {

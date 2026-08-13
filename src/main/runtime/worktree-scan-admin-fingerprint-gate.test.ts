@@ -36,7 +36,11 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
   readRepoWorktreeAdminFingerprint: readRepoWorktreeAdminFingerprintMock
 }))
 
-import { OrcaRuntimeService, WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS } from './orca-runtime'
+import {
+  OrcaRuntimeService,
+  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
+  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
+} from './orca-runtime'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/Users/me/dev/app'
@@ -121,6 +125,36 @@ function makeRuntime(
 
 function scanCount(): number {
   return listWorktreesStrictMock.mock.calls.length
+}
+
+/** Let every already-settled promise chain run without advancing the clock, so a stall stays a stall. */
+async function drainMicrotasks(): Promise<void> {
+  for (let tick = 0; tick < 200; tick += 1) {
+    await Promise.resolve()
+  }
+}
+
+function trackSettled(promise: Promise<unknown>): () => boolean {
+  let settled = false
+  void promise.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    }
+  )
+  return () => settled
+}
+
+function stallProbeOnce(): (fingerprint: string | null) => void {
+  let release: (fingerprint: string | null) => void = () => {}
+  readRepoWorktreeAdminFingerprintMock.mockReturnValueOnce(
+    new Promise<string | null>((resolve) => {
+      release = resolve
+    })
+  )
+  return (fingerprint) => release(fingerprint)
 }
 
 describe('worktree scan admin-fingerprint gate', () => {
@@ -310,6 +344,111 @@ describe('worktree scan admin-fingerprint gate', () => {
       expect(ttlOnlyScans).toBe(600)
       expect(reconcileScans).toBe(60)
       expect(scanCount()).toBe(reconcileScans)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps refreshing when a probe on a wedged filesystem never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      stallProbeOnce()
+      const { list } = makeRuntime()
+
+      await list()
+      expect(scanCount()).toBe(1)
+
+      // No timer advance: the caller's 5s fallback cannot rescue this, so the refresh itself must
+      // not be waiting on the dead probe.
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const second = list()
+      const secondSettled = trackSettled(second)
+      await drainMicrotasks()
+      expect(secondSettled()).toBe(true)
+      await second
+      expect(scanCount()).toBe(2)
+
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const third = list()
+      const thirdSettled = trackSettled(third)
+      await drainMicrotasks()
+      expect(thirdSettled()).toBe(true)
+      await third
+      expect(scanCount()).toBe(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('issues no further probes while one is still outstanding', async () => {
+    vi.useFakeTimers()
+    try {
+      readRepoWorktreeAdminFingerprintMock.mockReturnValue(new Promise<string | null>(() => {}))
+      const { list } = makeRuntime()
+
+      await list()
+      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(1)
+
+      for (let refresh = 0; refresh < 20; refresh += 1) {
+        vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+        await list()
+      }
+
+      // Each abandoned probe pins an fs work item on the 4-slot libuv pool forever.
+      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(1)
+      expect(scanCount()).toBe(21)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resumes gating once the filesystem recovers', async () => {
+    vi.useFakeTimers()
+    try {
+      const releaseStalledProbe = stallProbeOnce()
+      const { list } = makeRuntime()
+
+      await list()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      await list()
+      expect(scanCount()).toBe(2)
+
+      // The mount unwedges; its stale answer must not gate anything, but the repo must probe again.
+      releaseStalledProbe('fp-stale')
+      await drainMicrotasks()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      await list()
+      expect(scanCount()).toBe(3)
+
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      await list()
+      expect(scanCount()).toBe(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('scans when the awaited probe outlives its deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+
+      await list()
+      expect(scanCount()).toBe(1)
+
+      stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const second = list()
+      const secondSettled = trackSettled(second)
+      await drainMicrotasks()
+      // A reusable cache entry is the one case that genuinely waits on the probe.
+      expect(secondSettled()).toBe(false)
+      expect(scanCount()).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      await drainMicrotasks()
+      expect(scanCount()).toBe(2)
+      await second
     } finally {
       vi.useRealTimers()
     }
