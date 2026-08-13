@@ -857,7 +857,7 @@ describe('getPiAgentStatusExtensionSource', () => {
   })
 
   it.each<[string, Parameters<typeof createHarness>[0], unknown]>([
-    ['omp kind without willContinue', { kind: 'omp' }, undefined],
+    ['omp kind without willContinue', { kind: 'omp' }, {}],
     ['omp kind with willContinue false', { kind: 'omp' }, { willContinue: false }],
     ['runtime-detected omp', { kind: 'pi', argv: ['node', '/usr/bin/omp'] }, undefined]
   ])(
