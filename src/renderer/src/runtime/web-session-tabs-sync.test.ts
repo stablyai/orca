@@ -1880,6 +1880,156 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.layoutByWorktree).toBeUndefined()
   })
 
+  it('preserves client terminal|browser split ratio when host omits tabGroupLayout (#11162)', () => {
+    // Why: Browser-tab-host=this-computer composites are client-owned. Host publishes a
+    // terminal-only group with no layout; rebuilding via appendTabGroupLayout would drop the ratio.
+    const terminalId = toWebTerminalSurfaceTabId('host-terminal')
+    const localBrowserWorkspace: BrowserWorkspace = {
+      id: 'local-browser-workspace',
+      worktreeId: WT,
+      label: undefined,
+      sessionProfileId: null,
+      activePageId: 'local-browser-page',
+      pageIds: ['local-browser-page'],
+      url: 'https://example.com/',
+      title: 'Example',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW + 1
+    }
+    const localBrowserPage: BrowserPage = {
+      id: 'local-browser-page',
+      workspaceId: localBrowserWorkspace.id,
+      worktreeId: WT,
+      url: 'https://example.com/',
+      title: 'Example',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW + 1,
+      browserRuntimeEnvironmentId: null,
+      viewportPresetId: null
+    }
+    const terminalTab: Tab = {
+      id: terminalId,
+      entityId: terminalId,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'terminal',
+      label: 'host shell',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false,
+      isPinned: false
+    }
+    const browserTab: Tab = {
+      id: 'local-browser-tab',
+      entityId: localBrowserWorkspace.id,
+      groupId: 'local-browser-group',
+      worktreeId: WT,
+      contentType: 'browser',
+      label: 'Example',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: NOW + 1,
+      isPreview: false,
+      isPinned: false
+    }
+    const currentLayout = {
+      type: 'split' as const,
+      direction: 'horizontal' as const,
+      ratio: 0.3,
+      first: { type: 'leaf' as const, groupId: 'host-group-1' },
+      second: { type: 'leaf' as const, groupId: 'local-browser-group' }
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: terminalId,
+              ptyId: 'remote:web-env-1@@terminal-1',
+              worktreeId: WT,
+              title: 'host shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: NOW
+            }
+          ]
+        },
+        browserTabsByWorktree: { [WT]: [localBrowserWorkspace] },
+        browserPagesByWorkspace: { [localBrowserWorkspace.id]: [localBrowserPage] },
+        unifiedTabsByWorktree: { [WT]: [terminalTab, browserTab] },
+        tabBarOrderByWorktree: { [WT]: [terminalId, browserTab.id] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: terminalId,
+              tabOrder: [terminalId],
+              recentTabIds: [terminalId]
+            },
+            {
+              id: 'local-browser-group',
+              worktreeId: WT,
+              activeTabId: browserTab.id,
+              tabOrder: [browserTab.id],
+              recentTabIds: [browserTab.id]
+            }
+          ]
+        },
+        layoutByWorktree: { [WT]: currentLayout }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-terminal::${LEAF_ID}`,
+            title: 'host shell',
+            parentTabId: 'host-terminal',
+            leafId: LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-1'
+          }
+        ],
+        {
+          activeGroupId: 'host-group-1',
+          activeTabId: `host-terminal::${LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabGroups: [
+            { id: 'host-group-1', activeTabId: 'host-terminal', tabOrder: ['host-terminal'] }
+          ]
+          // no tabGroupLayout — host does not publish client composite layout
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    // Unchanged layout yields no patch entry; if a patch is emitted it must keep the ratio.
+    const layout = patch.layoutByWorktree?.[WT] ?? currentLayout
+    expect(layout).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      ratio: 0.3,
+      first: { type: 'leaf', groupId: 'host-group-1' },
+      second: { type: 'leaf', groupId: 'local-browser-group' }
+    })
+    expect(patch.layoutByWorktree).toBeUndefined()
+  })
+
   it('preserves host pane titles without synthesizing them from tab titles', () => {
     const patch = applyWebSessionTabsSnapshot(
       makeState(),

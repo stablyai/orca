@@ -1677,6 +1677,76 @@ function appendTabGroupLayout(
   }
 }
 
+function layoutCoversAllGroupIds(
+  layout: TabGroupLayoutNode | null,
+  groupIds: ReadonlySet<string>
+): boolean {
+  if (!layout || groupIds.size === 0) {
+    return false
+  }
+  const present = collectLayoutGroupIds(layout)
+  for (const groupId of groupIds) {
+    if (!present.has(groupId)) {
+      return false
+    }
+  }
+  return true
+}
+
+function tabGroupLayoutTopologyEqual(
+  a: TabGroupLayoutNode | null | undefined,
+  b: TabGroupLayoutNode | null | undefined
+): boolean {
+  if (!a || !b) {
+    return !a && !b
+  }
+  if (a.type !== b.type) {
+    return false
+  }
+  if (a.type === 'leaf') {
+    return b.type === 'leaf' && a.groupId === b.groupId
+  }
+  return (
+    b.type === 'split' &&
+    a.direction === b.direction &&
+    tabGroupLayoutTopologyEqual(a.first, b.first) &&
+    tabGroupLayoutTopologyEqual(a.second, b.second)
+  )
+}
+
+/** Copy split ratios from source onto target when topology matches and target omits ratio. */
+function preserveTabGroupLayoutRatios(
+  target: TabGroupLayoutNode,
+  source: TabGroupLayoutNode | null | undefined
+): TabGroupLayoutNode {
+  if (!source || !tabGroupLayoutTopologyEqual(target, source)) {
+    return target
+  }
+  return copyMissingLayoutRatios(target, source)
+}
+
+function copyMissingLayoutRatios(
+  target: TabGroupLayoutNode,
+  source: TabGroupLayoutNode
+): TabGroupLayoutNode {
+  if (target.type === 'leaf' || source.type === 'leaf') {
+    return target
+  }
+  const first = copyMissingLayoutRatios(target.first, source.first)
+  const second = copyMissingLayoutRatios(target.second, source.second)
+  const ratio = target.ratio ?? source.ratio
+  if (first === target.first && second === target.second && ratio === target.ratio) {
+    return target
+  }
+  return {
+    type: 'split',
+    direction: target.direction,
+    first,
+    second,
+    ...(ratio !== undefined ? { ratio } : {})
+  }
+}
+
 function tabGroupLayoutEqual(
   a: TabGroupLayoutNode | null | undefined,
   b: TabGroupLayoutNode | null | undefined
@@ -3080,8 +3150,20 @@ function applyWebSessionTabsSnapshotWithContext(
       return state.layoutByWorktree
     }
     const validGroupIds = new Set(nextGroups.map((group) => group.id))
+    const localLayout = pruneTabGroupLayout(state.layoutByWorktree[worktreeId], validGroupIds)
     const hostLayout = pruneTabGroupLayout(snapshot.tabGroupLayout, validGroupIds)
     const defaultLeafLayout = { type: 'leaf' as const, groupId: nextActiveGroupId ?? targetGroupId }
+    // Why: Browser-tab-host=this-computer composites are client-owned; host often omits tabGroupLayout.
+    // Prefer the existing local tree (incl. drag ratio) when it still covers every live group.
+    if (!hostLayout && localLayout && layoutCoversAllGroupIds(localLayout, validGroupIds)) {
+      if (tabGroupLayoutEqual(state.layoutByWorktree[worktreeId], localLayout)) {
+        return state.layoutByWorktree
+      }
+      return {
+        ...state.layoutByWorktree,
+        [worktreeId]: localLayout
+      }
+    }
     const hostLayoutGroupIds = collectLayoutGroupIds(hostLayout ?? undefined)
     const hostGroupIds = new Set(snapshot.tabGroups?.map((group) => group.id) ?? [])
     const extraGroupIds = new Set(
@@ -3098,16 +3180,18 @@ function applyWebSessionTabsSnapshotWithContext(
     const localExtraLayout = pruneTabGroupLayout(state.layoutByWorktree[worktreeId], extraGroupIds)
     const hostBaseLayout =
       hostLayout ?? (snapshot.tabGroups && snapshot.tabGroups.length > 0 ? defaultLeafLayout : null)
-    const fallbackLayout =
+    const mergedLayout =
       appendTabGroupLayout(hostBaseLayout, localExtraLayout) ??
       (snapshot.tabGroups && snapshot.tabGroups.length > 0
         ? defaultLeafLayout
         : state.layoutByWorktree[worktreeId]
           ? null
           : defaultLeafLayout)
-    if (!fallbackLayout) {
+    if (!mergedLayout) {
       return state.layoutByWorktree
     }
+    // Why: host/merged split nodes may omit ratio; keep the client's ratio when topology matches.
+    const fallbackLayout = preserveTabGroupLayoutRatios(mergedLayout, localLayout)
     if (tabGroupLayoutEqual(state.layoutByWorktree[worktreeId], fallbackLayout)) {
       return state.layoutByWorktree
     }
