@@ -1537,8 +1537,9 @@ export class OrcaRuntimeRpcServer {
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
-    if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
+    if (longPoll || request.method === 'terminal.send') {
+      // Why: Windows pacing can keep a large send open past the socket idle
+      // timeout, but sends must not consume the bounded long-poll budget.
       context?.startKeepalive()
     }
 

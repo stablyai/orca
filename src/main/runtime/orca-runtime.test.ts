@@ -16442,6 +16442,94 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('writes large terminal input in 16 KiB chunks without inter-chunk delay', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      await runtime.sendTerminal(handle, { text: 'x' })
+      expect(writes).toEqual(['x'])
+      expect(vi.getTimerCount()).toBe(0)
+
+      writes.length = 0
+      const text = 'y'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2)
+      // Why: flush microtasks only — advancing timers would let a reintroduced gap pass this test.
+      const send = runtime.sendTerminal(handle, { text })
+      for (let i = 0; i < 32 && writes.length < 2; i += 1) {
+        await Promise.resolve()
+      }
+      expect(vi.getTimerCount()).toBe(0)
+      expect(writes).toEqual([
+        'y'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES),
+        'y'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
+      ])
+      await send
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('serializes concurrent terminal sends per PTY', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    const first = 'a'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2)
+    const second = 'b'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2)
+
+    await Promise.all([
+      runtime.sendTerminal(handle, { text: first }),
+      runtime.sendTerminal(handle, { text: second })
+    ])
+
+    expect(writes.join('')).toBe(first + second)
+  })
+
+  it('stops multi-chunk terminal input when the PTY exits after the first chunk', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        // Why: exit after accepting the first chunk so later chunks hit the cancelled queue.
+        if (writes.length === 1) {
+          runtime.onPtyExit('pty-bg', 0)
+        }
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    await expect(
+      runtime.sendTerminal(handle, {
+        text: 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 3)
+      })
+    ).rejects.toThrow('terminal_not_writable')
+    expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)])
+  })
+
   it('chunks large terminal.send text before provider writes', async () => {
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(store)

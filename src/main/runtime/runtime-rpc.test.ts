@@ -5421,6 +5421,31 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('keeps paced terminal sends alive without consuming long-poll capacity', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+      const startKeepalive = vi.fn()
+      server['dispatcher'].dispatch = vi.fn().mockResolvedValue({
+        id: 'req_send',
+        ok: true,
+        result: { send: { handle: 'term-1', accepted: true, bytesWritten: 1 } }
+      })
+
+      await server['handleMessage'](
+        JSON.stringify({
+          id: 'req_send',
+          authToken: server['authToken'],
+          method: 'terminal.send',
+          params: { terminal: 'term-1', text: 'x' }
+        }),
+        { signal: new AbortController().signal, startKeepalive }
+      )
+
+      expect(startKeepalive).toHaveBeenCalledOnce()
+      expect(server['activeLongPolls']).toBe(0)
+    })
+
     it('does not emit keepalive frames for short RPCs', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
