@@ -18,6 +18,7 @@ function run(overrides: Partial<AutomationRun>): AutomationRun {
     terminalSessionId: 'tab-1',
     terminalPaneKey: 'tab-1:leaf-1',
     terminalPtyId: 'pty-1',
+    completionAttribution: null,
     outputSnapshot: null,
     precheckResult: null,
     usage: null,

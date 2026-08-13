@@ -1,5 +1,7 @@
 import type { AgentProviderSessionMetadata } from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusState } from '../agent-status/contracts/agent-status-types'
+import type { AutomationRunCompletionAttribution } from './automation-run-completion-attribution'
+import type { AutomationRunUsageProvider } from './history/automation-run'
 
 /** Identity fields needed to attribute automation completion to a session. */
 export type AutomationAgentSessionIdentity = {
@@ -90,4 +92,95 @@ export function noteAutomationAgentStatus(
   }
 
   return true
+}
+
+export function resolveAutomationRunUsageProvider(
+  agentId: string
+): AutomationRunUsageProvider | null {
+  return agentId === 'claude' || agentId === 'codex' ? agentId : null
+}
+
+function parseBoundFingerprint(fingerprint: string | null): {
+  key: 'session_id' | 'conversation_id'
+  id: string
+} | null {
+  if (!fingerprint) {
+    return null
+  }
+  const separator = fingerprint.indexOf(':')
+  if (separator <= 0 || separator === fingerprint.length - 1) {
+    return null
+  }
+  const key = fingerprint.slice(0, separator)
+  const id = fingerprint.slice(separator + 1)
+  if (key !== 'session_id' && key !== 'conversation_id') {
+    return null
+  }
+  return { key, id }
+}
+
+/** Persistable receipt: exact only when a provider-session fingerprint was bound. */
+export function buildAutomationRunCompletionAttribution(args: {
+  tracker: AutomationAgentSessionTracker
+  provider: AutomationRunUsageProvider | null
+  terminalPtyId: string | null
+  terminalPaneKey: string | null
+}): AutomationRunCompletionAttribution {
+  const parsed = parseBoundFingerprint(args.tracker.boundFingerprint)
+  if (!parsed) {
+    return {
+      kind: 'pane_time_fallback',
+      provider: args.provider,
+      providerSessionKey: null,
+      providerSessionId: null,
+      terminalPtyId: args.terminalPtyId,
+      terminalPaneKey: args.terminalPaneKey
+    }
+  }
+  return {
+    kind: 'exact_provider_session',
+    provider: args.provider,
+    providerSessionKey: parsed.key,
+    providerSessionId: parsed.id,
+    terminalPtyId: args.terminalPtyId,
+    terminalPaneKey: args.terminalPaneKey
+  }
+}
+
+/** Replay pane rows the way a live tracker would, then build the persisted receipt. */
+export function replayAutomationRunCompletionAttribution(args: {
+  rows: readonly (AutomationAgentSessionIdentity & {
+    stateStartedAt: number
+    providerSessionOnly?: boolean
+    agentType?: string | null
+  })[]
+  terminalPtyId: string | null
+  terminalPaneKey: string | null
+}): AutomationRunCompletionAttribution {
+  const tracker = createAutomationAgentSessionTracker()
+  const ordered = args.rows
+    .filter((row) => !row.providerSessionOnly)
+    .slice()
+    .sort((left, right) => left.stateStartedAt - right.stateStartedAt)
+  let provider: AutomationRunUsageProvider | null = null
+  for (const row of ordered) {
+    noteAutomationAgentStatus(tracker, {
+      state: row.state,
+      providerSession: row.providerSession
+    })
+    if (provider || !row.agentType) {
+      continue
+    }
+    const fingerprint = resolveAutomationAgentSessionFingerprint(row)
+    const rowProvider = resolveAutomationRunUsageProvider(row.agentType)
+    if (rowProvider && tracker.boundFingerprint && fingerprint === tracker.boundFingerprint) {
+      provider = rowProvider
+    }
+  }
+  return buildAutomationRunCompletionAttribution({
+    tracker,
+    provider,
+    terminalPtyId: args.terminalPtyId,
+    terminalPaneKey: args.terminalPaneKey
+  })
 }

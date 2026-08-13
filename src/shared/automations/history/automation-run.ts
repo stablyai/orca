@@ -1,5 +1,6 @@
 import type { SetupTrustMismatch } from '../../worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../work-items/task-source-context'
+import type { AutomationRunCompletionAttribution } from '../automation-run-completion-attribution'
 
 export type AutomationRunStatus =
   | 'pending'
@@ -99,6 +100,9 @@ export type AutomationRun = {
   /** Retain the executed pane/PTY because terminal tabs may later point elsewhere. */
   terminalPaneKey: string | null
   terminalPtyId: string | null
+  /** Why: consumers of `orca automations runs --json` must distinguish exact
+   *  provider-session binding from pane/time fallback (#10999). */
+  completionAttribution: AutomationRunCompletionAttribution | null
   outputSnapshot: AutomationRunOutputSnapshot | null
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
@@ -139,6 +143,7 @@ export type AutomationDispatchResult = {
   terminalSessionId?: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
+  completionAttribution?: AutomationRunCompletionAttribution | null
   outputSnapshot?: AutomationRunOutputSnapshot | null
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null

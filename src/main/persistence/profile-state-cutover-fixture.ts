@@ -158,6 +158,7 @@ function fixtureAutomationRun(): AutomationRun {
     terminalSessionId: 'terminal-fixture',
     terminalPaneKey: 'pane-fixture',
     terminalPtyId: 'pty-local',
+    completionAttribution: null,
     outputSnapshot: {
       format: 'plain_text',
       content: 'fixture output',

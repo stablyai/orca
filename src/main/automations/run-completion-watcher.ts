@@ -5,12 +5,18 @@ import {
   type AutomationRunOutputSnapshot
 } from '../../shared/automations/history/automation-run'
 import type { AutomationRunFailureCodeFields } from '../../shared/automations/history/automation-run-failure-copy'
+import type { AutomationRunCompletionAttribution } from '../../shared/automations/automation-run-completion-attribution'
+import {
+  buildAutomationRunCompletionAttribution,
+  createAutomationAgentSessionTracker
+} from '../../shared/automations/automation-agent-session-attribution'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
 
 export type AutomationRunCompletionObservation = {
   status: 'completed' | 'dispatch_failed'
   outputSnapshot?: AutomationRunOutputSnapshot | null
   error?: string | null
+  completionAttribution?: AutomationRunCompletionAttribution | null
 } & AutomationRunFailureCodeFields
 
 export type AutomationRunTerminalObserver = {
@@ -173,6 +179,16 @@ export class AutomationRunCompletionWatcher {
     if (!current || isFinalAutomationRunStatus(current.status)) {
       return
     }
+    const completionAttribution =
+      observation.completionAttribution ??
+      (observation.status === 'completed'
+        ? buildAutomationRunCompletionAttribution({
+            tracker: createAutomationAgentSessionTracker(),
+            provider: null,
+            terminalPtyId: current.terminalPtyId,
+            terminalPaneKey: current.terminalPaneKey
+          })
+        : undefined)
     await this.markDispatchResult({
       runId: run.id,
       status: observation.status,
@@ -182,6 +198,7 @@ export class AutomationRunCompletionWatcher {
       terminalSessionId: current.terminalSessionId,
       terminalPaneKey: current.terminalPaneKey,
       terminalPtyId: current.terminalPtyId,
+      ...(completionAttribution ? { completionAttribution } : {}),
       outputSnapshot: observation.outputSnapshot ?? null,
       error: observation.error ?? null,
       errorCode: observation.errorCode ?? null,

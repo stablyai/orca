@@ -23,6 +23,7 @@ function run(index: number, title = 'Nightly run'): AutomationRun {
     terminalSessionId: null,
     terminalPaneKey: null,
     terminalPtyId: null,
+    completionAttribution: null,
     outputSnapshot: { format: 'plain_text', content: OUTPUT, capturedAt: 5, truncated: false },
     precheckResult: {
       command: 'check',

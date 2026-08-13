@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { isExactAutomationRunCompletionAttribution } from './automation-run-completion-attribution'
 import {
+  buildAutomationRunCompletionAttribution,
   createAutomationAgentSessionTracker,
   noteAutomationAgentStatus,
-  resolveAutomationAgentSessionFingerprint
+  replayAutomationRunCompletionAttribution,
+  resolveAutomationAgentSessionFingerprint,
+  resolveAutomationRunUsageProvider
 } from './automation-agent-session-attribution'
 
 describe('resolveAutomationAgentSessionFingerprint', () => {
@@ -184,5 +188,102 @@ describe('noteAutomationAgentStatus', () => {
         providerSession: { key: 'session_id', id: 'primary' }
       })
     ).toBe(true)
+  })
+})
+
+describe('buildAutomationRunCompletionAttribution', () => {
+  it('emits a positive exact receipt only after a provider session is bound', () => {
+    const tracker = createAutomationAgentSessionTracker()
+    const fallback = buildAutomationRunCompletionAttribution({
+      tracker,
+      provider: resolveAutomationRunUsageProvider('claude'),
+      terminalPtyId: 'pty-1',
+      terminalPaneKey: 'pane-1'
+    })
+    expect(fallback.kind).toBe('pane_time_fallback')
+    expect(isExactAutomationRunCompletionAttribution(fallback)).toBe(false)
+
+    noteAutomationAgentStatus(tracker, {
+      state: 'working',
+      providerSession: { key: 'session_id', id: 'primary-session' }
+    })
+    const exact = buildAutomationRunCompletionAttribution({
+      tracker,
+      provider: 'claude',
+      terminalPtyId: 'pty-1',
+      terminalPaneKey: 'pane-1'
+    })
+    expect(exact).toEqual({
+      kind: 'exact_provider_session',
+      provider: 'claude',
+      providerSessionKey: 'session_id',
+      providerSessionId: 'primary-session',
+      terminalPtyId: 'pty-1',
+      terminalPaneKey: 'pane-1'
+    })
+    expect(isExactAutomationRunCompletionAttribution(exact)).toBe(true)
+  })
+
+  it('does not treat usage time-window fallback as exact attribution', () => {
+    expect(
+      isExactAutomationRunCompletionAttribution({
+        kind: 'pane_time_fallback',
+        provider: 'claude',
+        providerSessionKey: 'session_id',
+        providerSessionId: 'sess',
+        terminalPtyId: 'pty-1',
+        terminalPaneKey: 'pane-1'
+      })
+    ).toBe(false)
+  })
+
+  it('keeps a nested done on a pane-time receipt and records the bound session after its own done', () => {
+    const nestedOnly = replayAutomationRunCompletionAttribution({
+      rows: [
+        {
+          state: 'done',
+          stateStartedAt: 1,
+          providerSession: { key: 'session_id', id: 'nested' },
+          agentType: 'claude'
+        }
+      ],
+      terminalPtyId: 'pty-1',
+      terminalPaneKey: 'pane-1'
+    })
+    expect(nestedOnly.kind).toBe('pane_time_fallback')
+    expect(isExactAutomationRunCompletionAttribution(nestedOnly)).toBe(false)
+
+    const exact = replayAutomationRunCompletionAttribution({
+      rows: [
+        {
+          state: 'working',
+          stateStartedAt: 1,
+          providerSession: { key: 'session_id', id: 'primary-session' },
+          agentType: 'claude'
+        },
+        {
+          state: 'done',
+          stateStartedAt: 2,
+          providerSession: { key: 'session_id', id: 'nested' },
+          agentType: 'claude'
+        },
+        {
+          state: 'done',
+          stateStartedAt: 3,
+          providerSession: { key: 'session_id', id: 'primary-session' },
+          agentType: 'claude'
+        }
+      ],
+      terminalPtyId: 'pty-1',
+      terminalPaneKey: 'pane-1'
+    })
+    expect(exact).toEqual({
+      kind: 'exact_provider_session',
+      provider: 'claude',
+      providerSessionKey: 'session_id',
+      providerSessionId: 'primary-session',
+      terminalPtyId: 'pty-1',
+      terminalPaneKey: 'pane-1'
+    })
   })
 })
