@@ -2335,7 +2335,6 @@ describe('AgentBrowserBridge', () => {
 
   it.each([
     ['fill', (b: AgentBrowserBridge, text: string) => b.fill('@textarea', text)],
-    ['type', (b: AgentBrowserBridge, text: string) => b.type(text)],
     ['keyboard insert', (b: AgentBrowserBridge, text: string) => b.keyboardInsertText(text)]
   ])('yields before spawning agent-browser for accepted large %s text', async (_name, run) => {
     vi.useFakeTimers()
@@ -2357,23 +2356,172 @@ describe('AgentBrowserBridge', () => {
     }
   })
 
-  it('chunks large agent-browser type text before keyboard transport', async () => {
+  it('targets the requested page directly when typing text', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.type('HELLO-SOLO', undefined, 'tab-1')
+
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Input.insertText', {
+      text: 'HELLO-SOLO'
+    })
+  })
+
+  it('chunks large browser type text before direct CDP insertion', async () => {
     const text = ['y'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'zz'].join('')
-    succeedWith({ typed: true })
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
 
-    await bridge.type(text)
+    await bridge.type(text, undefined, 'tab-1')
 
-    const typeCalls = execFileMock.mock.calls.filter((call: unknown[]) => {
-      const args = call[1] as string[]
-      return args.includes('keyboard') && args.includes('type')
-    })
-    const chunks = typeCalls.map((call: unknown[]) => {
-      const args = call[1] as string[]
-      return args[args.indexOf('type') + 1]
-    })
+    const chunks = wc.debugger.sendCommand.mock.calls
+      .filter((call) => call[0] === 'Input.insertText')
+      .map((call) => (call[1] as { text: string }).text)
 
     expect(chunks).toEqual(['y'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'zz'])
   })
+
+  it.each([
+    [
+      '+',
+      {
+        key: '+',
+        code: '',
+        modifiers: 0,
+        windowsVirtualKeyCode: 43,
+        text: '+'
+      }
+    ],
+    [
+      'Control++',
+      {
+        key: '+',
+        code: '',
+        modifiers: 2,
+        windowsVirtualKeyCode: 43,
+        text: '+',
+        unmodifiedText: '+'
+      }
+    ],
+    [
+      'Shift+a',
+      {
+        key: 'a',
+        code: 'KeyA',
+        modifiers: 8,
+        windowsVirtualKeyCode: 65,
+        text: 'a',
+        unmodifiedText: 'a'
+      }
+    ],
+    [
+      'Shift+1',
+      {
+        key: '1',
+        code: 'Digit1',
+        modifiers: 8,
+        windowsVirtualKeyCode: 49,
+        text: '1',
+        unmodifiedText: '1'
+      }
+    ],
+    [
+      'Control+Shift+a',
+      {
+        key: 'a',
+        code: 'KeyA',
+        modifiers: 10,
+        windowsVirtualKeyCode: 65,
+        text: 'a',
+        unmodifiedText: 'a'
+      }
+    ]
+  ])('dispatches direct keypress payload for %s', async (key, expectedDefinition) => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.keypress(key, undefined, 'tab-1')
+
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(1, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      ...expectedDefinition
+    })
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      ...expectedDefinition
+    })
+  })
+
+  it('dispatches keypresses to the requested page instead of the focused window', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    const result = await bridge.keypress('Control+a', undefined, 'tab-1')
+
+    expect(result).toEqual({ pressed: 'Control+a' })
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(1, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'a',
+      code: 'KeyA',
+      modifiers: 2,
+      unmodifiedText: 'a',
+      windowsVirtualKeyCode: 65
+    })
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: 'a',
+      code: 'KeyA',
+      modifiers: 2,
+      unmodifiedText: 'a',
+      windowsVirtualKeyCode: 65
+    })
+  })
+
+  it.each([
+    ['type', (b: AgentBrowserBridge) => b.type('hello', undefined, 'tab-1')],
+    ['keypress', (b: AgentBrowserBridge) => b.keypress('a', undefined, 'tab-1')]
+  ])(
+    'translates direct %s debugger attachment failures while the page is live',
+    async (_name, run) => {
+      const wc = mockWebContents(100)
+      wc.debugger.isAttached.mockReturnValue(false)
+      wc.debugger.attach.mockImplementation(() => {
+        throw new Error('Cannot attach debugger')
+      })
+      webContentsFromIdMock.mockReturnValue(wc)
+
+      await expect(run(bridge)).rejects.toMatchObject({
+        code: 'browser_error',
+        message: expect.stringContaining('Cannot attach debugger')
+      })
+      expect(execFileMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    ['type', (b: AgentBrowserBridge) => b.type('hello', undefined, 'tab-1')],
+    ['keypress', (b: AgentBrowserBridge) => b.keypress('a', undefined, 'tab-1')]
+  ])(
+    'maps direct %s attachment races to page unavailable after the page closes',
+    async (_name, run) => {
+      const wc = mockWebContents(100)
+      wc.debugger.isAttached.mockReturnValue(false)
+      wc.debugger.attach.mockImplementation(() => {
+        wc.isDestroyed = () => true
+        throw new Error('Object has been destroyed')
+      })
+      webContentsFromIdMock.mockReturnValue(wc)
+
+      await expect(run(bridge)).rejects.toMatchObject({
+        code: 'browser_tab_not_found',
+        message: 'Browser page tab-1 is no longer available'
+      })
+      expect(execFileMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('chunks large agent-browser keyboard insert text before transport', async () => {
     const text = ['z'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'qq'].join('')

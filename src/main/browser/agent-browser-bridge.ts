@@ -49,7 +49,7 @@ import type {
 } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
-import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
+import { insertTextThroughCdp, iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
 const EXEC_TIMEOUT_MS = 90_000
@@ -59,6 +59,91 @@ const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
 const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+
+type DirectKeyDefinition = {
+  key: string
+  code: string
+  modifiers?: number
+  windowsVirtualKeyCode?: number
+  text?: string
+  unmodifiedText?: string
+}
+
+const DIRECT_KEY_DEFINITIONS: Record<string, DirectKeyDefinition> = {
+  Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' },
+  Tab: { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, text: '\t' },
+  Escape: { key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 },
+  Backspace: { key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 },
+  Delete: { key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 },
+  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 },
+  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
+  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 },
+  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 },
+  Home: { key: 'Home', code: 'Home', windowsVirtualKeyCode: 36 },
+  End: { key: 'End', code: 'End', windowsVirtualKeyCode: 35 },
+  PageUp: { key: 'PageUp', code: 'PageUp', windowsVirtualKeyCode: 33 },
+  PageDown: { key: 'PageDown', code: 'PageDown', windowsVirtualKeyCode: 34 },
+  Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' }
+}
+
+function resolveDirectKeyDefinition(input: string): DirectKeyDefinition {
+  const parts = input.split('+')
+  let key = parts.pop() ?? input
+  if (key === '' && parts.at(-1) === '') {
+    parts.pop()
+    key = '+'
+  }
+  let modifiers = 0
+  for (const modifier of parts) {
+    if (modifier === 'Alt') {
+      modifiers |= 1
+    } else if (modifier === 'Control' || modifier === 'Ctrl') {
+      modifiers |= 2
+    } else if (modifier === 'Meta' || modifier === 'Command' || modifier === 'Cmd') {
+      modifiers |= 4
+    } else if (modifier === 'Shift') {
+      modifiers |= 8
+    }
+  }
+
+  const known = DIRECT_KEY_DEFINITIONS[key]
+  if (known) {
+    return modifiers > 0 ? { ...known, modifiers } : known
+  }
+  if (key.length === 1) {
+    const charCode = key.charCodeAt(0)
+    if (charCode >= 48 && charCode <= 57) {
+      return {
+        key,
+        code: `Digit${key}`,
+        windowsVirtualKeyCode: charCode,
+        text: key,
+        modifiers,
+        ...(modifiers > 0 ? { unmodifiedText: key } : {})
+      }
+    }
+    if ((charCode >= 65 && charCode <= 90) || (charCode >= 97 && charCode <= 122)) {
+      const text = modifiers === 0 || (modifiers & 8) !== 0 ? key : undefined
+      return {
+        key,
+        code: `Key${key.toUpperCase()}`,
+        windowsVirtualKeyCode: key.toUpperCase().charCodeAt(0),
+        ...(text !== undefined ? { text } : {}),
+        ...(modifiers > 0 ? { unmodifiedText: key } : {}),
+        modifiers
+      }
+    }
+    return {
+      key,
+      code: '',
+      windowsVirtualKeyCode: charCode,
+      text: key,
+      modifiers,
+      ...(modifiers > 0 ? { unmodifiedText: key } : {})
+    }
+  }
+  return { key, code: key, modifiers }
+}
 
 type SessionState = {
   proxy: CdpWsProxy
@@ -973,16 +1058,30 @@ export class AgentBrowserBridge {
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
-      async (sessionName) => {
-        for (const chunk of iterateBrowserTextInsertionChunks(
-          input,
-          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
-        )) {
-          await this.execAgentBrowser(sessionName, ['keyboard', 'type', chunk])
+      async (_sessionName, target) => {
+        const wc = this.requireTargetWebContents(target)
+        let releaseDebugger = (): void => {}
+        try {
+          releaseDebugger = acquireElectronDebugger(wc).release
+          await insertTextThroughCdp(
+            (method, params) => wc.debugger.sendCommand(method, params),
+            input,
+            { maxChunkBytes: AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES }
+          )
+          return { typed: true }
+        } catch (error) {
+          if (!this.getWebContents(target.webContentsId)) {
+            throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+          }
+          throw new BrowserError(
+            'browser_error',
+            `Failed to type into browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        } finally {
+          releaseDebugger()
         }
-        return { typed: true } as BrowserTypeResult
       },
-      { requireScopedTarget: true }
+      { ensureSession: false, requireScopedTarget: true }
     )
   }
 
@@ -1768,9 +1867,38 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserKeypressResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.requireTargetWebContents(target)
+        const keyDefinition = resolveDirectKeyDefinition(key)
+        let releaseDebugger = (): void => {}
+        try {
+          releaseDebugger = acquireElectronDebugger(wc).release
+          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
+            type: 'keyDown',
+            ...keyDefinition
+          })
+          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
+            type: 'keyUp',
+            ...keyDefinition
+          })
+          return { pressed: key }
+        } catch (error) {
+          if (!this.getWebContents(target.webContentsId)) {
+            throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+          }
+          throw new BrowserError(
+            'browser_error',
+            `Failed to press key in browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        } finally {
+          releaseDebugger()
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async pdf(worktreeId?: string, browserPageId?: string): Promise<BrowserPdfResult> {
