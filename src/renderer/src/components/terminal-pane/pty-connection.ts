@@ -4982,6 +4982,27 @@ export function connectPanePty(
         armStartupDraftQuietTimer()
       }
     }
+    // Why: a cold restore replaces this pane's launch identity wholesale — see
+    // applyColdRestoreAgentResumeStartup, which re-registers the launch config
+    // under the resume's own freshly generated launchToken. That makes the
+    // pane-creation draft's launch provably over: its PTY is gone, which is the
+    // very reason a cold restore is running. Unlike activeColdRestoreDraft, the
+    // startupDraft* state above is a single whole-pane-lifetime slot with no
+    // generation/launchToken scoping, and nothing ever resets it — so a draft
+    // still owed here would keep its armed scanner (anchor already latched from
+    // the dead stream) observing the replacement PTY and paste the stale prompt
+    // into the resumed agent's composer, on top of the cold restore's own
+    // session-rules draft, which is what legitimately owns that composer. Settle
+    // it unpasted; the delivery claim stays held on purpose, exactly like a
+    // delivered draft's (see resetActiveColdRestoreDraft) — nothing should ever
+    // retry a draft whose launch no longer exists.
+    const supersedeStartupDraftPasteForColdRestore = (): void => {
+      if (startupDraftPasteSettled) {
+        return
+      }
+      startupDraftPasteSettled = true
+      clearStartupDraftPasteTimers()
+    }
     if (ownsStartupDraftPaste && !connectionId && !shouldDeliverStartupViaTerminalPaste) {
       armStartupDraftReadinessObservation()
     }
@@ -5407,6 +5428,10 @@ export function connectPanePty(
         tabId: deps.tabId,
         leafId: pane.leafId
       })
+      // Why: this is the point the pane stops belonging to its creation launch,
+      // so it is also where an unsettled launch draft stops being deliverable —
+      // whether or not this resume brings a rules draft of its own.
+      supersedeStartupDraftPasteForColdRestore()
       armActiveColdRestoreDraft(startup)
       return true
     }

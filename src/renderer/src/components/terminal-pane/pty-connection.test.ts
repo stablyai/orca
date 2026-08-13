@@ -11230,6 +11230,121 @@ describe('connectPanePty', () => {
     expect(transport.sendInputAccepted).not.toHaveBeenCalled()
   })
 
+  it('never rides an unsettled launch draft along with a later cold-restore rules draft', async () => {
+    // Regression: the legacy startupDraft* paste channel (seeded once from paneStartup at pane
+    // creation) never got the launch-scoped ownership discipline that the newer cold-restore
+    // draft has. Both channels observe the SAME bytes — dataCallback calls
+    // observeStartupDraftPasteReadiness and observeColdRestoreSessionRulesReadiness back to back
+    // on every chunk — and nothing coordinated them: startupDraftReadinessArmed and
+    // startupDraftPasteSettled are plain whole-pane-lifetime booleans that nothing ever resets,
+    // and the two delivery claims are keyed by launchToken, so they never collide in the claim
+    // registry either (see armActiveColdRestoreDraft's own comment).
+    //
+    // This constructs the reachable coexistence. opencode launches with a real startup draft and
+    // enables bracketed paste (\x1b[?2004h), but dies before mounting its composer, so its
+    // show-cursor marker never arrives. opencode's ready signal carries no quiet-window fallback,
+    // so nothing settles the draft: it is left armed-but-unsettled forever, with its scanner's
+    // \x1b[?2004h anchor already latched. The pane then hibernates and wakes, cold-restoring the
+    // provider session with a session-rules draft of its own. The resumed agent's composer bytes
+    // satisfied BOTH scanners at once, so the dead launch's stale prompt got bracket-pasted into
+    // the resumed session's composer alongside the rules text — two pastes into one shell.
+    const { connectPanePty } = await import('./pty-connection')
+    const launchDraftPrompt = 'refactor-the-graph-loader'
+    const capturedDataCallbacks: ((data: string) => void)[] = []
+    let currentPtyId: string | null = null
+    const transport = createMockTransport(null)
+    transport.getPtyId = vi.fn(() => currentPtyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      const id = `pty-${capturedDataCallbacks.length}`
+      capturedDataCallbacks.push(callbacks.onData ?? (() => {}))
+      currentPtyId = id
+      return id
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      settings: {
+        ...mockStoreState.settings,
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'cold-restore-rule',
+              label: 'Cold restore rule',
+              content: 'Reload the repository graph before answering.',
+              enabled: true,
+              source: 'custom'
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      },
+      agentStatusByPaneKey: {}
+    } as StoreState
+
+    const deps = createDeps({
+      consumeSuppressedPtyExit: vi.fn(() => true),
+      startup: {
+        command: 'opencode',
+        launchAgent: 'opencode',
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        launchToken: 'launch-token-startup-draft',
+        draftPrompt: launchDraftPrompt
+      }
+    })
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      deps as never
+    ) as unknown as { noteVisibilityResume: () => void }
+    await flushAsyncTicks(20)
+    expect(capturedDataCallbacks.length).toBe(1)
+
+    // opencode gets as far as enabling bracketed paste, then dies without ever rendering the
+    // show-cursor marker its draftPasteReadySignal waits on — the draft stays owed, unsettled.
+    capturedDataCallbacks[0]?.('\x1b[?2004h')
+    await flushAsyncTicks()
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'opencode',
+      providerSession: { key: 'session_id', id: 'opencode-session-1' },
+      prompt: 'finish the task',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'worktree-sleep'
+    }
+    mockStoreState.suppressedPtyExitIds['pty-0'] = true
+    deps.isVisibleRef.current = false
+    onPtyExit?.('pty-0')
+    currentPtyId = null
+
+    // Reveal wakes the pane: this cold restore owns the replacement PTY, and brings its own
+    // session-rules draft for the resumed session's composer.
+    deps.isVisibleRef.current = true
+    binding.noteVisibilityResume()
+    await flushAsyncTicks(20)
+    expect(capturedDataCallbacks.length).toBe(2)
+
+    capturedDataCallbacks[1]?.('\x1b[?2004h\x1b[?25h')
+    await flushAsyncTicks()
+
+    const pastedText = (transport.sendInputAccepted?.mock.calls ?? []).map(([data]) => String(data))
+    // The cold restore's own rules draft legitimately owns this composer.
+    expect(
+      pastedText.some((text) => text.includes('Reload the repository graph before answering.'))
+    ).toBe(true)
+    // The dead launch's draft must not ride along into the resumed session.
+    expect(pastedText.filter((text) => text.includes(launchDraftPrompt))).toEqual([])
+  })
+
   it('uses sleeping-record launch config for pane cold restore after settings change', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
