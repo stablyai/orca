@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import { toast } from 'sonner'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   BrowserTabCreateResult,
@@ -1201,10 +1202,11 @@ export function splitWebRuntimeTerminal(
     })
     .catch((error) => {
       releasePendingMirrorSuppression()
-      console.warn(
-        '[web-runtime-session] failed to split terminal:',
-        error instanceof Error ? error.message : String(error)
-      )
+      const message = error instanceof Error ? error.message : String(error)
+      // Why: a split that fails only in the console leaves the user with a pane that silently
+      // never appears.
+      toast.error(message)
+      console.warn('[web-runtime-session] failed to split terminal:', message)
     })
   return true
 }

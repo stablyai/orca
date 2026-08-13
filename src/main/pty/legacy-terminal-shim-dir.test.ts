@@ -176,6 +176,13 @@ describe('legacy terminal shim neutralization', () => {
       expect(messages.filter((message) => message.includes('neutralization attempt'))).toHaveLength(
         5
       )
+      // Why: pin the ordinals too — the count alone would not catch an off-by-one.
+      expect(messages.some((message) => message.includes('neutralization attempt 1 failed'))).toBe(
+        true
+      )
+      expect(messages.some((message) => message.includes('neutralization attempt 5 failed'))).toBe(
+        true
+      )
       // Why: the give-up count must agree with the last per-attempt line, not the retry counter.
       expect(
         messages.some((message) => message.includes('gave up neutralizing after 5 attempts'))
