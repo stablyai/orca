@@ -190,6 +190,7 @@ const CODEX_EFFORT_CHOICES = [
   { value: 'ultra', label: 'Ultra' }
 ]
 
+// Why: Codex can clamp higher values, so expose only each model's advertised levels.
 function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
   const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
   return {
