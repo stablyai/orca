@@ -8,6 +8,8 @@ import { translate } from '@/i18n/i18n'
 import { resolveUiLocale } from '@/i18n/supported-languages'
 import { MANAGE_SESSIONS_SECTION_ID } from '@/components/settings/TerminalTccAttributionNotice'
 
+const SEVERED_TCC_NOTICE_ID = 'mac-tcc-attribution-severed'
+
 /** Surface the existing restart remedy once when daemon TCC attribution is severed. */
 export function useMacTccAttributionSeveredNotice(): void {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -41,13 +43,19 @@ export function useMacTccAttributionSeveredNotice(): void {
     }
 
     const maybeToast = async (): Promise<void> => {
-      if (toastedThisSession.current || checkInFlight.current) {
+      if (checkInFlight.current) {
         return
       }
       checkInFlight.current = true
       try {
         const { health } = await macTccAttribution()
         if (health !== 'severed') {
+          if (toastedThisSession.current) {
+            toast.dismiss(SEVERED_TCC_NOTICE_ID)
+          }
+          return
+        }
+        if (toastedThisSession.current) {
           return
         }
         toastedThisSession.current = true
@@ -57,6 +65,7 @@ export function useMacTccAttributionSeveredNotice(): void {
             'Terminal permissions may be broken after an Orca update'
           ),
           {
+            id: SEVERED_TCC_NOTICE_ID,
             description: translate(
               'auto.hooks.useMacTccAttributionSeveredNotice.description',
               'The terminal daemon was started by a previous Orca install, so macOS may silently deny Accessibility, Automation, and some file access from terminals. Restart the daemon from Manage Sessions (running terminals will close).'

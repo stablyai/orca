@@ -14,7 +14,8 @@ const setSettingsSearchQuery = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
   toast: {
-    warning: vi.fn()
+    warning: vi.fn(),
+    dismiss: vi.fn()
   }
 }))
 
@@ -58,6 +59,7 @@ describe('useMacTccAttributionSeveredNotice', () => {
     openSettingsTarget.mockReset()
     setSettingsSearchQuery.mockReset()
     vi.mocked(toast.warning).mockReset()
+    vi.mocked(toast.dismiss).mockReset()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -115,7 +117,28 @@ describe('useMacTccAttributionSeveredNotice', () => {
     act(() => {
       window.dispatchEvent(new Event('focus'))
     })
-    expect(toast.warning).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(macTccAttribution).toHaveBeenCalledTimes(2)
+      expect(toast.warning).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('dismisses the warning after attribution recovers', async () => {
+    macTccAttribution.mockResolvedValueOnce({ health: 'severed' })
+    render(<MacosTccPromptNoticeHost />)
+    await waitFor(() => {
+      expect(toast.warning).toHaveBeenCalledTimes(1)
+    })
+    macTccAttribution.mockResolvedValue({ health: 'intact' })
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    await waitFor(() => {
+      expect(macTccAttribution).toHaveBeenCalledTimes(2)
+      expect(toast.dismiss).toHaveBeenCalledWith('mac-tcc-attribution-severed')
+    })
   })
 
   it('coalesces overlapping mount/focus checks into one IPC call and one toast', async () => {
