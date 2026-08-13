@@ -146,6 +146,14 @@ export type GitHubProjectFieldValue =
   | { kind: 'date'; fieldId: string; date: string }
   | { kind: 'labels'; fieldId: string; labels: GitHubProjectLabel[] }
   | { kind: 'users'; fieldId: string; users: GitHubProjectUser[] }
+  | {
+      kind: 'pull-requests'
+      fieldId: string
+      pullRequests: { number: number; title: string; url: string }[]
+      /** True when GraphQL returned fewer nodes than totalCount (page truncated). */
+      truncated: boolean
+      totalCount: number
+    }
 
 export type GitHubProjectRowItemType = 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE' | 'REDACTED'
 

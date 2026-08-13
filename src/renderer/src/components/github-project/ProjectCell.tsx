@@ -115,6 +115,23 @@ export default function ProjectCell({
     )
   }
 
+  if (field.dataType === 'LINKED_PULL_REQUESTS') {
+    if (value?.kind !== 'pull-requests' || value.pullRequests.length === 0) {
+      return <span className="text-xs text-muted-foreground" />
+    }
+    const labels = value.pullRequests.map((pr) => `#${pr.number}`)
+    const overflow =
+      value.truncated || value.totalCount > value.pullRequests.length
+        ? ` +${Math.max(value.totalCount - value.pullRequests.length, 1)}`
+        : ''
+    return (
+      <span className="truncate text-xs text-muted-foreground">
+        {labels.join(', ')}
+        {overflow}
+      </span>
+    )
+  }
+
   // Why: dispatch on the field's kind/dataType — not the value's kind — so an
   // unset cell still renders the appropriate editor and the user can assign a
   // value from scratch (e.g. set Status when it's currently empty).
