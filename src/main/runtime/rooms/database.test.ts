@@ -110,6 +110,35 @@ describe('RoomDatabase', () => {
     ])
   })
 
+  it('persists mention order and upgrades legacy mention rows', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-room-mentions-'))
+    directories.push(directory)
+    const path = join(directory, 'rooms.db')
+    const first = new RoomDatabase(path)
+    const snapshot = createRoom(first)
+    const created = first.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: 'egor',
+      actorKind: 'user',
+      body: '@claude @codex inspect this',
+      mentions: ['claude', 'codex']
+    }).message
+    first.close()
+
+    const second = new RoomDatabase(path)
+    expect(second.messages.get(created.id).mentions).toEqual(['claude', 'codex'])
+    second.close()
+
+    const legacy = new SyncDatabase(path)
+    legacy.exec('ALTER TABLE room_message_mentions DROP COLUMN position')
+    legacy.close()
+    const upgraded = new RoomDatabase(path)
+    databases.push(upgraded)
+
+    expect(upgraded.messages.get(created.id).mentions).toEqual(['claude', 'codex'])
+  })
+
   it('extends the participant state constraint for hibernation on legacy databases', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-rooms-'))
     directories.push(directory)
@@ -413,7 +442,9 @@ describe('RoomDatabase', () => {
       identity: 'codex',
       displayName: 'Codex',
       agent: 'codex',
-      providerSession: { key: 'session_id', id: 'provider-stable' }
+      providerSession: { key: 'session_id', id: 'provider-stable' },
+      paneKey: 'tab:codex',
+      terminalHandle: 'term-codex'
     })
     const message = database.messages.create({
       roomId: snapshot.room.id,
@@ -422,9 +453,24 @@ describe('RoomDatabase', () => {
       actorKind: 'agent',
       body: 'Result'
     }).message
-    const renamed = database.participants.update(participant.id, { identity: 'codex-2' })
+    const mention = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: snapshot.participants[0].identity,
+      actorKind: 'user',
+      body: '@codex review',
+      mentions: ['codex']
+    }).message
+    const renamed = database.participants.update(participant.id, {
+      identity: 'Codex',
+      displayName: 'Reviewer'
+    })
 
-    expect(database.messages.get(message.id).senderIdentity).toBe('codex-2')
+    expect(database.messages.get(message.id).senderIdentity).toBe('Codex')
+    expect(database.messages.get(mention.id).mentions).toEqual(['Codex'])
+    expect(renamed.displayName).toBe('Reviewer')
+    expect(renamed.paneKey).toBe('tab:codex')
+    expect(renamed.terminalHandle).toBe('term-codex')
     expect(renamed.providerSession?.id).toBe('provider-stable')
   })
 

@@ -32,10 +32,7 @@ export function buildRoomFeedItems(
   // a message far above the tail (its queue lags), and mid-feed pills detach
   // from view. startedAt is fixed at turn start, so the block order is stable
   // for the whole turn regardless of which agent acted last.
-  const pending = [...activities].sort(
-    (left, right) =>
-      left.startedAt - right.startedAt || left.participantId.localeCompare(right.participantId)
-  )
+  const pending = orderRoomActivities(messages, activities)
   if (pending.length > 0) {
     items.push({
       kind: 'activities',
@@ -44,6 +41,39 @@ export function buildRoomFeedItems(
     })
   }
   return items
+}
+
+export function orderRoomActivities(
+  messages: RoomMessage[],
+  activities: RoomAgentActivity[]
+): RoomAgentActivity[] {
+  const ordered = [...activities].sort(
+    (left, right) =>
+      left.startedAt - right.startedAt || left.participantId.localeCompare(right.participantId)
+  )
+  const activityByAnchorIdentity = new Map(
+    ordered
+      .filter((activity) => activity.anchorSequence !== null)
+      .map((activity) => [
+        `${activity.anchorSequence}:${activity.identity.toLocaleLowerCase()}`,
+        activity
+      ])
+  )
+  const anchor = messages.findLast((message) =>
+    (message.mentions ?? []).some((identity) =>
+      activityByAnchorIdentity.has(`${message.sequence}:${identity.toLocaleLowerCase()}`)
+    )
+  )
+  if (!anchor) {
+    return ordered
+  }
+  const directed = (anchor.mentions ?? [])
+    .map((identity) =>
+      activityByAnchorIdentity.get(`${anchor.sequence}:${identity.toLocaleLowerCase()}`)
+    )
+    .filter((activity): activity is RoomAgentActivity => Boolean(activity))
+  const directedIds = new Set(directed.map((activity) => activity.participantId))
+  return [...directed, ...ordered.filter((activity) => !directedIds.has(activity.participantId))]
 }
 
 export function pendingDeliveryActivities(

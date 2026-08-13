@@ -16,7 +16,9 @@ export function hydrateRoomMessages(db: SyncDatabase.Database, rows: RoomRow[]):
       related.push(
         ...(db
           .prepare(
-            `SELECT * FROM ${table} WHERE message_id IN (${batch.map(() => '?').join(', ')})`
+            `SELECT * FROM ${table} WHERE message_id IN (${batch.map(() => '?').join(', ')})${
+              table === 'room_message_mentions' ? ' ORDER BY message_id, position, rowid' : ''
+            }`
           )
           .all(...batch) as RoomRow[])
       )

@@ -65,6 +65,46 @@ describe('RoomMessageFeed', () => {
     })
   })
 
+  it('puts directed activities first in mention order', () => {
+    const message = {
+      id: 'prompt',
+      sequence: 7,
+      mentions: ['claude', 'codex']
+    } as RoomMessage
+    const activity = (
+      participantId: string,
+      identity: string,
+      startedAt: number
+    ): RoomAgentActivity => ({
+      participantId,
+      identity,
+      state: 'working',
+      kind: 'thinking',
+      messages: [],
+      startedAt,
+      updatedAt: startedAt,
+      anchorSequence: 7
+    })
+
+    const items = buildRoomFeedItems(
+      [message],
+      [
+        activity('optional', 'omp', 1),
+        activity('codex', 'codex', 2),
+        activity('claude', 'claude', 3)
+      ]
+    )
+
+    expect(items.at(-1)).toMatchObject({
+      kind: 'activities',
+      activities: [
+        { participantId: 'claude' },
+        { participantId: 'codex' },
+        { participantId: 'optional' }
+      ]
+    })
+  })
+
   it('shows one standard working activity until provider activity arrives', () => {
     const message = { id: 'message', sequence: 7, createdAt: 10 } as RoomMessage
     const delivery = {

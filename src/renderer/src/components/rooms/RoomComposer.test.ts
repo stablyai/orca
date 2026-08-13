@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RoomDelivery, RoomMessage } from '../../../../shared/rooms'
-import { getRoomContinueDeliveryIds } from './RoomComposer'
+import { getRoomContinueDeliveryIds } from './room-composer-continue-deliveries'
 import { getRoomDictationUnavailableReason } from './RoomDictationButton'
 
 describe('room loop continuation', () => {
