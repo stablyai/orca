@@ -12,12 +12,15 @@ export type AutomationAgentSessionIdentity = {
 export type AutomationAgentSessionTracker = {
   /** Provider session bound as the automation's primary agent after first live status. */
   boundFingerprint: string | null
+  /** Fingerprint that actually authorized completion; exit/fallback must not reuse bind. */
+  authorizedFingerprint: string | null
   sawWorkingAfterStart: boolean
 }
 
 export function createAutomationAgentSessionTracker(): AutomationAgentSessionTracker {
   return {
     boundFingerprint: null,
+    authorizedFingerprint: null,
     sawWorkingAfterStart: false
   }
 }
@@ -61,10 +64,10 @@ export function noteAutomationAgentStatus(
       if (identity.state === 'working' && tracker.boundFingerprint === null) {
         tracker.boundFingerprint = fingerprint
       }
-      if (tracker.boundFingerprint === fingerprint) {
+      if (identity.state === 'working' && tracker.boundFingerprint === fingerprint) {
         tracker.sawWorkingAfterStart = true
       }
-    } else if (tracker.boundFingerprint === null) {
+    } else if (identity.state === 'working' && tracker.boundFingerprint === null) {
       tracker.sawWorkingAfterStart = true
     }
     return false
@@ -91,6 +94,7 @@ export function noteAutomationAgentStatus(
     return false
   }
 
+  tracker.authorizedFingerprint = tracker.boundFingerprint
   return true
 }
 
@@ -119,14 +123,14 @@ function parseBoundFingerprint(fingerprint: string | null): {
   return { key, id }
 }
 
-/** Persistable receipt: exact only when a provider-session fingerprint was bound. */
+/** Persistable receipt: exact only when a matching done authorized the bound session. */
 export function buildAutomationRunCompletionAttribution(args: {
   tracker: AutomationAgentSessionTracker
   provider: AutomationRunUsageProvider | null
   terminalPtyId: string | null
   terminalPaneKey: string | null
 }): AutomationRunCompletionAttribution {
-  const parsed = parseBoundFingerprint(args.tracker.boundFingerprint)
+  const parsed = parseBoundFingerprint(args.tracker.authorizedFingerprint)
   if (!parsed) {
     return {
       kind: 'pane_time_fallback',

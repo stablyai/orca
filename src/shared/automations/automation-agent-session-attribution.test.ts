@@ -145,6 +145,7 @@ describe('noteAutomationAgentStatus', () => {
       })
     ).toBe(false)
     expect(tracker.boundFingerprint).toBeNull()
+    expect(tracker.sawWorkingAfterStart).toBe(false)
 
     expect(
       noteAutomationAgentStatus(tracker, {
@@ -153,12 +154,26 @@ describe('noteAutomationAgentStatus', () => {
       })
     ).toBe(false)
     expect(tracker.boundFingerprint).toBeNull()
+    expect(tracker.sawWorkingAfterStart).toBe(false)
 
     noteAutomationAgentStatus(tracker, {
       state: 'working',
       providerSession: { key: 'session_id', id: 'primary' }
     })
     expect(tracker.boundFingerprint).toBe('session_id:primary')
+  })
+
+  it('does not let waiting count as the reuse working edge', () => {
+    const tracker = createAutomationAgentSessionTracker()
+    const options = { requireWorkingAfterStart: true }
+
+    expect(noteAutomationAgentStatus(tracker, { state: 'waiting' }, options)).toBe(false)
+    expect(tracker.sawWorkingAfterStart).toBe(false)
+    expect(noteAutomationAgentStatus(tracker, { state: 'done' }, options)).toBe(false)
+
+    expect(noteAutomationAgentStatus(tracker, { state: 'working' }, options)).toBe(false)
+    expect(tracker.sawWorkingAfterStart).toBe(true)
+    expect(noteAutomationAgentStatus(tracker, { state: 'done' }, options)).toBe(true)
   })
 
   it('ignores fingerprint-bearing done before any working bind', () => {
@@ -207,6 +222,18 @@ describe('buildAutomationRunCompletionAttribution', () => {
       state: 'working',
       providerSession: { key: 'session_id', id: 'primary-session' }
     })
+    expect(
+      buildAutomationRunCompletionAttribution({
+        tracker,
+        provider: 'claude',
+        terminalPtyId: 'pty-1',
+        terminalPaneKey: 'pane-1'
+      }).kind
+    ).toBe('pane_time_fallback')
+    noteAutomationAgentStatus(tracker, {
+      state: 'done',
+      providerSession: { key: 'session_id', id: 'primary-session' }
+    })
     const exact = buildAutomationRunCompletionAttribution({
       tracker,
       provider: 'claude',
@@ -252,6 +279,21 @@ describe('buildAutomationRunCompletionAttribution', () => {
     })
     expect(nestedOnly.kind).toBe('pane_time_fallback')
     expect(isExactAutomationRunCompletionAttribution(nestedOnly)).toBe(false)
+
+    const workingOnly = replayAutomationRunCompletionAttribution({
+      rows: [
+        {
+          state: 'working',
+          stateStartedAt: 1,
+          providerSession: { key: 'session_id', id: 'primary-session' },
+          agentType: 'claude'
+        }
+      ],
+      terminalPtyId: 'pty-1',
+      terminalPaneKey: 'pane-1'
+    })
+    expect(workingOnly.kind).toBe('pane_time_fallback')
+    expect(workingOnly.providerSessionId).toBeNull()
 
     const exact = replayAutomationRunCompletionAttribution({
       rows: [
