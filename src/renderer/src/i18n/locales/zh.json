@@ -14301,7 +14301,7 @@
         "model": "模型",
         "effort": "推理强度",
         "fastMode": "快速模式",
-        "thinking": "思考中",
+        "thinking": "思考",
         "options": "选项",
         "sessionOptions": "会话选项",
         "chooseInAgentPicker": "在智能体选择器中选择…",
@@ -14363,7 +14363,7 @@
         "pairHost": "配对主机以查看智能体聊天记录。",
         "notAgent": {
           "title": "这里没有对话",
-          "subtitle": "此终端未运行可识别的编程智能体。"
+          "subtitle": "此终端未运行可识别的编码智能体。"
         },
         "empty": {
           "title": "开始与 {{value0}} 聊天",
@@ -14415,7 +14415,7 @@
     "workspace": {
       "cleanup": {
         "presentationFixtures": {
-          "reviewAlphaCleanup": "审查 Alpha 清理"
+          "reviewAlphaCleanup": "评审 Alpha 清理"
         },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
@@ -14500,10 +14500,10 @@
         "days": "{{count}} 天"
       },
       "review": {
-        "open": "开放的审查",
-        "draft": "草稿审查",
-        "merged": "已合并的审查",
-        "closed": "已关闭的审查"
+        "open": "开放的评审",
+        "draft": "草稿评审",
+        "merged": "已合并的评审",
+        "closed": "已关闭的评审"
       },
       "subagents_one": "{{count}} 个子智能体",
       "subagents_other": "{{count}} 个子智能体"
@@ -14524,9 +14524,9 @@
         "draft": "草稿",
         "merged": "已合并",
         "closed": "已关闭",
-        "none": "无审查"
+        "none": "无评审"
       },
-      "reviewChip": "审查：{{state}}",
+      "reviewChip": "评审：{{state}}",
       "label": "筛选",
       "project": "项目",
       "workspaceStatus": "工作区状态",
