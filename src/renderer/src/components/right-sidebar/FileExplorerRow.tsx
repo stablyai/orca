@@ -288,7 +288,7 @@ type FileExplorerRowProps = {
   onFindInFolder: () => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
-  onDragSourceChange: (path: string | null) => void
+  onDragSourceChange: (path: string | null, isDirectory?: boolean) => void
   onDragExpandDir: (dirPath: string) => void
   onNativeDragTargetChange: (dir: string | null) => void
   onNativeDragExpandDir: (dirPath: string) => void
@@ -565,7 +565,7 @@ export function FileExplorerRow({
               event.dataTransfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(paths))
             }
             event.dataTransfer.effectAllowed = 'copyMove'
-            onDragSourceChange(node.path)
+            onDragSourceChange(node.path, node.isDirectory)
 
             if (paths.length > 1) {
               const MAX_SHOWN = 5

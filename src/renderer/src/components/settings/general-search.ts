@@ -72,6 +72,25 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.confirmFileExplorerMove',
+      'Confirm Before Moving Files in Explorer'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.confirmFileExplorerMoveDescription',
+      'Show a confirmation dialog before drag-moving files or folders in the File Explorer.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.move', 'move'),
+      ...translateSearchKeyword('auto.components.settings.general.search.drag', 'drag'),
+      ...translateSearchKeyword('auto.components.settings.general.search.explorer', 'explorer'),
+      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.ca86dd6e27', 'dialog'),
+      ...translateSearchKeyword('auto.components.settings.general.search.folder', 'folder'),
+      ...translateSearchKeyword('auto.components.settings.general.search.directory', 'directory')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.451d4af994', 'Open In Apps'),
     description: translate(
       'auto.components.settings.general.search.a916662068',

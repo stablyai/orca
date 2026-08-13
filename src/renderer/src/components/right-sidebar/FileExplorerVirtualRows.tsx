@@ -46,7 +46,11 @@ type FileExplorerVirtualRowsProps = {
   onFindInFolder: (node: TreeNode) => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
-  onDragSourceChange: (path: string | null) => void
+  onDragSourceChange: (
+    path: string | null,
+    isDirectory?: boolean,
+    selectionDirectoryFlags?: readonly (readonly [string, boolean])[]
+  ) => void
   onDragExpandDir: (dirPath: string) => void
   onNativeDragTargetChange: (dir: string | null) => void
   onNativeDragExpandDir: (dirPath: string) => void
@@ -202,7 +206,18 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               onFindInFolder={() => onFindInFolder(n)}
               onMoveDrop={onMoveDrop}
               onDragTargetChange={onDragTargetChange}
-              onDragSourceChange={onDragSourceChange}
+              onDragSourceChange={(path, isDirectory) => {
+                if (path && selectedPaths.has(path) && selectedPaths.size > 1) {
+                  const nodes = rowProjection.getRowsByPaths(selectedPaths)
+                  onDragSourceChange(
+                    path,
+                    isDirectory,
+                    nodes.map((node) => [node.path, node.isDirectory] as const)
+                  )
+                  return
+                }
+                onDragSourceChange(path, isDirectory)
+              }}
               onDragExpandDir={onDragExpandDir}
               onNativeDragTargetChange={onNativeDragTargetChange}
               onNativeDragExpandDir={onNativeDragExpandDir}

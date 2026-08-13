@@ -3091,6 +3091,11 @@ export type GlobalSettings = {
   tabAutoGenerateTitle: boolean
   /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
+  /**
+   * Opt-in confirmation before File Explorer internal drag-moves (#10263).
+   * Default `never` preserves today's silent moves; `directories` covers subtree accidents.
+   */
+  confirmFileExplorerMove: 'never' | 'directories' | 'always'
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */

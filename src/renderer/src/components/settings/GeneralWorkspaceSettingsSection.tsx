@@ -2,8 +2,9 @@ import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+import { SettingsRow, SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { translate } from '@/i18n/i18n'
 
 type GeneralWorkspaceSettingsSectionProps = {
@@ -146,6 +147,80 @@ export function GeneralWorkspaceSettingsSection({
               updateSettings({
                 skipDeleteArtifactConfirm: !settings.skipDeleteArtifactConfirm
               })
+            }
+          />
+        </SearchableSetting>
+      </div>
+
+      <div id="general-confirm-file-explorer-move" className="scroll-mt-6">
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.confirmFileExplorerMove',
+            'Confirm Before Moving Files in Explorer'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.confirmFileExplorerMoveDescription',
+            'Show a confirmation dialog before drag-moving files or folders in the File Explorer.'
+          )}
+          keywords={[
+            'move',
+            'drag',
+            'drop',
+            'explorer',
+            'confirm',
+            'dialog',
+            'file',
+            'folder',
+            'directory'
+          ]}
+        >
+          <SettingsRow
+            labelId="confirm-file-explorer-move-label"
+            label={translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.confirmFileExplorerMove',
+              'Confirm Before Moving Files in Explorer'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.confirmFileExplorerMoveHint',
+              'Never keeps silent moves. Directories only prompts for folder moves. Always prompts for every drag-move.'
+            )}
+            control={
+              <Select
+                value={settings.confirmFileExplorerMove ?? 'never'}
+                onValueChange={(value) => {
+                  if (value === 'never' || value === 'directories' || value === 'always') {
+                    updateSettings({ confirmFileExplorerMove: value })
+                  }
+                }}
+              >
+                <SelectTrigger
+                  aria-labelledby="confirm-file-explorer-move-label"
+                  size="sm"
+                  className="w-[160px]"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="never">
+                    {translate(
+                      'auto.components.settings.GeneralWorkspaceSettingsSection.confirmFileExplorerMove.never',
+                      'Never'
+                    )}
+                  </SelectItem>
+                  <SelectItem value="directories">
+                    {translate(
+                      'auto.components.settings.GeneralWorkspaceSettingsSection.confirmFileExplorerMove.directories',
+                      'Directories only'
+                    )}
+                  </SelectItem>
+                  <SelectItem value="always">
+                    {translate(
+                      'auto.components.settings.GeneralWorkspaceSettingsSection.confirmFileExplorerMove.always',
+                      'Always'
+                    )}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             }
           />
         </SearchableSetting>

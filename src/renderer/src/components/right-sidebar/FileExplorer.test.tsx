@@ -952,6 +952,68 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(onFindInFolder).toHaveBeenCalledWith(directoryNode)
   })
 
+  it('reports directory metadata for every selected row when dragging a multi-selection', () => {
+    const onDragSourceChange = vi.fn()
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 52,
+        getVirtualItems: () => [
+          { index: 0, key: 'index.ts', start: 0 },
+          { index: 1, key: 'src', start: 26 }
+        ],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      rowProjection: createFileExplorerRowProjection([fileNode, directoryNode]),
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set([directoryNode.path]),
+      dirCache: {},
+      selectedPaths: new Set([fileNode.path, directoryNode.path]),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onAddFolderAsProject: vi.fn(),
+      canAddFolderAsProject: () => false,
+      onOpenInTerminal: vi.fn(),
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder: vi.fn(),
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange,
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+    ;(row.props.onDragSourceChange as (path: string, isDirectory: boolean) => void)(
+      fileNode.path,
+      false
+    )
+
+    expect(onDragSourceChange).toHaveBeenCalledWith(fileNode.path, false, [
+      [fileNode.path, false],
+      [directoryNode.path, true]
+    ])
+  })
+
   it('passes the active connection id to virtualized rows', () => {
     const element = FileExplorerVirtualRows({
       virtualizer: {
