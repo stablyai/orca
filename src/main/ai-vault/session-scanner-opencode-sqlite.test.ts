@@ -294,6 +294,54 @@ describe('listOpenCodeSqliteSessions', () => {
     expect(candidates).toEqual([])
   })
 
+  it('lists sessions after a concurrent exclusive writer releases', async () => {
+    const { writeFile } = await import('node:fs/promises')
+    const { Worker } = await import('node:worker_threads')
+    const dir = mkdtempSync(join(tmpdir(), 'orca-opencode-sqlite-busy-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'opencode.db')
+    const workerPath = join(dir, 'holder.mjs')
+    await writeFile(
+      workerPath,
+      `
+import { parentPort, workerData } from 'node:worker_threads'
+const { DatabaseSync } = process.getBuiltinModule('node:sqlite')
+const db = new DatabaseSync(workerData.dbPath)
+db.exec('CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL)')
+db.exec("INSERT INTO session VALUES ('ses_busy', 1777634000000, 1777634001000)")
+db.exec('BEGIN EXCLUSIVE')
+parentPort.postMessage('locked')
+setTimeout(() => {
+  db.exec('COMMIT')
+  db.close()
+}, 150)
+`
+    )
+    const worker = new Worker(workerPath, { workerData: { dbPath: path } })
+    await new Promise<void>((resolve, reject) => {
+      worker.once('error', reject)
+      worker.on('message', (message) => {
+        if (message === 'locked') {
+          resolve()
+        }
+      })
+    })
+    try {
+      const issues: AiVaultScanIssue[] = []
+      const candidates = await listOpenCodeSqliteSessions({
+        dbPaths: [path],
+        limit: 10,
+        issues
+      })
+      expect(issues).toEqual([])
+      expect(candidates.map((candidate) => candidate.file.path)).toEqual([
+        buildOpenCodeSqliteCandidatePath(path, 'ses_busy')
+      ])
+    } finally {
+      await worker.terminate()
+    }
+  })
+
   it('records an issue when the DB file does not exist', async () => {
     const issues: AiVaultScanIssue[] = []
     const candidates = await listOpenCodeSqliteSessions({

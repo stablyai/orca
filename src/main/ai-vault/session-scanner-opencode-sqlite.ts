@@ -10,7 +10,8 @@ import {
   shouldCaptureFullFirstUserPrompt
 } from './session-scanner-first-user-prompt'
 import { normalizeTitleText } from './session-scanner-values'
-import SyncDatabase from '../sqlite/sync-database'
+import { openReadonlySyncDatabase } from '../sqlite/readonly-sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
 // Why: OpenCode 1.17.x migrated session storage from per-session JSON files
@@ -54,11 +55,7 @@ type PreviewRow = {
 }
 
 function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  // Why: belt-and-suspenders guard so a bug in the SELECT list can never
-  // mutate the user's opencode.db.
-  db.pragma('query_only = ON')
-  return db
+  return openReadonlySyncDatabase(dbPath)
 }
 
 function canReadOpenCodeSessions(db: SyncDatabase): boolean {

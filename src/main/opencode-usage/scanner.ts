@@ -4,7 +4,8 @@ import { basename, isAbsolute, join, posix, win32 } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
-import Database from '../sqlite/sync-database'
+import { openReadonlySyncDatabase } from '../sqlite/readonly-sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from './schema-helpers'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
@@ -123,17 +124,17 @@ export async function getProcessedDatabaseInfo(
   }
 }
 
-function getProjectJoin(db: Database.Database): string {
+function getProjectJoin(db: SyncDatabase.Database): string {
   return tableExists(db, 'project') && columnExists(db, 'session', 'project_id')
     ? 'LEFT JOIN project p ON p.id = s.project_id'
     : 'LEFT JOIN (SELECT NULL AS id, NULL AS worktree) p ON 1 = 0'
 }
 
-function getSessionModelSelect(db: Database.Database): string {
+function getSessionModelSelect(db: SyncDatabase.Database): string {
   return columnExists(db, 'session', 'model') ? 's.model AS session_model' : 'NULL AS session_model'
 }
 
-function getAssistantSessionMessageCount(db: Database.Database): number {
+function getAssistantSessionMessageCount(db: SyncDatabase.Database): number {
   if (!tableExists(db, 'session_message')) {
     return 0
   }
@@ -146,7 +147,7 @@ function getAssistantSessionMessageCount(db: Database.Database): number {
   return row?.count ?? 0
 }
 
-function canReadSessionUsageRows(db: Database.Database): boolean {
+function canReadSessionUsageRows(db: SyncDatabase.Database): boolean {
   if (!tableExists(db, 'session')) {
     return false
   }
@@ -155,7 +156,7 @@ function canReadSessionUsageRows(db: Database.Database): boolean {
   )
 }
 
-function getSessionUsageRowCount(db: Database.Database): number {
+function getSessionUsageRowCount(db: SyncDatabase.Database): number {
   if (!canReadSessionUsageRows(db)) {
     return 0
   }
@@ -169,7 +170,7 @@ function getSessionUsageRowCount(db: Database.Database): number {
   return row?.count ?? 0
 }
 
-function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
+function selectSessionUsageRows(db: SyncDatabase.Database): OpenCodeUsageRow[] {
   const projectJoin = getProjectJoin(db)
   const sessionModelSelect = getSessionModelSelect(db)
   const rows = db
@@ -209,7 +210,7 @@ function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
   }))
 }
 
-function selectUsageRows(db: Database.Database): OpenCodeUsageRow[] {
+function selectUsageRows(db: SyncDatabase.Database): OpenCodeUsageRow[] {
   if (!tableExists(db, 'session')) {
     return []
   }
@@ -505,9 +506,8 @@ export async function parseOpenCodeUsageDatabase(
   options: { claimSession?: (sessionId: string) => boolean } = {}
 ): Promise<OpenCodeUsagePersistedDatabase> {
   const processedDatabase = await getProcessedDatabaseInfo(dbPath)
-  const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+  const db = openReadonlySyncDatabase(dbPath)
   try {
-    db.pragma('query_only = ON')
     const events: OpenCodeUsageAttributedEvent[] = []
     const claimedBySessionId = new Map<string, boolean>()
     let hasDeferredClaims = false
