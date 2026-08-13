@@ -13,6 +13,7 @@ import {
   cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
 } from '@/lib/ephemeral-vm-worktree-creation'
+import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
@@ -105,7 +106,8 @@ async function executeWorktreeCreation(
 
   let result: CreateWorktreeResult
   try {
-    const backendStartup = resolveBackendDraftStartup(preparedRequest)
+    const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
+    const backendStartup = provisionedRoot ? undefined : resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
       .getState()
       .createWorktree(
@@ -144,7 +146,8 @@ async function executeWorktreeCreation(
           // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
           ...(!backendStartup && preparedRequest.agent && preparedRequest.launchDraftPrompt
             ? { startupDraft: preparedRequest.launchDraftPrompt }
-            : {})
+            : {}),
+          ...(provisionedRoot ? { provisionedRoot } : {})
         }
       )
   } catch (error) {

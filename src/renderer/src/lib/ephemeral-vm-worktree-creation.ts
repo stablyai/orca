@@ -4,6 +4,7 @@ import { prepareEphemeralVmWorkspaceTarget } from '@/lib/ephemeral-vm-workspace-
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
 import type { Repo } from '../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 const MAX_PROVISIONING_LOG_CHARS = 12_000
 
@@ -15,6 +16,13 @@ export async function prepareRequestForCreate(
     return request
   }
   const store = useAppStore.getState()
+  if (request.ephemeralVmRecipe.checkoutMode === 'provisioned-root' && request.sparseCheckout) {
+    store.updatePendingWorktreeCreation(creationId, {
+      status: 'error',
+      error: getProvisionedRootSparseCheckoutError()
+    })
+    return null
+  }
   store.updatePendingWorktreeCreation(creationId, {
     phase: 'provisioning-vm',
     provisioningLog: ''
@@ -36,6 +44,12 @@ export async function prepareRequestForCreate(
       projectId:
         resolvePortableEphemeralVmProjectId(sourceRepo) ?? request.ephemeralVmRecipe.projectId,
       workspaceName: request.name,
+      ...(request.ephemeralVmRecipe.checkoutMode === 'provisioned-root'
+        ? {
+            branch: request.branchNameOverride ?? request.name,
+            ...(request.baseBranch ? { ref: request.baseBranch } : {})
+          }
+        : {}),
       provisionId: creationId,
       setupExistingFolder: store.setupProjectExistingFolder
     })
@@ -59,8 +73,11 @@ export async function prepareRequestForCreate(
   const preparedRequest: WorktreeCreationRequest = {
     ...request,
     repoId: preparedTarget.setup.repo.id,
-    ...getEphemeralVmPortableBaseSelection(request),
+    ...(preparedTarget.checkoutMode === 'provisioned-root'
+      ? { baseBranch: request.baseBranch, compareBaseRef: request.compareBaseRef }
+      : getEphemeralVmPortableBaseSelection(request)),
     ephemeralVmRuntimeId: preparedTarget.runtimeId,
+    ephemeralVmCheckoutMode: preparedTarget.checkoutMode,
     ...(preparedTarget.environmentId
       ? { ephemeralVmRuntimeEnvironmentId: preparedTarget.environmentId }
       : {}),
@@ -142,7 +159,7 @@ export async function attachEphemeralVmRuntimeToWorkspace(
   request: WorktreeCreationRequest,
   workspaceId: string
 ): Promise<void> {
-  if (!request.ephemeralVmRuntimeId) {
+  if (!request.ephemeralVmRuntimeId || request.ephemeralVmCheckoutMode === 'provisioned-root') {
     return
   }
   try {
@@ -178,9 +195,28 @@ export async function cleanupEphemeralVmRuntimeForFailedCreate(
   if (!request.ephemeralVmRuntimeId) {
     return
   }
+  if (
+    request.ephemeralVmCheckoutMode === 'provisioned-root' &&
+    request.workspaceRunContext?.projectHostSetupId
+  ) {
+    try {
+      await useAppStore.getState().deleteProjectHostSetup({
+        setupId: request.workspaceRunContext.projectHostSetupId
+      })
+    } catch (error) {
+      console.error('Failed to remove provisioned-root project setup:', error)
+    }
+  }
   try {
     await window.api.ephemeralVm.cleanup({ runtimeId: request.ephemeralVmRuntimeId })
   } catch (error) {
     console.error('Failed to clean up ephemeral VM runtime after workspace creation failed:', error)
   }
+}
+
+export function getProvisionedRootSparseCheckoutError(): string {
+  return translate(
+    'auto.lib.ephemeralVmWorktreeCreation.sparseCheckoutUnsupported',
+    'Provisioned-root recipes do not support sparse checkout.'
+  )
 }

@@ -122,6 +122,7 @@ const forgetRemovedForExecutionHostMock = vi.fn<
 const mockApi = {
   worktrees: {
     create: vi.fn(),
+    adoptProvisionedRoot: vi.fn(),
     prefetchCreateBase: vi.fn().mockResolvedValue(undefined),
     list: worktreeListMock,
     listDetected: listDetectedMock,
@@ -197,6 +198,8 @@ function resetRemoteRuntimeMocks() {
 // earlier describe would silently suppress a row here. Reset for every case, not just the fetch suites.
 beforeEach(() => {
   resetAuthoritativelyRemovedWorktreeMemoryForTests()
+  mockApi.worktrees.create.mockReset()
+  mockApi.worktrees.adoptProvisionedRoot.mockReset()
 })
 
 function createTestStore() {
@@ -4925,6 +4928,69 @@ describe('createWorktree base status merge', () => {
       workspaceStatus: 'in-review',
       pendingFirstAgentMessageRename: true
     })
+  })
+
+  it('adopts an explicit provisioned root without calling ordinary worktree create', async () => {
+    const store = createTestStore()
+    const adopted = makeWorktree({
+      id: 'repo1::/workspace/repo',
+      repoId: 'repo1',
+      path: '/workspace/repo',
+      hostId: 'ssh:runtime-ssh-runtime-1',
+      isMainWorktree: true,
+      ephemeralVmCheckoutMode: 'provisioned-root'
+    })
+    mockApi.worktrees.adoptProvisionedRoot.mockResolvedValue({ worktree: adopted })
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature',
+        undefined,
+        'inherit',
+        undefined,
+        'sidebar',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          provisionedRoot: {
+            runtimeId: 'runtime-1',
+            executionHostId: 'ssh:runtime-ssh-runtime-1',
+            expectedPath: '/workspace/repo'
+          }
+        }
+      )
+
+    expect(mockApi.worktrees.adoptProvisionedRoot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo1',
+        runtimeId: 'runtime-1',
+        executionHostId: 'ssh:runtime-ssh-runtime-1',
+        expectedPath: '/workspace/repo'
+      })
+    )
+    expect(mockApi.worktrees.create).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1).toContainEqual(
+      expect.objectContaining({ id: adopted.id, ephemeralVmCheckoutMode: 'provisioned-root' })
+    )
   })
 
   it('stamps the owning runtime host onto worktrees created on a remote runtime', async () => {

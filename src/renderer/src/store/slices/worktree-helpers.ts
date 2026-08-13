@@ -209,6 +209,11 @@ export type WorktreeSlice = {
       linkedTaskSourceContext?: TaskSourceContext | null
       /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
       startupDraft?: string
+      provisionedRoot?: {
+        runtimeId: string
+        executionHostId: ExecutionHostId
+        expectedPath: string
+      }
     }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */

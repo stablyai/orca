@@ -3927,6 +3927,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const linkedWorkItem = options?.linkedWorkItem
     const linkedTaskSourceContext = options?.linkedTaskSourceContext
     const startupDraft = options?.startupDraft
+    const provisionedRoot = options?.provisionedRoot
     try {
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         const candidateName = getClientWorktreeCreateCandidate(name, attempt)
@@ -3991,8 +3992,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               'Update the remote runtime to link Jira'
             )
           }
-          const result =
-            target.kind === 'local'
+          if (provisionedRoot && target.kind !== 'local') {
+            throw new Error('Provisioned-root recipes currently require a direct SSH connection.')
+          }
+          const result = provisionedRoot
+            ? await window.api.worktrees.adoptProvisionedRoot({
+                ...createArgs,
+                ...provisionedRoot
+              })
+            : target.kind === 'local'
               ? await window.api.worktrees.create(createArgs)
               : await callRuntimeRpc<Awaited<ReturnType<typeof window.api.worktrees.create>>>(
                   target,
