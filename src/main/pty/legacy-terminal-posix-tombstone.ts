@@ -1,4 +1,5 @@
 import { accessSync, constants } from 'node:fs'
+import { join } from 'node:path'
 
 const SHELL_DOLLAR = '$'
 
@@ -12,16 +13,41 @@ const POSIX_INTERPRETER_CANDIDATES = [
   '/opt/homebrew/bin/bash'
 ] as const
 
-export function resolvePosixTombstoneInterpreter(): string {
-  for (const candidate of POSIX_INTERPRETER_CANDIDATES) {
-    try {
-      accessSync(candidate, constants.X_OK)
+function isExecutable(candidate: string): boolean {
+  try {
+    accessSync(candidate, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function resolvePosixTombstoneInterpreter(
+  pathValue: string | undefined = process.env.PATH,
+  // Why: injectable so the PATH-search branch below is reachable in tests on hosts that do have
+  // a well-known bash.
+  candidates: readonly string[] = POSIX_INTERPRETER_CANDIDATES
+): string {
+  for (const candidate of candidates) {
+    if (isExecutable(candidate)) {
       return candidate
-    } catch {
-      // Try the next well-known location.
     }
   }
-  // Why: distributions without any of the above (NixOS, Guix) still need a working wrapper.
+  // Why: distributions that put bash outside the well-known locations (NixOS, Guix) would
+  // otherwise fall back to an ambient lookup. Search absolute PATH entries only — a relative or
+  // empty one means the current directory, which is the exposure this whole function exists to
+  // close.
+  for (const directory of pathValue?.split(':') ?? []) {
+    if (!directory.startsWith('/')) {
+      continue
+    }
+    const candidate = join(directory, 'bash')
+    if (isExecutable(candidate)) {
+      return candidate
+    }
+  }
+  // Why: last resort. Leaves the ambient lookup in place, but only when no absolute bash exists
+  // anywhere, in which case the wrapper would not run at all otherwise.
   return '/usr/bin/env bash'
 }
 

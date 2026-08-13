@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolvePosixTombstoneInterpreter } from './legacy-terminal-posix-tombstone'
 import {
   __resetLegacyTerminalShimNeutralizationForTests,
   neutralizeLegacyTerminalShimDir,
@@ -185,6 +186,25 @@ describe('legacy terminal shim neutralization', () => {
         expect(cmd.indexOf(guard)).toBeLessThan(cmd.indexOf(loop))
       }
     }
+  })
+
+  itOnPosix('resolves the interpreter from absolute PATH entries only', () => {
+    // Why: with no well-known bash (NixOS/Guix), the fallback search must still refuse relative
+    // and empty entries — those mean the current directory, the exposure being closed.
+    const userData = makeUserDataDir()
+    const absDir = join(userData, 'absbin')
+    const relDir = join(userData, 'relbin')
+    mkdirSync(absDir, { recursive: true })
+    mkdirSync(relDir, { recursive: true })
+    for (const dir of [absDir, relDir]) {
+      writeFileSync(join(dir, 'bash'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+    }
+
+    // No well-known candidates: force the PATH search.
+    expect(resolvePosixTombstoneInterpreter(`${absDir}:/usr/bin`, [])).toBe(join(absDir, 'bash'))
+    // Relative and empty entries must be skipped even though they contain an executable bash.
+    expect(resolvePosixTombstoneInterpreter(`:relbin:${absDir}`, [])).toBe(join(absDir, 'bash'))
+    expect(resolvePosixTombstoneInterpreter('.:relbin', [])).toBe('/usr/bin/env bash')
   })
 
   itOnPosix('does not let the cwd supply the script interpreter', async () => {
