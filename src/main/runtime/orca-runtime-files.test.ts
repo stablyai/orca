@@ -104,8 +104,14 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 }))
 
+vi.mock('../ipc/filesystem-list-files', () => ({
+  listQuickOpenFiles: vi.fn()
+}))
+
 import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
+import { buildExcludePathPrefixes, buildRgArgsForQuickOpen } from '../../shared/quick-open-filter'
 import {
   resetSshConnectionGenerations,
   setSshConnectionGeneration
@@ -235,6 +241,7 @@ describe('RuntimeFileCommands', () => {
     checkRgAvailableMock.mockReset()
     searchWithGitGrepMock.mockReset()
     vi.mocked(getSshFilesystemProvider).mockReset()
+    vi.mocked(listQuickOpenFiles).mockReset()
     resetSshConnectionGenerations()
     getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
     wslAwareSpawnMock.mockReset()
@@ -255,6 +262,228 @@ describe('RuntimeFileCommands', () => {
       value: originalPlatform
     })
     vi.useRealTimers()
+  })
+
+  it('caps a constructed remote runtime listing before serialization', async () => {
+    // Constructed from issue #11884's n=159027 relay log and 2 MiB lane because
+    // the issue artifact is workflow metadata, not a repository test fixture.
+    const inventory = Array.from(
+      { length: 159027 },
+      (_, index) => `src/pkg-${index}/module-${index}/file-${index}.ts`
+    )
+    const listFiles = vi.fn(
+      async (_rootPath: string, options?: { excludePaths?: string[]; maxResults?: number }) =>
+        options?.maxResults === undefined ? inventory : inventory.slice(0, options.maxResults)
+    )
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ listFiles } as never)
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      connectionId: 'conn-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+
+    const result = await commands.listRuntimeFiles('id:wt-1')
+    const options = listFiles.mock.calls[0]?.[1]
+    const serializedBytes = Buffer.byteLength(JSON.stringify(result), 'utf8')
+    expect({
+      excludePaths: options?.excludePaths,
+      maxResults: options?.maxResults,
+      resultLength: result.length
+    }).toEqual({ excludePaths: undefined, maxResults: 20001, resultLength: 20001 })
+    expect(serializedBytes).toBeLessThanOrEqual(2097152)
+  })
+
+  it('preserves the mobile listing sentinel on the remote route', async () => {
+    let inventory = Array.from({ length: 5000 }, (_, index) => `src/file-${index}.ts`)
+    const listFiles = vi.fn(async (_rootPath: string, options?: { maxResults?: number }) =>
+      inventory.slice(0, options?.maxResults ?? inventory.length)
+    )
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ listFiles } as never)
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      connectionId: 'conn-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+
+    const atLimit = await commands.listMobileFiles('id:wt-1')
+    inventory = Array.from({ length: 5001 }, (_, index) => `src/file-${index}.ts`)
+    const aboveLimit = await commands.listMobileFiles('id:wt-1')
+
+    expect(listFiles.mock.calls).toEqual([
+      ['/remote/repo', { maxResults: 5001 }],
+      ['/remote/repo', { maxResults: 5001 }]
+    ])
+    expect(atLimit.files).toHaveLength(5000)
+    expect(atLimit.totalCount).toBe(5000)
+    expect(atLimit.truncated).toBe(false)
+    expect(aboveLimit.files).toHaveLength(5000)
+    expect(aboveLimit.totalCount).toBe(5001)
+    expect(aboveLimit.truncated).toBe(true)
+  })
+
+  it('preserves the mobile listing sentinel on the local route', async () => {
+    let inventory = Array.from({ length: 5000 }, (_, index) => `src/file-${index}.ts`)
+    vi.mocked(listQuickOpenFiles).mockImplementation(
+      async (_rootPath, _store, _excludePaths, _signal, maxResults) =>
+        inventory.slice(0, maxResults ?? inventory.length)
+    )
+    const { commands, store } = createRuntimeFileCommands()
+
+    const atLimit = await commands.listMobileFiles('id:wt-1')
+    inventory = Array.from({ length: 5002 }, (_, index) => `src/file-${index}.ts`)
+    const aboveLimit = await commands.listMobileFiles('id:wt-1')
+
+    expect(vi.mocked(listQuickOpenFiles).mock.calls).toEqual([
+      ['/repo', store, undefined, undefined, 5001],
+      ['/repo', store, undefined, undefined, 5001]
+    ])
+    expect(atLimit).toMatchObject({ totalCount: 5000, truncated: false })
+    expect(atLimit.files).toHaveLength(5000)
+    expect(aboveLimit).toMatchObject({ totalCount: 5001, truncated: true })
+    expect(aboveLimit.files).toHaveLength(5000)
+  })
+
+  it('preserves the existing mobile search bounds on both routes', async () => {
+    const remoteListFiles = vi.fn().mockResolvedValue(['src/remote.ts'])
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ listFiles: remoteListFiles } as never)
+    const remoteTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      connectionId: 'conn-1'
+    }))
+    const remote = createRuntimeFileCommands({ resolveRuntimeFileTarget: remoteTarget })
+    await remote.commands.searchMobileFilePaths('id:wt-1', 'remote', 10)
+
+    vi.mocked(getSshFilesystemProvider).mockReset()
+    vi.mocked(listQuickOpenFiles).mockResolvedValue(['src/local.ts'])
+    const local = createRuntimeFileCommands()
+    await local.commands.searchMobileFilePaths('id:wt-1', 'local', 10)
+
+    expect(remoteListFiles).toHaveBeenCalledWith('/remote/repo', { maxResults: 20001 })
+    expect(listQuickOpenFiles).toHaveBeenCalledWith(
+      '/repo',
+      local.store,
+      undefined,
+      undefined,
+      20001
+    )
+  })
+
+  it('preserves remote markdown projection in one bounded request', async () => {
+    const inventory = ['README.md', 'notes.txt', 'guide.mdx']
+    const listFiles = vi.fn(async (_rootPath: string, options?: { maxResults?: number }) =>
+      inventory.slice(0, options?.maxResults ?? inventory.length)
+    )
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ listFiles } as never)
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      connectionId: 'conn-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+
+    const result = await commands.listRuntimeMarkdownDocuments('id:wt-1')
+
+    expect(listFiles).toHaveBeenCalledWith('/remote/repo', { maxResults: 20001 })
+    expect(listFiles).toHaveBeenCalledTimes(1)
+    expect(listFiles).not.toHaveBeenCalledWith(
+      '/remote/repo',
+      expect.objectContaining({ excludePaths: expect.anything() })
+    )
+    expect(result.map(({ relativePath, name }) => ({ relativePath, name }))).toEqual([
+      { relativePath: 'guide.mdx', name: 'guide' },
+      { relativePath: 'README.md', name: 'README' }
+    ])
+  })
+
+  it('keeps relay list argument construction independent of inventory size', async () => {
+    let inventory = ['/remote/repo/README.md']
+    const capturedOptions: { maxResults?: number; excludePaths?: string[] }[] = []
+    const listFiles = vi.fn(async (_rootPath: string, options?: { maxResults?: number }) => {
+      capturedOptions.push(options ?? {})
+      return inventory.slice(0, options?.maxResults ?? inventory.length)
+    })
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ listFiles } as never)
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      connectionId: 'conn-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+
+    await commands.listRuntimeMarkdownDocuments('id:wt-1')
+    inventory = Array.from({ length: 20001 }, (_, index) => `/remote/repo/src/file-${index}.txt`)
+    await commands.listRuntimeMarkdownDocuments('id:wt-1')
+
+    const argsForOptions = (options: (typeof capturedOptions)[number]) =>
+      buildRgArgsForQuickOpen({
+        searchRoot: '.',
+        excludePathPrefixes: buildExcludePathPrefixes('/remote/repo', options.excludePaths),
+        forceSlashSeparator: true
+      })
+    const smallArgs = argsForOptions(capturedOptions[0] ?? {})
+    const largeArgs = argsForOptions(capturedOptions[1] ?? {})
+
+    expect(capturedOptions).toEqual([{ maxResults: 20001 }, { maxResults: 20001 }])
+    expect(buildExcludePathPrefixes('/remote/repo', capturedOptions[0]?.excludePaths)).toEqual([])
+    expect(buildExcludePathPrefixes('/remote/repo', capturedOptions[1]?.excludePaths)).toEqual([])
+    expect(smallArgs).toEqual(largeArgs)
+    expect(smallArgs.primary).toHaveLength(largeArgs.primary.length)
+    expect(smallArgs.ignoredPass).toHaveLength(largeArgs.ignoredPass.length)
+    expect(smallArgs.primary).not.toContain(expect.stringContaining('file-'))
+  })
+
+  it('preserves local runtime listing results and exclusions below the cap', async () => {
+    const expected = ['src/index.ts', 'README.md']
+    vi.mocked(listQuickOpenFiles).mockResolvedValue(expected)
+    const { commands, store } = createRuntimeFileCommands()
+    const excludePaths = ['packages/app']
+
+    const result = await commands.listRuntimeFiles('id:wt-1', { excludePaths })
+
+    expect(result).toEqual(expected)
+    expect(listQuickOpenFiles).toHaveBeenCalledWith('/repo', store, excludePaths, undefined, 20001)
+  })
+
+  it('preserves remote runtime listing results and exclusions below the cap', async () => {
+    const expected = ['src/index.ts', 'README.md']
+    const listFiles = vi.fn().mockResolvedValue(expected)
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ listFiles } as never)
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      connectionId: 'conn-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const excludePaths = ['packages/app']
+
+    const result = await commands.listRuntimeFiles('id:wt-1', { excludePaths })
+
+    expect(result).toEqual(expected)
+    expect(listFiles).toHaveBeenCalledWith('/remote/repo', {
+      excludePaths,
+      maxResults: 20001
+    })
+  })
+
+  it('preserves provider-unavailable results and local markdown traversal', async () => {
+    const remoteTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      connectionId: 'conn-1'
+    }))
+    const remote = createRuntimeFileCommands({ resolveRuntimeFileTarget: remoteTarget })
+
+    await expect(remote.commands.listRuntimeFiles('id:wt-1')).resolves.toEqual([])
+    await expect(remote.commands.listMobileFiles('id:wt-1')).resolves.toMatchObject({
+      files: [],
+      totalCount: 0,
+      truncated: false
+    })
+    await expect(remote.commands.listRuntimeMarkdownDocuments('id:wt-1')).rejects.toThrow(
+      'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+    )
+    expect(getSshFilesystemProvider).toHaveBeenCalledTimes(3)
+
+    vi.mocked(getSshFilesystemProvider).mockReset()
+    const local = createRuntimeFileCommands()
+    await expect(local.commands.listRuntimeMarkdownDocuments('id:wt-1')).resolves.toEqual([])
+    expect(getSshFilesystemProvider).not.toHaveBeenCalled()
   })
 
   it('opens source control diffs through the renderer host (inheriting active runtime env)', async () => {

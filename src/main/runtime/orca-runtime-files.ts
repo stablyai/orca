@@ -96,6 +96,7 @@ import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../shared/quick-open-listing-limits'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
@@ -566,8 +567,14 @@ export class RuntimeFileCommands {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree, connectionId } = target
     const files = connectionId
-      ? await this.listRemoteMobileFiles(worktree.path, connectionId)
-      : await listQuickOpenFiles(worktree.path, store)
+      ? await this.listRemoteMobileFiles(worktree.path, connectionId, MOBILE_FILE_LIST_LIMIT + 1)
+      : await listQuickOpenFiles(
+          worktree.path,
+          store,
+          undefined,
+          undefined,
+          MOBILE_FILE_LIST_LIMIT + 1
+        )
     const entries = files
       .filter((relativePath) => isSafeMobileRelativePath(relativePath))
       .sort((a, b) => a.localeCompare(b))
@@ -1951,9 +1958,18 @@ export class RuntimeFileCommands {
       if (!provider) {
         return []
       }
-      return provider.listFiles(target.worktree.path, { excludePaths: options.excludePaths })
+      return provider.listFiles(target.worktree.path, {
+        excludePaths: options.excludePaths,
+        maxResults: QUICK_OPEN_LISTING_MAX_RESULTS
+      })
     }
-    return listQuickOpenFiles(target.worktree.path, this.host.requireStore(), options.excludePaths)
+    return listQuickOpenFiles(
+      target.worktree.path,
+      this.host.requireStore(),
+      options.excludePaths,
+      undefined,
+      QUICK_OPEN_LISTING_MAX_RESULTS
+    )
   }
 
   async listRuntimeMarkdownDocuments(worktreeSelector: string): Promise<MarkdownDocument[]> {
@@ -1963,7 +1979,9 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      const relativePaths = await provider.listFiles(target.worktree.path)
+      const relativePaths = await provider.listFiles(target.worktree.path, {
+        maxResults: QUICK_OPEN_LISTING_MAX_RESULTS
+      })
       return markdownDocumentsFromRelativePaths(target.worktree.path, relativePaths)
     }
     return listMarkdownDocuments(target.worktree.path)
