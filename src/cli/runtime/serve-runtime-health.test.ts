@@ -126,6 +126,23 @@ describe('serve runtime health', () => {
       reason: 'graph_not_ready'
     },
     {
+      name: 'WebSocket and graph are unavailable',
+      status: {
+        ...readyStatus(),
+        result: {
+          ...readyStatus().result,
+          runtime: {
+            state: 'graph_not_ready' as const,
+            reachable: true,
+            runtimeId: 'runtime-current'
+          },
+          graph: { state: 'unavailable' as const }
+        }
+      },
+      connect: false,
+      reason: 'websocket_unreachable'
+    },
+    {
       name: 'WebSocket listener is unreachable',
       status: readyStatus(),
       connect: false,

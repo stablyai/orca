@@ -39,21 +39,22 @@ export async function probeServeRuntimeHealth(
   if (status.result.runtime.runtimeId !== metadata.runtimeId) {
     return { healthy: false, reason: 'runtime_changed' }
   }
-  if (status.result.graph.state !== 'ready') {
-    return { healthy: false, reason: 'graph_not_ready' }
-  }
-  if (status.result.runtime.state !== 'ready') {
-    return { healthy: false, reason: 'runtime_unreachable' }
-  }
 
   const webSocket = findTransport(metadata, 'websocket')
   if (!webSocket) {
     return { healthy: false, reason: 'websocket_missing' }
   }
   const connected = await (options.connectWebSocket ?? connectWebSocketListener)(webSocket.endpoint)
-  return connected
-    ? { healthy: true, runtimeId: metadata.runtimeId }
-    : { healthy: false, reason: 'websocket_unreachable' }
+  if (!connected) {
+    return { healthy: false, reason: 'websocket_unreachable' }
+  }
+  if (status.result.graph.state !== 'ready') {
+    return { healthy: false, reason: 'graph_not_ready' }
+  }
+  if (status.result.runtime.state !== 'ready') {
+    return { healthy: false, reason: 'runtime_unreachable' }
+  }
+  return { healthy: true, runtimeId: metadata.runtimeId }
 }
 
 export async function connectWebSocketListener(endpoint: string): Promise<boolean> {
