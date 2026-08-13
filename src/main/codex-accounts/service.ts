@@ -10,7 +10,8 @@ import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState,
-  CodexSystemDefaultIdentity
+  CodexSystemDefaultIdentity,
+  GlobalSettings
 } from '../../shared/types'
 import type {
   CodexRateLimitResetOutcome,
@@ -66,6 +67,7 @@ const WINDOWS_RM_MAX_RETRIES = 8
 const WINDOWS_RM_RETRY_DELAY_MS = 150
 const WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS = 500
 const WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS = 5_000
+const LOGIN_TIMEOUT_CLOSE_GRACE_MS = 5_000
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
 
 type CodexOAuthCredentials = {
@@ -78,6 +80,16 @@ type ResolvedCodexIdentity = {
   providerAccountId: string | null
   workspaceLabel: string | null
   workspaceAccountId: string | null
+}
+
+type CodexSelectionSnapshot = {
+  activeCodexManagedAccountId: GlobalSettings['activeCodexManagedAccountId']
+  activeCodexManagedAccountIdsByRuntime: GlobalSettings['activeCodexManagedAccountIdsByRuntime']
+}
+
+// Why: undefined means the auth bytes were never captured, so rollback skips the file; null means captured and absent.
+type CodexLoginSnapshot = CodexSelectionSnapshot & {
+  authJson: string | null | undefined
 }
 
 type CanonicalCodexConfig = {
@@ -851,16 +863,27 @@ export class CodexAccountService {
     const account = this.requireAccount(accountId)
     const managedHomePath = this.ensureManagedHomeForReauthentication(account)
     const accountTarget = getCodexSelectionTargetForAccount(account)
+    const selectionSnapshot = this.captureSelectionSnapshot()
     const selectedAccountId = getSelectedCodexAccountIdForTarget(
       this.store.getSettings(),
       accountTarget
     )
 
     this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, undefined, account.id)
-    await this.runCodexLogin(managedHomePath)
-    const identity = this.readIdentityFromHome(managedHomePath, account.id)
+    const loginSnapshot = await this.runCodexLogin(managedHomePath, selectionSnapshot)
+    let identity: ResolvedCodexIdentity
+    try {
+      identity = this.readIdentityFromHome(managedHomePath, account.id)
+    } catch (error) {
+      this.restoreLoginSnapshotOrThrow(managedHomePath, loginSnapshot, error)
+      throw error
+    }
     if (!identity.email) {
-      throw new Error('Codex login completed, but Orca could not resolve the account email.')
+      const error = new Error(
+        'Codex login completed, but Orca could not resolve the account email.'
+      )
+      this.restoreLoginSnapshotOrThrow(managedHomePath, loginSnapshot, error)
+      throw error
     }
 
     const settings = this.store.getSettings()
@@ -1621,17 +1644,83 @@ export class CodexAccountService {
     }
   }
 
-  private async runCodexLogin(managedHomePath: string): Promise<void> {
+  private captureSelectionSnapshot(): CodexSelectionSnapshot {
+    const settings = this.store.getSettings()
+    return {
+      activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
+      activeCodexManagedAccountIdsByRuntime: structuredClone(
+        settings.activeCodexManagedAccountIdsByRuntime
+      )
+    }
+  }
+
+  private restoreLoginSnapshot(managedHomePath: string, snapshot: CodexLoginSnapshot): void {
+    const authJsonPath = join(managedHomePath, 'auth.json')
+    let firstError: unknown
+    if (snapshot.authJson !== undefined) {
+      try {
+        if (snapshot.authJson === null) {
+          rmSync(authJsonPath, { force: true })
+        } else {
+          writeFileAtomically(authJsonPath, snapshot.authJson, { mode: 0o600 })
+        }
+      } catch (error) {
+        firstError = error
+      }
+    }
+
+    try {
+      const settings = this.store.getSettings()
+      if (
+        settings.activeCodexManagedAccountId !== snapshot.activeCodexManagedAccountId ||
+        JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime) !==
+          JSON.stringify(snapshot.activeCodexManagedAccountIdsByRuntime)
+      ) {
+        this.store.updateSettings({
+          activeCodexManagedAccountId: snapshot.activeCodexManagedAccountId,
+          activeCodexManagedAccountIdsByRuntime: snapshot.activeCodexManagedAccountIdsByRuntime
+        })
+      }
+    } catch (error) {
+      firstError ??= error
+    }
+    if (firstError) {
+      throw firstError
+    }
+  }
+
+  private restoreLoginSnapshotOrThrow(
+    managedHomePath: string,
+    snapshot: CodexLoginSnapshot,
+    originalError: unknown
+  ): void {
+    try {
+      this.restoreLoginSnapshot(managedHomePath, snapshot)
+    } catch (rollbackError) {
+      throw new Error(
+        `${originalError instanceof Error ? originalError.message : 'Codex login failed'} Credential restoration failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+        { cause: originalError }
+      )
+    }
+  }
+
+  private async runCodexLogin(
+    managedHomePath: string,
+    selectionSnapshot?: CodexSelectionSnapshot
+  ): Promise<CodexLoginSnapshot> {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (wslInfo) {
       this.assertWslCodexCliAvailable(wslInfo)
     }
+    // Why: reading a WSL home over UNC before the distro answers can block the main process and report a dead path as an absent file.
+    const loginSnapshot: CodexLoginSnapshot = {
+      ...(selectionSnapshot ?? this.captureSelectionSnapshot()),
+      authJson: readLoginAuthSnapshot(join(managedHomePath, 'auth.json'))
+    }
     // Why: reauthentication starts with an existing auth.json. Only new auth
     // bytes prove this login completed; existence alone would kill the
     // Windows OAuth flow five seconds after it opened.
-    const initialAuthSnapshot = wslInfo
-      ? null
-      : readLoginAuthSnapshot(join(managedHomePath, 'auth.json'))
+    const initialAuthSnapshot = loginSnapshot.authJson
 
     await new Promise<void>((resolvePromise, rejectPromise) => {
       const spawnConfig = wslInfo
@@ -1674,12 +1763,18 @@ export class CodexAccountService {
       let timeout: ReturnType<typeof setTimeout> | null = null
       let authWatchInterval: ReturnType<typeof setInterval> | null = null
       let postAuthExitTimeout: ReturnType<typeof setTimeout> | null = null
-      let loginTreeKilledAfterAuth = false
+      let forceSettleTimeout: ReturnType<typeof setTimeout> | null = null
+      let loginAuthSecured = false
+      let failureError: Error | null = null
       const authJsonPath = join(managedHomePath, 'auth.json')
       const cleanupListeners = (): void => {
         if (timeout) {
           clearTimeout(timeout)
           timeout = null
+        }
+        if (forceSettleTimeout) {
+          clearTimeout(forceSettleTimeout)
+          forceSettleTimeout = null
         }
         if (authWatchInterval) {
           clearInterval(authWatchInterval)
@@ -1704,12 +1799,48 @@ export class CodexAccountService {
         callback()
       }
 
-      const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
-      timeout = setTimeout(() => {
-        killLoginProcessTree(child)
+      // Why: once the auth watch has seen new credentials the login completed, whether or not a timeout also fired.
+      const loginFinishedBeforeForcedKill = (): boolean =>
+        loginAuthSecured &&
+        loginAuthChanged(initialAuthSnapshot, readLoginAuthSnapshot(authJsonPath))
+
+      const settleFailure = (error: Error): void => {
         settle(() => {
-          rejectPromise(timeoutError)
+          try {
+            this.restoreLoginSnapshot(managedHomePath, loginSnapshot)
+            rejectPromise(error)
+          } catch (rollbackError) {
+            rejectPromise(
+              new Error(
+                `${error.message} Credential restoration failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+                { cause: error }
+              )
+            )
+          }
         })
+      }
+
+      const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
+      // Why: a killed login tree can fail to emit close, which would leave the caller waiting past the timeout unbounded.
+      const armForcedSettle = (): void => {
+        if (settled || forceSettleTimeout) {
+          return
+        }
+        forceSettleTimeout = setTimeout(() => {
+          if (loginFinishedBeforeForcedKill()) {
+            settle(() => {
+              resolvePromise()
+            })
+            return
+          }
+          settleFailure(failureError ?? timeoutError)
+        }, LOGIN_TIMEOUT_CLOSE_GRACE_MS)
+      }
+
+      timeout = setTimeout(() => {
+        failureError = timeoutError
+        killLoginProcessTree(child)
+        armForcedSettle()
       }, LOGIN_TIMEOUT_MS)
 
       // Why: on Windows the codex login CLI can linger after writing auth.json,
@@ -1721,49 +1852,50 @@ export class CodexAccountService {
           if (!loginAuthChanged(initialAuthSnapshot, readLoginAuthSnapshot(authJsonPath))) {
             return
           }
+          loginAuthSecured = true
           if (authWatchInterval) {
             clearInterval(authWatchInterval)
             authWatchInterval = null
           }
           postAuthExitTimeout = setTimeout(() => {
-            loginTreeKilledAfterAuth = true
             killLoginProcessTree(child)
           }, WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS)
         }, WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS)
       }
 
       const onError = (error: Error): void => {
-        settle(() => {
-          const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
-          // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
-          const isBareCommand = spawnConfig.codexCommand === 'codex'
-          const message = isEnoent
-            ? isBareCommand
-              ? 'Codex CLI not found.'
-              : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
-            : error.message
-          rejectPromise(new Error(message))
-        })
+        const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
+        // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
+        const isBareCommand = spawnConfig.codexCommand === 'codex'
+        const message = isEnoent
+          ? isBareCommand
+            ? 'Codex CLI not found.'
+            : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
+          : error.message
+        // Why: a kill that fails after the timeout must not replace the user-facing timeout message with its errno.
+        failureError ??= new Error(message)
+        // Why: close normally follows a spawn error, but nothing guarantees it.
+        armForcedSettle()
       }
 
       const onClose = (code: number | null): void => {
-        settle(() => {
-          // Why: the post-auth tree kill is a success path — auth.json already
-          // exists and codex only failed to exit on its own, so the forced
-          // non-zero exit must not surface as a login failure.
-          if (code === 0 || (loginTreeKilledAfterAuth && existsSync(authJsonPath))) {
+        // Why: a tree we killed after it wrote new credentials succeeded; its
+        // forced non-zero exit must not surface as a login failure.
+        if ((!failureError && code === 0) || loginFinishedBeforeForcedKill()) {
+          settle(() => {
             resolvePromise()
-            return
-          }
-          const trimmedOutput = output.trim()
-          rejectPromise(
+          })
+          return
+        }
+        const trimmedOutput = output.trim()
+        settleFailure(
+          failureError ??
             new Error(
               trimmedOutput
                 ? `Codex login failed: ${trimmedOutput}`
                 : `Codex login exited with code ${code ?? 'unknown'}.`
             )
-          )
-        })
+        )
       }
 
       child.stdout.on('data', appendOutput)
@@ -1771,6 +1903,8 @@ export class CodexAccountService {
       child.on('error', onError)
       child.on('close', onClose)
     })
+
+    return loginSnapshot
   }
 
   private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {

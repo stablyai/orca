@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  unlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -968,8 +969,15 @@ describe('CodexAccountService config sync', () => {
       label: 'a login that fails',
       accountId: 'account-1',
       outcome: 'login-failure',
-      expectedActiveAccountId: null,
-      expectedUpdateCount: 1
+      expectedActiveAccountId: 'account-1',
+      expectedUpdateCount: 2
+    },
+    {
+      label: 'login output that is malformed',
+      accountId: 'account-1',
+      outcome: 'malformed-output',
+      expectedActiveAccountId: 'account-1',
+      expectedUpdateCount: 2
     },
     {
       label: 'credentials rejected by runtime validation',
@@ -1049,6 +1057,11 @@ describe('CodexAccountService config sync', () => {
           queueMicrotask(() => child.emit('close', 1))
           return child
         }
+        if (testCase.outcome === 'malformed-output') {
+          writeFileSync(join(options.env.CODEX_HOME!, 'auth.json'), 'not-json', 'utf-8')
+          queueMicrotask(() => child.emit('close', 0))
+          return child
+        }
         writeFileSync(
           join(options.env.CODEX_HOME!, 'auth.json'),
           createCodexAuthJson('reauthenticated@example.com', 'provider-new', 'refresh-new'),
@@ -1088,16 +1101,18 @@ describe('CodexAccountService config sync', () => {
     )
 
     let result: CodexRateLimitAccountsState | null = null
-    if (testCase.outcome === 'login-failure') {
+    if (testCase.outcome === 'login-failure' || testCase.outcome === 'malformed-output') {
       await expect(service.reauthenticateAccount(testCase.accountId)).rejects.toThrow(
-        'Codex login exited with code 1.'
+        testCase.outcome === 'login-failure'
+          ? 'Codex login exited with code 1.'
+          : 'Codex auth.json is corrupt or not valid JSON'
       )
     } else {
       result = await service.reauthenticateAccount(testCase.accountId)
     }
 
-    expect(result?.activeAccountId ?? null).toBe(testCase.expectedActiveAccountId)
     if (result) {
+      expect(result.activeAccountId ?? null).toBe(testCase.expectedActiveAccountId)
       expect(result.activeAccountIdsByRuntime).toEqual({
         host: testCase.expectedActiveAccountId,
         wsl: { Ubuntu: null }
@@ -1107,10 +1122,14 @@ describe('CodexAccountService config sync', () => {
       activeCodexManagedAccountId: testCase.expectedActiveAccountId,
       activeCodexManagedAccountIdsByRuntime: {
         host: testCase.expectedActiveAccountId,
-        wsl: { Ubuntu: null }
+        wsl: {
+          Ubuntu: ['login-failure', 'malformed-output'].includes(testCase.outcome)
+            ? 'account-wsl'
+            : null
+        }
       }
     })
-    const completedLogin = testCase.outcome !== 'login-failure'
+    const completedLogin = !['login-failure', 'malformed-output'].includes(testCase.outcome)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(completedLogin ? 1 : 0)
     if (completedLogin) {
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({ runtime: 'host' })
@@ -1120,6 +1139,19 @@ describe('CodexAccountService config sync', () => {
     }
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(completedLogin ? 1 : 0)
     expect(store.updateSettings).toHaveBeenCalledTimes(testCase.expectedUpdateCount)
+    for (const entry of hostAccounts) {
+      expect(readFileSync(join(entry.managedHomePath, 'auth.json'), 'utf-8')).toBe(
+        testCase.outcome !== 'login-failure' &&
+          testCase.outcome !== 'malformed-output' &&
+          entry.id === testCase.accountId
+          ? createCodexAuthJson('reauthenticated@example.com', 'provider-new', 'refresh-new')
+          : createCodexAuthJson(
+              `${entry.id}@example.com`,
+              `provider-${entry.id}`,
+              `refresh-${entry.id}`
+            )
+      )
+    }
   })
 
   it('does not recreate a missing managed home at a different account path', async () => {
@@ -1555,6 +1587,106 @@ describe('CodexAccountService config sync', () => {
     }
   })
 
+  it('restores WSL managed home auth.json when reauthentication fails', async () => {
+    vi.resetModules()
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    const wslManagedHomePath = join(testState.userDataDir, 'wsl-account', 'home')
+    const wslLinuxHomePath = '/home/alice/.local/share/orca/codex-accounts/account-1/home'
+    const wslAuthPath = join(wslManagedHomePath, 'auth.json')
+    const originalAuthJson = JSON.stringify({
+      tokens: {
+        id_token: `header.${Buffer.from(JSON.stringify({ email: 'old@example.com' })).toString(
+          'base64url'
+        )}.signature`
+      }
+    })
+    mkdirSync(wslManagedHomePath, { recursive: true })
+    writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-1\n', 'utf-8')
+    writeFileSync(wslAuthPath, originalAuthJson, 'utf-8')
+
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+      if (script.includes('readlink -f')) {
+        return `${wslLinuxHomePath}\n`
+      }
+      return ''
+    })
+    const spawnMock = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: () => void
+      }
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      child.kill = vi.fn()
+      writeFileSync(wslAuthPath, '{"tokens":{"id_token":"partial"}}', 'utf-8')
+      queueMicrotask(() => child.emit('close', 1))
+      return child
+    })
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: execFileSyncMock,
+      spawn: spawnMock
+    }))
+    vi.doMock('../../shared/wsl-paths', () => ({
+      parseWslUncPath: (path: string) =>
+        path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
+    }))
+    vi.doMock('../wsl', () => ({
+      toWindowsWslPath: () => wslManagedHomePath
+    }))
+
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'old@example.com',
+          managedHomePath: wslManagedHomePath,
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: null,
+      activeCodexManagedAccountIdsByRuntime: {
+        host: null,
+        wsl: { Ubuntu: 'account-1' }
+      }
+    })
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        createStore(settings) as never,
+        createRateLimits() as never,
+        createRuntimeHome() as never
+      )
+
+      await expect(service.reauthenticateAccount('account-1')).rejects.toThrow('Codex login')
+      expect(readFileSync(wslAuthPath, 'utf-8')).toBe(originalAuthJson)
+    } finally {
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../../shared/wsl-paths')
+      vi.doUnmock('../wsl')
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('recreates the expected missing WSL managed home before reauthenticating', async () => {
     vi.resetModules()
     const originalPlatform = process.platform
@@ -1657,6 +1789,9 @@ describe('CodexAccountService config sync', () => {
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
     } finally {
       warnSpy.mockRestore()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../../shared/wsl-paths')
+      vi.doUnmock('../wsl')
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
@@ -3152,6 +3287,8 @@ describe('CodexAccountService config sync', () => {
   it('removes command listeners when Codex login times out', async () => {
     vi.resetModules()
     vi.useFakeTimers()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
     const child = new EventEmitter() as EventEmitter & {
       stdout: PassThrough
       stderr: PassThrough
@@ -3160,6 +3297,7 @@ describe('CodexAccountService config sync', () => {
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
+    const authPath = join(testState.fakeHomeDir, 'auth.json')
     const spawnMock = vi.fn(() => child)
     vi.doMock('node:child_process', () => ({
       execFileSync: vi.fn(),
@@ -3182,7 +3320,197 @@ describe('CodexAccountService config sync', () => {
       )
       const loginPromise = (
         service as unknown as {
-          runCodexLogin(managedHomePath: string): Promise<void>
+          runCodexLogin(managedHomePath: string): Promise<unknown>
+        }
+      ).runCodexLogin(testState.fakeHomeDir)
+      const rejection = expect(loginPromise).rejects.toThrow(
+        'Codex sign-in took too long to finish.'
+      )
+
+      writeFileSync(
+        authPath,
+        createCodexAuthJson('new@example.com', 'new-account', 'new-token'),
+        'utf-8'
+      )
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(readFileSync(authPath, 'utf-8')).toContain('new-token')
+      child.emit('close', 1)
+
+      await rejection
+      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(existsSync(authPath)).toBe(false)
+      expect(child.stdout.listenerCount('data')).toBe(0)
+      expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
+  it('rejects a timed-out Codex login when the child never emits close', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const authPath = join(testState.fakeHomeDir, 'auth.json')
+    const originalAuthJson = createCodexAuthJson('user@example.com', 'provider-1', 'old-token')
+    writeFileSync(authPath, originalAuthJson, 'utf-8')
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: vi.fn(() => child)
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const store = createStore(createSettings({ activeCodexManagedAccountId: 'account-1' }))
+      const service = new CodexAccountService(
+        store as never,
+        createRateLimits() as never,
+        createRuntimeHome() as never
+      )
+      const loginPromise = (
+        service as unknown as {
+          runCodexLogin(managedHomePath: string): Promise<unknown>
+        }
+      ).runCodexLogin(testState.fakeHomeDir)
+      const rejection = expect(loginPromise).rejects.toThrow(
+        'Codex sign-in took too long to finish.'
+      )
+
+      // The login clears the selection and then hangs without writing credentials.
+      store.updateSettings({ activeCodexManagedAccountId: null })
+      unlinkSync(authPath)
+      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await rejection
+      expect(readFileSync(authPath, 'utf-8')).toBe(originalAuthJson)
+      expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
+  it('keeps credentials the auth watch saw in the same tick the login timeout fired', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+      pid: number
+      exitCode: number | null
+      signalCode: string | null
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    child.pid = 4545
+    child.exitCode = null
+    child.signalCode = null
+    const authPath = join(testState.fakeHomeDir, 'auth.json')
+    writeFileSync(
+      authPath,
+      createCodexAuthJson('user@example.com', 'provider-1', 'old-token'),
+      'utf-8'
+    )
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: vi.fn(() => child)
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        createStore(createSettings()) as never,
+        createRateLimits() as never,
+        createRuntimeHome() as never
+      )
+      const loginPromise = (
+        service as unknown as {
+          runCodexLogin(managedHomePath: string): Promise<unknown>
+        }
+      ).runCodexLogin(testState.fakeHomeDir)
+
+      // Credentials land inside the last poll window, so the timeout fires before the post-auth kill is scheduled.
+      const newAuthJson = createCodexAuthJson('user@example.com', 'provider-1', 'new-token')
+      await vi.advanceTimersByTimeAsync(119_500)
+      writeFileSync(authPath, newAuthJson, 'utf-8')
+      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(loginPromise).resolves.toBeDefined()
+      expect(readFileSync(authPath, 'utf-8')).toBe(newAuthJson)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
+  it('keeps the timeout message when killing the login tree emits an error', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn(() => {
+      child.emit('error', Object.assign(new Error('kill EPERM'), { code: 'EPERM' }))
+    })
+    writeFileSync(
+      join(testState.fakeHomeDir, 'auth.json'),
+      createCodexAuthJson('user@example.com', 'provider-1', 'old-token'),
+      'utf-8'
+    )
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: vi.fn(() => child)
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        createStore(createSettings()) as never,
+        createRateLimits() as never,
+        createRuntimeHome() as never
+      )
+      const loginPromise = (
+        service as unknown as {
+          runCodexLogin(managedHomePath: string): Promise<unknown>
         }
       ).runCodexLogin(testState.fakeHomeDir)
       const rejection = expect(loginPromise).rejects.toThrow(
@@ -3190,14 +3518,73 @@ describe('CodexAccountService config sync', () => {
       )
 
       await vi.advanceTimersByTimeAsync(120_000)
-
+      await vi.advanceTimersByTimeAsync(5_000)
       await rejection
-      expect(child.kill).toHaveBeenCalledTimes(1)
-      expect(child.stdout.listenerCount('data')).toBe(0)
-      expect(child.stderr.listenerCount('data')).toBe(0)
-      expect(child.listenerCount('error')).toBe(0)
-      expect(child.listenerCount('close')).toBe(0)
     } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
+  it('keeps a post-auth killed Windows login successful after the timeout fires', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+      pid: number
+      exitCode: number | null
+      signalCode: string | null
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    child.pid = 4444
+    child.exitCode = null
+    child.signalCode = null
+    const authPath = join(testState.fakeHomeDir, 'auth.json')
+    writeFileSync(
+      authPath,
+      createCodexAuthJson('user@example.com', 'provider-1', 'old-token'),
+      'utf-8'
+    )
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: vi.fn(() => child)
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        createStore(createSettings()) as never,
+        createRateLimits() as never,
+        createRuntimeHome() as never
+      )
+      const loginPromise = (
+        service as unknown as {
+          runCodexLogin(managedHomePath: string): Promise<unknown>
+        }
+      ).runCodexLogin(testState.fakeHomeDir)
+
+      const newAuthJson = createCodexAuthJson('user@example.com', 'provider-1', 'new-token')
+      writeFileSync(authPath, newAuthJson, 'utf-8')
+      // Auth watch sees the new bytes, then the post-auth grace kills a tree that never closes.
+      await vi.advanceTimersByTimeAsync(6_000)
+      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(loginPromise).resolves.toBeDefined()
+      expect(readFileSync(authPath, 'utf-8')).toBe(newAuthJson)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
       vi.useRealTimers()
       vi.doUnmock('node:child_process')
       vi.doUnmock('../codex-cli/command')
@@ -3224,6 +3611,7 @@ describe('CodexAccountService config sync', () => {
     child.exitCode = null
     child.signalCode = null
     const execFileSyncMock = vi.fn()
+    const authPath = join(testState.fakeHomeDir, 'auth.json')
     const spawnMock = vi.fn(() => child)
     vi.doMock('node:child_process', () => ({
       execFileSync: execFileSyncMock,
@@ -3245,7 +3633,7 @@ describe('CodexAccountService config sync', () => {
       )
       const loginPromise = (
         service as unknown as {
-          runCodexLogin(managedHomePath: string): Promise<void>
+          runCodexLogin(managedHomePath: string): Promise<unknown>
         }
       ).runCodexLogin(testState.fakeHomeDir)
 
@@ -3268,7 +3656,10 @@ describe('CodexAccountService config sync', () => {
 
       // The forced non-zero exit still counts as a successful login.
       child.emit('close', 1)
-      await expect(loginPromise).resolves.toBeUndefined()
+      await expect(loginPromise).resolves.toBeDefined()
+      expect(readFileSync(authPath, 'utf-8')).toBe(
+        createCodexAuthJson('user@example.com', 'provider-account-1', 'refresh-token')
+      )
     } finally {
       Object.defineProperty(process, 'platform', originalPlatform)
       vi.useRealTimers()
@@ -3317,7 +3708,7 @@ describe('CodexAccountService config sync', () => {
         createRuntimeHome() as never
       )
       const loginPromise = (
-        service as unknown as { runCodexLogin(managedHomePath: string): Promise<void> }
+        service as unknown as { runCodexLogin(managedHomePath: string): Promise<unknown> }
       ).runCodexLogin(testState.fakeHomeDir)
 
       await vi.advanceTimersByTimeAsync(6_000)
@@ -3336,7 +3727,7 @@ describe('CodexAccountService config sync', () => {
       )
 
       child.emit('close', 1)
-      await expect(loginPromise).resolves.toBeUndefined()
+      await expect(loginPromise).resolves.toBeDefined()
     } finally {
       Object.defineProperty(process, 'platform', originalPlatform)
       vi.useRealTimers()
