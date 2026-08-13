@@ -367,6 +367,7 @@ import {
   type RuntimeSessionTabCloseReason,
   type RuntimeBrowserDriverState,
   type RuntimeTerminalDriverState,
+  type RuntimeRendererSyncWindowGraph,
   type RuntimeSyncWindowGraph,
   type RuntimeWorktreeListResult,
   type BrowserTabInfo,
@@ -5502,7 +5503,10 @@ export class OrcaRuntimeService {
     }
   }
 
-  syncWindowGraph(windowId: number, graph: RuntimeSyncWindowGraph): RuntimeSyncWindowGraphResult {
+  syncWindowGraph(
+    windowId: number,
+    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
+  ): RuntimeSyncWindowGraphResult {
     if (
       windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
       this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
