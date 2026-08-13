@@ -250,18 +250,22 @@ describe('foreground serve crash supervisor', () => {
     await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledTimes(1))
     healthyOne.emit('message', readyMessage)
     await vi.waitFor(() => expect(args.healthProbe).toHaveBeenCalledOnce())
+    await vi.waitFor(() =>
+      expect(cleanupSingletonQuarantine).toHaveBeenNthCalledWith(1, ['SingletonLock.test'])
+    )
     healthyOne.emit('exit', 1, null)
     await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledTimes(2))
     collisionTwo.emit('exit', SERVE_ALREADY_RUNNING_EXIT_CODE, null)
     await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledTimes(3))
     healthyTwo.emit('message', readyMessage)
     await vi.waitFor(() => expect(args.healthProbe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() =>
+      expect(cleanupSingletonQuarantine).toHaveBeenNthCalledWith(2, ['SingletonLock.test'])
+    )
     healthyTwo.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
 
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
     expect(recoverSingleton).toHaveBeenCalledTimes(2)
-    expect(cleanupSingletonQuarantine).toHaveBeenNthCalledWith(1, ['SingletonLock.test'])
-    expect(cleanupSingletonQuarantine).toHaveBeenNthCalledWith(2, ['SingletonLock.test'])
   })
 
   it('does not retry or isolate when a healthy owner holds the lock', async () => {

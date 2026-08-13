@@ -82,6 +82,20 @@ export async function superviseForegroundServe(
   let pendingSingletonQuarantine: string[] = []
   const restartDelays = args.restartDelaysMs ?? SERVE_CRASH_RESTART_DELAYS_MS
   const sleep = args.sleep ?? defaultSleep
+  const cleanupPendingSingletonQuarantine = async (): Promise<void> => {
+    if (pendingSingletonQuarantine.length === 0 || !args.cleanupSingletonQuarantine) {
+      return
+    }
+    const paths = pendingSingletonQuarantine
+    try {
+      await args.cleanupSingletonQuarantine(paths)
+      pendingSingletonQuarantine = []
+    } catch (error) {
+      process.stderr.write(
+        `[serve] could not remove stale singleton quarantine: ${error instanceof Error ? error.message : String(error)}\n`
+      )
+    }
+  }
 
   while (true) {
     const result = await waitForForegroundServeChild(
@@ -97,26 +111,12 @@ export async function superviseForegroundServe(
         : null,
       {
         healthProbe: args.healthProbe,
+        onVerified: cleanupPendingSingletonQuarantine,
         healthCheckIntervalMs: args.healthCheckIntervalMs ?? SERVE_HEALTH_CHECK_INTERVAL_MS,
         healthProbeTimeoutMs: args.healthProbeTimeoutMs ?? SERVE_HEALTH_PROBE_TIMEOUT_MS,
         healthFailureLimit: args.healthFailureLimit ?? SERVE_HEALTH_FAILURE_LIMIT
       }
     )
-
-    if (
-      result.readiness === 'verified' &&
-      pendingSingletonQuarantine.length > 0 &&
-      args.cleanupSingletonQuarantine
-    ) {
-      try {
-        await args.cleanupSingletonQuarantine(pendingSingletonQuarantine)
-        pendingSingletonQuarantine = []
-      } catch (error) {
-        process.stderr.write(
-          `[serve] could not remove stale singleton quarantine: ${error instanceof Error ? error.message : String(error)}\n`
-        )
-      }
-    }
 
     if (expectedHandoff && result.readiness === 'failed') {
       return 1

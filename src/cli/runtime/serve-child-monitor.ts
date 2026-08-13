@@ -17,6 +17,7 @@ export type ExpectedServeReadiness = {
 
 export type ServeChildMonitorOptions = {
   healthProbe?: () => Promise<ServeRuntimeHealth>
+  onVerified?: (runtimeId: string) => Promise<void>
   healthCheckIntervalMs: number
   healthProbeTimeoutMs: number
   healthFailureLimit: number
@@ -157,6 +158,13 @@ export function waitForForegroundServeChild(
           process.stderr.write(`[serve] could not complete update handoff: ${String(error)}\n`)
           terminateChild()
         })
+      }
+      if (options.onVerified) {
+        stateWrite = stateWrite
+          .then(() => options.onVerified!(runtimeId))
+          .catch((error) => {
+            process.stderr.write(`[serve] could not process verified readiness: ${String(error)}\n`)
+          })
       }
       scheduleHealthCheck(runtimeId)
     }
