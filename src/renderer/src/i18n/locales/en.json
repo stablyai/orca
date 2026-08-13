@@ -17676,6 +17676,7 @@
     },
     "addAgent": {
       "title": "Add agent",
+      "adding": "Adding agent…",
       "description": "Launch a clean harness, attach a running one, or resume local history.",
       "harness": "Harness",
       "worktree": "Worktree",
@@ -17707,7 +17708,8 @@
       "name": "Name",
       "back": "Back",
       "archived": "Archived",
-      "loading": "Loading…"
+      "loading": "Loading…",
+      "saving": "Saving…"
     },
     "archive": {
       "preparingExport": "Preparing room archive…",
@@ -17731,6 +17733,7 @@
       "dictate": "Dictate",
       "continueSuggestion": "/continue · resume a paused agent loop",
       "allAgentsSuggestion": "@all · all agents",
+      "allAgents": "All agents",
       "uploadProgressShort": "Uploading… {{percent}}%",
       "removeNamedAttachment": "Remove {{fileName}}",
       "removeRecipient": "Remove {{recipient}}",
@@ -17812,6 +17815,10 @@
     },
     "people": {
       "participants": "Participants",
+      "editParticipant": "Edit participant",
+      "editParticipantDescription": "The new name and @identity apply to the next room delivery.",
+      "displayName": "Display name",
+      "identity": "Identity",
       "you": "You",
       "participantActions": "Participant actions",
       "remove": "Remove from room",

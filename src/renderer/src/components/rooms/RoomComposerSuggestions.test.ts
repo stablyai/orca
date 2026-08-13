@@ -25,15 +25,38 @@ describe('room composer suggestions', () => {
 
   it('offers all and matching live room identities', () => {
     const participants = [
-      { actorKind: 'agent', identity: 'codex', state: 'online', participation: 'active' },
-      { actorKind: 'agent', identity: 'claude', state: 'busy', participation: 'active' },
-      { actorKind: 'agent', identity: 'gemini', state: 'online', participation: 'paused' },
-      { actorKind: 'user', identity: 'user', state: 'online' }
+      {
+        actorKind: 'agent',
+        identity: 'codex',
+        displayName: 'Claude Impersonator',
+        state: 'online',
+        participation: 'active'
+      },
+      {
+        actorKind: 'agent',
+        identity: 'claude',
+        displayName: 'Researcher',
+        state: 'busy',
+        participation: 'active'
+      },
+      {
+        actorKind: 'agent',
+        identity: 'gemini',
+        displayName: 'Gemini',
+        state: 'online',
+        participation: 'paused'
+      },
+      { actorKind: 'user', identity: 'user', displayName: 'You', state: 'online' }
     ] as RoomParticipant[]
 
     expect(getRoomComposerSuggestions(getRoomComposerQuery('@cl', 3), participants)).toEqual([
-      { value: '@claude', label: '@claude · busy' }
+      expect.objectContaining({
+        value: '@claude',
+        identity: 'claude',
+        displayName: 'Researcher'
+      })
     ])
+    expect(getRoomComposerSuggestions(getRoomComposerQuery('@imp', 4), participants)).toEqual([])
     const exactQuery = getRoomComposerQuery('@all', 4)
     const exactSuggestions = getRoomComposerSuggestions(exactQuery, participants)
     expect(getExactRoomMentionSuggestion(exactQuery, exactSuggestions)?.value).toBe('@all')

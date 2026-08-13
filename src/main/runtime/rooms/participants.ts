@@ -217,7 +217,7 @@ export class RoomParticipantStore {
           id
         )
       const identity = input.identity?.trim()
-      if (identity && identity.toLowerCase() !== current.identity.toLowerCase()) {
+      if (identity && identity !== current.identity) {
         this.renameReferences(current, identity)
       }
       this.db.exec('COMMIT')
@@ -313,11 +313,8 @@ export class RoomParticipantStore {
       .run(identity, participant.id)
     this.db
       .prepare(
-        'UPDATE OR IGNORE room_message_mentions SET identity = ? WHERE identity = ? COLLATE NOCASE'
+        'UPDATE OR REPLACE room_message_mentions SET identity = ? WHERE identity = ? COLLATE NOCASE'
       )
       .run(identity, participant.identity)
-    this.db
-      .prepare('DELETE FROM room_message_mentions WHERE identity = ? COLLATE NOCASE')
-      .run(participant.identity)
   }
 }

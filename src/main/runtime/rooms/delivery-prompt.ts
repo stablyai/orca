@@ -16,7 +16,7 @@ export function formatRoomDeliveryPrompt(input: {
 }): string {
   const participantList = input.participants
     .filter((participant) => participant.id !== input.target.id)
-    .map((participant) => `@${escapeXml(participant.identity)}`)
+    .map(formatParticipantIdentity)
     .join(', ')
   const replyRecipients = input.participants
     .filter(
@@ -32,7 +32,7 @@ export function formatRoomDeliveryPrompt(input: {
       ? 'A reply is required.'
       : 'Reply only when you can add useful, relevant information or your role requires it; otherwise return exactly <orca-room-silent />.'
   const body = [
-    `You are @${escapeXml(input.target.identity)} in the Orca room "${escapeXml(input.roomName)}".`,
+    `You are ${formatParticipantIdentity(input.target)} in the Orca room "${escapeXml(input.roomName)}".`,
     participantList ? `Other participants: ${participantList}.` : '',
     configuration,
     `${protocol} To invite agent replies, append <orca-room-recipients>["identity"]</orca-room-recipients> using only identities from ${escapeXml(JSON.stringify(replyRecipients))}; never include "user" (the user sees every reply). @mentions alone do not route.`,
@@ -44,6 +44,10 @@ export function formatRoomDeliveryPrompt(input: {
     .filter(Boolean)
     .join('\n\n')
   return `${roomDeliveryMarker(input.deliveryId, input.response)}\n${body}\n</orca-room-delivery>`
+}
+
+function formatParticipantIdentity(participant: RoomParticipant): string {
+  return `${escapeXml(participant.displayName)} (@${escapeXml(participant.identity)})`
 }
 
 export function roomDeliveryMarker(

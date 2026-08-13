@@ -19,8 +19,10 @@ import {
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
-import type { RoomRole } from '../../../../shared/rooms'
+import type { RoomParticipant, RoomRole } from '../../../../shared/rooms'
+import { RoomAuthorAvatar } from './RoomAuthorAvatar'
 import { RoomPanelEmpty, RoomPanelSection } from './RoomPanelSection'
+import { RoomParticipantEditDialog } from './RoomParticipantEditDialog'
 import type { RoomData } from './use-room-data'
 import { showRoomActionError } from './room-action-error'
 
@@ -36,6 +38,7 @@ export function PeoplePanel({
   const [editorOpen, setEditorOpen] = useState(false)
   const [name, setName] = useState('')
   const [prompt, setPrompt] = useState('')
+  const [editingParticipant, setEditingParticipant] = useState<RoomParticipant | null>(null)
   if (!snapshot) {
     return <RoomPanelEmpty />
   }
@@ -85,12 +88,17 @@ export function PeoplePanel({
         {snapshot.participants.map((participant) => (
           <div key={participant.id} className="rounded-md border border-border p-2 text-xs">
             <div className="flex items-start gap-2">
-              <span className="min-w-0 flex-1 truncate">
-                <b>@{participant.identity}</b>
-                <br />
-                <span className="text-muted-foreground">
+              <RoomAuthorAvatar actorKind={participant.actorKind} participant={participant} />
+              <span className="min-w-0 flex-1">
+                <b className="block truncate">{participant.displayName}</b>
+                <span className="block truncate text-muted-foreground">
+                  @{participant.identity}
+                </span>
+                <span className="block truncate text-muted-foreground">
                   {participant.actorKind === 'agent'
-                    ? `${participant.agent} · ${participant.participation === 'paused' ? 'Paused' : roomParticipantStateLabel(participant.state)}`
+                    ? participant.participation === 'paused'
+                      ? 'Paused'
+                      : roomParticipantStateLabel(participant.state)
                     : translate('rooms.people.you', 'You')}
                 </span>
               </span>
@@ -109,6 +117,11 @@ export function PeoplePanel({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setEditingParticipant(participant)}>
+                      <Pencil />
+                      {translate('rooms.people.editParticipant', 'Edit participant')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onSelect={() =>
                         void roomRpc(data.target, 'rooms.participants.reveal', {
@@ -208,6 +221,11 @@ export function PeoplePanel({
           </button>
         ))}
       </RoomPanelSection>
+      <RoomParticipantEditDialog
+        participant={editingParticipant}
+        target={data.target}
+        onOpenChange={(open) => !open && setEditingParticipant(null)}
+      />
       <Dialog open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
         <DialogContent className="min-w-0 sm:max-w-2xl">
           <form

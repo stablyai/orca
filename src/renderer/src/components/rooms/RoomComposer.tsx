@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
-import type { RoomDelivery, RoomMessage } from '../../../../shared/rooms'
+import type { RoomMessage } from '../../../../shared/rooms'
 import type { RoomData } from './use-room-data'
 import { RoomDictationButton } from './RoomDictationButton'
 import { cancelRoomAttachmentUpload, uploadRoomAttachment } from './room-attachment-transfer'
@@ -18,6 +18,7 @@ import {
 } from './RoomAttachments'
 import { getRoomComposerClipboardFiles } from './room-composer-clipboard-files'
 import { useRoomComposerClipboardPaste } from './room-composer-clipboard-paste'
+import { getRoomContinueDeliveryIds } from './room-composer-continue-deliveries'
 import {
   applyRoomComposerSuggestion,
   getExactRoomMentionSuggestion,
@@ -217,10 +218,17 @@ export function RoomComposer({
   useRoomComposerClipboardPaste(composerRootRef, attach)
 
   return (
-    <div className="shrink-0 border-t border-border bg-background px-4 pb-4 pt-2">
+    <div className="shrink-0 bg-background px-4 pb-4 pt-2">
+      <div className="relative isolate mx-auto max-w-4xl">
+        <RoomComposerSuggestions
+          suggestions={suggestions}
+          activeIndex={Math.min(activeSuggestion, Math.max(0, suggestions.length - 1))}
+          onSelect={selectSuggestion}
+        />
+      </div>
       <div
         ref={composerRootRef}
-        className="mx-auto max-w-4xl rounded-lg border border-border bg-muted/30 p-1.5 shadow-xs"
+        className="relative z-10 mx-auto max-w-4xl rounded-lg border border-border bg-[color-mix(in_srgb,var(--muted)_30%,var(--background))] p-1.5 shadow-xs"
         data-room-attachment-drop-target="true"
         aria-busy={uploading}
         onPasteCapture={(event) => {
@@ -298,11 +306,6 @@ export function RoomComposer({
             releaseRoomAttachmentPreview(attachment.previewUrl)
             void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
           }}
-        />
-        <RoomComposerSuggestions
-          suggestions={suggestions}
-          activeIndex={Math.min(activeSuggestion, Math.max(0, suggestions.length - 1))}
-          onSelect={selectSuggestion}
         />
         <textarea
           ref={textareaRef}
@@ -383,25 +386,4 @@ export function RoomComposer({
       </div>
     </div>
   )
-}
-
-export function getRoomContinueDeliveryIds(
-  messages: RoomMessage[],
-  deliveries: RoomDelivery[]
-): string[] {
-  const sequences = new Map(messages.map((message) => [message.id, message.sequence]))
-  const suppressed = deliveries.filter(
-    (delivery) => delivery.state === 'suppressed' && sequences.has(delivery.messageId)
-  )
-  const latestSequence = Math.max(
-    -1,
-    ...suppressed.map((delivery) => sequences.get(delivery.messageId)!)
-  )
-  return [
-    ...new Set(
-      suppressed
-        .filter((delivery) => sequences.get(delivery.messageId) === latestSequence)
-        .map((delivery) => delivery.id)
-    )
-  ]
 }

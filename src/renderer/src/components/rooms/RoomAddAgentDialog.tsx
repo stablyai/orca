@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Check, ChevronsUpDown } from 'lucide-react'
+import { ArrowLeft, Check, ChevronsUpDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -335,7 +335,9 @@ export function RoomAddAgentDialog({
         ) : (
           <DialogFooter showCloseButton>
             <Button
+              className="relative"
               onClick={() => void add()}
+              aria-label={saving ? translate('rooms.addAgent.adding', 'Adding agent…') : undefined}
               disabled={
                 saving ||
                 !roomId ||
@@ -344,7 +346,14 @@ export function RoomAddAgentDialog({
                 (mode !== 'launch' && (loadingChoices || !selection))
               }
             >
-              {translate('rooms.addAgent.title', 'Add agent')}
+              <span className={cn(saving && 'invisible')}>
+                {translate('rooms.addAgent.title', 'Add agent')}
+              </span>
+              {saving ? (
+                <span className="absolute" aria-hidden>
+                  <Loader2 className="animate-spin" />
+                </span>
+              ) : null}
             </Button>
           </DialogFooter>
         )}

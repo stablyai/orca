@@ -413,7 +413,9 @@ describe('RoomDatabase', () => {
       identity: 'codex',
       displayName: 'Codex',
       agent: 'codex',
-      providerSession: { key: 'session_id', id: 'provider-stable' }
+      providerSession: { key: 'session_id', id: 'provider-stable' },
+      paneKey: 'tab:codex',
+      terminalHandle: 'term-codex'
     })
     const message = database.messages.create({
       roomId: snapshot.room.id,
@@ -422,9 +424,24 @@ describe('RoomDatabase', () => {
       actorKind: 'agent',
       body: 'Result'
     }).message
-    const renamed = database.participants.update(participant.id, { identity: 'codex-2' })
+    const mention = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: snapshot.participants[0].identity,
+      actorKind: 'user',
+      body: '@codex review',
+      mentions: ['codex']
+    }).message
+    const renamed = database.participants.update(participant.id, {
+      identity: 'Codex',
+      displayName: 'Reviewer'
+    })
 
-    expect(database.messages.get(message.id).senderIdentity).toBe('codex-2')
+    expect(database.messages.get(message.id).senderIdentity).toBe('Codex')
+    expect(database.messages.get(mention.id).mentions).toEqual(['Codex'])
+    expect(renamed.displayName).toBe('Reviewer')
+    expect(renamed.paneKey).toBe('tab:codex')
+    expect(renamed.terminalHandle).toBe('term-codex')
     expect(renamed.providerSession?.id).toBe('provider-stable')
   })
 
