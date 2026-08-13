@@ -117,12 +117,20 @@ describe('legacy terminal shim neutralization', () => {
       // cached wrapper dir because %~dp0 is rebound inside a CALL.
       expect(cmd).toContain('if /I not "%%~fG\\"=="%orca_wrapper_dir%"')
       // Relative entries resolve against the cwd, so they must be rejected like empty ones.
-      expect(cmd).toContain('findstr /R')
+      // Why: the rooted-path test must not shell out — an external tool would itself be
+      // resolved from the cwd, reintroducing the hijack.
+      expect(cmd).not.toContain('findstr')
+      expect(cmd).toContain('if "%orca_candidate:~1,2%"==":\\" goto orca_candidate_rooted')
+      expect(cmd).toContain('if "%orca_candidate:~0,2%"=="\\\\" goto orca_candidate_rooted')
+      // Why: these two guards are the only thing stopping an empty element reaching the cwd on
+      // Windows; deleting either left every other assertion green.
+      expect(cmd).toContain('if "%~1"=="" exit /b')
 
       const powershell = readFileSync(join(win32Dir, `${command}-wrapper.ps1`), 'utf8')
       expect(powershell).not.toContain('Get-Command')
       expect(powershell).toContain("($env:PATH -split ';')")
       expect(powershell).toContain('[IO.Path]::IsPathRooted($dir)')
+      expect(powershell).toContain('if (-not $dir) { continue }')
       expect(powershell).toContain('Test-Path -LiteralPath $candidate -PathType Leaf')
     }
   })
