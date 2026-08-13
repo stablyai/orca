@@ -53,7 +53,7 @@ describe('DiscordPresenceManager', () => {
 
     // Initial publish after connect
     const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
-    expect(activity.details).toBe('1 agent working')
+    expect(activity.details).toBe('1 agent active')
     expect(activity.state).toBe('Claude')
     expect(activity.assets.large_image).toBe('orca')
   })
@@ -101,7 +101,7 @@ describe('DiscordPresenceManager', () => {
 
     expect(client.setActivity).toHaveBeenCalledTimes(1)
     const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
-    expect(activity.details).toBe('1 agent working')
+    expect(activity.details).toBe('1 agent active')
   })
 
   it('publishes idle activity when no active agents', async () => {
@@ -177,6 +177,39 @@ describe('DiscordPresenceManager', () => {
     await flush()
 
     expect(client.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not start overlapping connect attempts on rapid status changes', async () => {
+    const subscribeChanges = vi.fn().mockReturnValue(() => {})
+    let connectCount = 0
+    const client = {
+      connect: vi.fn(() => new Promise<void>((_res) => {
+        connectCount++
+      })),
+      setActivity: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      onDisconnect: vi.fn()
+    }
+
+    const mgr = new DiscordPresenceManager({
+      getSnapshot: vi.fn().mockReturnValue([]),
+      subscribeChanges,
+      client,
+      isEnabled: () => true,
+      assetKey: 'orca'
+    })
+
+    mgr.start()
+
+    // Simulate rapid status changes while connect is in-flight
+    const changeCb = subscribeChanges.mock.calls[0][0] as () => void
+    changeCb()
+    changeCb()
+    changeCb()
+    await flush()
+
+    // Only one connect attempt should be in flight
+    expect(connectCount).toBe(1)
   })
 
   it('stop() unsubscribes and disconnects', async () => {

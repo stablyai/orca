@@ -29,6 +29,7 @@ export class DiscordPresenceManager {
   private reconnectDelay = RECONNECT_BASE_DELAY_MS
   private stopped = false
   private handshakeFailed = false
+  private connecting = false
 
   constructor(deps: DiscordPresenceManagerDeps) {
     this.deps = deps
@@ -54,6 +55,7 @@ export class DiscordPresenceManager {
 
   stop(): void {
     this.stopped = true
+    this.throttle.cancel()
     this.unsubscribe?.()
     this.unsubscribe = null
     if (this.reconnectTimer) {
@@ -65,9 +67,9 @@ export class DiscordPresenceManager {
   }
 
   private async connectAndPublish(): Promise<void> {
-    if (!this.deps.isEnabled()) {
-      return
-    }
+    if (!this.deps.isEnabled()) return
+    if (this.connecting) return
+    this.connecting = true
     try {
       console.log('[discord-presence] connecting to Discord IPC...')
       await this.deps.client.connect()
@@ -83,6 +85,8 @@ export class DiscordPresenceManager {
       }
       console.error('[discord-presence] connect failed:', err)
       this.scheduleReconnect()
+    } finally {
+      this.connecting = false
     }
   }
 
@@ -112,7 +116,7 @@ export class DiscordPresenceManager {
       return
     }
     if (!this.connected) {
-      if (!this.handshakeFailed) void this.connectAndPublish()
+      if (!this.handshakeFailed && !this.reconnectTimer) void this.connectAndPublish()
       return
     }
     const snapshot = {

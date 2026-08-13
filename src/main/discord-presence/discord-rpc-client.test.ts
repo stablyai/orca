@@ -174,4 +174,41 @@ describe('createDiscordRpcClient', () => {
     await expect(client.connect()).rejects.toThrow('Discord IPC not found (tried pipes 0-9)')
     expect(created).toBe(10)
   })
+
+  it('responds to PING with PONG', async () => {
+    const OP_PING = 3
+    const OP_PONG = 4
+    const sock = new SyncSocket()
+    const client = createDiscordRpcClient(CLIENT_ID, () => sock)
+
+    const cp = client.connect()
+    sock.feedHandshakeAck()
+    await cp
+    sock.written = []
+
+    // Emit a PING frame
+    const ping = encodeFrame(OP_PING, '{}')
+    sock.emit('data', ping)
+
+    // The last write should be a PONG with the same payload
+    const pong = sock.written[sock.written.length - 1]
+    expect(pong).toBeDefined()
+    const header = pong.slice(0, 8)
+    expect(header.readInt32LE(0)).toBe(OP_PONG)
+  })
+
+  it('calls onDisconnect on post-connect socket error without throwing', async () => {
+    const sock = new SyncSocket()
+    const client = createDiscordRpcClient(CLIENT_ID, () => sock)
+
+    const cp = client.connect()
+    sock.feedHandshakeAck()
+    await cp
+
+    const cb = vi.fn()
+    client.onDisconnect(cb)
+
+    // Emit an error AFTER handshake completes — should not throw
+    expect(() => sock.emit('error', new Error('ECONNRESET'))).not.toThrow()
+  })
 })

@@ -94,6 +94,7 @@ export function createDiscordRpcClient(
           if (settled) return
           settled = true
           socket!.removeAllListeners()
+          socket!.destroy()
           socket = null
           pipeIndex++
           tryConnect()
@@ -132,7 +133,8 @@ export function createDiscordRpcClient(
               if (msg.cmd === 'DISPATCH' && msg.evt === 'READY') {
                 socket!.removeListener('error', onError)
                 socket!.removeAllListeners('close')
-                setupDataHandler()
+                const consumed = 8 + handshakeData.readInt32LE(4)
+                setupDataHandler(Buffer.from(handshakeData.subarray(consumed)))
                 resolve()
               }
             } catch { /* malformed, keep waiting */ }
@@ -147,10 +149,10 @@ export function createDiscordRpcClient(
     })
   }
 
-  function setupDataHandler() {
+  function setupDataHandler(initial: Buffer<ArrayBuffer> = Buffer.alloc(0)) {
     if (!socket) return
     socket.removeAllListeners('data')
-    buffer = Buffer.alloc(0)
+    buffer = initial
 
     socket.on('data', (chunk: unknown) => {
       buffer = Buffer.concat([buffer, chunk as Buffer])
@@ -183,6 +185,10 @@ export function createDiscordRpcClient(
       pendingRequests.clear()
       disconnectCb?.()
     })
+
+    socket.on('error', (..._args: unknown[]) => {
+      socket?.destroy()
+    })
   }
 
   function setActivity(activity: DiscordActivity | null): Promise<void> {
@@ -192,18 +198,23 @@ export function createDiscordRpcClient(
         return
       }
       const nonce = randomUUID()
-      pendingRequests.set(nonce, { resolve, reject })
+      const timeout = setTimeout(() => {
+        pendingRequests.delete(nonce)
+        reject(new Error('SET_ACTIVITY timed out'))
+      }, 10_000)
+      pendingRequests.set(nonce, {
+        resolve: () => { clearTimeout(timeout); resolve() },
+        reject: (err: Error) => { clearTimeout(timeout); reject(err) }
+      })
 
       const args: Record<string, unknown> = { pid }
       if (activity !== null) {
         args.activity = activity
       }
-      const frame = encodeFrame(OP_FRAME, JSON.stringify({
-        cmd: 'SET_ACTIVITY',
-        args,
-        nonce
-      }))
-      socket.write(frame)
+      const frame = encodeFrame(OP_FRAME, JSON.stringify({ cmd: 'SET_ACTIVITY', args, nonce }))
+      socket.write(frame, (err?: Error) => {
+        if (err) pendingRequests.get(nonce)?.reject(err)
+      })
     })
   }
 

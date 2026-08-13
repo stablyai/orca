@@ -141,7 +141,7 @@ describe('buildDiscordActivity', () => {
       snap({ working: 1, active: 1, total: 1, agentTypes: ['claude'], startedAt: 1000 }),
       ASSET
     )
-    expect(activity.details).toBe('1 agent working')
+    expect(activity.details).toBe('1 agent active')
     expect(activity.state).toBe('Claude')
     expect(activity.assets).toEqual({ large_image: 'orca', large_text: 'Orca' })
     expect(activity.party).toEqual({ id: 'orca', size: [1, 1] })
@@ -152,7 +152,7 @@ describe('buildDiscordActivity', () => {
       snap({ working: 3, active: 3, total: 3, agentTypes: ['claude', 'codex', 'gemini'], startedAt: 2000 }),
       ASSET
     )
-    expect(activity.details).toBe('3 agents working')
+    expect(activity.details).toBe('3 agents active')
     expect(activity.state).toBe('Claude · Codex · Gemini')
   })
 

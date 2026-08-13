@@ -97,7 +97,7 @@ export function buildDiscordActivity(
     }
   }
 
-  const details = `${snapshot.working} agent${snapshot.working !== 1 ? 's' : ''} working`
+  const details = `${snapshot.active} agent${snapshot.active !== 1 ? 's' : ''} active`
 
   const parts: string[] = []
   const displayed = snapshot.agentTypes.slice(0, 3)
@@ -108,7 +108,7 @@ export function buildDiscordActivity(
     parts.push(`${snapshot.blocked} waiting for you`)
   }
 
-  const state = parts.map(capitalize).join(' · ')
+  const state = parts.length > 0 ? parts.map(capitalize).join(' · ') : 'Orca'
 
   const activity: DiscordActivity = {
     details,

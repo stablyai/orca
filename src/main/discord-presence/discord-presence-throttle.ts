@@ -3,9 +3,19 @@ import type { DiscordActivity } from './discord-presence-activity'
 export type PresenceThrottle = {
   (activity: DiscordActivity | null): void
   flush(): void
+  cancel(): void
 }
 
 const DEFAULT_INTERVAL_MS = 15000
+
+function activitiesEqual(
+  a: DiscordActivity | null | undefined,
+  b: DiscordActivity | null | undefined
+): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  return JSON.stringify(a) === JSON.stringify(b)
+}
 
 export function createPresenceThrottle(
   publish: (activity: DiscordActivity | null) => void,
@@ -21,7 +31,7 @@ export function createPresenceThrottle(
     const remaining = intervalMs - (Date.now() - lastTime)
     timer = setTimeout(() => {
       timer = null
-      if (pending !== undefined && pending !== lastPublished) {
+      if (pending !== undefined && !activitiesEqual(pending, lastPublished)) {
         lastPublished = pending
         publish(pending!)
       }
@@ -56,12 +66,20 @@ export function createPresenceThrottle(
       clearTimeout(timer)
       timer = null
     }
-    if (pending !== undefined && pending !== lastPublished) {
+    if (pending !== undefined && !activitiesEqual(pending, lastPublished)) {
       lastPublished = pending
       publish(pending!)
     }
     pending = undefined
     lastTime = Date.now()
+  }
+
+  throttled.cancel = () => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    pending = undefined
   }
 
   return throttled
