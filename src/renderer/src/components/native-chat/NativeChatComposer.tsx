@@ -13,12 +13,7 @@ import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-sen
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
-import {
-  applyMentionSuggestion,
-  EMPTY_HISTORY,
-  pushHistory,
-  type HistoryState
-} from './native-chat-composer-state'
+import { EMPTY_HISTORY, pushHistory, type HistoryState } from './native-chat-composer-state'
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
@@ -39,6 +34,8 @@ import { useNativeChatSessionOptionCommand } from './use-native-chat-session-opt
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
+import { useNativeChatDispatchNoticeClear } from './use-native-chat-dispatch-notice-clear'
+import { useNativeChatAcceptMention } from './use-native-chat-mention-accept'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
@@ -235,6 +232,15 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         onAgentPicker: onSwitchToTerminal,
         readTerminalScreen
       })
+    useNativeChatDispatchNoticeClear(isDispatchingSessionOption, setNotice)
+    const acceptMention = useNativeChatAcceptMention({
+      autocomplete,
+      draft,
+      caret,
+      setDraft,
+      setCaret,
+      textareaRef
+    })
 
     const send = useCallback(() => {
       const text = draft
@@ -246,6 +252,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       // still writing its body+delayed-Enter to the same pty, so the two write
       // sequences can't interleave on one input line.
       if (isDispatchingSessionOption) {
+        setNotice('Confirming selection...') // else a blocked send looks like nothing happened
         return
       }
       const target = resolveTarget()
@@ -428,17 +435,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         pickerListboxId={picker.listboxId}
         onChoosePickerItem={completeItem}
         onRetrySkills={picker.retrySkills}
-        onAcceptMention={() => {
-          if (autocomplete.mode !== 'mention') {
-            return
-          }
-          const result = applyMentionSuggestion(draft, caret, autocomplete.query)
-          setDraft(result.draft)
-          setCaret(result.caret)
-          const textarea = textareaRef.current
-          textarea?.focus()
-          requestAnimationFrame(() => textarea?.setSelectionRange(result.caret, result.caret))
-        }}
+        onAcceptMention={acceptMention}
         onRemoveImageAttachment={(id) => removeImageAttachment(id)}
         onAttach={pickAttachment}
         onDictationToggle={toggleDictation}

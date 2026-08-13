@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     onCompositionEnd?: (event: { currentTarget: HTMLTextAreaElement }) => void
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
+    notice?: string | null
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'interaction-required' | 'unknown',
   confirmationObserver: null as {
@@ -607,6 +608,62 @@ describe('NativeChatComposer', () => {
       expect.any(AbortSignal)
     )
     expect(onSwitchToTerminal).toHaveBeenCalledOnce()
+  })
+
+  it('blocks a chat send with visible feedback while a picker command is still confirming, and clears it once resolved', async () => {
+    mocks.sendHandle.settleAfterMs = 0
+    let resolveResult!: (outcome: 'applied') => void
+    mocks.createClaudeModelSwitchConfirmationObserver.mockImplementation(() => {
+      const observer = {
+        ready: Promise.resolve(),
+        result: new Promise<'applied'>((resolve) => {
+          resolveResult = resolve
+        }),
+        arm: vi.fn(),
+        startDetection: vi.fn(),
+        dispose: vi.fn()
+      }
+      mocks.confirmationObserver = observer as never
+      return observer
+    })
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="claude"
+      />
+    )
+
+    // Start the picker dispatch but don't await it to completion yet — its
+    // observer.result deliberately never resolves until we say so below, so
+    // this leaves isDispatchingSessionOption pinned true, matching a slow/
+    // still-settling PTY right after a session launches.
+    let dispatchDone: Promise<unknown> | undefined
+    await act(async () => {
+      dispatchDone = mocks.fieldProps?.sessionOptionsSurface?.setOption('model', 'opus')
+      // Flush microtasks so the dispatch reaches its in-flight await point.
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(mocks.fieldProps?.notice ?? null).toBeNull()
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    // The blocked send must not reach the terminal...
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    // ...and must not be silently dropped — the user needs to see why nothing happened.
+    expect(mocks.fieldProps?.notice).toBe('Confirming selection...')
+
+    await act(async () => {
+      resolveResult('applied')
+      await dispatchDone
+    })
+
+    // Once the picker command settles, the stale notice must clear on its own —
+    // the user shouldn't have to retry a send just to make it disappear.
+    expect(mocks.fieldProps?.notice ?? null).toBeNull()
   })
 
   it('types the Codex picker command and switches to the terminal', async () => {
