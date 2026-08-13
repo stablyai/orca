@@ -14210,6 +14210,15 @@
           "errorInjectionFailed": "No se pudo iniciar la selección de elementos en esta página."
         }
       },
+      "GitHubIssueWorkspaceLaunchButton": {
+        "f20e260a05": "Iniciar espacio de trabajo desde la incidencia",
+        "e4bb9f1ece": "Iniciar",
+        "c8a6bec97e": "Elegir un agente para este espacio de trabajo",
+        "01be61ba14": "Iniciar con el agente",
+        "cf532aff14": "Detectando agentes…",
+        "9635bbe266": "No se pudieron cargar los agentes",
+        "89f202d990": "No hay agentes disponibles"
+      },
       "pluginCatalog": {
         "PluginCatalogLayout": {
           "title": "Plugins",

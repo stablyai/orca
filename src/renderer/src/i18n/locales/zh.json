@@ -14230,6 +14230,15 @@
           "errorInjectionFailed": "无法在此页面上启动元素选择。"
         }
       },
+      "GitHubIssueWorkspaceLaunchButton": {
+        "f20e260a05": "从议题启动工作区",
+        "e4bb9f1ece": "启动",
+        "c8a6bec97e": "为此工作区选择智能体",
+        "01be61ba14": "使用智能体启动",
+        "cf532aff14": "正在检测智能体…",
+        "9635bbe266": "无法加载智能体",
+        "89f202d990": "没有可用的智能体"
+      },
       "pluginCatalog": {
         "PluginCatalogLayout": {
           "title": "Plugins",

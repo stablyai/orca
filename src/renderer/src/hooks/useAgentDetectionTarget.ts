@@ -7,8 +7,10 @@ import {
   type WorktreeRuntimeOwnerState
 } from '@/lib/worktree-runtime-owner'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { Repo } from '../../../shared/types'
 import type { AgentDetectionTarget } from './useDetectedAgents'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
@@ -107,4 +109,36 @@ export function useAgentDetectionTargetForWorktree(
 ): AgentDetectionTarget | undefined {
   const key = useAppStore((s) => getAgentDetectionTargetKeyForWorktree(s, worktreeId))
   return useMemo(() => parseAgentDetectionTargetKey(key), [key])
+}
+
+/**
+ * Resolve the detection host for a repository row that has no workspace yet.
+ * Mirrors the host precedence the new-workspace composer uses for the same
+ * repo (`useComposerState`), so a launch menu never offers an agent the
+ * composer it opens cannot start. Returns undefined until the repo is known.
+ */
+export function useAgentDetectionTargetForRepo(
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | null | undefined
+): AgentDetectionTarget | undefined {
+  // Why: the caller already resolved which host owns this row's repo, so scope
+  // the lookup to it — a bare id re-resolves and can pick the focused duplicate.
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForRepo({ repos: repo ? [repo] : [], settings: s.settings }, repo?.id)
+  )
+  const repoHost = repo ? parseExecutionHostId(getRepoExecutionHostId(repo)) : null
+  const connectionId = repoHost?.kind === 'ssh' ? repoHost.targetId : null
+  const hasRepo = Boolean(repo)
+  return useMemo(() => {
+    if (!hasRepo) {
+      return undefined
+    }
+    if (connectionId) {
+      return { kind: 'ssh', connectionId }
+    }
+    // Why: covers both an explicit runtime owner and the focused-runtime
+    // fallback a hostless repo inherits during a paired session.
+    return runtimeEnvironmentId
+      ? { kind: 'runtime', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
+  }, [hasRepo, connectionId, runtimeEnvironmentId])
 }

@@ -14976,6 +14976,15 @@
           "errorInjectionFailed": "Could not start element selection on this page."
         }
       },
+      "GitHubIssueWorkspaceLaunchButton": {
+        "f20e260a05": "Start workspace from issue",
+        "e4bb9f1ece": "Start",
+        "c8a6bec97e": "Choose an agent for this workspace",
+        "01be61ba14": "Start with agent",
+        "cf532aff14": "Detecting agents…",
+        "9635bbe266": "Unable to load agents",
+        "89f202d990": "No agents available"
+      },
       "pluginCatalog": {
         "PluginCatalogLayout": {
           "title": "Plugins",

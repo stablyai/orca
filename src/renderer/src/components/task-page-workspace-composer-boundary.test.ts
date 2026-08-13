@@ -36,6 +36,7 @@ describe('TaskPage workspace creation source boundaries', () => {
     expect(section).toContain('prefilledName: getGitHubWorkItemWorkspaceSeed(item)')
     expect(section).toContain('initialRepoId: item.repoId')
     expect(section).toContain('initialGitHubWorkItem: item')
+    expect(section).toContain('...(initialAgent ? { initialAgent } : {})')
     expect(section).toContain("enableIssueAutomation: item.type === 'issue'")
     expect(section).toContain("telemetrySource: 'sidebar'")
   })
@@ -66,9 +67,15 @@ describe('TaskPage workspace creation source boundaries', () => {
     )
 
     expect(section).toContain("recordFeatureInteraction('github-tasks')")
-    expect(section).toContain('openComposerForItem(item)')
+    expect(section).toContain('openComposerForItem(item, agentOverride)')
     expect(section).not.toContain('createGitHubWorkItemWorkspaceInBackground')
     expect(TASK_PAGE_SOURCE).not.toContain('@/lib/github-work-item-background-create')
+    // Why: a stale picker must recheck attachments before it opens another composer.
+    expect(TASK_PAGE_SOURCE).toMatch(
+      /onStartWithAgent=\{\(agent\) =>\s+handleOpenOrUseGitHubWorkItem\(item, agent\)\s+\}/
+    )
+    expect(COMPOSER_MODAL_SOURCE).toContain('initialAgent?: TuiAgent')
+    expect(COMPOSER_MODAL_SOURCE).toContain('modalData.initialAgent')
   })
 
   it('routes TaskPage Linear starts directly to the composer', () => {
@@ -99,9 +106,10 @@ describe('TaskPage workspace creation source boundaries', () => {
       'const openComposerForGitLabItem = useCallback('
     )
 
+    expect(section).toContain('(item: GitHubWorkItem, agentOverride?: TuiAgent): void =>')
     expect(section).toContain('findGithubWorkItemWorkspaceAttachment(')
     expect(section).toContain('if (!currentAttached)')
-    expect(section).toContain('handleUseWorkItem(item)')
+    expect(section).toContain('handleUseWorkItem(item, agentOverride)')
     expect(section).toContain('activateAndRevealWorktree(currentAttached.id)')
   })
 

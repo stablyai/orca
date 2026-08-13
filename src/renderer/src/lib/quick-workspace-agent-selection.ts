@@ -60,5 +60,6 @@ export function resolveQuickWorkspaceAgentSelection({
   if (isQuickWorkspaceAgentAvailable(quickAgentOverride, detectedAgentIds, disabledTuiAgents)) {
     return { quickAgent: quickAgentOverride, quickAgentOverride }
   }
-  return { quickAgent: preferredQuickAgent, quickAgentOverride: preferredQuickAgent }
+  // Why: an explicit but stale choice must require reselection rather than silently consuming another provider.
+  return { quickAgent: null, quickAgentOverride }
 }

@@ -66,7 +66,7 @@ describe('resolveQuickWorkspaceAgentSelection', () => {
     ).toEqual({ quickAgent: 'codex', quickAgentOverride: 'codex' })
   })
 
-  it('replaces an unavailable override with the preferred quick agent', () => {
+  it('preserves an unavailable override while refusing to launch it or substitute a provider', () => {
     expect(
       resolveQuickWorkspaceAgentSelection({
         quickAgentOverride: 'codex',
@@ -74,6 +74,6 @@ describe('resolveQuickWorkspaceAgentSelection', () => {
         detectedAgentIds: ['claude'],
         disabledTuiAgents: []
       })
-    ).toEqual({ quickAgent: 'claude', quickAgentOverride: 'claude' })
+    ).toEqual({ quickAgent: null, quickAgentOverride: 'codex' })
   })
 })

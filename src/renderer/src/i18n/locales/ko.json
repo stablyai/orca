@@ -14221,6 +14221,15 @@
           "errorInjectionFailed": "이 페이지에서 요소 선택을 시작할 수 없습니다."
         }
       },
+      "GitHubIssueWorkspaceLaunchButton": {
+        "f20e260a05": "이슈에서 워크스페이스 시작",
+        "e4bb9f1ece": "시작",
+        "c8a6bec97e": "이 워크스페이스에 사용할 에이전트 선택",
+        "01be61ba14": "에이전트로 시작",
+        "cf532aff14": "에이전트 감지 중…",
+        "9635bbe266": "에이전트를 불러올 수 없습니다",
+        "89f202d990": "사용 가능한 에이전트가 없습니다"
+      },
       "pluginCatalog": {
         "PluginCatalogLayout": {
           "title": "Plugins",

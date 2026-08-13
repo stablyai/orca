@@ -183,6 +183,7 @@ import {
 import type { TaskPageGitHubMutationIntent } from '@/components/task-page-github-work-item-mutation-patches'
 import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page-github-work-item-mutation-types'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
+import { GitHubIssueWorkspaceLaunchButton } from '@/components/GitHubIssueWorkspaceLaunchButton'
 import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
@@ -375,7 +376,8 @@ import type {
   LinearWorkflowState,
   Repo,
   TaskProvider,
-  TaskViewPresetId
+  TaskViewPresetId,
+  TuiAgent
 } from '../../../shared/types'
 import type { PreflightStatus } from '../../../preload/api-types'
 import type { GitLabProjectRef } from '../../../shared/gitlab-types'
@@ -485,7 +487,7 @@ const JIRA_ITEM_LIMIT = 50
 const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
 
 const GITHUB_TASK_GRID_CLASS =
-  'min-w-[790px] grid-cols-[72px_minmax(320px,1fr)_84px_100px_92px_122px]'
+  'min-w-[800px] grid-cols-[72px_minmax(320px,1fr)_84px_100px_92px_132px]'
 const GITHUB_PR_TASK_GRID_CLASS =
   'min-w-[1020px] grid-cols-[72px_minmax(360px,2fr)_132px_128px_132px_92px_158px]'
 // Why: sticky cells need the row's opaque, animated surface to prevent bleed and hover flashes.
@@ -7346,7 +7348,7 @@ export default function TaskPage(): React.JSX.Element {
   ])
 
   const openComposerForItem = useCallback(
-    (item: GitHubWorkItem): void => {
+    (item: GitHubWorkItem, initialAgent?: TuiAgent): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
         provider: 'github',
         type: item.type,
@@ -7361,6 +7363,7 @@ export default function TaskPage(): React.JSX.Element {
         taskSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
         prefilledName: getGitHubWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
+        ...(initialAgent ? { initialAgent } : {}),
         enableIssueAutomation: item.type === 'issue',
         telemetrySource: 'sidebar'
       })
@@ -7369,15 +7372,15 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const handleUseWorkItem = useCallback(
-    (item: GitHubWorkItem): void => {
+    (item: GitHubWorkItem, agentOverride?: TuiAgent): void => {
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      openComposerForItem(item)
+      openComposerForItem(item, agentOverride)
     },
     [openComposerForItem]
   )
 
   const handleOpenOrUseGitHubWorkItem = useCallback(
-    (item: GitHubWorkItem): void => {
+    (item: GitHubWorkItem, agentOverride?: TuiAgent): void => {
       const currentAttached = findGithubWorkItemWorkspaceAttachment(
         useAppStore.getState().allWorktrees(),
         item.repoId,
@@ -7385,7 +7388,7 @@ export default function TaskPage(): React.JSX.Element {
         item.number
       )
       if (!currentAttached) {
-        handleUseWorkItem(item)
+        handleUseWorkItem(item, agentOverride)
         return
       }
 
@@ -10318,6 +10321,9 @@ export default function TaskPage(): React.JSX.Element {
                           tabIndex={0}
                           onClick={() => openGitHubDetailPage(item)}
                           onKeyDown={(event) => {
+                            if (event.target !== event.currentTarget) {
+                              return
+                            }
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault()
                               openGitHubDetailPage(item)
@@ -10547,38 +10553,34 @@ export default function TaskPage(): React.JSX.Element {
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                            ) : (
+                            ) : attachedWorkspace ? (
                               <Button
                                 type="button"
                                 // Why: Open resumes an existing workspace — solid primary reads stronger than outline Start (new workspace).
-                                variant={attachedWorkspace ? 'default' : 'outline'}
+                                variant="default"
                                 size="xs"
                                 data-contextual-tour-target="tasks-start-workspace"
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   handleOpenOrUseGitHubWorkItem(item)
                                 }}
-                                className={cn(
-                                  'min-w-[72px] gap-1 font-semibold',
-                                  attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
+                                className="min-w-[72px] gap-1 font-semibold shadow-xs"
+                                aria-label={translate(
+                                  'auto.components.TaskPage.2193a99ec1',
+                                  'Open workspace attached to issue'
                                 )}
-                                aria-label={
-                                  attachedWorkspace
-                                    ? translate(
-                                        'auto.components.TaskPage.2193a99ec1',
-                                        'Open workspace attached to issue'
-                                      )
-                                    : translate(
-                                        'auto.components.TaskPage.e104fa3d3d',
-                                        'Start workspace from issue'
-                                      )
-                                }
                               >
-                                {attachedWorkspace
-                                  ? translate('auto.components.TaskPage.606a85c774', 'Open')
-                                  : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                                {translate('auto.components.TaskPage.606a85c774', 'Open')}
                                 <ArrowRight className="size-3" />
                               </Button>
+                            ) : (
+                              <GitHubIssueWorkspaceLaunchButton
+                                repo={itemRepo}
+                                onStartDefault={() => handleOpenOrUseGitHubWorkItem(item)}
+                                onStartWithAgent={(agent) =>
+                                  handleOpenOrUseGitHubWorkItem(item, agent)
+                                }
+                              />
                             )}
                             {item.type !== 'pr' ? (
                               <DropdownMenu modal={false}>
