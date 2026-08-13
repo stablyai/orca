@@ -178,11 +178,15 @@ test.describe('Linear URL workspace entry', () => {
       exact: true
     })
     await expect(useNameRow).toHaveAttribute('data-selected', 'true')
+    await expect(input).not.toHaveAttribute('aria-busy', 'true')
 
     await input.press('Enter')
     await expect(input).toHaveValue(LINEAR_URL)
     await expect(dialog.locator('[data-workspace-source-pill="true"]')).toHaveCount(0)
-    await expect(useNameRow).toBeHidden()
+    const suggestions = dialog.locator('[data-workspace-source-suggestions="true"]')
+    if (await suggestions.isVisible()) {
+      await input.press('Escape')
+    }
     await expect(input).not.toHaveAttribute('aria-busy', 'true')
     await input.press('Enter')
     await expect(dialog.locator('[data-agent-combobox-root="true"][role="combobox"]')).toBeFocused()

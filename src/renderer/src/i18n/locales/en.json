@@ -148,6 +148,10 @@
       "clearProjects": "Clear projects",
       "back": "Back",
       "ariaActive": "Filter: {{value0}} active."
+    },
+    "taskUrl": {
+      "loadingHint": "Loading {{value0}}…",
+      "createHint": "Create worktree from {{value0}}"
     }
   },
   "auto": {
