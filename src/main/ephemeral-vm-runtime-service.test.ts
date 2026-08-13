@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -76,6 +76,7 @@ describe('ephemeral VM runtime service', () => {
         '  const payload = JSON.parse(input)',
         '  if (payload.recipeResult.projectRoot !== "/workspace/repo") process.exit(12)',
         '  if (!payload.recipeResult.userData.providerResourceId) process.exit(13)',
+        "  require('fs').appendFileSync('cleanup-count.txt', 'x')",
         '  console.error(`cleanup:${payload.instanceId}`)',
         '})'
       ].join('\n')
@@ -118,13 +119,17 @@ describe('ephemeral VM runtime service', () => {
     })
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([provisioned.runtime])
 
-    const cleanup = await cleanupEphemeralVmRuntime({
+    const cleanupArgs = {
       userDataPath,
       repoPath,
       recipe,
       runtimeId: provisioned.runtime.id,
       now: 2_000
-    })
+    }
+    const [cleanup] = await Promise.all([
+      cleanupEphemeralVmRuntime(cleanupArgs),
+      cleanupEphemeralVmRuntime(cleanupArgs)
+    ])
 
     expect(cleanup).toMatchObject({
       ok: true,
@@ -136,6 +141,13 @@ describe('ephemeral VM runtime service', () => {
         cleanupLastAttemptAt: 2_000
       }
     })
+    expect(readFileSync(join(repoPath, 'cleanup-count.txt'), 'utf8')).toBe('x')
+
+    await expect(cleanupEphemeralVmRuntime(cleanupArgs)).resolves.toMatchObject({
+      ok: true,
+      runtime: { status: 'cleaned' }
+    })
+    expect(readFileSync(join(repoPath, 'cleanup-count.txt'), 'utf8')).toBe('x')
   })
 
   it('does not persist a runtime when recipe output cannot be parsed', async () => {

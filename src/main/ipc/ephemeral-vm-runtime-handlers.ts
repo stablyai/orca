@@ -18,6 +18,7 @@ import {
   resumeEphemeralVmRuntime,
   suspendEphemeralVmRuntime
 } from '../ephemeral-vm-runtime-service'
+import { removeEphemeralVmRuntimeSshTarget } from '../ephemeral-vm-runtime-ssh-cleanup'
 import {
   buildEphemeralVmRecipeCleanupCommand,
   buildEphemeralVmRecipeCleanupPayload
@@ -73,23 +74,28 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (!runtime.repoId) {
         throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
       }
-      let resolved: ReturnType<typeof getRuntimeRecipeContext>
-      try {
-        resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
-      } catch (error) {
-        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-          status: 'cleanup_failed',
-          cleanupStatus: 'failed',
-          cleanupLastAttemptAt: Date.now(),
-          cleanupLastError: error instanceof Error ? error.message : String(error)
+      let result
+      if (runtime.cleanupStatus === 'succeeded') {
+        result = { ok: true as const, runtime, skipped: false }
+      } else {
+        let resolved: ReturnType<typeof getRuntimeRecipeContext>
+        try {
+          resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+        } catch (error) {
+          return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+            status: 'cleanup_failed',
+            cleanupStatus: 'failed',
+            cleanupLastAttemptAt: Date.now(),
+            cleanupLastError: error instanceof Error ? error.message : String(error)
+          })
+        }
+        result = await cleanupEphemeralVmRuntime({
+          userDataPath,
+          repoPath: resolved.repo.repo.path,
+          recipe: resolved.recipe,
+          runtimeId: runtime.id
         })
       }
-      const result = await cleanupEphemeralVmRuntime({
-        userDataPath,
-        repoPath: resolved.repo.repo.path,
-        recipe: resolved.recipe,
-        runtimeId: runtime.id
-      })
       if (result.ok && runtime.runtimeEnvironmentId) {
         try {
           removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
@@ -100,14 +106,11 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       }
       // Remove even on cleanup_failed (removal is idempotent via the deterministic
       // id) so a terminal cleanup never orphans the hidden SSH target.
-      if (runtime.sshTargetId) {
-        await removeRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
-        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-          connectionMode: null,
-          sshTargetId: null
-        })
-      }
-      return result.runtime
+      return removeEphemeralVmRuntimeSshTarget({
+        userDataPath,
+        runtime: result.runtime,
+        removeTarget: removeRuntimeOwnedSshTarget
+      })
     }
   )
 

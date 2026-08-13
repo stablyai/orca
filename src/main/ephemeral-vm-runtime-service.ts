@@ -92,6 +92,8 @@ export type ResumeEphemeralVmRuntimeResult =
       error: string
     }
 
+const cleanupInFlight = new Map<string, Promise<CleanupEphemeralVmRuntimeResult>>()
+
 export async function provisionEphemeralVmRuntime(
   args: ProvisionEphemeralVmRuntimeArgs
 ): Promise<ProvisionEphemeralVmRuntimeResult> {
@@ -137,7 +139,27 @@ export async function provisionEphemeralVmRuntime(
   return { ok: true, start, runtime }
 }
 
-export async function cleanupEphemeralVmRuntime(
+export function cleanupEphemeralVmRuntime(
+  args: CleanupEphemeralVmRuntimeArgs
+): Promise<CleanupEphemeralVmRuntimeResult> {
+  const key = `${args.userDataPath}\0${args.runtimeId}`
+  const existing = cleanupInFlight.get(key)
+  if (existing) {
+    return existing
+  }
+
+  const cleanup = cleanupEphemeralVmRuntimeOnce(args)
+  cleanupInFlight.set(key, cleanup)
+  const forget = (): void => {
+    if (cleanupInFlight.get(key) === cleanup) {
+      cleanupInFlight.delete(key)
+    }
+  }
+  void cleanup.then(forget, forget)
+  return cleanup
+}
+
+async function cleanupEphemeralVmRuntimeOnce(
   args: CleanupEphemeralVmRuntimeArgs
 ): Promise<CleanupEphemeralVmRuntimeResult> {
   const existing = listEphemeralVmRuntimes(args.userDataPath).find(
@@ -145,6 +167,13 @@ export async function cleanupEphemeralVmRuntime(
   )
   if (!existing) {
     throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
+  }
+  if (existing.status === 'cleaned') {
+    return {
+      ok: true,
+      runtime: existing,
+      skipped: existing.cleanupStatus === 'disabled'
+    }
   }
 
   const now = args.now ?? Date.now()
