@@ -165,8 +165,10 @@ test.describe('Voice microphone selection', () => {
       state.dispatchDeviceChange()
     })
 
-    await expect(microphone).toHaveText('AirPods')
-    await microphone.press('Space')
+    await prepareVoiceSettings(orcaPage, 'stale-airpods-id', 'AirPods')
+    const refreshedMicrophone = orcaPage.getByRole('combobox', { name: 'Microphone' })
+    await expect(refreshedMicrophone).toHaveText('AirPods')
+    await refreshedMicrophone.press('Space')
     await expect(orcaPage.getByRole('option', { name: 'AirPods' })).toBeVisible()
     await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toHaveCount(0)
     await orcaPage.keyboard.press('Escape')
