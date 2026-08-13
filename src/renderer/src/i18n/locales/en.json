@@ -5695,7 +5695,11 @@
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
           "415fa76f64": "Selected app icon",
-          "5f5142a62a": "Previous icon"
+          "5f5142a62a": "Previous icon",
+          "4239e200e8": "The current window icon updates immediately. Restart Orca if Windows still shows the previous icon.",
+          "95572fdc77": "For a pinned taskbar icon, unpin Orca and pin it again after restart.",
+          "8d399921d9": "Restarting…",
+          "ca8a78988d": "Restart now"
         },
         "AppearancePane": {
           "3057983501": "Unassigned",

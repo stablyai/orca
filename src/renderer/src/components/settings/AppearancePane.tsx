@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
 
 import type { GlobalSettings } from '../../../../shared/types'
@@ -78,12 +78,19 @@ export function AppearancePane({
   const clearAppearanceAccordionDeepLink = useAppStore(
     (state) => state.clearAppearanceAccordionDeepLink
   )
+  const appIconAtRendererStartup = useAppStore((state) => state.appIconAtRendererStartup)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const isWebClient = isWebClientLocation()
   // Why: the system tray behavior is desktop-Electron Windows-only; a Windows
   // browser web client has no local tray to control.
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
+  const persistedAppIcon = normalizeAppIconId(settings.appIcon)
+  const [selectedAppIcon, setSelectedAppIcon] = useState(persistedAppIcon)
+
+  useEffect(() => {
+    setSelectedAppIcon(persistedAppIcon)
+  }, [persistedAppIcon])
 
   // Why: Terminal / Window settings were too easy to miss when only Interface
   // started open; keep sections independently collapsible but expanded by default.
@@ -293,8 +300,17 @@ export function AppearancePane({
           className="max-w-none px-1 pt-2"
         >
           <AppIconSelector
-            value={normalizeAppIconId(settings.appIcon)}
-            onChange={(appIcon) => updateSettings({ appIcon })}
+            value={selectedAppIcon}
+            onChange={(appIcon) => {
+              setSelectedAppIcon(appIcon)
+              updateSettings({ appIcon })
+            }}
+            restartRequired={
+              isDesktopWindows && appIconAtRendererStartup !== null
+                ? selectedAppIcon !== normalizeAppIconId(appIconAtRendererStartup)
+                : false
+            }
+            onRestart={isDesktopWindows ? () => window.api.app.restart() : undefined}
           />
         </SearchableSetting>
       ) : null}

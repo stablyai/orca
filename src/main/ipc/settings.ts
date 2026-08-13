@@ -16,7 +16,7 @@ import { applyElectronProxySettings } from '../network/proxy-settings'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
-import { applyAppIcon } from '../app-icon'
+import { applyAppIcon, persistWindowsAppShortcutIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
@@ -245,7 +245,12 @@ export function registerSettingsHandlers(
       }
     }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
-      applyAppIcon(result.appIcon)
+      const iconApplied = applyAppIcon(result.appIcon)
+      // Why: applyAppIcon also runs during boot; shortcut writes belong only to
+      // explicit icon changes so startup stays free of synchronous Shell I/O.
+      if (iconApplied) {
+        persistWindowsAppShortcutIcon(result.appIcon)
+      }
     }
 
     // Why: telemetry-plan.md§Settings — fire `settings_changed` only for

@@ -6,12 +6,16 @@ const {
   createFromPathMock,
   dockSetIconMock,
   isMock,
+  updateWindowsAppShortcutIconMock,
+  windowSetAppDetailsMock,
   windowSetIconMock
 } = vi.hoisted(() => ({
   browserWindowGetAllWindowsMock: vi.fn(),
   createFromPathMock: vi.fn(),
   dockSetIconMock: vi.fn(),
   isMock: { dev: false },
+  updateWindowsAppShortcutIconMock: vi.fn(),
+  windowSetAppDetailsMock: vi.fn(),
   windowSetIconMock: vi.fn()
 }))
 
@@ -23,6 +27,10 @@ vi.mock('electron', () => ({
 
 vi.mock('@electron-toolkit/utils', () => ({
   is: isMock
+}))
+
+vi.mock('./windows-app-shortcut-icon', () => ({
+  updateWindowsAppShortcutIcon: updateWindowsAppShortcutIconMock
 }))
 
 vi.mock('../../resources/icon.png?asset', () => ({
@@ -49,7 +57,28 @@ vi.mock('../../resources/app-icons/orca-blue.png?asset&asarUnpack', () => ({
   default: 'blue-icon-unpacked'
 }))
 
-import { applyAppIcon, getAppIconPath, persistMacDockIcon } from './app-icon'
+vi.mock('../../resources/build/icon.ico?asset&asarUnpack', () => ({
+  default: 'classic-windows-icon-unpacked'
+}))
+
+vi.mock('../../resources/app-icons/orca-classic-dev.ico?asset&asarUnpack', () => ({
+  default: 'classic-dev-windows-icon-unpacked'
+}))
+
+vi.mock('../../resources/app-icons/orca-watercolor.ico?asset&asarUnpack', () => ({
+  default: 'watercolor-windows-icon-unpacked'
+}))
+
+vi.mock('../../resources/app-icons/orca-blue.ico?asset&asarUnpack', () => ({
+  default: 'blue-windows-icon-unpacked'
+}))
+
+import {
+  applyAppIcon,
+  getAppIconPath,
+  persistMacDockIcon,
+  persistWindowsAppShortcutIcon
+} from './app-icon'
 
 function waitForQueuedPersistence(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
@@ -74,6 +103,8 @@ describe('app icon selection', () => {
     browserWindowGetAllWindowsMock.mockReset()
     createFromPathMock.mockReset()
     dockSetIconMock.mockReset()
+    updateWindowsAppShortcutIconMock.mockReset()
+    windowSetAppDetailsMock.mockReset()
     windowSetIconMock.mockReset()
     isMock.dev = false
   })
@@ -82,31 +113,117 @@ describe('app icon selection', () => {
     vi.useRealTimers()
   })
 
-  it('resolves classic, watercolor, blue, and invalid icon ids', () => {
-    expect(getAppIconPath('classic')).toBe('classic-icon')
-    expect(getAppIconPath('watercolor')).toBe('watercolor-icon')
-    expect(getAppIconPath('blue')).toBe('blue-icon')
-    expect(getAppIconPath('missing')).toBe('classic-icon')
+  it('resolves app icons for the current platform', () => {
+    const expectedPaths =
+      process.platform === 'win32'
+        ? [
+            'classic-windows-icon-unpacked',
+            'watercolor-windows-icon-unpacked',
+            'blue-windows-icon-unpacked',
+            'classic-windows-icon-unpacked'
+          ]
+        : ['classic-icon', 'watercolor-icon', 'blue-icon', 'classic-icon']
+
+    expect([
+      getAppIconPath('classic'),
+      getAppIconPath('watercolor'),
+      getAppIconPath('blue'),
+      getAppIconPath('missing')
+    ]).toEqual(expectedPaths)
+  })
+
+  it('resolves Windows ICO paths through the platform-aware icon API', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect([
+        getAppIconPath('classic'),
+        getAppIconPath('watercolor'),
+        getAppIconPath('blue'),
+        getAppIconPath('missing')
+      ]).toEqual([
+        'classic-windows-icon-unpacked',
+        'watercolor-windows-icon-unpacked',
+        'blue-windows-icon-unpacked',
+        'classic-windows-icon-unpacked'
+      ])
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('applies the selected icon to the dock and live windows', () => {
     const image = { isEmpty: () => false }
     createFromPathMock.mockReturnValue(image)
     browserWindowGetAllWindowsMock.mockReturnValue([
-      { isDestroyed: () => false, setIcon: windowSetIconMock },
+      {
+        isDestroyed: () => false,
+        setAppDetails: windowSetAppDetailsMock,
+        setIcon: windowSetIconMock
+      },
       { isDestroyed: () => true, setIcon: vi.fn() }
     ])
 
     applyAppIcon('watercolor')
 
-    expect(createFromPathMock).toHaveBeenCalledWith('watercolor-icon')
+    expect(createFromPathMock).toHaveBeenCalledWith(
+      process.platform === 'win32' ? 'watercolor-windows-icon-unpacked' : 'watercolor-icon'
+    )
     if (process.platform === 'darwin') {
       expect(dockSetIconMock).toHaveBeenCalledWith(image)
     } else {
       expect(dockSetIconMock).not.toHaveBeenCalled()
     }
     expect(windowSetIconMock).toHaveBeenCalledWith(image)
+    expect(windowSetAppDetailsMock).not.toHaveBeenCalled()
+    expect(updateWindowsAppShortcutIconMock).not.toHaveBeenCalled()
   })
+
+  it('persists Windows shortcut icons only when explicitly requested', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      persistWindowsAppShortcutIcon('watercolor')
+
+      expect(updateWindowsAppShortcutIconMock).toHaveBeenCalledWith(
+        'watercolor-windows-icon-unpacked'
+      )
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it('does not persist Windows shortcut icons on other platforms', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      persistWindowsAppShortcutIcon('watercolor')
+
+      expect(updateWindowsAppShortcutIconMock).not.toHaveBeenCalled()
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'does not mutate the Windows taskbar identity during live icon changes',
+    () => {
+      const image = { isEmpty: () => false }
+      createFromPathMock.mockReturnValue(image)
+      browserWindowGetAllWindowsMock.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          setAppDetails: windowSetAppDetailsMock,
+          setIcon: windowSetIconMock
+        }
+      ])
+
+      applyAppIcon('classic')
+      applyAppIcon('watercolor')
+      applyAppIcon('blue')
+      applyAppIcon('classic')
+
+      expect(windowSetIconMock).toHaveBeenCalledTimes(4)
+      expect(windowSetAppDetailsMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('persists a custom macOS dock icon to the app bundle for inactive Dock pins', async () => {
     const execFile = vi.fn(

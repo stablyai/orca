@@ -12,7 +12,12 @@ import watercolorIcon from '../../resources/app-icons/orca-watercolor.png?asset'
 import watercolorMacDockIcon from '../../resources/app-icons/orca-watercolor.png?asset&asarUnpack'
 import blueIcon from '../../resources/app-icons/orca-blue.png?asset'
 import blueMacDockIcon from '../../resources/app-icons/orca-blue.png?asset&asarUnpack'
+import classicWindowsIcon from '../../resources/build/icon.ico?asset&asarUnpack'
+import classicDevWindowsIcon from '../../resources/app-icons/orca-classic-dev.ico?asset&asarUnpack'
+import watercolorWindowsIcon from '../../resources/app-icons/orca-watercolor.ico?asset&asarUnpack'
+import blueWindowsIcon from '../../resources/app-icons/orca-blue.ico?asset&asarUnpack'
 import { normalizeAppIconId, type AppIconId } from '../shared/app-icon'
+import { updateWindowsAppShortcutIcon } from './windows-app-shortcut-icon'
 
 const APP_ICON_PATHS = {
   classic: is.dev ? classicDevIcon : classicIcon,
@@ -24,6 +29,14 @@ const MAC_DOCK_ICON_PATHS = {
   watercolor: watercolorMacDockIcon,
   blue: blueMacDockIcon
 } satisfies Record<Exclude<AppIconId, 'classic'>, string>
+
+// Why: Windows Shell consumers need unpacked, multi-size ICO files; the PNG
+// assets remain appropriate for renderer previews and other platforms.
+const WINDOWS_APP_ICON_PATHS = {
+  classic: is.dev ? classicDevWindowsIcon : classicWindowsIcon,
+  watercolor: watercolorWindowsIcon,
+  blue: blueWindowsIcon
+} satisfies Record<AppIconId, string>
 
 type ExecFile = (
   file: string,
@@ -74,7 +87,8 @@ let macDockIconPersistenceGeneration = 0
 let macDockIconPersistenceQueue = Promise.resolve()
 
 export function getAppIconPath(value: unknown): string {
-  return APP_ICON_PATHS[normalizeAppIconId(value)]
+  const iconId = normalizeAppIconId(value)
+  return process.platform === 'win32' ? WINDOWS_APP_ICON_PATHS[iconId] : APP_ICON_PATHS[iconId]
 }
 
 export function createAppIconImage(value: unknown): Electron.NativeImage {
@@ -287,10 +301,17 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
   })
 }
 
-export function applyAppIcon(value: unknown): void {
+export function persistWindowsAppShortcutIcon(value: unknown): void {
+  if (process.platform !== 'win32') {
+    return
+  }
+  updateWindowsAppShortcutIcon(getAppIconPath(value))
+}
+
+export function applyAppIcon(value: unknown): boolean {
   const image = createAppIconImage(value)
   if (image.isEmpty()) {
-    return
+    return false
   }
   if (process.platform === 'darwin') {
     app.dock?.setIcon(image)
@@ -301,4 +322,5 @@ export function applyAppIcon(value: unknown): void {
     }
   }
   persistMacDockIcon(value)
+  return true
 }

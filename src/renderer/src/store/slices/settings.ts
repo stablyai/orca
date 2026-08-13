@@ -28,9 +28,11 @@ import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
 } from '../../../../shared/mobile-pairing-custom-address'
+import { normalizeAppIconId, type AppIconId } from '../../../../shared/app-icon'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
+  appIconAtRendererStartup: AppIconId | null
   fetchSettings: () => Promise<void>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<void>
@@ -164,12 +166,19 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
 
 export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => ({
   settings: null,
+  appIconAtRendererStartup: null,
   ...createSettingsSearchState((state) => set(state)),
 
   fetchSettings: async () => {
     try {
       const settings = await window.api.settings.get()
-      set({ settings })
+      set((state) => ({
+        settings,
+        // Why: renderer startup is the restart boundary; later settings refreshes
+        // must not move the baseline used by Windows restart guidance.
+        appIconAtRendererStartup:
+          state.appIconAtRendererStartup ?? normalizeAppIconId(settings.appIcon)
+      }))
     } catch (err) {
       console.error('Failed to fetch settings:', err)
     }

@@ -11,6 +11,7 @@ const {
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
   resolveEnvironmentMock,
+  persistWindowsAppShortcutIconMock,
   rebuildAppMenuMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
@@ -23,6 +24,7 @@ const {
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
+  persistWindowsAppShortcutIconMock: vi.fn(),
   rebuildAppMenuMock: vi.fn()
 }))
 
@@ -46,7 +48,8 @@ vi.mock('../network/proxy-settings', () => ({
 }))
 
 vi.mock('../app-icon', () => ({
-  applyAppIcon: applyAppIconMock
+  applyAppIcon: applyAppIconMock,
+  persistWindowsAppShortcutIcon: persistWindowsAppShortcutIconMock
 }))
 
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
@@ -86,7 +89,7 @@ describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
     onMock.mockClear()
-    applyAppIconMock.mockClear()
+    applyAppIconMock.mockReset().mockReturnValue(true)
     applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
@@ -99,6 +102,7 @@ describe('registerSettingsHandlers', () => {
       }
       return { id: 'windows-2' }
     })
+    persistWindowsAppShortcutIconMock.mockClear()
     rebuildAppMenuMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
@@ -665,6 +669,7 @@ describe('registerSettingsHandlers', () => {
       { notifyListeners: true, originWebContentsId: 1 }
     )
     expect(applyAppIconMock).toHaveBeenCalledWith('watercolor')
+    expect(persistWindowsAppShortcutIconMock).toHaveBeenCalledWith('watercolor')
   })
 
   it('falls back to the classic app icon for invalid renderer settings IPC values', async () => {
@@ -684,6 +689,24 @@ describe('registerSettingsHandlers', () => {
       { notifyListeners: true, originWebContentsId: 1 }
     )
     expect(applyAppIconMock).toHaveBeenCalledWith('classic')
+    expect(persistWindowsAppShortcutIconMock).toHaveBeenCalledWith('classic')
+  })
+
+  it('does not persist a Windows shortcut icon when the image cannot be applied', async () => {
+    store.getSettings.mockReturnValue({ appIcon: 'classic' })
+    store.updateSettings.mockReturnValue({ appIcon: 'watercolor' })
+    applyAppIconMock.mockReturnValue(false)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { appIcon: 'watercolor' })
+
+    expect(applyAppIconMock).toHaveBeenCalledWith('watercolor')
+    expect(persistWindowsAppShortcutIconMock).not.toHaveBeenCalled()
   })
 
   it('rebuilds the app menu after Automations sidebar visibility changes', async () => {
