@@ -174,7 +174,7 @@ jobs:
       # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
       # launches but never creates a BrowserWindow.
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e --shard=${{ matrix.shard }}
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 pnpm run test:e2e --shard=${{ matrix.shard }}
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without
@@ -233,7 +233,7 @@ jobs:
           TEST_FILES_JSON: ${{ inputs.test_files }}
         run: |
           mapfile -t TEST_FILES < <(jq -r '.[]' <<<"$TEST_FILES_JSON")
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 \
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 \
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1
 
       - name: Upload Playwright traces
