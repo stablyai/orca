@@ -31,6 +31,5 @@ unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 
 export ELECTRON_RUN_AS_NODE=1
-# Why: replace the launcher so SIGINT/SIGTERM reach the CLI supervisor, which
-# forwards them to the Electron serve process and releases its listener.
+# Why: preserve signal delivery by replacing the launcher with the CLI supervisor.
 exec "$ELECTRON" "$CLI" "$@"

@@ -1,5 +1,4 @@
 import { execFile, spawn } from 'node:child_process'
-import { once } from 'node:events'
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -11,6 +10,7 @@ import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
 const itRunsUnixShell = process.platform === 'win32' ? it.skip : it
+const unixTerminationSignals = ['SIGINT', 'SIGTERM'] as const
 const builderConfig = require('../../../config/electron-builder.config.cjs') as {
   files?: string[]
   asarUnpack?: string[]
@@ -107,9 +107,9 @@ describe('packaged CLI assets', () => {
     }
   })
 
-  itRunsUnixShell(
-    'delivers SIGTERM to the Linux executable and releases its listener',
-    async () => {
+  itRunsUnixShell.each(unixTerminationSignals)(
+    'delivers %s to the Linux executable and releases its listener',
+    async (signal) => {
       const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-signal-'))
       const appDir = join(root, 'Orca')
       const resourcesDir = join(appDir, 'resources')
@@ -151,18 +151,22 @@ process.on('SIGTERM', shutdown)
         const state = await waitForListenerState(statePath)
         executablePid = state.pid
         const launcherPid = launcher.pid
-        const launcherExit = once(launcher, 'exit')
-        launcher.kill('SIGTERM')
-        await launcherExit
+        launcher.kill(signal)
+        const launcherExit = await waitForChildExit(launcher, 5_000)
+        const exitCode = launcherExit?.[0]
+        const exitSignal = launcherExit?.[1]
 
-        expect(executablePid).toBe(launcherPid)
-        await expect(waitForPortRelease(state.port)).resolves.toBe(true)
+        expect.soft(executablePid).toBe(launcherPid)
+        expect.soft(launcherExit).not.toBeNull()
+        expect.soft(exitCode).toBe(0)
+        expect.soft(exitSignal).toBeNull()
+        expect.soft(await waitForPortRelease(state.port)).toBe(true)
       } finally {
-        if (launcher?.pid && isProcessAlive(launcher.pid)) {
-          process.kill(launcher.pid, 'SIGTERM')
+        if (launcher?.pid) {
+          await terminateSyntheticProcess(launcher.pid)
         }
-        if (executablePid && isProcessAlive(executablePid)) {
-          process.kill(executablePid, 'SIGTERM')
+        if (executablePid && executablePid !== launcher?.pid) {
+          await terminateSyntheticProcess(executablePid)
         }
         await rm(root, { recursive: true, force: true })
       }
@@ -350,4 +354,46 @@ function isProcessAlive(pid: number): boolean {
   } catch {
     return false
   }
+}
+
+function waitForChildExit(
+  child: ReturnType<typeof spawn>,
+  timeoutMs: number
+): Promise<readonly [number | null, NodeJS.Signals | null] | null> {
+  return new Promise((resolve) => {
+    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+      clearTimeout(timeout)
+      resolve([code, signal])
+    }
+    const timeout = setTimeout(() => {
+      child.off('exit', onExit)
+      resolve(null)
+    }, timeoutMs)
+    child.once('exit', onExit)
+  })
+}
+
+async function terminateSyntheticProcess(pid: number): Promise<void> {
+  if (!isProcessAlive(pid)) {
+    return
+  }
+  process.kill(pid, 'SIGTERM')
+  if (await waitForProcessExit(pid, 1_000)) {
+    return
+  }
+  process.kill(pid, 'SIGKILL')
+  if (!(await waitForProcessExit(pid, 1_000))) {
+    throw new Error(`Failed to terminate synthetic launcher process ${pid}`)
+  }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  return !isProcessAlive(pid)
 }
