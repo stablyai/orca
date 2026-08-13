@@ -3099,6 +3099,8 @@ function TerminalPane(
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
+        onSplitLeft={contextMenu.onSplitLeft}
+        onSplitUp={contextMenu.onSplitUp}
         keybindings={keybindings}
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}

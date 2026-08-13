@@ -1935,6 +1935,7 @@ type RuntimeNotifier = {
     paneRuntimeId: number,
     opts: {
       direction: 'horizontal' | 'vertical'
+      position?: 'before' | 'after'
       command?: string
       telemetrySource?: TerminalPaneSplitSource
     }
@@ -27338,6 +27339,7 @@ export class OrcaRuntimeService {
     handle: string,
     opts: {
       direction?: 'horizontal' | 'vertical'
+      position?: 'before' | 'after'
       command?: string
       env?: Record<string, string>
       envToDelete?: string[]
@@ -27366,6 +27368,7 @@ export class OrcaRuntimeService {
 
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
+      ...(opts.position ? { position: opts.position } : {}),
       command: opts.command,
       telemetrySource: opts.telemetrySource
     })

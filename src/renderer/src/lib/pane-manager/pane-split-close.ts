@@ -2,6 +2,7 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneManagerOptions,
+  PaneSplitPosition,
   PaneStyleOptions
 } from './pane-manager-types'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
@@ -30,7 +31,13 @@ type MovedPaneSplitState = {
 type SplitManagedPaneArgs = {
   paneId: number
   direction: 'vertical' | 'horizontal'
-  opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+  opts?: {
+    ratio?: number
+    cwd?: string
+    leafId?: string
+    ptyId?: string
+    position?: PaneSplitPosition
+  }
   sourceContainer?: HTMLElement
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement

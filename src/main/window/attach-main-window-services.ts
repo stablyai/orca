@@ -439,6 +439,7 @@ function registerRuntimeWindowLifecycle(
         tabId,
         paneRuntimeId,
         direction: opts.direction,
+        ...(opts.position ? { position: opts.position } : {}),
         command: opts.command,
         telemetrySource: opts.telemetrySource
       })

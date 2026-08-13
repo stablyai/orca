@@ -1844,11 +1844,12 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onSplitTerminal(
-        ({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
+        ({ tabId, paneRuntimeId, direction, position, command, telemetrySource }) => {
           const detail: SplitTerminalPaneDetail = {
             tabId,
             paneRuntimeId,
             direction,
+            ...(position ? { position } : {}),
             command,
             telemetrySource
           }

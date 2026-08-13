@@ -14,6 +14,10 @@ import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 // Public interfaces
 // ---------------------------------------------------------------------------
 
+/** Where the new pane lands relative to the pane being split: 'after' is
+ *  split right/down, 'before' is split left/up. */
+export type PaneSplitPosition = 'before' | 'after'
+
 /** Hints forwarded from splitPane() into onPaneCreated for a single split.
  *  Carries one-shot PTY spawn/adoption data for the new pane.
  *  Kept as a separate parameter (rather than extending ManagedPane) so the

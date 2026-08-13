@@ -830,6 +830,7 @@ export function useTerminalKeyboardShortcuts({
           fallbackCwd,
           pane,
           direction: action.direction,
+          position: action.position,
           source: getKeyboardSplitTelemetrySource()
         })
       }

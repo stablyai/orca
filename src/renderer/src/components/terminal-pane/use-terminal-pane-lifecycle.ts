@@ -1728,7 +1728,8 @@ export function useTerminalPaneLifecycle({
       }
       const splitOptions = {
         ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
-        ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
+        ...(detail.ptyId ? { ptyId: detail.ptyId } : {}),
+        ...(detail.position ? { position: detail.position } : {})
       }
       if (detail.command) {
         const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>

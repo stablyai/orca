@@ -2855,7 +2855,9 @@
             "925f49f210": "Expand Pane",
             "df766809e0": "Collapse Pane",
             "cff67afad1": "Copy Context",
-            "15dd899676": "Add to {{value0}}…"
+            "15dd899676": "Add to {{value0}}…",
+            "e179938889": "Split Terminal Left",
+            "81f1f200c7": "Split Terminal Up"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
