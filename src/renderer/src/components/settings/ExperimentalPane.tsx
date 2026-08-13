@@ -54,8 +54,12 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showDiscordRichPresence = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().discordRichPresence
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const discordRichPresenceEnabled = settings.discordRichPresenceEnabled === true
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -299,6 +303,47 @@ export function ExperimentalPane({
                   experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
                 })
               }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showDiscordRichPresence ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.experimental.search.discordRichPresence.title',
+            'Discord Rich Presence'
+          )}
+          description={translate(
+            'auto.components.settings.experimental.search.discordRichPresence.description',
+            'Show live agent activity on your Discord profile.'
+          )}
+          keywords={getExperimentalSearchEntry().discordRichPresence.keywords}
+          className="space-y-3 py-2"
+          id="experimental-discord-rich-presence"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.experimental.search.discordRichPresence.title',
+                  'Discord Rich Presence'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.experimental.search.discordRichPresence.copy',
+                  'Shows your active agents, blocked state, and terminal count on your Discord profile while Orca is open. Requires the Discord desktop app. Your agent activity is only shared with your own Discord account.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={discordRichPresenceEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.experimental.search.discordRichPresence.toggleLabel',
+                'Toggle Discord Rich Presence'
+              )}
+              onChange={() => updateSettings({ discordRichPresenceEnabled: !discordRichPresenceEnabled })}
             />
           </div>
         </SearchableSetting>

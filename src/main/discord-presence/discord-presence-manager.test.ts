@@ -103,7 +103,7 @@ describe('DiscordPresenceManager', () => {
     expect(activity.details).toBe('1 agent working')
   })
 
-  it('clears activity when no active agents', async () => {
+  it('publishes idle activity when no active agents', async () => {
     const getSnapshot = vi.fn().mockReturnValue([])
     const subscribeChanges = vi.fn()
     const client = makeClient()
@@ -122,7 +122,32 @@ describe('DiscordPresenceManager', () => {
     client.setActivity.mockClear()
 
     subscribeChanges.mock.calls[0][0]()
-    expect(client.setActivity).toHaveBeenCalledWith(null)
+    const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
+    expect(activity.details).toBe('Idle')
+  })
+
+  it('forwards active terminal count into the idle activity', async () => {
+    const getSnapshot = vi.fn().mockReturnValue([])
+    const subscribeChanges = vi.fn()
+    const client = makeClient()
+
+    const mgr = new DiscordPresenceManager({
+      getSnapshot,
+      subscribeChanges,
+      client,
+      isEnabled: () => true,
+      assetKey: 'orca',
+      getActiveTerminalCount: () => 5,
+      throttleIntervalMs: 0
+    })
+
+    mgr.start()
+    await flush()
+    client.setActivity.mockClear()
+
+    subscribeChanges.mock.calls[0][0]()
+    const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
+    expect(activity.state).toBe('5 terminals open')
   })
 
   it('stop() unsubscribes and disconnects', async () => {

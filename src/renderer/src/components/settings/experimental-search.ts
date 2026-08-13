@@ -228,6 +228,42 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
+    {
+      title: translate(
+        'auto.components.settings.experimental.search.discordRichPresence.title',
+        'Discord Rich Presence'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.discordRichPresence.description',
+        'Show live agent activity on your Discord profile.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.discordRichPresence.discord',
+          'discord'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.discordRichPresence.richPresence',
+          'rich presence'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.discordRichPresence.presence',
+          'presence'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.discordRichPresence.status',
+          'status'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.discordRichPresence.activity',
+          'activity'
+        )
+      ]
+    },
     getNewWorktreeCardStyleSearchEntry(),
     getEphemeralVmsSearchEntry()
   ]
@@ -272,6 +308,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
+      )
+    ),
+    discordRichPresence: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.discordRichPresence.title',
+        'Discord Rich Presence'
       )
     ),
     ephemeralVms: findEntry(

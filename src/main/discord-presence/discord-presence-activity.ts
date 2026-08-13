@@ -10,14 +10,19 @@ export type DiscordPresenceSnapshot = {
   agentTypes: string[]
   startedAt: number
   currentTool?: string
+  /** Live terminal panes (agent + plain-shell), when the host reports them. */
+  activeTerminals?: number
 }
 
 export type DiscordActivity = {
   details: string
   state: string
   assets: { large_image: string; large_text: string }
+  party?: { id: string; size: [number, number] }
   timestamps?: { start: number }
 }
+
+const DISCORD_PARTY_ID = 'orca'
 
 export function aggregateAgentStatus(
   entries: readonly AgentStatusIpcPayload[]
@@ -78,8 +83,19 @@ export function aggregateAgentStatus(
 export function buildDiscordActivity(
   snapshot: DiscordPresenceSnapshot,
   assetKey: string
-): DiscordActivity | null {
-  if (snapshot.active === 0) return null
+): DiscordActivity {
+  const assets = { large_image: assetKey, large_text: 'Orca' }
+
+  // Idle: Orca is open but no agent is running. Still publish so the app is
+  // visible the whole time the feature is enabled.
+  if (snapshot.active === 0) {
+    const terminals = snapshot.activeTerminals ?? 0
+    return {
+      details: 'Idle',
+      state: terminals > 0 ? `${terminals} terminal${terminals !== 1 ? 's' : ''} open` : 'Orca',
+      assets
+    }
+  }
 
   const details = `${snapshot.working} agent${snapshot.working !== 1 ? 's' : ''} working`
 
@@ -98,11 +114,13 @@ export function buildDiscordActivity(
   const activity: DiscordActivity = {
     details,
     state,
-    assets: { large_image: assetKey, large_text: 'Orca' }
+    assets,
+    party: { id: DISCORD_PARTY_ID, size: [snapshot.active, snapshot.total] }
   }
 
   if (snapshot.startedAt > 0) {
-    activity.timestamps = { start: snapshot.startedAt }
+    // Discord expects Unix seconds; Orca reports millisecond timestamps.
+    activity.timestamps = { start: Math.floor(snapshot.startedAt / 1000) }
   }
 
   return activity

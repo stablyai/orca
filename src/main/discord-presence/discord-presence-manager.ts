@@ -1,4 +1,5 @@
 import { aggregateAgentStatus, buildDiscordActivity } from './discord-presence-activity'
+import type { DiscordActivity } from './discord-presence-activity'
 import { createPresenceThrottle } from './discord-presence-throttle'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { DiscordRpcClient } from './discord-rpc-client'
@@ -9,6 +10,8 @@ export type DiscordPresenceManagerDeps = {
   client: DiscordRpcClient
   isEnabled: () => boolean
   assetKey: string
+  /** Live terminal pane count (agents + plain shells). Optional: defaults to 0. */
+  getActiveTerminalCount?: () => number
   /** Override the throttle interval (ms) for tests. */
   throttleIntervalMs?: number
 }
@@ -109,14 +112,17 @@ export class DiscordPresenceManager {
       void this.connectAndPublish()
       return
     }
-    const snapshot = aggregateAgentStatus(this.deps.getSnapshot())
+    const snapshot = {
+      ...aggregateAgentStatus(this.deps.getSnapshot()),
+      activeTerminals: this.deps.getActiveTerminalCount?.() ?? 0
+    }
     console.log('[discord-presence] snapshot:', JSON.stringify(snapshot))
     const activity = buildDiscordActivity(snapshot, this.deps.assetKey)
     console.log('[discord-presence] activity:', JSON.stringify(activity))
     this.throttle(activity)
   }
 
-  private publish(activity: ReturnType<typeof buildDiscordActivity>): void {
+  private publish(activity: DiscordActivity | null): void {
     console.log('[discord-presence] publish:', activity === null ? 'clear' : activity.details)
     this.deps.client.setActivity(activity).catch((err) => {
       console.error('[discord-presence] publish failed:', err)

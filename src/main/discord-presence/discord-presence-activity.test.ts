@@ -54,9 +54,7 @@ describe('aggregateAgentStatus', () => {
     expect(snap.done).toBe(1)
     expect(snap.active).toBe(4)
     expect(snap.total).toBe(5)
-    // done excluded from agentTypes, remaining sorted
     expect(snap.agentTypes).toEqual(['claude', 'codex', 'gemini', 'opencode'])
-    // earliest active receivedAt
     expect(snap.startedAt).toBe(1000)
   })
 
@@ -123,12 +121,19 @@ function snap(overrides: Partial<DiscordPresenceSnapshot> = {}): DiscordPresence
 describe('buildDiscordActivity', () => {
   const ASSET = 'orca'
 
-  it('returns null when no active agents', () => {
-    expect(buildDiscordActivity(snap(), ASSET)).toBeNull()
+  it('shows idle when no active agents', () => {
+    const activity = buildDiscordActivity(snap(), ASSET)
+    expect(activity.details).toBe('Idle')
+    expect(activity.state).toBe('Orca')
+    expect(activity.assets.large_image).toBe('orca')
+    expect(activity.party).toBeUndefined()
+    expect(activity.timestamps).toBeUndefined()
   })
 
-  it('returns null when only done agents', () => {
-    expect(buildDiscordActivity(snap({ done: 3, total: 3 }), ASSET)).toBeNull()
+  it('shows terminal count when idle with open terminals', () => {
+    const activity = buildDiscordActivity(snap({ activeTerminals: 5 }), ASSET)
+    expect(activity.details).toBe('Idle')
+    expect(activity.state).toBe('5 terminals open')
   })
 
   it('builds activity for single working agent', () => {
@@ -136,12 +141,10 @@ describe('buildDiscordActivity', () => {
       snap({ working: 1, active: 1, total: 1, agentTypes: ['claude'], startedAt: 1000 }),
       ASSET
     )
-    expect(activity).toEqual({
-      details: '1 agent working',
-      state: 'Claude',
-      assets: { large_image: 'orca', large_text: 'Orca' },
-      timestamps: { start: 1000 }
-    })
+    expect(activity.details).toBe('1 agent working')
+    expect(activity.state).toBe('Claude')
+    expect(activity.assets).toEqual({ large_image: 'orca', large_text: 'Orca' })
+    expect(activity.party).toEqual({ id: 'orca', size: [1, 1] })
   })
 
   it('builds activity for multiple working agents', () => {
@@ -149,8 +152,16 @@ describe('buildDiscordActivity', () => {
       snap({ working: 3, active: 3, total: 3, agentTypes: ['claude', 'codex', 'gemini'], startedAt: 2000 }),
       ASSET
     )
-    expect(activity?.details).toBe('3 agents working')
-    expect(activity?.state).toBe('Claude · Codex · Gemini')
+    expect(activity.details).toBe('3 agents working')
+    expect(activity.state).toBe('Claude · Codex · Gemini')
+  })
+
+  it('builds party size as [active, total]', () => {
+    const activity = buildDiscordActivity(
+      snap({ working: 2, blocked: 1, active: 3, total: 5, agentTypes: ['claude', 'codex'] }),
+      ASSET
+    )
+    expect(activity.party).toEqual({ id: 'orca', size: [3, 5] })
   })
 
   it('truncates agent list when more than 3 types', () => {
@@ -163,7 +174,7 @@ describe('buildDiscordActivity', () => {
       }),
       ASSET
     )
-    expect(activity?.state).toBe('Claude · Codex · Gemini · …')
+    expect(activity.state).toBe('Claude · Codex · Gemini · …')
   })
 
   it('shows blocked signal in state', () => {
@@ -177,7 +188,15 @@ describe('buildDiscordActivity', () => {
       }),
       ASSET
     )
-    expect(activity?.state).toBe('Claude · Codex · 1 waiting for you')
+    expect(activity.state).toBe('Claude · Codex · 1 waiting for you')
+  })
+
+  it('converts startedAt from milliseconds to Unix seconds', () => {
+    const activity = buildDiscordActivity(
+      snap({ working: 1, active: 1, total: 1, agentTypes: ['claude'], startedAt: 60_000 }),
+      ASSET
+    )
+    expect(activity.timestamps).toEqual({ start: 60 })
   })
 
   it('omits timestamps when startedAt is 0', () => {
@@ -185,6 +204,6 @@ describe('buildDiscordActivity', () => {
       snap({ working: 1, active: 1, total: 1, agentTypes: ['claude'] }),
       ASSET
     )
-    expect(activity?.timestamps).toBeUndefined()
+    expect(activity.timestamps).toBeUndefined()
   })
 })

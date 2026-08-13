@@ -5836,6 +5836,10 @@ export class Store {
     if ('artifactSharingEnabled' in updates) {
       sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
     }
+    // Why: presence sharing is opt-in and privacy-sensitive; coerce to exact boolean like other gates.
+    if ('discordRichPresenceEnabled' in updates) {
+      sanitizedUpdates.discordRichPresenceEnabled = updates.discordRichPresenceEnabled === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
