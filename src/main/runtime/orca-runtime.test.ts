@@ -42998,6 +42998,87 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('keeps the startup-terminal success when Codex status seeding throws', async () => {
+    // Why: seeding is best-effort UI state — a failure after the terminal
+    // spawned must not surface as a startup-terminal failure warning.
+    const seedSpy = vi.spyOn(agentHookServer, 'seedCodexLaunchStatus').mockImplementation(() => {
+      throw new Error('seed boom')
+    })
+    seedSpy.mockClear()
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: {}
+      }),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli-codex-seed-throw' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-cli-codex-seed-throw' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
+      handle: 'term-cli-codex-seed-throw',
+      tabId: 'tab-cli-codex-seed-throw',
+      paneKey: 'tab-cli-codex-seed-throw:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ptyId: 'pty-cli-codex-seed-throw',
+      worktreeId: 'unused',
+      title: null,
+      surface: 'background'
+    } as never)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-cli-codex-seed-throw')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-cli-codex-seed-throw')
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-cli-codex-seed-throw',
+        head: 'def',
+        branch: 'runtime-cli-codex-seed-throw',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: TEST_REPO_ID,
+      name: 'runtime-cli-codex-seed-throw',
+      startupAgent: 'codex',
+      startupPrompt: 'hi'
+    })
+
+    expect(seedSpy).toHaveBeenCalledTimes(1)
+    expect(result.warning).toBeUndefined()
+    expect(result.startupTerminal).toMatchObject({
+      spawned: true,
+      handle: 'term-cli-codex-seed-throw'
+    })
+  })
+
   it('sends follow-up prompts for CLI-created stdin-after-start startup agents', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {

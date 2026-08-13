@@ -21680,6 +21680,45 @@ export class OrcaRuntimeService {
     })
   }
 
+  // Why: Codex fires no hook until its first prompt submission, so a
+  // runtime-built spawn (CLI/automation — no renderer pane to seed) shows no
+  // card status until the first turn (#6643). UI-built startups
+  // (startupProvided) seed through the renderer's initialAgentStatus path.
+  // Local only: remote pane status arrives relay-stamped with a connectionId,
+  // which a local-connection seed row would contradict. Best-effort: the
+  // startup terminal already spawned, so a seeding failure is logged instead
+  // of thrown — it must not surface as a startup-terminal failure.
+  private seedCodexLaunchStatusIfEligible(options: {
+    startupProvided: boolean
+    repo: { connectionId?: string | null }
+    createdWithAgent: TuiAgent | undefined
+    terminal: { paneKey?: string | null; tabId?: string | null }
+    worktreeId: string
+    prompt: string | undefined
+  }): void {
+    if (
+      options.startupProvided ||
+      repoIsRemote(options.repo) ||
+      options.createdWithAgent !== 'codex' ||
+      !options.terminal.paneKey
+    ) {
+      return
+    }
+    try {
+      agentHookServer.seedCodexLaunchStatus({
+        paneKey: options.terminal.paneKey,
+        ...(options.terminal.tabId ? { tabId: options.terminal.tabId } : {}),
+        worktreeId: options.worktreeId,
+        ...(options.prompt ? { prompt: options.prompt } : {})
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn(
+        `[worktree-create] Failed to seed the Codex launch status for ${options.worktreeId}: ${message}`
+      )
+    }
+  }
+
   async createManagedWorktree(args: {
     repoSelector: string
     name: string
@@ -21862,25 +21901,14 @@ export class OrcaRuntimeService {
             ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
             surface: 'background'
           }
-          // Why: Codex fires no hook until its first prompt submission, so a
-          // runtime-built spawn (CLI/automation — no renderer pane to seed) shows
-          // no card status until the first turn (#6643). UI-built startups
-          // (args.startup) seed through the renderer's initialAgentStatus path.
-          // Local only: remote pane status arrives relay-stamped with a
-          // connectionId, which a local-connection seed row would contradict.
-          if (
-            !args.startup &&
-            !repoIsRemote(repo) &&
-            effectiveCreatedWithAgent === 'codex' &&
-            terminal.paneKey
-          ) {
-            agentHookServer.seedCodexLaunchStatus({
-              paneKey: terminal.paneKey,
-              ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
-              worktreeId: worktree.id,
-              ...(agentStartup && args.startupPrompt ? { prompt: args.startupPrompt } : {})
-            })
-          }
+          this.seedCodexLaunchStatusIfEligible({
+            startupProvided: Boolean(args.startup),
+            repo,
+            createdWithAgent: effectiveCreatedWithAgent,
+            terminal,
+            worktreeId: worktree.id,
+            prompt: agentStartup && args.startupPrompt ? args.startupPrompt : undefined
+          })
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
@@ -22631,25 +22659,14 @@ export class OrcaRuntimeService {
         startupTerminalTabId = terminal.tabId ?? null
         startupTerminalPaneKey = terminal.paneKey ?? null
         startupTerminalPtyId = terminal.ptyId ?? null
-        // Why: Codex fires no hook until its first prompt submission, so a
-        // runtime-built spawn (CLI/automation — no renderer pane to seed) shows
-        // no card status until the first turn (#6643). UI-built startups
-        // (args.startup) seed through the renderer's initialAgentStatus path.
-        // Local only: remote pane status arrives relay-stamped with a
-        // connectionId, which a local-connection seed row would contradict.
-        if (
-          !args.startup &&
-          !repoIsRemote(repo) &&
-          effectiveCreatedWithAgent === 'codex' &&
-          terminal.paneKey
-        ) {
-          agentHookServer.seedCodexLaunchStatus({
-            paneKey: terminal.paneKey,
-            ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
-            worktreeId: worktree.id,
-            ...(agentStartup && args.startupPrompt ? { prompt: args.startupPrompt } : {})
-          })
-        }
+        this.seedCodexLaunchStatusIfEligible({
+          startupProvided: Boolean(args.startup),
+          repo,
+          createdWithAgent: effectiveCreatedWithAgent,
+          terminal,
+          worktreeId: worktree.id,
+          prompt: agentStartup && args.startupPrompt ? args.startupPrompt : undefined
+        })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning
