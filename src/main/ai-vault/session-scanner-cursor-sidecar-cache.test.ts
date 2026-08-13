@@ -44,9 +44,28 @@ describe('Cursor sidecar parse cache isolation', () => {
       })
     ).rejects.toThrow('verified_file_outside_root')
   })
+
+  it('does not reuse cwd validation across storage target platforms', async () => {
+    const fixture = await createSidecar('/correct')
+    const mismatchedTarget = process.platform === 'win32' ? 'linux' : 'win32'
+    const mismatched = await parseCursorSidecarFileCached({
+      ...fixture,
+      targetPlatform: mismatchedTarget
+    })
+    const matching = await parseCursorSidecarFileCached({
+      ...fixture,
+      targetPlatform: process.platform
+    })
+
+    expect(mismatched.issue?.message).toContain('does not match')
+    expect(matching.issue).toBeNull()
+    expect(matching.evidence?.cwdEvidence?.cwd).toBe(
+      process.platform === 'win32' ? '\\correct' : '/correct'
+    )
+  })
 })
 
-async function createSidecar() {
+async function createSidecar(cwd = '/wrong') {
   const root = await mkdtemp(join(tmpdir(), 'orca-cursor-cache-'))
   roots.push(root)
   const chatsRoot = join(root, 'chats')
@@ -58,7 +77,7 @@ async function createSidecar() {
   await Promise.all([
     writeFile(
       metaPath,
-      JSON.stringify({ createdAtMs: 10, updatedAtMs: 20, hasConversation: true, cwd: '/wrong' })
+      JSON.stringify({ createdAtMs: 10, updatedAtMs: 20, hasConversation: true, cwd })
     ),
     writeFile(storePath, '')
   ])

@@ -2,6 +2,10 @@ import { lstat, readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { AI_VAULT_SCOPE_PATHS_MAX_COUNT, type AiVaultListResult } from '../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import type {
+  CursorSidecarScanRequest,
+  CursorSidecarScanResponse
+} from '../shared/cursor-sidecar-scan'
 import {
   SSH_AI_VAULT_LIST_LIMIT_MAX,
   SSH_AI_VAULT_LIST_SESSIONS_METHOD,
@@ -13,6 +17,7 @@ import type { RemoteSessionFilesystemProvider } from '../main/ai-vault/remote-se
 import { getRemoteHostPlatform, type RemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
 import { readRelayFileContent } from './fs-handler-file-read'
+import { scanCursorSidecars } from './cursor-sidecar-scan'
 import { relayLogLine } from './relay-diagnostic-log'
 import type { RelayDispatcher } from './dispatcher'
 import { AiVaultScanCoordinator } from '../main/ai-vault/ai-vault-scan-coordinator'
@@ -143,6 +148,16 @@ function createRelayAiVaultFilesystemProvider(): RemoteSessionFilesystemProvider
       }))
     },
     readFile: readRelayFileContent,
+    async scanCursorSidecars(
+      request: CursorSidecarScanRequest,
+      options?: { signal?: AbortSignal }
+    ): Promise<CursorSidecarScanResponse> {
+      return scanCursorSidecars(request, {
+        clientId: 0,
+        isStale: () => Boolean(options?.signal?.aborted),
+        signal: options?.signal
+      })
+    },
     async stat(filePath) {
       const stats = await lstat(filePath)
       return {

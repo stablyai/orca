@@ -25,6 +25,10 @@ export type CursorSidecarEvidence = {
 export type CursorSidecarParseResult = {
   evidence: CursorSidecarEvidence | null
   issue: AiVaultScanIssue | null
+  /** True when the parse reused an in-memory entry and skipped a verified read. */
+  cacheHit?: boolean
+  /** UTF-8 byte length actually returned by the verified read; 0 on cache hit. */
+  returnedBytes?: number
 }
 
 const SIDECAR_CACHE_MAX_ENTRIES = 4096
@@ -38,6 +42,7 @@ const sidecarCache = new Map<
     ino: number | null
     nlink: number | null
     platform: NodeJS.Platform
+    targetPlatform: NodeJS.Platform
     executionHostId: ExecutionHostId | null
     expectedRootRealPath: string | null
     result: CursorSidecarParseResult
@@ -47,26 +52,34 @@ const sidecarCache = new Map<
 export async function parseCursorSidecarFile(args: {
   file: FileWithMtime
   platform: NodeJS.Platform
+  targetPlatform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
   expectedRootRealPath?: string
+  maxBytes?: number
 }): Promise<CursorSidecarParseResult> {
   if (!args.expectedRootRealPath) {
     throw new Error('cursor_sidecar_root_unavailable')
   }
-  return parseCursorSidecarContent({
-    ...args,
-    content: await readVerifiedBoundedTextFile(args.file.path, {
-      expectedRootRealPath: args.expectedRootRealPath,
-      maxBytes: CURSOR_SIDECAR_MAX_BYTES
-    })
+  const content = await readVerifiedBoundedTextFile(args.file.path, {
+    expectedRootRealPath: args.expectedRootRealPath,
+    maxBytes: args.maxBytes ?? CURSOR_SIDECAR_MAX_BYTES
   })
+  return {
+    ...parseCursorSidecarContent({
+      ...args,
+      content
+    }),
+    returnedBytes: Buffer.byteLength(content, 'utf8')
+  }
 }
 
 export async function parseCursorSidecarFileCached(args: {
   file: FileWithMtime
   platform: NodeJS.Platform
+  targetPlatform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
   expectedRootRealPath?: string
+  maxBytes?: number
 }): Promise<CursorSidecarParseResult> {
   const cached = sidecarCache.get(args.file.path)
   if (
@@ -77,6 +90,7 @@ export async function parseCursorSidecarFileCached(args: {
     cached.ino === (args.file.ino ?? null) &&
     cached.nlink === (args.file.nlink ?? null) &&
     cached.platform === args.platform &&
+    cached.targetPlatform === (args.targetPlatform ?? args.platform) &&
     cached.executionHostId === (args.executionHostId ?? null) &&
     cached.expectedRootRealPath === (args.expectedRootRealPath ?? null) &&
     (cached.sizeBytes === null ||
@@ -85,9 +99,13 @@ export async function parseCursorSidecarFileCached(args: {
   ) {
     sidecarCache.delete(args.file.path)
     sidecarCache.set(args.file.path, cached)
-    return cached.result
+    return { ...cached.result, cacheHit: true, returnedBytes: 0 }
   }
   const result = await parseCursorSidecarFile(args)
+  const cacheEntry = {
+    evidence: result.evidence,
+    issue: result.issue
+  }
   sidecarCache.delete(args.file.path)
   sidecarCache.set(args.file.path, {
     mtimeMs: args.file.mtimeMs,
@@ -97,9 +115,10 @@ export async function parseCursorSidecarFileCached(args: {
     ino: args.file.ino ?? null,
     nlink: args.file.nlink ?? null,
     platform: args.platform,
+    targetPlatform: args.targetPlatform ?? args.platform,
     executionHostId: args.executionHostId ?? null,
     expectedRootRealPath: args.expectedRootRealPath ?? null,
-    result
+    result: cacheEntry
   })
   if (sidecarCache.size > SIDECAR_CACHE_MAX_ENTRIES) {
     const oldest = sidecarCache.keys().next()
@@ -107,7 +126,7 @@ export async function parseCursorSidecarFileCached(args: {
       sidecarCache.delete(oldest.value)
     }
   }
-  return result
+  return { ...result, cacheHit: false }
 }
 
 export function resetCursorSidecarParseCacheForTests(): void {
@@ -118,6 +137,7 @@ export function parseCursorSidecarContent(args: {
   file: FileWithMtime
   content: string
   platform: NodeJS.Platform
+  targetPlatform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
 }): CursorSidecarParseResult {
   let value: unknown
@@ -158,7 +178,7 @@ export function parseCursorSidecarContent(args: {
     return { evidence: null, issue: null }
   }
   const rawTitle = typeof record.title === 'string' ? record.title.trim() : ''
-  const cwdResult = validatedSidecarCwd(record.cwd, args.platform, bucket)
+  const cwdResult = validatedSidecarCwd(record.cwd, args.targetPlatform ?? args.platform, bucket)
 
   return {
     evidence: {

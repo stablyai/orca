@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { cursorBucketForCwd } from './session-scanner-cursor-paths'
 import {
@@ -175,5 +175,39 @@ describe('reconcileCursorCandidates', () => {
     const candidate = legacy()
     candidate.cwdEvidence = { kind: 'legacy-scope-only', cwd: null }
     expect(reconcile([candidate]).sessions[0]?.cwd).toBeNull()
+  })
+
+  it('selects equal-time physical sources without locale collation', () => {
+    const bucket = cursorBucketForCwd('/repo', 'linux')
+    const composedSidecar = sidecar({ bucket })
+    const decomposedSidecar = sidecar({ bucket })
+    composedSidecar.file.path = `/home/\u00e9/.cursor/chats/${bucket}/session/meta.json`
+    decomposedSidecar.file.path = `/home/e\u0301/.cursor/chats/${bucket}/session/meta.json`
+    composedSidecar.sidecar!.title = 'composed'
+    decomposedSidecar.sidecar!.title = 'decomposed'
+
+    const composedLegacy = legacy({ path: '/home/\u00e9/session.jsonl' })
+    const decomposedLegacy = legacy({ path: '/home/e\u0301/session.jsonl' })
+    composedLegacy.legacy!.branch = 'composed'
+    decomposedLegacy.legacy!.branch = 'decomposed'
+    const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+
+    try {
+      const result = reconcile([
+        composedSidecar,
+        decomposedSidecar,
+        composedLegacy,
+        decomposedLegacy
+      ])
+
+      expect(localeCompare).not.toHaveBeenCalled()
+      expect(result.sessions[0]).toMatchObject({
+        branch: 'decomposed',
+        title: 'decomposed',
+        transcriptFilePath: decomposedLegacy.file.path
+      })
+    } finally {
+      localeCompare.mockRestore()
+    }
   })
 })

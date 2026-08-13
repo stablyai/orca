@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
-import { resolveAiVaultCursorCommand } from './ai-vault-cursor-command'
+import {
+  resolveAiVaultCursorCommand,
+  resolveAiVaultResumeCommandOverride
+} from './ai-vault-cursor-command'
 
 function state(
   overrides: Partial<
@@ -98,5 +101,25 @@ describe('resolveAiVaultCursorCommand', () => {
         commandOverride: 'cursor-dev'
       })
     ).toBe('cursor-dev')
+  })
+})
+
+describe('resolveAiVaultResumeCommandOverride', () => {
+  it('leaves incomplete Cursor sessions inert while their resume controls are disabled', () => {
+    const source = state()
+
+    expect(
+      resolveAiVaultResumeCommandOverride({
+        state: source,
+        session: { agent: 'cursor', cwd: '/work/demo-project' }
+      })
+    ).toBeUndefined()
+    expect(
+      resolveAiVaultResumeCommandOverride({
+        state: source,
+        session: { agent: 'cursor', cwd: null },
+        commandOverride: 'cursor-agent'
+      })
+    ).toBeUndefined()
   })
 })

@@ -5,6 +5,7 @@ import type {
   CursorReconcileStats,
   ParsedCursorCandidate
 } from './session-scanner-cursor-reconcile'
+import type { SessionFileDiscovery } from './session-scanner-types'
 
 export function recordCursorScanSpan(args: {
   span: ActiveSpan
@@ -40,6 +41,69 @@ export function recordCursorScanSpan(args: {
   args.span.setAttribute('cursorReconciledCounterparts', args.reconcileStats.reconciledCounterparts)
   args.span.setAttribute('cursorAmbiguousLegacyIds', args.reconcileStats.ambiguousLegacyIds)
   args.span.setAttribute('cursorBucketCollisions', args.reconcileStats.bucketCollisions)
+}
+
+export function recordLocalCursorDiscoverySpan(
+  span: ActiveSpan,
+  discoveries: readonly SessionFileDiscovery[]
+): void {
+  const sidecarDiscoveries = discoveries.filter(
+    (discovery) => discovery.agent === 'cursor' && discovery.cursorLayout === 'sidecar'
+  )
+  if (sidecarDiscoveries.length === 0) {
+    return
+  }
+  const counters = sidecarDiscoveries.reduce(
+    (total, discovery) => {
+      const c = discovery.cursorDiscoveryCounters
+      if (!c) {
+        return total
+      }
+      return {
+        rootReaddir: total.rootReaddir + c.rootReaddir,
+        bucketReaddir: total.bucketReaddir + c.bucketReaddir,
+        fileLstat: total.fileLstat + c.fileLstat,
+        boundedReads: total.boundedReads + c.boundedReads,
+        scopeRealpath: total.scopeRealpath + c.scopeRealpath,
+        returnedBytes: total.returnedBytes + c.returnedBytes,
+        elapsedMs: Math.max(total.elapsedMs, c.elapsedMs)
+      }
+    },
+    {
+      rootReaddir: 0,
+      bucketReaddir: 0,
+      fileLstat: 0,
+      boundedReads: 0,
+      scopeRealpath: 0,
+      returnedBytes: 0,
+      elapsedMs: 0
+    }
+  )
+  const truncated = {
+    scopePaths: sidecarDiscoveries.some((d) => d.cursorDiscoveryTruncated?.scopePaths),
+    buckets: sidecarDiscoveries.some((d) => d.cursorDiscoveryTruncated?.buckets),
+    sessionDirs: sidecarDiscoveries.some((d) => d.cursorDiscoveryTruncated?.sessionDirs),
+    sidecarBytes: sidecarDiscoveries.some((d) => d.cursorDiscoveryTruncated?.sidecarBytes)
+  }
+  span.setAttribute(
+    'cursorLocalFilesystemOperations',
+    counters.rootReaddir +
+      counters.bucketReaddir +
+      counters.fileLstat +
+      counters.boundedReads +
+      counters.scopeRealpath
+  )
+  span.setAttribute('cursorLocalRootReaddir', counters.rootReaddir)
+  span.setAttribute('cursorLocalBucketReaddir', counters.bucketReaddir)
+  span.setAttribute('cursorLocalFileLstat', counters.fileLstat)
+  span.setAttribute('cursorLocalBoundedReads', counters.boundedReads)
+  span.setAttribute('cursorLocalScopeRealpath', counters.scopeRealpath)
+  span.setAttribute('cursorLocalReturnedBytes', counters.returnedBytes)
+  span.setAttribute('cursorLocalElapsedMs', counters.elapsedMs)
+  span.setAttribute('cursorLocalTruncatedScopePaths', truncated.scopePaths)
+  span.setAttribute('cursorLocalTruncatedBuckets', truncated.buckets)
+  span.setAttribute('cursorLocalTruncatedSessionDirs', truncated.sessionDirs)
+  span.setAttribute('cursorLocalTruncatedSidecarBytes', truncated.sidecarBytes)
 }
 
 export function recordRemoteCursorScanSpan(

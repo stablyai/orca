@@ -1,4 +1,5 @@
 import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumulator'
+import { compareCursorSidecarNames } from '../../shared/cursor-sidecar-scan-directory'
 import {
   cursorSessionActivityMtimeMs,
   cursorSidecarBucket,
@@ -80,7 +81,7 @@ export function buildCursorCandidateSelectionGroups<T>(args: {
     })
   }
   return [...groups.values()].sort(
-    (left, right) => right.mtimeMs - left.mtimeMs || left.key.localeCompare(right.key)
+    (left, right) => right.mtimeMs - left.mtimeMs || compareCursorSidecarNames(left.key, right.key)
   )
 }
 
@@ -95,7 +96,7 @@ export function selectCursorScopedGroups<T>(
       (left, right) =>
         right.scopePriority - left.scopePriority ||
         right.mtimeMs - left.mtimeMs ||
-        left.key.localeCompare(right.key)
+        compareCursorSidecarNames(left.key, right.key)
     )
     .slice(0, limit)
 }

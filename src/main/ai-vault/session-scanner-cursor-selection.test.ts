@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import {
   buildCursorCandidateSelectionGroups,
@@ -133,5 +133,32 @@ describe('Cursor candidate selection', () => {
     })
 
     expect(groups.map((group) => group.candidates[0])).toEqual([activeStore, newerMetadata])
+  })
+
+  it('orders equal-time groups without locale collation', () => {
+    const composed = candidate(
+      '/chats/11111111111111111111111111111111/\u00e9/meta.json',
+      'sidecar',
+      100
+    )
+    const decomposed = candidate(
+      '/chats/11111111111111111111111111111111/e\u0301/meta.json',
+      'sidecar',
+      100
+    )
+    const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+
+    try {
+      const groups = buildCursorCandidateSelectionGroups({
+        candidates: [composed, decomposed],
+        platform: 'linux',
+        adapter
+      })
+
+      expect(localeCompare).not.toHaveBeenCalled()
+      expect(groups.map((group) => group.candidates[0])).toEqual([decomposed, composed])
+    } finally {
+      localeCompare.mockRestore()
+    }
   })
 })

@@ -1,13 +1,12 @@
-import { readFile } from 'node:fs/promises'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import { buildAiVaultSessionId } from '../../shared/ai-vault-session-id'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
+import { canStopParsingSessions } from './session-scanner-parse-stop'
 import { mergeAiVaultSessions } from './session-list-results'
 import {
   codexRolloutHardlinkIdentity,
@@ -24,11 +23,7 @@ import {
   ensureSessionParseCacheLoaded,
   scheduleSessionParseCachePersist
 } from './session-parse-cache-persistence'
-import {
-  createSessionParseStats,
-  parseAgentSessionFileCached,
-  type SessionParseStats
-} from './session-scanner-parse-cache'
+import { createSessionParseStats, type SessionParseStats } from './session-scanner-parse-cache'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
 import {
   DEFAULT_CODEX_HOME_DIR,
@@ -37,13 +32,14 @@ import {
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
-  SessionFileDiscovery,
-  SessionParseResult
+  SessionFileDiscovery
 } from './session-scanner-types'
-import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { clampPositiveInteger } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
 import { processLocalCursorCandidates } from './session-scanner-cursor-local-pipeline'
+import { recordLocalCursorDiscoverySpan } from './session-scanner-cursor-observability'
+import { parseSessionCandidate, readOptionalTextFile } from './session-scanner-candidate-parse'
 
 const SESSION_PARSE_CONCURRENCY = 8
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
@@ -102,6 +98,7 @@ export async function scanAiVaultSessions(
                   : undefined,
               cursorLayout: discovery.cursorLayout,
               cursorStorageContextKey: discovery.cursorStorageContextKey,
+              cursorTargetPlatform: discovery.cursorTargetPlatform,
               cursorCwdEvidence: discovery.cursorCwdEvidenceByPath?.get(file.path),
               cursorExpectedRootRealPath: discovery.cursorExpectedRootRealPath
             })
@@ -126,8 +123,12 @@ export async function scanAiVaultSessions(
       executionHostId,
       issues,
       parseStats,
-      span
+      span,
+      discoveries,
+      signal: options.signal
     })
+    // Record after verified reads so counters include boundedReads/returnedBytes.
+    recordLocalCursorDiscoverySpan(span, discoveries)
     throwIfAiVaultScanCancelled(options.signal)
     const parsedSessions = await parseSessionCandidates({
       candidates: nonCursorCandidates.slice(0, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER),
@@ -279,79 +280,4 @@ async function parseSessionCandidates(args: {
   // partial parse is never cached or returned as a complete scan.
   throwIfAiVaultScanCancelled(args.signal)
   return sessions
-}
-
-async function parseSessionCandidate(
-  candidate: SessionFileCandidate,
-  platform: NodeJS.Platform,
-  executionHostId: ExecutionHostId,
-  parseStats: SessionParseStats,
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
-): Promise<SessionParseResult> {
-  try {
-    let session = await parseAgentSessionFileCached(candidate, platform, parseStats)
-    if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
-      session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
-    }
-    return {
-      session: session ? withSessionExecutionHost(session, executionHostId) : null,
-      issue: null
-    }
-  } catch (err) {
-    return {
-      session: null,
-      issue: {
-        executionHostId,
-        agent: candidate.agent,
-        path: candidate.file.path,
-        message: errorMessage(err)
-      }
-    }
-  }
-}
-
-async function readOptionalTextFile(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, 'utf-8')
-  } catch {
-    return null
-  }
-}
-
-function withSessionExecutionHost(
-  session: AiVaultSession,
-  executionHostId: ExecutionHostId
-): AiVaultSession {
-  if (session.executionHostId === executionHostId) {
-    return session
-  }
-  return {
-    ...session,
-    executionHostId,
-    id: buildAiVaultSessionId({
-      executionHostId,
-      agent: session.agent,
-      sessionId: session.sessionId,
-      filePath: session.filePath,
-      previousId: session.id
-    })
-  }
-}
-
-function canStopParsingSessions(
-  sessions: AiVaultSession[],
-  limit: number,
-  nextCandidateMtimeMs: number | undefined
-): boolean {
-  if (sessions.length < limit || typeof nextCandidateMtimeMs !== 'number') {
-    return false
-  }
-  const visibleCutoff = sessions
-    .map(sessionSortTime)
-    .sort((left, right) => right - left)
-    .at(limit - 1)
-
-  // Transcript mtime is already our discovery bound and fallback sort key; older
-  // files cannot displace the current visible set once the cutoff is newer.
-  return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff
 }

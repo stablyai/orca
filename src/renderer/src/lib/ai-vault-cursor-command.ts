@@ -125,11 +125,8 @@ export function resolveAiVaultResumeCommandOverride(args: {
   }
   const command = resolveAiVaultCursorCommand(args)
   if (!args.session.cwd || !command?.trim()) {
-    throw new Error(
-      args.session.cwd
-        ? 'Cursor CLI not detected on this host.'
-        : 'Cursor did not record a resumable workspace for this session.'
-    )
+    // Resume controls gate these incomplete sessions; row rendering still builds an inert startup.
+    return undefined
   }
   return command
 }

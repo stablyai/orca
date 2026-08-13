@@ -70,6 +70,7 @@ export type SessionFileCandidate = {
   antigravityHistoryPath?: string
   cursorLayout?: CursorLayout
   cursorStorageContextKey?: string
+  cursorTargetPlatform?: NodeJS.Platform
   cursorCwdEvidence?: CursorCwdEvidence
   cursorExpectedRootRealPath?: string
 }
@@ -80,8 +81,25 @@ export type SessionFileDiscovery = {
   files: FileWithMtime[]
   cursorLayout?: CursorLayout
   cursorStorageContextKey?: string
+  cursorTargetPlatform?: NodeJS.Platform
   cursorCwdEvidenceByPath?: ReadonlyMap<string, CursorCwdEvidence>
   cursorExpectedRootRealPath?: string
+  // Path-free ingress telemetry for local/WSL Cursor chats discovery.
+  cursorDiscoveryCounters?: {
+    rootReaddir: number
+    bucketReaddir: number
+    fileLstat: number
+    boundedReads: number
+    scopeRealpath: number
+    returnedBytes: number
+    elapsedMs: number
+  }
+  cursorDiscoveryTruncated?: {
+    scopePaths: boolean
+    buckets: boolean
+    sessionDirs: boolean
+    sidecarBytes: boolean
+  }
 }
 
 export type CursorLayout = 'sidecar' | 'legacy'

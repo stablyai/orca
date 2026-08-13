@@ -151,6 +151,26 @@ describe('ai vault resume command runtime', () => {
     )
   })
 
+  it('builds disabled Cursor row startup data when the CLI is unavailable', () => {
+    const state = makeState({ worktreePath: '/work/demo-project' })
+    state.repos = [{ id: 'repo-1', path: '/work/demo-project', connectionId: 'ssh-1' }] as never
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'cursor',
+          sessionId: 'session one',
+          cwd: '/work/demo-project',
+          codexHome: null,
+          executionHostId: 'ssh:ssh-1',
+          executionHostPlatform: 'linux'
+        }
+      })
+    ).toEqual({ command: "cd '/work/demo-project' && cursor-agent --resume 'session one'" })
+  })
+
   it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {
     // Regression: local rebuilds must forward session.filePath so OMP resumes by
     // path, and queued Windows commands must match the live tab shell.

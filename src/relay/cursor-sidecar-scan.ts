@@ -16,9 +16,11 @@ import { readVerifiedBoundedTextFile } from '../shared/node-verified-bounded-tex
 import type { RequestContext } from './dispatcher'
 import {
   discoverCursorSidecarCandidates,
+  isCursorSidecarScanCancelledError,
   type CursorSidecarScanCandidate,
-  type CursorSidecarScanCaps
-} from './cursor-sidecar-scan-discovery'
+  type CursorSidecarScanCaps,
+  type CursorSidecarScanCancellation
+} from '../shared/cursor-sidecar-scan-discovery'
 
 export async function scanCursorSidecars(
   input: unknown,
@@ -32,7 +34,7 @@ export async function scanCursorSidecars(
     request,
     caps,
     response,
-    context
+    cancellation: cancellationFromContext(context)
   })
   if (!discovery) {
     return finish(response, startedAt)
@@ -58,17 +60,31 @@ async function readCandidates(
   response: CursorSidecarScanResponse,
   context: RequestContext
 ): Promise<void> {
+  let chargedBytes = 0
   for (let index = 0; index < candidates.length; index += 1) {
     throwIfCancelled(context)
+    if (chargedBytes >= caps.aggregateBytes) {
+      if (index < candidates.length) {
+        response.truncated.sidecarBytes = true
+      }
+      break
+    }
     const candidate = candidates[index]
+    // Pre-check statted size so we do not open a sidecar that cannot fit.
+    if (chargedBytes + candidate.meta.size > caps.aggregateBytes) {
+      response.truncated.sidecarBytes = true
+      break
+    }
     try {
       response.counters.boundedReads++
       const content = await readVerifiedBoundedTextFile(candidate.metaPath, {
         expectedRootRealPath: rootRealPath,
-        maxBytes: caps.sidecarBytes
+        maxBytes: Math.min(caps.sidecarBytes, caps.aggregateBytes - chargedBytes)
       })
+      throwIfCancelled(context)
       const bytes = Buffer.byteLength(content, 'utf8')
-      if (response.counters.returnedBytes + bytes > caps.aggregateBytes) {
+      chargedBytes += bytes
+      if (chargedBytes > caps.aggregateBytes) {
         response.truncated.sidecarBytes = true
         break
       }
@@ -83,13 +99,27 @@ async function readCandidates(
         storeMtimeMs: candidate.store.mtimeMs,
         scopeCwd: candidate.scopeCwd
       })
-      if (response.counters.returnedBytes >= caps.aggregateBytes && index < candidates.length - 1) {
+      if (chargedBytes >= caps.aggregateBytes && index < candidates.length - 1) {
         response.truncated.sidecarBytes = true
         break
       }
     } catch (error) {
+      throwIfCancelled(context)
+      if (isCursorSidecarScanCancelledError(error)) {
+        throw error
+      }
       if (!isMissing(error)) {
         addIssue(response, candidate.metaPath, error)
+      }
+      // A failed remote read hides how many bytes it consumed; charge its full ceiling.
+      chargedBytes = Math.min(caps.aggregateBytes, chargedBytes + caps.sidecarBytes)
+      if (isVerifiedReadTooLargeError(error)) {
+        response.truncated.sidecarBytes = true
+        break
+      }
+      if (chargedBytes >= caps.aggregateBytes && index < candidates.length - 1) {
+        response.truncated.sidecarBytes = true
+        break
       }
     }
   }
@@ -150,8 +180,20 @@ function isMissing(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-function throwIfCancelled(context: RequestContext): void {
-  if (context.isStale() || context.signal?.aborted) {
-    throw new Error('cursor_sidecar_scan_cancelled')
+function isVerifiedReadTooLargeError(error: unknown): boolean {
+  return error instanceof Error && error.message === 'file_too_large'
+}
+
+function cancellationFromContext(context: RequestContext): CursorSidecarScanCancellation {
+  return {
+    throwIfCancelled: () => {
+      if (context.isStale() || context.signal?.aborted) {
+        throw new Error('cursor_sidecar_scan_cancelled')
+      }
+    }
   }
+}
+
+function throwIfCancelled(context: RequestContext): void {
+  cancellationFromContext(context).throwIfCancelled()
 }

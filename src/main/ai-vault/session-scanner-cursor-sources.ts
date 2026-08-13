@@ -1,22 +1,16 @@
-import { lstat, readdir, realpath } from 'node:fs/promises'
+import { realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import {
   cursorBucketForCwd,
+  cursorContextPathForHash,
   cursorLegacySlug,
   cursorSessionActivityMtimeMs,
   cursorScopeCwdCandidates,
   cursorStorageContextKey,
-  isSafeCursorSessionBasename,
   resolveCursorLocalRoots
 } from './session-scanner-cursor-paths'
-import {
-  cursorLocalFileMetadata,
-  discoverLocalCursorSidecars,
-  isMissingCursorPathError,
-  localCursorRootRealPath,
-  validateLocalCursorSidecars
-} from './session-scanner-cursor-local-files'
+import { discoverLocalCursorSidecarsBounded } from './session-scanner-cursor-local-files'
 import { discoverFiles } from './session-scanner-discovery'
 import type {
   AiVaultScanOptions,
@@ -24,8 +18,10 @@ import type {
   FileWithMtime,
   SessionFileDiscovery
 } from './session-scanner-types'
+import { createAiVaultScanCancelledError } from './ai-vault-scan-cancellation'
 import { errorMessage } from './session-scanner-values'
 
+// Matches the shared owning-host scope cap; conversion work stays bounded too.
 const CURSOR_SCOPE_PATH_LIMIT = 64
 
 type CursorRootPair = {
@@ -75,25 +71,63 @@ async function discoverCursorSidecars(args: {
   limit: number
   issues: AiVaultScanIssue[]
 }): Promise<SessionFileDiscovery> {
-  const expectedRootRealPath = await localCursorRootRealPath(args.roots.chatsDir, args.issues)
-  if (!expectedRootRealPath) {
+  const startedAt = Date.now()
+  const scopePaths = localSidecarScopePaths(args)
+  let discovery
+  try {
+    discovery = await discoverLocalCursorSidecarsBounded({
+      chatsDir: args.roots.chatsDir,
+      scopePaths,
+      issues: args.issues,
+      signal: args.options.signal,
+      pathPlatform: args.roots.targetPlatform,
+      resolveScopePaths: (scopePath) =>
+        resolveLocalSidecarScopePaths({
+          scopePath,
+          storageContextKey: args.roots.storageContextKey,
+          targetPlatform: args.roots.targetPlatform
+        })
+    })
+  } catch (error) {
+    if ((error as Error).message === 'cursor_sidecar_scan_cancelled') {
+      throw createAiVaultScanCancelledError()
+    }
+    args.issues.push({
+      agent: 'cursor',
+      path: args.roots.chatsDir,
+      message: errorMessage(error)
+    })
     return {
       agent: 'cursor',
       rootDir: args.roots.chatsDir,
       files: [],
       cursorLayout: 'sidecar',
-      cursorStorageContextKey: args.roots.storageContextKey
+      cursorStorageContextKey: args.roots.storageContextKey,
+      cursorTargetPlatform: args.roots.targetPlatform
     }
   }
-  const discovered = await discoverLocalCursorSidecars(args.roots.chatsDir, args.issues)
-  const evidenceByPath = new Map<string, CursorCwdEvidence>()
-  const scopedFiles = await discoverScopedSidecars(args, evidenceByPath)
-  const files = await validateLocalCursorSidecars(
-    dedupeFiles([...scopedFiles, ...discovered]),
-    args.issues
-  )
-  const rankedFiles = dedupeFiles(files)
-  const scopedPaths = new Set(evidenceByPath.keys())
+
+  const counters = {
+    ...discovery.counters,
+    elapsedMs: Math.max(0, Date.now() - startedAt)
+  }
+  if (!discovery.rootRealPath) {
+    return {
+      agent: 'cursor',
+      rootDir: args.roots.chatsDir,
+      files: [],
+      cursorLayout: 'sidecar',
+      cursorStorageContextKey: args.roots.storageContextKey,
+      cursorTargetPlatform: args.roots.targetPlatform,
+      cursorDiscoveryCounters: counters,
+      cursorDiscoveryTruncated: discovery.truncated
+    }
+  }
+
+  const rankedFiles = dedupeFiles(discovery.files)
+  const scopedPaths = new Set(discovery.evidenceByPath.keys())
+  // Scope buckets stay outside the unscoped retention window; unscoped entries
+  // still honor the per-agent discovery limit used by the rest of AI Vault.
   const retained = dedupeFiles([
     ...rankedFiles.filter((file) => scopedPaths.has(file.path)),
     ...rankedFiles.filter((file) => !scopedPaths.has(file.path)).slice(0, args.limit)
@@ -104,8 +138,11 @@ async function discoverCursorSidecars(args: {
     files: retained,
     cursorLayout: 'sidecar',
     cursorStorageContextKey: args.roots.storageContextKey,
-    cursorCwdEvidenceByPath: evidenceByPath,
-    cursorExpectedRootRealPath: expectedRootRealPath
+    cursorTargetPlatform: args.roots.targetPlatform,
+    cursorCwdEvidenceByPath: discovery.evidenceByPath,
+    cursorExpectedRootRealPath: discovery.rootRealPath,
+    cursorDiscoveryCounters: counters,
+    cursorDiscoveryTruncated: discovery.truncated
   }
 }
 
@@ -156,51 +193,6 @@ async function discoverCursorLegacy(args: {
   }
 }
 
-async function discoverScopedSidecars(
-  args: {
-    roots: CursorRootPair
-    options: AiVaultScanOptions
-    limit: number
-    issues: AiVaultScanIssue[]
-  },
-  evidenceByPath: Map<string, CursorCwdEvidence>
-): Promise<FileWithMtime[]> {
-  const files: FileWithMtime[] = []
-  for (const cwd of await localScopeCandidates(args)) {
-    const bucket = cursorBucketForCwd(cwd, args.roots.targetPlatform)
-    const bucketDir = join(args.roots.chatsDir, bucket)
-    let entries
-    try {
-      const bucketStat = await lstat(bucketDir)
-      if (!bucketStat.isDirectory() || bucketStat.isSymbolicLink()) {
-        continue
-      }
-      entries = await readdir(bucketDir, { withFileTypes: true })
-    } catch (error) {
-      if (!isMissingCursorPathError(error)) {
-        args.issues.push({ agent: 'cursor', path: bucketDir, message: errorMessage(error) })
-      }
-      continue
-    }
-    for (const entry of entries) {
-      if (
-        !entry.isDirectory() ||
-        entry.isSymbolicLink() ||
-        !isSafeCursorSessionBasename(entry.name)
-      ) {
-        continue
-      }
-      const metaPath = join(bucketDir, entry.name, 'meta.json')
-      const file = await cursorLocalFileMetadata(metaPath)
-      if (file) {
-        evidenceByPath.set(metaPath, { kind: 'scope-bucket', cwd, bucket })
-        files.push(file)
-      }
-    }
-  }
-  return files
-}
-
 async function localScopeCandidates(args: {
   roots: CursorRootPair
   options: AiVaultScanOptions
@@ -226,6 +218,51 @@ async function localScopeCandidates(args: {
     } catch {
       // A scope path need not exist in every selected storage context.
     }
+  }
+  return [...candidates]
+}
+
+function localSidecarScopePaths(args: {
+  roots: CursorRootPair
+  options: AiVaultScanOptions
+}): string[] {
+  const paths = new Set<string>()
+  for (const scopePath of args.options.scopePaths ?? []) {
+    const trimmed = scopePath.trim()
+    if (
+      trimmed &&
+      cursorContextPathForHash(trimmed, args.roots.storageContextKey, args.roots.targetPlatform)
+    ) {
+      paths.add(trimmed)
+    }
+  }
+  return [...paths]
+}
+
+export async function resolveLocalSidecarScopePaths(args: {
+  scopePath: string
+  storageContextKey: string
+  targetPlatform: NodeJS.Platform
+  realpathPath?: (path: string) => Promise<string>
+}): Promise<string[]> {
+  const candidates = new Set(
+    cursorScopeCwdCandidates({
+      scopePath: args.scopePath,
+      storageContextKey: args.storageContextKey,
+      platform: args.targetPlatform
+    })
+  )
+  try {
+    const resolved = await (args.realpathPath ?? realpath)(args.scopePath)
+    for (const candidate of cursorScopeCwdCandidates({
+      scopePath: resolved,
+      storageContextKey: args.storageContextKey,
+      platform: args.targetPlatform
+    })) {
+      candidates.add(candidate)
+    }
+  } catch {
+    // A scope path need not exist in every selected storage context.
   }
   return [...candidates]
 }

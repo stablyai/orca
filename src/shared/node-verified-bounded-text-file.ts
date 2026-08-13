@@ -5,6 +5,7 @@ import type { FileHandle } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
+const STRICT_UTF8_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 export type VerifiedBoundedTextFileOptions = {
   maxBytes: number
@@ -28,7 +29,12 @@ export async function readVerifiedBoundedTextFile(
     if (!opened.isFile() || !sameFileIdentity(beforeOpen, opened)) {
       throw new Error('verified_file_changed')
     }
-    return (await readBoundedFileHandle(handle, maxBytes)).toString('utf8')
+    const bytes = await readBoundedFileHandle(handle, maxBytes)
+    try {
+      return STRICT_UTF8_DECODER.decode(bytes)
+    } catch {
+      throw new Error('invalid_utf8')
+    }
   } finally {
     await handle.close()
   }

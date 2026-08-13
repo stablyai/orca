@@ -1,13 +1,18 @@
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { chmod, mkdtemp, mkdir, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanCursorSidecars } from './cursor-sidecar-scan'
-import { defaultCursorSidecarScanRequest } from '../shared/cursor-sidecar-scan'
+import {
+  CURSOR_SIDECAR_MAX_BYTES,
+  defaultCursorSidecarScanRequest
+} from '../shared/cursor-sidecar-scan'
 import { cursorBucketForCwd } from '../main/ai-vault/session-scanner-cursor-paths'
 
 const roots: string[] = []
 const context = { clientId: 1, isStale: () => false }
+const CHECKS_BEFORE_FIRST_VERIFIED_READ = 9
 
 async function createRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-cursor-scan-'))
@@ -70,16 +75,60 @@ describe('scanCursorSidecars', () => {
     expect(result.counters).toMatchObject({
       rootReaddir: 1,
       bucketReaddir: 1,
-      fileLstat: 2,
       boundedReads: 1,
       scopeRealpath: 1
     })
+    // Scope-bucket existence lstat(s) plus meta/store lstats; macOS realpath may
+    // add a second scope variant whose missing bucket is still counted.
+    expect(result.counters.fileLstat).toBeGreaterThanOrEqual(3)
     expect(result.truncated).toEqual({
       scopePaths: false,
       buckets: false,
       sessionDirs: false,
       sidecarBytes: false
     })
+  })
+
+  it('shares bounded session capacity across exact scope buckets', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const scopes = [join(root, 'a-workspace'), join(root, 'z-workspace')]
+    await Promise.all(scopes.map((scope) => mkdir(scope)))
+    const firstBucket = cursorBucketForCwd(scopes[0], process.platform)
+    await Promise.all([
+      addSession(chatsRoot, firstBucket, 'first-a'),
+      addSession(chatsRoot, firstBucket, 'first-b'),
+      addSession(chatsRoot, cursorBucketForCwd(scopes[1], process.platform), 'second')
+    ])
+    const request = defaultCursorSidecarScanRequest(chatsRoot, scopes, process.platform)
+    request.maxSessionDirs = 2
+
+    const result = await scanCursorSidecars(request, context)
+
+    expect(result.sidecars.map((sidecar) => sidecar.sessionId).sort()).toEqual([
+      'first-a',
+      'second'
+    ])
+    expect(result.truncated.sessionDirs).toBe(true)
+  })
+
+  it('keeps exact scope sessions within the requested cap', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const scope = join(root, 'workspace')
+    await mkdir(scope)
+    const bucket = cursorBucketForCwd(scope, process.platform)
+    await Promise.all([
+      addSession(chatsRoot, bucket, 'first-scoped'),
+      addSession(chatsRoot, bucket, 'second-scoped')
+    ])
+    const request = defaultCursorSidecarScanRequest(chatsRoot, [scope], process.platform)
+    request.maxSessionDirs = 1
+
+    const result = await scanCursorSidecars(request, context)
+
+    expect(result.sidecars).toHaveLength(1)
+    expect(result.truncated.sessionDirs).toBe(true)
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -140,6 +189,20 @@ describe('scanCursorSidecars', () => {
     const root = await createRoot()
     const chatsRoot = join(root, 'chats')
     await addSession(chatsRoot, '33333333333333333333333333333333', 'only-session')
+    const request = defaultCursorSidecarScanRequest(chatsRoot, [], process.platform)
+    request.maxSessionDirs = 1
+
+    const result = await scanCursorSidecars(request, context)
+
+    expect(result.sidecars).toHaveLength(1)
+    expect(result.truncated.sessionDirs).toBe(false)
+  })
+
+  it('does not report session truncation for an already-examined empty bucket', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    await addSession(chatsRoot, '33333333333333333333333333333333', 'only-session')
+    await mkdir(join(chatsRoot, '44444444444444444444444444444444'))
     const request = defaultCursorSidecarScanRequest(chatsRoot, [], process.platform)
     request.maxSessionDirs = 1
 
@@ -226,6 +289,54 @@ describe('scanCursorSidecars', () => {
     )
   })
 
+  it('isolates invalid UTF-8 metadata without rejecting other sidecars', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const bucket = 'abababababababababababababababab'
+    const validContent = JSON.stringify({ createdAtMs: 10, title: 'valid' })
+    await Promise.all([
+      addSession(chatsRoot, bucket, 'aaa-invalid'),
+      addSession(chatsRoot, bucket, 'zzz-valid', validContent)
+    ])
+    const invalidPath = join(chatsRoot, bucket, 'aaa-invalid', 'meta.json')
+    await writeFile(invalidPath, Buffer.alloc(100_000, 0x80))
+
+    const result = await scanCursorSidecars(
+      defaultCursorSidecarScanRequest(chatsRoot, [], process.platform),
+      context
+    )
+
+    expect(result.sidecars.map((sidecar) => sidecar.sessionId)).toEqual(['zzz-valid'])
+    expect(result.counters.returnedBytes).toBe(Buffer.byteLength(validContent))
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({ path: invalidPath, message: 'invalid_utf8' })
+    )
+  })
+
+  it('isolates response-invalid file timestamps without rejecting other sidecars', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const bucket = 'acacacacacacacacacacacacacacacac'
+    await Promise.all([
+      addSession(chatsRoot, bucket, 'invalid-time'),
+      addSession(chatsRoot, bucket, 'valid')
+    ])
+    await setSessionMtime(chatsRoot, bucket, 'invalid-time', -1_000)
+
+    const result = await scanCursorSidecars(
+      defaultCursorSidecarScanRequest(chatsRoot, [], process.platform),
+      context
+    )
+
+    expect(result.sidecars.map((sidecar) => sidecar.sessionId)).toEqual(['valid'])
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        path: join(chatsRoot, bucket, 'invalid-time', 'meta.json'),
+        message: 'Cursor session metadata has invalid file timestamps.'
+      })
+    )
+  })
+
   it('normalizes scope truncation deterministically inside the owning-host scan', async () => {
     const root = await createRoot()
     const chatsRoot = join(root, 'chats')
@@ -253,6 +364,211 @@ describe('scanCursorSidecars', () => {
         isStale: () => true
       })
     ).rejects.toThrow('cursor_sidecar_scan_cancelled')
+  })
+
+  it('rejects when cancellation flips after the first enumeration check', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    await addSession(chatsRoot, 'cccccccccccccccccccccccccccccccc', 'alive')
+    let checks = 0
+    await expect(
+      scanCursorSidecars(defaultCursorSidecarScanRequest(chatsRoot, [], process.platform), {
+        clientId: 1,
+        isStale: () => {
+          checks += 1
+          return checks > 1
+        }
+      })
+    ).rejects.toThrow('cursor_sidecar_scan_cancelled')
+  })
+
+  it('rejects when cancellation lands during the final verified sidecar read', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    await addSession(chatsRoot, 'cccccccccccccccccccccccccccccccc', 'alive')
+    let checks = 0
+
+    await expect(
+      scanCursorSidecars(defaultCursorSidecarScanRequest(chatsRoot, [], process.platform), {
+        clientId: 1,
+        isStale: () => {
+          checks += 1
+          return checks > CHECKS_BEFORE_FIRST_VERIFIED_READ
+        }
+      })
+    ).rejects.toThrow('cursor_sidecar_scan_cancelled')
+  })
+
+  it('stops after a raced sidecar grows past the verified-read limit', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const bucket = 'cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd'
+    await Promise.all([
+      addSession(chatsRoot, bucket, 'first'),
+      addSession(chatsRoot, bucket, 'second')
+    ])
+    let checks = 0
+
+    const result = await scanCursorSidecars(
+      defaultCursorSidecarScanRequest(chatsRoot, [], process.platform),
+      {
+        clientId: 1,
+        isStale: () => {
+          checks += 1
+          if (checks === CHECKS_BEFORE_FIRST_VERIFIED_READ) {
+            for (const sessionId of ['first', 'second']) {
+              writeFileSync(
+                join(chatsRoot, bucket, sessionId, 'meta.json'),
+                'x'.repeat(CURSOR_SIDECAR_MAX_BYTES + 1)
+              )
+            }
+          }
+          return false
+        }
+      }
+    )
+
+    expect(result.sidecars).toEqual([])
+    expect(result.counters.boundedReads).toBe(1)
+    expect(result.counters.returnedBytes).toBe(0)
+    expect(result.truncated.sidecarBytes).toBe(true)
+    expect(result.issues).toContainEqual(expect.objectContaining({ message: 'file_too_large' }))
+  })
+
+  it('bounds a raced sidecar by the remaining aggregate budget', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const bucket = 'dededededededededededededededede'
+    const racePath = join(chatsRoot, bucket, 'race', 'meta.json')
+    await Promise.all([
+      addSession(chatsRoot, bucket, 'filler', 'f'.repeat(90)),
+      addSession(chatsRoot, bucket, 'race', 'r'.repeat(5))
+    ])
+    await setSessionMtime(chatsRoot, bucket, 'filler', 10_000)
+    await setSessionMtime(chatsRoot, bucket, 'race', 1_000)
+    const request = defaultCursorSidecarScanRequest(chatsRoot, [], process.platform)
+    request.maxAggregateBytes = 100
+    let checks = 0
+
+    const result = await scanCursorSidecars(request, {
+      clientId: 1,
+      isStale: () => {
+        checks += 1
+        if (checks === CHECKS_BEFORE_FIRST_VERIFIED_READ) {
+          writeFileSync(racePath, 'x'.repeat(20))
+        }
+        return false
+      }
+    })
+
+    expect(result.sidecars.map((sidecar) => sidecar.sessionId)).toEqual(['filler'])
+    expect(result.counters.returnedBytes).toBe(90)
+    expect(result.truncated.sidecarBytes).toBe(true)
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({ path: racePath, message: 'file_too_large' })
+    )
+  })
+
+  it('prioritizes cancellation that lands during a failed raced read', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const bucket = 'cececececececececececececececece'
+    const metaPath = join(chatsRoot, bucket, 'race', 'meta.json')
+    await addSession(chatsRoot, bucket, 'race')
+    let cancelled = false
+    let checks = 0
+
+    await expect(
+      scanCursorSidecars(defaultCursorSidecarScanRequest(chatsRoot, [], process.platform), {
+        clientId: 1,
+        isStale: () => {
+          checks += 1
+          if (checks === CHECKS_BEFORE_FIRST_VERIFIED_READ) {
+            writeFileSync(metaPath, 'x'.repeat(CURSOR_SIDECAR_MAX_BYTES + 1))
+            queueMicrotask(() => {
+              cancelled = true
+            })
+          }
+          return cancelled
+        }
+      })
+    ).rejects.toThrow('cursor_sidecar_scan_cancelled')
+  })
+
+  it('caps generic failed read attempts without charging returned bytes', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const bucket = 'cfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcf'
+    const sessionIds = ['first', 'second']
+    await Promise.all(sessionIds.map((sessionId) => addSession(chatsRoot, bucket, sessionId)))
+    const request = defaultCursorSidecarScanRequest(chatsRoot, [], process.platform)
+    request.maxAggregateBytes = CURSOR_SIDECAR_MAX_BYTES
+    let checks = 0
+
+    const result = await scanCursorSidecars(request, {
+      clientId: 1,
+      isStale: () => {
+        checks += 1
+        if (checks === CHECKS_BEFORE_FIRST_VERIFIED_READ) {
+          for (const sessionId of sessionIds) {
+            const metaPath = join(chatsRoot, bucket, sessionId, 'meta.json')
+            rmSync(metaPath)
+            mkdirSync(metaPath)
+          }
+        }
+        return false
+      }
+    })
+
+    expect(result.sidecars).toEqual([])
+    expect(result.counters.boundedReads).toBe(1)
+    expect(result.counters.returnedBytes).toBe(0)
+    expect(result.truncated.sidecarBytes).toBe(true)
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({ message: 'verified_file_not_regular' })
+    )
+  })
+
+  it('retains the newer equal-size session under a tight aggregate byte cap', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const content = 'y'.repeat(70)
+    const bucket = 'dddddddddddddddddddddddddddddddd'
+    await addSession(chatsRoot, bucket, 'aaa-older', content)
+    await addSession(chatsRoot, bucket, 'zzz-newer', content)
+    await setSessionMtime(chatsRoot, bucket, 'aaa-older', 1_000)
+    await setSessionMtime(chatsRoot, bucket, 'zzz-newer', 9_000)
+    const request = defaultCursorSidecarScanRequest(chatsRoot, [], process.platform)
+    request.maxAggregateBytes = 70
+
+    const result = await scanCursorSidecars(request, context)
+    expect(result.sidecars.map((sidecar) => sidecar.sessionId)).toEqual(['zzz-newer'])
+    expect(result.counters.returnedBytes).toBe(70)
+    expect(result.truncated.sidecarBytes).toBe(true)
+  })
+
+  it('does not return all 70 large sidecars past the 16 MiB aggregate', async () => {
+    const root = await createRoot()
+    const chatsRoot = join(root, 'chats')
+    const bucket = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+    const payload = `${'{"createdAtMs":1,"updatedAtMs":2,"hasConversation":true,"pad":"'}${'b'.repeat(249_990)}"}`
+    const payloadBytes = Buffer.byteLength(payload, 'utf8')
+    expect(payloadBytes * 70).toBeGreaterThan(16_777_216)
+    for (let index = 0; index < 70; index += 1) {
+      await addSession(chatsRoot, bucket, `s-${String(index).padStart(3, '0')}`, payload)
+    }
+    const result = await scanCursorSidecars(
+      defaultCursorSidecarScanRequest(chatsRoot, [], process.platform),
+      context
+    )
+    expect(result.sidecars.length).toBeLessThan(70)
+    expect(result.counters.returnedBytes).toBeLessThanOrEqual(16_777_216)
+    expect(result.truncated.sidecarBytes).toBe(true)
+    const contentTotal = result.sidecars.reduce(
+      (total, sidecar) => total + Buffer.byteLength(sidecar.content, 'utf8'),
+      0
+    )
+    expect(contentTotal).toBe(result.counters.returnedBytes)
   })
 
   it.skipIf(process.platform === 'win32')(

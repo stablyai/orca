@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -220,6 +221,44 @@ describe('AiVaultHandler', () => {
     await expect(
       dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {}, controller.signal)
     ).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('discovers Cursor sidecars through listSessions via the relay scan provider', async () => {
+    const remoteHome = await makeTemporaryHome()
+    const workspace = join(remoteHome, 'repo')
+    await mkdir(workspace, { recursive: true })
+    const bucket = createHash('md5').update(workspace).digest('hex')
+    const sessionDir = join(remoteHome, '.cursor', 'chats', bucket, 'cursor-session')
+    await mkdir(sessionDir, { recursive: true })
+    await Promise.all([
+      writeFile(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          createdAtMs: 1_750_000_000_000,
+          updatedAtMs: 1_750_000_001_000,
+          hasConversation: true,
+          title: 'Relay Cursor Session'
+        })
+      ),
+      writeFile(join(sessionDir, 'store.db'), '')
+    ])
+    const dispatcher = createMockDispatcher()
+    new AiVaultHandler(dispatcher.value, {
+      remoteHome,
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    const result = (await dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {
+      limit: 20,
+      scopePaths: [workspace]
+    })) as AiVaultListResult
+
+    expect(result.issues.filter((issue) => issue.message.includes('unavailable'))).toEqual([])
+    expect(result.sessions.some((session) => session.agent === 'cursor')).toBe(true)
+    expect(result.sessions.find((session) => session.agent === 'cursor')).toMatchObject({
+      title: 'Relay Cursor Session',
+      cwd: workspace
+    })
   })
 })
 

@@ -5,6 +5,7 @@ import {
 } from '../../shared/ai-vault-types'
 import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
 import { buildAiVaultSessionId } from '../../shared/ai-vault-session-id'
+import { compareCursorSidecarNames } from '../../shared/cursor-sidecar-scan-directory'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { CursorSidecarEvidence } from './session-scanner-cursor-sidecar'
 import type {
@@ -144,7 +145,7 @@ function compareSidecars(
     scopeDelta ||
     Date.parse(right.sidecar.updatedAt) - Date.parse(left.sidecar.updatedAt) ||
     right.file.mtimeMs - left.file.mtimeMs ||
-    left.file.path.localeCompare(right.file.path)
+    compareCursorSidecarNames(left.file.path, right.file.path)
   )
 }
 
@@ -155,7 +156,7 @@ function compareLegacy(
   return (
     right.legacy.messageCount - left.legacy.messageCount ||
     right.file.mtimeMs - left.file.mtimeMs ||
-    left.file.path.localeCompare(right.file.path)
+    compareCursorSidecarNames(left.file.path, right.file.path)
   )
 }
 

@@ -146,4 +146,28 @@ describe('parseCursorSidecarContent', () => {
       cwd: win32.resolve(cwd)
     })
   })
+
+  it('validates WSL metadata with Linux cwd semantics on a Windows filesystem', () => {
+    const cwd = '/home/ada/repo'
+    const bucket = cursorBucketForCwd(cwd, 'linux')
+    const file = {
+      ...fileFor('C:\\placeholder', 'win32'),
+      path: win32.join(
+        '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.cursor\\chats',
+        bucket,
+        'wsl-session',
+        'meta.json'
+      )
+    }
+
+    const result = parseCursorSidecarContent({
+      file,
+      platform: 'win32',
+      targetPlatform: 'linux',
+      content: JSON.stringify({ createdAtMs: 10, hasConversation: true, cwd })
+    })
+
+    expect(result.issue).toBeNull()
+    expect(result.evidence?.cwdEvidence).toEqual({ kind: 'sidecar-bucket-match', cwd })
+  })
 })
