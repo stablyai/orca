@@ -279,6 +279,12 @@ import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
+import { DiscordPresenceManager } from './discord-presence/discord-presence-manager'
+import { createDiscordRpcClient } from './discord-presence/discord-rpc-client'
+import {
+  DISCORD_RICH_PRESENCE_CLIENT_ID,
+  DISCORD_RICH_PRESENCE_ASSET_KEY
+} from './discord-presence/discord-presence-config'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
@@ -370,6 +376,7 @@ let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
+let discordPresenceManager: DiscordPresenceManager | null = null
 let unsubscribeSystemResumeBroadcast: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
@@ -2227,6 +2234,10 @@ void app.whenReady().then(async () => {
         wslHookRelayManager.disposeAll({ permanent: false })
       }
     }
+    if ('discordRichPresenceEnabled' in updates) {
+      // The manager reads isEnabled() on the next status change; force an immediate refresh.
+      discordPresenceManager?.refresh?.()
+    }
   })
   // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.
   attachClaudeLivePtyPersistence(store)
@@ -2272,6 +2283,17 @@ void app.whenReady().then(async () => {
   )
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
+
+  // Discord Rich Presence: best-effort, fails silently if Discord is not running.
+  discordPresenceManager = new DiscordPresenceManager({
+    getSnapshot: () => agentHookServer.getStatusSnapshot(),
+    subscribeChanges: (cb) => agentHookServer.subscribeStatusChanges(cb),
+    client: createDiscordRpcClient(DISCORD_RICH_PRESENCE_CLIENT_ID),
+    isEnabled: () => store.getSettings().discordRichPresenceEnabled === true,
+    assetKey: DISCORD_RICH_PRESENCE_ASSET_KEY
+  })
+  discordPresenceManager.start()
+
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
   const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
     const ownedIdentities = identities.map((identity) => ({
@@ -2322,6 +2344,7 @@ void app.whenReady().then(async () => {
     unsubscribeProviderSessionChanges()
     unsubscribeHookStatusSessionTabs()
     unsubscribeHookStatusClear()
+    discordPresenceManager?.stop()
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)

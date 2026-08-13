@@ -25,6 +25,11 @@ export class DiscordPresenceManager {
     this.unsubscribe = this.deps.subscribeChanges(() => this.onChange())
   }
 
+  /** Force an immediate re-evaluation (e.g. when the enabled toggle changes). */
+  refresh(): void {
+    this.onChange()
+  }
+
   stop(): void {
     this.unsubscribe?.()
     this.unsubscribe = null
