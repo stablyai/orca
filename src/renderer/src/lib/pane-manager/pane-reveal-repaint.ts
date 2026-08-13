@@ -1,6 +1,7 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
+import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
 
 type PaneGetter = () => Iterable<ManagedPaneInternal>
 
@@ -96,6 +97,12 @@ export function schedulePaneRevealRepaint(getPanes: () => Iterable<ManagedPaneIn
 export function schedulePaneRevealPresent(getPanes: () => Iterable<ManagedPaneInternal>): void {
   forEachPaneOnSettledFrame(getPanes, (pane) => {
     reattachWebglIfNeeded(pane)
+    // Why: same paused-render gate the atlas reset punches through — on reveal
+    // xterm's IntersectionObserver can still report the pane as not
+    // intersecting, so a plain refresh() is swallowed and nothing repaints.
+    if (forceRepaintThroughRenderPause(pane.terminal)) {
+      return
+    }
     if (pane.terminal.rows > 0) {
       pane.terminal.refresh(0, pane.terminal.rows - 1)
     }

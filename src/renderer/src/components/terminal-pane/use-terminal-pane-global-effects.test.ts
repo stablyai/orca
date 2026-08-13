@@ -7,6 +7,7 @@ import {
   registerLivePaneManager,
   unregisterLivePaneManager
 } from '@/lib/pane-manager/pane-manager-registry'
+import { schedulePaneRevealRepaint } from '@/lib/pane-manager/pane-reveal-repaint'
 import { useAppStore } from '@/store'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
@@ -207,6 +208,14 @@ describe('useTerminalPaneGlobalEffects', () => {
     return manager
   }
 
+  // Why: the reveal atlas rebuild now runs inside the settled repaint, so tests
+  // that assert it must be able to drive that repaint themselves. Without
+  // requestAnimationFrame the repaint falls back to a zero-delay timeout, so
+  // fake timers drive it without stubbing frames.
+  function flushSettledRevealRepaint(): void {
+    vi.advanceTimersByTime(0)
+  }
+
   beforeEach(() => {
     resetHookRefs()
     vi.clearAllMocks()
@@ -240,14 +249,20 @@ describe('useTerminalPaneGlobalEffects', () => {
     const order: string[] = []
     const terminalA = { name: 'terminal-a' }
     const terminalB = { name: 'terminal-b' }
+    const getPanes = vi.fn(() => [
+      { id: 1, terminal: terminalA },
+      { id: 2, terminal: terminalB }
+    ])
     const manager = {
-      getPanes: vi.fn(() => [
-        { id: 1, terminal: terminalA },
-        { id: 2, terminal: terminalB }
-      ]),
+      getPanes,
       resumeRendering: vi.fn(() => order.push('resume')),
       resetWebglTextureAtlases: vi.fn(() => order.push('reset-atlas')),
-      scheduleRevealRepaint: vi.fn(() => order.push('reveal-repaint')),
+      // Why: stand in for the real PaneManager.scheduleRevealRepaint so the
+      // assertions below observe the settled-reveal rebuild itself, not a mock.
+      scheduleRevealRepaint: vi.fn(() => {
+        order.push('reveal-repaint')
+        schedulePaneRevealRepaint(getPanes as never)
+      }),
       scheduleRevealPresent: vi.fn(() => order.push('reveal-present')),
       refreshAllPanes: vi.fn(() => order.push('refresh')),
       suspendRendering: vi.fn(),
@@ -274,10 +289,11 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))
 
-    // Why: the resume path resets atlases through the live-manager registry
+    // Why: the reveal path resets atlases through the live-manager registry
     // (shared glyph atlas), so the fake manager must be registered to observe
     // its reset in the ordering assertion.
     registerManagerForReset(manager)
+    vi.useFakeTimers()
     const isActiveRef = { current: false }
     const isVisibleRef = { current: false }
     beginHookRender()
@@ -307,10 +323,16 @@ describe('useTerminalPaneGlobalEffects', () => {
       'fit-reveal',
       'intent:terminal-a',
       'intent:terminal-b',
-      'reset-atlas',
-      'refresh',
       'reveal-repaint'
     ])
+
+    // The reveal still owes one shared-atlas rebuild — it is just handed to the
+    // settled repaint, which runs after the revealed pane is attached and
+    // measured instead of before it.
+    flushSettledRevealRepaint()
+    expect(order.slice(-3)).toEqual(['reveal-repaint', 'reset-atlas', 'refresh'])
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
     expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
@@ -535,11 +557,16 @@ describe('useTerminalPaneGlobalEffects', () => {
 
   it('suspends a tab-hidden terminal when its worktree surface becomes hidden', () => {
     const terminal = { name: 'terminal-a' }
+    const getPanes = vi.fn(() => [{ id: 1, terminal }])
     const manager = {
-      getPanes: vi.fn(() => [{ id: 1, terminal }]),
+      getPanes,
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
+      // Why: stand in for the real PaneManager.scheduleRevealRepaint so the
+      // heavy resume's shared-atlas rebuild is observable where it now runs.
+      scheduleRevealRepaint: vi.fn(() => {
+        schedulePaneRevealRepaint(getPanes as never)
+      }),
       scheduleRevealPresent: vi.fn(),
       refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
@@ -549,6 +576,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       setActivePane: vi.fn()
     }
     registerManagerForReset(manager)
+    vi.useFakeTimers()
     const baseArgs = {
       tabId: 'tab-1',
       worktreeId: 'wt-1',
@@ -616,6 +644,10 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
     expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
     expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
+    // Why: a heavy resume still owes exactly one shared-atlas rebuild — the
+    // settled repaint owns it now, so nothing wipes before the reveal lands.
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    flushSettledRevealRepaint()
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
   })

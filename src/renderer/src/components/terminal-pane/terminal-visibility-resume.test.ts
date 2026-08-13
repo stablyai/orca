@@ -127,6 +127,21 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(order).toEqual(['resume-rendering', 'fit-reveal', 'reveal-repaint'])
   })
 
+  it('leaves the heavy reveal atlas rebuild to the settled repaint', async () => {
+    // The synchronous wipe here landed before the revealed pane was attached and
+    // measured, so its repaint was dropped, yet it still re-rasterized the glyph
+    // atlas shared with every same-config terminal. The settled repaint is the
+    // whole reveal repair.
+    const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
+      await import('@/lib/pane-manager/pane-manager-registry')
+    )
+    const manager = createManager()
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+  })
+
   it('routes a heavy reveal through fitAllRevealedPanes, not the sync fit', () => {
     // Regression: the sync reveal fit applied a transient one-column DOM↔WebGL grid, garbling grok on restore.
     const manager = createManager()
