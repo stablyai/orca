@@ -146,7 +146,8 @@ Mobile Emulator (iOS Simulator):
   emulator tap <x> <y>      Tap at normalized 0..1 coords (preferred for single taps)
   emulator type <text>      Type text (US ASCII only)
   emulator gesture <json>   Send begin/move/end touch points
-  emulator button <name>    Hardware button (home, side_button, etc.)
+  emulator button <name>    Hardware button (home, lock, side_button, siri, app_switcher)
+  emulator biometric        Face ID / Touch ID enroll|unenroll|match|nomatch (iOS only)
   emulator rotate <o>       Rotate device (portrait|landscape_left|...)
   emulator exec --command   Raw serve-sim subcommand passthrough (no "serve-sim" prefix)
   emulator kill             Stop helper for device

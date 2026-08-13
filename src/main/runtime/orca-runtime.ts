@@ -35680,6 +35680,8 @@ export class OrcaRuntimeService {
   )
   emulatorButton: RuntimeEmulatorCommands['emulatorButton'] =
     this.emulatorCommands.emulatorButton.bind(this.emulatorCommands)
+  emulatorBiometric: RuntimeEmulatorCommands['emulatorBiometric'] =
+    this.emulatorCommands.emulatorBiometric.bind(this.emulatorCommands)
   emulatorRotate: RuntimeEmulatorCommands['emulatorRotate'] =
     this.emulatorCommands.emulatorRotate.bind(this.emulatorCommands)
   emulatorExec: RuntimeEmulatorCommands['emulatorExec'] = this.emulatorCommands.emulatorExec.bind(

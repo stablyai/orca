@@ -145,6 +145,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'emulator type',
       'emulator gesture',
       'emulator button',
+      'emulator biometric',
       'emulator rotate',
       'emulator exec',
       'emulator kill',

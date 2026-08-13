@@ -25,10 +25,14 @@ import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emula
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
+import { resolveIosHardwareButton } from '../ios-simulator-hardware-buttons'
+import { sendIosSimulatorBiometricEvent } from '../ios-simulator-biometric'
 import type {
   BackendAvailability,
   EmulatorBackend,
   EmulatorBackendCapabilities,
+  EmulatorBiometricAction,
+  EmulatorBiometryType,
   EmulatorDevice
 } from './emulator-backend'
 
@@ -43,7 +47,8 @@ export class IosEmulatorBackend implements EmulatorBackend {
     launch: false,
     permissions: false,
     accessibilityTree: true,
-    logcat: false
+    logcat: false,
+    biometric: true
   }
 
   private cachedServeSimExecutable: ServeSimExecutable | undefined
@@ -161,13 +166,23 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async button(deviceId: string, name: string): Promise<void> {
+    const button = resolveIosHardwareButton(name)
     const udid = await this.resolveDeviceId(deviceId)
-    await this.execServeSim(['button', name, '-d', udid])
+    await this.execServeSim(['button', button, '-d', udid])
   }
 
   async rotate(deviceId: string, orientation: string): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await this.execServeSim(['rotate', orientation, '-d', udid])
+  }
+
+  async biometric(
+    deviceId: string,
+    action: EmulatorBiometricAction,
+    type?: EmulatorBiometryType
+  ): Promise<void> {
+    const udid = await this.resolveDeviceId(deviceId)
+    await sendIosSimulatorBiometricEvent(udid, action, type)
   }
 
   async exec(deviceId: string, command: string): Promise<unknown> {

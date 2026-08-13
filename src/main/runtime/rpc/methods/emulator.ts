@@ -41,6 +41,14 @@ const ButtonParams = z.object({
   worktree: z.string().optional()
 })
 
+const BiometricParams = z.object({
+  action: z.enum(['enroll', 'unenroll', 'match', 'nomatch']),
+  type: z.enum(['face', 'touch']).optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
 const RotateOrientation = z.enum([
   'portrait',
   'portrait_upside_down',
@@ -185,6 +193,11 @@ export const EMULATOR_METHODS: RpcMethod[] = [
     name: 'emulator.button',
     params: ButtonParams,
     handler: async (params, { runtime }) => runtime.emulatorButton(params)
+  }),
+  defineMethod({
+    name: 'emulator.biometric',
+    params: BiometricParams,
+    handler: async (params, { runtime }) => runtime.emulatorBiometric(params)
   }),
   defineMethod({
     name: 'emulator.rotate',

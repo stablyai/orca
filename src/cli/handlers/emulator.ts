@@ -1,4 +1,6 @@
 import type { CommandHandler } from '../dispatch'
+import { parseEmulatorBiometricRequest } from '../emulator-biometric-args'
+import { assertNormalizedCoordinate, parseEmulatorGesturePoints } from '../emulator-gesture-args'
 import { formatLogcat } from '../emulator-logcat-format'
 import { parseEmulatorPermissionRequest } from '../emulator-permissions-args'
 import { printResult } from '../format'
@@ -10,7 +12,6 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { getEmulatorCommandTarget } from '../selectors'
-import { RuntimeClientError } from '../runtime-client'
 
 type EmulatorAttachResult = {
   info?: {
@@ -26,13 +27,6 @@ type EmulatorKillResult = {
 }
 
 type EmulatorShutdownResult = EmulatorKillResult
-
-type EmulatorGesturePoint = {
-  edge?: number
-  type: 'begin' | 'move' | 'end'
-  x: number
-  y: number
-}
 
 type EmulatorDeviceRow = {
   backend?: 'ios' | 'android'
@@ -52,65 +46,6 @@ function formatEmulatorDevices(value: unknown): string {
       return `${platform.padEnd(8)} ${(device.state ?? '').padEnd(9)} ${device.name ?? ''}  (${device.id ?? ''})`
     })
     .join('\n')
-}
-
-function assertNormalizedCoordinate(value: number, name: string): void {
-  if (value < 0 || value > 1) {
-    throw new RuntimeClientError('invalid_argument', `--${name} must be between 0 and 1`)
-  }
-}
-
-function parseEmulatorGesturePoints(raw: string): EmulatorGesturePoint[] {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    throw new RuntimeClientError('invalid_argument', '--points must be valid JSON')
-  }
-  const value =
-    parsed && typeof parsed === 'object' && 'points' in parsed
-      ? (parsed as { points?: unknown }).points
-      : parsed
-  if (!Array.isArray(value) || value.length < 2 || value.length > 64) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      '--points must be an array of 2 to 64 touch points'
-    )
-  }
-  return value.map((point, index) => {
-    if (!point || typeof point !== 'object') {
-      throw new RuntimeClientError('invalid_argument', `gesture point ${index} must be an object`)
-    }
-    const candidate = point as Record<string, unknown>
-    const type = candidate.type
-    const edge = candidate.edge
-    const x = candidate.x
-    const y = candidate.y
-    if (type !== 'begin' && type !== 'move' && type !== 'end') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `gesture point ${index} type must be begin, move, or end`
-      )
-    }
-    if (typeof x !== 'number' || !Number.isFinite(x)) {
-      throw new RuntimeClientError('invalid_argument', `gesture point ${index} x must be a number`)
-    }
-    if (typeof y !== 'number' || !Number.isFinite(y)) {
-      throw new RuntimeClientError('invalid_argument', `gesture point ${index} y must be a number`)
-    }
-    assertNormalizedCoordinate(x, `points[${index}].x`)
-    assertNormalizedCoordinate(y, `points[${index}].y`)
-    if (
-      edge !== undefined &&
-      (typeof edge !== 'number' || !Number.isInteger(edge) || edge < 0 || edge > 4)
-    ) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `gesture point ${index} edge must be an integer between 0 and 4`
-      )
-    }
-    return edge === undefined ? { type, x, y } : { type, x, y, edge }
-  })
 }
 
 export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
@@ -265,6 +200,18 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
       worktree: target.worktree
     })
     printResult(res, json, () => `Launched ${packageName}`)
+  },
+  'emulator biometric': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const request = parseEmulatorBiometricRequest(flags)
+    const res = await client.call('emulator.biometric', {
+      action: request.action,
+      type: request.type,
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, () => `Sent biometric ${request.action}`)
   },
   'emulator permissions': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)

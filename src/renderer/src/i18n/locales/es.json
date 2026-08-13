@@ -12457,6 +12457,20 @@
                 "9406c15775": "Pantalla del emulador",
                 "8f25ffaf8a": "Pantalla del emulador, teclado capturado. Presiona Escape para liberar.",
                 "0022420df0": "teléfono"
+              },
+              "actions": {
+                "menu": {
+                  "fa29179c0f": "More device actions",
+                  "ec6370bcc7": "Hardware",
+                  "9ec74b4d24": "Side Button",
+                  "075f41864d": "Siri",
+                  "4e5664df54": "App Switcher",
+                  "c354ee38ec": "Face ID",
+                  "109869fe69": "Enrolled",
+                  "8f274ef31a": "Not Enrolled",
+                  "640607156a": "Matching Face",
+                  "0886900498": "Non-matching Face"
+                }
               }
             },
             "pane": {

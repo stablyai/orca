@@ -4036,6 +4036,43 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes an emulator biometric action and type through to the runtime', async () => {
+    queueFixtures(callMock, okFixture('req_emulator_biometric', { ok: true }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['emulator', 'biometric', 'match', '--type', 'touch', '--worktree', 'id:wt-1', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('emulator.biometric', {
+      action: 'match',
+      type: 'touch',
+      device: undefined,
+      emulator: undefined,
+      worktree: 'id:wt-1'
+    })
+  })
+
+  it('rejects an unknown emulator biometric action before calling the runtime', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['emulator', 'biometric', 'scan', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: '<action> must be enroll, unenroll, match, or nomatch'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects emulator gesture points outside normalized coordinates', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const priorExitCode = process.exitCode

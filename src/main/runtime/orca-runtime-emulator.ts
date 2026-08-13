@@ -7,10 +7,14 @@ import {
 } from '../emulator/emulator-availability'
 import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
 import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
+import type {
+  EmulatorBiometricAction,
+  EmulatorBiometryType,
+  EmulatorDevice
+} from '../emulator/backends/emulator-backend'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
-import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/types'
 
 // Settings slice the emulator surface needs; keeps the host contract honest (no widening cast).
@@ -89,6 +93,17 @@ export class RuntimeEmulatorCommands {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.button(params.name, { device: params.device ?? params.emulator, worktreeId })
+    return RuntimeEmulatorCommands.OK
+  }
+
+  async emulatorBiometric(
+    params: EmulatorTargetParams & { action: EmulatorBiometricAction; type?: EmulatorBiometryType }
+  ): Promise<{ ok: true }> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    const target = { device: params.device ?? params.emulator, worktreeId }
+    await this.requireEmulatorBridge().runCapability('biometric', target, (backend, device) =>
+      backend.biometric!(device, params.action, params.type)
+    )
     return RuntimeEmulatorCommands.OK
   }
 

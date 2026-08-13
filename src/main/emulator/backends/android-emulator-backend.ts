@@ -73,7 +73,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     launch: true,
     permissions: true,
     accessibilityTree: true,
-    logcat: true
+    logcat: true,
+    biometric: false
   }
 
   private readonly runner: AndroidCommandRunner

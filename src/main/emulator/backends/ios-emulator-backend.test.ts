@@ -12,7 +12,8 @@ const {
   shutdownSimulatorDeviceMock,
   sendEmulatorGestureSequenceMock,
   parseServeSimDetachedSessionMock,
-  netFetchMock
+  netFetchMock,
+  sendIosSimulatorBiometricEventMock
 } = vi.hoisted(() => ({
   ensureSimulatorBootedMock: vi.fn(async () => {}),
   execServeSimCommandMock: vi.fn(async (_executable?: unknown, _args?: string[]) => ({})),
@@ -23,7 +24,12 @@ const {
   shutdownSimulatorDeviceMock: vi.fn(async () => {}),
   sendEmulatorGestureSequenceMock: vi.fn(async () => {}),
   parseServeSimDetachedSessionMock: vi.fn(),
-  netFetchMock: vi.fn()
+  netFetchMock: vi.fn(),
+  sendIosSimulatorBiometricEventMock: vi.fn(async () => {})
+}))
+
+vi.mock('../ios-simulator-biometric', () => ({
+  sendIosSimulatorBiometricEvent: sendIosSimulatorBiometricEventMock
 }))
 
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
@@ -97,7 +103,8 @@ describe('IosEmulatorBackend', () => {
       launch: false,
       permissions: false,
       accessibilityTree: true,
-      logcat: false
+      logcat: false,
+      biometric: true
     })
   })
 
@@ -195,6 +202,42 @@ describe('IosEmulatorBackend', () => {
       EXECUTABLE,
       ['rotate', 'landscape_left', '-d', 'device-1'],
       undefined
+    )
+  })
+
+  it('presses the lock button for side_button', async () => {
+    const backend = new IosEmulatorBackend()
+    await backend.button('device-1', 'side_button')
+    expect(execServeSimCommandMock).toHaveBeenCalledWith(
+      EXECUTABLE,
+      ['button', 'lock', '-d', 'device-1'],
+      undefined
+    )
+  })
+
+  it('rejects an unknown button name without reaching serve-sim', async () => {
+    const backend = new IosEmulatorBackend()
+    await expect(backend.button('device-1', 'volume_up')).rejects.toMatchObject({
+      code: 'emulator_error'
+    })
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+  })
+
+  it('forwards biometric actions to the resolved udid', async () => {
+    const backend = new IosEmulatorBackend()
+    await backend.biometric('device-1', 'match')
+    await backend.biometric('device-1', 'enroll', 'touch')
+    expect(sendIosSimulatorBiometricEventMock).toHaveBeenNthCalledWith(
+      1,
+      'device-1',
+      'match',
+      undefined
+    )
+    expect(sendIosSimulatorBiometricEventMock).toHaveBeenNthCalledWith(
+      2,
+      'device-1',
+      'enroll',
+      'touch'
     )
   })
 

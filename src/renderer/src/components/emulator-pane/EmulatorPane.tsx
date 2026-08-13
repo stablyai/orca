@@ -1,4 +1,7 @@
+import { useCallback } from 'react'
 import type { Tab } from '../../../../shared/types'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { EmulatorBiometricAction } from './emulator-pane-types'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
@@ -37,6 +40,18 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     autoAttachOnMount: isActive
   })
 
+  // Why: biometric is a fire-and-forget device command with no session state, so it
+  // stays out of the session hook the way the pane's text insertion already does.
+  const sendBiometric = useCallback(
+    async (action: EmulatorBiometricAction) => {
+      await callRuntimeRpc({ kind: 'local' }, 'emulator.biometric', {
+        action,
+        worktree: worktreeId
+      })
+    },
+    [worktreeId]
+  )
+
   return (
     <div
       data-emulator-pane
@@ -54,8 +69,12 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         }}
         onAttach={() => void attach(selectedUdid ?? undefined)}
         onShutdown={() => void shutdown(selectedUdid ?? undefined)}
-        onHome={() => void sendButton('home')}
+        onButton={(name) => void sendButton(name)}
+        onBiometric={(action) => void sendBiometric(action)}
         onRotate={() => void sendRotate()}
+        showDeviceActions={
+          devices.find((device) => device.udid === selectedUdid)?.backend !== 'android'
+        }
       />
 
       {error ? (
