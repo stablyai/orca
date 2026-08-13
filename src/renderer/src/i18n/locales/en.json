@@ -5789,6 +5789,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
+          },
+          "followSymlinkedDirectories": {
+            "title": "Follow symlinked directories in file explorer",
+            "description": "Expand symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -8194,7 +8198,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "followSymlinkedDirectories": {
+              "title": "Follow Symlinked Directories",
+              "description": "Let the file explorer expand into symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
+            }
           }
         },
         "auto": {

@@ -5483,6 +5483,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "也在原来的列表中显示已固定的工作树",
             "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"
+          },
+          "followSymlinkedDirectories": {
+            "title": "Follow symlinked directories in file explorer",
+            "description": "Expand symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -7788,7 +7792,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "用量百分比",
-            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。"
+            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。",
+            "followSymlinkedDirectories": {
+              "title": "Follow Symlinked Directories",
+              "description": "Let the file explorer expand into symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
+            }
           }
         },
         "auto": {

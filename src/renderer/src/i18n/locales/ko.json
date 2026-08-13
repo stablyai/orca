@@ -5471,6 +5471,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "고정된 워크트리를 원래 목록에도 표시",
             "description": "고정된 워크트리는 Pinned에 유지하면서 전체, 프로젝트, 상태 및 PR에도 표시합니다."
+          },
+          "followSymlinkedDirectories": {
+            "title": "Follow symlinked directories in file explorer",
+            "description": "Expand symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -7776,7 +7780,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "사용량 백분율",
-            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다.",
+            "followSymlinkedDirectories": {
+              "title": "Follow Symlinked Directories",
+              "description": "Let the file explorer expand into symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
+            }
           }
         },
         "auto": {

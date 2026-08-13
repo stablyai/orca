@@ -5471,6 +5471,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "ピン留めしたワークツリーを元のリストにも表示",
             "description": "ピン留めしたワークツリーを Pinned に残したまま、すべて、プロジェクト、ステータス、PR にも表示します。"
+          },
+          "followSymlinkedDirectories": {
+            "title": "Follow symlinked directories in file explorer",
+            "description": "Expand symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -7813,7 +7817,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "使用率",
-            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。",
+            "followSymlinkedDirectories": {
+              "title": "Follow Symlinked Directories",
+              "description": "Let the file explorer expand into symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
+            }
           }
         },
         "auto": {

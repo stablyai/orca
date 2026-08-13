@@ -490,18 +490,30 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
 async function isDirectoryEntry(
   dirPath: string,
   entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
-  _resolveEntryPath: (entryPath: string) => Promise<string>
+  resolveEntryPath: (entryPath: string) => Promise<string>,
+  followSymlinkedDirectories: boolean
 ): Promise<boolean> {
-  // Why: following a symlink in readDir can touch macOS TCC-protected containers; treat links as file-like until explicitly opened.
-  void _resolveEntryPath
-  if (entry.isSymbolicLink()) {
-    void dirPath
-    return false
-  }
   if (entry.isDirectory()) {
     return true
   }
-  return false
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  // Why: following a symlink just to decorate readDir can touch macOS
+  // TCC-protected app containers, so links stay file-like unless the user
+  // opts in via followSymlinkedDirectories.
+  if (!followSymlinkedDirectories) {
+    return false
+  }
+  try {
+    // Resolve to the link's authorized target and classify by the target type,
+    // mirroring the relay file handler. Broken links or targets outside allowed
+    // roots throw and fall back to file-like.
+    const resolvedTarget = await resolveEntryPath(join(dirPath, entry.name))
+    return (await stat(resolvedTarget)).isDirectory()
+  } catch {
+    return false
+  }
 }
 
 export function registerFilesystemHandlers(
@@ -554,11 +566,15 @@ export function registerFilesystemHandlers(
         const dirPath = await resolveAuthorizedPath(args.dirPath, store)
         throwSite = 'readdir'
         const entries = await readdir(dirPath, { withFileTypes: true })
+        const followSymlinkedDirectories = store.getSettings().followSymlinkedDirectories ?? false
         const mapped = await Promise.all(
           entries.map(async (entry) => ({
             name: entry.name,
-            isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
-              resolveAuthorizedPath(entryPath, store)
+            isDirectory: await isDirectoryEntry(
+              dirPath,
+              entry,
+              (entryPath) => resolveAuthorizedPath(entryPath, store),
+              followSymlinkedDirectories
             ),
             isSymlink: entry.isSymbolicLink()
           }))

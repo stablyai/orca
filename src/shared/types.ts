@@ -2957,6 +2957,11 @@ export type GlobalSettings = {
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
+  /** Why: opt-in. When on, the file explorer classifies a symlinked entry by its
+   *  target type so a link to a directory expands instead of opening as a file.
+   *  Off by default because resolving link targets can touch macOS TCC-protected
+   *  locations and surface a permission prompt. */
+  followSymlinkedDirectories?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */

@@ -1080,6 +1080,48 @@ describe('registerFilesystemHandlers', () => {
     expect(statMock).not.toHaveBeenCalledWith(modelLinkPath)
   })
 
+  it('classifies symlinked directories as directories when followSymlinkedDirectories is on', async () => {
+    const modelLinkPath = path.join(REPO_PATH, 'Model')
+    const followStore = {
+      ...store,
+      getSettings: () => ({ workspaceDir: WORKSPACE_DIR, followSymlinkedDirectories: true })
+    }
+    readdirMock.mockResolvedValue([
+      dirEntry({ name: 'README.md', file: true }),
+      dirEntry({ name: 'Model', directory: true, symlink: true })
+    ])
+    // stat (not lstat) resolves the link, so the target reports as a directory.
+    statMock.mockImplementation(async (targetPath: string) => ({
+      size: 10,
+      isDirectory: () => targetPath === modelLinkPath,
+      mtimeMs: 123
+    }))
+
+    registerFilesystemHandlers(followStore as never)
+
+    await expect(handlers.get('fs:readDir')!(null, { dirPath: REPO_PATH })).resolves.toEqual([
+      { name: 'Model', isDirectory: true, isSymlink: true },
+      { name: 'README.md', isDirectory: false, isSymlink: false }
+    ])
+    expect(statMock).toHaveBeenCalledWith(modelLinkPath)
+  })
+
+  it('keeps broken symlinks file-like when followSymlinkedDirectories is on', async () => {
+    const followStore = {
+      ...store,
+      getSettings: () => ({ workspaceDir: WORKSPACE_DIR, followSymlinkedDirectories: true })
+    }
+    readdirMock.mockResolvedValue([dirEntry({ name: 'Dangling', directory: true, symlink: true })])
+    // A broken link's target cannot be stat'd; it must fall back to file-like.
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+
+    registerFilesystemHandlers(followStore as never)
+
+    await expect(handlers.get('fs:readDir')!(null, { dirPath: REPO_PATH })).resolves.toEqual([
+      { name: 'Dangling', isDirectory: false, isSymlink: true }
+    ])
+  })
+
   it('returns false from pathExists when a local authorized path is missing', async () => {
     const targetPath = path.join(REPO_PATH, 'untitled-7.md')
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))

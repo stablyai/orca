@@ -115,6 +115,41 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
+export const getFollowSymlinkedDirectoriesEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.followSymlinkedDirectories.title',
+      'Follow Symlinked Directories'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.followSymlinkedDirectories.description',
+      'Let the file explorer expand into symlinked directories instead of showing them as files. May trigger a macOS permission prompt.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.followSymlinkedDirectories.symlink',
+        'symlink'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.followSymlinkedDirectories.symbolicLink',
+        'symbolic link'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.followSymlinkedDirectories.alias',
+        'alias'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.followSymlinkedDirectories.fileExplorer',
+        'file explorer'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.followSymlinkedDirectories.follow',
+        'follow'
+      )
+    ]
+  })
+)
+
 export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
@@ -139,7 +174,8 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
-  }
+  },
+  getFollowSymlinkedDirectoriesEntry()
 ])
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [

@@ -18,6 +18,7 @@ import {
   getStatusBarToggles,
   getUsagePercentageDisplayEntry
 } from './appearance-search'
+import { FollowSymlinkedDirectoriesSetting } from './FollowSymlinkedDirectoriesSetting'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
@@ -379,6 +380,11 @@ export function AppearanceWindowSidebarSection({
                       }
                     />
                   </SearchableSetting>
+
+                  <FollowSymlinkedDirectoriesSetting
+                    settings={settings}
+                    updateSettings={updateSettings}
+                  />
                 </div>
               </div>
             ) : null}

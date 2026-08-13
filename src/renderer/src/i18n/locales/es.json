@@ -5486,6 +5486,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "Mostrar también los worktrees fijados en sus listas originales",
             "description": "Los worktrees fijados permanecen en Fijados y también aparecen en Todos, Proyecto, Estado y PR."
+          },
+          "followSymlinkedDirectories": {
+            "title": "Follow symlinked directories in file explorer",
+            "description": "Expand symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -7791,7 +7795,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Porcentajes de uso",
-            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
+            "followSymlinkedDirectories": {
+              "title": "Follow Symlinked Directories",
+              "description": "Let the file explorer expand into symlinked directories instead of showing them as files. May trigger a macOS permission prompt."
+            }
           }
         },
         "auto": {
