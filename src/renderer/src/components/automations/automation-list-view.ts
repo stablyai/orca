@@ -1,3 +1,4 @@
+import { getIntlLocale } from '@/i18n/i18n'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import {
@@ -153,10 +154,11 @@ export function sortAutomationListViewItems(
     return [...items]
   }
   const next = [...items]
+  const locale = getIntlLocale()
   next.sort((left, right) => {
     const compared =
       sort.field === 'name'
-        ? left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
+        ? left.name.localeCompare(right.name, locale, { sensitivity: 'base' })
         : (left.lastRunAt ?? 0) - (right.lastRunAt ?? 0)
     if (compared !== 0) {
       return sort.direction === 'asc' ? compared : -compared

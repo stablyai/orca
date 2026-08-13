@@ -28,6 +28,7 @@ import type {
 } from './automation-list-view'
 import { AutomationListTableHeader } from './AutomationListTableHeader'
 import { AutomationListToolbar } from './AutomationListToolbar'
+import { indexLatestAutomationRuns } from './automation-list-last-run'
 
 type AutomationsListPanelProps = {
   hasListItems: boolean
@@ -119,6 +120,10 @@ export function AutomationsListPanel({
   onRefresh,
   isRefreshing
 }: AutomationsListPanelProps): React.JSX.Element {
+  // Why: one pass over runs for the whole list — each row renders its own
+  // component, so indexing per row would be O(rows × runs) on every re-render.
+  const lastRunByAutomationId = React.useMemo(() => indexLatestAutomationRuns(runs), [runs])
+
   return (
     <section
       className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-4 md:px-5"
@@ -190,7 +195,7 @@ export function AutomationsListPanel({
                         automations={[item.automation]}
                         selectedId={selectedId}
                         isSelectedLocal={selectedExternalKey === null}
-                        runs={runs}
+                        lastRunByAutomationId={lastRunByAutomationId}
                         relativeNow={relativeNow}
                         repoMap={repoMap}
                         worktreeMap={worktreeMap}

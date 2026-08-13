@@ -119,10 +119,6 @@ export function AutomationListFilterMenu({
           type="button"
           variant="ghost"
           size="sm"
-          aria-label={translate(
-            'auto.components.automations.AutomationListFilterMenu.filters',
-            'Filters'
-          )}
           className="h-8 shrink-0 gap-1.5 border border-border bg-background px-2.5 text-xs shadow-none hover:bg-muted/50 focus-visible:border-ring/70 focus-visible:ring-0"
         >
           <ListFilter className="size-3.5" />

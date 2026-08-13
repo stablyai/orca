@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type {
   Automation,
   AutomationRun,
@@ -106,10 +107,21 @@ export function getExternalAutomationLastRunSnapshot(
     return { at: null, tone: 'never', statusLabel: '' }
   }
   if (EXTERNAL_SUCCEEDED_STATUSES.has(normalized)) {
-    return { at, tone: 'succeeded', statusLabel: 'Done' }
+    return {
+      at,
+      tone: 'succeeded',
+      statusLabel: translate('auto.components.automations.automation.list.last.run.done', 'Done')
+    }
   }
   if (EXTERNAL_FAILED_STATUSES.has(normalized) || Boolean(job.lastError)) {
-    return { at, tone: 'failed', statusLabel: 'Failed' }
+    return {
+      at,
+      tone: 'failed',
+      statusLabel: translate(
+        'auto.components.automations.automation.list.last.run.failed',
+        'Failed'
+      )
+    }
   }
   if (raw) {
     return { at, tone: 'unknown', statusLabel: raw }

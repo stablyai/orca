@@ -12,6 +12,7 @@ import type {
 } from '../../../../shared/automations-types'
 import { AutomationListLocalRows } from './AutomationListLocalRows'
 import { AutomationListExternalRows } from './AutomationListExternalRows'
+import { indexLatestAutomationRuns } from './automation-list-last-run'
 
 // Why: Tooltip needs a provider in the app; stub so rows render standalone.
 vi.mock('@/components/ui/tooltip', () => ({
@@ -120,7 +121,7 @@ function renderLocalRows(handlers: {
       automations={[makeAutomation()]}
       selectedId={null}
       isSelectedLocal={true}
-      runs={handlers.runs ?? []}
+      lastRunByAutomationId={indexLatestAutomationRuns(handlers.runs ?? [])}
       relativeNow={Date.now()}
       repoMap={new Map()}
       worktreeMap={new Map()}
