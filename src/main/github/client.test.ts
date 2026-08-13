@@ -869,6 +869,117 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('falls back to branch list when REST branch lookup misses a PR from another fork', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'innocarpe', repo: 'orca' }
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 12956,
+            title: 'Existing fork PR',
+            state: 'OPEN',
+            url: 'https://github.com/stablyai/orca/pull/12956',
+            statusCheckRollup: [],
+            updatedAt: '2026-08-08T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'fix/pr-branch-fork-lookup',
+            baseRefOid: 'base-oid',
+            headRefOid: 'fallback-head-oid'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 12956,
+          title: 'Hydrated existing fork PR',
+          state: 'OPEN',
+          url: 'https://github.com/stablyai/orca/pull/12956',
+          statusCheckRollup: [],
+          updatedAt: '2026-08-08T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fix/pr-branch-fork-lookup',
+          baseRefOid: 'base-oid',
+          headRefOid: 'fallback-head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'fix/pr-branch-fork-lookup')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'api',
+        'repos/stablyai/orca/pulls?head=innocarpe%3Afix%2Fpr-branch-fork-lookup&state=all&per_page=1'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'pr',
+        'list',
+        '--repo',
+        'stablyai/orca',
+        '--head',
+        'fix/pr-branch-fork-lookup',
+        '--state',
+        'all',
+        '--limit',
+        '1',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({
+      number: 12956,
+      title: 'Hydrated existing fork PR',
+      prRepo: { owner: 'stablyai', repo: 'orca' },
+      headRepo: { owner: 'innocarpe', repo: 'orca' }
+    })
+  })
+
+  it('reports no PR when REST and branch-list lookups both miss', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'innocarpe', repo: 'orca' }
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
+
+    expect(outcome.kind).toBe('no-pr')
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'pr',
+        'list',
+        '--repo',
+        'stablyai/orca',
+        '--head',
+        'feature/test',
+        '--state',
+        'all',
+        '--limit',
+        '1',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
   it('ignores merged PRs discovered only by branch lookup when the branch moved on', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
