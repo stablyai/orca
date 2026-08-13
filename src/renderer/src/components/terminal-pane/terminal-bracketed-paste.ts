@@ -1,4 +1,8 @@
 import type { Terminal } from '@xterm/xterm'
+import {
+  sanitizeTerminalDraftText,
+  toSafeTerminalDraftPaste
+} from '../../../../shared/terminal-draft-paste'
 
 type BracketedPasteTerminal = {
   modes: {
@@ -47,19 +51,7 @@ function hasBracketedPasteModeSequence(data: string): boolean {
 // the bracketed-paste frame early and run the tail as keystrokes. Replacing ESC
 // with its printable substitute (\u241b, U+241B) neutralizes every framing escape.
 export function sanitizeBracketedPasteText(text: string): string {
-  let escapeIndex = text.indexOf(ESCAPE)
-  if (escapeIndex === -1) {
-    return text
-  }
-
-  let sanitized = ''
-  let start = 0
-  while (escapeIndex !== -1) {
-    sanitized += `${text.slice(start, escapeIndex)}\u241b`
-    start = escapeIndex + ESCAPE.length
-    escapeIndex = text.indexOf(ESCAPE, start)
-  }
-  return sanitized + text.slice(start)
+  return sanitizeTerminalDraftText(text)
 }
 
 export function sanitizeTerminalPasteText(text: string): string {
@@ -73,8 +65,7 @@ export function normalizeTerminalPasteLineEndings(text: string): string {
 }
 
 export function wrapTerminalBracketedPasteText(text: string): string {
-  const normalizedText = normalizeTerminalPasteLineEndings(text)
-  return `${BRACKETED_PASTE_START}${sanitizeBracketedPasteText(normalizedText)}${BRACKETED_PASTE_END}`
+  return toSafeTerminalDraftPaste(text)
 }
 
 function forceBracketedPaste(terminal: PasteTerminal, text: string): void {

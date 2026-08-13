@@ -5,6 +5,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
+import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status'
 import { createTestStore, makeTab } from './store-test-helpers'
 
 const NOW = 1_800_000_000_000
@@ -58,6 +59,26 @@ function makeSleepingRecord(
 }
 
 describe('manual sleep agent session capture', () => {
+  it('does not retag a foreign live row as owned by the sleeping host', () => {
+    const store = createTestStore()
+    seedTabs(store)
+    store.setState({
+      agentStatusByPaneKey: {
+        'tab-1:foreign': makeAgentEntry({
+          paneKey: 'tab-1:foreign',
+          executionHostId: 'runtime:runtime-b'
+        })
+      }
+    } as Partial<AppState>)
+
+    const records = collectSleepingAgentSessionRecordsForWorktree(store.getState(), 'wt-1', {
+      captureMode: 'manual-worktree-sleep',
+      executionHostId: 'local'
+    })
+
+    expect(records).toEqual({})
+  })
+
   it('captures every resumable live row as a worktree-sleep record keeping its own state', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)

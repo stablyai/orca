@@ -4,7 +4,7 @@ import { sshSupportsAgentSessionCreateOperations } from './ssh-agent-session-cre
 import { waitForSshCapabilityProbe } from './ssh-capability-probe-waiter'
 
 export class SshAgentSessionCapabilities {
-  private claimProbe: Promise<void> | null = null
+  private claimProbe: Promise<boolean> | null = null
   private claimSupported = false
   private createOperationProbe: Promise<boolean> | null = null
 
@@ -14,16 +14,18 @@ export class SshAgentSessionCapabilities {
     const probe = this.claimProbe ?? proveSshAgentSessionClaimCapability(this.mux)
     this.claimProbe = probe
     try {
-      await waitForSshCapabilityProbe(probe, options.signal)
-      this.claimSupported = true
-      return true
-    } catch {
+      const supported = await waitForSshCapabilityProbe(probe, options.signal)
+      this.claimSupported = supported
+      if (!supported && this.claimProbe === probe) {
+        this.claimProbe = null
+      }
+      return supported
+    } catch (error) {
       if (!options.signal?.aborted && this.claimProbe === probe) {
-        // Why: negative physical probes must follow a relay upgraded on this connection.
         this.claimProbe = null
         this.claimSupported = false
       }
-      return false
+      throw error
     }
   }
 
@@ -37,9 +39,12 @@ export class SshAgentSessionCapabilities {
     let supported: boolean
     try {
       supported = await waitForSshCapabilityProbe(probe, options.signal)
-    } catch {
+    } catch (error) {
       // Why: one canceled waiter must not cancel or evict the shared physical probe used by peers.
-      return false
+      if (!options.signal?.aborted && this.createOperationProbe === probe) {
+        this.createOperationProbe = null
+      }
+      throw error
     }
     if (!supported && this.createOperationProbe === probe) {
       // Why: negative capability results must follow a relay upgraded on the same connection.

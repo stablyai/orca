@@ -846,7 +846,7 @@ describe('useComposerState host-context boundaries', () => {
       'const createGateInput'
     )
     expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
-    expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
+    expect(quickSubmit).toContain('startupPlan.draftPrompt = buildAgentSessionRulesPrompt')
   })
 
   it('selects the failed Jira source host before opening integration settings', () => {

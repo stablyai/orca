@@ -13,6 +13,8 @@ import {
   launchSleepingAgentSession,
   type ResumeSleepingAgentSessionsOptions
 } from './sleeping-agent-session-launch'
+import { sleepingAgentSessionRecordMatchesExecutionHost } from './sleeping-agent-session-execution-owner'
+import { getExecutionHostIdForWorktree } from './worktree-runtime-owner'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
@@ -82,7 +84,8 @@ function getAgentStatusTabId(entry: {
 function activeOrQueuedResumeClaimsProviderSession(
   record: SleepingAgentSessionRecord,
   state: ReturnType<typeof useAppStore.getState>,
-  samePaneOwnsRecovery: boolean
+  samePaneOwnsRecovery: boolean,
+  executionHostId: ReturnType<typeof getExecutionHostIdForWorktree>
 ): boolean {
   const worktreeTabIds = new Set(
     (state.tabsByWorktree[record.worktreeId] ?? []).map((tab) => tab.id)
@@ -95,6 +98,11 @@ function activeOrQueuedResumeClaimsProviderSession(
     if (
       worktreeTabIds.has(getAgentStatusTabId(entry) ?? '') &&
       entry.worktreeId === record.worktreeId &&
+      sleepingAgentSessionRecordMatchesExecutionHost(
+        state,
+        { ...entry, worktreeId: record.worktreeId },
+        executionHostId
+      ) &&
       entry.agentType === record.agent &&
       entry.state !== 'done' &&
       agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
@@ -106,6 +114,7 @@ function activeOrQueuedResumeClaimsProviderSession(
   for (const [tabId, startup] of Object.entries(state.pendingStartupByTabId)) {
     if (
       worktreeTabIds.has(tabId) &&
+      (startup.executionHostId ?? 'local') === executionHostId &&
       startup.launchAgent === record.agent &&
       agentProviderSessionsEqual(
         record.agent,
@@ -121,6 +130,7 @@ function activeOrQueuedResumeClaimsProviderSession(
     if (
       worktreeTabIds.has(tabId) &&
       claim.worktreeId === record.worktreeId &&
+      (claim.executionHostId ?? 'local') === executionHostId &&
       claim.launchAgent === record.agent &&
       agentProviderSessionsEqual(record.agent, claim.providerSession, record.providerSession)
     ) {
@@ -146,8 +156,13 @@ export function resumeSleepingAgentSessionsForWorktree(
   options?: ResumeSleepingAgentSessionsOptions
 ): number {
   const state = useAppStore.getState()
+  const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
-    .filter((record) => record.worktreeId === worktreeId)
+    .filter(
+      (record) =>
+        record.worktreeId === worktreeId &&
+        sleepingAgentSessionRecordMatchesExecutionHost(state, record, executionHostId)
+    )
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
   const validWorktreeRecords = worktreeRecords.filter(
     (record) => !isInvalidWorktreeActivationRecord(record)
@@ -188,7 +203,9 @@ export function resumeSleepingAgentSessionsForWorktree(
       }
       continue
     }
-    if (activeOrQueuedResumeClaimsProviderSession(record, currentState, isPaneOwned)) {
+    if (
+      activeOrQueuedResumeClaimsProviderSession(record, currentState, isPaneOwned, executionHostId)
+    ) {
       // Why: main can replay the old wake record after the same provider
       // session was already queued in a fresh tab; clear the stale replay.
       state.clearSleepingAgentSession(record.paneKey)

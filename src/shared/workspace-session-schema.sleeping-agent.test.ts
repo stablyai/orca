@@ -14,6 +14,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
           paneKey: 'tab1:pane-1',
           tabId: 'tab1',
           worktreeId: 'wt',
+          executionHostId: 'runtime:runtime-a',
           agent: 'codex',
           providerSession: { key: 'session_id', id: 'codex-session' },
           prompt: 'continue',
@@ -34,6 +35,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.executionHostId).toBe(
+        'runtime:runtime-a'
+      )
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig).toEqual({
         agentArgs: '',
         agentEnv: {}

@@ -212,6 +212,7 @@ type StoreState = {
     agentCmdOverrides?: Record<string, string>
     agentDefaultArgs?: Record<string, string>
     agentDefaultEnv?: Record<string, Record<string, string>>
+    agentSessionRules?: { enabled: boolean; rules: unknown[] }
   } | null
   codexRestartNoticeByPtyId: Record<
     string,
@@ -939,7 +940,10 @@ describe('connectPanePty', () => {
       settings: {
         promptCacheTimerEnabled: true,
         experimentalTerminalAttention: true,
-        terminalMainSideEffectAuthority: false
+        terminalMainSideEffectAuthority: false,
+        // Why: unrelated to this suite's PTY-reconnect assertions; disabled so
+        // no rule text leaks into the exact launchCommand strings under test.
+        agentSessionRules: { enabled: false, rules: [] }
       },
       codexRestartNoticeByPtyId: {},
       deferredSshReconnectTargets: [],
@@ -3474,7 +3478,7 @@ describe('connectPanePty', () => {
     expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
 
     // The wake reports the claim it consumed so the dispatcher's generic resume never launches the same provider session into a second tab.
-    const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-bg'
+    const claimKey = 'local\0wt-1\0claude\0session_id\0sess-hibernated-bg'
     expect(binding.wakeHibernatedAgentIfArmed(new Set([claimKey]))).toBeNull()
     expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
     const claimedProviderSessions = new Set<string>()
@@ -3530,7 +3534,7 @@ describe('connectPanePty', () => {
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
 
     // Wake arrives mid-kill: nothing is armed yet, but the pane must claim the session (suppressing the generic resume) and latch the request.
-    const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-race'
+    const claimKey = 'local\0wt-1\0claude\0session_id\0sess-hibernated-race'
     expect(binding.wakeHibernatedAgentIfArmed(new Set([claimKey]))).toBeNull()
     const claimedProviderSessions = new Set<string>()
     expect(binding.wakeHibernatedAgentIfArmed(claimedProviderSessions)).toBe(claimKey)
@@ -3586,7 +3590,7 @@ describe('connectPanePty', () => {
     const deferredSpawn = createDeferred<unknown>()
     transport.connect.mockImplementationOnce(() => deferredSpawn.promise)
 
-    const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-inflight'
+    const claimKey = 'local\0wt-1\0claude\0session_id\0sess-hibernated-inflight'
     expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
     const connectCallsAfterFirstWake = transport.connect.mock.calls.length
     expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
@@ -3629,7 +3633,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     transport.connect.mockRejectedValueOnce(new Error('transient spawn failure'))
 
-    const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-retry'
+    const claimKey = 'local\0wt-1\0claude\0session_id\0sess-hibernated-retry'
     expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
     await flushAsyncTicks(20)
     const connectCallsAfterFailure = transport.connect.mock.calls.length
@@ -10906,6 +10910,129 @@ describe('connectPanePty', () => {
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
   })
 
+  it('does not cold-resume a sleeping record owned by another execution host', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
+      sessionId
+        ? { id: 'fresh-pty', coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' } }
+        : 'fresh-pty'
+    )
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'codex',
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          executionHostId: 'runtime:other-host',
+          providerSession: { key: 'session_id', id: 'foreign-live-session' }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          executionHostId: 'runtime:other-host',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'other-host-session' },
+          prompt: '',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    } as StoreState
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+      }) as never
+    )
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringMatching(/other-host-session|foreign-live-session/)
+      })
+    )
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+  })
+
+  it('keeps another execution host sleeping record after a successful cold resume', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
+      sessionId
+        ? { id: 'fresh-pty', coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' } }
+        : 'fresh-pty'
+    )
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const otherPaneKey = makePaneKey('tab-other', LEAF_2)
+    const providerSession = { key: 'session_id' as const, id: 'shared-provider-session' }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          executionHostId: 'local',
+          agent: 'codex',
+          providerSession,
+          prompt: '',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        },
+        [otherPaneKey]: {
+          paneKey: otherPaneKey,
+          tabId: 'tab-other',
+          worktreeId: 'wt-1',
+          executionHostId: 'runtime:other-host',
+          agent: 'codex',
+          providerSession,
+          prompt: '',
+          state: 'working',
+          capturedAt: 2,
+          updatedAt: 2
+        }
+      }
+    } as StoreState
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+      }) as never
+    )
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(otherPaneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[otherPaneKey]).toBeDefined()
+  })
+
   it('marks the pane as freshly started when main declined an unverifiable resume', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
@@ -11108,6 +11235,219 @@ describe('connectPanePty', () => {
       expect.objectContaining({ command: expect.stringContaining('resume') })
     )
     expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('prefills current rules when cold-restoring a fallback-channel agent', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport('fresh-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks: ConnectCallbacks }) => {
+        capturedDataCallback.current = callbacks.onData ?? null
+        if (sessionId) {
+          return {
+            id: 'fresh-pty',
+            coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+          }
+        }
+        return 'fresh-pty'
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
+      settings: {
+        ...mockStoreState.settings,
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'current-rule',
+              label: 'Current rule',
+              content: 'Use the current repository graph first.',
+              enabled: true,
+              source: 'custom'
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'opencode',
+          providerSession: { key: 'session_id', id: 'opencode-session-1' },
+          prompt: 'finish the task',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    } as StoreState
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+      }) as never
+    )
+    await flushAsyncTicks(20)
+    capturedDataCallback.current?.('\x1b[?2004h\x1b[?25h')
+    await flushAsyncTicks()
+
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
+      expect.stringContaining('Use the current repository graph first.')
+    )
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
+      expect.stringContaining('## Agent session rules')
+    )
+  })
+
+  it('never arms a stale cold-restore draft (left by an aborted attempt) onto a later unrelated spawn', async () => {
+    // Regression for op5's review of 4027be5548 (ISSUE 3): applyColdRestoreAgentResumeStartup
+    // arms activeColdRestoreDraft BEFORE startFreshSpawn runs (see startFreshColdRestoreAgentResume).
+    // If startFreshSpawn then aborts early — e.g. its isDeleting guard — before ever reaching
+    // armActiveColdRestoreDraftObservationIfReady, the draft used to sit in activeColdRestoreDraft
+    // forever with readinessArmed still false. A LATER, totally unrelated startFreshSpawn call (a
+    // plain shell restart with no cold-restore override at all) reaches
+    // armActiveColdRestoreDraftObservationIfReady too — and used to arm that stale leftover draft
+    // onto its OWN brand-new transportStreamGeneration, so the aborted attempt's stale rules text
+    // got bracket-pasted into a shell that has nothing to do with it.
+    //
+    // This constructs exactly that: attempt 1's cold restore is aborted mid-flight by a worktree
+    // deletion race (isDeleting), leaving its draft (content "Attempt-one-only") unarmed and
+    // un-reset in the buggy code. Attempt 2 is a plain, non-cold-restore fresh spawn (its sleeping
+    // record's agent is not resumable, so buildColdRestoreAgentResumeStartup returns null and
+    // startFreshColdRestoreAgentResume degrades to a bare startFreshSpawn). The ready bytes are fed
+    // into attempt 2's OWN, freshly captured, CURRENT (never superseded) onData closure — so a pass
+    // here cannot be explained by the pre-existing per-connect isCurrent() gate (attempt 2's
+    // closure is never stale); it can only be explained by activeColdRestoreDraft correctly being
+    // gone/refused by the time attempt 2 tries to arm it.
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallbacks: ((data: string) => void)[] = []
+    let currentPtyId: string | null = null
+    const transport = createMockTransport(null)
+    transport.getPtyId = vi.fn(() => currentPtyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      const id = `pty-${capturedDataCallbacks.length}`
+      capturedDataCallbacks.push(callbacks.onData ?? (() => {}))
+      currentPtyId = id
+      return id
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      settings: {
+        ...mockStoreState.settings,
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'attempt-1-rule',
+              label: 'Attempt 1 rule',
+              content: 'Attempt-one-only rule text.',
+              enabled: true,
+              source: 'custom'
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      },
+      agentStatusByPaneKey: {}
+    } as StoreState
+
+    const deps = createDeps({ consumeSuppressedPtyExit: vi.fn(() => true) })
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      deps as never
+    ) as unknown as { noteVisibilityResume: () => void }
+    await flushAsyncTicks(20)
+
+    // Initial connect: a plain shell, nothing cold-restore related yet.
+    expect(capturedDataCallbacks.length).toBe(1)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+
+    // The shell hibernates: a resumable sleeping record (opencode, with attempt-1's
+    // distinct rules content resolved as its draftPrompt) arms the hibernation wake
+    // target on its suppressed exit.
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'opencode',
+      providerSession: { key: 'session_id', id: 'opencode-session-1' },
+      prompt: 'finish the task',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'worktree-sleep'
+    }
+    mockStoreState.suppressedPtyExitIds['pty-0'] = true
+    deps.isVisibleRef.current = false
+    onPtyExit?.('pty-0')
+    // Why: a real exit clears the transport's tracked ptyId; nothing ever replaces
+    // it below since attempt 1 aborts before transport.connect() is ever called.
+    currentPtyId = null
+
+    // The wake races a worktree-deletion: startFreshSpawn's isDeleting guard aborts
+    // attempt 1's respawn AFTER applyColdRestoreAgentResumeStartup already armed its
+    // draft (armActiveColdRestoreDraft), never reaching
+    // armActiveColdRestoreDraftObservationIfReady.
+    mockStoreState.deleteStateByWorktreeId = { 'wt-1': { isDeleting: true } }
+    deps.isVisibleRef.current = true
+    binding.noteVisibilityResume()
+    await flushAsyncTicks(20)
+
+    // Attempt 1 never reached transport.connect() at all — aborted before it, no
+    // new onData closure, and definitely no paste yet.
+    expect(capturedDataCallbacks.length).toBe(1)
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+
+    // Later: the deletion is no longer in the way, but the sleeping record's agent
+    // is no longer resumable — buildColdRestoreAgentResumeStartup now returns null,
+    // so this next wake degrades to a PLAIN startFreshSpawn with NO cold-restore
+    // override at all: exactly "the user does something unrelated — a plain shell
+    // restart" from op5's repro. A second suppressed exit (different ptyId, since
+    // handledExitPtyId already latched on 'pty-0') re-arms the wake target.
+    mockStoreState.deleteStateByWorktreeId = {}
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'not-a-resumable-agent' as never,
+      providerSession: { key: 'session_id', id: 'opencode-session-1' },
+      prompt: 'finish the task',
+      state: 'done',
+      capturedAt: 2,
+      updatedAt: 2,
+      origin: 'worktree-sleep'
+    }
+    mockStoreState.suppressedPtyExitIds['pty-0-b'] = true
+    deps.isVisibleRef.current = false
+    onPtyExit?.('pty-0-b')
+    deps.isVisibleRef.current = true
+    binding.noteVisibilityResume()
+    await flushAsyncTicks(20)
+
+    // Attempt 2 is a fresh, unrelated connect — its own onData closure is captured,
+    // and it is CURRENT (never superseded by anything).
+    expect(capturedDataCallbacks.length).toBe(2)
+
+    // Attempt 2's current onData closure must never receive attempt 1's stale draft
+    // content, even when fed the exact bracketed-paste-ready signal opencode's
+    // scanner is armed on.
+    capturedDataCallbacks[1]?.('\x1b[?2004h\x1b[?25h')
+    await flushAsyncTicks()
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
   })
 
   it('uses sleeping-record launch config for pane cold restore after settings change', async () => {
@@ -19113,6 +19453,7 @@ describe('connectPanePty', () => {
           paneKey,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
+          executionHostId: 'runtime:env-1',
           agent: 'codex',
           providerSession: { key: 'session_id', id: 'codex-session-1' },
           prompt: 'finish the task',

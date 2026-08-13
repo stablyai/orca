@@ -1,5 +1,11 @@
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 import type { TuiAgent } from './types'
 
 export const RESUMABLE_TUI_AGENTS = [
@@ -44,6 +50,7 @@ export type SleepingAgentSessionRecord = {
   paneKey: string
   tabId?: string
   worktreeId: string
+  executionHostId?: ExecutionHostId
   agent: ResumableTuiAgent
   providerSession: AgentProviderSessionMetadata
   prompt: string
@@ -69,6 +76,19 @@ export type SleepingAgentSessionRecord = {
    *  opened, so a mobile wake must not background-mount every such tab and
    *  respawn the whole workspace the user just slept (#11598). */
   restoreOnTabOpenOnly?: boolean
+}
+
+export function getSleepingAgentSessionExecutionHostId(
+  record: Pick<SleepingAgentSessionRecord, 'executionHostId' | 'connectionId'>
+): ExecutionHostId | null {
+  const explicitHost = parseExecutionHostId(record.executionHostId)
+  if (explicitHost) {
+    return explicitHost.id
+  }
+  if (typeof record.connectionId === 'string' && record.connectionId.trim()) {
+    return toSshExecutionHostId(record.connectionId.trim())
+  }
+  return record.connectionId === null ? LOCAL_EXECUTION_HOST_ID : null
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)

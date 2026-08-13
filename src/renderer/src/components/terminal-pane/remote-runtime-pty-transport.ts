@@ -20,12 +20,15 @@ import type {
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
 import {
+  AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY,
   TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
+import { normalizeAgentSessionRulesSettings } from '../../../../shared/agent-session-rules'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -371,6 +374,9 @@ export function createRemoteRuntimePtyTransport(
   // Why: reconnect retries must replay one host operation instead of creating
   // another fresh agent when the first response was lost.
   const agentCreateOperation = createAgentSessionCreateOperation()
+  const clientDefaultAgentSessionRules = normalizeAgentSessionRulesSettings(
+    useAppStore.getState().settings?.agentSessionRules
+  )
   let agentSessionCreateAuthority: LiveRuntimeEnvironmentAuthority | null = null
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
@@ -2043,10 +2049,16 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
-        const requiredAgentSessionCapabilities: readonly RuntimeCapability[] =
-          resumeProviderSessionToSend && launchAgentToSend === 'omp'
+        const hasAgentPrompt = Boolean(agentPrompt?.trim())
+        const hostOwnsAgentPrompt = hasAgentPrompt && agentPromptDelivery === 'auto-submit'
+        const promptDeliveryOwner = hostOwnsAgentPrompt ? 'host' : 'client'
+        const requiredAgentSessionCapabilities: readonly RuntimeCapability[] = [
+          AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY,
+          ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
             ? [AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY]
-            : []
+            : []),
+          ...(hasAgentPrompt ? [AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY] : [])
+        ]
         const revalidateAgentSessionReplay = async (
           timeoutMs: number,
           authority: LiveRuntimeEnvironmentAuthority
@@ -2095,9 +2107,17 @@ export function createRemoteRuntimePtyTransport(
                         ? { ompResumeFilePath: launchConfigToSend.ompResumeFilePath }
                         : {}),
                       ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
+                      ...(hasAgentPrompt
+                        ? {
+                            ...(hostOwnsAgentPrompt ? { prompt: agentPrompt } : {}),
+                            promptDelivery: 'draft' as const,
+                            promptDeliveryOwner
+                          }
+                        : {}),
                       ...(agentLaunchPreferences
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
+                      clientDefaultAgentSessionRules,
                       placement: { tabId, leafId },
                       presentation: 'background'
                     },
@@ -2111,14 +2131,16 @@ export function createRemoteRuntimePtyTransport(
                       {
                         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                         agent: launchAgentToSend!,
-                        ...(agentPrompt ? { prompt: agentPrompt } : {}),
+                        ...(hostOwnsAgentPrompt ? { prompt: agentPrompt } : {}),
                         ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {}),
+                        ...(hasAgentPrompt ? { promptDeliveryOwner } : {}),
                         ...(agentArgsOverride !== undefined
                           ? { agentArgs: agentArgsOverride }
                           : {}),
                         ...(agentLaunchPreferences
                           ? { launchPreferences: agentLaunchPreferences }
                           : {}),
+                        clientDefaultAgentSessionRules,
                         placement: { tabId, leafId },
                         presentation: 'background'
                       },

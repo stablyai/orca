@@ -7,6 +7,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-search-entries'
 import { getRepositoryGitHooksSearchEntries } from './repository-git-hooks-search-entries'
 import { getRepositoryGitWorktreeSearchEntries } from './repository-git-worktree-search-entries'
+import { getRepositoryAgentSessionRulesSearchEntries } from './repository-agent-session-rules-search-entries'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -187,6 +188,10 @@ export function getRepositoryPaneSearchEntries(
     },
     ...(isFolder
       ? []
-      : [...getRepositoryGitAuthorSearchEntries(repo), ...getRepositoryGitHooksSearchEntries(repo)])
+      : [
+          ...getRepositoryGitAuthorSearchEntries(repo),
+          ...getRepositoryGitHooksSearchEntries(repo)
+        ]),
+    ...getRepositoryAgentSessionRulesSearchEntries(repo)
   ]
 }

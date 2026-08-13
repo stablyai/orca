@@ -6,17 +6,21 @@ import {
   type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import {
-  clearEnvCommand,
-  commandSeparator,
+  appendSessionRulesConfigOverride,
+  appendSessionRulesFileCleanup,
+  appendSessionRulesFlag,
+  hasNativeSessionRulesInjection,
+  prependSessionRulesToPrompt,
   quoteStartupArg,
+  resolveSessionRulesDeliveryShell,
   resolveStartupShell,
+  sessionRulesTextRequiresPostReadyDelivery,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
-import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './types'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
@@ -55,9 +59,14 @@ export function buildAgentStartupPlan(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must be skipped for remote launches. */
   isRemote?: boolean
+  /** Path to a file of global session rules text, injected via config.sessionRulesFileFlag. */
+  agentSessionRulesFilePath?: string | null
+  /** Inline global session rules for the prompt-prepend fallback. */
+  agentSessionRulesText?: string | null
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
+  const rulesDeliveryShell = resolveSessionRulesDeliveryShell(args)
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
   const usesQuery = config.promptInjectionMode === 'hermes-query' && Boolean(trimmedPrompt)
@@ -80,14 +89,59 @@ export function buildAgentStartupPlan(args: {
     // session restores its own state and must retain only explicit user args.
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
-
-  if (!trimmedPrompt) {
-    if (!allowEmptyPromptLaunch) {
-      return null
-    }
+  if (!trimmedPrompt && !allowEmptyPromptLaunch) {
+    return null
+  }
+  const hasNativeRulesInjection = hasNativeSessionRulesInjection(
+    config,
+    args.agentSessionRulesFilePath,
+    args.agentSessionRulesText,
+    rulesDeliveryShell
+  )
+  // Why: cmd.exe can't reliably carry rules text inline via any path with no file alternative —
+  // native flag or prepended prompt alike — so this overrides the agent's own promptInjectionMode
+  // entirely and defers everything (rules + whatever prompt there is) to a paste-and-submit
+  // follow-up instead. A file-backed native flag is exempt (hasNativeRulesInjection already
+  // accounts for that), since only a short path needs quoting there, not the rules text itself.
+  if (
+    !hasNativeRulesInjection &&
+    sessionRulesTextRequiresPostReadyDelivery(args.agentSessionRulesText, rulesDeliveryShell)
+  ) {
     return {
       agent,
       launchCommand: baseCommand.command,
+      expectedProcess: config.expectedProcess,
+      followupPrompt: args.agentSessionRulesText?.trim()
+        ? prependSessionRulesToPrompt(trimmedPrompt, args.agentSessionRulesText)
+        : trimmedPrompt || null,
+      launchConfig,
+      ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+  const commandWithSessionRules = appendSessionRulesConfigOverride(
+    appendSessionRulesFlag(
+      baseCommand.command,
+      config,
+      args.agentSessionRulesFilePath,
+      hasNativeRulesInjection ? args.agentSessionRulesText : null,
+      rulesDeliveryShell
+    ),
+    config,
+    args.agentSessionRulesText,
+    rulesDeliveryShell
+  )
+  const withSessionRulesCleanup = (launchCommand: string): string =>
+    appendSessionRulesFileCleanup(
+      launchCommand,
+      hasNativeRulesInjection ? args.agentSessionRulesFilePath : null,
+      shell
+    )
+
+  if (!trimmedPrompt) {
+    return {
+      agent,
+      launchCommand: withSessionRulesCleanup(commandWithSessionRules),
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -96,13 +150,19 @@ export function buildAgentStartupPlan(args: {
     }
   }
 
-  const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
+  const effectivePrompt =
+    args.agentSessionRulesText?.trim() && !hasNativeRulesInjection
+      ? prependSessionRulesToPrompt(trimmedPrompt, args.agentSessionRulesText)
+      : trimmedPrompt
+  const quotedPrompt = quoteStartupArg(effectivePrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
     const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
     return {
       agent,
-      launchCommand: `${baseCommand.command}${promptSeparator} ${quotedPrompt}`,
+      launchCommand: withSessionRulesCleanup(
+        `${commandWithSessionRules}${promptSeparator} ${quotedPrompt}`
+      ),
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -115,7 +175,7 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-prompt') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
+      launchCommand: withSessionRulesCleanup(`${commandWithSessionRules} --prompt ${quotedPrompt}`),
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -126,9 +186,9 @@ export function buildAgentStartupPlan(args: {
 
   if (config.promptInjectionMode === 'hermes-query') {
     const queryPlan = planHermesStartupQuery({
-      baseCommand: baseCommand.command,
+      baseCommand: commandWithSessionRules,
       agentArgs: args.agentArgs,
-      prompt: trimmedPrompt,
+      prompt: effectivePrompt,
       agentEnv: args.agentEnv,
       platform,
       shell,
@@ -141,7 +201,7 @@ export function buildAgentStartupPlan(args: {
       agent,
       // Why: Hermes owns readiness and submission for `chat --query`; Orca
       // only bounds and quotes the native invocation before starting the TUI.
-      launchCommand: queryPlan.command,
+      launchCommand: withSessionRulesCleanup(queryPlan.command),
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -153,7 +213,9 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-prompt-interactive') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
+      launchCommand: withSessionRulesCleanup(
+        `${commandWithSessionRules} --prompt-interactive ${quotedPrompt}`
+      ),
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -165,7 +227,7 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-interactive') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
+      launchCommand: withSessionRulesCleanup(`${commandWithSessionRules} -i ${quotedPrompt}`),
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -176,9 +238,9 @@ export function buildAgentStartupPlan(args: {
 
   return {
     agent,
-    launchCommand: baseCommand.command,
+    launchCommand: withSessionRulesCleanup(commandWithSessionRules),
     expectedProcess: config.expectedProcess,
-    followupPrompt: trimmedPrompt,
+    followupPrompt: effectivePrompt,
     launchConfig,
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
@@ -198,6 +260,15 @@ export function buildAgentResumeStartupPlan(args: {
   sessionOptions?: Record<string, SessionOptionValue>
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
+  /** Why: resume has no initial prompt to prepend rules to via the generic text/file native-flag
+   * path, so the renderer wrapper applies session rules to the returned plan's draftPrompt itself
+   * instead when no unconditional mechanism (config.sessionRulesConfigOverride) covers this agent —
+   * see tui-agent-startup.ts's own resume wrapper. A config-override agent (e.g. Codex) still gets
+   * its rules embedded directly into launchCommand below, since that mechanism needs no prompt to
+   * attach to. agentSessionRulesFilePath is accepted for a uniform call shape but currently unused
+   * here — no agent combines a resume launch with a file-backed native flag yet. */
+  agentSessionRulesFilePath?: string | null
+  agentSessionRulesText?: string | null
 }): AgentStartupPlan | null {
   const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!argv) {
@@ -223,9 +294,15 @@ export function buildAgentResumeStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.command
   })
+  const commandWithSessionRules = appendSessionRulesConfigOverride(
+    baseCommand.command,
+    config,
+    args.agentSessionRulesText,
+    shell
+  )
   return {
     agent: args.agent,
-    launchCommand: buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell),
+    launchCommand: buildAgentResumeLaunchCommand(args.agent, commandWithSessionRules, argv, shell),
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
     launchConfig,
@@ -233,90 +310,17 @@ export function buildAgentResumeStartupPlan(args: {
   }
 }
 
-export type AgentDraftLaunchPlan = {
-  agent: TuiAgent
-  launchCommand: string
-  expectedProcess: string
-  launchConfig: SleepingAgentLaunchConfig
-  env?: Record<string, string>
-  startupCommandDelivery?: StartupCommandDelivery
-  sessionOptions?: Record<string, SessionOptionValue>
-}
-
-export function buildAgentDraftLaunchPlan(args: {
-  agent: TuiAgent
-  draft: string
-  cmdOverrides: Partial<Record<TuiAgent, string>>
-  platform: NodeJS.Platform
-  shell?: AgentStartupShell
-  agentArgs?: string | null
-  agentEnv?: Record<string, string> | null
-  sessionOptions?: Record<string, SessionOptionValue>
-  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
-  isRemote?: boolean
-}): AgentDraftLaunchPlan | null {
-  const { agent, draft, cmdOverrides, platform } = args
-  const shell = resolveStartupShell(platform, args.shell)
-  const config = TUI_AGENT_CONFIG[agent]
-  const trimmed = draft.trim()
-  if (!trimmed) {
-    return null
-  }
-  const baseCommand = resolveAgentLaunchCommand({
-    agent,
-    cmdOverrides,
-    platform,
-    shell,
-    agentArgs: args.agentArgs,
-    sessionOptions: args.sessionOptions,
-    isRemote: args.isRemote
-  })
-  if (!baseCommand.ok) {
-    return null
-  }
-  const launchConfig = buildSleepingAgentLaunchConfig({
-    ...args,
-    // Why: see the new-session path above — resume must not replay picker flags.
-    agentCommand: baseCommand.commandWithoutSessionOptions
-  })
-  let plan: AgentDraftLaunchPlan | null = null
-  if (config.draftPromptFlag) {
-    const quoted = quoteStartupArg(trimmed, shell)
-    plan = {
-      agent,
-      launchCommand: `${baseCommand.command} ${config.draftPromptFlag} ${quoted}`,
-      expectedProcess: config.expectedProcess,
-      launchConfig,
-      ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      // Why: native draft flags carry user text on argv and must survive rc-file startup.
-      ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
-  } else if (config.draftPromptEnvVar) {
-    const clearVar = clearEnvCommand(config.draftPromptEnvVar, shell)
-    plan = {
-      agent,
-      launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
-      expectedProcess: config.expectedProcess,
-      launchConfig,
-      ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
-    }
-  }
-  if (
-    !plan ||
-    !inlineAgentDraftFitsPlatform({ command: plan.launchCommand, env: plan.env, platform })
-  ) {
-    return null
-  }
-  return plan
-}
-
 export { isShellProcess }
 export {
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix,
   quoteStartupArg,
+  resolveSessionRulesDeliveryShell,
   resolveStartupShell
 } from './tui-agent-startup-shell'
+// Why: split out to keep this file under the repo's max-lines cap; also the only file
+// with a real session-rules-aware buildAgentDraftLaunchPlan (this file's own copy was
+// a stale duplicate missing the Windows-remote cleanup guard — see git history).
+export type { AgentDraftLaunchPlan } from './tui-agent-draft-launch'
+export { buildAgentDraftLaunchPlan } from './tui-agent-draft-launch'
 export type { AgentCliArgsPlan, AgentStartupShell } from './tui-agent-startup-shell'

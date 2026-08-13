@@ -149,3 +149,6 @@ tests/tools/benchmarks/results/terminal-pipeline-*.json
 
 # Old release trees the cross-version wire harness extracts on demand
 tests/e2e/.cross-version-checkouts/
+
+# Orca context-bridge runtime state (machine-local session/launch metadata, never source)
+/.orca/

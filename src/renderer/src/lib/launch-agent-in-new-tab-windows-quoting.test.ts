@@ -14,13 +14,17 @@ const store = {
     agentCmdOverrides: {},
     agentDefaultArgs: {} as Record<string, string>,
     agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    activeRuntimeEnvironmentId: null as string | null
+    activeRuntimeEnvironmentId: null as string | null,
+    // Why: unrelated to this suite's shell-quoting assertions; disabled so no
+    // rule text leaks into the exact launchCommand strings under test.
+    agentSessionRules: { enabled: false, rules: [] as unknown[] }
   } as {
     agentCmdOverrides: Record<string, string>
     agentDefaultArgs: Record<string, string>
     agentDefaultEnv: Record<string, Record<string, string>>
     activeRuntimeEnvironmentId: string | null
     terminalWindowsShell?: string
+    agentSessionRules?: { enabled: boolean; rules: unknown[] }
   },
   projects: [
     {
@@ -115,7 +119,8 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: null
+      activeRuntimeEnvironmentId: null,
+      agentSessionRules: { enabled: false, rules: [] }
     }
     store.projects = [
       {
@@ -150,7 +155,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
   it('uses the explicit startup shell platform when building draft launch commands', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: "review Bob's change",
@@ -170,7 +175,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       launchPlatform: 'win32'
@@ -188,7 +193,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     store.settings.terminalWindowsShell = 'powershell.exe'
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       launchPlatform: 'win32'
@@ -206,7 +211,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'fix the spinner',
@@ -227,7 +232,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     store.settings.terminalWindowsShell = 'git-bash'
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: "review Bob's change",
@@ -248,7 +253,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: 'C:\\remote\\repo' }]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1'
     })
@@ -283,7 +288,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: "review Bob's change",
@@ -323,7 +328,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    await launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     const queued = mockQueueTabStartupCommand.mock.calls.at(-1)?.[1] as { command: string }
     expect(queued.command).toContain("'don'\\''t'")

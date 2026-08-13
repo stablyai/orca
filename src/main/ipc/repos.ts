@@ -32,6 +32,7 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import { normalizeRepoSourceControlAiOverrides } from '../../shared/source-control-ai'
+import { normalizeRepoAgentSessionRuleOverrides } from '../../shared/agent-session-rules'
 import {
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
@@ -2132,6 +2133,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           >
         > & {
           sourceControlAi?: Repo['sourceControlAi'] | null
+          agentSessionRules?: Repo['agentSessionRules'] | null
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
@@ -2256,6 +2258,19 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           delete updates.sourceControlAi
         } else {
           updates.sourceControlAi = normalizedSourceControlAi
+        }
+      }
+      // Why: null is the transport sentinel for clearing agent session rule overrides.
+      if ('agentSessionRules' in updates && updates.agentSessionRules === null) {
+        updates.agentSessionRules = undefined
+      } else if ('agentSessionRules' in updates && updates.agentSessionRules !== undefined) {
+        const normalizedAgentSessionRules = normalizeRepoAgentSessionRuleOverrides(
+          updates.agentSessionRules
+        )
+        if (normalizedAgentSessionRules === undefined) {
+          delete updates.agentSessionRules
+        } else {
+          updates.agentSessionRules = normalizedAgentSessionRules
         }
       }
       const hostId = args.hostId ? normalizeExecutionHostId(args.hostId) : null

@@ -3,6 +3,7 @@ import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-deliver
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
   buildAgentDraftLaunchPlan,
+  buildAgentSessionRulesPrompt,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
@@ -18,6 +19,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -40,6 +42,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
+  repoId?: string | null
+  connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
 }): {
   startupPlan: AgentStartupPlan | null
   draftLaunchedNatively: boolean
@@ -72,7 +77,10 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           isRemote: args.isRemote,
           agentArgs: effectiveAgentArgs,
           agentEnv: effectiveAgentEnv,
-          sessionOptions
+          sessionOptions,
+          repoId: args.repoId,
+          connectionId: args.connectionId,
+          executionHostId: args.executionHostId
         })
 
   if (draftLaunchPlan) {
@@ -105,10 +113,19 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
     sessionOptions,
-    allowEmptyPromptLaunch: true
+    allowEmptyPromptLaunch: true,
+    repoId: args.repoId,
+    connectionId: args.connectionId,
+    executionHostId: args.executionHostId
   })
   if (startupPlan && args.promptDelivery === 'draft') {
-    startupPlan.draftPrompt = args.draftContent
+    startupPlan.draftPrompt = buildAgentSessionRulesPrompt({
+      agent: args.agent,
+      prompt: args.draftContent,
+      repoId: args.repoId,
+      connectionId: args.connectionId,
+      executionHostId: args.executionHostId
+    })
   }
   return {
     startupPlan,

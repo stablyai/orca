@@ -579,7 +579,7 @@ export class SshConnection {
   async writeBuffer(
     remotePath: string,
     contents: Buffer,
-    options?: SshRemoteFileOptions & { append?: boolean; exclusive?: boolean }
+    options?: SshRemoteFileOptions & { append?: boolean; exclusive?: boolean; mode?: number }
   ): Promise<void> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
@@ -596,6 +596,7 @@ export class SshConnection {
       hostPlatform: options?.hostPlatform,
       append: options?.append,
       exclusive: options?.exclusive,
+      mode: options?.mode,
       ...this.getSystemSshBuildArgsOptions()
     })
   }

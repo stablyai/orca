@@ -125,6 +125,7 @@ export function launchAgentInWebHostTab(args: {
     return createWebRuntimeAgentSessionTerminal({
       ...launch,
       agent,
+      promptDeliveryOwner: 'client',
       promptAfterReady: pastePromptAfterReady,
       submitPrompt: submitPastedPrompt,
       forcePromptPaste: promptDelivery === 'submit-after-ready'

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
 import { getProviderSessionClaimKey } from '../../lib/sleeping-agent-pane-ownership'
-import { createTestStore, makeTab } from './store-test-helpers'
+import { createTestStore, makeTab, makeWorktree, TEST_REPO } from './store-test-helpers'
 
 const PI_COMPATIBLE_CASES = [
   { agent: 'pi' as const, label: 'Pi' },
@@ -151,6 +151,23 @@ describe('recordAgentProviderSession', () => {
     expect(getProviderSessionClaimKey(makeRecord('claude', '/tmp/first.jsonl'))).toBe(
       getProviderSessionClaimKey(makeRecord('claude', '/tmp/second.jsonl'))
     )
+    expect(
+      getProviderSessionClaimKey({
+        ...makeRecord('claude', '/tmp/first.jsonl'),
+        executionHostId: 'runtime:runtime-a'
+      })
+    ).not.toBe(
+      getProviderSessionClaimKey({
+        ...makeRecord('claude', '/tmp/first.jsonl'),
+        executionHostId: 'runtime:runtime-b'
+      })
+    )
+    expect(getProviderSessionClaimKey(makeRecord('claude', '/tmp/first.jsonl'))).toBe(
+      getProviderSessionClaimKey({
+        ...makeRecord('claude', '/tmp/first.jsonl'),
+        executionHostId: 'local'
+      })
+    )
   })
 
   it('keeps Pi session identity durable without fabricating a visible turn', () => {
@@ -187,16 +204,19 @@ describe('recordAgentProviderSession', () => {
         { tabId: 'tab-1', worktreeId: 'wt-1' }
       )
 
-    store
-      .getState()
-      .recordAgentProviderSession(
-        'tab-1:leaf-1',
-        'pi',
-        providerSession,
-        { updatedAt: 20 },
-        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: null },
-        { launchToken: 'pi-launch-1' }
-      )
+    store.getState().recordAgentProviderSession(
+      'tab-1:leaf-1',
+      'pi',
+      providerSession,
+      { updatedAt: 20 },
+      {
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: null,
+        executionHostId: 'runtime:runtime-a'
+      },
+      { launchToken: 'pi-launch-1' }
+    )
 
     expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeUndefined()
     expect(store.getState().retainedAgentsByPaneKey['tab-1:leaf-1']).toBeUndefined()
@@ -207,6 +227,7 @@ describe('recordAgentProviderSession', () => {
       agent: 'pi',
       providerSession,
       launchConfig,
+      executionHostId: 'runtime:runtime-a',
       origin: 'live'
     })
 
@@ -329,6 +350,22 @@ describe('recordAgentProviderSession', () => {
     async ({ agent, label }) => {
       const store = createTestStore()
       store.setState({
+        repos: [
+          {
+            ...TEST_REPO,
+            connectionId: 'ssh-connection-1',
+            executionHostId: 'ssh:ssh-connection-1'
+          }
+        ],
+        worktreesByRepo: {
+          [TEST_REPO.id]: [
+            makeWorktree({
+              id: 'wt-1',
+              repoId: TEST_REPO.id,
+              hostId: 'ssh:ssh-connection-1'
+            })
+          ]
+        },
         tabsByWorktree: {
           'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
         }

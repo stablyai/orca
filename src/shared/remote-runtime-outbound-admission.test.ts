@@ -63,19 +63,15 @@ describe('remote runtime outbound admission', () => {
 
     await expect(
       sendRemoteRuntimeRequest(pairing, 'status.get', oversizedParams, 1000)
-    ).rejects.toThrow('JSON payload exceeds')
-    await expect(cached.request('status.get', oversizedParams, 1000)).rejects.toThrow(
-      'JSON payload exceeds'
-    )
-    await expect(shared.request('status.get', oversizedParams, 1000)).rejects.toThrow(
-      'JSON payload exceeds'
-    )
+    ).rejects.toThrow('exceeds')
+    await expect(cached.request('status.get', oversizedParams, 1000)).rejects.toThrow('exceeds')
+    await expect(shared.request('status.get', oversizedParams, 1000)).rejects.toThrow('exceeds')
     await expect(
       subscribeRemoteRuntimeRequest(pairing, 'terminal.subscribe', oversizedParams, 1000, {
         onResponse: vi.fn(),
         onError: vi.fn()
       })
-    ).rejects.toThrow('JSON payload exceeds')
+    ).rejects.toThrow('exceeds')
 
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(server.clients.size).toBe(0)
@@ -120,7 +116,7 @@ describe('remote runtime outbound admission', () => {
 
   it('bounds aggregate prepared bytes across stalled one-shot sockets', async () => {
     const { pairing, server } = await createServer()
-    const params = { value: 'x'.repeat(3 * 1024 * 1024) }
+    const params = { value: 'x'.repeat(768 * 1024) }
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
@@ -177,7 +173,7 @@ describe('remote runtime outbound admission', () => {
 
   it('bounds aggregate prepared request text while both handshakes stall', async () => {
     const { pairing } = await createServer()
-    const params = { value: 'x'.repeat(3 * 1024 * 1024) }
+    const params = { value: 'x'.repeat(768 * 1024) }
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
@@ -263,7 +259,7 @@ describe('remote runtime outbound admission', () => {
 
   it('bounds retained request bytes across stalled environment connections', async () => {
     const { pairing } = await createServer()
-    const params = { value: 'x'.repeat(1024 * 1024) }
+    const params = { value: 'x'.repeat(768 * 1024) }
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',

@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events'
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import fs, { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, win32 } from 'node:path'
 import { ipcMain } from 'electron'
@@ -1358,7 +1358,12 @@ const store = {
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'none',
-    branchPrefixCustom: ''
+    branchPrefixCustom: '',
+    agentSessionRules: {
+      enabled: false,
+      rules: [],
+      seenBuiltinRuleIds: ['builtin-graphify']
+    }
   }),
   getProjects: () => []
 }
@@ -13333,6 +13338,178 @@ describe('OrcaRuntimeService', () => {
     expect(spawn.mock.calls[0]?.[0]?.command).not.toContain('--host-default')
   })
 
+  it('merges client default rules with the host repository override for structured launches', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-structured-draft' })
+    const repo = {
+      ...store.getRepos()[0]!,
+      agentSessionRules: {
+        extraRules: [
+          {
+            id: 'structured-repo-rule',
+            label: 'Structured repo rule',
+            content: 'Apply the execution host repository override.',
+            enabled: true,
+            source: 'custom' as const
+          }
+        ]
+      }
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepo: (id: string) => (id === repo.id ? repo : undefined),
+      getRepos: () => [repo],
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'structured-host-rule',
+              label: 'Structured host rule',
+              content: 'Query the execution host graph first.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const draftPaste = vi
+      .spyOn(
+        runtime as unknown as {
+          pasteStartupDraftWhenReady: (
+            handle: string,
+            draft: { agent: string; content: string }
+          ) => void
+        },
+        'pasteStartupDraftWhenReady'
+      )
+      .mockImplementation(() => undefined)
+
+    await runtime.createAgentSession(
+      {
+        clientOperationId: `${Date.now()}-${'cd'.repeat(16)}`,
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        agent: 'opencode',
+        clientDefaultAgentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'structured-client-rule',
+              label: 'Structured client rule',
+              content: 'Apply the client default graph policy.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      },
+      { clientId: 'renderer-structured-draft', clientKind: 'runtime' }
+    )
+
+    expect(draftPaste).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        agent: 'opencode',
+        content: expect.stringContaining('Apply the client default graph policy.')
+      })
+    )
+    const emptyPromptDraft = draftPaste.mock.calls[0]?.[1]?.content ?? ''
+    expect(emptyPromptDraft).toContain('Apply the execution host repository override.')
+    expect(emptyPromptDraft).not.toContain('Query the execution host graph first.')
+
+    draftPaste.mockClear()
+    await runtime.createAgentSession(
+      {
+        clientOperationId: `${Date.now()}-${'ef'.repeat(16)}`,
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        agent: 'opencode',
+        prompt: 'Keep this request in the composer',
+        promptDelivery: 'draft',
+        clientDefaultAgentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'structured-client-rule',
+              label: 'Structured client rule',
+              content: 'Apply the client default graph policy.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      },
+      { clientId: 'renderer-structured-draft', clientKind: 'runtime' }
+    )
+
+    const composedDraft = draftPaste.mock.calls[0]?.[1]?.content ?? ''
+    expect(composedDraft).toContain('Apply the client default graph policy.')
+    expect(composedDraft).toContain('Apply the execution host repository override.')
+    expect(composedDraft).not.toContain('Query the execution host graph first.')
+    expect(composedDraft).toContain('Keep this request in the composer')
+
+    draftPaste.mockClear()
+    await runtime.createAgentSession(
+      {
+        clientOperationId: `${Date.now()}-${'fa'.repeat(16)}`,
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        agent: 'opencode',
+        promptDelivery: 'draft',
+        promptDeliveryOwner: 'client',
+        clientDefaultAgentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'structured-client-rule',
+              label: 'Structured client rule',
+              content: 'Apply the client default graph policy.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      },
+      { clientId: 'renderer-client-owned-draft', clientKind: 'runtime' }
+    )
+
+    expect(draftPaste).not.toHaveBeenCalled()
+
+    await runtime.ensureAgentSession({
+      kind: 'explicit',
+      worktree: `id:${TEST_WORKTREE_ID}`,
+      agent: 'opencode',
+      providerSession: { key: 'session_id', id: 'client-owned-resume-draft' },
+      promptDelivery: 'draft',
+      promptDeliveryOwner: 'client',
+      clientDefaultAgentSessionRules: {
+        enabled: true,
+        rules: [
+          {
+            id: 'structured-client-rule',
+            label: 'Structured client rule',
+            content: 'Apply the client default graph policy.',
+            enabled: true,
+            source: 'custom' as const
+          }
+        ],
+        seenBuiltinRuleIds: ['builtin-graphify']
+      }
+    })
+
+    expect(draftPaste).not.toHaveBeenCalled()
+  })
+
   it('applies Settings agent defaults to bare agent command terminal creates', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtimeStore = {
@@ -13439,6 +13616,63 @@ describe('OrcaRuntimeService', () => {
     // Why: assert the cmd.exe double quoting too — a platform-insensitive prefix
     // match would pass on any OS and prove nothing about the reported platform.
     expect(spawnCall?.command).toBe('cursor-agent "--force"')
+  })
+
+  it('prefills current rules for a bare fallback-channel startupAgent launch', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'current-rule',
+              label: 'Current rule',
+              content: 'Use the current repository graph first.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const draftPaste = vi
+      .spyOn(
+        runtime as unknown as {
+          pasteStartupDraftWhenReady: (
+            handle: string,
+            draft: { agent: string; content: string }
+          ) => void
+        },
+        'pasteStartupDraftWhenReady'
+      )
+      .mockImplementation(() => undefined)
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'opencode' })
+
+    expect(draftPaste).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        agent: 'opencode',
+        content: expect.stringContaining('Use the current repository graph first.')
+      })
+    )
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.not.stringContaining('Use the current repository graph')
+      })
+    )
   })
 
   // Why: claude-agent-teams is the only agent whose launcher name varies by
@@ -13631,7 +13865,8 @@ describe('OrcaRuntimeService', () => {
         terminalWindowsShell: 'cmd.exe',
         agentCmdOverrides: {},
         agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
-        agentDefaultEnv: {}
+        agentDefaultEnv: {},
+        agentSessionRules: undefined
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore)
@@ -13648,7 +13883,209 @@ describe('OrcaRuntimeService', () => {
     })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
-    expect(spawnCall?.command).toBe('claude "--dangerously-skip-permissions"')
+    // Why: the default graphify session rule is on by default, so claude also gets a
+    // cmd.exe-quoted --append-system-prompt-file flag (see agent-session-rules.ts).
+    expect(spawnCall?.command).toMatch(
+      /^claude "--dangerously-skip-permissions" --append-system-prompt-file "[^"]+"/
+    )
+    expect(spawnCall?.command).toContain(' & del /f /q ')
+    const rulesPaths = spawnCall?.command?.match(/orca-agent-session-rules-[^"]+\.md/g) ?? []
+    expect(rulesPaths).toHaveLength(2)
+    expect(new Set(rulesPaths).size).toBe(1)
+  })
+
+  it('injects session rules into bare Codex terminal creates', async () => {
+    setPlatform('linux')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-codex-rules' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'custom-rule',
+              label: 'Custom rule',
+              content: 'Always run tests.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+    expect(spawnCall?.command).toContain('developer_instructions=')
+    expect(spawnCall?.command).toContain('Always run tests.')
+  })
+
+  it('applies a repo override that disables a global rule for Codex terminal creates', async () => {
+    setPlatform('linux')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-codex-repo-disabled-rule' })
+    const repoWithOverride = {
+      ...store.getRepos()[0],
+      agentSessionRules: { disabledRuleIds: ['custom-rule'] }
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [repoWithOverride],
+      getRepo: (id: string) => (id === repoWithOverride.id ? repoWithOverride : undefined),
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'custom-rule',
+              label: 'Custom rule',
+              content: 'Always run tests.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+    expect(spawnCall?.command).not.toContain('developer_instructions=')
+  })
+
+  it('applies a repo override that turns off session rules entirely for Codex terminal creates', async () => {
+    setPlatform('linux')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-codex-repo-disabled' })
+    const repoWithOverride = {
+      ...store.getRepos()[0],
+      agentSessionRules: { enabled: false }
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [repoWithOverride],
+      getRepo: (id: string) => (id === repoWithOverride.id ? repoWithOverride : undefined),
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'custom-rule',
+              label: 'Custom rule',
+              content: 'Always run tests.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+    expect(spawnCall?.command).not.toContain('developer_instructions=')
+  })
+
+  it('applies a repo-only extra rule to Codex terminal creates', async () => {
+    setPlatform('linux')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-codex-repo-extra-rule' })
+    const repoWithOverride = {
+      ...store.getRepos()[0],
+      agentSessionRules: {
+        extraRules: [
+          {
+            id: 'repo-only-rule',
+            label: 'Repo-only rule',
+            content: 'Use the repo-local lint config.',
+            enabled: true,
+            source: 'custom' as const
+          }
+        ]
+      }
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [repoWithOverride],
+      getRepo: (id: string) => (id === repoWithOverride.id ? repoWithOverride : undefined),
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentSessionRules: {
+          enabled: true,
+          rules: [],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+    expect(spawnCall?.command).toContain('developer_instructions=')
+    expect(spawnCall?.command).toContain('Use the repo-local lint config.')
   })
 
   it('does not use the local Windows shell setting for remote Windows bare agent creates', async () => {
@@ -32324,6 +32761,126 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('resolves colliding repo ids against the worktree execution host', async () => {
+    const localRepo = store.getRepos()[0]!
+    const remoteRepo = {
+      ...localRepo,
+      path: '/remote/repo',
+      connectionId: 'ssh-1',
+      agentSessionRules: {
+        extraRules: [
+          {
+            id: 'remote-rule',
+            label: 'Remote only',
+            content: 'Use the remote graph.',
+            enabled: true,
+            source: 'custom' as const
+          }
+        ]
+      }
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepo: () => localRepo,
+      getRepos: () => [localRepo, remoteRepo]
+    } as never)
+    const runtimeAccess = runtime as unknown as {
+      resolveWorktreeSelector: (selector: string) => Promise<unknown>
+      resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<{
+        connectionId: string | null
+        repo: { path: string; agentSessionRules?: unknown } | null
+      }>
+    }
+    vi.spyOn(runtimeAccess, 'resolveWorktreeSelector').mockResolvedValue({
+      id: `${TEST_REPO_ID}::/remote/worktree`,
+      repoId: TEST_REPO_ID,
+      hostId: 'ssh:ssh-1',
+      path: '/remote/worktree'
+    })
+
+    const scope = await runtimeAccess.resolveTerminalWorkspaceLaunchScope(
+      `id:${TEST_REPO_ID}::/remote/worktree`
+    )
+
+    expect(scope.connectionId).toBe('ssh-1')
+    expect(scope.repo).toMatchObject({
+      path: '/remote/repo',
+      agentSessionRules: remoteRepo.agentSessionRules
+    })
+  })
+
+  it('treats legacy worktrees without a host id as local when repo ids collide', async () => {
+    const localRepo = store.getRepos()[0]!
+    const remoteRepo = {
+      ...localRepo,
+      path: '/remote/repo',
+      connectionId: 'ssh-1'
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepo: () => remoteRepo,
+      getRepos: () => [remoteRepo, localRepo]
+    } as never)
+    const runtimeAccess = runtime as unknown as {
+      resolveWorktreeSelector: (selector: string) => Promise<unknown>
+      resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<{
+        connectionId: string | null
+        repo: { path: string } | null
+      }>
+    }
+    vi.spyOn(runtimeAccess, 'resolveWorktreeSelector').mockResolvedValue({
+      id: TEST_WORKTREE_ID,
+      repoId: TEST_REPO_ID,
+      path: TEST_WORKTREE_PATH
+    })
+
+    const scope = await runtimeAccess.resolveTerminalWorkspaceLaunchScope(`id:${TEST_WORKTREE_ID}`)
+
+    expect(scope.connectionId).toBeNull()
+    expect(scope.repo?.path).toBe(localRepo.path)
+  })
+
+  it('fails closed when multiple repositories claim the same worktree owner key', async () => {
+    const localRepo = store.getRepos()[0]!
+    const duplicateRepo = { ...localRepo, path: '/duplicate/local/repo' }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => [localRepo, duplicateRepo]
+    } as never)
+    const runtimeAccess = runtime as unknown as {
+      resolveWorktreeSelector: (selector: string) => Promise<unknown>
+      resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
+    }
+    vi.spyOn(runtimeAccess, 'resolveWorktreeSelector').mockResolvedValue({
+      id: TEST_WORKTREE_ID,
+      repoId: TEST_REPO_ID,
+      path: TEST_WORKTREE_PATH
+    })
+
+    await expect(
+      runtimeAccess.resolveTerminalWorkspaceLaunchScope(`id:${TEST_WORKTREE_ID}`)
+    ).rejects.toThrow('selector_not_found')
+  })
+
+  it('fails closed when a worktree host has no matching repo owner', async () => {
+    const localRepo = store.getRepos()[0]!
+    const runtime = new OrcaRuntimeService({ ...store, getRepos: () => [localRepo] } as never)
+    const runtimeAccess = runtime as unknown as {
+      resolveWorktreeSelector: (selector: string) => Promise<unknown>
+      resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
+    }
+    vi.spyOn(runtimeAccess, 'resolveWorktreeSelector').mockResolvedValue({
+      id: 'remote-worktree',
+      repoId: localRepo.id,
+      hostId: 'ssh:ssh-1',
+      path: '/remote/worktree'
+    })
+
+    await expect(
+      runtimeAccess.resolveTerminalWorkspaceLaunchScope(TEST_WORKTREE_ID)
+    ).rejects.toThrow('selector_not_found')
+  })
+
   it('injects mobile quick-command prompts into the host-built agent startup command', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-prompt' })
     const runtime = new OrcaRuntimeService({
@@ -32355,6 +32912,146 @@ describe('OrcaRuntimeService', () => {
         cwd: TEST_WORKTREE_PATH
       })
     )
+  })
+
+  it('rebuilds legacy-compatible launches from client defaults and host repository rules', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-host-rules' })
+    const clientDefaultAgentSessionRules = {
+      enabled: true,
+      rules: [
+        {
+          id: 'current-client-rule',
+          label: 'Current client rule',
+          content: 'Use the client graph policy.',
+          enabled: true,
+          source: 'custom' as const
+        }
+      ],
+      seenBuiltinRuleIds: ['builtin-graphify']
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: { codex: 'codex' },
+        agentDefaultArgs: {},
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'current-host-rule',
+              label: 'Current host rule',
+              content: 'Use the execution host graph.',
+              enabled: true,
+              source: 'custom' as const
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      command: "codex -c developer_instructions='stale client rule' 'stale prompt'",
+      launchAgent: 'codex',
+      launchConfig: { agentCommand: 'codex', agentArgs: '' },
+      hostAgentLaunch: {
+        kind: 'fresh',
+        agent: 'codex',
+        prompt: 'Review with current rules',
+        promptDelivery: 'auto-submit',
+        clientDefaultAgentSessionRules
+      }
+    } as never)
+
+    const command = (spawn.mock.calls[0]?.[0] as { command?: string } | undefined)?.command ?? ''
+    expect(command).toContain('Use the client graph policy.')
+    expect(command).not.toContain('Use the execution host graph.')
+    expect(command).toContain('Review with current rules')
+    expect(command).not.toContain('stale client rule')
+    expect(command).not.toContain('stale prompt')
+
+    spawn.mockClear()
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      command: "codex -c developer_instructions='stale resume rule' resume stale-session",
+      launchAgent: 'codex',
+      launchConfig: { agentCommand: 'codex', agentArgs: '' },
+      hostAgentLaunch: {
+        kind: 'resume',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'session-host-1' },
+        clientDefaultAgentSessionRules
+      }
+    } as never)
+
+    const resumeCommand =
+      (spawn.mock.calls[0]?.[0] as { command?: string } | undefined)?.command ?? ''
+    expect(resumeCommand).toContain('Use the client graph policy.')
+    expect(resumeCommand).not.toContain('Use the execution host graph.')
+    expect(resumeCommand).toContain('session-host-1')
+    expect(resumeCommand).not.toContain('stale resume rule')
+    expect(resumeCommand).not.toContain('stale-session')
+
+    const draftPaste = vi
+      .spyOn(
+        runtime as unknown as {
+          pasteStartupDraftWhenReady: (
+            handle: string,
+            draft: { agent: string; content: string }
+          ) => void
+        },
+        'pasteStartupDraftWhenReady'
+      )
+      .mockImplementation(() => undefined)
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      command: "opencode --prompt 'stale draft'",
+      launchAgent: 'opencode',
+      launchConfig: { agentCommand: 'opencode', agentArgs: '' },
+      hostAgentLaunch: {
+        kind: 'fresh',
+        agent: 'opencode',
+        prompt: 'Review without submitting',
+        promptDelivery: 'draft',
+        clientDefaultAgentSessionRules
+      }
+    } as never)
+
+    expect(draftPaste).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        agent: 'opencode',
+        content: expect.stringContaining('Use the client graph policy.')
+      })
+    )
+    expect(draftPaste.mock.calls[0]?.[1]?.content).toContain('Review without submitting')
+
+    draftPaste.mockClear()
+    spawn.mockClear()
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      command: "opencode --prompt 'client-owned stale draft'",
+      agentPrompt: 'client-owned stale draft',
+      launchAgent: 'opencode',
+      hostAgentLaunch: {
+        kind: 'fresh',
+        agent: 'opencode',
+        promptDelivery: 'draft',
+        promptDeliveryOwner: 'client',
+        clientDefaultAgentSessionRules
+      }
+    } as never)
+
+    const clientOwnedCommand =
+      (spawn.mock.calls[0]?.[0] as { command?: string } | undefined)?.command ?? ''
+    expect(clientOwnedCommand).not.toContain('client-owned stale draft')
+    expect(draftPaste).not.toHaveBeenCalled()
   })
 
   it('rejects startup prompts for agents that require post-ready stdin', async () => {
@@ -32427,6 +33124,67 @@ describe('OrcaRuntimeService', () => {
           worktreeId: TEST_WORKTREE_ID
         })
       )
+    })
+  })
+
+  it('writes Claude rules through WSL UNC and launches with the Linux path', async () => {
+    await withPlatform('win32', async () => {
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getProjects: () => [
+          {
+            id: 'project-1',
+            displayName: 'repo',
+            badgeColor: 'blue',
+            sourceRepoIds: [TEST_REPO_ID],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {},
+          agentDefaultArgs: {},
+          agentDefaultEnv: {},
+          agentSessionRules: undefined,
+          localWindowsRuntimeDefault: { kind: 'windows-host' }
+        })
+      } as never)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+      // Why: the distro's filesystem isn't reachable from this non-Windows test host,
+      // so the UNC write is stubbed instead of hitting the real (backslash-named) path.
+      const writeFileSpy = vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined)
+      try {
+        await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+          agent: 'claude'
+        })
+
+        expect(writeFileSpy).toHaveBeenCalledWith(
+          expect.stringMatching(
+            /^\\\\wsl\.localhost\\Ubuntu\\tmp\\orca-agent-session-rules-.*\.md$/
+          ),
+          expect.any(String),
+          { encoding: 'utf-8', flag: 'wx', mode: 0o600 }
+        )
+        const command = (spawn.mock.calls[0]?.[0] as { command?: string } | undefined)?.command
+        expect(command).toMatch(
+          /--append-system-prompt-file '\/tmp\/orca-agent-session-rules-.*\.md'/
+        )
+        expect(command).not.toContain('wsl.localhost')
+        expect(command).not.toContain('--append-system-prompt ')
+      } finally {
+        writeFileSpy.mockRestore()
+      }
     })
   })
 
@@ -33529,6 +34287,17 @@ describe('OrcaRuntimeService', () => {
         kill: () => true,
         getForegroundProcess: async () => null
       })
+      const draftPaste = vi
+        .spyOn(
+          runtime as unknown as {
+            pasteStartupDraftOnPtyWhenReady: (
+              ptyId: string,
+              draft: { agent: string; content: string }
+            ) => void
+          },
+          'pasteStartupDraftOnPtyWhenReady'
+        )
+        .mockImplementation(() => undefined)
       runtime.setNotifier(createMobileCreateTestNotifier(vi.fn()))
       const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
@@ -33550,9 +34319,15 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        agent: 'codex',
+        agent: 'opencode',
+        hostAgentLaunch: {
+          kind: 'fresh',
+          agent: 'opencode',
+          prompt: 'Keep this as a draft',
+          promptDelivery: 'draft'
+        },
         activate: true
-      })
+      } as never)
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
       await vi.advanceTimersByTimeAsync(50)
       const result = await create
@@ -33563,12 +34338,19 @@ describe('OrcaRuntimeService', () => {
         leafId,
         status: 'ready'
       })
-      // Why: the adopted PTY never launched codex, so the settle must type the
+      // Why: the adopted PTY never launched the agent, so the settle must type the
       // launch command (Enter as its own write) instead of succeeding silently.
       expect(write).toHaveBeenCalledTimes(2)
       expect(write.mock.calls[0][0]).toBe('pty-bare')
-      expect(String(write.mock.calls[0][1])).toMatch(/codex/)
+      expect(String(write.mock.calls[0][1])).toMatch(/opencode/)
       expect(write.mock.calls[1]).toEqual(['pty-bare', '\r'])
+      expect(draftPaste).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          agent: 'opencode',
+          content: expect.stringContaining('Keep this')
+        })
+      )
     } finally {
       vi.useRealTimers()
     }

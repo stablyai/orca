@@ -138,7 +138,10 @@ import { resolveDirectSshTerminalWorkspaceKeys } from './direct-ssh-terminal-wor
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -490,6 +493,7 @@ function withTerminalTabPtyId(
 
 export type AutomaticAgentResumeClaim = {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   launchAgent: TuiAgent
   providerSession: AgentProviderSessionMetadata
 }
@@ -564,6 +568,7 @@ export type TerminalSlice = {
     string,
     {
       command: string
+      executionHostId?: ExecutionHostId
       /** Renderer-delivered startup input for callers needing xterm paste semantics before the submit Enter. */
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
@@ -747,6 +752,7 @@ export type TerminalSlice = {
     tabId: string,
     startup: {
       command: string
+      executionHostId?: ExecutionHostId
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
@@ -767,6 +773,7 @@ export type TerminalSlice = {
   consumeTabInitialCwd: (tabId: string) => string | null
   consumeTabStartupCommand: (tabId: string) => {
     command: string
+    executionHostId?: ExecutionHostId
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
@@ -2664,7 +2671,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       worktreeId,
       {
         paneKeys,
-        captureMode: 'completed-agent-hibernation'
+        captureMode: 'completed-agent-hibernation',
+        executionHostId: getExecutionHostIdForWorktree(state, worktreeId)
       }
     )
     const retainedCompletionEvidence = collectHibernatedCompletionEvidenceForWorktree(
@@ -2951,6 +2959,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const rendererShutdownPtyIds = sortedUniquePtyIds(ptyIds)
     const expectedRuntimePtyIds = sortedUniquePtyIds(opts?.expectedRuntimePtyIds)
     const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
+    const executionHostId = getExecutionHostIdForWorktree(get(), worktreeId)
     // Why: only renderer-bound ids emit pane exit callbacks, so they are the complete guard set (expectedRuntimePtyIds are raw RPC handles).
     const exitGuardPtyIds = rendererShutdownPtyIds
     const sleepingAgentSessionRecords = keepIdentifiers
@@ -2959,7 +2968,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...(shutdownReason === 'manual-sleep' ? { captureMode: 'manual-worktree-sleep' } : {}),
           ...(shutdownReason === 'auto-hibernate-completed-agent'
             ? { captureMode: 'completed-agent-hibernation' }
-            : {})
+            : {}),
+          executionHostId
         })
       : {}
     const retainedCompletionEvidence =
@@ -3334,8 +3344,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const base =
           shutdownReason === 'manual-sleep'
             ? removeSleepingRecordsReplacedByManualWorktreeSleep(
-                s.sleepingAgentSessionsByPaneKey,
+                s,
                 worktreeId,
+                executionHostId,
                 opts?.sleepingPaneKeys,
                 sleepingAgentSessionRecords
               ).records
@@ -3348,11 +3359,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       })
     } else {
-      get().clearSleepingAgentSessionsByWorktree(worktreeId)
+      get().clearSleepingAgentSessionsByWorktree(worktreeId, executionHostId)
     }
 
     // Why: only automatic completed-agent sleep keeps passive completion evidence; manual sleep/remove fold the whole worktree surface.
     get().dropAgentStatusByWorktree(worktreeId, {
+      executionHostId,
       shutdownReason,
       sleepingPaneKeys: opts?.sleepingPaneKeys,
       retainedCompletionEvidence

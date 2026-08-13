@@ -276,6 +276,33 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('persists agent session rule overrides on a runtime repo', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        agentSessionRules: { enabled: false }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { agentSessionRules: { enabled: false } }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      agentSessionRules: { enabled: false }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', agentSessionRules: { enabled: false } } }
+    })
+  })
+
   it('persists fork sync mode updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

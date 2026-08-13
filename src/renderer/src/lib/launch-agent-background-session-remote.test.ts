@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentSessionRulesSettings } from '../../../shared/agent-session-rules-types'
 import {
   AGENT_BACKGROUND_SESSION_UUID_RE as UUID_RE,
   createAgentBackgroundSessionTestState,
@@ -33,6 +34,11 @@ const state = createAgentBackgroundSessionTestState({
   setTabLayout: mockSetTabLayout,
   registerAgentLaunchConfig: mockRegisterAgentLaunchConfig
 })
+
+function useSshAgentBackgroundRuntime(): void {
+  state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+  state.worktreesByRepo['repo-1']![0]!.hostId = 'ssh:ssh-1'
+}
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -135,7 +141,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
   })
 
   it('forwards Hermes startup queries through SSH command transport', async () => {
-    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+    useSshAgentBackgroundRuntime()
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     await launchAgentBackgroundSession({
@@ -156,7 +162,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
   it('injects fast startup commands into SSH background sessions after shell output arrives', async () => {
     vi.useFakeTimers()
     try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      useSshAgentBackgroundRuntime()
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
       await launchAgentBackgroundSession({
@@ -186,7 +192,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
   it('waits for shell-ready before injecting payload-bearing SSH background commands', async () => {
     vi.useFakeTimers()
     try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      useSshAgentBackgroundRuntime()
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
       await launchAgentBackgroundSession({
@@ -222,7 +228,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
   it('falls back when an SSH shell produces no observable startup data', async () => {
     vi.useFakeTimers()
     try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      useSshAgentBackgroundRuntime()
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
       await launchAgentBackgroundSession({
@@ -248,7 +254,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
   it('keeps the short fallback for an SSH shell that talks but cannot emit the marker', async () => {
     vi.useFakeTimers()
     try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      useSshAgentBackgroundRuntime()
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
       await launchAgentBackgroundSession({
@@ -272,11 +278,12 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
   it('waits for shell-ready for SSH background Codex native prefill commands without a hint', async () => {
     vi.useFakeTimers()
     try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      useSshAgentBackgroundRuntime()
       state.settings = {
         agentCmdOverrides: { codex: "codex --prefill 'draft from override'" },
         activeRuntimeEnvironmentId: null,
-        terminalMainSideEffectAuthority: undefined
+        terminalMainSideEffectAuthority: undefined,
+        agentSessionRules: { enabled: false, rules: [] }
       }
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
@@ -313,7 +320,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
   it('does not rearm SSH background startup delivery after exit cleanup', async () => {
     vi.useFakeTimers()
     try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      useSshAgentBackgroundRuntime()
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
       await launchAgentBackgroundSession({
@@ -338,6 +345,19 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('creates background sessions on the active runtime environment', async () => {
     useRemoteAgentBackgroundRuntime(state)
+    state.settings.agentSessionRules = {
+      enabled: true,
+      rules: [
+        {
+          id: 'background-client-rule',
+          label: 'Background client rule',
+          content: 'Use the client graph for background tasks.',
+          enabled: true,
+          source: 'custom'
+        }
+      ],
+      seenBuiltinRuleIds: ['builtin-graphify']
+    } as AgentSessionRulesSettings
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     const result = await launchAgentBackgroundSession({
@@ -387,6 +407,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         agent: 'claude',
         prompt: 'run the automation',
         promptDelivery: 'auto-submit',
+        clientDefaultAgentSessionRules: state.settings.agentSessionRules,
         placement: { tabId, leafId },
         presentation: 'background'
       }),
@@ -408,6 +429,24 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       ptyId: 'remote:env-1@@terminal-1',
       terminalOwnership: null
     })
+  })
+
+  it('fails closed when a remote worktree has only a mismatched local repo owner', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    state.worktreesByRepo['repo-1']![0]!.hostId = 'runtime:env-1'
+    state.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await expect(
+      launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation'
+      })
+    ).rejects.toThrow('The target workspace host is unavailable or ambiguous.')
+    expect(mockRuntimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.createAgentSession' })
+    )
   })
 
   it('preserves the legacy background spawn on an old remote host', async () => {
@@ -498,7 +537,9 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       { id: 'fw-1', projectGroupId: 'grp-1', folderPath: '/srv/proj', connectionId: 'ssh-1' }
     ]
     state.getKnownWorktreeById = (worktreeId: string) =>
-      worktreeId === 'folder:fw-1' ? { id: 'folder:fw-1', path: '/srv/proj' } : undefined
+      worktreeId === 'folder:fw-1'
+        ? { id: 'folder:fw-1', path: '/srv/proj', hostId: 'ssh:ssh-1' }
+        : undefined
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     await launchAgentBackgroundSession({

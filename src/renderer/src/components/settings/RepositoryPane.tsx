@@ -19,6 +19,7 @@ import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
+import { RepositoryAgentSessionRulesSection } from './RepositoryAgentSessionRulesSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
@@ -36,8 +37,9 @@ import { getProjectRuntimeSessionSummary } from './repository-runtime-session-su
 export { getRepositoryPaneSearchEntries }
 export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
-type RepositoryPaneRepoUpdate = Omit<Partial<Repo>, 'sourceControlAi'> & {
+type RepositoryPaneRepoUpdate = Omit<Partial<Repo>, 'sourceControlAi' | 'agentSessionRules'> & {
   sourceControlAi?: Repo['sourceControlAi'] | null
+  agentSessionRules?: Repo['agentSessionRules'] | null
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -189,6 +191,9 @@ export function RepositoryPane({
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
+  const agentSessionRulesEntries = allEntries.filter(
+    (entry) => entry.title === 'Agent Session Rules'
+  )
   const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
   const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
   const removeProjectLabel =
@@ -364,6 +369,13 @@ export function RepositoryPane({
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection
         key="source-control-ai"
+        repo={repo}
+        updateRepo={updateSelectedRepo}
+      />
+    ) : null,
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, agentSessionRulesEntries) ? (
+      <RepositoryAgentSessionRulesSection
+        key="agent-session-rules"
         repo={repo}
         updateRepo={updateSelectedRepo}
       />

@@ -56,6 +56,7 @@ import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
+  AgentSessionHostLaunchIntent,
   AgentSessionSurfaceBinding,
   AgentLaunchPreferences,
   RuntimeAgentSessionRpcCaller,
@@ -270,6 +271,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
+import { isResumableTuiAgent } from '../../shared/agent-session-resume'
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
@@ -415,6 +417,7 @@ import {
 } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { toSafeTerminalDraftPaste } from '../../shared/terminal-draft-paste'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import {
   applyTerminalQuickCommandMutation,
@@ -427,7 +430,18 @@ import {
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan
 } from '../../shared/tui-agent-startup'
+import {
+  buildAgentResumeSessionRulesDraft,
+  buildAgentSessionRulesOnlyDraft,
+  prependSessionRulesToPrompt,
+  resolveSessionRulesDeliveryShell
+} from '../../shared/tui-agent-startup-shell'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
+import {
+  resolveEffectiveAgentSessionRules,
+  serializeAgentSessionRulesForInjection
+} from '../../shared/agent-session-rules'
+import { ensureAgentSessionRulesFile } from '../agent-session-rules/agent-session-rules-file'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -465,7 +479,7 @@ import {
 } from '../../shared/cross-platform-path'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
-import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -1187,6 +1201,7 @@ type RuntimeStore = {
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
+    agentSessionRules?: GlobalSettings['agentSessionRules']
     mobileAutoRestoreFitMs?: number | null
     mobileEmulatorEnabled?: boolean
     mobileEmulatorDefaultDeviceUdid?: string | null
@@ -1377,6 +1392,7 @@ type TerminalCreateOptions = {
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+  startupDraftPrompt?: string
   telemetry?: WorktreeStartupLaunch['telemetry']
   title?: string
   focus?: boolean
@@ -1825,8 +1841,6 @@ const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 const WORKTREE_CREATE_RESULT_TTL_MS = 60_000
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
@@ -2794,6 +2808,8 @@ export class OrcaRuntimeService {
       /** Resolved agent launch command, kept so a settle over a bare renderer
        *  PTY can still deliver the launch instead of succeeding silently (STA-3214). */
       startupCommand?: string
+      startupDraftPrompt?: string
+      launchAgent?: TuiAgent
     }
   >()
   private mobileSessionTabListeners = new Set<{
@@ -19203,6 +19219,7 @@ export class OrcaRuntimeService {
       >
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null
+      agentSessionRules?: Repo['agentSessionRules'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
     }
   ): Promise<Repo> {
@@ -19466,21 +19483,40 @@ export class OrcaRuntimeService {
     return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
   }
 
-  private getAgentLaunchPlatformForRepo(repo: Repo): NodeJS.Platform {
+  private getAgentLaunchPlatformForRepo(repo: Repo): {
+    platform: NodeJS.Platform
+    wslDistro: string | null
+  } {
     const projectRuntime = repo.connectionId
       ? undefined
       : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
-    return getAgentLaunchPlatformForRepo(repo, projectRuntime)
+    return {
+      platform: getAgentLaunchPlatformForRepo(repo, projectRuntime),
+      // Why: only a resolved WSL runtime carries a validated, reachable distro;
+      // repair-required means the distro is missing/unavailable or unset, so
+      // treat it as unknown rather than guess a broken UNC target.
+      wslDistro:
+        projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
+          ? projectRuntime.runtime.distro
+          : null
+    }
   }
 
-  private getAgentLaunchPlatformForWorkspace(scope: TerminalWorkspaceLaunchScope): NodeJS.Platform {
+  private getAgentLaunchPlatformForWorkspace(scope: TerminalWorkspaceLaunchScope): {
+    platform: NodeJS.Platform
+    wslDistro: string | null
+  } {
     if (scope.repo) {
       return this.getAgentLaunchPlatformForRepo(scope.repo)
     }
     if (scope.connectionId) {
-      return isWindowsAbsolutePathLike(scope.path) ? 'win32' : 'linux'
+      return {
+        platform: isWindowsAbsolutePathLike(scope.path) ? 'win32' : 'linux',
+        wslDistro: null
+      }
     }
-    return isWslUncPath(scope.path) ? 'linux' : process.platform
+    const wslPath = parseWslUncPath(scope.path)
+    return { platform: wslPath ? 'linux' : process.platform, wslDistro: wslPath?.distro ?? null }
   }
 
   async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
@@ -21344,13 +21380,22 @@ export class OrcaRuntimeService {
 
     // Why: a mobile client can run on Windows while the workspace shell is
     // Linux over SSH. Startup command quoting must target the shell that runs it.
-    const agentLaunchPlatform = this.getAgentLaunchPlatformForRepo(repo)
+    const { platform: agentLaunchPlatform, wslDistro: agentLaunchWslDistro } =
+      this.getAgentLaunchPlatformForRepo(repo)
     const isRemote = repoIsRemote(repo)
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform: agentLaunchPlatform,
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
+    const agentSessionRules = await this.resolveAgentSessionRulesLaunchOptions(
+      agent,
+      settings,
+      repo,
+      repo.connectionId ?? null,
+      agentLaunchPlatform,
+      agentLaunchWslDistro
+    )
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
       agent,
       draft: content,
@@ -21359,7 +21404,8 @@ export class OrcaRuntimeService {
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
       shell: queuedShell,
-      isRemote
+      isRemote,
+      ...agentSessionRules
     })
     if (draftLaunchPlan) {
       return {
@@ -21384,7 +21430,8 @@ export class OrcaRuntimeService {
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      ...agentSessionRules
     })
     if (!startupPlan) {
       return null
@@ -21403,12 +21450,16 @@ export class OrcaRuntimeService {
     }
   }
 
-  private buildStartupForAgent(
+  private async buildStartupForAgent(
     repo: Repo,
     agent: TuiAgent,
     prompt: string | undefined,
     launchPreferences?: AgentLaunchPreferences
-  ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
+  ): Promise<{
+    agent: TuiAgent
+    startup: WorktreeStartupLaunch
+    followup?: WorktreeStartupFollowup
+  }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -21418,7 +21469,8 @@ export class OrcaRuntimeService {
     }
     // Why: CLI clients may target SSH runtimes from macOS/Windows, so quote for
     // the workspace shell rather than the client shell.
-    const agentLaunchPlatform = this.getAgentLaunchPlatformForRepo(repo)
+    const { platform: agentLaunchPlatform, wslDistro: agentLaunchWslDistro } =
+      this.getAgentLaunchPlatformForRepo(repo)
     const isRemote = repoIsRemote(repo)
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform: agentLaunchPlatform,
@@ -21426,6 +21478,14 @@ export class OrcaRuntimeService {
       terminalWindowsShell: settings.terminalWindowsShell
     })
     const sessionOptions = this.toAgentSessionOptions(launchPreferences)
+    const agentSessionRules = await this.resolveAgentSessionRulesLaunchOptions(
+      agent,
+      settings,
+      repo,
+      repo.connectionId ?? null,
+      agentLaunchPlatform,
+      agentLaunchWslDistro
+    )
     const startupPlan = buildAgentStartupPlan({
       agent,
       prompt: prompt ?? '',
@@ -21437,7 +21497,8 @@ export class OrcaRuntimeService {
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      ...agentSessionRules
     })
     if (!startupPlan) {
       throw new Error(`Could not build launch command for ${agent}.`)
@@ -21494,6 +21555,44 @@ export class OrcaRuntimeService {
       await markRemoteAgentWorkspaceTrusted({ preset, connectionId, workspacePath })
     } catch {
       // Best-effort: the user can still accept the remote agent trust prompt manually.
+    }
+  }
+
+  // Why: repo is null for folder workspaces, which resolve to a pure-global rule set.
+  private async resolveAgentSessionRulesLaunchOptions(
+    agent: TuiAgent,
+    settings: { agentSessionRules?: GlobalSettings['agentSessionRules'] },
+    repo: Repo | null,
+    connectionId: string | null,
+    targetPlatform: NodeJS.Platform,
+    wslDistro: string | null = null
+  ): Promise<{
+    agentSessionRulesFilePath: string | null
+    agentSessionRulesText: string | null
+  }> {
+    const rules = resolveEffectiveAgentSessionRules(
+      settings.agentSessionRules,
+      repo?.agentSessionRules
+    )
+    const rulesText = serializeAgentSessionRulesForInjection(rules)
+    if (!rulesText) {
+      return { agentSessionRulesFilePath: null, agentSessionRulesText: null }
+    }
+    const cannotReachLocalRulesFile =
+      !connectionId && targetPlatform !== process.platform && !wslDistro
+    if (!TUI_AGENT_CONFIG[agent].sessionRulesFileFlag || cannotReachLocalRulesFile) {
+      return { agentSessionRulesFilePath: null, agentSessionRulesText: rulesText }
+    }
+    try {
+      return {
+        agentSessionRulesFilePath: await ensureAgentSessionRulesFile(rulesText, {
+          connectionId,
+          wslDistro
+        }),
+        agentSessionRulesText: rulesText
+      }
+    } catch {
+      return { agentSessionRulesFilePath: null, agentSessionRulesText: rulesText }
     }
   }
 
@@ -21577,16 +21676,21 @@ export class OrcaRuntimeService {
   }
 
   private pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
-    void this.waitForStartupDraftReady(handle, draft.agent)
+    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
+    if (!ptyId) {
+      return
+    }
+    this.pasteStartupDraftOnPtyWhenReady(ptyId, draft)
+  }
+
+  private pasteStartupDraftOnPtyWhenReady(ptyId: string, draft: WorktreeStartupDraftPaste): void {
+    void this.waitForStartupDraftPtyReady(ptyId, draft.agent)
       .then((ptyId) => {
         if (!ptyId) {
           console.warn('[worktree-create] agent did not become ready for draft paste')
           return
         }
-        this.ptyController?.write(
-          ptyId,
-          `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`
-        )
+        this.ptyController?.write(ptyId, toSafeTerminalDraftPaste(draft.content))
       })
       .catch((error) => {
         console.warn('[worktree-create] failed to paste startup draft:', error)
@@ -21767,12 +21871,7 @@ export class OrcaRuntimeService {
     return null
   }
 
-  private waitForStartupDraftReady(handle: string, agent: TuiAgent): Promise<string | null> {
-    const livePty = this.getLivePtyForHandle(handle)
-    const ptyId = livePty?.pty.ptyId
-    if (!ptyId) {
-      return Promise.resolve(null)
-    }
+  private waitForStartupDraftPtyReady(ptyId: string, agent: TuiAgent): Promise<string | null> {
     const readySignal =
       TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
     return new Promise<string | null>((resolve) => {
@@ -21906,7 +22005,7 @@ export class OrcaRuntimeService {
     }
     const agentStartup =
       !args.startup && args.startupAgent
-        ? this.buildStartupForAgent(
+        ? await this.buildStartupForAgent(
             repo,
             args.startupAgent,
             args.startupPrompt,
@@ -25108,7 +25207,7 @@ export class OrcaRuntimeService {
     }
 
     const settings = store.getSettings()
-    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const { platform, wslDistro } = this.getAgentLaunchPlatformForWorkspace(workspace)
     const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : Boolean(workspace.connectionId)
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform,
@@ -25131,6 +25230,14 @@ export class OrcaRuntimeService {
     }
 
     const sessionOptions = this.toAgentSessionOptions(opts.launchPreferences)
+    const agentSessionRules = await this.resolveAgentSessionRulesLaunchOptions(
+      agent,
+      settings,
+      workspace.repo,
+      workspace.connectionId,
+      platform,
+      wslDistro
+    )
     const startupPlan = buildAgentStartupPlan({
       agent,
       prompt: '',
@@ -25139,6 +25246,7 @@ export class OrcaRuntimeService {
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       sessionOptions,
       sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
+      ...agentSessionRules,
       platform,
       shell: queuedShell,
       isRemote,
@@ -25152,6 +25260,12 @@ export class OrcaRuntimeService {
       }
       return opts
     }
+    const startupDraftPrompt = buildAgentSessionRulesOnlyDraft(
+      TUI_AGENT_CONFIG[agent],
+      agentSessionRules.agentSessionRulesFilePath,
+      agentSessionRules.agentSessionRulesText,
+      resolveSessionRulesDeliveryShell({ platform, shell: queuedShell, isRemote })
+    )
 
     if (workspace.connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
@@ -25162,6 +25276,7 @@ export class OrcaRuntimeService {
     return {
       ...opts,
       command: startupPlan.launchCommand,
+      ...(startupDraftPrompt ? { startupDraftPrompt } : {}),
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       launchAgent: agent,
@@ -25214,10 +25329,16 @@ export class OrcaRuntimeService {
       return workspace.connectionId === null
     }
     try {
-      return (await probe.call(provider, { signal })) === true
+      const supported = (await probe.call(provider, { signal })) === true
+      if (signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      return supported
     } catch {
-      // Why: this read-only check has not launched anything, so the old route remains safe.
-      return false
+      if (signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      throw new Error('agent_session_capability_unknown')
     }
   }
 
@@ -25249,11 +25370,15 @@ export class OrcaRuntimeService {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
-      !namespace ||
       !(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', _caller.signal))
     ) {
       // Why: the renderer still holds the exact old request and may retry it before any side effect.
       throw new Error('agent_session_legacy_required')
+    }
+    if (!namespace) {
+      // Why: a claim-capable nested SSH relay still needs target-attested namespace identity;
+      // client-built legacy resume would reintroduce cross-host concurrent ownership.
+      throw new Error('agent_session_ownership_unknown')
     }
     // Why: nested SSH paths belong to the execution owner, so compatibility selection must happen before local filesystem canonicalization.
     const identity = canonicalizeAgentSessionIdentity(request.agent, request.providerSession)
@@ -25266,13 +25391,23 @@ export class OrcaRuntimeService {
     if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before resuming.')
     }
-    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const { platform, wslDistro } = this.getAgentLaunchPlatformForWorkspace(workspace)
     const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : Boolean(workspace.connectionId)
     const shell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
+    const agentSessionRules = await this.resolveAgentSessionRulesLaunchOptions(
+      request.agent,
+      {
+        agentSessionRules: request.clientDefaultAgentSessionRules ?? settings.agentSessionRules
+      },
+      workspace.repo,
+      workspace.connectionId,
+      platform,
+      wslDistro
+    )
     const startup = buildAgentResumeStartupPlan({
       agent: request.agent,
       providerSession: identity.providerSession,
@@ -25286,11 +25421,30 @@ export class OrcaRuntimeService {
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       platform,
       shell,
-      isRemote
+      isRemote,
+      ...agentSessionRules
     })
     if (!startup) {
       throw new Error('agent_session_identity_required')
     }
+    // Why: this is a resume launch (buildAgentResumeStartupPlan above) — it never applies an argv
+    // session-rules flag, only ever a config-override, so the rules-only draft must gate on that
+    // specifically (buildAgentResumeSessionRulesDraft), not on whether the agent merely has some
+    // native mechanism (buildAgentSessionRulesOnlyDraft's hasNativeSessionRulesInjection check,
+    // correct only for a fresh launch) — see #41.
+    const rulesOnlyDraft = buildAgentResumeSessionRulesDraft(
+      TUI_AGENT_CONFIG[request.agent],
+      agentSessionRules.agentSessionRulesText,
+      resolveSessionRulesDeliveryShell({ platform, shell, isRemote })
+    )
+    const startupDraftPrompt =
+      request.promptDeliveryOwner === 'client'
+        ? null
+        : request.prompt?.trim()
+          ? rulesOnlyDraft && agentSessionRules.agentSessionRulesText
+            ? prependSessionRulesToPrompt(request.prompt, agentSessionRules.agentSessionRulesText)
+            : request.prompt
+          : rulesOnlyDraft
     if (workspace.connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(
         request.agent,
@@ -25305,6 +25459,7 @@ export class OrcaRuntimeService {
     }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
       command: startup.launchCommand,
+      ...(startupDraftPrompt ? { startupDraftPrompt } : {}),
       env: startup.env,
       launchConfig: startup.launchConfig,
       launchAgent: request.agent,
@@ -25345,11 +25500,13 @@ export class OrcaRuntimeService {
           request.agent,
           request.prompt ?? null,
           request.promptDelivery ?? null,
+          request.promptDeliveryOwner ?? 'host',
           request.agentArgs ?? null,
           request.agentArgs === undefined ? 'host-default' : 'client-override',
           request.launchPreferences?.model ?? null,
           request.launchPreferences?.effort ?? null,
           request.launchPreferences?.mode ?? null,
+          request.clientDefaultAgentSessionRules ?? null,
           request.startupCwd ?? null,
           request.presentation ?? null,
           request.placement?.tabId ?? null,
@@ -25411,11 +25568,13 @@ export class OrcaRuntimeService {
             request.agent,
             request.prompt ?? null,
             request.promptDelivery ?? null,
+            request.promptDeliveryOwner ?? 'host',
             request.agentArgs ?? null,
             request.agentArgs === undefined ? 'host-default' : 'client-override',
             request.launchPreferences?.model ?? null,
             request.launchPreferences?.effort ?? null,
             request.launchPreferences?.mode ?? null,
+            request.clientDefaultAgentSessionRules ?? null,
             startupCwd ?? null,
             request.presentation ?? null,
             request.placement?.tabId ?? null,
@@ -25428,7 +25587,7 @@ export class OrcaRuntimeService {
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
-      const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+      const { platform, wslDistro } = this.getAgentLaunchPlatformForWorkspace(workspace)
       const isRemote = workspace.repo
         ? repoIsRemote(workspace.repo)
         : Boolean(workspace.connectionId)
@@ -25437,6 +25596,16 @@ export class OrcaRuntimeService {
         isRemote,
         terminalWindowsShell: settings.terminalWindowsShell
       })
+      const agentSessionRules = await this.resolveAgentSessionRulesLaunchOptions(
+        request.agent,
+        {
+          agentSessionRules: request.clientDefaultAgentSessionRules ?? settings.agentSessionRules
+        },
+        workspace.repo,
+        workspace.connectionId,
+        platform,
+        wslDistro
+      )
       const startupArgs = {
         agent: request.agent,
         cmdOverrides: settings.agentCmdOverrides ?? {},
@@ -25448,19 +25617,40 @@ export class OrcaRuntimeService {
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
         platform,
         shell,
-        isRemote
+        isRemote,
+        ...agentSessionRules
       }
-      const startup =
-        request.promptDelivery === 'draft'
+      const hostOwnsPrompt = request.promptDeliveryOwner !== 'client'
+      const hostPrompt = hostOwnsPrompt ? request.prompt : undefined
+      const nativeDraft =
+        hostOwnsPrompt && request.promptDelivery === 'draft'
           ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
-          : buildAgentStartupPlan({
-              ...startupArgs,
-              prompt: request.prompt ?? '',
-              allowEmptyPromptLaunch: true
-            })
+          : null
+      const startup =
+        nativeDraft ??
+        buildAgentStartupPlan({
+          ...startupArgs,
+          prompt: request.promptDelivery === 'draft' ? '' : (hostPrompt ?? ''),
+          allowEmptyPromptLaunch: true
+        })
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }
+      const rulesOnlyDraft = buildAgentSessionRulesOnlyDraft(
+        TUI_AGENT_CONFIG[request.agent],
+        agentSessionRules.agentSessionRulesFilePath,
+        agentSessionRules.agentSessionRulesText,
+        resolveSessionRulesDeliveryShell({ platform, shell, isRemote })
+      )
+      const startupDraftPrompt = !hostOwnsPrompt
+        ? null
+        : request.promptDelivery === 'draft' && !nativeDraft
+          ? rulesOnlyDraft && agentSessionRules.agentSessionRulesText
+            ? prependSessionRulesToPrompt(hostPrompt ?? '', agentSessionRules.agentSessionRulesText)
+            : hostPrompt?.trim() || null
+          : hostPrompt?.trim()
+            ? null
+            : rulesOnlyDraft
       if (workspace.connectionId) {
         await this.markRemoteWorkspaceTrustedForAgent(
           request.agent,
@@ -25489,6 +25679,7 @@ export class OrcaRuntimeService {
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
           command: startup.launchCommand,
+          ...(startupDraftPrompt ? { startupDraftPrompt } : {}),
           env: startup.env,
           launchConfig: startup.launchConfig,
           launchAgent: request.agent,
@@ -25842,6 +26033,12 @@ export class OrcaRuntimeService {
           pty.paneKey = paneKey
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+        if (launchOpts.startupDraftPrompt && launchOpts.launchAgent) {
+          this.pasteStartupDraftWhenReady(handle, {
+            agent: launchOpts.launchAgent,
+            content: launchOpts.startupDraftPrompt
+          })
+        }
         if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
@@ -26107,7 +26304,7 @@ export class OrcaRuntimeService {
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
+    const startup = await this.buildStartupForAgent(repo, opts.agent, opts.prompt)
     if (repo.connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
     } else {
@@ -26168,6 +26365,7 @@ export class OrcaRuntimeService {
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       agentPrompt?: string
+      hostAgentLaunch?: AgentSessionHostLaunchIntent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
@@ -26238,6 +26436,7 @@ export class OrcaRuntimeService {
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       agentPrompt?: string
+      hostAgentLaunch?: AgentSessionHostLaunchIntent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
@@ -26279,6 +26478,7 @@ export class OrcaRuntimeService {
           env: startupCommand.env,
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
+          startupDraftPrompt: startupCommand.startupDraftPrompt,
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
@@ -26338,6 +26538,9 @@ export class OrcaRuntimeService {
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...(startupCommand.startupDraftPrompt
+            ? { startupDraftPrompt: startupCommand.startupDraftPrompt }
+            : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
@@ -26360,6 +26563,10 @@ export class OrcaRuntimeService {
         paired: pairedCreate,
         selectIfNoActiveTab: true,
         ...(startupCommand.command ? { startupCommand: startupCommand.command } : {}),
+        ...(startupCommand.startupDraftPrompt
+          ? { startupDraftPrompt: startupCommand.startupDraftPrompt }
+          : {}),
+        ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
       })
       try {
@@ -26403,6 +26610,7 @@ export class OrcaRuntimeService {
             env: startupCommand.env,
             envToDelete: startupCommand.envToDelete,
             startupCommandDelivery: startupCommand.startupCommandDelivery,
+            startupDraftPrompt: startupCommand.startupDraftPrompt,
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
             viewMode: opts.viewMode,
@@ -26447,6 +26655,7 @@ export class OrcaRuntimeService {
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       agentPrompt?: string
+      hostAgentLaunch?: AgentSessionHostLaunchIntent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
     }
@@ -26455,10 +26664,11 @@ export class OrcaRuntimeService {
     env?: Record<string, string>
     envToDelete?: string[]
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+    startupDraftPrompt?: string
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
   }> {
-    if (opts.command || !opts.agent) {
+    if (!opts.hostAgentLaunch && (opts.command || !opts.agent)) {
       return {
         command: opts.command,
         env: opts.env,
@@ -26471,12 +26681,17 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+    const launchIntent = opts.hostAgentLaunch
+    const agent = launchIntent?.agent ?? opts.agent
+    if (!agent) {
+      throw new Error('agent_session_identity_required')
+    }
     const settings = this.store.getSettings()
-    if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
+    if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
     // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
-    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const { platform, wslDistro } = this.getAgentLaunchPlatformForWorkspace(workspace)
     // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
     const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : repoIsRemote(workspace)
     const queuedShell = resolveLocalWindowsAgentStartupShell({
@@ -26484,40 +26699,111 @@ export class OrcaRuntimeService {
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
-    const startupPlan = buildAgentStartupPlan({
-      agent: opts.agent,
-      prompt: opts.agentPrompt ?? '',
+    const agentSessionRules = await this.resolveAgentSessionRulesLaunchOptions(
+      agent,
+      {
+        agentSessionRules:
+          launchIntent?.clientDefaultAgentSessionRules ?? settings.agentSessionRules
+      },
+      workspace.repo,
+      workspace.connectionId,
+      platform,
+      wslDistro
+    )
+    const startupArgs = {
+      agent,
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
+      agentArgs:
+        launchIntent?.agentArgs !== undefined
+          ? launchIntent.agentArgs
+          : resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      sessionOptions: this.toAgentSessionOptions(launchIntent?.launchPreferences),
+      ...agentSessionRules,
       platform,
       shell: queuedShell,
-      isRemote,
-      allowEmptyPromptLaunch: true
-    })
-    if (!startupPlan) {
-      throw new Error(`Could not build launch command for ${opts.agent}.`)
+      isRemote
     }
-    if (opts.agentPrompt && startupPlan.followupPrompt) {
-      throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)
+    const hostOwnsPrompt = launchIntent?.promptDeliveryOwner !== 'client'
+    const hostPrompt = hostOwnsPrompt ? launchIntent?.prompt : undefined
+    const effectivePrompt = launchIntent ? hostPrompt : opts.agentPrompt
+    const nativeDraft =
+      hostOwnsPrompt && launchIntent?.kind !== 'resume' && launchIntent?.promptDelivery === 'draft'
+        ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: launchIntent.prompt ?? '' })
+        : null
+    const startupPlan =
+      launchIntent?.kind === 'resume'
+        ? isResumableTuiAgent(agent) && launchIntent.providerSession
+          ? buildAgentResumeStartupPlan({
+              ...startupArgs,
+              agent,
+              providerSession: launchIntent.providerSession,
+              ompResumeFilePath: launchIntent.ompResumeFilePath
+            })
+          : null
+        : (nativeDraft ??
+          buildAgentStartupPlan({
+            ...startupArgs,
+            prompt: launchIntent?.promptDelivery === 'draft' ? '' : (effectivePrompt ?? ''),
+            allowEmptyPromptLaunch: true
+          }))
+    if (!startupPlan) {
+      throw new Error(`Could not build launch command for ${agent}.`)
+    }
+    if (
+      opts.agentPrompt &&
+      !launchIntent &&
+      'followupPrompt' in startupPlan &&
+      startupPlan.followupPrompt
+    ) {
+      throw new Error(`Agent ${agent} does not support startup prompt quick commands.`)
     }
     if (workspace.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(
-        opts.agent,
-        workspace.connectionId,
-        workspace.path
-      )
+      await this.markRemoteWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
     } else {
-      this.markLocalWorkspaceTrustedForAgent(opts.agent, workspace.path)
+      this.markLocalWorkspaceTrustedForAgent(agent, workspace.path)
     }
+    // Why: startupPlan above is either a resume (buildAgentResumeStartupPlan, which never applies
+    // an argv session-rules flag — only ever a config-override) or a fresh launch
+    // (buildAgentStartupPlan/buildAgentDraftLaunchPlan, which does apply one). The rules-only draft
+    // must use the gate that matches which one actually ran, or a resumable agent with only a
+    // text/file flag (e.g. Claude) silently loses its rules on resume — see #41.
+    const shellForRules = resolveSessionRulesDeliveryShell({
+      platform,
+      shell: queuedShell,
+      isRemote
+    })
+    const rulesOnlyDraft =
+      launchIntent?.kind === 'resume'
+        ? buildAgentResumeSessionRulesDraft(
+            TUI_AGENT_CONFIG[agent],
+            agentSessionRules.agentSessionRulesText,
+            shellForRules
+          )
+        : buildAgentSessionRulesOnlyDraft(
+            TUI_AGENT_CONFIG[agent],
+            agentSessionRules.agentSessionRulesFilePath,
+            agentSessionRules.agentSessionRulesText,
+            shellForRules
+          )
+    const startupDraftPrompt = !hostOwnsPrompt
+      ? null
+      : launchIntent?.promptDelivery === 'draft' && !nativeDraft
+        ? rulesOnlyDraft && agentSessionRules.agentSessionRulesText
+          ? prependSessionRulesToPrompt(hostPrompt ?? '', agentSessionRules.agentSessionRulesText)
+          : hostPrompt?.trim() || null
+        : effectivePrompt?.trim()
+          ? null
+          : rulesOnlyDraft
     return {
       command: startupPlan.launchCommand,
       env: startupPlan.env,
       // Why: a real-home Codex resume strips inherited CODEX_HOME via
       // envToDelete; dropping it here would resume against the wrong home.
       envToDelete: opts.envToDelete,
+      ...(startupDraftPrompt ? { startupDraftPrompt } : {}),
       launchConfig: startupPlan.launchConfig,
-      launchAgent: opts.agent,
+      launchAgent: agent,
       startupCommandDelivery: startupPlan.startupCommandDelivery
     }
   }
@@ -26532,6 +26818,7 @@ export class OrcaRuntimeService {
       env?: Record<string, string>
       envToDelete?: string[]
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+      startupDraftPrompt?: string
       identity?: { tabId: string; leafId: string; sessionId?: string }
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
@@ -26552,6 +26839,7 @@ export class OrcaRuntimeService {
       cwd,
       env: opts.env,
       envToDelete: opts.envToDelete,
+      ...(opts.startupDraftPrompt ? { startupDraftPrompt: opts.startupDraftPrompt } : {}),
       ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
@@ -26917,6 +27205,12 @@ export class OrcaRuntimeService {
       // Why: Enter rides its own write so a long command cannot swallow it.
       this.ptyController.write(pty.ptyId, '\r')
       this.noteTerminalSpawnCommand(pty.ptyId, command)
+      if (pending?.startupDraftPrompt && pending.launchAgent) {
+        this.pasteStartupDraftOnPtyWhenReady(pty.ptyId, {
+          agent: pending.launchAgent,
+          content: pending.startupDraftPrompt
+        })
+      }
     }
   }
 
@@ -28550,7 +28844,19 @@ export class OrcaRuntimeService {
     const parsed = parseWorkspaceKey(workspaceSelector)
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const repo = this.store?.getRepo(worktree.repoId) ?? null
+    // Why: legacy worktrees omitted hostId only for local ownership; never let inventory order bind them to SSH.
+    const ownerHostId = worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
+    const repoOwners =
+      this.store
+        ?.getRepos()
+        .filter(
+          (candidate) =>
+            candidate.id === worktree.repoId && getRepoExecutionHostId(candidate) === ownerHostId
+        ) ?? []
+    if (repoOwners.length !== 1) {
+      throw new Error('selector_not_found')
+    }
+    const repo = repoOwners[0]!
     return {
       id: worktree.id,
       path: worktree.path,

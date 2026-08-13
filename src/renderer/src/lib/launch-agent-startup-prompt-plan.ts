@@ -1,8 +1,11 @@
 import {
   buildAgentDraftLaunchPlan,
+  buildAgentSessionRulesInputDraft,
+  buildAgentSessionRulesPrompt,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
+import { resolveSessionRulesDeliveryShell } from '../../../shared/tui-agent-startup-shell'
 
 type StartupPlanBase = Omit<
   Parameters<typeof buildAgentStartupPlan>[0],
@@ -30,11 +33,20 @@ export function planLaunchAgentStartupPrompt(args: {
 }): LaunchAgentStartupPromptPlan {
   const { base, prompt, promptDelivery, isFollowupPath } = args
   const hasPrompt = prompt.length > 0
+  const shell = resolveSessionRulesDeliveryShell(base)
+  const postReadyPrompt = buildAgentSessionRulesPrompt({
+    agent: base.agent,
+    prompt,
+    repoId: base.repoId,
+    connectionId: base.connectionId,
+    executionHostId: base.executionHostId,
+    shell
+  })
   const launchEmpty = (): AgentStartupPlan | null =>
     buildAgentStartupPlan({ ...base, prompt: '', allowEmptyPromptLaunch: true })
   const pasteAfterReady = (submit: boolean): LaunchAgentStartupPromptPlan => ({
     startupPlan: launchEmpty(),
-    pasteDraftAfterLaunch: prompt,
+    pasteDraftAfterLaunch: postReadyPrompt,
     submitPastedPrompt: submit
   })
 
@@ -69,12 +81,33 @@ export function planLaunchAgentStartupPrompt(args: {
   if (hasPrompt && isFollowupPath) {
     return pasteAfterReady(false)
   }
+  if (!hasPrompt) {
+    return {
+      startupPlan: launchEmpty(),
+      pasteDraftAfterLaunch: buildAgentSessionRulesInputDraft({
+        agent: base.agent,
+        repoId: base.repoId,
+        connectionId: base.connectionId,
+        executionHostId: base.executionHostId,
+        shell
+      }),
+      submitPastedPrompt: false
+    }
+  }
+  const startupPlan = buildAgentStartupPlan({
+    ...base,
+    prompt,
+    allowEmptyPromptLaunch: false
+  })
+  if (startupPlan?.followupPrompt) {
+    return {
+      startupPlan,
+      pasteDraftAfterLaunch: startupPlan.followupPrompt,
+      submitPastedPrompt: true
+    }
+  }
   return {
-    startupPlan: buildAgentStartupPlan({
-      ...base,
-      prompt: hasPrompt ? prompt : '',
-      allowEmptyPromptLaunch: !hasPrompt
-    }),
+    startupPlan,
     pasteDraftAfterLaunch: null,
     submitPastedPrompt: false
   }

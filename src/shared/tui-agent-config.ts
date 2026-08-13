@@ -44,6 +44,25 @@ export type TuiAgentConfig = {
   windowsShiftEnterEncoding?: 'csi-u'
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
+  /** Native CLI flag that takes session rules text directly as its argument (e.g. Claude's
+   * `--append-system-prompt <text>`). When sessionRulesFileFlag is also configured and a rules file was
+   * actually written for this launch, the file flag wins instead (see appendSessionRulesFlag) — a short
+   * file path is cheap and safe to quote everywhere (cmd.exe, across a Windows-to-WSL boundary) where
+   * arbitrary multi-line text is not. This text flag remains the delivery path whenever no file was
+   * written, which is every renderer-driven launch (the renderer never resolves a file path). */
+  sessionRulesTextFlag?: string
+  /** Native CLI flag that loads session rules text from a file path (e.g. Claude's
+   * `--append-system-prompt-file <path>`). Preferred over sessionRulesTextFlag whenever a rules file was
+   * actually written for this launch (see resolveAgentSessionRulesLaunchOptions /
+   * ensureAgentSessionRulesFile) since quoting a path is reliable where quoting arbitrary text is not.
+   * Set this only once a specific agent's real flag is confirmed against its own CLI, not guessed. */
+  sessionRulesFileFlag?: string
+  /** `-c key=value` config-override flag for agents with no argv system-prompt flag at all (e.g. Codex's
+   * `-c developer_instructions=<text>`). Like sessionRulesTextFlag/sessionRulesFileFlag, this IS read by
+   * hasNativeSessionRulesInjection and gates the prepend-to-prompt / paste-after-ready fallbacks off —
+   * it applies unconditionally (including a resume launch with no prompt at all to prepend rules to),
+   * so once it fires those fallbacks must not also deliver the same rules text a second time. */
+  sessionRulesConfigOverride?: { flag: string; key: string }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -53,7 +72,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'claude',
     promptInjectionMode: 'argv',
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
-    draftPromptFlag: '--prefill'
+    draftPromptFlag: '--prefill',
+    // Why: `claude --append-system-prompt <text>` carries session rules as system instructions, kept
+    // separate from the user prompt on argv rather than mixed into a single prepended string.
+    sessionRulesTextFlag: '--append-system-prompt',
+    // Why: `claude --append-system-prompt-file <path>` is the file-backed counterpart, used instead of
+    // the text flag whenever a rules file was actually written (cmd.exe, or across a WSL UNC boundary,
+    // where quoting arbitrary multi-line text inline is unreliable but a short path is not).
+    sessionRulesFileFlag: '--append-system-prompt-file'
   },
   'claude-agent-teams': {
     // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.
@@ -84,7 +110,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
     preflightTrust: 'codex',
-    draftPasteReadySignal: 'codex-composer-prompt'
+    draftPasteReadySignal: 'codex-composer-prompt',
+    // Why: Codex has no argv system-prompt flag, but `-c developer_instructions=<text>` is a real Codex
+    // config override that applies regardless of whether there is a prompt/resume selector alongside it.
+    sessionRulesConfigOverride: { flag: '-c', key: 'developer_instructions' }
   },
   autohand: {
     detectCmd: 'autohand',

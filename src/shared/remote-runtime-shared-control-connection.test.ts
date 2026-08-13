@@ -13,6 +13,7 @@ import {
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
 import {
   REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
+  REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES,
   retainedRemoteRuntimeJsonStringBytes,
   serializeRemoteRuntimeRpcRequest
 } from './remote-runtime-memory-limits'
@@ -654,7 +655,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it('keeps sent request bytes admitted while a ready socket stops responding', async () => {
     const server = await createServer({ silentMethods: ['worktree.large'] })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const params = { value: 'x'.repeat(3 * 1024 * 1024) }
+    // Why: a single RPC request must still fit within one E2EE-wrapped
+    // transport frame (REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES), so this stays
+    // just under that cap instead of the old unbounded-payload assumption —
+    // pending-byte admission is exercised by admitting several such requests.
+    const params = { value: 'x'.repeat(REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES - 4096) }
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
@@ -675,7 +680,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const requests = Array.from({ length: admittedCount }, () =>
       connection.request('worktree.large', params, 60_000).catch(() => undefined)
     )
-    await vi.waitFor(() => expect(server.requests).toHaveLength(admittedCount))
+    // Why: the tighter per-request cap means more (smaller) requests are
+    // needed to fill the pending-byte budget than before, so encrypting and
+    // sending them all takes longer than the default waitFor timeout allows
+    // under full-suite load.
+    await vi.waitFor(() => expect(server.requests).toHaveLength(admittedCount), { timeout: 5000 })
 
     expect(
       Array.from(pendingRequests.values()).every(

@@ -361,6 +361,7 @@ describe('launchAgentBackgroundSession', () => {
     // OSC 9999 → store path for hidden SSH sessions.
     state.settings.terminalMainSideEffectAuthority = false
     state.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
+    state.worktreesByRepo['repo-1']![0]!.hostId = 'ssh:ssh-a'
     state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
     mockSpawn.mockResolvedValue({ id: toAppSshPtyId('ssh-a', 'pty-1') })
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
@@ -410,6 +411,7 @@ describe('launchAgentBackgroundSession', () => {
 
   it('stamps a working status for SSH Command Code prompt launches', async () => {
     state.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
+    state.worktreesByRepo['repo-1']![0]!.hostId = 'ssh:ssh-a'
     state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
     mockSpawn.mockResolvedValue({ id: toAppSshPtyId('ssh-a', 'pty-1') })
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')

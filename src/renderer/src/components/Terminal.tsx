@@ -1566,7 +1566,7 @@ function Terminal(): React.JSX.Element | null {
   )
 
   const handleNewAgentTab = useCallback(
-    (agent: TuiAgent) => {
+    async (agent: TuiAgent) => {
       if (!activeWorktreeId) {
         return
       }
@@ -2043,7 +2043,7 @@ function Terminal(): React.JSX.Element | null {
           e.preventDefault()
           notifyTerminalCapture(agentActionId)
           if (agentToLaunch) {
-            handleNewAgentTab(agentToLaunch)
+            void handleNewAgentTab(agentToLaunch)
           } else {
             toast.message(
               translate(

@@ -61,7 +61,7 @@ describe('SshPtyProvider', () => {
     const live = provider.supportsAgentSessionClaims()
 
     abort.abort()
-    await expect(canceled).resolves.toBe(false)
+    await expect(canceled).rejects.toThrow('client_disconnected')
     finishProbe({ agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION })
     await expect(live).resolves.toBe(true)
     expect(mux.request).toHaveBeenCalledOnce()
@@ -121,7 +121,7 @@ describe('SshPtyProvider', () => {
     })
 
     it('fails before spawn when the relay cannot prove claim support', async () => {
-      mux.request.mockRejectedValue(new Error('method not found'))
+      mux.request.mockResolvedValue({})
 
       await expect(
         provider.spawn({ cols: 80, rows: 24, agentSessionEnsure: { claim, surface } })

@@ -1203,6 +1203,7 @@ export type PreloadApi = {
         >
       > & {
         sourceControlAi?: Repo['sourceControlAi'] | null
+        agentSessionRules?: Repo['agentSessionRules'] | null
         externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       }
     }) => Promise<Repo>
@@ -2474,6 +2475,7 @@ export type PreloadApi = {
       connectionId?: string
     }) => Promise<void>
   }
+
   preflight: PreflightApi
   notifications: {
     dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>

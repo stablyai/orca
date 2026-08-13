@@ -8,6 +8,7 @@ import type { PtySpawnResult } from './pty-spawn-result'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS } from './ssh-agent-session-create-operation'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import { isSshRpcMethodNotFoundError } from '../ssh/ssh-rpc-error'
 
 export type ClaimedSshSpawnValidation =
   | { valid: true }
@@ -16,7 +17,7 @@ export type ClaimedSshSpawnValidation =
 export async function proveSshAgentSessionClaimCapability(
   mux: SshChannelMultiplexer,
   options: { signal?: AbortSignal } = {}
-): Promise<void> {
+): Promise<boolean> {
   try {
     const result = (await mux.request('pty.getCapabilities', undefined, {
       signal: options.signal,
@@ -24,11 +25,12 @@ export async function proveSshAgentSessionClaimCapability(
     })) as {
       agentSessionClaimVersion?: unknown
     }
-    if (result.agentSessionClaimVersion !== AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION) {
-      throw new Error('unsupported')
+    return result.agentSessionClaimVersion === AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION
+  } catch (error) {
+    if (isSshRpcMethodNotFoundError(error)) {
+      return false
     }
-  } catch {
-    throw new Error('agent_session_claim_unavailable')
+    throw error
   }
 }
 

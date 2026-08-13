@@ -33,10 +33,11 @@ function ids(
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 10)).toEqual([
+    expect(ids().slice(0, 11)).toEqual([
       'agents',
       'accounts',
       'orchestration',
+      'agentSessionRules',
       'computer-use',
       'voice',
       'orca-account',
@@ -117,10 +118,11 @@ describe('settings navigation metadata', () => {
   })
 
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
-    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
+    expect(ids({ isWebClient: true }).slice(0, 7)).toEqual([
       'agents',
       'accounts',
       'orchestration',
+      'agentSessionRules',
       'setup-guide',
       'general',
       'integrations'

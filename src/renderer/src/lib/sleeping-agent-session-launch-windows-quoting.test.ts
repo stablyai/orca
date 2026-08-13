@@ -13,13 +13,18 @@ const store = {
     agentCmdOverrides: {},
     agentDefaultArgs: {} as Record<string, string>,
     agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    activeRuntimeEnvironmentId: null as string | null
+    activeRuntimeEnvironmentId: null as string | null,
+    // Why: this file is pure shell-quoting coverage for the resume argv, isolated from session-rules
+    // content (covered separately by sleeping-agent-session-launch-session-rules.test.ts) — otherwise
+    // the default-enabled builtin graphify rule would leak into every exact-equality assertion below.
+    agentSessionRules: { enabled: false, rules: [] as unknown[] }
   } as {
     agentCmdOverrides: Record<string, string>
     agentDefaultArgs: Record<string, string>
     agentDefaultEnv: Record<string, Record<string, string>>
     activeRuntimeEnvironmentId: string | null
     terminalWindowsShell?: string
+    agentSessionRules?: { enabled: boolean; rules: unknown[] }
   },
   repos: [
     {
@@ -96,7 +101,8 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: null
+      activeRuntimeEnvironmentId: null,
+      agentSessionRules: { enabled: false, rules: [] }
     }
     store.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\neil\\repo' }]
     store.worktreesByRepo = {

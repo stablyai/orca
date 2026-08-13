@@ -153,8 +153,11 @@ import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pan
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { isDecorativeAgentTitleFrameChange } from '../../../shared/agent-decorative-title-signature'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import type {
@@ -1825,7 +1828,8 @@ export function useIpcEvents(): void {
               ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
               ...(data.startupCommandDelivery
                 ? { startupCommandDelivery: data.startupCommandDelivery }
-                : {})
+                : {}),
+              ...(data.startupDraftPrompt ? { draftPrompt: data.startupDraftPrompt } : {})
             })
           }
           window.api.ui.replyTerminalCreate({
@@ -3244,6 +3248,11 @@ export function useIpcEvents(): void {
         return 'dropped'
       }
       const existingStatus = store.agentStatusByPaneKey[paneKey]
+      const statusWorktreeId = data.worktreeId ?? owningWorktreeId
+      const executionHostId =
+        typeof ownershipConnectionId === 'string'
+          ? toSshExecutionHostId(ownershipConnectionId)
+          : getExecutionHostIdForWorktree(store, statusWorktreeId)
       if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
         // Why: the store rejects out-of-order status rows; keep metadata-only session identity on the same event boundary.
         return 'dropped'
@@ -3261,6 +3270,7 @@ export function useIpcEvents(): void {
           routing: {
             tabId: ownerTabId,
             worktreeId: data.worktreeId ?? owningWorktreeId,
+            executionHostId,
             // Why: persist the WSL-normalized ownership id, not raw relay provenance; a `wsl:*` connectionId would misroute later resumes.
             ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
           },
@@ -3327,7 +3337,6 @@ export function useIpcEvents(): void {
         return 'dropped'
       }
       const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
-      const statusWorktreeId = data.worktreeId ?? owningWorktreeId
       const update: AgentStatusUpdate = {
         paneKey,
         payload: statusPayloadWithProvenance,
@@ -3339,6 +3348,7 @@ export function useIpcEvents(): void {
         routing: {
           tabId: ownerTabId,
           worktreeId: statusWorktreeId,
+          executionHostId,
           terminalHandle: data.terminalHandle,
           ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
         },
@@ -3447,7 +3457,10 @@ export function useIpcEvents(): void {
                 entry.paneKey &&
                 resolvePaneKeyFromRoutingIndex(unsupportedRoutingIndex, entry.paneKey).exists
               ) {
-                unsupportedStore.setMigrationUnsupportedPty(entry)
+                unsupportedStore.setMigrationUnsupportedPty({
+                  ...entry,
+                  executionHostId: getExecutionHostIdForWorktree(unsupportedStore, entry.worktreeId)
+                })
               }
             }
           })
@@ -3618,7 +3631,10 @@ export function useIpcEvents(): void {
           return
         }
         if (entry.paneKey && resolvePaneKey(store, entry.paneKey).exists) {
-          store.setMigrationUnsupportedPty(entry)
+          store.setMigrationUnsupportedPty({
+            ...entry,
+            executionHostId: getExecutionHostIdForWorktree(store, entry.worktreeId)
+          })
         }
       }
     )

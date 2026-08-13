@@ -12,7 +12,10 @@ import {
 } from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
@@ -21,6 +24,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
@@ -86,6 +90,16 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const store = useAppStore.getState()
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
   const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
+  // Why: an explicitly host-pinned worktree (SSH/runtime) must be backed by a repo whose
+  // own connection actually reaches that host. A stale or mismatched pairing — including
+  // an orphaned worktree whose repoId no longer resolves to any repo — must fail closed
+  // here rather than silently launching the agent against the wrong machine.
+  if (worktree?.hostId) {
+    const claimedExecutionHostId = getExecutionHostIdForWorktree(store, worktreeId)
+    if (!repo || claimedExecutionHostId !== getRepoExecutionHostId(repo)) {
+      return null
+    }
+  }
   const resolvedLaunchPlatform =
     launchPlatform ??
     (repo
@@ -130,7 +144,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv,
-    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
+    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions),
+    repoId: worktree?.repoId ?? null,
+    connectionId: repo?.connectionId ?? null,
+    executionHostId: repo ? getRepoExecutionHostId(repo) : null
   }
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
     base: startupPlanBase,

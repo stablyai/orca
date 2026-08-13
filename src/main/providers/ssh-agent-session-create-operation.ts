@@ -10,6 +10,7 @@ import {
   type PtySourceReceivingActivation
 } from '../../shared/pty-source-receiving-activation'
 import { validateClaimedSshSpawn } from './ssh-agent-session-claim-validation'
+import { isSshRpcMethodNotFoundError } from '../ssh/ssh-rpc-error'
 
 export const SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS = 5_000
 
@@ -46,9 +47,11 @@ export async function sshSupportsAgentSessionCreateOperations(
     return (
       result.agentSessionCreateOperationVersion === AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
     )
-  } catch {
-    // Why: capability probing does not spawn, so an old relay can safely keep legacy behavior.
-    return false
+  } catch (error) {
+    if (isSshRpcMethodNotFoundError(error)) {
+      return false
+    }
+    throw error
   }
 }
 

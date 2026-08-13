@@ -3,6 +3,7 @@ import { OptionalFiniteNumber, OptionalString } from '../schemas'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import { normalizeRepoAgentSessionRuleOverrides } from '../../../../shared/agent-session-rules'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -13,6 +14,17 @@ export const RepoSourceControlAiOverrides = z
       : value === null
         ? null
         : normalizeRepoSourceControlAiOverrides(value)
+  )
+
+const RepoAgentSessionRuleOverrides = z
+  .unknown()
+  .optional()
+  .transform((value) =>
+    value === undefined
+      ? undefined
+      : value === null
+        ? null
+        : normalizeRepoAgentSessionRuleOverrides(value)
   )
 
 const RepoBadgeColor = z
@@ -58,7 +70,8 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber,
-      sourceControlAi: RepoSourceControlAiOverrides
+      sourceControlAi: RepoSourceControlAiOverrides,
+      agentSessionRules: RepoAgentSessionRuleOverrides
     })
   }) as z.ZodObject<T & { updates: z.ZodObject<z.ZodRawShape> }>
 }

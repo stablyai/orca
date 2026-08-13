@@ -1,13 +1,17 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
-import { uploadBuffer } from '../ssh/sftp-upload'
+
 import { lstatViaSftp } from './ssh-filesystem-provider-sftp'
 import {
   downloadFileViaSftp,
   downloadFolderViaSftp,
   type SftpFactory
 } from './ssh-filesystem-download'
-import { openSshFileUploadSession, type SshRawTransferOptions } from './ssh-filesystem-file-upload'
+import {
+  openSshFileUploadSession,
+  writeSshBase64File,
+  type SshRawTransferOptions
+} from './ssh-filesystem-file-upload'
 import {
   closeSshFilesystemWatch,
   registerSshFilesystemWatch,
@@ -25,6 +29,7 @@ import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../..
 import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import { readSshTerminalArtifact, writeSshTerminalArtifact } from './ssh-terminal-artifact-access'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 
 export class SshFilesystemProvider implements IFilesystemProvider {
@@ -113,21 +118,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     filePath: string,
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult> {
-    try {
-      return (await this.mux.request('fs.readTerminalArtifact', {
-        filePath,
-        expectedRealPath: options.expectedRealPath,
-        expectedStatIdentity: options.expectedStatIdentity,
-        maxBytes: options.maxBytes
-      })) as FileReadResult
-    } catch (err) {
-      if (isMethodNotFoundError(err)) {
-        throw new Error(
-          'Remote terminal artifact access is unavailable. Reconnect the SSH target before retrying.'
-        )
-      }
-      throw err
-    }
+    return readSshTerminalArtifact(this.mux, filePath, options)
   }
 
   async downloadFile(sourcePath: string, destinationPath: string): Promise<void> {
@@ -166,31 +157,18 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     content: string,
     options: TerminalArtifactAccessOptions
   ): Promise<FileStat> {
-    let result: { stat?: FileStat }
-    try {
-      result = (await this.mux.request('fs.writeTerminalArtifact', {
-        filePath,
-        content,
-        expectedRealPath: options.expectedRealPath,
-        expectedStatIdentity: options.expectedStatIdentity,
-        maxBytes: options.maxBytes
-      })) as { stat?: FileStat }
-    } catch (err) {
-      if (isMethodNotFoundError(err)) {
-        throw new Error(
-          'Remote terminal artifact access is unavailable. Reconnect the SSH target before retrying.'
-        )
-      }
-      throw err
-    }
-    if (!result.stat) {
-      throw new Error('terminal_file_grant_stale')
-    }
-    return result.stat
+    return writeSshTerminalArtifact(this.mux, filePath, content, options)
   }
 
   async writeFileBase64(filePath: string, contentBase64: string): Promise<void> {
     await this.writeFileBase64Chunk(filePath, contentBase64, false)
+  }
+
+  async writePrivateFileBase64(filePath: string, contentBase64: string): Promise<void> {
+    await writeSshBase64File(this.createSftp, this.rawTransfer, filePath, contentBase64, {
+      append: false,
+      mode: 0o600
+    })
   }
 
   async writeFileBase64Chunk(
@@ -198,25 +176,9 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     contentBase64: string,
     append: boolean
   ): Promise<void> {
-    const contents = Buffer.from(contentBase64, 'base64')
-    if (this.rawTransfer?.writeBuffer) {
-      await this.rawTransfer.writeBuffer(filePath, contents, { append, exclusive: !append })
-      return
-    }
-    if (!this.createSftp) {
-      throw new Error('remote_binary_upload_unavailable')
-    }
-    const sftp = await this.createSftp()
-    try {
-      // Why: relay fs.writeFile is text-only. SFTP writes the decoded bytes
-      // directly so runtime uploads do not corrupt images, PDFs, or archives.
-      await uploadBuffer(sftp, contents, filePath, {
-        append,
-        exclusive: !append
-      })
-    } finally {
-      sftp.end()
-    }
+    await writeSshBase64File(this.createSftp, this.rawTransfer, filePath, contentBase64, {
+      append
+    })
   }
 
   async stat(filePath: string): Promise<FileStat> {

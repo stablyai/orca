@@ -1514,6 +1514,32 @@ describe('createWebRuntimeSessionTerminal', () => {
   ])(
     'keeps $sessionKind host creation background with activate=$activate while focus stays client-owned',
     async ({ sessionKind, activate }) => {
+      const clientDefaultAgentSessionRules = {
+        enabled: true,
+        rules: [
+          {
+            id: 'client-host-authority-rule',
+            label: 'Client host authority rule',
+            content: 'Preserve client defaults on the execution host.',
+            enabled: true,
+            source: 'custom' as const
+          }
+        ],
+        seenBuiltinRuleIds: ['builtin-graphify']
+      }
+      mocks.getState.mockReturnValue({
+        settings: {
+          activeRuntimeEnvironmentId: ENVIRONMENT_ID,
+          agentSessionRules: clientDefaultAgentSessionRules
+        },
+        activeWorktreeId: WORKTREE_ID,
+        browserPagesByWorkspace: {},
+        remoteBrowserPageHandlesByPageId: {},
+        createBrowserTab: mocks.createBrowserTab,
+        setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
+        focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
+        setActiveWorktree: mocks.setActiveWorktree
+      })
       const hostTabId = `host-${sessionKind}-${activate ? 'active' : 'background'}`
       const runtimeCall = vi.fn(async (request: { method: string }) => {
         if (request.method === 'status.get') {
@@ -1525,7 +1551,12 @@ describe('createWebRuntimeSessionTerminal', () => {
               graphStatus: 'ready',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+              capabilities: [
+                'agent-session.host-authority.v1',
+                'agent-session.client-default-rules.v1',
+                'agent-session.prompt-delivery-owner.v1',
+                'terminal.attribution-removed.v1'
+              ]
             }
           }
         }
@@ -1561,9 +1592,12 @@ describe('createWebRuntimeSessionTerminal', () => {
           ...(sessionKind === 'resume'
             ? {
                 command: "codex resume 'session-1'",
-                providerSession: { key: 'session_id' as const, id: 'session-1' }
+                providerSession: { key: 'session_id' as const, id: 'session-1' },
+                prompt: 'Restore this draft',
+                promptDelivery: 'draft' as const
               }
             : {}),
+          launchConfig: { agentArgs: '--stale-renderer-default', agentEnv: {} },
           activate
         })
       ).resolves.toEqual({ status: 'created' })
@@ -1572,12 +1606,19 @@ describe('createWebRuntimeSessionTerminal', () => {
         sessionKind === 'resume' ? 'terminal.ensureAgentSession' : 'terminal.createAgentSession'
       const authorityRequest = runtimeCall.mock.calls.find(
         ([request]) => request.method === authorityMethod
-      )?.[0]
+      )?.[0] as { method: string; params?: Record<string, unknown> } | undefined
       expect(authorityRequest).toMatchObject({
         selector: ENVIRONMENT_ID,
         method: authorityMethod,
-        params: { presentation: 'background' }
+        params: {
+          presentation: 'background',
+          clientDefaultAgentSessionRules,
+          ...(sessionKind === 'resume'
+            ? { prompt: 'Restore this draft', promptDelivery: 'draft' }
+            : {})
+        }
       })
+      expect(authorityRequest?.params).not.toHaveProperty('agentArgs')
       expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual(
         activate ? { hostTabId, leafId: FOCUS_LEAF_ID } : null
       )
@@ -1614,7 +1655,11 @@ describe('createWebRuntimeSessionTerminal', () => {
           graphStatus: 'ready',
           runtimeProtocolVersion: 3,
           minCompatibleRuntimeClientVersion: 2,
-          capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+          capabilities: [
+            'agent-session.host-authority.v1',
+            'agent-session.client-default-rules.v1',
+            'terminal.attribution-removed.v1'
+          ]
         }
       })
       .mockResolvedValueOnce({
@@ -1688,6 +1733,11 @@ describe('createWebRuntimeSessionTerminal', () => {
         promptDelivery: 'draft',
         agentArgs: '--model gpt-5 --profile captured',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
+        clientDefaultAgentSessionRules: expect.objectContaining({
+          rules: expect.arrayContaining([
+            expect.objectContaining({ id: 'builtin-graphify', enabled: true })
+          ])
+        }),
         startupCwd: '/repo/packages/app',
         viewMode: 'chat',
         presentation: 'background'
@@ -1845,7 +1895,11 @@ describe('createWebRuntimeSessionTerminal', () => {
               graphStatus: 'ready',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+              capabilities: [
+                'agent-session.host-authority.v1',
+                'agent-session.client-default-rules.v1',
+                'terminal.attribution-removed.v1'
+              ]
             }
           }
         }
@@ -1906,7 +1960,11 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: [
+              'agent-session.host-authority.v1',
+              'agent-session.client-default-rules.v1',
+              'terminal.attribution-removed.v1'
+            ]
           }
         }
       }
@@ -2014,6 +2072,167 @@ describe('createWebRuntimeSessionTerminal', () => {
       'session.tabs.createTerminal',
       'session.tabs.list'
     ])
+  })
+
+  it('sends host launch intent when placement uses legacy RPC on a capable host', async () => {
+    const clientDefaultAgentSessionRules = {
+      enabled: true,
+      rules: [
+        {
+          id: 'client-graph-policy',
+          label: 'Client graph policy',
+          content: 'Use the client graph policy.',
+          enabled: true,
+          source: 'custom' as const
+        }
+      ],
+      seenBuiltinRuleIds: ['builtin-graphify']
+    }
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID,
+        agentSessionRules: clientDefaultAgentSessionRules
+      },
+      activeWorktreeId: WORKTREE_ID,
+      browserPagesByWorkspace: {},
+      remoteBrowserPageHandlesByPageId: {},
+      createBrowserTab: mocks.createBrowserTab,
+      setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
+      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
+      setActiveWorktree: mocks.setActiveWorktree
+    })
+    const runtimeCall = vi.fn(async (request: { method: string }) => {
+      if (request.method === 'status.get') {
+        return {
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'old-runtime',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: [
+              'agent-session.client-default-rules.v1',
+              'terminal.attribution-removed.v1'
+            ]
+          }
+        }
+      }
+      if (request.method === 'session.tabs.createTerminal') {
+        return {
+          id: 'legacy-create',
+          ok: true,
+          result: {
+            tab: { id: 'legacy-tab-1' },
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1
+          }
+        }
+      }
+      return { id: 'list', ok: true, result: makeSnapshot() }
+    })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await createWebRuntimeSessionTerminal({
+      worktreeId: WORKTREE_ID,
+      afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
+      agentSessionKind: 'fresh',
+      launchAgent: 'codex',
+      command: "codex 'client-built prompt'",
+      prompt: 'Host-built prompt',
+      promptDelivery: 'draft',
+      agentArgs: '--profile review',
+      launchPreferences: { model: 'gpt-5', effort: 'high' },
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+    })
+
+    expect(runtimeCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: 'session.tabs.createTerminal',
+        params: expect.objectContaining({
+          command: "codex 'client-built prompt'",
+          launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+          hostAgentLaunch: {
+            kind: 'fresh',
+            agent: 'codex',
+            prompt: 'Host-built prompt',
+            promptDelivery: 'draft',
+            agentArgs: '--profile review',
+            launchPreferences: { model: 'gpt-5', effort: 'high' },
+            clientDefaultAgentSessionRules
+          }
+        })
+      })
+    )
+  })
+
+  it('omits OMP host intent when placement host lacks the OMP resume capability', async () => {
+    mocks.getState.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-env-old-placement' },
+      activeWorktreeId: WORKTREE_ID,
+      browserPagesByWorkspace: {},
+      remoteBrowserPageHandlesByPageId: {},
+      createBrowserTab: mocks.createBrowserTab,
+      setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
+      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
+      setActiveWorktree: mocks.setActiveWorktree
+    })
+    const runtimeCall = vi.fn(async (request: { method: string }) => {
+      if (request.method === 'status.get') {
+        return {
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'old-placement-runtime',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: [
+              'agent-session.client-default-rules.v1',
+              'terminal.attribution-removed.v1'
+            ]
+          }
+        }
+      }
+      if (request.method === 'session.tabs.createTerminal') {
+        return {
+          id: 'legacy-create',
+          ok: true,
+          result: {
+            tab: { id: 'legacy-tab-placement' },
+            publicationEpoch: 'epoch-placement',
+            snapshotVersion: 1
+          }
+        }
+      }
+      return { id: 'list', ok: true, result: makeSnapshot() }
+    })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await createWebRuntimeSessionTerminal({
+      worktreeId: WORKTREE_ID,
+      afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
+      agentSessionKind: 'resume',
+      launchAgent: 'omp',
+      command: "omp --resume '/project/session.jsonl'",
+      launchConfig: {
+        agentCommand: 'omp',
+        agentArgs: '',
+        agentEnv: {},
+        ompResumeFilePath: '/project/session.jsonl'
+      },
+      providerSession: { key: 'session_id', id: 'omp-session' }
+    })
+
+    const createRequest = runtimeCall.mock.calls.find(
+      ([request]) => request.method === 'session.tabs.createTerminal'
+    )?.[0] as { params?: Record<string, unknown> } | undefined
+    expect(createRequest?.params).not.toHaveProperty('hostAgentLaunch')
   })
 
   it('preserves the opaque legacy resume payload on an old host', async () => {
@@ -2166,7 +2385,12 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: [
+              'agent-session.host-authority.v1',
+              'agent-session.client-default-rules.v1',
+              'agent-session.prompt-delivery-owner.v1',
+              'terminal.attribution-removed.v1'
+            ]
           }
         }
       }
@@ -2197,6 +2421,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         agentSessionKind: 'fresh',
         agent: 'claude',
         command: 'claude',
+        promptDeliveryOwner: 'client',
         promptAfterReady: 'continue the unfinished task',
         submitPrompt: true,
         forcePromptPaste: true
@@ -2206,7 +2431,9 @@ describe('createWebRuntimeSessionTerminal', () => {
     const createRequest = runtimeCall.mock.calls.find(
       ([request]) => request.method === 'terminal.createAgentSession'
     )?.[0]
-    expect(createRequest).toMatchObject({ params: { agent: 'claude' } })
+    expect(createRequest).toMatchObject({
+      params: { agent: 'claude', promptDeliveryOwner: 'client' }
+    })
     expect(createRequest?.params).not.toHaveProperty('prompt')
     expect(mocks.deliverLaunchPromptToAgentTab).toHaveBeenCalledWith({
       tabId: 'web-terminal-host-tab-2',
@@ -2228,7 +2455,11 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1', 'terminal.attribution-removed.v1']
+            capabilities: [
+              'agent-session.host-authority.v1',
+              'agent-session.client-default-rules.v1',
+              'terminal.attribution-removed.v1'
+            ]
           }
         }
       }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildAgentResumeSessionRulesDraft,
   buildShellCommandFromArgv,
   clearEnvCommand,
   commandSeparator,
@@ -8,7 +9,8 @@ import {
   resolveLoginShellStartupDialect,
   tokenizeStartupCommand
 } from './tui-agent-startup-shell'
-import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
+import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from './tui-agent-startup'
+import { TUI_AGENT_CONFIG } from './tui-agent-config'
 
 function expectSpansCoverTokens(source: string, shell: 'powershell' | 'cmd'): string[] {
   const result = tokenizeStartupCommand(source, shell)
@@ -110,5 +112,73 @@ describe('fish startup shell dialect', () => {
 
     expect(plan?.launchCommand).toBe('pi; set -e ORCA_PI_PREFILL')
     expect(plan?.env?.ORCA_PI_PREFILL).toBe('hello')
+  })
+})
+
+describe('config-override session rules do not double-deliver', () => {
+  it('embeds Codex session rules via -c developer_instructions= exactly once, not also prepended to the prompt', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'Review this diff',
+      cmdOverrides: {},
+      platform: 'darwin',
+      agentSessionRulesText: 'Always run tests.'
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "codex -c 'developer_instructions=Always run tests.' 'Review this diff'"
+    )
+    expect(plan?.launchCommand.match(/Always run tests\./g)).toHaveLength(1)
+  })
+
+  it('still embeds Codex session rules with no prompt at all', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'darwin',
+      allowEmptyPromptLaunch: true,
+      agentSessionRulesText: 'Always run tests.'
+    })
+
+    expect(plan?.launchCommand).toBe("codex -c 'developer_instructions=Always run tests.'")
+    expect(plan?.launchCommand.match(/Always run tests\./g)).toHaveLength(1)
+  })
+})
+
+describe('buildAgentResumeSessionRulesDraft', () => {
+  it('drafts rules for an agent with only a text/file flag, since resume never applies either', () => {
+    const draft = buildAgentResumeSessionRulesDraft(
+      TUI_AGENT_CONFIG.claude,
+      'Always run tests.',
+      'posix'
+    )
+
+    expect(draft).toContain('Always run tests.')
+  })
+
+  it('returns null for a config-override agent whose rules embed inline', () => {
+    const draft = buildAgentResumeSessionRulesDraft(
+      TUI_AGENT_CONFIG.codex,
+      'Always run tests.',
+      'posix'
+    )
+
+    expect(draft).toBeNull()
+  })
+
+  it('drafts rules for a config-override agent on cmd.exe, since the override cannot embed there', () => {
+    const draft = buildAgentResumeSessionRulesDraft(
+      TUI_AGENT_CONFIG.codex,
+      'Always run tests.',
+      'cmd'
+    )
+
+    expect(draft).toContain('Always run tests.')
+  })
+
+  it('returns null with no rules text', () => {
+    expect(buildAgentResumeSessionRulesDraft(TUI_AGENT_CONFIG.claude, null, 'posix')).toBeNull()
+    expect(buildAgentResumeSessionRulesDraft(TUI_AGENT_CONFIG.claude, '   ', 'posix')).toBeNull()
   })
 })
