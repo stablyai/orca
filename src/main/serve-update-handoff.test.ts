@@ -39,6 +39,7 @@ describe('serve update handoff', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     delete process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]
     delete process.env[SERVE_SUPERVISOR_ENV]
     rmSync(root, { recursive: true, force: true })
@@ -121,14 +122,19 @@ describe('serve update handoff', () => {
   )
 
   it('quits a supervised serve child on every platform when its CLI parent is lost', async () => {
+    vi.useFakeTimers()
     const parent = new EventEmitter()
     process.env[SERVE_SUPERVISOR_ENV] = '1'
-    const { installServeSupervisorDisconnectQuit } = await import('./serve-update-handoff')
+    const { installServeSupervisorDisconnectQuit, SERVE_SUPERVISOR_EXIT_FALLBACK_MS } =
+      await import('./serve-update-handoff')
 
     const removeListener = installServeSupervisorDisconnectQuit(true, parent)
     parent.emit('disconnect')
 
     expect(appMock.quit).toHaveBeenCalledOnce()
+    expect(appMock.exit).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(SERVE_SUPERVISOR_EXIT_FALLBACK_MS)
+    expect(appMock.exit).toHaveBeenCalledWith(SERVE_SUPERVISOR_STOP_EXIT_CODE)
     removeListener()
   })
 

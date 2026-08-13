@@ -113,7 +113,11 @@ export async function recoverStaleServeSingleton(
       return { state: 'not-recoverable', reason: 'owner_changed' }
     }
     if (quarantine.state === 'failed') {
-      return { state: 'not-recoverable', reason: 'quarantine_failed' }
+      return {
+        state: 'not-recoverable',
+        reason: 'quarantine_failed',
+        ...(quarantine.errorCode ? { errorCode: quarantine.errorCode } : {})
+      }
     }
     return { state: 'recovered', ownerPid: confirmedOwner.pid, quarantined: quarantine.paths }
   } finally {

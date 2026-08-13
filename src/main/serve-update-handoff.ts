@@ -14,6 +14,9 @@ import {
   type ServeSupervisorHealth
 } from '../shared/serve-supervision'
 import { getCanonicalUserDataPath } from './persistence'
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from './quit-teardown-deadline'
+
+export const SERVE_SUPERVISOR_EXIT_FALLBACK_MS = WILL_QUIT_TEARDOWN_DEADLINE_MS + 5_000
 
 function getConfiguredHandoffPath(): string | null {
   const configuredPath = process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]
@@ -98,6 +101,12 @@ export function installServeSupervisorDisconnectQuit(
     if (foregroundSupervised && !app.isReady()) {
       app.exit(SERVE_SUPERVISOR_STOP_EXIT_CODE)
       return
+    }
+    if (foregroundSupervised) {
+      setTimeout(
+        () => app.exit(SERVE_SUPERVISOR_STOP_EXIT_CODE),
+        SERVE_SUPERVISOR_EXIT_FALLBACK_MS
+      ).unref()
     }
     app.quit()
   }

@@ -14,7 +14,7 @@ import { getDefaultUserDataPath } from './metadata'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
 import { probeServeRuntimeHealth } from './serve-runtime-health'
 import { recoverStaleServeSingleton } from './serve-singleton-recovery'
-import { removeServeSingletonQuarantine } from './serve-singleton-quarantine'
+import { removeServeSingletonQuarantine as cleanSingleton } from './serve-singleton-quarantine'
 import {
   applyServeTempDirectory,
   prepareServeTempDirectory,
@@ -29,7 +29,6 @@ import {
 import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
-
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
   if (typeof overrideCommand === 'string' && overrideCommand.trim().length > 0) {
@@ -50,9 +49,7 @@ export function launchOrcaApp(): void {
     if (process.platform === 'darwin') {
       const appBundlePath = getMacAppBundlePath(process.execPath)
       if (appBundlePath) {
-        // Why: launching the inner MacOS binary directly can trigger macOS app
-        // launch failures and bypass normal bundle lifecycle. The public
-        // packaged CLI should re-open the .app the same way Finder does.
+        // Why: launching the inner binary bypasses bundle lifecycle; reopen the .app like Finder.
         spawnDetached('open', [appBundlePath], {
           env: stripElectronRunAsNode(process.env)
         })
@@ -78,8 +75,7 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
     stdio: 'ignore',
     ...options
   })
-  // Why: detached launch errors are reported asynchronously after this function
-  // returns; openOrca already reports the user-facing timeout if startup fails.
+  // Why: detached errors arrive after return; openOrca reports the startup timeout.
   child.once('error', () => {})
   child.unref()
 }
@@ -167,7 +163,7 @@ export function serveOrcaApp(
     ? {
         healthProbe: () => probeServeRuntimeHealth(userDataPath),
         recoverSingleton: () => recoverStaleServeSingleton(userDataPath),
-        cleanupSingletonQuarantine: (paths) => removeServeSingletonQuarantine(userDataPath, paths),
+        cleanupSingletonQuarantine: (paths) => cleanSingleton(userDataPath, paths, tempDirectory),
         beforeRestart: async () => {
           prepareServeTempDirectory({ env: { [SERVE_TEMP_DIRECTORY_ENV]: tempDirectory } })
         }

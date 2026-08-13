@@ -64,6 +64,61 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
     }
   })
 
+  it('removes the exact stale Chromium socket directory from the serve temp root', async () => {
+    const root = await createProfile(987_654)
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-serve-temp-'))
+    roots.push(tempRoot)
+    const scopedDirectory = join(tempRoot, '.org.chromium.Chromium.test')
+    const socketTarget = join(scopedDirectory, 'SingletonSocket')
+    await mkdir(scopedDirectory)
+    writeFileSync(socketTarget, 'stale socket')
+    await rm(join(root, 'SingletonSocket'))
+    await symlink(socketTarget, join(root, 'SingletonSocket'))
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+      isProcessAlive: () => false,
+      wait: async () => undefined,
+      quarantineSuffix: 'temp-cleanup'
+    })
+    if (result.state !== 'recovered') {
+      throw new Error('Expected stale singleton recovery')
+    }
+
+    await removeServeSingletonQuarantine(root, result.quarantined, tempRoot)
+
+    expect(await pathExists(scopedDirectory)).toBe(false)
+  })
+
+  it('keeps a stale socket target outside the configured serve temp root', async () => {
+    const root = await createProfile(987_654)
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-serve-temp-'))
+    const outsideRoot = await mkdtemp(join(tmpdir(), 'orca-serve-outside-'))
+    roots.push(tempRoot, outsideRoot)
+    const scopedDirectory = join(outsideRoot, '.org.chromium.Chromium.test')
+    const socketTarget = join(scopedDirectory, 'SingletonSocket')
+    await mkdir(scopedDirectory)
+    writeFileSync(socketTarget, 'stale socket')
+    await rm(join(root, 'SingletonSocket'))
+    await symlink(socketTarget, join(root, 'SingletonSocket'))
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+      isProcessAlive: () => false,
+      wait: async () => undefined,
+      quarantineSuffix: 'temp-boundary'
+    })
+    if (result.state !== 'recovered') {
+      throw new Error('Expected stale singleton recovery')
+    }
+
+    await removeServeSingletonQuarantine(root, result.quarantined, tempRoot)
+
+    expect(await pathExists(socketTarget)).toBe(true)
+  })
+
   it('does not touch an active runtime owner', async () => {
     const root = await createProfile(4101)
 
@@ -185,7 +240,11 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
       quarantineSuffix: 'rollback'
     })
 
-    expect(result).toEqual({ state: 'not-recoverable', reason: 'quarantine_failed' })
+    expect(result).toMatchObject({
+      state: 'not-recoverable',
+      reason: 'quarantine_failed',
+      errorCode: expect.any(String)
+    })
     expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-987654`)
     expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
     expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
@@ -288,6 +347,28 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
       reason: 'recovery_mutex_failed',
       errorCode: 'ENOSPC'
     })
+  })
+
+  it('reports the errno when singleton quarantine cannot be created', async () => {
+    const root = await createProfile(987_654)
+
+    await expect(
+      recoverStaleServeSingleton(root, {
+        platform: 'linux',
+        probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+        isProcessAlive: () => false,
+        wait: async () => undefined,
+        createRecoveryGuardLink: async () => {
+          throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
+        }
+      })
+    ).resolves.toEqual({
+      state: 'not-recoverable',
+      reason: 'quarantine_failed',
+      errorCode: 'ENOSPC'
+    })
+    expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-987654`)
+    expect(await pathExists(join(root, 'SingletonRecoveryLock'))).toBe(false)
   })
 
   it('treats an existing live mutex as recovery in progress', async () => {

@@ -1,5 +1,5 @@
-import { link, lstat, readlink, rename, symlink, unlink } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { link, lstat, readlink, rename, rmdir, symlink, unlink } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 
 export const SINGLETON_ARTIFACT_NAMES = [
   'SingletonSocket',
@@ -10,14 +10,19 @@ export const SINGLETON_ARTIFACT_NAMES = [
 export type SingletonQuarantineResult =
   | { state: 'quarantined'; paths: string[] }
   | { state: 'owner_changed' }
-  | { state: 'failed' }
+  | { state: 'failed'; errorCode?: string }
 
 type MovedArtifact = { source: string; target: string; name: string }
 
 export async function removeServeSingletonQuarantine(
   userDataPath: string,
-  paths: readonly string[]
+  paths: readonly string[],
+  tempDirectory?: string
 ): Promise<void> {
+  const socketTarget = await readQuarantinedSocketTarget(userDataPath, paths)
+  if (socketTarget && tempDirectory) {
+    await removeScopedSocketDirectory(socketTarget, tempDirectory)
+  }
   await Promise.all(
     paths.map(async (path) => {
       if (
@@ -51,9 +56,8 @@ export async function quarantineSingletonArtifacts(
   try {
     await rename(lock.source, lock.target)
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT'
-      ? { state: 'owner_changed' }
-      : { state: 'failed' }
+    const errorCode = (error as NodeJS.ErrnoException).code
+    return errorCode === 'ENOENT' ? { state: 'owner_changed' } : quarantineFailure(error)
   }
 
   const movedLockTarget = await readlink(lock.target).catch(() => null)
@@ -68,7 +72,7 @@ export async function quarantineSingletonArtifacts(
     await restoreMovedLock(lock.source, lock.target, movedLockTarget)
     return (error as NodeJS.ErrnoException).code === 'EEXIST'
       ? { state: 'owner_changed' }
-      : { state: 'failed' }
+      : quarantineFailure(error)
   }
 
   const moved: MovedArtifact[] = [lock]
@@ -92,17 +96,66 @@ export async function quarantineSingletonArtifacts(
         (name) => `${name}.${suffix}`
       )
     }
-  } catch {
+  } catch (error) {
     for (const entry of moved.slice(1).toReversed()) {
       await rename(entry.target, entry.source).catch(() => undefined)
     }
     await restoreExpectedLock(lock, expectedLockTarget, recoveryGuardTarget)
-    return { state: 'failed' }
+    return quarantineFailure(error)
   } finally {
     if ((await readlink(lock.source).catch(() => null)) === recoveryGuardTarget) {
       await unlink(lock.source).catch(() => undefined)
     }
   }
+}
+
+function quarantineFailure(
+  error: unknown
+): Extract<SingletonQuarantineResult, { state: 'failed' }> {
+  const errorCode = (error as NodeJS.ErrnoException).code
+  return { state: 'failed', ...(errorCode ? { errorCode } : {}) }
+}
+
+async function readQuarantinedSocketTarget(
+  userDataPath: string,
+  paths: readonly string[]
+): Promise<string | null> {
+  const socketPath = paths.find((path) => path.startsWith('SingletonSocket.'))
+  if (!socketPath || basename(socketPath) !== socketPath) {
+    return null
+  }
+  return readlink(join(userDataPath, socketPath)).catch(() => null)
+}
+
+async function removeScopedSocketDirectory(
+  socketTarget: string,
+  tempDirectory: string
+): Promise<void> {
+  if (!isAbsolute(socketTarget) || basename(socketTarget) !== 'SingletonSocket') {
+    return
+  }
+  const scopedDirectory = dirname(resolve(socketTarget))
+  if (
+    dirname(scopedDirectory) !== resolve(tempDirectory) ||
+    !basename(scopedDirectory).startsWith('.org.chromium.')
+  ) {
+    return
+  }
+  const stats = await lstat(scopedDirectory).catch(() => null)
+  if (!stats?.isDirectory() || (process.getuid && stats.uid !== process.getuid())) {
+    return
+  }
+  await unlink(socketTarget).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error
+    }
+  })
+  await rmdir(scopedDirectory).catch((error) => {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== 'ENOENT' && code !== 'ENOTEMPTY') {
+      throw error
+    }
+  })
 }
 
 async function restoreExpectedLock(

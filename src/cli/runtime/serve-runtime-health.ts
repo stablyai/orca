@@ -1,4 +1,3 @@
-import WebSocket from 'ws'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { tryReadMetadata } from './metadata'
 import { getCliStatus } from './status'
@@ -63,6 +62,7 @@ export async function connectWebSocketListener(endpoint: string): Promise<boolea
     return false
   }
 
+  const { default: WebSocket } = await import('ws')
   return await new Promise<boolean>((resolveResult) => {
     // This only verifies the local listener handshake; runtime RPC verifies authenticated health.
     const socket = new WebSocket(target, {
