@@ -30,6 +30,7 @@ import {
 } from '../ephemeral-vm-runtime-ssh'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments'
+import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm-runtime-attachment'
 
 export type EphemeralVmCleanupCommandResult = {
   runtimeId: string
@@ -54,8 +55,9 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.handle(
     'ephemeralVm:attachWorkspace',
     (_event, args: { runtimeId: string; workspaceId: string }): EphemeralVmRuntimeRecord => {
-      return updateEphemeralVmRuntimeStatus(app.getPath('userData'), args.runtimeId, {
-        status: 'running',
+      return attachEphemeralVmRuntimeToWorkspace({
+        userDataPath: app.getPath('userData'),
+        runtimeId: args.runtimeId,
         workspaceId: args.workspaceId
       })
     }

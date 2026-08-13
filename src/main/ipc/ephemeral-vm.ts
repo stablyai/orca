@@ -110,6 +110,8 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         workspaceName?: string
         projectId?: string
         workspaceId?: string
+        branch?: string
+        ref?: string
         provisionId?: string
       }
     ): Promise<EphemeralVmProvisionIpcResult> => {
@@ -152,6 +154,11 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           projectId: args.projectId,
           workspaceId: args.workspaceId,
           workspaceName: args.workspaceName,
+          ...(repo.repo.gitRemoteIdentity?.remoteUrl
+            ? { repoUrl: repo.repo.gitRemoteIdentity.remoteUrl }
+            : {}),
+          ...(args.branch ? { branch: args.branch } : {}),
+          ...(args.ref ? { ref: args.ref } : {}),
           ...(controller ? { signal: controller.signal } : {}),
           onStdout: (chunk) => sendProvisionEvent('stdout', chunk),
           onStderr: (chunk) => sendProvisionEvent('stderr', chunk)
