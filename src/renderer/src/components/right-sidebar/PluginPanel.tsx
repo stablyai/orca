@@ -108,7 +108,6 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     watchdog.start()
     return () => watchdog.stop()
   }, [loadedFrameKey, panelFrameKey, watchdog])
-
   useEffect(() => {
     if (!pluginKey || !panelId) {
       return

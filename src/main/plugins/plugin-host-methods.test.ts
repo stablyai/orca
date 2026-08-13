@@ -5,7 +5,9 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-hos
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
 
-function createServices(storageSet: PluginHostServices['storage']['set']): PluginHostServices {
+function createServices(
+  storageSet: PluginHostServices['storage']['set'] = vi.fn().mockReturnValue({ ok: true })
+): PluginHostServices {
   return {
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
     listWorktreeTerminals: vi.fn().mockResolvedValue([]),
@@ -204,7 +206,7 @@ describe('terminal.sendText explicit worktree routing', () => {
     }
   )
 
-  it('bounds workspace.readContext and omits the provider path', async () => {
+  it('workspace.readContext projects bounded opaque worktree context without provider paths', async () => {
     const handles = Array.from(
       { length: PLUGIN_WORKSPACE_TERMINAL_LIMIT + 10 },
       (_, index) => `terminal:local:${index}`
@@ -222,7 +224,10 @@ describe('terminal.sendText explicit worktree routing', () => {
 
     expect(outcome).toMatchObject({
       ok: true,
-      value: { branch: 'main', displayName: 'Repo' }
+      value: {
+        branch: 'main',
+        displayName: 'Repo'
+      }
     })
     expect(outcome).not.toHaveProperty('value.path')
     expect(outcome).not.toHaveProperty('value.worktreeId')
@@ -231,4 +236,25 @@ describe('terminal.sendText explicit worktree routing', () => {
     )
     expect(delegate.listTerminals).toHaveBeenCalledTimes(1)
   })
+
+  it('workspace.readContext accepts omitted folder opt-in and rejects unknown params', async () => {
+    const services = createServices()
+
+    expect(await callWorkspaceContext(services, undefined)).toBeNull()
+    expect(await callWorkspaceContext(services, { unknown: true })).toMatchObject({
+      ok: false,
+      code: 'invalid_params'
+    })
+  })
 })
+
+const callWorkspaceContext = (services: PluginHostServices, params: unknown) =>
+  executePluginHostCall({
+    pluginId: 'orca-samples.demo',
+    method: 'workspace.readContext',
+    params,
+    viaPanel: true,
+    grantedCapabilities: ['workspace:read'],
+    services,
+    audit: { record: vi.fn().mockResolvedValue(undefined) }
+  }).then((outcome) => (outcome.ok ? outcome.value : outcome))

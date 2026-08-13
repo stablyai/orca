@@ -14,6 +14,7 @@ import type {
   WorktreeLineage,
   WorkspaceLineage,
   ProjectHostSetup,
+  GlobalSettings,
   Repo,
   WorktreeMeta
 } from '../../../../shared/types'
@@ -83,11 +84,13 @@ import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
+  resolveActiveWorkspaceRoute,
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteResult,
   settingsForWorktreeOperationRoute
@@ -163,6 +166,51 @@ const folderWorkspaceActivityPersistenceByStore = new WeakMap<
   WorktreeSliceGet,
   FolderWorkspaceActivityPersistence
 >()
+type WorktreeMetaOwnerState = Pick<
+  AppState,
+  | 'repos'
+  | 'settings'
+  | 'worktreesByRepo'
+  | 'detectedWorktreesByRepo'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+  | 'runtimeEnvironments'
+  | 'runtimeEnvironmentCatalogHydrated'
+  | 'removedRuntimeEnvironmentIds'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+>
+
+type WorktreeMetaSaveState = {
+  generation: number
+  failureRefresh: Promise<void> | null
+}
+
+const worktreeMetaSaveStatesByStore = new WeakMap<
+  WorktreeSliceGet,
+  Map<string, WorktreeMetaSaveState>
+>()
+
+function getWorktreeMetaSaveState(
+  get: WorktreeSliceGet,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): WorktreeMetaSaveState {
+  let states = worktreeMetaSaveStatesByStore.get(get)
+  if (!states) {
+    states = new Map()
+    worktreeMetaSaveStatesByStore.set(get, states)
+  }
+  const key = `${executionHostId}\0${worktreeId}`
+  const existing = states.get(key)
+  if (existing) {
+    return existing
+  }
+  const created = { generation: 0, failureRefresh: null }
+  states.set(key, created)
+  return created
+}
 
 function getFolderWorkspaceActivityPersistence(
   get: WorktreeSliceGet
@@ -215,6 +263,15 @@ type DetectedWorktreeRefreshOutcome =
       executionHostId: ExecutionHostId
       directSshAuthority?: DirectSshAuthority
     }
+
+function getDetectedWorktreeMergeHostId(
+  executionHostId: ExecutionHostId,
+  runtimeAuthority: AdmittedDetectedWorktreeRefresh['runtimeAuthority']
+): ExecutionHostId {
+  return parseExecutionHostId(executionHostId)?.kind === 'ssh' && runtimeAuthority
+    ? toRuntimeExecutionHostId(runtimeAuthority.environmentId)
+    : executionHostId
+}
 
 async function mapReposForWorktreeRefresh<TRepo extends { id: string }, TResult>(
   repos: readonly TRepo[],
@@ -550,6 +607,19 @@ function worktreeMatchesHost(
   return options.unhostedWorktreesMatchHost ?? hostId === LOCAL_EXECUTION_HOST_ID
 }
 
+function worktreeMetaMatchesHost(
+  worktree: { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string },
+  hostId: ExecutionHostId,
+  options: WorktreeHostMatchOptions = {}
+): boolean {
+  // A paired HUB row keeps its physical SSH host while the runtime owner is a separate route.
+  return (
+    (parseExecutionHostId(hostId)?.kind === 'ssh' &&
+      parseExecutionHostId(worktree.hostId)?.id === hostId) ||
+    worktreeMatchesHost(worktree, hostId, options)
+  )
+}
+
 function mergeWorktreesForHost<
   T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
 >(
@@ -761,7 +831,10 @@ function notifyRuntimeScopeForbiddenIfNeeded(error: unknown): boolean {
 function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
   worktreeId: string,
-  rawUpdates: Partial<WorktreeMeta>
+  rawUpdates: Partial<WorktreeMeta>,
+  matchesWorktree: (worktree: DetectedWorktreeListResult['worktrees'][number]) => boolean = (
+    worktree
+  ) => worktree.id === worktreeId
 ): AppState['detectedWorktreesByRepo'] {
   // Why: mirrors applyWorktreeUpdates — detected rows feed the same palette.
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
@@ -771,7 +844,7 @@ function applyDetectedWorktreeUpdates(
   for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
     let repoChanged = false
     const nextWorktrees = result.worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId) {
+      if (!matchesWorktree(worktree)) {
         return worktree
       }
       repoChanged = true
@@ -794,6 +867,16 @@ function folderWorkspaceMatchesHost(
         ? toSshExecutionHostId(workspace.connectionId)
         : LOCAL_EXECUTION_HOST_ID)) === executionHostId
   )
+}
+
+function worktreeMetaOwnerKey(
+  worktree: Pick<Worktree, 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+): string {
+  return JSON.stringify([
+    worktree.repoId,
+    parseExecutionHostId(worktree.hostId)?.id ?? LOCAL_EXECUTION_HOST_ID,
+    worktree.runtimeOwnerEnvironmentId?.trim() || null
+  ])
 }
 
 function findKnownWorktreeById(
@@ -826,23 +909,24 @@ function findKnownWorktreeById(
         executionHostId
       ) as Worktree | null)
     : findWorktreeById(state.worktreesByRepo, worktreeId)
-  if (visible) {
-    return visible
-  }
-  for (const result of Object.values(state.detectedWorktreesByRepo)) {
-    const detected = result.worktrees.find(
+  const detectedCandidates = Object.values(state.detectedWorktreesByRepo).flatMap((result) =>
+    result.worktrees.filter(
       (worktree) =>
         worktree.id === worktreeId &&
         (!executionHostId ||
-          worktreeMatchesHost(worktree, executionHostId, {
+          worktreeMetaMatchesHost(worktree, executionHostId, {
             unhostedWorktreesMatchHost: executionHostId === LOCAL_EXECUTION_HOST_ID
           }))
     )
-    if (detected) {
-      return detected
-    }
+  )
+  if (visible) {
+    const visibleOwnerKey = worktreeMetaOwnerKey(visible)
+    return detectedCandidates.some((worktree) => worktreeMetaOwnerKey(worktree) !== visibleOwnerKey)
+      ? undefined
+      : visible
   }
-  return undefined
+  const detectedOwnerKeys = new Set(detectedCandidates.map(worktreeMetaOwnerKey))
+  return detectedOwnerKeys.size === 1 ? detectedCandidates[0] : undefined
 }
 
 function getFolderWorkspaceMetaUpdates(
@@ -1002,23 +1086,29 @@ function settingsForKnownRepoOwner(
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
+function resolveWorktreeMetaOwnerRoute(
+  state: WorktreeMetaOwnerState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): ReturnType<typeof resolveWorktreeOperationRoute> {
+  return executionHostId
+    ? resolveActiveWorkspaceRoute(
+        {
+          ...state,
+          activeWorktreeId: worktreeId,
+          activeWorkspaceExecutionHostId: executionHostId
+        },
+        worktreeId
+      )
+    : resolveWorktreeOperationRoute(state, worktreeId)
+}
+
 function trySettingsForWorktreeOwner(
-  state: Pick<
-    AppState,
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-    | 'detectedWorktreesByRepo'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'restoredRuntimeHostIdByWorkspaceSessionKey'
-    | 'runtimeEnvironments'
-    | 'runtimeEnvironmentCatalogHydrated'
-    | 'removedRuntimeEnvironmentIds'
-  >,
-  worktreeId: string
+  state: WorktreeMetaOwnerState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ): AppState['settings'] | null {
-  const route = resolveWorktreeOperationRoute(state, worktreeId)
+  const route = resolveWorktreeMetaOwnerRoute(state, worktreeId, executionHostId)
   if (!route) {
     return null
   }
@@ -1026,14 +1116,82 @@ function trySettingsForWorktreeOwner(
 }
 
 function settingsForWorktreeOwner(
-  state: Parameters<typeof trySettingsForWorktreeOwner>[0],
-  worktreeId: string
+  state: WorktreeMetaOwnerState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ) {
-  const settings = trySettingsForWorktreeOwner(state, worktreeId)
+  const settings = trySettingsForWorktreeOwner(state, worktreeId, executionHostId)
   if (!settings) {
     throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
   }
   return settings
+}
+
+function getWorktreeMetaRefreshRoute(
+  state: WorktreeMetaOwnerState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): ReturnType<typeof resolveWorktreeOperationRoute> {
+  if (!executionHostId) {
+    return null
+  }
+  const route = resolveWorktreeMetaOwnerRoute(state, worktreeId, executionHostId)
+  if (!route) {
+    return { executionHostId, runtimeEnvironmentId: null }
+  }
+  return route
+}
+
+async function refreshWorktreesAfterMetaUpdate(
+  get: WorktreeSliceGet,
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined,
+  saveState: WorktreeMetaSaveState | null,
+  saveGeneration: number | null
+): Promise<void> {
+  if (saveState && saveState.generation !== saveGeneration) {
+    return
+  }
+  const state = get()
+  const refreshRoute = getWorktreeMetaRefreshRoute(state, worktreeId, executionHostId)
+  if (refreshRoute?.executionHostId) {
+    const refreshHost = parseExecutionHostId(refreshRoute.executionHostId)
+    await get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId), {
+      executionHostId: refreshRoute.executionHostId,
+      ...(refreshHost?.kind === 'ssh' && refreshRoute.runtimeEnvironmentId
+        ? { runtimeEnvironmentId: refreshRoute.runtimeEnvironmentId }
+        : {})
+    })
+    return
+  }
+  await get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+}
+
+async function reconcileWorktreeMetaFailure(
+  get: WorktreeSliceGet,
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined,
+  saveState: WorktreeMetaSaveState | null,
+  saveGeneration: number | null
+): Promise<void> {
+  if (!saveState) {
+    await refreshWorktreesAfterMetaUpdate(get, worktreeId, executionHostId, null, null)
+    return
+  }
+  const previousRefresh = saveState.failureRefresh ?? Promise.resolve()
+  const refresh = previousRefresh
+    .catch(() => undefined)
+    .then(() =>
+      refreshWorktreesAfterMetaUpdate(get, worktreeId, executionHostId, saveState, saveGeneration)
+    )
+  saveState.failureRefresh = refresh
+  try {
+    await refresh
+  } finally {
+    if (saveState.failureRefresh === refresh) {
+      saveState.failureRefresh = null
+    }
+  }
 }
 
 // Why: activity bumps fire on every PTY event, so an ambiguous workspace would warn continuously.
@@ -2875,7 +3033,8 @@ function mergeFetchedWorktrees(
       return s
     }
     admitted = true
-    const matchOptions = worktreeHostMatchOptions(s, args.repoId, args.hostId)
+    const mergeHostId = getDetectedWorktreeMergeHostId(args.hostId, args.refresh.runtimeAuthority)
+    const matchOptions = worktreeHostMatchOptions(s, args.repoId, mergeHostId)
     const currentWorktrees = s.worktreesByRepo[args.repoId]
     const refreshResult = {
       ...args.refresh.result,
@@ -2886,12 +3045,12 @@ function mergeFetchedWorktrees(
         (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions)
       )
     }
-    let incoming = toVisibleWorktrees(refreshResult, args.hostId, args.setup)
+    let incoming = toVisibleWorktrees(refreshResult, mergeHostId, args.setup)
     incoming = routeListingBranchSwitchesThroughGitIdentity({
       requestStarted: args.requestStartedWorktrees,
       current: s.worktreesByRepo[args.repoId],
       incoming,
-      matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions),
+      matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, mergeHostId, matchOptions),
       hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity
     })
@@ -2900,12 +3059,12 @@ function mergeFetchedWorktrees(
       s.worktreesByRepo[args.repoId]
     )
     const currentForHost = (s.worktreesByRepo[args.repoId] ?? []).filter((worktree) =>
-      worktreeMatchesHost(worktree, args.hostId, matchOptions)
+      worktreeMatchesHost(worktree, mergeHostId, matchOptions)
     )
     const mergedDetected = mergeDetectedWorktreesForHost(
       s.detectedWorktreesByRepo[args.repoId],
       refreshResult,
-      args.hostId,
+      mergeHostId,
       args.setup,
       matchOptions
     )
@@ -2922,7 +3081,7 @@ function mergeFetchedWorktrees(
     const mergedWorktrees = mergeWorktreesForHost(
       s.worktreesByRepo[args.repoId],
       worktrees,
-      args.hostId,
+      mergeHostId,
       matchOptions
     )
     const removedIds =
@@ -2932,7 +3091,7 @@ function mergeFetchedWorktrees(
             s,
             args.repoId,
             args.refresh.result,
-            args.hostId
+            mergeHostId
           )
     authoritativelyRemovedIds = removedIds
     if (args.refresh.result.authoritative) {
@@ -3416,16 +3575,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         hostId,
         ownerWasMissingAtStart && (useLocalOwner || options?.executionHostId !== undefined)
       )
-      const settings =
-        useLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
-          ? { ...ownerSettings, activeRuntimeEnvironmentId: null }
-          : ownerSettings
+      const settings: GlobalSettings | null =
+        options?.runtimeEnvironmentId !== undefined
+          ? ownerSettings
+            ? { ...ownerSettings, activeRuntimeEnvironmentId: options.runtimeEnvironmentId }
+            : null
+          : useLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
+            ? { ...ownerSettings, activeRuntimeEnvironmentId: null }
+            : ownerSettings
       const parsedHost = parseExecutionHostId(hostId)
+      const explicitRuntimeEnvironmentId = options?.runtimeEnvironmentId?.trim()
+      const usesExplicitRuntimeOwner =
+        parsedHost?.kind === 'ssh' && Boolean(explicitRuntimeEnvironmentId)
       const directSshAuthority =
-        parsedHost?.kind === 'ssh'
+        parsedHost?.kind === 'ssh' && !usesExplicitRuntimeOwner
           ? (directCallerAuthority ?? getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
           : undefined
-      if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
+      if (parsedHost?.kind === 'ssh' && !directSshAuthority && !usesExplicitRuntimeOwner) {
         // Why: requireAuthoritative callers asked for authoritative-or-nothing, so writing non-authoritative
         // rows as a side effect before returning false would silently weaken that contract.
         if (!options?.requireAuthoritative) {
@@ -3438,7 +3604,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         requireAuthoritative: options?.requireAuthoritative,
         directSshAuthority,
         connectionId: repoOwner?.connectionId,
-        knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
+        knownWorktreeIds: getKnownWorktreeIdsForPurge(
+          ownerState,
+          repoId,
+          explicitRuntimeEnvironmentId && usesExplicitRuntimeOwner
+            ? toRuntimeExecutionHostId(explicitRuntimeEnvironmentId)
+            : hostId
+        )
       })
       if (refresh.status !== 'admitted') {
         return directCallerAuthority ? refresh.providerResult : false
@@ -4827,12 +4999,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   updateWorktreeMeta: async (worktreeId, updates, options) => {
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    const resolvedWorktreeId =
+      workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
+    const executionHostId = options?.executionHostId
+    const saveState = executionHostId
+      ? getWorktreeMetaSaveState(get, resolvedWorktreeId, executionHostId)
+      : null
+    if (saveState?.failureRefresh) {
+      await saveState.failureRefresh.catch(() => undefined)
+    }
+    const saveGeneration = saveState ? ++saveState.generation : null
     const shouldApplyUpdate = options?.shouldApply
-    const existingWorktree = get().getKnownWorktreeById(worktreeId)
+    const existingWorktree = get().getKnownWorktreeById(resolvedWorktreeId, executionHostId)
     if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
       return { ok: true }
     }
-    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (executionHostId && !existingWorktree) {
+      return {
+        ok: false,
+        error: translate(
+          'auto.store.slices.worktrees.a17f4d2e93',
+          'Could not update this workspace.'
+        )
+      }
+    }
     if (workspaceScope?.type === 'folder') {
       const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
       if (Object.keys(folderUpdates).length === 0) {
@@ -4843,7 +5034,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // reporting ok would show the dialog a save that silently undid itself.
         const updated = await get().updateFolderWorkspace(
           workspaceScope.folderWorkspaceId,
-          folderUpdates
+          folderUpdates,
+          executionHostId ? { executionHostId } : undefined
         )
         return updated
           ? { ok: true }
@@ -4872,7 +5064,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       existingWorktree &&
       !existingWorktree.pushTarget
         ? await resolveGitHubReviewPushTarget(
-            settingsForWorktreeOwner(get(), worktreeId),
+            settingsForWorktreeOwner(get(), resolvedWorktreeId, executionHostId),
             existingWorktree.repoId,
             linkedPrForPushTarget
           )
@@ -4890,7 +5082,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       resolvedPushTarget === undefined &&
       existingHostedReviewPushTargetLookup !== null &&
       existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
-    const worktreeForUpdate = get().getKnownWorktreeById(worktreeId)
+    const worktreeForUpdate = get().getKnownWorktreeById(resolvedWorktreeId, executionHostId)
     if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
       return { ok: true }
     }
@@ -4928,15 +5120,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
     let didApply = false
     set((s) => {
-      if (shouldApplyUpdate && !shouldApplyUpdate(findKnownWorktreeById(s, worktreeId))) {
+      if (
+        shouldApplyUpdate &&
+        !shouldApplyUpdate(findKnownWorktreeById(s, resolvedWorktreeId, executionHostId))
+      ) {
         return {}
       }
       didApply = true
-      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)
+      const hostMatchOptions = executionHostId
+        ? worktreeHostMatchOptions(s, getRepoIdFromWorktreeId(resolvedWorktreeId), executionHostId)
+        : undefined
+      const matchesSelectedHost = executionHostId
+        ? (worktree: {
+            id: string
+            hostId?: ExecutionHostId
+            runtimeOwnerEnvironmentId?: string
+          }) =>
+            worktree.id === resolvedWorktreeId &&
+            worktreeMetaMatchesHost(worktree, executionHostId, hostMatchOptions)
+        : undefined
+      const nextWorktrees = applyWorktreeUpdates(
+        s.worktreesByRepo,
+        resolvedWorktreeId,
+        enriched,
+        matchesSelectedHost
+      )
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
-        worktreeId,
-        enriched
+        resolvedWorktreeId,
+        enriched,
+        matchesSelectedHost
       )
       const cacheKey =
         reviewRepo && reviewBranch
@@ -5016,11 +5229,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return { ok: true }
     }
     if (hasHostedReviewLinkUpdates(enriched)) {
-      bumpHostedReviewLinkMutationGeneration(worktreeId)
+      bumpHostedReviewLinkMutationGeneration(resolvedWorktreeId)
     }
 
     try {
-      await persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, enriched)
+      await persistWorktreeMeta(
+        settingsForWorktreeOwner(get(), resolvedWorktreeId, executionHostId),
+        resolvedWorktreeId,
+        enriched
+      )
       if (
         !options?.suppressHostedReviewRefresh &&
         reviewRepo &&
@@ -5060,7 +5277,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
     } catch (err) {
       if (isRuntimeSelectorNotFoundError(err)) {
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        try {
+          await reconcileWorktreeMetaFailure(
+            get,
+            resolvedWorktreeId,
+            executionHostId,
+            saveState,
+            saveGeneration
+          )
+        } catch (refreshError) {
+          console.error('Failed to refresh worktrees after metadata update:', refreshError)
+        }
         return {
           ok: false,
           error: translate(
@@ -5070,7 +5297,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       }
       console.error('Failed to update worktree meta:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      try {
+        await reconcileWorktreeMetaFailure(
+          get,
+          resolvedWorktreeId,
+          executionHostId,
+          saveState,
+          saveGeneration
+        )
+      } catch (refreshError) {
+        console.error('Failed to refresh worktrees after metadata update:', refreshError)
+      }
       // Why: the refetch above reverts the optimistic write, so a caller that
       // closes its surface on this path shows the user a save that undid itself.
       return { ok: false, error: err instanceof Error ? err.message : String(err) }

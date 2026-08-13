@@ -2760,6 +2760,42 @@ describe('fetchWorktrees', () => {
     ])
   })
 
+  it('uses an explicit paired runtime owner for an SSH refresh', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'ambient-runtime' } as never,
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ]
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-paired-refresh',
+      ok: true,
+      result: makeDetectedResult('repo-ssh', []),
+      _meta: { runtimeId: 'runtime-hub' }
+    })
+
+    await store.getState().fetchWorktrees('repo-ssh', {
+      executionHostId: 'ssh:ssh-1',
+      runtimeEnvironmentId: 'hub-env'
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'hub-env',
+      method: 'worktree.detectedList',
+      params: { repo: 'repo-ssh' },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+  })
+
   it('rejects a missing-owner SSH result after the repo catalog changes', async () => {
     const store = createTestStore()
     const remote = makeWorktree({
@@ -6968,6 +7004,650 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-ssh'][0]?.comment).toBe('ssh note')
+  })
+
+  it('updates and persists only the selected host when worktree ids are duplicated', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    const localWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'local',
+      comment: 'Local note'
+    })
+    const sshWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'ssh:ssh-1',
+      comment: 'SSH note'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never,
+      repos: [
+        {
+          id: 'repo-shared',
+          path: '/local/repo',
+          displayName: 'Local repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        },
+        {
+          id: 'repo-shared',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-shared': [localWorktree, sshWorktree] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .updateWorktreeMeta(
+        `worktree:${worktreeId}`,
+        { comment: 'SSH note updated' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+
+    expect(store.getState().worktreesByRepo['repo-shared']).toEqual([
+      localWorktree,
+      { ...sshWorktree, comment: 'SSH note updated', lastActivityAt: expect.any(Number) }
+    ])
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId,
+      updates: expect.objectContaining({ comment: 'SSH note updated' })
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('keeps a host-scoped metadata save when detected data duplicates the visible owner', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/same/path'
+    const visibleWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      comment: 'SSH note'
+    })
+    const detected = makeDetectedResult('repo-ssh', [visibleWorktree])
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [visibleWorktree] },
+      detectedWorktreesByRepo: { 'repo-ssh': detected }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(
+        `worktree:${worktreeId}`,
+        { comment: 'SSH note updated' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+
+    expect(result).toEqual({ ok: true })
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId,
+      updates: expect.objectContaining({ comment: 'SSH note updated' })
+    })
+  })
+
+  it('fails a host-scoped metadata save when a detected row has a rival owner', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/same/path'
+    const visibleWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-a',
+      comment: 'Visible note'
+    })
+    const rivalDetectedWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-b',
+      comment: 'Rival note'
+    })
+    const detected = makeDetectedResult('repo-ssh', [rivalDetectedWorktree])
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [visibleWorktree] },
+      detectedWorktreesByRepo: { 'repo-ssh': detected }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(
+        `worktree:${worktreeId}`,
+        { comment: 'Should not apply' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+
+    expect(result).toEqual({ ok: false, error: 'Could not update this workspace.' })
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([visibleWorktree])
+    expect(store.getState().detectedWorktreesByRepo['repo-ssh']).toBe(detected)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('fails a host-scoped metadata save when detected rows are ambiguous', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/same/path'
+    const firstHubWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-a',
+      comment: 'Hub A note'
+    })
+    const secondHubWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-b',
+      comment: 'Hub B note'
+    })
+    const detected = makeDetectedResult('repo-ssh', [firstHubWorktree, secondHubWorktree])
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never,
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      detectedWorktreesByRepo: { 'repo-ssh': detected }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(
+        `worktree:${worktreeId}`,
+        { comment: 'Should not apply' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+
+    expect(result).toEqual({ ok: false, error: 'Could not update this workspace.' })
+    expect(store.getState().detectedWorktreesByRepo['repo-ssh']).toBe(detected)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('fails a host-scoped metadata save when its target row is unavailable', async () => {
+    const store = createTestStore()
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(
+        'worktree:missing::/same/path',
+        { comment: 'Do not discard this draft' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+
+    expect(result).toEqual({ ok: false, error: 'Could not update this workspace.' })
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('refetches the raw repo id when a scoped metadata save fails', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const fetchWorktrees = vi.fn().mockResolvedValue(false)
+    const worktree = makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'local' })
+    mockApi.worktrees.updateMeta.mockRejectedValueOnce(new Error('save failed'))
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [worktree] },
+      fetchWorktrees
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().updateWorktreeMeta(`worktree:${worktreeId}`, { comment: 'note' })
+    ).resolves.toEqual({ ok: false, error: 'save failed' })
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo1')
+  })
+
+  it('refetches a scoped metadata failure through its selected runtime owner', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const fetchWorktrees = vi.fn().mockResolvedValue(false)
+    const worktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      hostId: 'runtime:owner-env',
+      comment: 'Existing note'
+    })
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('save failed'))
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:owner-env'
+        }
+      ],
+      worktreesByRepo: { repo1: [worktree] },
+      fetchWorktrees
+    } as Partial<AppState>)
+
+    await expect(
+      store
+        .getState()
+        .updateWorktreeMeta(
+          `worktree:${worktreeId}`,
+          { comment: 'note' },
+          { executionHostId: 'runtime:owner-env' }
+        )
+    ).resolves.toEqual({ ok: false, error: 'save failed' })
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo1', {
+      executionHostId: 'runtime:owner-env'
+    })
+  })
+
+  it('refetches the failed host scope after the active workspace switches', async () => {
+    const store = createTestStore()
+    const oldWorktree = makeWorktree({
+      id: 'repo1::/old',
+      repoId: 'repo1',
+      hostId: 'ssh:ssh-1',
+      comment: 'Old note'
+    })
+    const newWorktree = makeWorktree({
+      id: 'repo1::/new',
+      repoId: 'repo1',
+      hostId: 'local',
+      comment: 'New note'
+    })
+    const fetchWorktrees = vi.fn().mockResolvedValue(false)
+    mockApi.worktrees.updateMeta.mockRejectedValueOnce(new Error('save failed'))
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/local/repo',
+          displayName: 'Local Repo',
+          badgeColor: '#000',
+          addedAt: 0
+        },
+        {
+          id: 'repo1',
+          path: '/remote/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { repo1: [oldWorktree, newWorktree] },
+      activeWorktreeId: oldWorktree.id,
+      activeWorkspaceExecutionHostId: 'ssh:ssh-1',
+      fetchWorktrees
+    } as Partial<AppState>)
+
+    const save = store.getState().updateWorktreeMeta(
+      oldWorktree.id,
+      { comment: 'Old draft' },
+      {
+        executionHostId: 'ssh:ssh-1',
+        shouldApply: () => store.getState().activeWorktreeId === oldWorktree.id
+      }
+    )
+    store.setState({
+      activeWorktreeId: newWorktree.id,
+      activeWorkspaceExecutionHostId: 'local'
+    })
+
+    await expect(save).resolves.toEqual({ ok: false, error: 'save failed' })
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo1', {
+      executionHostId: 'ssh:ssh-1'
+    })
+  })
+
+  it('refetches a paired HUB metadata failure through its selected SSH execution host', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/path/wt1'
+    const fetchWorktrees = vi.fn().mockResolvedValue(false)
+    const worktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-env',
+      comment: 'Existing note'
+    })
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('save failed'))
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [worktree] },
+      fetchWorktrees
+    } as Partial<AppState>)
+
+    await expect(
+      store
+        .getState()
+        .updateWorktreeMeta(
+          `worktree:${worktreeId}`,
+          { comment: 'note' },
+          { executionHostId: 'ssh:ssh-1' }
+        )
+    ).resolves.toEqual({ ok: false, error: 'save failed' })
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-ssh', {
+      executionHostId: 'ssh:ssh-1',
+      runtimeEnvironmentId: 'hub-env'
+    })
+  })
+
+  it('refreshes a paired HUB metadata failure through the HUB when direct SSH authority is unavailable', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/path/wt1'
+    const worktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-env',
+      comment: 'Existing note'
+    })
+    const originalFetchWorktrees = store.getState().fetchWorktrees
+    const fetchWorktrees = vi.fn(originalFetchWorktrees)
+    runtimeEnvironmentCall.mockImplementation(async (request: RuntimeEnvironmentCallRequest) => {
+      if (request.method === 'worktree.set') {
+        throw new Error('save failed')
+      }
+      if (request.method === 'worktree.detectedList') {
+        return {
+          id: 'rpc-paired-refresh',
+          ok: true,
+          result: makeDetectedResult('repo-ssh', [worktree]),
+          _meta: { runtimeId: 'runtime-hub' }
+        }
+      }
+      if (request.method === 'worktree.lineageList') {
+        return {
+          id: 'rpc-paired-lineage',
+          ok: true,
+          result: { lineage: {}, workspaceLineage: {} },
+          _meta: { runtimeId: 'runtime-hub' }
+        }
+      }
+      throw new Error(`Unexpected runtime method ${request.method}`)
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never,
+      sshConnectionStates: new Map(),
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [worktree] },
+      fetchWorktrees: fetchWorktrees as unknown as AppState['fetchWorktrees']
+    } as Partial<AppState>)
+
+    await expect(
+      store
+        .getState()
+        .updateWorktreeMeta(
+          `worktree:${worktreeId}`,
+          { comment: 'Edited note' },
+          { executionHostId: 'ssh:ssh-1' }
+        )
+    ).resolves.toEqual({ ok: false, error: 'save failed' })
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-ssh', {
+      executionHostId: 'ssh:ssh-1',
+      runtimeEnvironmentId: 'hub-env'
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'hub-env',
+      method: 'worktree.set',
+      params: expect.objectContaining({
+        worktree: `id:${worktreeId}`,
+        comment: 'Edited note'
+      }),
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: undefined
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'hub-env',
+      method: 'worktree.detectedList',
+      params: { repo: 'repo-ssh' },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
+      expect.objectContaining({
+        id: worktreeId,
+        hostId: 'ssh:ssh-1',
+        runtimeOwnerEnvironmentId: 'hub-env',
+        comment: 'Existing note'
+      })
+    ])
+  })
+
+  it('does not let a delayed failure refresh overwrite a newer host-scoped save', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const initialWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      hostId: 'ssh:ssh-1',
+      comment: 'Initial note'
+    })
+    let resolveRefresh!: (result: boolean) => void
+    const fetchWorktrees = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveRefresh = (result) => {
+            store.setState({
+              worktreesByRepo: {
+                repo1: [{ ...initialWorktree, comment: 'Stale rollback' }]
+              }
+            } as Partial<AppState>)
+            resolve(result)
+          }
+        })
+    )
+    mockApi.worktrees.updateMeta.mockRejectedValueOnce(new Error('first save failed'))
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { repo1: [initialWorktree] },
+      fetchWorktrees
+    } as unknown as Partial<AppState>)
+
+    const firstSave = store
+      .getState()
+      .updateWorktreeMeta(
+        `worktree:${worktreeId}`,
+        { comment: 'First draft' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+    await vi.waitFor(() => expect(fetchWorktrees).toHaveBeenCalledTimes(1))
+
+    const secondSave = store
+      .getState()
+      .updateWorktreeMeta(
+        `worktree:${worktreeId}`,
+        { comment: 'Newer draft' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+    resolveRefresh(false)
+    await Promise.all([firstSave, secondSave])
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('Newer draft')
+  })
+
+  it('updates and persists a paired HUB-owned SSH row for its selected SSH host', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    const localWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'local',
+      comment: 'Local note'
+    })
+    const pairedSshWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-env',
+      comment: 'SSH note'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-paired-worktree-set',
+      ok: true,
+      result: { worktree: { ...pairedSshWorktree, comment: 'SSH note updated' } },
+      _meta: { runtimeId: 'runtime-hub' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never,
+      repos: [
+        {
+          id: 'repo-shared',
+          path: '/local/repo',
+          displayName: 'Local repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        },
+        {
+          id: 'repo-shared',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-shared': [localWorktree, pairedSshWorktree] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .updateWorktreeMeta(
+        `worktree:${worktreeId}`,
+        { comment: 'SSH note updated' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+
+    expect(store.getState().worktreesByRepo['repo-shared']).toEqual([
+      localWorktree,
+      { ...pairedSshWorktree, comment: 'SSH note updated', lastActivityAt: expect.any(Number) }
+    ])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'hub-env',
+        method: 'worktree.set',
+        params: expect.objectContaining({
+          worktree: `id:${worktreeId}`,
+          comment: 'SSH note updated'
+        })
+      })
+    )
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when an SSH selection has two HUB owners for the same worktree', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/same/path'
+    const firstHubWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-a',
+      comment: 'Hub A note'
+    })
+    const secondHubWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-b',
+      comment: 'Hub B note'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [firstHubWorktree, secondHubWorktree] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .updateWorktreeMeta(
+        `worktree:${worktreeId}`,
+        { comment: 'Should not apply' },
+        { executionHostId: 'ssh:ssh-1' }
+      )
+
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
+      firstHubWorktree,
+      secondHubWorktree
+    ])
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('clears pending first-agent rename when the title is updated', async () => {
