@@ -62,12 +62,9 @@ export function CodeEditorAppearanceSection({
             'color',
             'syntax',
             'highlighting',
-            'monokai',
-            'dracula',
-            'one dark',
-            'solarized',
             'dark',
-            'light'
+            'light',
+            ...themeOptions.map((option) => option.label.toLowerCase())
           ]}
           forceVisible={forceVisiblePrimary}
         >

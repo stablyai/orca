@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type * as Monaco from 'monaco-editor'
 import { EDITOR_THEME_CATALOG, registerEditorThemeCatalog } from './index'
 import { buildMonacoThemeFromPalette } from './palette'
+import { TERMINAL_THEME_CATALOG } from '../terminal-themes'
 
 describe('EDITOR_THEME_CATALOG', () => {
   it('gives every catalog theme a non-empty label and a valid base', () => {
@@ -14,6 +15,35 @@ describe('EDITOR_THEME_CATALOG', () => {
   it('includes Monokai matching the terminal Monokai background/foreground pairing', () => {
     expect(EDITOR_THEME_CATALOG.monokai.palette.background).toBe('#272822')
     expect(EDITOR_THEME_CATALOG.monokai.palette.foreground).toBe('#f8f8f2')
+  })
+
+  it('covers every terminal theme, and only terminal themes, under the same label', () => {
+    const editorLabels = Object.values(EDITOR_THEME_CATALOG).map((entry) => entry.label)
+    expect(editorLabels.sort()).toEqual(Object.keys(TERMINAL_THEME_CATALOG).sort())
+  })
+
+  it('reuses its terminal counterpart chrome colors so both surfaces read as one theme', () => {
+    for (const entry of Object.values(EDITOR_THEME_CATALOG)) {
+      const terminalTheme = TERMINAL_THEME_CATALOG[entry.label]
+      expect(entry.palette.background, `${entry.label} background`).toBe(terminalTheme?.background)
+      expect(entry.palette.foreground, `${entry.label} foreground`).toBe(terminalTheme?.foreground)
+      expect(entry.palette.cursor, `${entry.label} cursor`).toBe(terminalTheme?.cursor)
+      expect(entry.palette.selection, `${entry.label} selection`).toBe(
+        terminalTheme?.selectionBackground
+      )
+    }
+  })
+
+  it('keeps syntax roles distinguishable from the background of their own theme', () => {
+    for (const entry of Object.values(EDITOR_THEME_CATALOG)) {
+      const { background, ...roles } = entry.palette
+      for (const [role, color] of Object.entries(roles)) {
+        if (role === 'base' || role === 'lineHighlight' || role === 'selection') {
+          continue
+        }
+        expect(color, `${entry.label} ${role}`).not.toBe(background)
+      }
+    }
   })
 })
 

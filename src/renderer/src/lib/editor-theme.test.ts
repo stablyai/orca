@@ -4,6 +4,7 @@ import {
   getAvailableEditorColorThemeOptions,
   resolveMonacoThemeName
 } from './editor-theme'
+import { EDITOR_THEME_CATALOG } from './editor-themes'
 
 describe('resolveMonacoThemeName', () => {
   it('follows isDark when the preference is undefined (profiles saved before the setting existed)', () => {
@@ -29,16 +30,8 @@ describe('resolveMonacoThemeName', () => {
 
 describe('EDITOR_COLOR_THEME_VALUES', () => {
   it('exposes auto/vs/vs-dark plus every catalog theme exactly once', () => {
-    expect(EDITOR_COLOR_THEME_VALUES).toEqual([
-      'auto',
-      'vs',
-      'vs-dark',
-      'monokai',
-      'dracula',
-      'one-dark',
-      'solarized-dark',
-      'solarized-light'
-    ])
+    expect(EDITOR_COLOR_THEME_VALUES.slice(0, 3)).toEqual(['auto', 'vs', 'vs-dark'])
+    expect(EDITOR_COLOR_THEME_VALUES.slice(3)).toEqual(Object.keys(EDITOR_THEME_CATALOG))
     expect(new Set(EDITOR_COLOR_THEME_VALUES).size).toBe(EDITOR_COLOR_THEME_VALUES.length)
   })
 })

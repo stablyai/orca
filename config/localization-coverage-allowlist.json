@@ -9,28 +9,28 @@
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "语言",
+    "text": "\u8bed\u8a00",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "語言",
+    "text": "\u8a9e\u8a00",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "언어",
+    "text": "\uc5b8\uc5b4",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "言語",
+    "text": "\u8a00\u8a9e",
     "dynamic": false,
     "count": 1
   },
@@ -91,37 +91,212 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-classic.ts",
     "kind": "object-property:label",
-    "text": "Monokai",
+    "text": "Ghostty Default Style Dark",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-classic.ts",
+    "kind": "object-property:label",
+    "text": "Builtin Tango Light",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-classic.ts",
+    "kind": "object-property:label",
+    "text": "Tango Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-classic.ts",
+    "kind": "object-property:label",
+    "text": "Homebrew",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-classic.ts",
+    "kind": "object-property:label",
+    "text": "Snazzy",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-core.ts",
     "kind": "object-property:label",
     "text": "Dracula",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-core.ts",
     "kind": "object-property:label",
     "text": "One Dark",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-core.ts",
+    "kind": "object-property:label",
+    "text": "Nord",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-core.ts",
+    "kind": "object-property:label",
+    "text": "Monokai",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-core.ts",
+    "kind": "object-property:label",
+    "text": "Tokyo Night",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-core.ts",
+    "kind": "object-property:label",
+    "text": "Gruvbox Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-core.ts",
+    "kind": "object-property:label",
+    "text": "Catppuccin Mocha",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-core.ts",
     "kind": "object-property:label",
     "text": "Solarized Dark",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Material Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Ayu Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Nightfox",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Kanagawa",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Rose Pine",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Everforest Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Palenight",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Horizon Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-dark-extended.ts",
+    "kind": "object-property:label",
+    "text": "Night Owl",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-light.ts",
     "kind": "object-property:label",
     "text": "Solarized Light",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-light.ts",
+    "kind": "object-property:label",
+    "text": "One Light",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-light.ts",
+    "kind": "object-property:label",
+    "text": "Catppuccin Latte",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-light.ts",
+    "kind": "object-property:label",
+    "text": "GitHub Light",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-light.ts",
+    "kind": "object-property:label",
+    "text": "Rose Pine Dawn",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-light.ts",
+    "kind": "object-property:label",
+    "text": "Gruvbox Light",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-light.ts",
+    "kind": "object-property:label",
+    "text": "Tokyo Night Light",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog-popular-light.ts",
+    "kind": "object-property:label",
+    "text": "Everforest Light",
     "dynamic": false,
     "count": 1
   }
