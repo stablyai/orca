@@ -11,6 +11,7 @@ import {
   resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
+import { anchorQueuedPromptsToFileOrder, lastAnchorTimestamp } from './queued-prompt-file-order'
 import { emitTranscriptUnavailableSnapshot } from './transcript-unavailable-snapshot'
 import { transcriptWatcherPathIsInstallable } from './transcript-watcher-install-probe'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
@@ -56,6 +57,9 @@ export async function installTranscriptWatcher(
   let reading = false
   let pendingReadRequested = false
   let rotationRetryCount = 0
+  // Why: an append batch can begin with the queued record itself, so the
+  // predecessor it anchors to has to survive across reads.
+  let queuedAnchorTimestamp: number | null = null
 
   function scheduleRotationRetry(): void {
     if (closed) {
@@ -75,7 +79,9 @@ export async function installTranscriptWatcher(
       decode,
       (messages) => {
         if (!closed) {
-          onAppend(messages)
+          const anchored = anchorQueuedPromptsToFileOrder(messages, queuedAnchorTimestamp)
+          queuedAnchorTimestamp = lastAnchorTimestamp(anchored, queuedAnchorTimestamp)
+          onAppend(anchored)
         }
       },
       decodeLifecycle ?? undefined,
@@ -85,7 +91,9 @@ export async function installTranscriptWatcher(
       gateAbort.signal
     )
     if (!closed && (remaining.length > 0 || lifecycle)) {
-      onAppend(remaining, lifecycle)
+      const anchored = anchorQueuedPromptsToFileOrder(remaining, queuedAnchorTimestamp)
+      queuedAnchorTimestamp = lastAnchorTimestamp(anchored, queuedAnchorTimestamp)
+      onAppend(anchored, lifecycle)
     }
   }
 
@@ -134,6 +142,7 @@ export async function installTranscriptWatcher(
     }
     if (contentReplaced) {
       resetIncrementalTranscriptState(state)
+      queuedAnchorTimestamp = null
     }
     // Why: subscriber callbacks may replace the path before the drain can finish.
     watchedVersion ??= current
@@ -158,6 +167,7 @@ export async function installTranscriptWatcher(
     if (replacementSnapshot && onReplace) {
       state.offset = replacementSnapshot.consumedTo
       state.pendingStart = state.offset
+      queuedAnchorTimestamp = lastAnchorTimestamp(replacementSnapshot.messages, null)
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
@@ -189,6 +199,7 @@ export async function installTranscriptWatcher(
       if (initialSnapshot) {
         state.offset = initialSnapshot.consumedTo
         state.pendingStart = state.offset
+        queuedAnchorTimestamp = lastAnchorTimestamp(initialSnapshot.messages, null)
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,

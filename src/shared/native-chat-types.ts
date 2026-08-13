@@ -88,6 +88,11 @@ export type NativeChatMessage = {
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** Queued while the agent was busy. Its timestamp is the enqueue moment, which
+   *  predates the records it was appended after, so ordering must anchor it to
+   *  the position the transcript file gave it rather than sort by time.
+   *  Main-process ordering pass only — renderers must not branch on this. */
+  queued?: boolean
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const

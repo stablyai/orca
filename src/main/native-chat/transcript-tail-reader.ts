@@ -28,6 +28,7 @@ import {
   wslGatedStat
 } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { anchorQueuedPromptsToFileOrder } from './queued-prompt-file-order'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
@@ -145,7 +146,8 @@ export async function readNativeChatTranscriptTailFile(
     // window to nothing explicitly rather than leak every buffered record.
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
     return {
-      messages: selected.map((entry) => entry.message),
+      // No-op for agents that never mark a message queued.
+      messages: anchorQueuedPromptsToFileOrder(selected.map((entry) => entry.message)),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,
