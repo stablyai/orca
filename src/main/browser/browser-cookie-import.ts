@@ -164,7 +164,9 @@ const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     keychainService: 'Comet Safe Storage',
     keychainAccount: 'Comet',
     macRoot: 'Comet',
-    winRoot: 'Comet/User Data'
+    // Why: on Windows Comet installs under a Perplexity vendor directory
+    // (%LOCALAPPDATA%\Perplexity\Comet\User Data), unlike its macOS layout.
+    winRoot: 'Perplexity/Comet/User Data'
     // linuxRoot intentionally omitted — Comet does not ship a Linux build as of 2026-05-15
   },
   {
