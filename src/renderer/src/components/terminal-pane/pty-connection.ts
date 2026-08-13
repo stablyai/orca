@@ -22,6 +22,13 @@ import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kit
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree-removal-fence-error'
+import {
+  MAX_WORKTREE_REMOVAL_RESPAWN_ATTEMPTS,
+  WORKTREE_REMOVAL_RESPAWN_FALLBACK_MS,
+  WORKTREE_REMOVAL_SPAWN_BLOCKED_MESSAGE,
+  isWorkspaceStillRegistered,
+  resolveWorktreeRemovalRespawnDecision
+} from './worktree-removal-respawn'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
 import {
   HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
@@ -3396,12 +3403,20 @@ export function connectPanePty(
   // and agentStatusByPaneKey. Treat it as opaque outside Orca.
   const state = useAppStore.getState()
   const parsedWorkspaceKey = parseWorkspaceKey(deps.worktreeId)
+  const paneFolderWorkspaceId =
+    parsedWorkspaceKey?.type === 'folder' ? parsedWorkspaceKey.folderWorkspaceId : null
   const folderWorkspace =
-    parsedWorkspaceKey?.type === 'folder'
-      ? state.folderWorkspaces.find(
-          (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
-        )
+    paneFolderWorkspaceId !== null
+      ? state.folderWorkspaces.find((workspace) => workspace.id === paneFolderWorkspaceId)
       : null
+  // Why: the floating terminal's synthetic workspace is registered nowhere, so a
+  // later "not found" must not be read as "this workspace was just deleted" by the
+  // removal-respawn retry below. Record whether it was ever known at all.
+  const paneWorkspaceWasRegistered = isWorkspaceStillRegistered(
+    state,
+    deps.worktreeId,
+    paneFolderWorkspaceId
+  )
   const workspaceEnv: Record<string, string> = { ORCA_WORKSPACE_ID: deps.worktreeId }
   if (folderWorkspace) {
     workspaceEnv.ORCA_PROJECT_GROUP_ID = folderWorkspace.projectGroupId
@@ -4691,6 +4706,81 @@ export function connectPanePty(
       deps.onPtyErrorRef?.current?.(pane.id, createTerminalZeroDimensionsMessage(cols, rows))
     }
 
+    // Why: both removal fences (main's pty:spawn rejection and startFreshSpawn's
+    // isDeleting skip) suppress exactly one spawn, but a pane only connects once.
+    // When the removal then FAILS, its shells are already dead and nothing
+    // re-triggers a spawn — the pane stays blank until the user switches
+    // workspaces. Re-arm the spawn for when every in-flight removal settles with
+    // this workspace still present.
+    let removalRespawnAttempts = 0
+    let pendingRemovalRespawn: (() => void) | null = null
+    let removalRespawnUnsubscribe: (() => void) | null = null
+    let removalRespawnFallbackTimer: ReturnType<typeof setTimeout> | null = null
+    const releaseRemovalRespawn = (): void => {
+      pendingRemovalRespawn = null
+      if (removalRespawnFallbackTimer !== null) {
+        clearTimeout(removalRespawnFallbackTimer)
+        removalRespawnFallbackTimer = null
+      }
+      const unsubscribe = removalRespawnUnsubscribe
+      removalRespawnUnsubscribe = null
+      const teardownIndex = waitTeardowns.indexOf(releaseRemovalRespawn)
+      if (teardownIndex !== -1) {
+        waitTeardowns.splice(teardownIndex, 1)
+      }
+      unsubscribe?.()
+    }
+    const evaluateRemovalRespawn = (): void => {
+      if (disposed || !pendingRemovalRespawn) {
+        releaseRemovalRespawn()
+        return
+      }
+      const state = useAppStore.getState()
+      const decision = resolveWorktreeRemovalRespawnDecision(
+        state.deleteStateByWorktreeId,
+        !paneWorkspaceWasRegistered ||
+          isWorkspaceStillRegistered(state, deps.worktreeId, paneFolderWorkspaceId)
+      )
+      if (decision === 'wait') {
+        return
+      }
+      const respawn = pendingRemovalRespawn
+      // Why: release before respawning so a fence on the retry can arm a fresh wait.
+      releaseRemovalRespawn()
+      if (decision === 'respawn') {
+        removalRespawnAttempts++
+        respawn()
+      }
+    }
+    const armRemovalRespawn = (respawn: () => void): boolean => {
+      if (disposed || removalRespawnAttempts >= MAX_WORKTREE_REMOVAL_RESPAWN_ATTEMPTS) {
+        return false
+      }
+      pendingRemovalRespawn = respawn
+      if (removalRespawnUnsubscribe) {
+        return true
+      }
+      removalRespawnUnsubscribe = useAppStore.subscribe(evaluateRemovalRespawn)
+      if (
+        resolveWorktreeRemovalRespawnDecision(
+          useAppStore.getState().deleteStateByWorktreeId,
+          true
+        ) !== 'wait'
+      ) {
+        // Why: a removal driven from the CLI, a paired client, or a runtime host
+        // never sets isDeleting in this renderer, so the store may never emit for
+        // it. Only that unobservable case needs a timed re-check.
+        removalRespawnFallbackTimer = setTimeout(
+          evaluateRemovalRespawn,
+          WORKTREE_REMOVAL_RESPAWN_FALLBACK_MS
+        )
+      }
+      // Why: dispose() drains waitTeardowns, so a pane torn down mid-wait cannot
+      // leak this subscriber or fire a spawn into a dead transport.
+      waitTeardowns.push(releaseRemovalRespawn)
+      return true
+    }
+
     const reportError = (message: string): void => {
       // Why: the transport connect can reject asynchronously after the pane has been
       // disposed (e.g. its workspace was deleted) — dropping a late error avoids a toast
@@ -4704,6 +4794,12 @@ export function connectPanePty(
         // user-facing failure — the pane unmounts once removal completes, so never
         // surface the raw fence error. Covers the parent-removal-fences-child case
         // that startFreshSpawn's own-worktree isDeleting skip cannot see.
+        if (armRemovalRespawn(() => void startFreshSpawn())) {
+          return
+        }
+        // Retries exhausted and the pane is still mounted and shell-less: a blank
+        // pane with no explanation is worse than the diagnostic.
+        deps.onPtyErrorRef?.current?.(pane.id, WORKTREE_REMOVAL_SPAWN_BLOCKED_MESSAGE)
         return
       }
       deps.onPtyErrorRef?.current?.(pane.id, message)
@@ -5323,6 +5419,13 @@ export function connectPanePty(
         // filesystem teardown. A fresh shell must not spawn into a directory the
         // removal is about to delete (main fences it anyway), and the pane is
         // about to unmount — so skip the doomed respawn instead of racing it.
+        // If the removal fails, the pane stays mounted with dead shells and this
+        // skipped spawn is the only one it would ever get, so queue a retry. Once
+        // the retries are spent, say so rather than silently leaving it blank —
+        // that silence is the bug this path exists to fix.
+        if (!armRemovalRespawn(() => void startFreshSpawn(startupOverride, options)) && !disposed) {
+          deps.onPtyErrorRef?.current?.(pane.id, WORKTREE_REMOVAL_SPAWN_BLOCKED_MESSAGE)
+        }
         return Promise.resolve(null)
       }
       authoritativeReattachGeneration += 1
