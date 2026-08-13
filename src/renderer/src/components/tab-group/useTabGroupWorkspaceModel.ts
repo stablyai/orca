@@ -45,10 +45,6 @@ const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
-const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
-  ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
-> = {}
-
 type TerminalTabItem = TerminalTab & { unifiedTabId: string }
 
 export function useTabGroupWorkspaceModel({
@@ -67,7 +63,6 @@ export function useTabGroupWorkspaceModel({
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId,
-      terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
       mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
     }))
@@ -362,20 +357,15 @@ export function useTabGroupWorkspaceModel({
       }
       setActiveTab(terminalId)
       setActiveTabType('terminal')
-      const activeLeafId = worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
+      // Why: transient getState read — subscribing to the global layout record
+      // here re-rendered every mounted worktree's tab strip on each PTY
+      // spawn/attach (STA-3328 amplifier).
+      const activeLeafId =
+        useAppStore.getState().terminalLayoutsByTabId?.[terminalId]?.activeLeafId ?? null
       // Why: restore xterm focus to the store-active leaf so keyboard input can't drift to a sibling pane.
       focusTerminalTabSurface(terminalId, activeLeafId)
     },
-    [
-      activateTab,
-      focusGroup,
-      groupId,
-      groupTabs,
-      setActiveTab,
-      setActiveTabType,
-      worktreeState.terminalLayoutsByTabId,
-      worktreeId
-    ]
+    [activateTab, focusGroup, groupId, groupTabs, setActiveTab, setActiveTabType, worktreeId]
   )
 
   const toggleTerminalPaneExpand = useCallback(
@@ -563,16 +553,10 @@ export function useTabGroupWorkspaceModel({
     [group, groupTabs]
   )
 
-  return {
-    group,
-    activeTab,
-    browserItems,
-    editorItems,
-    terminalTabs,
-    tabBarOrder,
-    groupTabs,
-    expandedPaneByTabId: worktreeState.expandedPaneByTabId,
-    commands: {
+  // Why: referentially stable commands are what let TabBar's React.memo bail;
+  // a per-render literal here defeated it fleet-wide (STA-3328 amplifier).
+  const commands = useMemo(
+    () => ({
       focusGroup: () => {
         focusGroup(worktreeId, groupId)
       },
@@ -683,6 +667,46 @@ export function useTabGroupWorkspaceModel({
       setTabColor,
       setTabCustomTitle,
       toggleTerminalPaneExpand
-    }
+    }),
+    [
+      activateBrowser,
+      activateEditor,
+      activateTerminal,
+      closeAllEditorTabsInGroup,
+      closeGroup,
+      closeItem,
+      closeOthers,
+      closeToLeft,
+      closeToRight,
+      createBrowserTab,
+      createSplitGroup,
+      createTab,
+      focusGroup,
+      groupId,
+      makePreviewFilePermanent,
+      openNewBrowserTabInActiveWorkspace,
+      openNewMarkdownInActiveWorkspace,
+      openNewTerminalTabInActiveWorkspace,
+      pinFile,
+      setActiveTab,
+      setActiveTabType,
+      setTabColor,
+      setTabCustomTitle,
+      toggleTerminalPaneExpand,
+      worktreeId,
+      worktreeState.mobileEmulatorEnabled
+    ]
+  )
+
+  return {
+    group,
+    activeTab,
+    browserItems,
+    editorItems,
+    terminalTabs,
+    tabBarOrder,
+    groupTabs,
+    expandedPaneByTabId: worktreeState.expandedPaneByTabId,
+    commands
   }
 }

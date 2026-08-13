@@ -1074,6 +1074,11 @@ function TerminalPane(
       }
 
       if (ptyId) {
+        // Why: reattaches re-deliver the same binding; rewriting it churns the
+        // global layout record every subscriber wakes on (STA-3328 amplifier).
+        if (existingBindings[leafId] === ptyId) {
+          return
+        }
         setTabLayout(tabId, {
           ...layoutWithoutPtyBindings,
           // Why: PTY ownership changes after the mount-time layout snapshot, so persist the live pane→PTY binding here for correct remount attachment.

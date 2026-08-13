@@ -1,4 +1,4 @@
-import { Suspense, useMemo } from 'react'
+import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { Ellipsis, X } from 'lucide-react'
@@ -59,7 +59,89 @@ export default function TabGroupPanel({
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
-  const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
+  const { activeTab, browserItems, commands, editorItems, groupTabs, tabBarOrder, terminalTabs } =
+    model
+
+  // Why: TabBar is memoized; inline arrows here defeated that memo on every
+  // render, turning each store write into a full tab-strip reconciliation
+  // (STA-3328 amplifier).
+  const handleClose = useCallback(
+    (terminalId: string) => {
+      const item = resolveGroupTabFromVisibleId(groupTabs, terminalId)
+      if (item?.contentType === 'terminal') {
+        commands.closeItem(item.id)
+        return
+      }
+      // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
+      closeTerminalTab(terminalId)
+    },
+    [commands, groupTabs]
+  )
+  const handleCloseOthers = useCallback(
+    (visibleId: string) => {
+      // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
+      const item = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+      if (item) {
+        commands.closeOthers(item.id)
+      }
+    },
+    [commands, groupTabs]
+  )
+  const handleCloseToRight = useCallback(
+    (visibleId: string) => {
+      const item = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+      if (item) {
+        commands.closeToRight(item.id)
+      }
+    },
+    [commands, groupTabs]
+  )
+  const handleCloseToLeft = useCallback(
+    (visibleId: string) => {
+      const item = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+      if (item) {
+        commands.closeToLeft(item.id)
+      }
+    },
+    [commands, groupTabs]
+  )
+  const handleCloseBrowserTab = useCallback(
+    (browserTabId: string) => {
+      const item = groupTabs.find(
+        (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
+      )
+      if (item) {
+        commands.closeItem(item.id)
+      }
+    },
+    [commands, groupTabs]
+  )
+  const handleMakePreviewFilePermanent = useCallback(
+    (_fileId: string, tabId?: string) => {
+      if (!tabId) {
+        return
+      }
+      const item = groupTabs.find((candidate) => candidate.id === tabId)
+      if (!item) {
+        return
+      }
+      commands.makePreviewFilePermanent(item.entityId, item.id)
+    },
+    [commands, groupTabs]
+  )
+  const handlePinFile = useCallback(
+    (_fileId: string, tabId?: string) => {
+      if (!tabId) {
+        return
+      }
+      const item = groupTabs.find((candidate) => candidate.id === tabId)
+      if (!item) {
+        return
+      }
+      commands.pinFile(item.entityId, item.id)
+    },
+    [commands, groupTabs]
+  )
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -85,34 +167,10 @@ export default function TabGroupPanel({
       worktreeId={worktreeId}
       expandedPaneByTabId={model.expandedPaneByTabId}
       onActivate={commands.activateTerminal}
-      onClose={(terminalId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
-        if (item?.contentType === 'terminal') {
-          commands.closeItem(item.id)
-          return
-        }
-        // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
-        closeTerminalTab(terminalId)
-      }}
-      onCloseOthers={(visibleId) => {
-        // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeOthers(item.id)
-        }
-      }}
-      onCloseToRight={(visibleId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeToRight(item.id)
-        }
-      }}
-      onCloseToLeft={(visibleId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeToLeft(item.id)
-        }
-      }}
+      onClose={handleClose}
+      onCloseOthers={handleCloseOthers}
+      onCloseToRight={handleCloseToRight}
+      onCloseToLeft={handleCloseToLeft}
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
@@ -145,36 +203,11 @@ export default function TabGroupPanel({
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
       onActivateBrowserTab={commands.activateBrowser}
-      onCloseBrowserTab={(browserTabId) => {
-        const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
-        )
-        if (item) {
-          commands.closeItem(item.id)
-        }
-      }}
+      onCloseBrowserTab={handleCloseBrowserTab}
       onDuplicateBrowserTab={commands.duplicateBrowserTab}
       onCloseAllFiles={commands.closeAllEditorTabsInGroup}
-      onMakePreviewFilePermanent={(_fileId, tabId) => {
-        if (!tabId) {
-          return
-        }
-        const item = model.groupTabs.find((candidate) => candidate.id === tabId)
-        if (!item) {
-          return
-        }
-        commands.makePreviewFilePermanent(item.entityId, item.id)
-      }}
-      onPinFile={(_fileId, tabId) => {
-        if (!tabId) {
-          return
-        }
-        const item = model.groupTabs.find((candidate) => candidate.id === tabId)
-        if (!item) {
-          return
-        }
-        commands.pinFile(item.entityId, item.id)
-      }}
+      onMakePreviewFilePermanent={handleMakePreviewFilePermanent}
+      onPinFile={handlePinFile}
       tabBarOrder={tabBarOrder}
       hoveredTabInsertion={hoveredTabInsertion}
     />
