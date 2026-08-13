@@ -24,7 +24,9 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'commit',
   'for-each-ref',
   'check-ref-format',
-  'config'
+  'config',
+  // Why: durable review-head prune needs update-ref -d for refs/orca/** only (#10501).
+  'update-ref'
 ])
 const CONFIG_READ_ONLY_FLAGS = new Set(['--get', '--get-all', '--list', '--get-regexp', '-l'])
 // Why: checking presence of a read-only flag is insufficient — a request could
@@ -200,5 +202,13 @@ export function validateGitExecArgs(args: string[]): void {
   }
   if (subcommand === 'clone') {
     validateCloneArgs(args)
+  }
+  if (subcommand === 'update-ref') {
+    // Why: only durable Orca review-head pins may be deleted via generic exec.
+    if (args.length !== 3 || args[1] !== '-d' || !args[2]?.startsWith('refs/orca/')) {
+      throw new Error(
+        'git update-ref via exec is restricted to update-ref -d refs/orca/<…>'
+      )
+    }
   }
 }

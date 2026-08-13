@@ -1,4 +1,4 @@
-const MUTATING_GIT_EXEC_SUBCOMMANDS = new Set(['clone', 'commit', 'init'])
+const MUTATING_GIT_EXEC_SUBCOMMANDS = new Set(['clone', 'commit', 'init', 'update-ref'])
 
 // Why: relay git.exec permits these narrow write shapes alongside read-only
 // probes, so cache invalidation must distinguish them before dispatch.

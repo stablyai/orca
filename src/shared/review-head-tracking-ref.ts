@@ -47,3 +47,72 @@ export function isValidReviewHeadNumber(value: unknown): value is number {
 export function isSafeReviewHeadFetchRemote(remote: string): boolean {
   return !remote.startsWith('-')
 }
+
+/**
+ * Match durable local refs written for a GitHub PR number (any hosting remote
+ * component). Shape: refs/orca/pull/<remoteComponent>/<prNumber>
+ */
+export function isGithubPullRequestHeadLocalRefForNumber(
+  refName: string,
+  prNumber: number
+): boolean {
+  if (!isValidReviewHeadNumber(prNumber)) {
+    return false
+  }
+  const prefix = 'refs/orca/pull/'
+  if (!refName.startsWith(prefix)) {
+    return false
+  }
+  const rest = refName.slice(prefix.length)
+  // Why: durable shape is exactly <remoteComponent>/<number> — reject nested paths.
+  const parts = rest.split('/')
+  if (parts.length !== 2 || parts[0].length === 0 || parts[1].length === 0) {
+    return false
+  }
+  return parts[1] === String(prNumber)
+}
+
+/**
+ * Match durable local refs written for a GitLab MR iid.
+ * Shape: refs/orca/merge-requests/<remoteComponent>/<mrIid>
+ */
+export function isGitlabMergeRequestHeadLocalRefForNumber(refName: string, mrIid: number): boolean {
+  if (!isValidReviewHeadNumber(mrIid)) {
+    return false
+  }
+  const prefix = 'refs/orca/merge-requests/'
+  if (!refName.startsWith(prefix)) {
+    return false
+  }
+  const rest = refName.slice(prefix.length)
+  // Why: durable shape is exactly <remoteComponent>/<number> — reject nested paths.
+  const parts = rest.split('/')
+  if (parts.length !== 2 || parts[0].length === 0 || parts[1].length === 0) {
+    return false
+  }
+  return parts[1] === String(mrIid)
+}
+
+/** Select refs to delete after the last worktree for a PR/MR is removed (#10431). */
+export function selectReviewHeadLocalRefsToPrune(
+  refNames: readonly string[],
+  targets: { githubPrNumber?: number | null; gitlabMrIid?: number | null }
+): string[] {
+  const selected: string[] = []
+  for (const refName of refNames) {
+    if (
+      targets.githubPrNumber != null &&
+      isGithubPullRequestHeadLocalRefForNumber(refName, targets.githubPrNumber)
+    ) {
+      selected.push(refName)
+      continue
+    }
+    if (
+      targets.gitlabMrIid != null &&
+      isGitlabMergeRequestHeadLocalRefForNumber(refName, targets.gitlabMrIid)
+    ) {
+      selected.push(refName)
+    }
+  }
+  return selected
+}
