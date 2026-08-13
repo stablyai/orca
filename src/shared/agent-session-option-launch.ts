@@ -1,5 +1,6 @@
 import type { AgentType } from './agent-status-types'
 import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import type { CatalogOption } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat-session-options'
 
 export type ResolvedSessionOptionLaunch = {
@@ -21,7 +22,12 @@ export function removeOverriddenAgentSessionArgs(
   const model = findCatalogModel(catalog, modelId)
   const modelOptions = model?.options ?? catalog.unknownModelOptions ?? []
   for (const option of modelOptions) {
-    if (values[option.id] !== undefined && option.apply.removeAgentArgs) {
+    const explicitValue = values[option.id]
+    if (
+      explicitValue !== undefined &&
+      optionValueIsValid(option, explicitValue, Boolean(model)) &&
+      option.apply.removeAgentArgs
+    ) {
       result = option.apply.removeAgentArgs(result)
     }
   }
@@ -48,11 +54,7 @@ export function resolveAgentSessionOptionLaunch(
     modelOptions.flatMap((option) => {
       const explicitValue = values[option.id]
       if (explicitValue !== undefined) {
-        if (
-          !model &&
-          option.kind.type === 'select' &&
-          !option.kind.choices.some((choice) => choice.value === explicitValue)
-        ) {
+        if (!optionValueIsValid(option, explicitValue, Boolean(model))) {
           return []
         }
         return [[option.id, explicitValue]]
@@ -91,4 +93,18 @@ export function resolveAgentSessionOptionLaunch(
     }
   }
   return { args, appliedValues }
+}
+
+function optionValueIsValid(
+  option: CatalogOption,
+  value: SessionOptionValue,
+  hasKnownModel: boolean
+): boolean {
+  if (option.kind.type === 'boolean') {
+    return typeof value === 'boolean'
+  }
+  return (
+    typeof value === 'string' &&
+    (hasKnownModel || option.kind.choices.some((choice) => choice.value === value))
+  )
 }

@@ -19,12 +19,12 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcAnyMethod } from '../core'
+import { AgentLaunchPreferencesSchema } from './agent-launch-option-schemas'
 
 const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 const MAX_TRANSCRIPT_PATH_BYTES = 16 * 1024
 const MAX_PROMPT_BYTES = 256 * 1024
 const MAX_AGENT_ARGS_BYTES = 16 * 1024
-const MAX_LAUNCH_PREFERENCE_LENGTH = 512
 
 const StrictNonEmptyString = (max: number, message: string) =>
   z
@@ -54,20 +54,6 @@ const Placement = z
   .refine((value) => value.tabId !== undefined || value.leafId !== undefined, {
     message: 'Placement must include a tab or leaf ID'
   })
-
-const LaunchPreferences = z
-  .object({
-    model: StrictNonEmptyString(
-      MAX_LAUNCH_PREFERENCE_LENGTH,
-      'Invalid model preference'
-    ).optional(),
-    effort: StrictNonEmptyString(
-      MAX_LAUNCH_PREFERENCE_LENGTH,
-      'Invalid effort preference'
-    ).optional(),
-    mode: StrictNonEmptyString(MAX_LAUNCH_PREFERENCE_LENGTH, 'Invalid mode preference').optional()
-  })
-  .strict()
 
 const PromptDelivery = z.enum(['auto-submit', 'draft'])
 
@@ -131,7 +117,7 @@ const ExplicitEnsure = z
     providerSession: ProviderSession,
     ompResumeFilePath: OmpResumeFilePath.optional(),
     agentArgs: AgentArgs.optional(),
-    launchPreferences: LaunchPreferences.optional(),
+    launchPreferences: AgentLaunchPreferencesSchema.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional()
   })
@@ -175,7 +161,7 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
       .optional(),
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
-    launchPreferences: LaunchPreferences.optional(),
+    launchPreferences: AgentLaunchPreferencesSchema.optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),

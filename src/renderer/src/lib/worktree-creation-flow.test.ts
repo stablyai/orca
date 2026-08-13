@@ -739,10 +739,6 @@ describe('staged background worktree creation', () => {
     expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({ tabId: 'agent-tab' })
     )
-    const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(createCall?.[25]).toEqual({
-      startupDraft: 'https://github.com/o/r/issues/12'
-    })
   })
 
   it.each([

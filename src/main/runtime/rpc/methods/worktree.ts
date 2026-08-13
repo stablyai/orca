@@ -161,6 +161,9 @@ export const WORKTREE_METHODS: RpcMethod[] = [
                 }
               : undefined,
             ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
+            ...(params.startupSessionOptions
+              ? { startupSessionOptions: params.startupSessionOptions }
+              : {}),
             ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
             startupDraft: params.startupDraft,
             lineage: {

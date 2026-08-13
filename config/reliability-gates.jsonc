@@ -11645,6 +11645,151 @@
       "demotionRule": "Demote if any exit duration can evade the spawn budget, concurrent children or timers appear, cleanup retains resources, or a transient failure cannot recover within the budget."
     },
     {
+      "id": "worktree.remote-task-agent-startup-authority",
+      "title": "Remote task workspaces start one host-owned agent with truthful launch state",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "worktree-runtime",
+      "layer": "renderer-runtime-worktree-create-contract",
+      "surfaces": [
+        "Tasks issue and pull-request workspace creation",
+        "paired runtime Git and folder workspaces",
+        "nested SSH worktrees owned by a paired runtime",
+        "startup terminal mirroring and wake recovery",
+        "agent launch session-option state",
+        "mixed client and host versions"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "paired-runtime"],
+      "coveredPlatforms": ["macos", "windows"],
+      "coveredProviders": ["local", "ssh", "paired-runtime"],
+      "coverageNotes": "Deterministic contracts join renderer request construction, RPC validation and forwarding, exact host argv for Git/SSH/folder workspaces, agent-scoped startup acknowledgement, renderer fallback suppression, and truthful session-option seeding. A physical paired Windows v1.4.177 host covers the reported Tasks journey and exact host PTY inventory; applying the new session-option field on a physical candidate host remains a gap.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/13412"],
+      "invariant": "A Tasks-created paired workspace launches exactly one agent PTY on the owning host, mirrors that terminal without a renderer wake or fallback shell, preserves every supported client-selected launch option through host-side quoting, and marks only agent-matched host-acknowledged values as applied. Missing optional fields, fallback agents, invalid option kinds, or receipts from older hosts degrade without RPC failure or false applied state.",
+      "oracle": "Send a linked-task draft and session options through the real worktree.create schema and handler. Require Git, nested SSH, and folder hosts to emit the selected model and effort in the exact startup command, return the actual applied subset with the startup-terminal receipt, and publish no client-authored command. Feed that receipt through Tasks completion and activation; require the host tab to own draft/session state, zero fallback or wake creation, and no applied cache entry when a legacy receipt omits acknowledgement. On a physical paired Windows host, compare authoritative PTY inventory before and after the fix and require Codex plus Setup only, a running Codex process, the unsent issue draft, completed Setup, and no ConPTY DA1 text.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/tui-agent-startup-session-options.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/schemas.test.ts src/main/runtime/rpc/methods/worktree.test.ts src/renderer/src/hooks/useComposerState-host-context-boundaries.test.ts src/renderer/src/store/slices/worktrees.test.ts src/renderer/src/lib/worktree-creation-flow.test.ts src/renderer/src/lib/worktree-creation-flow-startup.test.ts src/renderer/src/lib/worktree-creation-agent-seeds.test.ts src/renderer/src/lib/worktree-activation.test.ts",
+        "Tasks -> GitHub issue #13320 -> create on Windows 2 paired host with Codex"
+      ],
+      "testFiles": [
+        "src/shared/tui-agent-startup-session-options.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/rpc/schemas.test.ts",
+        "src/main/runtime/rpc/methods/worktree.test.ts",
+        "src/renderer/src/hooks/useComposerState-host-context-boundaries.test.ts",
+        "src/renderer/src/store/slices/worktrees.test.ts",
+        "src/renderer/src/lib/worktree-creation-flow.test.ts",
+        "src/renderer/src/lib/worktree-creation-flow-startup.test.ts",
+        "src/renderer/src/lib/worktree-creation-agent-seeds.test.ts",
+        "src/renderer/src/lib/worktree-activation.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "Git host startup argv replaces host model and effort defaults with client session options",
+            "nested SSH startup uses remote-shell quoting and returns applied session options",
+            "folder workspace startup returns the same authoritative receipt",
+            "fallback agents neither receive nor acknowledge another agent's options"
+          ]
+        },
+        {
+          "file": "src/shared/tui-agent-startup-session-options.test.ts",
+          "assertions": [
+            "option values with the wrong catalog kind are neither encoded nor acknowledged",
+            "invalid requested replacements preserve valid host-configured agent arguments"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/schemas.test.ts",
+          "assertions": [
+            "draft session options cannot be combined with a competing startup agent or command"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/worktree.test.ts",
+          "assertions": [
+            "worktree.create forwards the bounded optional startup draft and session options"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/worktree-creation-flow-startup.test.ts",
+          "assertions": [
+            "host-built draft session options are scoped to the requested agent",
+            "client-built startup does not also request host-owned draft startup"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/worktree-creation-flow.test.ts",
+          "assertions": [
+            "the backend startup receipt identifies the agent tab rather than a configured default tab"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/worktree-activation.test.ts",
+          "assertions": [
+            "explicit backend spawn evidence suppresses fallback creation while the host tab mirrors"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/worktree-creation-agent-seeds.test.ts",
+          "assertions": [
+            "legacy hosts without acknowledgement cannot stamp client options as applied",
+            "client-built commands retain their known applied state",
+            "fallback agents own draft state without inheriting requested-agent options",
+            "paired-runtime receipts target the authoritative web-surface agent tab"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/tui-agent-startup-session-options.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/schemas.test.ts src/main/runtime/rpc/methods/worktree.test.ts src/renderer/src/hooks/useComposerState-host-context-boundaries.test.ts src/renderer/src/store/slices/worktrees.test.ts src/renderer/src/lib/worktree-creation-flow.test.ts src/renderer/src/lib/worktree-creation-flow-startup.test.ts src/renderer/src/lib/worktree-creation-agent-seeds.test.ts src/renderer/src/lib/worktree-activation.test.ts",
+          "durationSeconds": 12,
+          "summary": "1,518 deterministic renderer, RPC, Git, SSH, folder, launch-command, compatibility, and activation tests passed; one unrelated test was skipped."
+        },
+        {
+          "date": "2026-08-09",
+          "runner": "manual",
+          "platform": "windows",
+          "result": "passed",
+          "command": "Tasks -> GitHub issue #13320 -> create on Windows 2 paired host with Codex",
+          "durationSeconds": 60,
+          "summary": "Baseline had two blank shells plus Setup and no Codex. Candidate had Codex plus Setup only, Codex running with the issue URL drafted, Setup complete, and no DA1 text."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "deterministic renderer, RPC, full runtime-service, and shared launch contracts"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "New gate; controlled promises, exact call counts, and host inventories replace timing or eventual-state assertions."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "On baseline 94cc867e2a the physical Windows journey produced three host PTYs, no running Codex, and visible DA1 text; the candidate produced exactly Codex plus Setup. Independent review then proved the first candidate built from host defaults while stamping client options as applied. The exact argv and acknowledgement oracle fails on that candidate and passes after the optional session-options request and host-applied receipt; omitting the receipt reproduces the legacy no-claim result."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Creation adds one bounded optional JSON object and one response property. It adds no polling, retries, scans, subprocesses, timers, listeners, or hot-path fanout."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Run the candidate host build on physical Windows and headless serve with non-default model and effort selections.",
+        "Add a versioned worktree.create harness spanning v1.4.19, v1.4.68, v1.4.138, and the current host."
+      ],
+      "knownGaps": [
+        "The physical Windows host was v1.4.177, so it proves terminal topology but not application of the new session-options field.",
+        "Headless serve parity and a second simultaneous viewer have not been exercised for this Tasks creation path.",
+        "Historical receipt boundaries are reconstructed from release history and response-shape tests rather than four packaged hosts."
+      ],
+      "demotionRule": "Demote if a task create can produce a second shell, if any client-only value is marked applied without host acknowledgement, if an old peer rejects the optional fields, or if the gate depends on elapsed time instead of authoritative inventory."
+    },
+    {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",
       "title": "SSH managed-hook companions load and install hooks on Node 18",
       "maturity": "experimental",

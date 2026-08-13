@@ -4106,6 +4106,14 @@ describe('OrcaRuntimeService', () => {
     }
     const runtimeStore = {
       ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: {},
+        agentDefaultArgs: {
+          codex:
+            '-m folder-host-model -c model_reasoning_effort=low --dangerously-bypass-approvals-and-sandbox'
+        }
+      }),
       getRepos: () => [folderRepo],
       getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
       getAllWorktreeMeta: () => metaById,
@@ -4146,14 +4154,25 @@ describe('OrcaRuntimeService', () => {
       repoSelector: 'id:folder-repo',
       name: 'folder-session',
       createdWithAgent: 'codex',
-      startup: { command: 'codex', viewMode: 'chat' }
+      startupDraft: 'https://github.com/stablyai/orca/issues/12',
+      startupSessionOptions: {
+        agent: 'codex',
+        values: { model: 'gpt-5.6-sol', effort: 'high' }
+      }
     })
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(createTerminal).toHaveBeenCalledWith(
       `id:${result.worktree.id}`,
-      expect.objectContaining({ command: 'codex', viewMode: 'chat' })
+      expect.objectContaining({
+        command:
+          "codex '--dangerously-bypass-approvals-and-sandbox' '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=high'"
+      })
     )
+    expect(result.startupTerminal?.appliedSessionOptions).toEqual({
+      agent: 'codex',
+      values: { model: 'gpt-5.6-sol', effort: 'high' }
+    })
     expect(result.worktree).toEqual(
       expect.objectContaining({
         id: expect.stringMatching(/^folder-repo::\/workspace\/folder::workspace:[0-9a-f-]{36}$/),
@@ -43638,7 +43657,11 @@ describe('OrcaRuntimeService', () => {
       getSettings: () => ({
         ...store.getSettings(),
         defaultTuiAgent: 'codex' as const,
-        agentCmdOverrides: { codex: 'codex --profile work' }
+        agentCmdOverrides: { codex: 'codex --profile work' },
+        agentDefaultArgs: {
+          codex:
+            '-m host-model -c model_reasoning_effort=low --dangerously-bypass-approvals-and-sandbox'
+        }
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
@@ -43689,6 +43712,10 @@ describe('OrcaRuntimeService', () => {
       repoSelector: 'id:repo-1',
       name: 'runtime-startup-draft',
       startupDraft: draftUrl,
+      startupSessionOptions: {
+        agent: 'codex',
+        values: { model: 'gpt-5.6-sol', effort: 'high' }
+      },
       activate: true
     })
 
@@ -43697,10 +43724,15 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-draft',
-        command: "codex --profile work '--dangerously-bypass-approvals-and-sandbox'",
+        command:
+          "codex --profile work '--dangerously-bypass-approvals-and-sandbox' '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=high'",
         worktreeId: result.worktree.id
       })
     )
+    expect(result.startupTerminal?.appliedSessionOptions).toEqual({
+      agent: 'codex',
+      values: { model: 'gpt-5.6-sol', effort: 'high' }
+    })
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
 
     runtime.onPtyData('pty-startup-draft', '\x1b[?2004h›', Date.now())
@@ -43736,6 +43768,35 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('Selected agent is disabled. Choose an enabled agent before creating.')
 
     expect(spawn).not.toHaveBeenCalled()
+    expect(addWorktree).not.toHaveBeenCalled()
+  })
+
+  it('rejects startup draft options combined with another startup command', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+    const startupSessionOptions = {
+      agent: 'codex' as const,
+      values: { model: 'gpt-5.6-sol', effort: 'high' }
+    }
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: TEST_REPO_ID,
+        name: 'ambiguous-startup',
+        startupAgent: 'codex',
+        startupDraft: 'https://github.com/stablyai/orca/issues/123',
+        startupSessionOptions
+      })
+    ).rejects.toThrow('Startup session options require a draft without another startup command.')
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: TEST_REPO_ID,
+        name: 'ambiguous-startup',
+        startup: { command: 'codex' },
+        startupDraft: 'https://github.com/stablyai/orca/issues/123',
+        startupSessionOptions
+      })
+    ).rejects.toThrow('Startup session options require a draft without another startup command.')
+
     expect(addWorktree).not.toHaveBeenCalled()
   })
 
@@ -44005,6 +44066,10 @@ describe('OrcaRuntimeService', () => {
       repoSelector: TEST_REPO_ID,
       name: 'runtime-fallback-draft',
       startupDraft: 'https://github.com/stablyai/orca/issues/456',
+      startupSessionOptions: {
+        agent: 'codex',
+        values: { model: 'gpt-5.6-sol', effort: 'high' }
+      },
       createdWithAgent: 'codex',
       activate: true
     })
@@ -44018,6 +44083,8 @@ describe('OrcaRuntimeService', () => {
       })
     )
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'claude' })
+    expect(spawn.mock.calls[0]?.[0].command).not.toContain('gpt-5.6-sol')
+    expect(result.startupTerminal?.appliedSessionOptions).toBeUndefined()
   })
 
   it('honors split setup placement for opted-in local startup-draft worktrees', async () => {
@@ -44474,7 +44541,8 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.createManagedWorktree({
       repoSelector: TEST_REPO_ID,
       name: 'mobile-startup-draft',
-      startupDraft: draftUrl
+      startupDraft: draftUrl,
+      startupSessionOptions: { agent: 'claude', values: { model: 'opus', effort: 'high' } }
     })
 
     expect(detectRemoteAgentsMock).toHaveBeenCalledWith({ connectionId: 'ssh-1' })
@@ -44482,11 +44550,15 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/remote/mobile-startup-draft',
-        command: `claude '--dangerously-skip-permissions' --prefill '${draftUrl}'`,
+        command: `claude '--dangerously-skip-permissions' '--model' 'opus' '--effort' 'high' --prefill '${draftUrl}'`,
         connectionId: 'ssh-1',
         worktreeId: result.worktree.id
       })
     )
+    expect(result.startupTerminal?.appliedSessionOptions).toEqual({
+      agent: 'claude',
+      values: { model: 'opus', effort: 'high' }
+    })
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'claude' })
   })
 

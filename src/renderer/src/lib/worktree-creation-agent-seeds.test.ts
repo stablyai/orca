@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
-import { seedAgentTabStateAfterWorktreeCreate } from './worktree-creation-agent-seeds'
+import {
+  resolveCreatedAgentAppliedSessionOptions,
+  seedAgentTabStateAfterWorktreeCreate
+} from './worktree-creation-agent-seeds'
 
 const mocks = vi.hoisted(() => ({
   seedNativeChatAppliedSessionOptions: vi.fn(),
@@ -108,6 +111,46 @@ afterEach(() => {
 })
 
 describe('seedAgentTabStateAfterWorktreeCreate', () => {
+  it('requires acknowledgement only when the host built the launch command', () => {
+    const clientSessionOptions = { model: 'client-model', effort: 'high' }
+    const hostAppliedSessionOptions = { model: 'host-confirmed-model' }
+
+    expect(
+      resolveCreatedAgentAppliedSessionOptions({
+        agent: 'claude',
+        backendSpawned: true,
+        clientBuiltStartup: false,
+        clientSessionOptions,
+        hostAppliedSessionOptions: { agent: 'claude', values: hostAppliedSessionOptions }
+      })
+    ).toEqual(hostAppliedSessionOptions)
+    expect(
+      resolveCreatedAgentAppliedSessionOptions({
+        agent: 'claude',
+        backendSpawned: true,
+        clientBuiltStartup: false,
+        clientSessionOptions
+      })
+    ).toBeUndefined()
+    expect(
+      resolveCreatedAgentAppliedSessionOptions({
+        agent: 'claude',
+        backendSpawned: true,
+        clientBuiltStartup: false,
+        clientSessionOptions,
+        hostAppliedSessionOptions: { agent: 'codex', values: clientSessionOptions }
+      })
+    ).toBeUndefined()
+    expect(
+      resolveCreatedAgentAppliedSessionOptions({
+        agent: 'claude',
+        backendSpawned: true,
+        clientBuiltStartup: true,
+        clientSessionOptions
+      })
+    ).toEqual(clientSessionOptions)
+  })
+
   it('seeds the backend-spawned startup tab, not the first default terminal tab', () => {
     // Repo default tabs (dev server / logs / shell) run no agent; on the
     // backend-spawn path none of them carries launchAgent either.
@@ -127,6 +170,93 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
       'claude',
       undefined
     )
+  })
+
+  it('seeds only host-confirmed options for a host-built startup', () => {
+    setTabs([{ id: 'agent-tab' }])
+    const requestWithOptions = {
+      ...request,
+      startupPlan: {
+        agent: 'claude',
+        launchCommand: 'claude',
+        sessionOptions: { model: 'client-model', effort: 'high' }
+      } as never
+    }
+
+    seedAgentTabStateAfterWorktreeCreate({
+      request: requestWithOptions,
+      worktreeId: 'wt-1',
+      primaryTabId: 'agent-tab',
+      startupTerminalTabId: 'agent-tab',
+      backendSpawned: true,
+      hostAppliedSessionOptions: {
+        agent: 'claude',
+        values: { model: 'host-confirmed-model' }
+      }
+    })
+
+    expect(mocks.seedNativeChatAppliedSessionOptions).toHaveBeenCalledWith('agent-tab', 'claude', {
+      model: 'host-confirmed-model'
+    })
+  })
+
+  it('does not claim client options when an older host returns no acknowledgement', () => {
+    setTabs([{ id: 'agent-tab' }])
+    const requestWithOptions = {
+      ...request,
+      startupPlan: {
+        agent: 'claude',
+        launchCommand: 'claude',
+        sessionOptions: { model: 'client-model', effort: 'high' }
+      } as never
+    }
+
+    seedAgentTabStateAfterWorktreeCreate({
+      request: requestWithOptions,
+      worktreeId: 'wt-1',
+      primaryTabId: 'agent-tab',
+      startupTerminalTabId: 'agent-tab',
+      backendSpawned: true
+    })
+
+    expect(mocks.seedNativeChatAppliedSessionOptions).toHaveBeenCalledWith(
+      'agent-tab',
+      'claude',
+      undefined
+    )
+  })
+
+  it('uses the host fallback agent without applying requested-agent options', () => {
+    setTabs([{ id: 'agent-tab' }])
+    const codexRequest = {
+      ...request,
+      agent: 'codex' as const,
+      startupPlan: {
+        agent: 'codex',
+        launchCommand: 'codex',
+        sessionOptions: { model: 'gpt-5.6-sol', effort: 'high' }
+      } as never
+    }
+
+    seedAgentTabStateAfterWorktreeCreate({
+      request: codexRequest,
+      worktreeId: 'wt-1',
+      primaryTabId: 'agent-tab',
+      startupTerminalTabId: 'agent-tab',
+      backendSpawned: true,
+      backendAgent: 'claude'
+    })
+
+    expect(mocks.seedNativeChatAppliedSessionOptions).toHaveBeenCalledWith(
+      'agent-tab',
+      'claude',
+      undefined
+    )
+    expect(mocks.seedNativeChatLaunchDraftForAgentTab).toHaveBeenCalledWith({
+      tabId: 'agent-tab',
+      agent: 'claude',
+      text: DRAFT
+    })
   })
 
   it('moves a backend-spawned non-mirrorable draft out of an inherited chat view', () => {

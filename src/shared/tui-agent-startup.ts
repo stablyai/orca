@@ -1,4 +1,4 @@
-import { isShellProcess } from './agent-detection'
+export { isShellProcess } from './agent-detection'
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
@@ -252,6 +252,7 @@ export function buildAgentDraftLaunchPlan(args: {
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
+  sessionOptionsOverrideAgentArgs?: boolean
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
@@ -269,6 +270,7 @@ export function buildAgentDraftLaunchPlan(args: {
     shell,
     agentArgs: args.agentArgs,
     sessionOptions: args.sessionOptions,
+    sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
@@ -312,7 +314,6 @@ export function buildAgentDraftLaunchPlan(args: {
   return plan
 }
 
-export { isShellProcess }
 export {
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix,

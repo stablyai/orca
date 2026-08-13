@@ -180,12 +180,52 @@ describe('RPC optional pipe schemas', () => {
       setupDecision: 'run',
       activate: true,
       startupDraft: 'https://github.com/acme/app/pull/123',
+      startupSessionOptions: {
+        agent: 'codex',
+        values: { model: 'gpt-5.6-sol', effort: 'high', fastMode: true }
+      },
       createdWithAgent: 'codex',
       linkedPR: 123,
       baseBranch: 'origin/main',
       compareBaseRef: 'origin/main',
       branchNameOverride: 'feature/mobile-tasks',
       pushTarget: { remoteName: 'origin', branchName: 'feature/mobile-tasks' }
+    })
+    expectRejects(create, {
+      repo: 'id:repo-github',
+      startupDraft: 'https://github.com/acme/app/pull/123',
+      startupSessionOptions: { agent: 'codex', values: { model: ' gpt-5.6-sol' } }
+    })
+    expectRejects(create, {
+      repo: 'id:repo-github',
+      startupDraft: 'https://github.com/acme/app/pull/123',
+      startupSessionOptions: { agent: 'codex', values: { constructor: 'polluted' } }
+    })
+    expectRejects(create, {
+      repo: 'id:repo-github',
+      startupSessionOptions: { agent: 'codex', values: { model: 'gpt-5.6-sol' } }
+    })
+    expectRejects(create, {
+      repo: 'id:repo-github',
+      startupAgent: 'codex',
+      startupDraft: 'https://github.com/acme/app/pull/123',
+      startupSessionOptions: { agent: 'codex', values: { model: 'gpt-5.6-sol' } }
+    })
+    expectRejects(create, {
+      repo: 'id:repo-github',
+      startupCommand: 'codex',
+      startupDraft: 'https://github.com/acme/app/pull/123',
+      startupSessionOptions: { agent: 'codex', values: { model: 'gpt-5.6-sol' } }
+    })
+    expectRejects(create, {
+      repo: 'id:repo-github',
+      startupDraft: 'https://github.com/acme/app/pull/123',
+      startupSessionOptions: { values: { model: 'gpt-5.6-sol' } }
+    })
+    expectRejects(create, {
+      repo: 'id:repo-github',
+      startupDraft: 'https://github.com/acme/app/pull/123',
+      startupSessionOptions: { agent: 'not-an-agent', values: { model: 'gpt-5.6-sol' } }
     })
     expectParses(create, {
       repo: 'id:repo-gitlab',

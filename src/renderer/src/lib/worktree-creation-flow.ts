@@ -27,6 +27,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 import {
+  buildHostDraftStartupOptions,
   buildWorktreeCreationStartupOpt,
   getInitialWorktreeCreationPhase,
   getWorktreeCreationIndeterminate
@@ -103,9 +104,9 @@ async function executeWorktreeCreation(
     return
   }
 
+  const backendStartup = resolveBackendDraftStartup(preparedRequest)
   let result: CreateWorktreeResult
   try {
-    const backendStartup = resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
       .getState()
       .createWorktree(
@@ -141,10 +142,7 @@ async function executeWorktreeCreation(
           ...(preparedRequest.linkedTaskSourceContext !== undefined
             ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
             : {}),
-          // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
-          ...(!backendStartup && preparedRequest.agent && preparedRequest.launchDraftPrompt
-            ? { startupDraft: preparedRequest.launchDraftPrompt }
-            : {})
+          ...buildHostDraftStartupOptions(preparedRequest, Boolean(backendStartup))
         }
       )
   } catch (error) {
@@ -243,7 +241,10 @@ async function executeWorktreeCreation(
     worktreeId: worktree.id,
     primaryTabId,
     startupTerminalTabId: result.startupTerminal?.tabId,
-    backendSpawned
+    backendSpawned,
+    backendAgent: result.worktree.createdWithAgent,
+    clientBuiltStartup: Boolean(backendStartup),
+    hostAppliedSessionOptions: result.startupTerminal?.appliedSessionOptions
   })
   if (preparedRequest.startupPlan && !backendSpawned) {
     void ensureAgentStartupInTerminal({

@@ -9,11 +9,27 @@ import { nativeChatRequiresLocalTranscript } from '@/lib/native-chat-supported-a
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { toWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { TuiAgent } from '../../../shared/types'
+import type { AgentLaunchSessionOptions, TuiAgent } from '../../../shared/types'
+import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 
 type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
 type SeedRequest = Pick<WorktreeCreationRequest, 'agent' | 'startupPlan' | 'launchDraftPrompt'>
+
+export function resolveCreatedAgentAppliedSessionOptions(args: {
+  agent: TuiAgent
+  backendSpawned: boolean
+  clientBuiltStartup: boolean
+  clientSessionOptions?: Record<string, SessionOptionValue>
+  hostAppliedSessionOptions?: AgentLaunchSessionOptions
+}): Record<string, SessionOptionValue> | undefined {
+  if (!args.backendSpawned || args.clientBuiltStartup) {
+    return args.clientSessionOptions
+  }
+  return args.hostAppliedSessionOptions?.agent === args.agent
+    ? args.hostAppliedSessionOptions.values
+    : undefined
+}
 
 /**
  * Resolve the tab the launch agent actually runs in.
@@ -22,7 +38,7 @@ type SeedRequest = Pick<WorktreeCreationRequest, 'agent' | 'startupPlan' | 'laun
  * (e.g. "dev server", "logs", "shell") the worktree's first tab runs no agent,
  * and activation's `primaryTabId` is only the worktree's primary tab.
  */
-function resolveLaunchAgentTabId(
+export function resolveLaunchAgentTabId(
   state: AppStoreSnapshot,
   args: {
     agent: TuiAgent
@@ -92,10 +108,15 @@ function applyAgentTabSeeds(args: {
   tabId: string
   worktreeId: string
   backendSpawned: boolean
+  backendAppliedSessionOptions?: Record<string, SessionOptionValue>
 }): void {
-  const { request, agent, tabId } = args
+  const { request, agent, tabId, backendSpawned, backendAppliedSessionOptions } = args
   applyBackendSpawnedDraftViewMode(args)
-  seedNativeChatAppliedSessionOptions(tabId, agent, request.startupPlan?.sessionOptions)
+  seedNativeChatAppliedSessionOptions(
+    tabId,
+    agent,
+    backendSpawned ? backendAppliedSessionOptions : request.startupPlan?.sessionOptions
+  )
   // Why: draft launch context reaches only the TUI input; seed the
   // chat-composer copy so it isn't invisible in the chat view.
   if (request.launchDraftPrompt) {
@@ -113,16 +134,38 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
   primaryTabId: string | null
   startupTerminalTabId: string | null | undefined
   backendSpawned: boolean
+  backendAgent?: TuiAgent
+  clientBuiltStartup?: boolean
+  hostAppliedSessionOptions?: AgentLaunchSessionOptions
 }): void {
   const { request, worktreeId, backendSpawned } = args
-  const agent = request.agent
-  if (!request.startupPlan || !agent) {
+  const requestedAgent = request.agent
+  if (!request.startupPlan || !requestedAgent) {
     return
   }
+  const agent =
+    backendSpawned && !args.clientBuiltStartup
+      ? (args.backendAgent ?? requestedAgent)
+      : requestedAgent
+  const backendAppliedSessionOptions = resolveCreatedAgentAppliedSessionOptions({
+    agent,
+    backendSpawned,
+    clientBuiltStartup: Boolean(args.clientBuiltStartup),
+    clientSessionOptions: request.startupPlan.sessionOptions,
+    hostAppliedSessionOptions: args.hostAppliedSessionOptions
+  })
   const state = useAppStore.getState()
   const tabId = resolveLaunchAgentTabId(state, { ...args, agent })
   if (tabId) {
-    applyAgentTabSeeds({ state, request, agent, tabId, worktreeId, backendSpawned })
+    applyAgentTabSeeds({
+      state,
+      request,
+      agent,
+      tabId,
+      worktreeId,
+      backendSpawned,
+      backendAppliedSessionOptions
+    })
     return
   }
   if ((state.tabsByWorktree[worktreeId] ?? []).length > 0) {
@@ -144,7 +187,8 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
           agent,
           tabId: mirroredTabId,
           worktreeId,
-          backendSpawned
+          backendSpawned,
+          backendAppliedSessionOptions
         })
         return
       }
@@ -159,7 +203,8 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
           agent,
           tabId: firstTerminalTabId,
           worktreeId,
-          backendSpawned
+          backendSpawned,
+          backendAppliedSessionOptions
         })
       }
     }

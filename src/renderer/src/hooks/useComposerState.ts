@@ -16,6 +16,10 @@ import {
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import {
+  resolveCreatedAgentAppliedSessionOptions,
+  resolveLaunchAgentTabId
+} from '@/lib/worktree-creation-agent-seeds'
+import {
   findPendingLinkedWorkItemCreationId,
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
@@ -3886,7 +3890,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           ...(!backendStartup && startupPlan?.draftPrompt
-            ? { startupDraft: startupPlan.draftPrompt }
+            ? {
+                startupDraft: startupPlan.draftPrompt,
+                ...(startupPlan.sessionOptions
+                  ? {
+                      startupSessionOptions: { agent: tuiAgent, values: startupPlan.sessionOptions }
+                    }
+                  : {})
+              }
             : {})
         }
       )
@@ -3942,10 +3953,29 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           : {})
       })
       if (startupPlan) {
-        const optionScopeKey =
-          (activation !== false ? activation.primaryTabId : null) ?? result.startupTerminal?.tabId
+        const createdAgent =
+          backendSpawnedStartup && !backendStartup
+            ? (worktree.createdWithAgent ?? tuiAgent)
+            : tuiAgent
+        const optionScopeKey = resolveLaunchAgentTabId(useAppStore.getState(), {
+          agent: createdAgent,
+          worktreeId: worktree.id,
+          primaryTabId: activation === false ? null : activation.primaryTabId,
+          startupTerminalTabId: result.startupTerminal?.tabId,
+          backendSpawned: backendSpawnedStartup
+        })
         if (optionScopeKey) {
-          seedNativeChatAppliedSessionOptions(optionScopeKey, tuiAgent, startupPlan.sessionOptions)
+          seedNativeChatAppliedSessionOptions(
+            optionScopeKey,
+            createdAgent,
+            resolveCreatedAgentAppliedSessionOptions({
+              agent: createdAgent,
+              backendSpawned: backendSpawnedStartup,
+              clientBuiltStartup: Boolean(backendStartup),
+              clientSessionOptions: startupPlan.sessionOptions,
+              hostAppliedSessionOptions: result.startupTerminal?.appliedSessionOptions
+            })
+          )
         }
       }
       if (startupPlan && !backendSpawnedStartup) {

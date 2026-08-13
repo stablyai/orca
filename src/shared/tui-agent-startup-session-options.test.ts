@@ -54,6 +54,24 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
   })
 
+  it('quotes overridden task preferences for a Windows host shell', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'win32',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'gpt-5.6-sol', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs:
+        '-m host-model -c model_reasoning_effort=low --dangerously-bypass-approvals-and-sandbox'
+    })
+    expect(plan?.launchCommand).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox' '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=high'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'gpt-5.6-sol', effort: 'high' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
@@ -140,6 +158,21 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
   })
 
+  it('lets host-built drafts override host defaults with client preferences', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'claude',
+      draft: 'review this',
+      cmdOverrides: {},
+      platform: 'linux',
+      sessionOptions: { model: 'opus', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--model haiku --effort low'
+    })
+    expect(plan?.launchCommand).toContain("claude '--model' 'opus' '--effort' 'high'")
+    expect(plan?.launchCommand).not.toContain('haiku')
+    expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
+  })
+
   it('never injects session options into resume commands', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
@@ -150,5 +183,41 @@ describe('tui agent startup session options', () => {
     })
     expect(plan?.launchCommand).toBe("codex 'resume' 'thread-1'")
     expect(plan?.sessionOptions).toBeUndefined()
+  })
+
+  it('never acknowledges an option whose value has the wrong catalog type', () => {
+    const resolved = resolveAgentLaunchCommand({
+      agent: 'cursor',
+      cmdOverrides: {},
+      platform: 'linux',
+      shell: 'posix',
+      sessionOptions: { model: 'gpt-5.3-codex', fastMode: 'false' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+
+    expect(resolved.ok).toBe(true)
+    if (resolved.ok) {
+      expect(resolved.command).not.toContain('-fast')
+      expect(resolved.appliedSessionOptions).toEqual({ model: 'gpt-5.3-codex' })
+    }
+  })
+
+  it('preserves configured arguments when their requested replacement has the wrong type', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'gpt-5.6-sol', effort: true },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs:
+        '-m host-model -c model_reasoning_effort=low --dangerously-bypass-approvals-and-sandbox'
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "codex '-c' 'model_reasoning_effort=low' '--dangerously-bypass-approvals-and-sandbox' '-m' 'gpt-5.6-sol'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'gpt-5.6-sol' })
   })
 })

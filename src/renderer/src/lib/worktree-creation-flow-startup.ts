@@ -5,6 +5,27 @@ import type {
   WorktreeCreationPhase,
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
+import type { AgentLaunchSessionOptions } from '../../../shared/types'
+
+export function buildHostDraftStartupOptions(
+  request: WorktreeCreationRequest,
+  clientBuiltStartup: boolean
+): { startupDraft?: string; startupSessionOptions?: AgentLaunchSessionOptions } {
+  if (clientBuiltStartup || !request.agent || !request.launchDraftPrompt) {
+    return {}
+  }
+  return {
+    startupDraft: request.launchDraftPrompt,
+    ...(request.startupPlan?.sessionOptions
+      ? {
+          startupSessionOptions: {
+            agent: request.agent,
+            values: request.startupPlan.sessionOptions
+          }
+        }
+      : {})
+  }
+}
 
 // Why: mirrors the startup-opt the composer used to build inline. The renderer
 // only seeds the first terminal when the backend did not already spawn it.

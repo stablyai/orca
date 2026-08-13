@@ -6272,7 +6272,13 @@ describe('worktree remote runtime mutations', () => {
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = ['repo1', 'task-draft', undefined, 'inherit']
     args[10] = 'codex'
-    args[25] = { startupDraft: 'https://github.com/stablyai/orca/issues/12' }
+    args[25] = {
+      startupDraft: 'https://github.com/stablyai/orca/issues/12',
+      startupSessionOptions: {
+        agent: 'codex',
+        values: { model: 'gpt-5.6-sol', effort: 'high', fastMode: true }
+      }
+    }
 
     await createWorktree(...args)
 
@@ -6281,7 +6287,11 @@ describe('worktree remote runtime mutations', () => {
         method: 'worktree.create',
         params: expect.objectContaining({
           createdWithAgent: 'codex',
-          startupDraft: 'https://github.com/stablyai/orca/issues/12'
+          startupDraft: 'https://github.com/stablyai/orca/issues/12',
+          startupSessionOptions: {
+            agent: 'codex',
+            values: { model: 'gpt-5.6-sol', effort: 'high', fastMode: true }
+          }
         })
       })
     )

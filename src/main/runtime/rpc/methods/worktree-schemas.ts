@@ -14,6 +14,7 @@ import {
 import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
+import { AgentLaunchSessionOptionsSchema } from './agent-launch-option-schemas'
 
 const OptionalTuiAgent = z
   .unknown()
@@ -180,6 +181,7 @@ export const WorktreeCreate = z
     // Why: task-driven mobile creates need desktop parity: the host chooses
     // the same default/detected agent and drafts the linked issue/PR URL into it.
     startupDraft: OptionalString,
+    startupSessionOptions: AgentLaunchSessionOptionsSchema.optional(),
     createdWithAgent: z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
@@ -208,6 +210,18 @@ export const WorktreeCreate = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'startupPrompt requires startupAgent'
+      })
+    }
+    if (
+      params.startupSessionOptions !== undefined &&
+      (params.startupDraft === undefined ||
+        params.startupAgent !== undefined ||
+        params.startupCommand !== undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['startupSessionOptions'],
+        message: 'startupSessionOptions requires startupDraft without an explicit startup command'
       })
     }
   })

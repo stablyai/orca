@@ -589,6 +589,10 @@ describe('worktree RPC methods', () => {
         repo: 'repo-1',
         name: 'issue-123',
         startupDraft: 'https://github.com/stablyai/orca/issues/123',
+        startupSessionOptions: {
+          agent: 'codex',
+          values: { model: 'gpt-5.6-sol', effort: 'high', fastMode: true }
+        },
         createdWithAgent: 'codex',
         activate: true
       })
@@ -601,7 +605,11 @@ describe('worktree RPC methods', () => {
         activate: true,
         createdWithAgent: 'codex',
         startup: undefined,
-        startupDraft: 'https://github.com/stablyai/orca/issues/123'
+        startupDraft: 'https://github.com/stablyai/orca/issues/123',
+        startupSessionOptions: {
+          agent: 'codex',
+          values: { model: 'gpt-5.6-sol', effort: 'high', fastMode: true }
+        }
       })
     )
   })

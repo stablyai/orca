@@ -1,6 +1,7 @@
 import type {
   CreateWorktreeResult,
   CreateWorktreeArgs,
+  AgentLaunchSessionOptions,
   CreateSparseCheckoutRequest,
   DetectedWorktree,
   DetectedWorktreeListResult,
@@ -209,6 +210,8 @@ export type WorktreeSlice = {
       linkedTaskSourceContext?: TaskSourceContext | null
       /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
       startupDraft?: string
+      /** Picker values the owning runtime should apply while building that launch. */
+      startupSessionOptions?: AgentLaunchSessionOptions
     }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */

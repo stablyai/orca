@@ -236,6 +236,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab,
   TuiAgent,
+  AgentLaunchSessionOptions,
   WorkspaceCreateTelemetrySource,
   WorkspaceSessionState,
   WorkspaceLinkedItem,
@@ -21356,11 +21357,13 @@ export class OrcaRuntimeService {
   private async buildStartupForDraft(
     repo: Repo,
     draft: string,
-    requestedAgent?: TuiAgent
+    requestedAgent?: TuiAgent,
+    requestedSessionOptions?: AgentLaunchSessionOptions
   ): Promise<{
     agent: TuiAgent
     startup: WorktreeStartupLaunch
     draftPaste?: WorktreeStartupDraftPaste
+    appliedSessionOptions?: AgentLaunchSessionOptions
   } | null> {
     if (!this.store) {
       return null
@@ -21396,6 +21399,8 @@ export class OrcaRuntimeService {
     if (!agent) {
       return null
     }
+    const sessionOptions =
+      requestedSessionOptions?.agent === agent ? requestedSessionOptions.values : undefined
 
     // Why: a mobile client can run on Windows while the workspace shell is
     // Linux over SSH. Startup command quoting must target the shell that runs it.
@@ -21412,6 +21417,8 @@ export class OrcaRuntimeService {
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      sessionOptions,
+      sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote
@@ -21426,7 +21433,10 @@ export class OrcaRuntimeService {
             ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
             : {}),
           ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
-        }
+        },
+        ...(draftLaunchPlan.sessionOptions
+          ? { appliedSessionOptions: { agent, values: draftLaunchPlan.sessionOptions } }
+          : {})
       }
     }
 
@@ -21436,12 +21446,17 @@ export class OrcaRuntimeService {
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      sessionOptions,
+      sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
+      if (sessionOptions) {
+        throw new Error(`Could not apply launch preferences for ${agent}.`)
+      }
       return null
     }
     return {
@@ -21454,7 +21469,10 @@ export class OrcaRuntimeService {
           : {}),
         ...(startupPlan.env ? { env: startupPlan.env } : {})
       },
-      draftPaste: { agent, content }
+      draftPaste: { agent, content },
+      ...(startupPlan.sessionOptions
+        ? { appliedSessionOptions: { agent, values: startupPlan.sessionOptions } }
+        : {})
     }
   }
 
@@ -21463,7 +21481,12 @@ export class OrcaRuntimeService {
     agent: TuiAgent,
     prompt: string | undefined,
     launchPreferences?: AgentLaunchPreferences
-  ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
+  ): {
+    agent: TuiAgent
+    startup: WorktreeStartupLaunch
+    followup?: WorktreeStartupFollowup
+    appliedSessionOptions?: AgentLaunchSessionOptions
+  } {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -21514,6 +21537,9 @@ export class OrcaRuntimeService {
               prompt: startupPlan.followupPrompt
             }
           }
+        : {}),
+      ...(startupPlan.sessionOptions
+        ? { appliedSessionOptions: { agent, values: startupPlan.sessionOptions } }
         : {})
     }
   }
@@ -21928,6 +21954,7 @@ export class OrcaRuntimeService {
     createdWithAgent?: TuiAgent
     startupAgent?: TuiAgent
     startupLaunchPreferences?: AgentLaunchPreferences
+    startupSessionOptions?: AgentLaunchSessionOptions
     startupPrompt?: string
     pendingFirstAgentMessageRename?: boolean
     automationProvenance?: AutomationWorkspaceProvenance
@@ -21940,6 +21967,9 @@ export class OrcaRuntimeService {
   }): Promise<CreateWorktreeResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
+    }
+    if (args.startupSessionOptions && (!args.startupDraft || args.startupAgent || args.startup)) {
+      throw new Error('Startup session options require a draft without another startup command.')
     }
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
@@ -21970,10 +22000,17 @@ export class OrcaRuntimeService {
         : null
     const draftStartup =
       !args.startup && !agentStartup && args.startupDraft
-        ? await this.buildStartupForDraft(repo, args.startupDraft, requestedAgent)
+        ? await this.buildStartupForDraft(
+            repo,
+            args.startupDraft,
+            requestedAgent,
+            args.startupSessionOptions
+          )
         : null
     const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
     const effectiveStartupFollowup = agentStartup?.followup
+    const effectiveAppliedSessionOptions =
+      agentStartup?.appliedSessionOptions ?? draftStartup?.appliedSessionOptions
     const effectiveCreatedWithAgent = args.startup
       ? args.createdWithAgent
       : (agentStartup?.agent ??
@@ -22075,7 +22112,10 @@ export class OrcaRuntimeService {
             ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
             ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
             ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
-            surface: 'background'
+            surface: 'background',
+            ...(effectiveAppliedSessionOptions
+              ? { appliedSessionOptions: effectiveAppliedSessionOptions }
+              : {})
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
@@ -22128,6 +22168,9 @@ export class OrcaRuntimeService {
         ...(effectiveStartup ? { startup: effectiveStartup } : {}),
         ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
         ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
+        ...(effectiveAppliedSessionOptions
+          ? { startupAppliedSessionOptions: effectiveAppliedSessionOptions }
+          : {}),
         ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
       })
       const recordedLineage = this.recordCreatedWorktreeLineage(result.worktree, lineageResolution)
@@ -22997,7 +23040,10 @@ export class OrcaRuntimeService {
               ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
               ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
               ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
-              surface: 'background' as const
+              surface: 'background' as const,
+              ...(effectiveAppliedSessionOptions
+                ? { appliedSessionOptions: effectiveAppliedSessionOptions }
+                : {})
             }
           }
         : {})
@@ -23041,6 +23087,7 @@ export class OrcaRuntimeService {
       startup?: WorktreeStartupLaunch
       startupFollowup?: WorktreeStartupFollowup
       startupDraftPaste?: WorktreeStartupDraftPaste
+      startupAppliedSessionOptions?: AgentLaunchSessionOptions
     }
   ): Promise<CreateWorktreeResult> {
     if (!this.store) {
@@ -23308,7 +23355,10 @@ export class OrcaRuntimeService {
               ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
               ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
               ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
-              surface: 'background' as const
+              surface: 'background' as const,
+              ...(args.startupAppliedSessionOptions
+                ? { appliedSessionOptions: args.startupAppliedSessionOptions }
+                : {})
             }
           }
         : resultForRenderer

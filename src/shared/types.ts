@@ -48,7 +48,10 @@ import type {
 } from './project-execution-runtime'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
-import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type {
+  PersistedNativeChatSessionOptions,
+  SessionOptionValue
+} from './native-chat-session-options'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 import type { TaskSourceContext } from './task-source-context'
 import type { SetupRunnerShell } from './setup-runner-command'
@@ -2393,6 +2396,8 @@ export type CreateWorktreeResult = {
     paneKey?: string | null
     ptyId?: string | null
     surface?: 'visible' | 'background'
+    /** Host-confirmed agent and picker values emitted into the startup command. */
+    appliedSessionOptions?: AgentLaunchSessionOptions
   }
   timing?: WorktreeCreateTiming
 }
@@ -2693,6 +2698,11 @@ export type TuiAgent =
   | 'ante' // Ante (Antigma Labs)
   | 'trae' // Trae CLI
   | 'prime-agent' // Prime Agent (Prime Intellect)
+
+export type AgentLaunchSessionOptions = {
+  agent: TuiAgent
+  values: Record<string, SessionOptionValue>
+}
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
