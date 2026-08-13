@@ -94,7 +94,7 @@
       "emptySubtitle": "위의 필터를 지우거나 더 많은 호스트와 프로젝트로 범위를 넓히세요.",
       "tabKey": "Tab",
       "label": "필터",
-      "activeCount": "{{value0}}개 활성",
+      "activeCount": "활성 필터 {{value0}}개",
       "removeChip": "필터 {{value0}} 제거",
       "chipOverflow": "+{{value0}}",
       "clearAll": "모두 지우기",
@@ -113,7 +113,7 @@
       "clearHosts": "호스트 지우기",
       "clearProjects": "프로젝트 지우기",
       "back": "뒤로",
-      "ariaActive": "필터: {{value0}}개 활성."
+      "ariaActive": "필터: {{value0}}개 활성화됨."
     }
   },
   "auto": {
