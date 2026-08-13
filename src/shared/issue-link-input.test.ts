@@ -22,6 +22,14 @@ describe('getIssueLinkProviderFromUrl', () => {
     expect(getIssueLinkProviderFromUrl('https://linear.app/acme/team/ENG/all')).toBeNull()
   })
 
+  it('detects Jira issue browse URLs', () => {
+    expect(getIssueLinkProviderFromUrl('https://acme.atlassian.net/browse/PROJ-9')).toBe('jira')
+  })
+
+  it('ignores non-issue paths on a Jira host', () => {
+    expect(getIssueLinkProviderFromUrl('https://acme.atlassian.net/projects/PROJ')).toBeNull()
+  })
+
   it('rejects hosts that merely contain linear.app', () => {
     expect(getIssueLinkProviderFromUrl('https://linear.app.evil.com/acme/issue/STA-335')).toBeNull()
   })
@@ -113,6 +121,48 @@ describe('parseIssueLinkInput', () => {
     it('rejects junk and empty input', () => {
       expect(parseIssueLinkInput('not an issue', 'linear')).toBeNull()
       expect(parseIssueLinkInput('   ', 'linear')).toBeNull()
+    })
+  })
+
+  describe('jira provider', () => {
+    it('accepts bare issue keys and normalizes case', () => {
+      expect(parseIssueLinkInput('PROJ-9', 'jira')).toEqual({
+        provider: 'jira',
+        issueKey: 'PROJ-9'
+      })
+      expect(parseIssueLinkInput('proj-9', 'jira')).toEqual({
+        provider: 'jira',
+        issueKey: 'PROJ-9'
+      })
+    })
+
+    it('omits site pinning for bare keys', () => {
+      expect(parseIssueLinkInput('PROJ-9', 'jira')).not.toHaveProperty('siteOrigin')
+    })
+
+    it('accepts issue URLs and pins the site', () => {
+      expect(parseIssueLinkInput('https://acme.atlassian.net/browse/PROJ-9', 'jira')).toEqual({
+        provider: 'jira',
+        issueKey: 'PROJ-9',
+        siteOrigin: 'https://acme.atlassian.net',
+        sitePath: ''
+      })
+    })
+
+    it('carries the site path for Jira Server instances behind a base path', () => {
+      expect(parseIssueLinkInput('https://jira.example.com/jira/browse/PROJ-9', 'jira')).toEqual({
+        provider: 'jira',
+        issueKey: 'PROJ-9',
+        siteOrigin: 'https://jira.example.com',
+        sitePath: '/jira'
+      })
+    })
+
+    it('rejects GitHub and Linear URLs, junk, and empty input', () => {
+      expect(parseIssueLinkInput('https://github.com/o/r/issues/12', 'jira')).toBeNull()
+      expect(parseIssueLinkInput('https://linear.app/acme/issue/STA-335', 'jira')).toBeNull()
+      expect(parseIssueLinkInput('not an issue', 'jira')).toBeNull()
+      expect(parseIssueLinkInput('   ', 'jira')).toBeNull()
     })
   })
 })

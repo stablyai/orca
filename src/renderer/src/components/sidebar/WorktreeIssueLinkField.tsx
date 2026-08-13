@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import { ChevronDown, ExternalLink, Github, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -32,9 +33,13 @@ export function issueAdornmentReserve(providerLabel: string): string {
 }
 
 function providerLabel(provider: IssueLinkProvider): string {
-  return provider === 'linear'
-    ? translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
-    : translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
+  if (provider === 'linear') {
+    return translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
+  }
+  if (provider === 'jira') {
+    return translate('auto.components.sidebar.WorktreeIssueLinkField.d83b054c9c', 'Jira')
+  }
+  return translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
 }
 
 function ProviderIcon({
@@ -44,11 +49,13 @@ function ProviderIcon({
   provider: IssueLinkProvider
   className?: string
 }): React.JSX.Element {
-  return provider === 'linear' ? (
-    <LinearIcon className={className} />
-  ) : (
-    <Github className={className} />
-  )
+  if (provider === 'linear') {
+    return <LinearIcon className={className} />
+  }
+  if (provider === 'jira') {
+    return <JiraIcon className={className} />
+  }
+  return <Github className={className} />
 }
 
 export type WorktreeIssueLinkFieldProps = {
@@ -61,6 +68,8 @@ export type WorktreeIssueLinkFieldProps = {
   displacedLinkLabels: string[] | null
   /** Folder workspaces have no persisted link slots — see the design doc. */
   isReadOnly: boolean
+  /** True while a save is in flight, so edits cannot race the async Jira lookup. */
+  disabled?: boolean
   canOpenIssue: boolean
   openingIssue: boolean
   /** The last open attempt resolved to nothing — see useWorktreeIssueLink. */
@@ -79,6 +88,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
     isInvalid,
     displacedLinkLabels,
     isReadOnly,
+    disabled = false,
     canOpenIssue,
     openingIssue,
     openIssueFailed,
@@ -115,31 +125,56 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
       )
     }
     if (isInvalid) {
-      return provider === 'linear'
-        ? translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.964d9bc00a',
-            'Not a Linear issue key or linear.app issue URL.'
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.0a7a2c6efd',
-            'Not a GitHub issue number or issue URL.'
-          )
+      if (provider === 'linear') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.964d9bc00a',
+          'Not a Linear issue key or linear.app issue URL.'
+        )
+      }
+      if (provider === 'jira') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.c587107e21',
+          'Not a Jira issue key or issue URL.'
+        )
+      }
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.0a7a2c6efd',
+        'Not a GitHub issue number or issue URL.'
+      )
     }
     // Why: ranked above displacement because it answers the click the user just
     // made, and it clears as soon as they edit the value that caused it.
     if (openIssueFailed) {
-      return provider === 'linear'
-        ? translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.d8c8a30d1f',
-            "Couldn't open that issue. Check the identifier and your Linear connection."
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.269198eeda',
-            "Couldn't open that issue. Check the number and your GitHub connection."
-          )
+      if (provider === 'linear') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.d8c8a30d1f',
+          "Couldn't open that issue. Check the identifier and your Linear connection."
+        )
+      }
+      if (provider === 'jira') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.59aa1044bb',
+          "Couldn't open that issue. Check the key and your Jira connection."
+        )
+      }
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.269198eeda',
+        "Couldn't open that issue. Check the number and your GitHub connection."
+      )
     }
     // Whole sentences per arity rather than a joined list: a translated " and "
     // fragment would not survive languages that order or punctuate lists differently.
+    if (displacedLinkLabels && displacedLinkLabels.length > 2) {
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.5089993940',
+        'Saving unlinks {{first}}, {{second}}, and {{third}}. A workspace tracks one issue.',
+        {
+          first: displacedLinkLabels[0],
+          second: displacedLinkLabels[1],
+          third: displacedLinkLabels[2]
+        }
+      )
+    }
     if (displacedLinkLabels && displacedLinkLabels.length > 1) {
       return translate(
         'auto.components.sidebar.WorktreeIssueLinkField.72486800ff',
@@ -155,8 +190,8 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
       )
     }
     return translate(
-      'auto.components.sidebar.WorktreeIssueLinkField.f047887705',
-      'Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.'
+      'auto.components.sidebar.WorktreeIssueLinkField.95d9f8f997',
+      'Paste a GitHub, Linear, or Jira URL, or enter a number. Leave blank to remove the link.'
     )
   }, [displacedLinkLabels, isInvalid, isReadOnly, openIssueFailed, provider])
 
@@ -173,11 +208,11 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={isReadOnly}
+          disabled={isReadOnly || disabled}
           aria-invalid={isInvalid || undefined}
           placeholder={translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.662ae142f8',
-            'Issue #, or a GitHub or Linear URL'
+            'auto.components.sidebar.WorktreeIssueLinkField.0ee31ebf7b',
+            'Issue #, or a GitHub, Linear, or Jira URL'
           )}
           className="h-8 text-xs"
           style={{ paddingRight: issueAdornmentReserve(label) }}
@@ -191,7 +226,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
                 type="button"
                 variant="ghost"
                 size="xs"
-                disabled={isReadOnly}
+                disabled={isReadOnly || disabled}
                 aria-label={translate(
                   'auto.components.sidebar.WorktreeIssueLinkField.929c98d05a',
                   'Issue provider'
@@ -221,7 +256,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
                 variant="ghost"
                 size="icon-xs"
                 aria-label={openIssueLabel}
-                disabled={!canOpenIssue || openingIssue}
+                disabled={!canOpenIssue || openingIssue || disabled}
                 onClick={onOpenIssue}
                 className="text-muted-foreground"
               >

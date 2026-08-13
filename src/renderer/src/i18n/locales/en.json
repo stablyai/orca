@@ -4854,7 +4854,12 @@
           "382fd11a3e": "Edit Worktree Details",
           "2174f17011": "Save",
           "61d6f612cf": "Saving...",
-          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace."
+          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace.",
+          "136795efad": "Connect Jira in Settings before linking an issue.",
+          "9c3e2078a4": "That Jira site isn't connected. Connect it, or enter a bare issue key to use the active site.",
+          "764b478e40": "Several Jira sites are connected. Paste a full Jira issue URL so the site is unambiguous.",
+          "9560604f22": "That Jira issue was not found. Check the key and your access.",
+          "a3d824d1b8": "Could not link the Jira issue. Check your Jira connection and try again."
         },
         "WorktreeOpenInMenu": {
           "localOnly": "Local only",
@@ -5343,14 +5348,19 @@
           "2c245ac134": "Saving unlinks {{link}} — a workspace tracks one issue.",
           "d8c8a30d1f": "Couldn't open that issue. Check the identifier and your Linear connection.",
           "269198eeda": "Couldn't open that issue. Check the number and your GitHub connection.",
-          "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.",
           "ad78f9bee2": "Issue",
-          "662ae142f8": "Issue #, or a GitHub or Linear URL",
-          "929c98d05a": "Issue provider"
+          "929c98d05a": "Issue provider",
+          "d83b054c9c": "Jira",
+          "c587107e21": "Not a Jira issue key or issue URL.",
+          "59aa1044bb": "Couldn't open that issue. Check the key and your Jira connection.",
+          "95d9f8f997": "Paste a GitHub, Linear, or Jira URL, or enter a number. Leave blank to remove the link.",
+          "0ee31ebf7b": "Issue #, or a GitHub, Linear, or Jira URL",
+          "5089993940": "Saving unlinks {{first}}, {{second}}, and {{third}}. A workspace tracks one issue."
         },
         "worktreeIssueDisplacement": {
           "3f61c0a8d2": "Linear {{value}}",
-          "9c4b7e1f60": "GitHub #{{value}}"
+          "9c4b7e1f60": "GitHub #{{value}}",
+          "91421aa60e": "Jira {{value}}"
         },
         "WorktreeCardSshHostControl": {
           "connectFailed": "SSH connection failed",

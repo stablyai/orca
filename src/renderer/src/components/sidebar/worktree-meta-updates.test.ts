@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { WorktreeMeta } from '../../../../shared/types'
 import {
   buildWorktreeMetaUpdates,
+  isIssueFieldDirty,
   type WorktreeMetaDraft,
   type WorktreeMetaLiveLinks,
   type WorktreeMetaSnapshot
@@ -153,6 +154,21 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(updates).toHaveProperty('linkedTaskSourceContext', null)
   })
 
+  it('displaces a Jira linked work item when the issue field changes', () => {
+    const updates = buildUpdates(
+      { issueInput: '12' },
+      {},
+      {
+        linkedWorkItemProvider: 'jira',
+        linkedWorkItemType: 'issue',
+        linkedWorkItemJiraIdentifier: 'PROJ-9'
+      }
+    )
+
+    expect(updates).toHaveProperty('linkedWorkItem', null)
+    expect(updates).toHaveProperty('linkedTaskSourceContext', null)
+  })
+
   // linkedWorkItem also records the PR or MR a workspace was created from, which
   // the Issue row does not own and must not drop.
   it('leaves a PR-typed work item alone', () => {
@@ -166,10 +182,10 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(updates).not.toHaveProperty('linkedTaskSourceContext')
   })
 
-  // The row cannot render a GitLab or Jira issue, so clearing one would destroy a
-  // link the user was never shown — and neither has another editor to restore it.
+  // The row cannot render a GitLab issue, so clearing one would destroy a link
+  // the user was never shown, and it has no other editor to restore it from.
   it('leaves work items owned by other providers alone', () => {
-    for (const provider of ['jira', 'gitlab'] as const) {
+    for (const provider of ['gitlab'] as const) {
       const updates = buildUpdates(
         { issueInput: '12' },
         {},
@@ -362,5 +378,43 @@ describe('buildWorktreeMetaUpdates', () => {
 
   it('clears a comment with empty string, never a present-undefined key', () => {
     expect(buildUpdates({ commentInput: '  ' }, { comment: 'old note' }).comment).toBe('')
+  })
+})
+
+describe('isIssueFieldDirty Jira site identity', () => {
+  // The same key on two Jira instances is two different links, so re-pointing a
+  // URL at another site must resolve and persist rather than read as untouched.
+  it('treats the same key on two Jira sites as a change', () => {
+    expect(
+      isIssueFieldDirty(
+        makeDraft({
+          issueProvider: 'jira',
+          issueInput: 'https://site-b.atlassian.net/browse/PROJ-9'
+        }),
+        makeSnapshot({
+          issueProvider: 'jira',
+          issueInput: 'https://site-a.atlassian.net/browse/PROJ-9'
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('treats an unchanged Jira URL as clean', () => {
+    const url = 'https://acme.atlassian.net/browse/PROJ-9'
+    expect(
+      isIssueFieldDirty(
+        makeDraft({ issueProvider: 'jira', issueInput: url }),
+        makeSnapshot({ issueProvider: 'jira', issueInput: url })
+      )
+    ).toBe(false)
+  })
+
+  it('treats a respelled bare Jira key as clean', () => {
+    expect(
+      isIssueFieldDirty(
+        makeDraft({ issueProvider: 'jira', issueInput: 'proj-9' }),
+        makeSnapshot({ issueProvider: 'jira', issueInput: 'PROJ-9' })
+      )
+    ).toBe(false)
   })
 })
