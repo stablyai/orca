@@ -51,6 +51,18 @@ export class RoomEventBus {
     this.activities.clear()
   }
 
+  endRoom(roomId: string): void {
+    const event: RoomEvent = { type: 'end', reason: 'deleted' }
+    this.broadcast?.(roomId, event)
+    for (const listener of this.listeners.get(roomId) ?? []) {
+      try {
+        listener(event)
+      } catch {}
+    }
+    this.listeners.delete(roomId)
+    this.activities.delete(roomId)
+  }
+
   private removeActivity(roomId: string, participantId: string | null): void {
     if (!participantId) {
       return

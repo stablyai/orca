@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RoomAttachmentTransferStore } from './attachment-transfers'
 import { RoomAttachmentManager } from './attachments'
 import { RoomDatabase } from './database'
@@ -88,9 +88,6 @@ describe('room attachment transfers', () => {
       'room_attachment_not_found'
     )
 
-    database.core.update(room.room.id, { archived: true })
-    expect(existsSync(attachment.localPath)).toBe(true)
-    database.core.update(room.room.id, { archived: false })
     await messages.delete(message.id, 'user')
     expect(existsSync(attachment.localPath)).toBe(false)
   })
@@ -116,6 +113,63 @@ describe('room attachment transfers', () => {
     ).rejects.toThrow('database_failed')
     expect(existsSync(path)).toBe(false)
     database.messages.create = create
+  })
+
+  it('does not retain a download started while its room is cancelled', async () => {
+    const { room, manager, transfers, messages } = setup()
+    const upload = await transfers.startUpload(room.room.id, 'evidence.txt', 1)
+    await transfers.appendUpload(upload.uploadId, 0, Buffer.from('x').toString('base64'))
+    transfers.finishUpload(upload.uploadId)
+    const message = await messages.send({
+      roomId: room.room.id,
+      senderIdentity: 'user',
+      body: '',
+      attachmentUploadIds: [upload.uploadId]
+    })
+    let resolveSize!: (size: number) => void
+    manager.size = vi.fn(() => new Promise<number>((resolve) => (resolveSize = resolve)))
+
+    const download = transfers.startDownload(room.room.id, message.attachments[0].id)
+    await vi.waitFor(() => expect(manager.size).toHaveBeenCalledOnce())
+    await transfers.cancelRoom(room.room.id)
+    resolveSize(1)
+
+    await expect(download).rejects.toThrow('room_not_found')
+  })
+
+  it('waits for an active download read before cancelling its room', async () => {
+    const { room, manager, transfers, messages } = setup()
+    const upload = await transfers.startUpload(room.room.id, 'evidence.txt', 1)
+    await transfers.appendUpload(upload.uploadId, 0, Buffer.from('x').toString('base64'))
+    transfers.finishUpload(upload.uploadId)
+    const message = await messages.send({
+      roomId: room.room.id,
+      senderIdentity: 'user',
+      body: '',
+      attachmentUploadIds: [upload.uploadId]
+    })
+    const download = await transfers.startDownload(room.room.id, message.attachments[0].id)
+    const readChunk = manager.readChunk.bind(manager)
+    let continueRead!: () => void
+    const paused = new Promise<void>((resolve) => (continueRead = resolve))
+    vi.spyOn(manager, 'readChunk').mockImplementation(async (...args) => {
+      await paused
+      return readChunk(...args)
+    })
+
+    const read = transfers.readDownload(download.transferId, 0)
+    await vi.waitFor(() => expect(manager.readChunk).toHaveBeenCalledOnce())
+    let cancelled = false
+    const cancellation = transfers.cancelRoom(room.room.id).then(() => (cancelled = true))
+    await Promise.resolve()
+    expect(cancelled).toBe(false)
+
+    continueRead()
+    await read
+    await cancellation
+    await expect(transfers.readDownload(download.transferId, 0)).rejects.toThrow(
+      'room_attachment_download_not_found'
+    )
   })
 
   it('rejects malformed chunks, invalid offsets, and symlink escapes', async () => {

@@ -7,6 +7,14 @@ const ArchiveChunk = z.string().max(600_000)
 
 export const ROOM_MANAGEMENT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
+    name: 'rooms.delete',
+    params: z.object({ roomId: RoomId }).strict(),
+    handler: async (params, { runtime }) => {
+      await runtime.getRoomService().deleteRoom(params.roomId)
+      return { deleted: true }
+    }
+  }),
+  defineMethod({
     name: 'rooms.archive.export.start',
     params: z.object({ roomId: RoomId }).strict(),
     handler: async (params, { runtime }) => {
@@ -14,7 +22,7 @@ export const ROOM_MANAGEMENT_METHODS: readonly RpcAnyMethod[] = [
       const room = service.db.core.get(params.roomId)
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
       const safe = room.name.replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '') || 'room'
-      return service.archiveTransfers.startExport(room.id, `${safe}-${stamp}.zip`)
+      return service.startArchiveExport(room.id, `${safe}-${stamp}.zip`)
     }
   }),
   defineMethod({
@@ -35,17 +43,18 @@ export const ROOM_MANAGEMENT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'rooms.archive.import.append',
     params: z.object({ transferId: TransferId, contentBase64: ArchiveChunk }).strict(),
-    handler: async (params, { runtime }) =>
-      runtime
-        .getRoomService()
-        .archiveTransfers.appendImport(params.transferId, params.contentBase64)
+    handler: async (params, { runtime }) => {
+      const service = runtime.getRoomService()
+      service.assertWritable(service.archiveTransfers.importRoomId(params.transferId))
+      return service.archiveTransfers.appendImport(params.transferId, params.contentBase64)
+    }
   }),
   defineMethod({
     name: 'rooms.archive.import.finish',
     params: z.object({ transferId: TransferId }).strict(),
     handler: async (params, { runtime }) => {
       const service = runtime.getRoomService()
-      const result = await service.archiveTransfers.finishImport(params.transferId)
+      const result = await service.finishArchiveImport(params.transferId)
       service.emitEvent(result.roomId, {
         type: 'snapshot',
         snapshot: service.snapshot(result.roomId)
@@ -69,22 +78,14 @@ export const ROOM_MANAGEMENT_METHODS: readonly RpcAnyMethod[] = [
         name: z.string().trim().min(1).max(120).optional(),
         description: z.string().max(4000).optional(),
         loopLimit: z.number().int().min(0).max(20).optional(),
-        worktreeId: z.string().trim().min(1).max(1024).nullable().optional(),
-        archived: z.boolean().optional()
+        worktreeId: z.string().trim().min(1).max(1024).nullable().optional()
       })
       .strict(),
     handler: async (params, { runtime }) => {
       const service = runtime.getRoomService()
-      const current = service.db.core.get(params.roomId)
-      if (current.archivedAt && params.archived !== false) {
-        throw new Error('room_archived')
-      }
-      const { archived, ...changes } = params
-      let room = archived === undefined ? current : service.setArchived(params.roomId, archived)
-      if (Object.keys(changes).length > 1) {
-        room = service.db.core.update(params.roomId, changes)
-        service.emitEvent(room.id, { type: 'room.updated', room })
-      }
+      service.assertWritable(params.roomId)
+      const room = service.db.core.update(params.roomId, params)
+      service.emitEvent(room.id, { type: 'room.updated', room })
       return { room }
     }
   }),

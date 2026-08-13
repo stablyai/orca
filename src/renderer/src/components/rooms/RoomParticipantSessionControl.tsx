@@ -16,9 +16,8 @@ export function isRoomParticipantSessionControlBusy(
 export function RoomParticipantSessionControl(props: {
   participant: NonNullable<RoomData['snapshot']>['participants'][number]
   target: RoomData['target']
-  archived: boolean
 }): React.JSX.Element {
-  const { participant, target, archived } = props
+  const { participant, target } = props
   const [compacting, setCompacting] = useState(false)
   const { surface, snapshot } = useRoomParticipantSessionOptions(participant, target)
   const compact = async (): Promise<void> => {
@@ -36,7 +35,7 @@ export function RoomParticipantSessionControl(props: {
       snapshot={snapshot}
       isWorking={isRoomParticipantSessionControlBusy(participant.state, compacting)}
       context={participant.context}
-      canCompact={!archived}
+      canCompact
       onCompact={compact}
       className={cn(
         'h-9 max-w-80 rounded-md border border-border bg-card px-2',

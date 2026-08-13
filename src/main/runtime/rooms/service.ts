@@ -2,7 +2,6 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type {
   Room,
-  RoomAttachableAgent,
   RoomEvent,
   RoomMessage,
   RoomMessagePage,
@@ -24,6 +23,8 @@ import { RoomMessageController, type SendRoomMessageInput } from './message-cont
 import { RoomArchiveTransferStore } from './archive-transfers'
 import { RoomAttachmentManager } from './attachments'
 import { RoomAttachmentTransferStore } from './attachment-transfers'
+import { RoomDeletionCoordinator } from './room-deletion'
+import { RoomWorkController } from './work-controller'
 import { addRoomMessageNotificationContext } from './room-event-notification'
 
 export type { RoomParticipantConnection } from './participant-controller'
@@ -38,14 +39,14 @@ export class RoomService {
   readonly participantController: RoomParticipantController
   private readonly events: RoomEventBus
   private readonly messageController: RoomMessageController
-  private readonly listAttachable: RoomHarnessRuntime['listRoomAttachableAgents']
   private readonly focusTerminal: RoomHarnessRuntime['focusTerminal']
   private readonly hideRendererStatus: RoomHarnessRuntime['hideRoomAgentStatusFromRenderer']
   private readonly publishAgentSession: RoomHarnessRuntime['publishRoomAgentProviderSession']
+  private readonly deletion: RoomDeletionCoordinator
+  private readonly work: RoomWorkController
 
   constructor(path: string, runtime: RoomHarnessRuntime) {
     this.events = new RoomEventBus(runtime.emitRoomEvent?.bind(runtime))
-    this.listAttachable = runtime.listRoomAttachableAgents.bind(runtime)
     this.focusTerminal = runtime.focusTerminal?.bind(runtime)
     this.hideRendererStatus = runtime.hideRoomAgentStatusFromRenderer?.bind(runtime)
     this.publishAgentSession = runtime.publishRoomAgentProviderSession?.bind(runtime)
@@ -85,11 +86,29 @@ export class RoomService {
       (roomId, event) => this.emitEvent(roomId, event),
       () => this.deliveryWorker.wake()
     )
+    this.work = new RoomWorkController(
+      this.db,
+      this.deliveryWorker,
+      this.transcriptBridge,
+      this.adapters,
+      (roomId, event) => this.emitEvent(roomId, event)
+    )
+    this.deletion = new RoomDeletionCoordinator(
+      this.db,
+      this.deliveryWorker,
+      this.participantController,
+      this.archiveTransfers,
+      this.attachmentTransfers,
+      this.events,
+      runtime.cleanupDeletedRoomResources?.bind(runtime) ?? (async () => undefined)
+    )
     this.deliveryWorker.start()
     this.participantController.startHibernationSweep()
+    this.deletion.start()
   }
 
   close(): void {
+    this.deletion.dispose()
     this.participantController.dispose()
     this.deliveryWorker.dispose()
     this.transcriptBridge.dispose()
@@ -103,12 +122,8 @@ export class RoomService {
     return this.db.createRoom(input)
   }
 
-  listRooms(projectId: string, includeArchived = false): Room[] {
-    return this.db.core.list(projectId, includeArchived)
-  }
-
-  listAttachableAgents(worktreeId: string): Promise<RoomAttachableAgent[]> {
-    return this.listAttachable(worktreeId)
+  listRooms(projectId: string): Room[] {
+    return this.db.core.list(projectId)
   }
 
   snapshot(roomId: string, readerKey = 'user'): RoomSnapshot {
@@ -116,10 +131,11 @@ export class RoomService {
   }
 
   async activateRoom(roomId: string, readerKey = 'user'): Promise<RoomSnapshot> {
+    return this.deletion.run(roomId, () => this.activateRoomNow(roomId, readerKey))
+  }
+
+  private async activateRoomNow(roomId: string, readerKey: string): Promise<RoomSnapshot> {
     const snapshot = this.db.snapshot(roomId, readerKey)
-    if (snapshot.room.archivedAt) {
-      return snapshot
-    }
     await Promise.all(
       snapshot.participants
         .filter((participant) => participant.actorKind === 'agent')
@@ -152,9 +168,7 @@ export class RoomService {
   }
 
   assertWritable(roomId: string): void {
-    if (this.db.core.get(roomId).archivedAt) {
-      throw new Error('room_archived')
-    }
+    this.deletion.assertAvailable(roomId)
   }
 
   getUserParticipant(roomId: string): RoomParticipant {
@@ -165,56 +179,33 @@ export class RoomService {
     return participant
   }
 
-  setArchived(roomId: string, archived: boolean): Room {
-    const changes = this.db.transaction(() => ({
-      room: this.db.core.update(roomId, { archived }),
-      deliveries: archived
-        ? this.db.messages.deliveries.deferRoom(roomId)
-        : this.db.messages.deliveries.resumeRoom(roomId)
-    }))
-    const { room } = changes
-    this.emitEvent(room.id, { type: 'room.updated', room })
-    if (archived) {
-      for (const delivery of changes.deliveries) {
-        this.emitEvent(room.id, { type: 'delivery.updated', delivery })
-      }
-      for (const participant of this.db.participants.list(room.id)) {
-        this.transcriptBridge.disposeParticipant(participant.id)
-      }
-    } else {
-      for (const delivery of changes.deliveries) {
-        this.emitEvent(room.id, { type: 'delivery.updated', delivery })
-      }
-      for (const participant of this.db.participants.listBound(room.id)) {
-        this.db.providerMessages.resetStream(participant.id)
-        void this.transcriptBridge.ensure(participant).catch(() => {})
-        void this.transcriptBridge.refreshContext(participant).catch(() => {})
-      }
-      this.deliveryWorker.wake()
-    }
-    return room
-  }
-
   sendMessage(input: SendRoomMessageInput): Promise<RoomMessage> {
-    return this.messageController.send(input)
+    return this.deletion.run(input.roomId, () => this.messageController.send(input))
   }
 
   updateMessage(id: string, senderIdentity: string, body: string): RoomMessage {
+    this.assertWritable(this.db.messages.get(id).roomId)
     return this.messageController.update(id, senderIdentity, body)
   }
 
   async deleteMessage(id: string, senderIdentity: string): Promise<void> {
-    await this.messageController.delete(id, senderIdentity)
+    const roomId = this.db.messages.get(id).roomId
+    this.messageController.assertDeletable(id, senderIdentity)
+    await this.deletion.run(roomId, async () => {
+      await this.work.stopMessage(id)
+      await this.messageController.delete(id, senderIdentity)
+    })
   }
 
   markRead(roomId: string, readerKey: string, sequence: number): RoomUnread {
+    this.assertWritable(roomId)
     return this.messageController.markRead(roomId, readerKey, sequence)
   }
 
   async addParticipant(
     input: Parameters<RoomParticipantController['add']>[0]
   ): Promise<RoomParticipant> {
-    return this.participantController.add(input)
+    return this.deletion.run(input.roomId, () => this.participantController.add(input))
   }
 
   participantForTerminal(handle: string): RoomParticipant | null {
@@ -231,6 +222,11 @@ export class RoomService {
   }
 
   async revealParticipant(id: string, viewMode: 'terminal' | 'chat'): Promise<void> {
+    const roomId = this.db.participants.get(id).roomId
+    return this.deletion.run(roomId, () => this.revealParticipantNow(id, viewMode))
+  }
+
+  private async revealParticipantNow(id: string, viewMode: 'terminal' | 'chat'): Promise<void> {
     if (!this.focusTerminal) {
       throw new Error('room_participant_not_ready')
     }
@@ -268,25 +264,26 @@ export class RoomService {
   }
 
   async removeParticipant(id: string): Promise<void> {
-    return this.participantController.remove(id)
+    const roomId = this.db.participants.get(id).roomId
+    return this.deletion.run(roomId, () => this.participantController.remove(id))
   }
 
   async compactParticipant(id: string): Promise<RoomParticipant> {
-    this.assertWritable(this.db.participants.get(id).roomId)
-    return this.participantController.compact(id)
+    const roomId = this.db.participants.get(id).roomId
+    return this.deletion.run(roomId, () => this.participantController.compact(id))
   }
 
   async controlParticipant(id: string, command: string): Promise<RoomParticipant> {
-    this.assertWritable(this.db.participants.get(id).roomId)
-    return this.participantController.control(id, command)
+    const roomId = this.db.participants.get(id).roomId
+    return this.deletion.run(roomId, () => this.participantController.control(id, command))
   }
 
   async reconfigureParticipant(
     id: string,
     preferences: Parameters<RoomParticipantController['reconfigure']>[1]
   ): Promise<RoomParticipant> {
-    this.assertWritable(this.db.participants.get(id).roomId)
-    return this.participantController.reconfigure(id, preferences)
+    const roomId = this.db.participants.get(id).roomId
+    return this.deletion.run(roomId, () => this.participantController.reconfigure(id, preferences))
   }
 
   retryDelivery(id: string): void {
@@ -295,6 +292,41 @@ export class RoomService {
     const delivery = this.db.messages.deliveries.retry(id)
     this.emitEvent(roomId, { type: 'delivery.updated', delivery })
     this.deliveryWorker.wake()
+  }
+
+  stopRoom = (roomId: string): Promise<number> =>
+    this.deletion.run(roomId, () => this.work.stop(roomId))
+
+  resumeRoom = (roomId: string): Promise<number> =>
+    this.deletion.run(roomId, () => this.work.resume(roomId))
+
+  recordAttachmentDrop(attachmentId: string, connectionId: string, remotePath: string): void {
+    this.db.recordAttachmentDrop(attachmentId, connectionId, remotePath)
+  }
+
+  deleteRoom(roomId: string): Promise<void> {
+    return this.deletion.delete(roomId)
+  }
+
+  finishArchiveImport(transferId: string) {
+    const roomId = this.archiveTransfers.importRoomId(transferId)
+    return this.deletion.run(roomId, () => this.archiveTransfers.finishImport(transferId))
+  }
+
+  startArchiveExport(roomId: string, fileName: string) {
+    return this.deletion.run(roomId, () => this.archiveTransfers.startExport(roomId, fileName))
+  }
+
+  startAttachmentUpload(roomId: string, fileName: string, byteSize: number) {
+    return this.deletion.run(roomId, () =>
+      this.attachmentTransfers.startUpload(roomId, fileName, byteSize)
+    )
+  }
+
+  startAttachmentDownload(roomId: string, attachmentId: string) {
+    return this.deletion.run(roomId, () =>
+      this.attachmentTransfers.startDownload(roomId, attachmentId)
+    )
   }
 
   ingestAgentStatus(event: AgentHookEventPayload & { receivedAt: number }): void {
@@ -306,6 +338,9 @@ export class RoomService {
   }
 
   emitEvent(roomId: string, event: RoomEvent): void {
+    if (event.type === 'delivery.updated') {
+      event = { ...event, workState: this.db.messages.deliveries.workState(roomId) }
+    }
     this.events.emit(roomId, addRoomMessageNotificationContext(this.db, roomId, event))
   }
 }

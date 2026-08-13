@@ -1,5 +1,6 @@
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
+import { Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ComposerRunButton } from '@/components/ComposerRunButton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -145,26 +146,16 @@ export function NativeChatComposerActions({
             {dictationLabel}
           </TooltipContent>
         </Tooltip>
-        <Button
-          type="button"
-          data-native-chat-critical-action={isWorking ? 'stop' : undefined}
-          aria-label={
+        <ComposerRunButton
+          mode={isWorking ? 'stop' : 'send'}
+          label={
             isWorking
               ? translate('components.native-chat.stop', 'Stop the agent')
               : translate('components.native-chat.composer.send', 'Send')
           }
           disabled={sendDisabled}
           onClick={handleCriticalAction}
-          variant={isWorking ? 'secondary' : 'default'}
-          size="icon"
-          className="size-8 rounded-full pointer-coarse:size-10"
-        >
-          {isWorking ? (
-            <Square className="size-3.5 fill-current" />
-          ) : (
-            <ArrowUp className="size-4" />
-          )}
-        </Button>
+        />
       </div>
     </div>
   )

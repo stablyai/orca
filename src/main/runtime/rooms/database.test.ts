@@ -222,6 +222,89 @@ describe('RoomDatabase', () => {
     })
   })
 
+  it('never automatically retries a delivery that may have submitted Enter', () => {
+    const database = memory()
+    const snapshot = createRoom(database)
+    const agent = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'claude',
+      displayName: 'Claude',
+      agent: 'claude'
+    })
+    const deliveries = ['submitting', 'awaiting-turn'].map((phase) => {
+      const delivery = database.messages.create({
+        roomId: snapshot.room.id,
+        senderId: snapshot.participants[0].id,
+        senderIdentity: 'egor',
+        actorKind: 'user',
+        body: phase
+      }).deliveries[0]!
+      database.messages.deliveries.claim(delivery.id)
+      database.messages.deliveries.setPhase(delivery.id, phase as 'submitting' | 'awaiting-turn')
+      return delivery
+    })
+
+    database.messages.deliveries.recoverInterrupted(123)
+
+    expect(deliveries.map((item) => database.messages.deliveries.get(item.id))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ state: 'failed', error: 'room_delivery_uncertain' }),
+        expect.objectContaining({ state: 'failed', error: 'room_delivery_uncertain' })
+      ])
+    )
+    expect(database.messages.deliveries.listDue(123)).toEqual([])
+    expect(agent.id).toBeTruthy()
+  })
+
+  it('selects one FIFO head per participant before applying the global limit', () => {
+    const database = memory()
+    const snapshot = createRoom(database)
+    const alpha = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'alpha',
+      displayName: 'Alpha',
+      agent: 'codex'
+    })
+    const beta = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'beta',
+      displayName: 'Beta',
+      agent: 'claude'
+    })
+    const first = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: 'egor',
+      actorKind: 'user',
+      body: 'first'
+    })
+    const second = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: 'egor',
+      actorKind: 'user',
+      body: 'second'
+    })
+    const firstAlpha = first.deliveries.find((item) => item.participantId === alpha.id)!
+    const secondAlpha = second.deliveries.find((item) => item.participantId === alpha.id)!
+    const now = Date.now()
+    database.messages.deliveries.claim(firstAlpha.id)
+    database.messages.deliveries.complete(firstAlpha.id, 'pending', 'retry', now + 10_000)
+
+    expect(
+      database.messages.deliveries.listDue(now, 100).map((item) => item.participantId)
+    ).toEqual([beta.id])
+    expect(database.messages.deliveries.listDue(now + 10_000, 100)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: firstAlpha.id }),
+        expect.objectContaining({ participantId: beta.id })
+      ])
+    )
+    expect(database.messages.deliveries.listDue(500, 100)).not.toContainEqual(
+      expect.objectContaining({ id: secondAlpha.id })
+    )
+  })
+
   it('keeps only the latest five delivery attempt diagnostics', () => {
     const database = memory()
     const snapshot = createRoom(database)
@@ -317,7 +400,7 @@ describe('RoomDatabase', () => {
       expect.objectContaining({ messageId: guarded.message.id, state: 'suppressed' })
     )
 
-    expect(database.messages.deliveries.retry(guarded.deliveries[0].id, 123)).toMatchObject({
+    expect(database.messages.deliveries.resumeRoom(snapshot.room.id, 123)[0]).toMatchObject({
       messageId: guarded.message.id,
       state: 'pending',
       nextAttemptAt: 123
@@ -333,6 +416,92 @@ describe('RoomDatabase', () => {
     })
     expect(resumed.message.hopCount).toBe(4)
     expect(resumed.deliveries[0].state).toBe('pending')
+  })
+
+  it('stops every unresolved room delivery and resumes it as a new attempt', () => {
+    const database = memory()
+    const snapshot = createRoom(database)
+    const alpha = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'alpha',
+      displayName: 'Alpha',
+      agent: 'codex'
+    })
+    const beta = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'beta',
+      displayName: 'Beta',
+      agent: 'claude'
+    })
+    const gamma = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'gamma',
+      displayName: 'Gamma',
+      agent: 'grok'
+    })
+    const created = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: 'egor',
+      actorKind: 'user',
+      body: 'Review this'
+    })
+    const alphaDelivery = created.deliveries.find(
+      (delivery) => delivery.participantId === alpha.id
+    )!
+    const betaDelivery = created.deliveries.find((delivery) => delivery.participantId === beta.id)!
+    const gammaDelivery = created.deliveries.find(
+      (delivery) => delivery.participantId === gamma.id
+    )!
+    database.messages.deliveries.claim(alphaDelivery.id)
+    database.messages.deliveries.setPhase(alphaDelivery.id, 'awaiting-turn')
+    database.messages.deliveries.confirmTurn(alphaDelivery.id, 'turn-alpha')
+    database.messages.deliveries.claim(betaDelivery.id)
+    database.messages.deliveries.setPhase(betaDelivery.id, 'awaiting-turn')
+    database.messages.deliveries.complete(
+      betaDelivery.id,
+      'failed',
+      'room_delivery_uncertain',
+      Number.MAX_SAFE_INTEGER
+    )
+    database.messages.deliveries.claim(gammaDelivery.id)
+    database.messages.deliveries.setPhase(gammaDelivery.id, 'waking')
+    database.messages.deliveries.complete(
+      gammaDelivery.id,
+      'suppressed',
+      'room_participant_paused',
+      Number.MAX_SAFE_INTEGER
+    )
+
+    expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('active')
+    const stopped = database.transaction(() =>
+      database.messages.deliveries.stopRoom(snapshot.room.id)
+    )
+    expect(stopped.stopped).toHaveLength(2)
+    expect(stopped.deliveries.every((delivery) => delivery.error === 'room_stopping')).toBe(true)
+    expect(() => database.messages.deliveries.resumeRoom(snapshot.room.id, 456)).toThrow(
+      'room_stop_in_progress'
+    )
+    database.messages.deliveries.finishRoomStop(stopped.deliveries.map((delivery) => delivery.id))
+    expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('stopped')
+    expect(database.messages.deliveries.retry(alphaDelivery.id).state).toBe('suppressed')
+    expect(database.messages.deliveries.get(gammaDelivery.id)).toMatchObject({
+      state: 'suppressed',
+      error: 'room_participant_paused'
+    })
+
+    const resumed = database.transaction(() =>
+      database.messages.deliveries.resumeRoom(snapshot.room.id, 456)
+    )
+    expect(resumed).toHaveLength(2)
+    expect(
+      resumed.every((delivery) => delivery.state === 'pending' && delivery.nextAttemptAt === 456)
+    ).toBe(true)
+    expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('active')
+    expect(database.messages.deliveries.get(gammaDelivery.id)).toMatchObject({
+      state: 'suppressed',
+      error: 'room_participant_paused'
+    })
   })
 
   it('paginates without rereading the whole room and tracks unread cursors', () => {
@@ -445,7 +614,7 @@ describe('RoomDatabase', () => {
     expect(renamed.providerSession?.id).toBe('provider-stable')
   })
 
-  it('rejects cross-room roles and parks archived room deliveries durably', () => {
+  it('rejects cross-room roles and duplicate live panes', () => {
     const database = memory()
     const first = createRoom(database)
     const second = database.createRoom({ projectId: 'project-1', name: 'Second' })
@@ -474,34 +643,117 @@ describe('RoomDatabase', () => {
       })
     ).toThrow('room_agent_already_in_room')
 
+    database.participants.update(agent.id, {
+      worktreeId: 'worktree-1',
+      providerSession: { key: 'session_id', id: 'session-1' }
+    })
+    expect(() =>
+      database.participants.add({
+        roomId: second.room.id,
+        identity: 'openclaude',
+        displayName: 'OpenClaude',
+        agent: 'openclaude',
+        worktreeId: 'worktree-1',
+        providerSession: { key: 'session_id', id: 'session-1' }
+      })
+    ).toThrow('room_agent_already_in_room')
+
     database.providerMessages.observeSnapshot(agent.id, 'session-1', ['old'])
     database.providerMessages.observeSnapshot(agent.id, 'session-1', ['old'])
     expect(database.providerMessages.hasObservedSession(agent.id, 'session-1')).toBe(true)
     database.providerMessages.resetStream(agent.id)
     expect(database.providerMessages.hasObservedSession(agent.id, 'session-1')).toBe(true)
-    database.providerMessages.observeSnapshot(agent.id, 'session-1', ['old', 'archived'])
+  })
 
-    const delivery = database.messages.create({
-      roomId: first.room.id,
-      senderId: first.participants[0].id,
-      senderIdentity: first.participants[0].identity,
-      actorKind: 'user',
-      body: '@claude review',
-      mentions: ['claude']
-    }).deliveries[0]!
-    expect(database.messages.deliveries.claim(delivery.id)?.state).toBe('delivering')
-    database.core.update(first.room.id, { archived: true })
-    expect(database.messages.deliveries.deferRoom(first.room.id)).toMatchObject([
-      { id: delivery.id, state: 'failed', error: 'room_archived' }
-    ])
-    expect(database.messages.deliveries.complete(delivery.id, 'delivered', null)).toMatchObject({
-      id: delivery.id,
-      state: 'failed',
-      error: 'room_archived'
+  it('deletes the complete room graph without touching another room', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-room-delete-'))
+    directories.push(directory)
+    const path = join(directory, 'rooms.db')
+    const database = new RoomDatabase(path)
+    databases.push(database)
+    const deleted = createRoom(database)
+    const kept = database.createRoom({ projectId: 'project-1', name: 'Kept' })
+    const agent = database.participants.add({
+      roomId: deleted.room.id,
+      identity: 'codex',
+      displayName: 'Codex',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'session-1' }
     })
-    database.core.update(first.room.id, { archived: false })
-    expect(database.messages.deliveries.resumeRoom(first.room.id, 1)).toMatchObject([
-      { id: delivery.id, state: 'pending', error: null, nextAttemptAt: 1 }
-    ])
+    const created = database.messages.create({
+      roomId: deleted.room.id,
+      senderId: deleted.participants[0].id,
+      senderIdentity: deleted.participants[0].identity,
+      actorKind: 'user',
+      body: '@codex review',
+      mentions: ['codex'],
+      attachments: [
+        {
+          id: crypto.randomUUID(),
+          fileName: 'evidence.txt',
+          mimeType: 'text/plain',
+          byteSize: 1,
+          localPath: join(directory, 'evidence.txt'),
+          createdAt: 1
+        }
+      ]
+    })
+    const attachment = created.message.attachments[0]
+    database.recordAttachmentDrop(attachment.id, 'ssh-1', '/repo/.orca/drops/evidence.txt')
+    database.messages.markRead(deleted.room.id, 'user', created.message.sequence)
+    database.pins.set({
+      roomId: deleted.room.id,
+      messageId: created.message.id,
+      status: 'todo',
+      createdBy: 'egor'
+    })
+    database.providerMessages.observeSnapshot(agent.id, 'session-1', ['provider-message'])
+    database.activities.upsert({
+      participantId: agent.id,
+      identity: agent.identity,
+      state: 'working',
+      kind: 'command',
+      detail: 'git status',
+      messages: [],
+      startedAt: 1,
+      updatedAt: 1,
+      anchorSequence: created.message.sequence
+    })
+    database.deliveryConfiguration.commit(agent.id, {
+      providerSessionKey: 'session_id',
+      providerSessionId: 'session-1',
+      description: '',
+      roleRevision: ''
+    })
+
+    database.deleteRoom({
+      roomId: deleted.room.id,
+      attachmentPaths: [attachment.localPath],
+      pendingUploadIds: [],
+      drops: database.listAttachmentDrops(deleted.room.id)
+    })
+
+    const raw = new SyncDatabase(path)
+    const emptyQueries = [
+      ['rooms', 'id', deleted.room.id],
+      ['room_roles', 'room_id', deleted.room.id],
+      ['room_participants', 'room_id', deleted.room.id],
+      ['room_messages', 'room_id', deleted.room.id],
+      ['room_reads', 'room_id', deleted.room.id],
+      ['room_pins', 'room_id', deleted.room.id],
+      ['room_attachment_drops', 'room_id', deleted.room.id],
+      ['room_attachments', 'message_id', created.message.id],
+      ['room_message_mentions', 'message_id', created.message.id],
+      ['room_deliveries', 'message_id', created.message.id],
+      ['room_provider_streams', 'participant_id', agent.id],
+      ['room_provider_messages', 'participant_id', agent.id],
+      ['room_agent_activity', 'participant_id', agent.id],
+      ['room_delivery_configuration', 'participant_id', agent.id]
+    ] as const
+    for (const [table, column, value] of emptyQueries) {
+      expect(raw.prepare(`SELECT 1 FROM ${table} WHERE ${column} = ?`).get(value)).toBeUndefined()
+    }
+    expect(raw.prepare('SELECT 1 FROM rooms WHERE id = ?').get(kept.room.id)).toBeDefined()
+    raw.close()
   })
 })

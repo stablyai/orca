@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Paperclip, Send, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
 import type { RoomMessage } from '../../../../shared/rooms'
 import type { RoomData } from './use-room-data'
-import { RoomDictationButton } from './RoomDictationButton'
+import { RoomComposerActions } from './RoomComposerActions'
 import { cancelRoomAttachmentUpload, uploadRoomAttachment } from './room-attachment-transfer'
 import {
   isPreviewableImage,
@@ -19,6 +18,7 @@ import {
 import { getRoomComposerClipboardFiles } from './room-composer-clipboard-files'
 import { useRoomComposerClipboardPaste } from './room-composer-clipboard-paste'
 import { getRoomContinueDeliveryIds } from './room-composer-continue-deliveries'
+import { useRoomComposerWorkControl } from './use-room-composer-work-control'
 import {
   applyRoomComposerSuggestion,
   getExactRoomMentionSuggestion,
@@ -101,21 +101,33 @@ export function RoomComposer({
       return
     }
     const isContinue = text.trim().toLocaleLowerCase() === '/continue' && attachments.length === 0
-    const continueDeliveryIds = isContinue
-      ? getRoomContinueDeliveryIds(data.messages, Object.values(data.deliveries))
-      : []
-    if (isContinue && continueDeliveryIds.length === 0) {
+    const supportsRoomWork = data.snapshot?.workState !== undefined
+    const continueDeliveryIds =
+      isContinue && !supportsRoomWork
+        ? getRoomContinueDeliveryIds(data.messages, Object.values(data.deliveries))
+        : []
+    if (isContinue && !supportsRoomWork && continueDeliveryIds.length === 0) {
       toast.error(translate('rooms.composer.noPausedLoop', 'No paused agent loop in this room'))
       return
     }
     setSending(true)
     try {
       await (isContinue
-        ? Promise.all(
-            continueDeliveryIds.map((deliveryId) =>
-              roomRpc(data.target, 'rooms.deliveries.retry', { deliveryId })
+        ? supportsRoomWork
+          ? roomRpc<{ resumed: number }>(data.target, 'rooms.work.resume', {
+              roomId: data.roomId
+            }).then(({ resumed }) => {
+              if (resumed === 0) {
+                throw new Error(
+                  translate('rooms.composer.noPausedLoop', 'No paused agent loop in this room')
+                )
+              }
+            })
+          : Promise.all(
+              continueDeliveryIds.map((deliveryId) =>
+                roomRpc(data.target, 'rooms.deliveries.retry', { deliveryId })
+              )
             )
-          )
         : roomRpc(data.target, 'rooms.messages.send', {
             roomId: data.roomId,
             body: text.trim(),
@@ -216,6 +228,20 @@ export function RoomComposer({
   }
 
   useRoomComposerClipboardPaste(composerRootRef, attach)
+
+  const hasDraft =
+    Boolean(text.trim()) ||
+    attachments.length > 0 ||
+    uploading ||
+    Boolean(reply) ||
+    selectedRecipients.length > 0
+  const workControl = useRoomComposerWorkControl({
+    data,
+    hasDraft,
+    sending,
+    sendDisabled: (!text.trim() && attachments.length === 0) || uploading,
+    send
+  })
 
   return (
     <div className="shrink-0 bg-background px-4 pb-4 pt-2">
@@ -355,34 +381,24 @@ export function RoomComposer({
           )}
           className="block max-h-48 min-h-14 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none"
         />
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || attachments.length >= 10}
-            aria-label={translate('rooms.composer.attachFile', 'Attach file')}
-          >
-            <Paperclip className="size-4" />
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(event) => void attach(Array.from(event.target.files ?? []))}
-          />
-          <RoomDictationButton textareaRef={textareaRef} />
-          <div className="flex-1" />
-          <Button
-            size="icon-sm"
-            onClick={() => void send()}
-            disabled={(!text.trim() && attachments.length === 0) || sending || uploading}
-            aria-label={translate('rooms.common.send', 'Send')}
-          >
-            <Send className="size-4" />
-          </Button>
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(event) => void attach(Array.from(event.target.files ?? []))}
+        />
+        <RoomComposerActions
+          attachDisabled={uploading || attachments.length >= 10}
+          onAttach={() => fileInputRef.current?.click()}
+          textareaRef={textareaRef}
+          run={{
+            mode: workControl.mode,
+            label: workControl.label,
+            disabled: workControl.disabled,
+            invoke: () => void workControl.run()
+          }}
+        />
       </div>
     </div>
   )

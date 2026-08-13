@@ -7,6 +7,7 @@ const DOWNLOAD_TTL_MS = 5 * 60_000
 const MAX_DOWNLOADS = 10
 
 type Download = {
+  roomId: string
   path: string
   fileName: string
   mimeType: string
@@ -16,6 +17,8 @@ type Download = {
 
 export class RoomAttachmentTransferStore {
   private readonly downloads = new Map<string, Download>()
+  private readonly activeReads = new Map<string, Set<Promise<unknown>>>()
+  private readonly roomGenerations = new Map<string, number>()
 
   constructor(
     private readonly db: RoomDatabase,
@@ -31,8 +34,14 @@ export class RoomAttachmentTransferStore {
     chunkBytes: number
   }> {
     this.db.core.get(roomId)
+    const generation = this.roomGenerations.get(roomId) ?? 0
+    const uploadId = await this.manager.startUpload(roomId, fileName, byteSize)
+    if ((this.roomGenerations.get(roomId) ?? 0) !== generation) {
+      await this.manager.cancelUpload(uploadId)
+      throw new Error('room_not_found')
+    }
     return {
-      uploadId: await this.manager.startUpload(roomId, fileName, byteSize),
+      uploadId,
       chunkBytes: ROOM_ATTACHMENT_CHUNK_BYTES
     }
   }
@@ -47,6 +56,10 @@ export class RoomAttachmentTransferStore {
     return this.manager
       .appendUpload(uploadId, offset, contentBase64)
       .then((nextOffset) => ({ nextOffset }))
+  }
+
+  uploadRoomId(uploadId: string): string {
+    return this.manager.uploadRoomId(uploadId)
   }
 
   finishUpload(uploadId: string): void {
@@ -67,6 +80,7 @@ export class RoomAttachmentTransferStore {
     byteLength: number
     chunkBytes: number
   }> {
+    const generation = this.roomGenerations.get(roomId) ?? 0
     this.cleanup()
     if (this.downloads.size >= MAX_DOWNLOADS) {
       throw new Error('room_attachment_downloads_busy')
@@ -76,8 +90,12 @@ export class RoomAttachmentTransferStore {
       throw new Error('room_attachment_path_invalid')
     }
     const byteLength = await this.manager.size(attachment.localPath)
+    if ((this.roomGenerations.get(roomId) ?? 0) !== generation) {
+      throw new Error('room_not_found')
+    }
     const transferId = randomUUID()
     this.downloads.set(transferId, {
+      roomId,
       path: attachment.localPath,
       fileName: attachment.fileName,
       mimeType: attachment.mimeType,
@@ -110,15 +128,72 @@ export class RoomAttachmentTransferStore {
       throw new Error('room_attachment_download_expired')
     }
     download.touchedAt = Date.now()
-    return this.manager.readChunk(download.path, offset)
+    const read = this.manager.readChunk(download.path, offset)
+    const active = this.activeReads.get(download.roomId) ?? new Set<Promise<unknown>>()
+    active.add(read)
+    this.activeReads.set(download.roomId, active)
+    const release = (): void => {
+      active.delete(read)
+      if (active.size === 0) {
+        this.activeReads.delete(download.roomId)
+      }
+    }
+    return read.then(
+      (result) => {
+        release()
+        return result
+      },
+      (error) => {
+        release()
+        throw error
+      }
+    )
+  }
+
+  downloadRoomId(transferId: string): string {
+    const download = this.downloads.get(transferId)
+    if (!download) {
+      throw new Error('room_attachment_download_not_found')
+    }
+    return download.roomId
   }
 
   cancelDownload(transferId: string): void {
     this.downloads.delete(transferId)
   }
 
+  async cancelRoom(roomId: string): Promise<string[]> {
+    this.roomGenerations.set(roomId, (this.roomGenerations.get(roomId) ?? 0) + 1)
+    const uploadIds = this.manager.pendingUploadIds(roomId)
+    for (const [id, download] of this.downloads) {
+      if (download.roomId === roomId) {
+        this.downloads.delete(id)
+      }
+    }
+    const activeReads = this.activeReads.get(roomId)
+    if (activeReads) {
+      await Promise.allSettled(activeReads)
+    }
+    await Promise.all(uploadIds.map((id) => this.manager.cancelUpload(id)))
+    return uploadIds
+  }
+
+  removeRoomFiles(
+    roomId: string,
+    pendingUploadIds: string[],
+    attachmentPaths: string[]
+  ): Promise<void> {
+    return this.manager.removeRoom(roomId, pendingUploadIds, attachmentPaths)
+  }
+
+  forgetRoom(roomId: string): void {
+    this.roomGenerations.delete(roomId)
+  }
+
   clear(): void {
     this.downloads.clear()
+    this.activeReads.clear()
+    this.roomGenerations.clear()
     this.manager.clear()
   }
 

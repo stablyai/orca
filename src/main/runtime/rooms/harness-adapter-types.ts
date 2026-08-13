@@ -9,9 +9,10 @@ import type {
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import type {
   RoomAttachment,
-  RoomAttachableAgent,
+  RoomRunningAgent,
   RoomContextSnapshot,
   RoomEvent,
+  RoomExistingAgentCandidate,
   RoomHarnessAgent,
   RoomProviderSession
 } from '../../../shared/rooms'
@@ -23,13 +24,15 @@ import type {
 } from '../../../shared/runtime-types'
 import type { NativeChatTranscriptSubscription } from '../../native-chat/transcript-watch'
 import type { RoomHarnessLifecycleEvent } from './harness-lifecycle'
+import type { RoomDeletionManifest } from './database'
 
 export type RoomHarnessBinding = {
   worktreeId: string
   terminalHandle: string
   paneKey: string
   providerSession: RoomProviderSession | null
-  disposition?: 'created' | 'adopted' | 'attached'
+  disposition?: 'created' | 'adopted'
+  terminalSurfaceVisible?: boolean
 }
 
 export type RoomHarnessRuntime = {
@@ -42,7 +45,11 @@ export type RoomHarnessRuntime = {
   sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
-    options?: { clearInput?: boolean; imagePaths?: readonly string[] }
+    options?: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      clearInput?: boolean
+      imagePaths?: readonly string[]
+    }
   ): Promise<RuntimeTerminalSend>
   sendTerminal?(
     handle: string,
@@ -55,10 +62,13 @@ export type RoomHarnessRuntime = {
     options?: { confirmForeground?: boolean }
   ): Promise<RuntimeTerminalAgentStatus>
   getTerminalProcessIncarnation(handle: string): string | null
-  closeTerminal(handle: string, options?: { force?: boolean }): Promise<RuntimeTerminalClose>
+  closeTerminal(
+    handle: string,
+    options?: { force?: boolean; waitForExit?: boolean }
+  ): Promise<RuntimeTerminalClose>
   waitForTerminal(
     handle: string,
-    options?: { condition?: 'exit' | 'tui-idle'; timeoutMs?: number }
+    options?: { condition?: 'exit' | 'tui-idle'; timeoutMs?: number; signal?: AbortSignal }
   ): Promise<RuntimeTerminalWait>
   focusTerminal?(
     handle: string,
@@ -73,7 +83,11 @@ export type RoomHarnessRuntime = {
     force?: boolean
   ): void
   emitRoomEvent?(roomId: string, event: RoomEvent): void
-  listRoomAttachableAgents(worktreeId: string): Promise<RoomAttachableAgent[]>
+  listRoomRunningAgents(worktreeId: string): Promise<RoomRunningAgent[]>
+  listRoomExistingAgents(
+    worktreeId: string,
+    agent: RoomHarnessAgent
+  ): Promise<RoomExistingAgentCandidate[]>
   resolveRoomHistoricalSession(
     worktreeId: string,
     agent: RoomHarnessAgent,
@@ -84,6 +98,7 @@ export type RoomHarnessRuntime = {
     terminalHandle: string,
     attachment: Pick<RoomAttachment, 'id' | 'fileName' | 'localPath'>
   ): Promise<string>
+  cleanupDeletedRoomResources?(manifest: RoomDeletionManifest): Promise<void>
 }
 
 export type RoomHarnessReadResult =
@@ -99,17 +114,26 @@ export type RoomHarnessSubscriptionCallbacks = {
 export type RoomHarnessAdapter = {
   readonly agent: RoomHarnessAgent
   launch(worktreeId: string): Promise<RoomHarnessBinding>
-  attach(binding: RoomHarnessBinding): Promise<RoomHarnessBinding>
+  connectExisting(input: {
+    worktreeId: string
+    terminalHandle?: string
+    paneKey?: string
+    historyId?: string
+  }): Promise<RoomHarnessBinding>
   locate(binding: RoomHarnessBinding): Promise<RoomHarnessBinding | null>
   read(binding: RoomHarnessBinding, limit?: number): Promise<RoomHarnessReadResult>
   send(
     binding: RoomHarnessBinding,
     prompt: string,
-    options?: { clearInput?: boolean; imagePaths?: readonly string[] }
+    options?: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      clearInput?: boolean
+      imagePaths?: readonly string[]
+    }
   ): Promise<RuntimeTerminalSend>
+  interrupt(binding: RoomHarnessBinding): Promise<void>
   prepareControl?(binding: RoomHarnessBinding, command: string): Promise<void>
   stop(binding: RoomHarnessBinding): Promise<RuntimeTerminalClose>
-  resume(worktreeId: string, historyId: string): Promise<RoomHarnessBinding>
   restore(
     binding: RoomHarnessBinding,
     preferences?: AgentLaunchPreferences

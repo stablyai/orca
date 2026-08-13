@@ -64,14 +64,14 @@ export class RoomCoreStore {
     return this.get(roomId)
   }
 
-  list(projectId: string, includeArchived = false): Room[] {
+  list(projectId: string): Room[] {
     return (
       this.db
         .prepare(
-          `SELECT * FROM rooms WHERE project_id = ? AND (? = 1 OR archived_at IS NULL)
+          `SELECT * FROM rooms WHERE project_id = ?
          ORDER BY updated_at DESC, created_at DESC`
         )
-        .all(projectId, includeArchived ? 1 : 0) as RoomRow[]
+        .all(projectId) as RoomRow[]
     ).map(roomFromRow)
   }
 
@@ -83,13 +83,18 @@ export class RoomCoreStore {
     return roomFromRow(row)
   }
 
+  delete(id: string): void {
+    if (this.db.prepare('DELETE FROM rooms WHERE id = ?').run(id).changes === 0) {
+      throw new Error('room_not_found')
+    }
+  }
+
   update(
     id: string,
     input: {
       name?: string
       description?: string
       loopLimit?: number
-      archived?: boolean
       worktreeId?: string | null
     }
   ): Room {
@@ -97,14 +102,13 @@ export class RoomCoreStore {
     const now = Date.now()
     this.db
       .prepare(
-        `UPDATE rooms SET name = ?, description = ?, loop_limit = ?, archived_at = ?, worktree_id = ?,
+        `UPDATE rooms SET name = ?, description = ?, loop_limit = ?, worktree_id = ?,
          updated_at = ? WHERE id = ?`
       )
       .run(
         input.name?.trim() ?? room.name,
         input.description?.trim() ?? room.description,
         input.loopLimit ?? room.loopLimit,
-        input.archived === undefined ? room.archivedAt : input.archived ? now : null,
         input.worktreeId === undefined ? room.worktreeId : input.worktreeId,
         now,
         id

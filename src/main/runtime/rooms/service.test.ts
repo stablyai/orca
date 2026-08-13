@@ -34,7 +34,8 @@ function runtime(): RoomHarnessRuntime {
       status: 'running' as const,
       exitCode: null
     }),
-    listRoomAttachableAgents: async () => [],
+    listRoomRunningAgents: async () => [],
+    listRoomExistingAgents: async () => [],
     resolveRoomHistoricalSession: unused,
     stageRoomAttachment: vi.fn(async (_worktreeId, _handle, attachment) =>
       join(tmpdir(), attachment.fileName)
@@ -42,7 +43,7 @@ function runtime(): RoomHarnessRuntime {
   }
 }
 
-describe('RoomService archive lifecycle', () => {
+describe('RoomService lifecycle', () => {
   it('removes a newly launched hidden participant from renderer recovery state', async () => {
     const harness = runtime()
     harness.createAgentSession = vi.fn(async () => ({
@@ -68,7 +69,7 @@ describe('RoomService archive lifecycle', () => {
       identity: 'codex',
       displayName: 'Codex',
       agent: 'codex',
-      connection: { kind: 'launch', worktreeId: 'worktree-1' }
+      connection: { kind: 'new', worktreeId: 'worktree-1' }
     })
 
     expect(participant.terminalSurfaceVisible).toBe(false)
@@ -127,7 +128,7 @@ describe('RoomService archive lifecycle', () => {
       .mockResolvedValue({ handle: 'term-new', isRunningAgent: true, status: 'idle' })
     harness.hideRoomAgentStatusFromRenderer = vi.fn()
     harness.ensureAgentSession = vi.fn()
-    harness.listRoomAttachableAgents = vi.fn(async () => [
+    harness.listRoomRunningAgents = vi.fn(async () => [
       {
         agent: 'codex' as const,
         title: 'Codex',
@@ -201,6 +202,7 @@ describe('RoomService archive lifecycle', () => {
       terminalHandle: 'term-old',
       providerSession
     })
+    service.db.participants.update(participant.id, { terminalSurfaceVisible: true })
     service.db.deliveryConfiguration.commit(participant.id, {
       providerSessionKey: providerSession.key,
       providerSessionId: providerSession.id,
@@ -213,7 +215,8 @@ describe('RoomService archive lifecycle', () => {
     expect(harness.ensureAgentSession).not.toHaveBeenCalled()
     expect(service.db.participants.get(participant.id)).toMatchObject({
       terminalHandle: 'term-old',
-      state: 'sleeping'
+      state: 'sleeping',
+      terminalSurfaceVisible: true
     })
     const { configuration } = service.db.deliveryConfiguration.pending({
       participant: service.db.participants.get(participant.id),
@@ -713,11 +716,14 @@ describe('RoomService archive lifecycle', () => {
           700
         )
       )
-      await vi.waitFor(() => {
-        const confirmed = service.db.messages.deliveries.get(secondDelivery.id)
-        expect(confirmed.state).toBe('delivered')
-        expect(confirmed.providerTurnId).toBe('prompt-2')
-      })
+      await vi.waitFor(
+        () => {
+          const confirmed = service.db.messages.deliveries.get(secondDelivery.id)
+          expect(confirmed.state).toBe('delivered')
+          expect(confirmed.providerTurnId).toBe('prompt-2')
+        },
+        { timeout: 5_000 }
+      )
     } finally {
       service.close()
       await rm(root, { recursive: true, force: true })

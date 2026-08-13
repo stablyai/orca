@@ -13,6 +13,7 @@ import { RoomMessageAttachments } from './RoomAttachments'
 import { RoomAuthorAvatar } from './RoomAuthorAvatar'
 import { RoomCompletedActivityTimeline } from './RoomActivityTimeline'
 import { completedRoomActivity } from './room-activity-timeline'
+import { isRoomLoopLimitSuppression } from './room-delivery-state'
 import { AgentSubagentTurnLink } from '../agent-subagents/AgentSubagentContext'
 
 export function RoomMessageRow({
@@ -36,7 +37,7 @@ export function RoomMessageRow({
     (item) => item.messageId === message.id && item.state === 'failed'
   )
   const loopSuppressed = Object.values(data.deliveries).some(
-    (item) => item.messageId === message.id && item.state === 'suppressed'
+    (item) => item.messageId === message.id && isRoomLoopLimitSuppression(item)
   )
   const pin = data.snapshot?.pins.find((item) => item.messageId === message.id)
   const participant = data.snapshot?.participants.find(

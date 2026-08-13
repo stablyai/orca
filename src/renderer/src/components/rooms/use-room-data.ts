@@ -3,7 +3,8 @@ import type { Room, RoomEvent, RoomMessagePage, RoomSnapshot } from '../../../..
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { roomRpc, subscribeRoom } from '@/runtime/runtime-rooms-client'
 import { EMPTY_ACTIVE_ROOM, reduceRoomEvent } from './room-event-reducer'
-import { useRoomTabs } from './use-room-tabs'
+import { closeRoomTabs, useRoomTabs } from './use-room-tabs'
+import { closeRoomTabsForEnd } from './room-deletion-lifecycle'
 
 export function useRoomData(
   target: RuntimeClientTarget,
@@ -35,8 +36,7 @@ export function useRoomData(
     setLoading(true)
     try {
       const result = await roomRpc<{ rooms: Room[] }>(target, 'rooms.list', {
-        projectId,
-        includeArchived: true
+        projectId
       })
       if (request !== roomsRequestRef.current) {
         return
@@ -69,7 +69,11 @@ export function useRoomData(
       roomId,
       readerKey,
       (event) => {
-        if (disposed || event.type === 'end') {
+        if (disposed) {
+          return
+        }
+        if (event.type === 'end') {
+          closeRoomTabsForEnd(event, roomId)
           return
         }
         snapshotRef.current = updateSnapshotRef(snapshotRef.current, event)
@@ -82,7 +86,12 @@ export function useRoomData(
       },
       (cause) => {
         if (!disposed) {
-          setError(message(cause))
+          const text = message(cause)
+          if (text === 'room_not_found') {
+            closeRoomTabs(roomId)
+          } else {
+            setError(text)
+          }
         }
       }
     ).then(

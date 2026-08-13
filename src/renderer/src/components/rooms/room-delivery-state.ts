@@ -7,3 +7,7 @@ export function isRoomDeliveryActive(delivery: RoomDelivery): boolean {
     (delivery.state === 'delivered' && !delivery.respondedAt)
   )
 }
+
+export function isRoomLoopLimitSuppression(delivery: RoomDelivery): boolean {
+  return delivery.state === 'suppressed' && delivery.error === null
+}

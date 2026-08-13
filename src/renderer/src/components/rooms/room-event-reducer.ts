@@ -84,7 +84,14 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
     }
   }
   if (event.type === 'delivery.updated') {
-    return { ...state, deliveries: { ...state.deliveries, [event.delivery.id]: event.delivery } }
+    return {
+      ...state,
+      deliveries: { ...state.deliveries, [event.delivery.id]: event.delivery },
+      snapshot:
+        state.snapshot && event.workState
+          ? { ...state.snapshot, workState: event.workState }
+          : state.snapshot
+    }
   }
   if (event.type === 'activity.updated') {
     return {

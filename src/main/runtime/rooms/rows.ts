@@ -49,8 +49,7 @@ export function roomFromRow(row: RoomRow): Room {
     description: string(row.description),
     loopLimit: number(row.loop_limit),
     createdAt: number(row.created_at),
-    updatedAt: number(row.updated_at),
-    archivedAt: nullableNumber(row.archived_at)
+    updatedAt: number(row.updated_at)
   }
 }
 

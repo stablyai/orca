@@ -61,7 +61,7 @@ function runtimeStub(): RoomHarnessRuntime {
       status: 'running' as const,
       exitCode: null
     })),
-    listRoomAttachableAgents: vi.fn(async (worktreeId) =>
+    listRoomRunningAgents: vi.fn(async (worktreeId) =>
       ROOM_HARNESS_AGENTS.map((agent) => ({
         agent,
         worktreeId,
@@ -74,6 +74,7 @@ function runtimeStub(): RoomHarnessRuntime {
         }
       }))
     ),
+    listRoomExistingAgents: vi.fn(async () => []),
     resolveRoomHistoricalSession: vi.fn(async (_worktreeId, agent, historyId) => ({
       key: 'session_id' as const,
       id: `session-${agent}`,
@@ -85,6 +86,106 @@ function runtimeStub(): RoomHarnessRuntime {
     )
   }
 }
+
+it('registers the canonical idle wait before interrupting a room agent', async () => {
+  const runtime = runtimeStub()
+  const adapter = createRoomHarnessAdapters(runtime).codex
+  const binding = {
+    worktreeId: 'worktree-1',
+    terminalHandle: 'term-codex',
+    paneKey: 'tab:codex',
+    providerSession: null
+  }
+
+  await adapter.interrupt(binding)
+
+  expect(runtime.waitForTerminal).toHaveBeenCalledWith('term-codex', {
+    condition: 'tui-idle',
+    timeoutMs: 8_000,
+    signal: expect.any(AbortSignal)
+  })
+  expect(runtime.sendTerminal).toHaveBeenCalledWith('term-codex', { text: '\x1b' })
+  expect(vi.mocked(runtime.waitForTerminal).mock.invocationCallOrder[0]).toBeLessThan(
+    vi.mocked(runtime.sendTerminal!).mock.invocationCallOrder[0]!
+  )
+})
+
+it('accepts an idle transition while ESC is being written', async () => {
+  const runtime = runtimeStub()
+  let resolveIdle!: (value: Awaited<ReturnType<RoomHarnessRuntime['waitForTerminal']>>) => void
+  runtime.waitForTerminal = vi.fn(
+    () =>
+      new Promise<Awaited<ReturnType<RoomHarnessRuntime['waitForTerminal']>>>((resolve) => {
+        resolveIdle = resolve
+      })
+  )
+  runtime.sendTerminal = vi.fn(async (handle, action) => {
+    resolveIdle({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    })
+    return { handle, accepted: true, bytesWritten: Buffer.byteLength(action.text ?? '') }
+  })
+
+  await createRoomHarnessAdapters(runtime).codex.interrupt({
+    worktreeId: 'worktree-1',
+    terminalHandle: 'term-codex',
+    paneKey: 'tab:codex',
+    providerSession: null
+  })
+})
+
+it('accepts process exit while interrupting a room agent', async () => {
+  const runtime = runtimeStub()
+  let rejectIdle!: (error: Error) => void
+  runtime.waitForTerminal = vi.fn(
+    () =>
+      new Promise<Awaited<ReturnType<RoomHarnessRuntime['waitForTerminal']>>>(
+        (_resolve, reject) => {
+          rejectIdle = reject
+        }
+      )
+  )
+  runtime.sendTerminal = vi.fn(async (handle, action) => {
+    rejectIdle(new Error('terminal_exited'))
+    return { handle, accepted: true, bytesWritten: Buffer.byteLength(action.text ?? '') }
+  })
+
+  await expect(
+    createRoomHarnessAdapters(runtime).codex.interrupt({
+      worktreeId: 'worktree-1',
+      terminalHandle: 'term-codex',
+      paneKey: 'tab:codex',
+      providerSession: null
+    })
+  ).resolves.toBeUndefined()
+})
+
+it('rejects an interrupt that never reaches idle', async () => {
+  const runtime = runtimeStub()
+  vi.mocked(runtime.waitForTerminal)
+    .mockResolvedValueOnce({
+      handle: 'term-codex',
+      condition: 'tui-idle',
+      satisfied: false,
+      status: 'running',
+      exitCode: null,
+      blockedReason: 'codex-interactive-prompt'
+    })
+    .mockRejectedValueOnce(new Error('timeout'))
+
+  await expect(
+    createRoomHarnessAdapters(runtime).codex.interrupt({
+      worktreeId: 'worktree-1',
+      terminalHandle: 'term-codex',
+      paneKey: 'tab:codex',
+      providerSession: null
+    })
+  ).rejects.toThrow('room_agent_not_ready')
+})
 
 describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnessAgent) => {
   it('implements the shared PTY lifecycle without provider-specific transport', async () => {
@@ -107,7 +208,13 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
         persistHostSessionBinding: false
       })
     )
-    await expect(adapter.attach(launched)).resolves.toMatchObject({ disposition: 'attached' })
+    await expect(
+      adapter.connectExisting({
+        worktreeId: launched.worktreeId,
+        terminalHandle: launched.terminalHandle,
+        paneKey: launched.paneKey
+      })
+    ).resolves.toMatchObject({ disposition: 'adopted', terminalSurfaceVisible: true })
     await expect(adapter.send(launched, 'review')).resolves.toMatchObject({ accepted: true })
     await adapter.prepareControl?.(launched, '/fast off')
     if (agent === 'claude') {
@@ -134,17 +241,19 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
     ).resolves.toContain('/worktrees/worktree-1/')
     await expect(adapter.stop(launched)).resolves.toMatchObject({ ptyKilled: true })
     // Room-owned stops must bypass the view-close guard and really kill the PTY.
-    expect(runtime.closeTerminal).toHaveBeenCalledWith(launched.terminalHandle, { force: true })
+    expect(runtime.closeTerminal).toHaveBeenCalledWith(launched.terminalHandle, {
+      force: true,
+      waitForExit: true
+    })
 
     const providerSession = {
       key: 'session_id' as const,
       id: `session-${agent}`,
       transcriptPath: `/sessions/history-${agent}.jsonl`
     }
-    await expect(adapter.resume('worktree-1', `history-${agent}`)).resolves.toMatchObject({
-      providerSession,
-      disposition: 'adopted'
-    })
+    await expect(
+      adapter.connectExisting({ worktreeId: 'worktree-1', historyId: `history-${agent}` })
+    ).resolves.toMatchObject({ providerSession, disposition: 'adopted' })
     expect(runtime.ensureAgentSession).toHaveBeenCalledWith(
       expect.objectContaining({
         agent,
@@ -172,15 +281,14 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
 
   it('rejects renderer-spoofed terminal identity at the host boundary', async () => {
     const runtime = runtimeStub()
-    vi.mocked(runtime.listRoomAttachableAgents).mockResolvedValue([])
+    vi.mocked(runtime.listRoomRunningAgents).mockResolvedValue([])
     const adapter = createRoomHarnessAdapters(runtime)[agent]
 
     await expect(
-      adapter.attach({
+      adapter.connectExisting({
         worktreeId: 'worktree-1',
         terminalHandle: `term_${agent}`,
-        paneKey: `tab:${agent}`,
-        providerSession: { key: 'session_id', id: 'spoofed', transcriptPath: '/secret.jsonl' }
+        paneKey: `tab:${agent}`
       })
     ).rejects.toThrow('room_agent_not_running')
   })
@@ -192,7 +300,7 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
       id: `session-${agent}`,
       transcriptPath: `/sessions/${agent}.jsonl`
     }
-    vi.mocked(runtime.listRoomAttachableAgents).mockResolvedValue([
+    vi.mocked(runtime.listRoomRunningAgents).mockResolvedValue([
       {
         agent,
         worktreeId: 'worktree-1',
@@ -214,7 +322,7 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
     ).resolves.toMatchObject({
       terminalHandle: 'term_live',
       paneKey: 'tab:new-pane',
-      disposition: 'attached'
+      disposition: 'adopted'
     })
     expect(runtime.ensureAgentSession).not.toHaveBeenCalled()
   })
@@ -229,7 +337,7 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
         id: `session-${agent}`,
         transcriptPath: `/sessions/${agent}.jsonl`
       }
-      vi.mocked(runtime.listRoomAttachableAgents).mockResolvedValue([])
+      vi.mocked(runtime.listRoomRunningAgents).mockResolvedValue([])
       runtime.hasPersistedTerminalSurface = vi.fn(() => persisted)
       const adapter = createRoomHarnessAdapters(runtime)[agent]
 

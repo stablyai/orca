@@ -17667,8 +17667,7 @@
       "label": "Rooms",
       "newRoom": "New room",
       "roomActions": "Room actions",
-      "restoreRoom": "Restore room",
-      "archiveRoom": "Archive room",
+      "deleteRoom": "Delete room",
       "roomName": "Room name",
       "channelName": "Channel name",
       "channels": "Channels",
@@ -17677,23 +17676,28 @@
     "addAgent": {
       "title": "Add agent",
       "adding": "Adding agent…",
-      "description": "Launch a clean harness, attach a running one, or resume local history.",
+      "description": "Start a new agent or add an existing session.",
       "harness": "Harness",
       "worktree": "Worktree",
       "identity": "Room identity",
       "session": "Session",
       "loadingSessions": "Loading sessions…",
       "noMatchingSessions": "No matching sessions found.",
-      "chooseRunning": "Choose a running {{agent}} session.",
-      "chooseHistory": "Choose local {{agent}} history.",
+      "chooseExisting": "Choose an existing {{agent}} session.",
       "searchSessions": "Search sessions…",
       "runningNow": "Running now",
+      "history": "History",
+      "mode": {
+        "new": "New",
+        "existing": "Existing",
+        "newDescription": "Start a new clean agent session.",
+        "existingDescription": "Add a running agent or continue a session from history."
+      },
       "chooseSession": "Choose session…"
     },
     "common": {
       "select": "Select…",
       "room": "Room",
-      "archivedSuffix": " (archived)",
       "settings": "Settings",
       "add": "Add",
       "send": "Send",
@@ -17707,7 +17711,6 @@
       "description": "Description",
       "name": "Name",
       "back": "Back",
-      "archived": "Archived",
       "loading": "Loading…",
       "saving": "Saving…"
     },
@@ -17721,8 +17724,16 @@
       "export": "Export archive",
       "import": "Import archive"
     },
+    "delete": {
+      "title": "Delete “{{name}}”?",
+      "description": "The room, messages, participants, attachments, and delivery state will be deleted. Participant chat sessions will remain in Agent Session History.",
+      "deleting": "Deleting room…",
+      "deleted": "Room deleted"
+    },
     "composer": {
       "noPausedLoop": "No paused agent loop in the room",
+      "stop": "Stop room",
+      "resume": "Resume room",
       "replyingTo": "Replying to @{{identity}}: {{body}}",
       "cancelReply": "Cancel reply",
       "removeAttachment": "Remove attachment",
@@ -17857,8 +17868,7 @@
       "empty": "No rooms yet",
       "emptyDescription": "Create a room for {{name}}.",
       "defaultRoomName": "Research room",
-      "create": "Create room",
-      "archived": "This room is archived. Restore it from the room menu to continue."
+      "create": "Create room"
     },
     "selector": {
       "title": "Choose a room",

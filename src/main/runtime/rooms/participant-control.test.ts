@@ -25,7 +25,8 @@ function runtime(): RoomHarnessRuntime {
       status: 'running',
       exitCode: null
     }),
-    listRoomAttachableAgents: async () => [],
+    listRoomRunningAgents: async () => [],
+    listRoomExistingAgents: async () => [],
     resolveRoomHistoricalSession: unused,
     stageRoomAttachment: unused
   }

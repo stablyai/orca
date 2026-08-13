@@ -9,6 +9,13 @@ import { RoomProviderMessageStore } from './provider-messages'
 import { RoomActivityStore } from './activities'
 import { RoomDeliveryConfigurationStore } from './delivery-configuration'
 
+export type RoomDeletionManifest = {
+  roomId: string
+  attachmentPaths: string[]
+  pendingUploadIds: string[]
+  drops: { connectionId: string; remotePath: string }[]
+}
+
 export class RoomDatabase {
   private readonly db: SyncDatabase.Database
   readonly core: RoomCoreStore
@@ -59,7 +66,54 @@ export class RoomDatabase {
       activities: this.activities.list(roomId),
       roles: this.core.listRoles(roomId),
       pins: this.pins.list(roomId),
-      unread: this.messages.getUnread(roomId, readerKey)
+      unread: this.messages.getUnread(roomId, readerKey),
+      workState: this.messages.deliveries.workState(roomId)
     }
+  }
+
+  recordAttachmentDrop(attachmentId: string, connectionId: string, remotePath: string): void {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO room_attachment_drops
+         (room_id, attachment_id, connection_id, remote_path)
+         SELECT m.room_id, a.id, ?, ? FROM room_attachments a
+         JOIN room_messages m ON m.id = a.message_id WHERE a.id = ?`
+      )
+      .run(connectionId, remotePath, attachmentId)
+  }
+
+  listAttachmentDrops(roomId: string): RoomDeletionManifest['drops'] {
+    return (
+      this.db
+        .prepare('SELECT connection_id, remote_path FROM room_attachment_drops WHERE room_id = ?')
+        .all(roomId) as Record<string, unknown>[]
+    ).map((row) => ({
+      connectionId: String(row.connection_id),
+      remotePath: String(row.remote_path)
+    }))
+  }
+
+  deleteRoom(manifest: RoomDeletionManifest): void {
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO room_deletion_cleanup (room_id, manifest_json, created_at)
+           VALUES (?, ?, ?)`
+        )
+        .run(manifest.roomId, JSON.stringify(manifest), Date.now())
+      this.core.delete(manifest.roomId)
+    })
+  }
+
+  listRoomDeletionCleanup(): RoomDeletionManifest[] {
+    return (
+      this.db.prepare('SELECT manifest_json FROM room_deletion_cleanup').all() as {
+        manifest_json: string
+      }[]
+    ).map((row) => JSON.parse(row.manifest_json) as RoomDeletionManifest)
+  }
+
+  finishRoomDeletionCleanup(roomId: string): void {
+    this.db.prepare('DELETE FROM room_deletion_cleanup WHERE room_id = ?').run(roomId)
   }
 }

@@ -5,6 +5,7 @@ export type RoomDeliveryResponse = 'required' | 'optional'
 
 export function formatRoomDeliveryPrompt(input: {
   deliveryId: string
+  attempt: number
   response: RoomDeliveryResponse
   roomName: string
   message: RoomMessage
@@ -43,7 +44,7 @@ export function formatRoomDeliveryPrompt(input: {
   ]
     .filter(Boolean)
     .join('\n\n')
-  return `${roomDeliveryMarker(input.deliveryId, input.response)}\n${body}\n</orca-room-delivery>`
+  return `${roomDeliveryMarker(input.deliveryId, input.response, input.attempt)}\n${body}\n</orca-room-delivery>`
 }
 
 function formatParticipantIdentity(participant: RoomParticipant): string {
@@ -52,17 +53,23 @@ function formatParticipantIdentity(participant: RoomParticipant): string {
 
 export function roomDeliveryMarker(
   deliveryId: string,
-  response: RoomDeliveryResponse = 'required'
+  response: RoomDeliveryResponse = 'required',
+  attempt?: number
 ): string {
-  return `<orca-room-delivery id="${deliveryId}" response="${response}">`
+  return `<orca-room-delivery id="${deliveryId}" response="${response}"${attempt === undefined ? '' : ` attempt="${attempt}"`}>`
 }
 
-export function roomDeliveryIdFromTurn(turnText: string): string | null {
-  return (
-    turnText.match(
-      /<orca-room-delivery id="([^"]+)"(?: response="(?:required|optional)")?>/
-    )?.[1] ?? null
-  )
+export function roomDeliveryAttemptsFromTurn(
+  turnText: string
+): { deliveryId: string; attempt: number | null }[] {
+  return [...turnText.matchAll(/<orca-room-delivery\b([^>]*)>/g)].flatMap(([, attributes]) => {
+    const deliveryId = attributes?.match(/\bid="([^"]+)"/)?.[1]
+    if (!deliveryId) {
+      return []
+    }
+    const attempt = attributes.match(/\battempt="(\d+)"/)?.[1]
+    return [{ deliveryId, attempt: attempt === undefined ? null : Number(attempt) }]
+  })
 }
 
 function formatConfiguration(configuration: RoomDeliveryConfiguration): string {

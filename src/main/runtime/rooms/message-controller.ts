@@ -24,10 +24,7 @@ export class RoomMessageController {
     if (!input.body.trim() && (input.attachmentUploadIds?.length ?? 0) === 0) {
       throw new Error('room_message_empty')
     }
-    const room = this.db.core.get(input.roomId)
-    if (room.archivedAt) {
-      throw new Error('room_archived')
-    }
+    this.db.core.get(input.roomId)
     if (input.replyToId) {
       const reply = this.db.messages.get(input.replyToId)
       if (reply.roomId !== input.roomId || reply.deletedAt) {
@@ -45,26 +42,36 @@ export class RoomMessageController {
       throw new Error('room_attachment_count_exceeded')
     }
     const attachments: RoomAttachment[] = []
-    let created
+    let result
     try {
       attachments.push(
         ...(await this.attachments.consumeUploads(input.roomId, input.attachmentUploadIds ?? []))
       )
-      created = this.db.messages.create({
-        roomId: input.roomId,
-        senderId: sender.id,
-        senderIdentity: sender.identity,
-        actorKind: sender.actorKind,
-        body: input.body,
-        replyToId: input.replyToId,
-        mentions,
-        attachments
-      })
+      result = this.db.transaction(() => ({
+        superseded:
+          sender.actorKind === 'user'
+            ? this.db.messages.deliveries.supersedeRoomStop(input.roomId)
+            : [],
+        created: this.db.messages.create({
+          roomId: input.roomId,
+          senderId: sender.id,
+          senderIdentity: sender.identity,
+          actorKind: sender.actorKind,
+          body: input.body,
+          replyToId: input.replyToId,
+          mentions,
+          attachments
+        })
+      }))
     } catch (error) {
       await this.attachments.remove(attachments.map((attachment) => attachment.localPath))
       throw error
     }
+    const { created, superseded } = result
     this.emit(input.roomId, { type: 'message.created', message: created.message })
+    for (const delivery of superseded) {
+      this.emit(input.roomId, { type: 'delivery.updated', delivery })
+    }
     for (const delivery of created.deliveries) {
       this.emit(input.roomId, { type: 'delivery.updated', delivery })
     }
@@ -74,9 +81,6 @@ export class RoomMessageController {
 
   update(id: string, senderIdentity: string, body: string): RoomMessage {
     const current = this.db.messages.get(id)
-    if (this.db.core.get(current.roomId).archivedAt) {
-      throw new Error('room_archived')
-    }
     this.assertUserOwner(current, senderIdentity)
     const message = this.db.messages.update(id, body)
     this.emit(message.roomId, { type: 'message.updated', message })
@@ -85,9 +89,6 @@ export class RoomMessageController {
 
   async delete(id: string, senderIdentity: string): Promise<void> {
     const current = this.db.messages.get(id)
-    if (this.db.core.get(current.roomId).archivedAt) {
-      throw new Error('room_archived')
-    }
     this.assertUserOwner(current, senderIdentity)
     const paths = this.db.messages.delete([id])
     await this.attachments.remove(paths)
@@ -95,6 +96,10 @@ export class RoomMessageController {
       type: 'message.deleted',
       messageId: id
     })
+  }
+
+  assertDeletable(id: string, senderIdentity: string): void {
+    this.assertUserOwner(this.db.messages.get(id), senderIdentity)
   }
 
   markRead(roomId: string, readerKey: string, sequence: number): RoomUnread {

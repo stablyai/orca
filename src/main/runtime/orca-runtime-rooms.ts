@@ -4,7 +4,10 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import { isAiVaultSessionInWorkspacePath } from '../../shared/ai-vault-session-filters'
-import { isAiVaultSessionResumableContent } from '../../shared/ai-vault-types'
+import {
+  isAiVaultSessionResumableContent,
+  type AiVaultSession
+} from '../../shared/ai-vault-types'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { AGENT_COMPACT_COMMAND } from '../../shared/agent-compaction'
@@ -16,12 +19,13 @@ import type {
 } from '../../shared/runtime-types'
 import {
   ROOM_HARNESS_AGENTS,
-  type RoomAttachableAgent,
   type RoomAttachment,
   type RoomEvent,
+  type RoomExistingAgentCandidate,
   type RoomHarnessAgent,
   type RoomParticipant,
-  type RoomProviderSession
+  type RoomProviderSession,
+  type RoomRunningAgent
 } from '../../shared/rooms'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -29,6 +33,7 @@ import { listAiVaultSessions } from '../ai-vault/cached-session-list'
 import { isENOENT } from '../ipc/filesystem-auth'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { RoomService } from './rooms/service'
+import type { RoomDeletionManifest } from './rooms/database'
 import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import { resolveTerminalSessionWorktreeId } from './runtime-worktree-path-identity'
@@ -90,13 +95,13 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
     )
   }
 
-  async listRoomAttachableAgents(worktreeId: string): Promise<RoomAttachableAgent[]> {
+  async listRoomRunningAgents(worktreeId: string): Promise<RoomRunningAgent[]> {
     const listed = await this.listTerminals(`id:${worktreeId}`, 200, {
       requireFreshPtyLiveness: true
     })
     const supported = new Set<string>(ROOM_HARNESS_AGENTS)
     const candidates = await Promise.all(
-      listed.terminals.map(async (terminal): Promise<RoomAttachableAgent | null> => {
+      listed.terminals.map(async (terminal): Promise<RoomRunningAgent | null> => {
         const status = await this.getTerminalAgentStatus(terminal.handle, {
           confirmForeground: true
         }).catch(() => null)
@@ -114,7 +119,7 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
           return null
         }
         return {
-          agent: agent as RoomAttachableAgent['agent'],
+          agent: agent as RoomRunningAgent['agent'],
           worktreeId,
           terminalHandle: terminal.handle,
           paneKey,
@@ -123,7 +128,61 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
         }
       })
     )
-    return candidates.filter((candidate): candidate is RoomAttachableAgent => candidate !== null)
+    return candidates.filter((candidate): candidate is RoomRunningAgent => candidate !== null)
+  }
+
+  async listRoomExistingAgents(
+    worktreeId: string,
+    agent: RoomHarnessAgent
+  ): Promise<RoomExistingAgentCandidate[]> {
+    const [running, history] = await Promise.all([
+      this.listRoomRunningAgents(worktreeId),
+      this.listRoomHistoricalSessions(worktreeId, agent)
+    ])
+    const historyBySession = new Map(
+      history.map((session) => [`session_id\0${session.sessionId}`, session])
+    )
+    const runningSessions = new Set<string>()
+    const candidates: RoomExistingAgentCandidate[] = []
+    for (const live of running) {
+      if (live.agent !== agent) continue
+      const providerKey = live.providerSession
+        ? `${live.providerSession.key}\0${live.providerSession.id}`
+        : null
+      if (providerKey && runningSessions.has(providerKey)) continue
+      if (providerKey) runningSessions.add(providerKey)
+      const session = providerKey ? historyBySession.get(providerKey) : undefined
+      if (session) historyBySession.delete(`session_id\0${session.sessionId}`)
+      candidates.push({
+        id: session?.id ?? `running:${live.terminalHandle}:${live.paneKey}`,
+        agent,
+        title: live.title ?? session?.title ?? null,
+        status: 'running',
+        model: session?.model ?? null,
+        updatedAt: session?.updatedAt ?? session?.modifiedAt ?? null,
+        providerSession: live.providerSession,
+        terminalHandle: live.terminalHandle,
+        paneKey: live.paneKey,
+        ...(session ? { historyId: session.id } : {})
+      })
+    }
+    for (const session of historyBySession.values()) {
+      candidates.push({
+        id: session.id,
+        agent,
+        title: session.title,
+        status: 'history',
+        model: session.model,
+        updatedAt: session.updatedAt ?? session.modifiedAt,
+        providerSession: {
+          key: 'session_id',
+          id: session.sessionId,
+          transcriptPath: session.filePath
+        },
+        historyId: session.id
+      })
+    }
+    return candidates
   }
 
   async resolveRoomHistoricalSession(
@@ -131,21 +190,29 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
     agent: RoomHarnessAgent,
     historyId: string
   ): Promise<RoomProviderSession> {
-    const worktree = await this.resolveWorktreeSelector(`id:${worktreeId}`)
-    const expectedAgent = agent === 'openclaude' ? 'claude' : agent
-    const result = await listAiVaultSessions({ unlimited: true, scopePaths: [worktree.path] })
-    const session = result.sessions.find(
-      (candidate) =>
-        candidate.id === historyId &&
-        candidate.agent === expectedAgent &&
-        isAiVaultSessionResumableContent(candidate) &&
-        candidate.cwd !== null &&
-        isAiVaultSessionInWorkspacePath(worktree.path, candidate.cwd)
+    const session = (await this.listRoomHistoricalSessions(worktreeId, agent)).find(
+      (candidate) => candidate.id === historyId
     )
     if (!session) {
       throw new Error('room_historical_session_not_found')
     }
     return { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
+  }
+
+  private async listRoomHistoricalSessions(
+    worktreeId: string,
+    agent: RoomHarnessAgent
+  ): Promise<AiVaultSession[]> {
+    const worktree = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+    const expectedAgent = agent === 'openclaude' ? 'claude' : agent
+    const result = await listAiVaultSessions({ unlimited: true, scopePaths: [worktree.path] })
+    return result.sessions.filter(
+      (candidate) =>
+        candidate.agent === expectedAgent &&
+        isAiVaultSessionResumableContent(candidate) &&
+        candidate.cwd !== null &&
+        isAiVaultSessionInWorkspacePath(worktree.path, candidate.cwd)
+    )
   }
 
   async stageRoomAttachment(
@@ -190,6 +257,7 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
     await provider.createDir(directory)
     try {
       await provider.stat(filePath)
+      this.roomService?.recordAttachmentDrop(attachment.id, pty.connectionId, filePath)
       return filePath
     } catch (error) {
       if (!isENOENT(error)) throw error
@@ -200,10 +268,12 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
     const upload = await provider.openFileUploadSession()
     try {
       await upload.uploadFile(attachment.localPath, filePath, { exclusive: true })
+      this.roomService?.recordAttachmentDrop(attachment.id, pty.connectionId, filePath)
       return filePath
     } catch (error) {
       try {
         await provider.stat(filePath)
+        this.roomService?.recordAttachmentDrop(attachment.id, pty.connectionId, filePath)
         return filePath
       } catch {
         throw error
@@ -211,6 +281,20 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
     } finally {
       upload.close()
     }
+  }
+
+  async cleanupDeletedRoomResources(manifest: RoomDeletionManifest): Promise<void> {
+    await Promise.all(
+      manifest.drops.map(async ({ connectionId, remotePath }) => {
+        const provider = getSshFilesystemProvider(connectionId)
+        if (!provider) throw new Error('room_attachment_remote_unavailable')
+        try {
+          await provider.deletePath(remotePath)
+        } catch (error) {
+          if (!isENOENT(error)) throw error
+        }
+      })
+    )
   }
 
   publishRoomAgentProviderSession(
@@ -335,7 +419,7 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
 
   override async closeTerminal(
     handle: string,
-    options?: { force?: boolean }
+    options?: { force?: boolean; waitForExit?: boolean }
   ): Promise<RuntimeTerminalClose> {
     const live = this.getLivePtyForHandle(handle)
     if (!options?.force && live && this.roomService?.participantForTerminal(handle)) {

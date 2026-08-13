@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Archive, Download, Ellipsis, Plus, Settings2, Upload } from 'lucide-react'
+import { Download, Ellipsis, Plus, Settings2, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -113,7 +113,8 @@ export function RoomParticipantBar({
   onSettings,
   onExport,
   onImport,
-  onArchiveToggle,
+  onDelete,
+  deleting,
   transferring
 }: {
   data: RoomData
@@ -121,12 +122,12 @@ export function RoomParticipantBar({
   onSettings: () => void
   onExport: () => void
   onImport: () => void
-  onArchiveToggle: () => void
+  onDelete: () => void
+  deleting: boolean
   transferring: boolean
 }): React.JSX.Element {
   const agents =
     data.snapshot?.participants.filter((participant) => participant.actorKind === 'agent') ?? []
-  const archived = Boolean(data.snapshot?.room.archivedAt)
   const { metrics, stripRef } = useRoomParticipantOverflow(data.roomId)
   return (
     <header className="grid h-16 min-w-0 shrink-0 grid-cols-[minmax(0,max-content)_minmax(0,1fr)_auto] items-center gap-2 border-b border-border px-3">
@@ -148,6 +149,7 @@ export function RoomParticipantBar({
               type="button"
               variant="ghost"
               size="icon-xs"
+              disabled={deleting}
               aria-label={translate('rooms.sidebar.roomActions', 'Room actions')}
             >
               <Ellipsis />
@@ -166,13 +168,11 @@ export function RoomParticipantBar({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              variant={archived ? 'default' : 'destructive'}
-              onSelect={onArchiveToggle}
+              disabled={deleting || transferring}
+              variant="destructive"
+              onSelect={onDelete}
             >
-              <Archive />
-              {archived
-                ? translate('rooms.sidebar.restoreRoom', 'Restore room')
-                : translate('rooms.sidebar.archiveRoom', 'Archive room')}
+              <Trash2 /> {translate('rooms.sidebar.deleteRoom', 'Delete room')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -191,7 +191,6 @@ export function RoomParticipantBar({
             key={participant.id}
             participant={participant}
             target={data.target}
-            archived={archived}
           />
         ))}
       </div>
@@ -200,7 +199,7 @@ export function RoomParticipantBar({
         size="sm"
         onClick={onAdd}
         className="h-8 shrink-0"
-        disabled={archived}
+        disabled={deleting}
       >
         <Plus className="mr-1 size-3.5" />
         {translate('rooms.common.agent', 'Agent')}

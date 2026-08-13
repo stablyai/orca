@@ -117,4 +117,28 @@ describe('room attachment delivery path', () => {
       await rm(directory, { recursive: true, force: true })
     }
   })
+
+  it('deletes only persisted SSH drop paths and tolerates missing files', async () => {
+    const deletePath = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(enoent())
+    registerSshFilesystemProvider('ssh-1', { deletePath } as never)
+    try {
+      const runtime = runtimeForHost({ connectionId: null, wslDistro: null })
+      await runtime.cleanupDeletedRoomResources({
+        roomId: 'room-1',
+        attachmentPaths: [],
+        pendingUploadIds: [],
+        drops: [
+          { connectionId: 'ssh-1', remotePath: '/repo/.orca/drops/first.txt' },
+          { connectionId: 'ssh-1', remotePath: '/repo/.orca/drops/missing.txt' }
+        ]
+      })
+
+      expect(deletePath.mock.calls).toEqual([
+        ['/repo/.orca/drops/first.txt'],
+        ['/repo/.orca/drops/missing.txt']
+      ])
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+  })
 })

@@ -1,6 +1,14 @@
 import type SyncDatabase from '../../sqlite/sync-database'
-import type { RoomDelivery, RoomDeliveryAttempt } from '../../../shared/rooms'
+import type { RoomDelivery, RoomDeliveryAttempt, RoomWorkState } from '../../../shared/rooms'
 import { deliveryFromRow, type RoomRow } from './rows'
+import {
+  finishRoomStop,
+  resumeRoomDeliveries,
+  roomDeliveryWorkState,
+  stopMessageDeliveries,
+  stopRoomDeliveries,
+  supersedeRoomStop
+} from './delivery-work-control'
 
 export class RoomDeliveryStore {
   constructor(private readonly db: SyncDatabase.Database) {}
@@ -28,38 +36,53 @@ export class RoomDeliveryStore {
     ).map(deliveryFromRow)
   }
 
-  listDue(now = Date.now(), limit = 100): RoomDelivery[] {
+  listDue(now = Date.now(), limit = 100, excludedRoomIds: readonly string[] = []): RoomDelivery[] {
+    const excluded = excludedRoomIds.map(() => '?').join(', ')
     return (
       this.db
         .prepare(
-          `SELECT d.* FROM room_deliveries d
-         WHERE d.state IN ('pending', 'failed') AND d.next_attempt_at <= ?
+          `SELECT d.* FROM room_deliveries d JOIN room_messages message ON message.id = d.message_id
+         WHERE d.state = 'pending' AND d.next_attempt_at <= ?
+           ${excluded ? `AND message.room_id NOT IN (${excluded})` : ''}
            AND NOT EXISTS (
-             SELECT 1 FROM room_deliveries active
-             WHERE active.participant_id = d.participant_id AND (
-               active.state = 'delivering' OR
-               (active.state = 'delivered' AND active.responded_at IS NULL)
+             SELECT 1 FROM room_deliveries blocked
+             JOIN room_messages blocked_message ON blocked_message.id = blocked.message_id
+             WHERE blocked.participant_id = d.participant_id AND blocked.id <> d.id AND (
+               blocked.state = 'delivering' OR
+               (blocked.state = 'delivered' AND blocked.responded_at IS NULL) OR
+               (blocked.state = 'failed' AND blocked.error = 'room_delivery_uncertain') OR
+               (blocked.state = 'suppressed' AND blocked.error = 'room_stopping') OR
+               (blocked_message.sequence < message.sequence AND blocked.state = 'pending')
              )
            )
-         ORDER BY next_attempt_at LIMIT ?`
+         ORDER BY d.next_attempt_at, message.sequence LIMIT ?`
         )
-        .all(now, Math.min(Math.max(limit, 1), 500)) as RoomRow[]
+        .all(now, ...excludedRoomIds, Math.min(Math.max(limit, 1), 500)) as RoomRow[]
     ).map(deliveryFromRow)
   }
 
-  nextDueAt(): number | null {
+  nextDueAt(excludedRoomIds: readonly string[] = []): number | null {
+    const excluded = excludedRoomIds.map(() => '?').join(', ')
     const row = this.db
       .prepare(
-        `SELECT min(d.next_attempt_at) AS next_due_at FROM room_deliveries d
-         WHERE d.state IN ('pending', 'failed') AND NOT EXISTS (
-           SELECT 1 FROM room_deliveries active
-           WHERE active.participant_id = d.participant_id AND (
-             active.state = 'delivering' OR
-             (active.state = 'delivered' AND active.responded_at IS NULL)
+        `SELECT min(d.next_attempt_at) AS next_due_at
+         FROM room_deliveries d JOIN room_messages message ON message.id = d.message_id
+         WHERE d.state = 'pending'
+           ${excluded ? `AND message.room_id NOT IN (${excluded})` : ''}
+           AND NOT EXISTS (
+             SELECT 1 FROM room_deliveries blocked
+             JOIN room_messages blocked_message ON blocked_message.id = blocked.message_id
+             WHERE blocked.participant_id = d.participant_id AND blocked.id <> d.id AND (
+               blocked.state = 'delivering' OR
+               (blocked.state = 'delivered' AND blocked.responded_at IS NULL) OR
+               (blocked.state = 'failed' AND blocked.error = 'room_delivery_uncertain') OR
+               (blocked.state = 'suppressed' AND blocked.error = 'room_stopping') OR
+               (blocked_message.sequence < message.sequence AND blocked.state = 'pending')
+             )
            )
-         )`
+         `
       )
-      .get() as RoomRow
+      .get(...excludedRoomIds) as RoomRow
     return row.next_due_at === null ? null : Number(row.next_due_at)
   }
 
@@ -74,7 +97,7 @@ export class RoomDeliveryStore {
         .all() as RoomRow[]
     ).map(deliveryFromRow)
     for (const delivery of interrupted) {
-      const uncertain = delivery.phase === 'awaiting-turn' || delivery.phase === null
+      const uncertain = delivery.phase !== 'waking'
       this.finish(
         delivery,
         uncertain ? 'failed' : 'pending',
@@ -85,41 +108,52 @@ export class RoomDeliveryStore {
     }
   }
 
-  deferRoom(roomId: string): RoomDelivery[] {
-    const ids = this.roomDeliveryIds(roomId, false)
-    if (ids.length === 0) {
-      return []
-    }
-    const placeholders = ids.map(() => '?').join(', ')
+  suppressDeletedMessages(): void {
     this.db
       .prepare(
-        `UPDATE room_deliveries SET state = 'failed', error = 'room_archived',
-         next_attempt_at = ? WHERE id IN (${placeholders})`
+        `UPDATE room_deliveries SET state = 'suppressed', phase = NULL,
+         error = 'room_message_deleted', next_attempt_at = ?
+         WHERE message_id IN (SELECT id FROM room_messages WHERE deleted_at IS NOT NULL) AND (
+           state IN ('pending', 'delivering') OR
+           (state = 'delivered' AND responded_at IS NULL) OR
+           (state = 'failed' AND error = 'room_delivery_uncertain')
+         )`
       )
-      .run(Number.MAX_SAFE_INTEGER, ...ids)
-    return ids.map((id) => this.get(id))
+      .run(Number.MAX_SAFE_INTEGER)
+  }
+
+  workState(roomId: string): RoomWorkState {
+    return roomDeliveryWorkState(this.db, roomId)
+  }
+
+  stopRoom(roomId: string): { stopped: RoomDelivery[]; deliveries: RoomDelivery[] } {
+    return stopRoomDeliveries(this.db, roomId)
+  }
+
+  stopMessage(messageId: string): { stopped: RoomDelivery[]; deliveries: RoomDelivery[] } {
+    return stopMessageDeliveries(this.db, messageId)
   }
 
   resumeRoom(roomId: string, now = Date.now()): RoomDelivery[] {
-    const ids = this.roomDeliveryIds(roomId, true)
-    if (ids.length === 0) {
-      return []
-    }
-    const placeholders = ids.map(() => '?').join(', ')
-    this.db
-      .prepare(
-        `UPDATE room_deliveries SET state = 'pending', error = NULL, next_attempt_at = ?
-         WHERE id IN (${placeholders})`
-      )
-      .run(now, ...ids)
-    return ids.map((id) => this.get(id))
+    return resumeRoomDeliveries(this.db, roomId, now)
+  }
+
+  supersedeRoomStop(roomId: string): RoomDelivery[] {
+    return supersedeRoomStop(this.db, roomId)
+  }
+
+  finishRoomStop(deliveryIds: readonly string[]): RoomDelivery[] {
+    return finishRoomStop(this.db, deliveryIds)
   }
 
   retry(id: string, now = Date.now()): RoomDelivery {
     this.db
       .prepare(
         `UPDATE room_deliveries SET state = 'pending', error = NULL, next_attempt_at = ?
-         WHERE id = ? AND state IN ('failed', 'suppressed')`
+         WHERE id = ? AND (
+           state = 'failed' OR
+           (state = 'suppressed' AND error IS NULL)
+         )`
       )
       .run(now, id)
     return this.get(id)
@@ -222,21 +256,6 @@ export class RoomDeliveryStore {
       throw new Error('room_delivery_not_found')
     }
     return deliveryFromRow(row)
-  }
-
-  private roomDeliveryIds(roomId: string, archivedOnly: boolean): string[] {
-    return (
-      this.db
-        .prepare(
-          `SELECT d.id FROM room_deliveries d
-           JOIN room_messages m ON m.id = d.message_id
-           WHERE m.room_id = ? AND (
-             (? = 1 AND d.state = 'failed' AND d.error = 'room_archived') OR
-             (? = 0 AND d.state IN ('pending', 'failed', 'delivering'))
-           )`
-        )
-        .all(roomId, archivedOnly ? 1 : 0, archivedOnly ? 1 : 0) as RoomRow[]
-    ).map((row) => String(row.id))
   }
 
   private finish(

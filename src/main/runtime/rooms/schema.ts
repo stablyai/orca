@@ -22,6 +22,7 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     ensureRoomParticipantSleepingStateSchema(db)
     ensureRoomActivitySchema(db)
     ensureRoomDeliveryConfigurationSchema(db)
+    ensureRoomDeletionSchema(db)
     return
   }
 
@@ -36,8 +37,7 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
         description TEXT NOT NULL DEFAULT '',
         loop_limit INTEGER NOT NULL DEFAULT 0 CHECK(loop_limit BETWEEN 0 AND 20),
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        archived_at INTEGER
+        updated_at INTEGER NOT NULL
       );
       CREATE INDEX idx_rooms_project_updated ON rooms(project_id, updated_at DESC);
 
@@ -86,6 +86,14 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
         created_at INTEGER NOT NULL
       );
       CREATE INDEX idx_room_attachments_message ON room_attachments(message_id);
+
+      CREATE TABLE room_attachment_drops (
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        attachment_id TEXT NOT NULL,
+        connection_id TEXT NOT NULL,
+        remote_path TEXT NOT NULL,
+        PRIMARY KEY(room_id, attachment_id, connection_id, remote_path)
+      );
 
       CREATE TABLE room_message_mentions (
         message_id TEXT NOT NULL REFERENCES room_messages(id) ON DELETE CASCADE,
@@ -155,6 +163,12 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
         PRIMARY KEY(room_id, message_id)
       );
       CREATE INDEX idx_room_pins_status ON room_pins(room_id, status, created_at DESC);
+
+      CREATE TABLE room_deletion_cleanup (
+        room_id TEXT PRIMARY KEY,
+        manifest_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
     `)
     db.exec('COMMIT')
   } catch (error) {
@@ -162,6 +176,23 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     throw error
   }
   ensureRoomDeliveryConfigurationSchema(db)
+}
+
+function ensureRoomDeletionSchema(db: SyncDatabase.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS room_attachment_drops (
+      room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+      attachment_id TEXT NOT NULL,
+      connection_id TEXT NOT NULL,
+      remote_path TEXT NOT NULL,
+      PRIMARY KEY(room_id, attachment_id, connection_id, remote_path)
+    );
+    CREATE TABLE IF NOT EXISTS room_deletion_cleanup (
+      room_id TEXT PRIMARY KEY,
+      manifest_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+  `)
 }
 
 function ensureRoomDeliveryTurnSchema(db: SyncDatabase.Database): void {

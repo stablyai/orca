@@ -19,8 +19,8 @@ import { RoomInspector } from './RoomInspector'
 import { RoomAddAgentDialog } from './RoomAddAgentDialog'
 import { RoomSettingsDialog } from './RoomSettingsDialog'
 import { exportRoomArchive, importRoomArchive } from './room-archive-transfer'
-import { roomRpc } from '@/runtime/runtime-rooms-client'
-import { showRoomActionError } from './room-action-error'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { deleteRoomFromUi } from './room-deletion-lifecycle'
 import {
   AgentSubagentProvider,
   type AgentSubagentSource
@@ -70,6 +70,7 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
     [settings, worktreeOwner?.runtimeOwnerEnvironmentId]
   )
   const data = useRoomData(target, projectId, roomId)
+  const confirm = useConfirmationDialog()
   const participants = useMemo(
     () => data.snapshot?.participants ?? [],
     [data.snapshot?.participants]
@@ -118,6 +119,7 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
   const [addAgentOpen, setAddAgentOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [transferring, setTransferring] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [reply, setReply] = useState<RoomMessage | null>(null)
   const archiveInputRef = useRef<HTMLInputElement>(null)
 
@@ -176,6 +178,19 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
     }
   }
 
+  const deleteRoom = async (): Promise<void> => {
+    const room = data.snapshot?.room
+    if (!room || deleting || transferring) {
+      return
+    }
+    await deleteRoomFromUi({
+      room,
+      target: data.target,
+      confirm,
+      setDeleting
+    })
+  }
+
   if (!projectId || (!repo && !worktreeOwner)) {
     return (
       <EmptyState
@@ -207,15 +222,8 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
             onSettings={() => setSettingsOpen(true)}
             onExport={() => void exportArchive()}
             onImport={() => archiveInputRef.current?.click()}
-            onArchiveToggle={() => {
-              const room = data.snapshot?.room
-              if (room) {
-                void roomRpc(data.target, 'rooms.update', {
-                  roomId: room.id,
-                  archived: !room.archivedAt
-                }).catch(showRoomActionError)
-              }
-            }}
+            onDelete={() => void deleteRoom()}
+            deleting={deleting}
             transferring={transferring}
           />
           {data.error ? (
@@ -225,12 +233,9 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
             </div>
           ) : null}
           <RoomMessageFeed key={data.roomId ?? 'none'} data={data} onReply={setReply} />
-          {data.snapshot?.room.archivedAt ? (
+          {deleting ? (
             <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
-              {translate(
-                'rooms.page.archived',
-                'This room is archived. Restore it from the room menu to continue.'
-              )}
+              {translate('rooms.delete.deleting', 'Deleting room…')}
             </div>
           ) : (
             <RoomComposer data={data} reply={reply} onReplyChange={setReply} />

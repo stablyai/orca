@@ -86,4 +86,66 @@ describe('room message recipients', () => {
       database.close()
     }
   })
+
+  it('supersedes a completed room stop only after the next user message is accepted', async () => {
+    const database = new RoomDatabase(':memory:')
+    try {
+      const snapshot = database.createRoom({ projectId: 'project-1', name: 'Research' })
+      const user = snapshot.participants[0]
+      const codex = database.participants.add({
+        roomId: snapshot.room.id,
+        identity: 'codex',
+        displayName: 'Codex',
+        agent: 'codex'
+      })
+      const controller = new RoomMessageController(
+        database,
+        {
+          consumeUploads: async () => [],
+          remove: async () => {}
+        } as unknown as RoomAttachmentManager,
+        () => {},
+        () => {}
+      )
+      const first = await controller.send({
+        roomId: snapshot.room.id,
+        senderIdentity: user.identity,
+        body: 'Start'
+      })
+      const delivery = database.messages.deliveries.listForMessage(first.id)[0]
+      database.messages.deliveries.claim(delivery.id)
+      database.messages.deliveries.setPhase(delivery.id, 'awaiting-turn')
+      const stopped = database.transaction(() =>
+        database.messages.deliveries.stopRoom(snapshot.room.id)
+      )
+
+      await expect(
+        controller.send({
+          roomId: snapshot.room.id,
+          senderIdentity: user.identity,
+          body: 'Too early'
+        })
+      ).rejects.toThrow('room_stop_in_progress')
+      expect(database.messages.deliveries.get(delivery.id).error).toBe('room_stopping')
+
+      database.messages.deliveries.finishRoomStop(
+        stopped.deliveries.map((stoppedDelivery) => stoppedDelivery.id)
+      )
+      database.participants.update(codex.id, { participation: 'paused' })
+      await controller.send({
+        roomId: snapshot.room.id,
+        senderIdentity: user.identity,
+        body: 'Replace the stopped work'
+      })
+
+      expect(database.messages.deliveries.get(delivery.id)).toMatchObject({
+        state: 'suppressed',
+        error: 'room_stopped_superseded'
+      })
+      expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('idle')
+      expect(database.messages.deliveries.resumeRoom(snapshot.room.id)).toEqual([])
+    } finally {
+      database.close()
+    }
+  })
 })

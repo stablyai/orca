@@ -17,6 +17,7 @@ import { roomParticipantRestartPreferences } from './participant-restart-prefere
 import { waitForRoomParticipantReady } from './participant-readiness'
 import { RoomParticipantSessionControls } from './participant-session-controls'
 import { RoomParticipantMembership } from './participant-membership'
+import { stopRoomParticipants } from './participant-room-stop'
 import {
   ingestRoomParticipantClaudeStatusLine,
   ingestRoomParticipantStatus,
@@ -33,9 +34,11 @@ export type { RoomParticipantConnection } from './participant-membership'
 
 export class RoomParticipantController {
   private readonly restoring = new Map<string, Promise<RoomParticipant>>()
+  private readonly blockedRooms = new Set<string>()
   private readonly membership: RoomParticipantMembership
   private readonly sessionControls: RoomParticipantSessionControls
   private hibernationTimer: NodeJS.Timeout | null = null
+  private hibernating: Promise<void> | null = null
 
   constructor(
     private readonly db: RoomDatabase,
@@ -78,6 +81,7 @@ export class RoomParticipantController {
   }
 
   async add(input: Parameters<RoomParticipantMembership['add']>[0]): Promise<RoomParticipant> {
+    this.assertAvailable(input.roomId)
     return this.membership.add(input)
   }
 
@@ -86,6 +90,7 @@ export class RoomParticipantController {
   }
 
   async restore(participant: RoomParticipant, requireReady = false): Promise<RoomParticipant> {
+    this.assertAvailable(participant.roomId)
     const active = this.restoring.get(participant.id)
     if (active) {
       const restored = await active
@@ -100,6 +105,7 @@ export class RoomParticipantController {
 
   async ensureReady(id: string): Promise<RoomParticipant> {
     let participant = this.db.participants.get(id)
+    this.assertAvailable(participant.roomId)
     const adapter = participant.agent ? this.adapters[participant.agent] : null
     const binding = roomParticipantHarnessBinding(participant)
     if (!adapter || !binding) {
@@ -131,6 +137,7 @@ export class RoomParticipantController {
 
   /** Room activation observes existing processes; only delivery/reveal may wake one. */
   async reconcile(participant: RoomParticipant): Promise<RoomParticipant> {
+    this.assertAvailable(participant.roomId)
     if (participant.state === 'sleeping') {
       // Opening a room must not boot processes; the next delivery wakes.
       return participant
@@ -190,14 +197,38 @@ export class RoomParticipantController {
   /** Stops harness processes of provably idle participants; only a live agent
    *  reporting 'idle' is stopped, a dead pane is just recorded as sleeping. */
   async hibernateIdle(now = Date.now()): Promise<void> {
-    await hibernateIdleRoomParticipants({
+    if (this.hibernating) {
+      return this.hibernating
+    }
+    const hibernating = hibernateIdleRoomParticipants({
       db: this.db,
       adapters: this.adapters,
       restoring: this.restoring,
+      blockedRooms: this.blockedRooms,
       emit: this.emit,
       hideRendererStatus: this.hideRendererStatus,
       now
     })
+    this.hibernating = hibernating
+    await hibernating.finally(() => {
+      if (this.hibernating === hibernating) {
+        this.hibernating = null
+      }
+    })
+  }
+
+  async blockRoom(roomId: string): Promise<() => void> {
+    this.blockedRooms.add(roomId)
+    await this.hibernating
+    const participants = this.db.participants.list(roomId)
+    await Promise.allSettled(
+      participants.map((participant) => this.restoring.get(participant.id)).filter(Boolean)
+    )
+    return stopRoomParticipants(roomId, this.db, this.adapters, this.transcriptBridge)
+  }
+
+  unblockRoom(roomId: string): void {
+    this.blockedRooms.delete(roomId)
   }
 
   private async restoreParticipant(
@@ -293,5 +324,11 @@ export class RoomParticipantController {
       participant,
       requireInputReady
     )
+  }
+
+  private assertAvailable(roomId: string): void {
+    if (this.blockedRooms.has(roomId)) {
+      throw new Error('room_deleting')
+    }
   }
 }
