@@ -138,38 +138,42 @@ describe('Codex structured writer against the installed app-server', () => {
         })
         await deadline(turnCompletion.promise, 'structured writer turn')
         await authority.flushReceipts()
-        const admissions = JSON.parse(
-          await readFile(
-            join(stateDirectory, 'codex-structured-write', 'host-enforcement-receipts.json'),
-            'utf8'
-          )
-        ).receipts as Record<string, unknown>[]
-        const receipts = JSON.parse(
-          await readFile(
-            join(stateDirectory, 'codex-structured-write', 'operational-trace.json'),
-            'utf8'
-          )
-        ).receipts as Record<string, unknown>[]
-        expect(
-          receipts,
-          JSON.stringify({
-            fileExists: existsSync(join(worktree, 'proof.txt')),
-            decisions,
-            events: events
-              .filter((event) => event.type === 'notification')
-              .map((event) => {
-                const params = event.params as {
-                  item?: { id?: string; type?: string; status?: string }
-                }
-                return {
-                  method: event.method,
-                  ...(event.method === 'error' || event.method === 'warning'
-                    ? { params: event.params }
-                    : { item: params.item })
-                }
-              })
-          })
-        ).toHaveLength(1)
+        const admissionPath = join(
+          stateDirectory,
+          'codex-structured-write',
+          'host-enforcement-receipts.json'
+        )
+        const operationalTracePath = join(
+          stateDirectory,
+          'codex-structured-write',
+          'operational-trace.json'
+        )
+        const diagnostic = {
+          fileExists: existsSync(join(worktree, 'proof.txt')),
+          decisions,
+          events: events
+            .filter((event) => event.type === 'notification')
+            .map((event) => {
+              const params = event.params as {
+                item?: { id?: string; type?: string; status?: string }
+              }
+              return {
+                method: event.method,
+                ...(event.method === 'error' || event.method === 'warning'
+                  ? { params: event.params }
+                  : { item: params.item })
+              }
+            })
+        }
+        expect(existsSync(admissionPath), JSON.stringify(diagnostic)).toBe(true)
+        expect(existsSync(operationalTracePath), JSON.stringify(diagnostic)).toBe(true)
+        const admissions = JSON.parse(await readFile(admissionPath, 'utf8')).receipts as Record<
+          string,
+          unknown
+        >[]
+        const receipts = JSON.parse(await readFile(operationalTracePath, 'utf8'))
+          .receipts as Record<string, unknown>[]
+        expect(receipts, JSON.stringify(diagnostic)).toHaveLength(1)
         const writeReceipt = receipts[0]
         expect(await readFile(join(worktree, 'proof.txt'), 'utf8')).toBe('structured-writer-pass\n')
         expect(writeReceipt).toMatchObject({
