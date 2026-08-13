@@ -16,12 +16,18 @@ vi.mock('electron', () => ({
 import { normalizeRightSidebarTab } from './persistence'
 
 describe('normalizeRightSidebarTab', () => {
-  it.each(['explorer', 'search', 'vault', 'workspaces', 'source-control', 'checks', 'ports'])(
-    'preserves the built-in %s tab',
-    (tab) => {
-      expect(normalizeRightSidebarTab(tab)).toBe(tab)
-    }
-  )
+  it.each([
+    'explorer',
+    'search',
+    'vault',
+    'workspaces',
+    'source-control',
+    'checks',
+    'ports',
+    'notes'
+  ])('preserves the built-in %s tab', (tab) => {
+    expect(normalizeRightSidebarTab(tab)).toBe(tab)
+  })
 
   // Regression: pr-checks was missing from the allow-list, so the folder
   // PR Checks tab silently reset to Explorer on every app restart.

@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { applyWorktreeUpdates } from '../../worktree-helpers'
 import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../github-cache-key'
 import {
@@ -24,11 +24,13 @@ import {
   resolveGitHubReviewPushTarget
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
-import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import {
   settingsForWorktreeOwner,
   trySettingsForWorktreeOwner
 } from '../listing/worktree-owner-settings'
+import { startWorktreeMetaSave } from './worktree-meta-save-reconciliation'
+import { findWorktreeMetaOwner } from './worktree-meta-owner'
+import { worktreeMetaSaveFailureResult } from './worktree-meta-save-failure'
 
 import { findRepoForHost } from '../../repo-host-identity'
 export function createUpdateWorktreeMeta(
@@ -38,7 +40,7 @@ export function createUpdateWorktreeMeta(
   return async (worktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
     const requestedHostId = options?.executionHostId
-    const existingWorktree = findKnownWorktreeById(get(), worktreeId, requestedHostId)
+    const existingWorktree = findWorktreeMetaOwner(get(), worktreeId, requestedHostId)
     const executionHostId =
       requestedHostId ??
       existingWorktree?.hostId ??
@@ -46,6 +48,16 @@ export function createUpdateWorktreeMeta(
     if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
       return { ok: true }
     }
+    if (requestedHostId && !existingWorktree) {
+      return {
+        ok: false,
+        error: translate(
+          'auto.store.slices.worktrees.a17f4d2e93',
+          'Could not update this workspace.'
+        )
+      }
+    }
+    const save = await startWorktreeMetaSave(get, worktreeId, executionHostId)
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
       const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
@@ -292,21 +304,7 @@ export function createUpdateWorktreeMeta(
         })
       }
     } catch (err) {
-      if (isRuntimeSelectorNotFoundError(err)) {
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-        return {
-          ok: false,
-          error: translate(
-            'auto.store.slices.worktrees.c6cf133786',
-            'This workspace is no longer available.'
-          )
-        }
-      }
-      console.error('Failed to update worktree meta:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-      // Why: the refetch above reverts the optimistic write, so a caller that
-      // closes its surface on this path shows the user a save that undid itself.
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      return worktreeMetaSaveFailureResult(get, worktreeId, executionHostId, save, err)
     }
     return { ok: true }
   }

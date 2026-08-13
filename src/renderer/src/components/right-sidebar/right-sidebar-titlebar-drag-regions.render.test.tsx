@@ -247,6 +247,7 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expect(markup).toContain('right-sidebar-header-drag')
 
     expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
+    expectNoDrag(buttonOpeningTag(markup, 'Notes'))
     expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
     expectNoDrag(buttonOpeningTag(markup, 'Checks'))
     expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
