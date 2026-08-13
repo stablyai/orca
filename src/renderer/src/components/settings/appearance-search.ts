@@ -139,6 +139,42 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.appearance.search.fileExplorerRenameOnDoubleClick.title',
+      'Rename on Double-Click'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.fileExplorerRenameOnDoubleClick.description',
+      'Double-clicking a name in the file explorer starts a rename. Turning this off makes folders expand and collapse instantly.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.fileExplorerRenameOnDoubleClick.rename',
+        'rename'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.fileExplorerRenameOnDoubleClick.doubleClick',
+        'double click'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.fileExplorerRenameOnDoubleClick.expand',
+        'expand'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.fileExplorerRenameOnDoubleClick.slow',
+        'slow'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.fileExplorerRenameOnDoubleClick.delay',
+        'delay'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.fileExplorerRenameOnDoubleClick.fileExplorer',
+        'file explorer'
+      )
+    ]
   }
 ])
 

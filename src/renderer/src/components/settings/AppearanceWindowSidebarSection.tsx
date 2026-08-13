@@ -4,6 +4,7 @@ import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
 import { SearchableSetting } from './SearchableSetting'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
+import { AppearanceFileExplorerSection } from './AppearanceFileExplorerSection'
 import { useAppStore } from '../../store'
 import {
   SettingsRow,
@@ -341,46 +342,7 @@ export function AppearanceWindowSidebarSection({
             ) : null}
 
             {showFileExplorerAdvanced ? (
-              <div className="space-y-3">
-                <SettingsSubsectionHeader
-                  title={translate(
-                    'auto.components.settings.AppearancePane.d496901cd0',
-                    'File Explorer'
-                  )}
-                />
-                <div className="ml-4 divide-y divide-border/40">
-                  <SearchableSetting
-                    title={
-                      layoutEntries[0]?.title ??
-                      translate(
-                        'auto.components.settings.AppearancePane.0fafabcf35',
-                        'Show Git-Ignored Files'
-                      )
-                    }
-                    description={layoutEntries[0]?.description}
-                    keywords={layoutEntries[0]?.keywords ?? ['git', 'gitignore', 'ignored']}
-                  >
-                    <SettingsSwitchRow
-                      label={translate(
-                        'auto.components.settings.AppearancePane.0fafabcf35',
-                        'Show Git-Ignored Files'
-                      )}
-                      // Why: define what "git-ignored" matches; the location (file explorer)
-                      // is obvious from the section header.
-                      description={translate(
-                        'auto.components.settings.AppearancePane.gitIgnoredGlossary',
-                        'Files matched by .gitignore.'
-                      )}
-                      checked={settings.showGitIgnoredFiles ?? true}
-                      onChange={() =>
-                        updateSettings({
-                          showGitIgnoredFiles: !(settings.showGitIgnoredFiles ?? true)
-                        })
-                      }
-                    />
-                  </SearchableSetting>
-                </div>
-              </div>
+              <AppearanceFileExplorerSection settings={settings} updateSettings={updateSettings} />
             ) : null}
           </div>
         </AppearanceAdvancedDisclosure>

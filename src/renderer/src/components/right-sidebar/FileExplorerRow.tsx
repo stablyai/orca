@@ -484,6 +484,9 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const renameOnDoubleClick = useAppStore(
+    (s) => s.settings?.fileExplorerRenameOnDoubleClick ?? true
+  )
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
@@ -646,9 +649,11 @@ export function FileExplorerRow({
             </>
           )}
           <span
-            // Why: marks the rename hotspot so the row's click handler can hold
-            // back the directory toggle until the double-click window closes.
-            {...{ [RENAME_HOTSPOT_ATTR]: '' }}
+            // Why: the hotspot marks where a rename gesture lives, so it must
+            // disappear with the gesture — otherwise the row's click handler
+            // keeps holding back the directory toggle for a rename that can no
+            // longer start.
+            {...(renameOnDoubleClick ? { [RENAME_HOTSPOT_ATTR]: '' } : {})}
             className={cn(
               'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
@@ -664,12 +669,16 @@ export function FileExplorerRow({
                   ? { color: 'var(--git-decoration-ignored)' }
                   : undefined
             }
-            onDoubleClick={(e) => {
-              // Why: scope rename to the filename text so "pin preview" and the
-              // directory toggle stay reachable on the icon and empty row area.
-              e.stopPropagation()
-              onStartRename(node)
-            }}
+            onDoubleClick={
+              renameOnDoubleClick
+                ? (e) => {
+                    // Why: scope rename to the filename text so "pin preview" and the
+                    // directory toggle stay reachable on the icon and empty row area.
+                    e.stopPropagation()
+                    onStartRename(node)
+                  }
+                : undefined
+            }
           >
             {node.name}
           </span>
