@@ -338,7 +338,6 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
-const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('./components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
@@ -1534,10 +1533,7 @@ function App(): React.JSX.Element {
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
   const showSidebar =
-    activeView !== 'settings' &&
-    activeView !== 'activity' &&
-    activeView !== 'space' &&
-    activeView !== 'skills'
+    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
   // Tasks/Landing show the full titlebar only when the sidebar is collapsed; open, they mirror workspace view (creation suppresses it).
   const stackedSidebarOpen =
     !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
@@ -2404,7 +2400,6 @@ function App(): React.JSX.Element {
                               )}
                             >
                               {activeView === 'settings' ? <Settings /> : null}
-                              {activeView === 'skills' ? <SkillsPage /> : null}
                               {activeView === 'artifacts' ? <ArtifactsPage /> : null}
                               {activeView === 'tasks' ? <TaskPage /> : null}
                               {activeView === 'automations' ? <AutomationsPage /> : null}
