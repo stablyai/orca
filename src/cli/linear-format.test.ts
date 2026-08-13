@@ -4,12 +4,15 @@ import type {
   LinearIssueContextResult,
   LinearMcpIssueListResult,
   LinearProjectListResult,
-  LinearSearchResult
+  LinearSearchResult,
+  LinearTeamMembersResult
 } from '../shared/linear-agent-access'
+import { getEastAsianDisplayWidth } from '../shared/east-asian-display-width'
 import {
   formatLinearCreate,
   formatLinearIssue,
   formatLinearProjectList,
+  formatLinearTeamMembers,
   printLinearMcpIssueListWarnings,
   printLinearSearchWarnings
 } from './linear-format'
@@ -128,5 +131,42 @@ describe('linear-format', () => {
     } as LinearCreateResult
 
     expect(formatLinearCreate(result)).toBe('Created ENG-123 in Launch: Follow up.')
+  })
+})
+
+describe('linear-format East Asian column alignment', () => {
+  function membersResult(displayNames: string[]): LinearTeamMembersResult {
+    return {
+      team: { id: 'team-1', name: 'Engineering', key: 'ENG' },
+      members: displayNames.map((displayName, index) => ({
+        id: `user-${index}`,
+        displayName
+      })),
+      meta: { workspaceId: 'workspace-1', returned: displayNames.length }
+    } as LinearTeamMembersResult
+  }
+
+  it('starts the id column at the same display column for Korean and Latin names', () => {
+    const rows = formatLinearTeamMembers(membersResult(['배현우', 'Alice'])).split('\n')
+
+    const idColumns = rows.map((row) =>
+      getEastAsianDisplayWidth(row.slice(0, row.indexOf(' user-')))
+    )
+
+    expect(idColumns[0]).toBe(idColumns[1])
+  })
+
+  it('keeps every row aligned regardless of how many wide characters it holds', () => {
+    // Why: the built-in padEnd overshoots by one column per wide character, so
+    // rows with different Hangul counts each drift by a different amount.
+    const rows = formatLinearTeamMembers(
+      membersResult(['김', '김철수', '김철수영희', 'Bob'])
+    ).split('\n')
+
+    const idColumns = new Set(
+      rows.map((row) => getEastAsianDisplayWidth(row.slice(0, row.indexOf(' user-'))))
+    )
+
+    expect(idColumns.size).toBe(1)
   })
 })

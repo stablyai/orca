@@ -11,6 +11,7 @@ import {
 } from '../flags'
 import { getEmulatorCommandTarget } from '../selectors'
 import { RuntimeClientError } from '../runtime-client'
+import { padEndToEastAsianDisplayWidth } from '../../shared/east-asian-display-width'
 
 type EmulatorAttachResult = {
   info?: {
@@ -49,7 +50,7 @@ function formatEmulatorDevices(value: unknown): string {
   return devices
     .map((device) => {
       const platform = device.backend === 'android' ? 'Android' : 'iOS'
-      return `${platform.padEnd(8)} ${(device.state ?? '').padEnd(9)} ${device.name ?? ''}  (${device.id ?? ''})`
+      return `${padEndToEastAsianDisplayWidth(platform, 8)} ${padEndToEastAsianDisplayWidth(device.state ?? '', 9)} ${device.name ?? ''}  (${device.id ?? ''})`
     })
     .join('\n')
 }
