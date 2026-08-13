@@ -212,10 +212,8 @@ export function createAutomationDispatchCompletion(args: {
         }
         if (historicalState.state === 'working') {
           sawWorkingAfterStart = true
-          noteAutomationAgentStatus(agentSessionTracker, {
-            state: 'working',
-            providerSession: entry.providerSession
-          })
+          // Why: history entries have no providerSession. Binding here
+          // would attach the live session to a past working sample.
         }
         if (
           historicalState.state === 'done' &&

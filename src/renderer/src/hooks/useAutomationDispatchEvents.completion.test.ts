@@ -419,6 +419,77 @@ describe('useAutomationDispatchEvents completion', () => {
     )
   })
 
+  it('does not label a PTY exit as exact after only a working bind', async () => {
+    let launchArgs: {
+      onExit?: (ptyId: string, code: number) => void
+    } = {}
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      launchArgs = args
+      return {
+        tabId: 'agent-tab',
+        paneKey: AUTOMATION_PANE_KEY,
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    publishAgentStatus({
+      state: 'working',
+      providerSession: { key: 'session_id', id: 'primary-session' }
+    })
+    launchArgs.onExit?.('agent-pty', 0)
+
+    await vi.waitFor(() =>
+      expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'completed',
+          completionAttribution: expect.objectContaining({
+            kind: 'pane_time_fallback',
+            providerSessionId: null
+          })
+        })
+      )
+    )
+  })
+
+  it('does not bind a live provider session from historical working samples', async () => {
+    const paneKey = AUTOMATION_PANE_KEY
+    await registerAndDispatch()
+    const startedAt = Date.now() + 1
+    state.agentStatusByPaneKey = {
+      [paneKey]: {
+        paneKey,
+        state: 'working',
+        prompt: 'second turn',
+        agentType: 'claude',
+        updatedAt: startedAt + 2,
+        stateStartedAt: startedAt + 2,
+        lastCompletedAssistantMessage: 'stale nested digest',
+        providerSession: { key: 'session_id', id: 'nested-session' },
+        stateHistory: [
+          { state: 'working', prompt: 'first turn', startedAt },
+          { state: 'done', prompt: 'first turn', startedAt: startedAt + 1 }
+        ]
+      }
+    }
+    if (!latestStoreSubscriber) {
+      throw new Error('agent status observer was not registered')
+    }
+    latestStoreSubscriber()
+    await Promise.resolve()
+
+    // History has no providerSession; replaying it with the live nested session
+    // must not finalize as if that nested session already completed.
+    expect(
+      mockMarkDispatchResult.mock.calls.some(([result]) => result.status === 'completed')
+    ).toBe(false)
+  })
+
   it('consumes duplicate done and zero-exit completion through one finalizer', async () => {
     let launchArgs: {
       onAgentStatus?: (payload: { state: string }) => void
