@@ -114,6 +114,46 @@ describe('AgentRegistry', () => {
 
       vi.useRealTimers()
     })
+
+    it('should not keep declared capabilities alive past the single TTL window (no separate capability grace period)', () => {
+      // There is only one expiry timer in this registry: TTL_MS, applied to the
+      // whole entry via lastActivityAt. Capabilities are not tracked with their
+      // own independent lifetime, so they must disappear at exactly the same
+      // moment as the rest of the entry -- neither earlier nor in some later
+      // "grace window".
+      vi.useFakeTimers()
+      const now = Date.now()
+      vi.setSystemTime(now)
+
+      registry.register({
+        keyId: 'test-key-1',
+        agentType: 'pi',
+        sessionId: 'session-123',
+        supportedMethods: [brandCapabilityMethod('file.read')]
+      })
+
+      // Just before TTL: entry and capabilities are both still present.
+      vi.advanceTimersByTime(AGENT_REGISTRY_CONFIG.TTL_MS - 1000)
+      const beforeExpiry = registry.get('test-key-1')
+      expect(beforeExpiry).not.toBeNull()
+      expect(beforeExpiry?.capabilities.supportedMethods).toEqual([
+        brandCapabilityMethod('file.read')
+      ])
+
+      // Just past TTL: the whole entry, capabilities included, is gone.
+      vi.advanceTimersByTime(2000)
+      const afterExpiry = registry.get('test-key-1')
+      expect(afterExpiry).toBeNull()
+
+      vi.useRealTimers()
+    })
+
+    it('should not expose a capability-only TTL config for a second-tier grace period', () => {
+      // Guards against reintroducing a documented-but-unimplemented two-tier
+      // expiry: any such config must come with real logic reading it (see the
+      // test above), not just live on as unused/aspirational documentation.
+      expect((AGENT_REGISTRY_CONFIG as Record<string, unknown>).CAPABILITY_TTL_MS).toBeUndefined()
+    })
   })
 
   describe('unregister', () => {

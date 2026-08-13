@@ -55,8 +55,7 @@ export class AgentRegistry {
         agentKeyId: request.keyId,
         supportedMethods: request.supportedMethods,
         capabilityDigest,
-        declaredAt: now,
-        expiresAt: now + AGENT_REGISTRY_CONFIG.CAPABILITY_TTL_MS
+        declaredAt: now
       },
       lastActivityAt: now,
       metadata: request.metadata

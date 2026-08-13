@@ -42,12 +42,6 @@ export type AgentCapabilityDeclaration = {
    * Timestamp (milliseconds since epoch) when capabilities were declared.
    */
   declaredAt: number
-
-  /**
-   * Timestamp (milliseconds since epoch) when capabilities expire if not refreshed.
-   * Used for graceful degradation if an agent disappears.
-   */
-  expiresAt: number
 }
 
 /**
@@ -159,12 +153,8 @@ export type AgentRegistryListResult = {
 export const AGENT_REGISTRY_CONFIG = {
   /**
    * How long (in milliseconds) an agent entry remains valid without a heartbeat.
+   * Once exceeded, the entire entry (including its declared capabilities, which
+   * are not tracked separately) is evicted. See AgentRegistry.isExpired().
    */
-  TTL_MS: 60 * 1000, // 60 seconds
-
-  /**
-   * How long a capability declaration is valid.
-   * Set to twice the TTL to allow for some graceful degradation time.
-   */
-  CAPABILITY_TTL_MS: 120 * 1000 // 120 seconds
+  TTL_MS: 60 * 1000 // 60 seconds
 } as const
