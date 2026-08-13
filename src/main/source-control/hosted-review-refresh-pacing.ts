@@ -2,13 +2,16 @@
  * Shared pacing policy for hosted-review lookups (#11532).
  *
  * The PR refresh coordinator's queue and the `hostedReview:forBranch` entry
- * point spend the same per-user API quota, so they must agree on how long an
- * answer stays good and how hard to back off after a failure. Keeping the
- * numbers here stops the two paths from drifting apart.
+ * point spend the same per-user API quota, so their tier-specific freshness
+ * intervals and shared failure backoff belong in one explicit policy. Keeping
+ * the numbers here makes intentional differences reviewable.
  */
 
 /** A branch with no review only gains one when a review is opened, which is not a per-minute event. */
 export const NO_REVIEW_REFRESH_INTERVAL_MS = 15 * 60_000
+
+/** O(N) card-list polling can wait longer without slowing the selected-worktree fast tier. */
+export const BACKGROUND_NO_REVIEW_REFRESH_INTERVAL_MS = 60 * 60_000
 
 /**
  * The worktree the user has selected is re-checked at the old cadence: a review

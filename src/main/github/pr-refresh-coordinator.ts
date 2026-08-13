@@ -13,8 +13,8 @@ import { getOriginGitHubApiRepository } from './github-api-repository'
 import { ghRepoExecOptions, githubRepoContext } from './gh-utils'
 import { getRateLimit, repositoryRateLimitGuard, spendsSharedGitHubComQuota } from './rate-limit'
 import {
-  lookupBackoffDelayMs,
-  NO_REVIEW_REFRESH_INTERVAL_MS
+  BACKGROUND_NO_REVIEW_REFRESH_INTERVAL_MS,
+  lookupBackoffDelayMs
 } from '../source-control/hosted-review-refresh-pacing'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
@@ -505,7 +505,7 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
     return 30 * 60_000
   }
   if (candidate.cachedHasPR === false) {
-    return NO_REVIEW_REFRESH_INTERVAL_MS
+    return BACKGROUND_NO_REVIEW_REFRESH_INTERVAL_MS
   }
   if (
     candidate.cachedHasPR === true &&
