@@ -21,7 +21,10 @@ function runMirrorSequence(
   let sentText = ''
   let heldText = ''
   for (const fieldText of fieldStates) {
-    const step = computeTerminalLiveMirrorStep(sentText, fieldText, { commitHeld: false })
+    const step = computeTerminalLiveMirrorStep(sentText, fieldText, {
+      commitHeld: false,
+      previousHeldText: heldText
+    })
     const payload = buildTerminalLiveMirrorPayload(step)
     if (payload.length > 0) {
       payloads.push(payload)
@@ -31,7 +34,10 @@ function runMirrorSequence(
   }
   if (options.commitAtEnd) {
     const lastField = sentText + heldText
-    const step = computeTerminalLiveMirrorStep(sentText, lastField, { commitHeld: true })
+    const step = computeTerminalLiveMirrorStep(sentText, lastField, {
+      commitHeld: true,
+      previousHeldText: heldText
+    })
     const payload = buildTerminalLiveMirrorPayload(step)
     if (payload.length > 0) {
       payloads.push(payload)
@@ -203,13 +209,24 @@ describe('terminal live composition mirror', () => {
     expect(run.payloads.join('')).not.toContain('\x7f')
   })
 
-  it('Given a command with a trailing reading When the step runs Then the ASCII prefix streams and only the reading is held', () => {
-    // Given / When
+  it('Given a command with a trailing reading When steps run Then the ASCII prefix streams and only the reading is held', () => {
+    // Given / When: the ASCII is already on the PTY before composition starts
+    const run = runMirrorSequence(['echo ', 'echo に', 'echo にほんご'])
+
+    // Then
+    expect(run.payloads).toEqual(['echo '])
+    expect(run.sentText).toBe('echo ')
+    expect(run.heldText).toBe('にほんご')
+  })
+
+  it('Given a whole line arriving at once When the step runs Then it commits instead of holding a tail', () => {
+    // Given / When: paste and dictation replace the field wholesale, so the tail
+    // is committed text rather than a reading the user is still composing.
     const step = computeTerminalLiveMirrorStep('', 'echo にほんご', { commitHeld: false })
 
     // Then
-    expect(buildTerminalLiveMirrorPayload(step)).toBe('echo ')
-    expect(step.heldText).toBe('にほんご')
+    expect(buildTerminalLiveMirrorPayload(step)).toBe('echo にほんご')
+    expect(step.heldText).toBe('')
   })
 
   it('Given a reading committed by the settle timer When the user then converts Then DEL correction repairs it', () => {
@@ -271,6 +288,48 @@ describe('terminal live composition mirror', () => {
     expect(isTerminalLiveJapanesePreeditCodePoint('語'.codePointAt(0) ?? 0)).toBe(false)
     expect(isTerminalLiveJapanesePreeditCodePoint('s'.codePointAt(0) ?? 0)).toBe(false)
     expect(isTerminalLiveJapanesePreeditCodePoint('한'.codePointAt(0) ?? 0)).toBe(false)
+  })
+
+  it('Given okurigana たべる→食べる When steps run Then the whole candidate reaches the PTY', () => {
+    // Given / When: the picked candidate keeps a kana tail, which is not a reading
+    const run = runMirrorSequence(['た', 'たべ', 'たべる', '食べる'], { commitAtEnd: true })
+
+    // Then: holding べる would strand the PTY on 食 until the next boundary
+    expect(run.payloads).toEqual(['食べる'])
+    expect(run.sentText).toBe('食べる')
+    expect(run.heldText).toBe('')
+  })
+
+  it('Given a committed candidate When more kana follow Then only the new reading is held', () => {
+    // Given: 食べる is already on the PTY
+    const committed = computeTerminalLiveMirrorStep('', '食べる', {
+      commitHeld: false,
+      previousHeldText: 'たべる'
+    })
+    expect(committed.nextSentText).toBe('食べる')
+
+    // When: the user keeps typing もの
+    const next = computeTerminalLiveMirrorStep(committed.nextSentText, '食べるもの', {
+      commitHeld: false,
+      previousHeldText: committed.heldText
+    })
+
+    // Then: べる is not re-held, so nothing is erased and replayed
+    expect(buildTerminalLiveMirrorPayload(next)).toBe('')
+    expect(next.heldText).toBe('もの')
+    expect(next.nextSentText).toBe('食べる')
+  })
+
+  it('Given a reading typed after committed kanji When the step runs Then it is still held', () => {
+    // Given / When: 日本語 committed, を is a fresh reading rather than a conversion
+    const step = computeTerminalLiveMirrorStep('日本語', '日本語を', {
+      commitHeld: false,
+      previousHeldText: ''
+    })
+
+    // Then
+    expect(buildTerminalLiveMirrorPayload(step)).toBe('')
+    expect(step.heldText).toBe('を')
   })
 
   it('Given Chinese full-width punctuation When the step runs Then it still mirrors immediately', () => {

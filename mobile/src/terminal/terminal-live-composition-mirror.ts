@@ -41,16 +41,17 @@ type HeldRun = {
 
 const NO_HELD_RUN: HeldRun = { count: 0, commitsOnPause: false }
 
+function commonPrefixLength(left: readonly string[], right: readonly string[]): number {
+  let length = 0
+  while (length < left.length && length < right.length && left[length] === right[length]) {
+    length += 1
+  }
+  return length
+}
+
 // Why: kanji is deliberately excluded — it only appears once the user has picked a
 // candidate, so holding it would delay committed text with nothing left to correct.
-function measureHeldRun(fieldCodePoints: readonly string[]): HeldRun {
-  const lastCodePoint = fieldCodePoints.at(-1)
-  if (lastCodePoint === undefined) {
-    return NO_HELD_RUN
-  }
-  if (isTerminalLiveHangulCodePoint(lastCodePoint.codePointAt(0) ?? 0)) {
-    return { count: 1, commitsOnPause: true }
-  }
+function measureTrailingReadingRun(fieldCodePoints: readonly string[]): number {
   let count = 0
   while (count < fieldCodePoints.length) {
     const candidate = fieldCodePoints[fieldCodePoints.length - 1 - count]!
@@ -59,6 +60,52 @@ function measureHeldRun(fieldCodePoints: readonly string[]): HeldRun {
     }
     count += 1
   }
+  return count
+}
+
+// Why: script alone cannot separate "picked 食べる" from "typed を after 日本語" —
+// both end in kana. The text *before* the trailing run settles it: a conversion
+// rewrites it (たべる → 食べる), continued typing leaves it untouched.
+function isConversionResult(
+  fieldCodePoints: readonly string[],
+  previousFieldCodePoints: readonly string[],
+  readingStart: number
+): boolean {
+  if (readingStart === 0) {
+    return false
+  }
+  return (
+    commonPrefixLength(fieldCodePoints.slice(0, readingStart), previousFieldCodePoints) <
+    readingStart
+  )
+}
+
+function measureHeldRun(
+  fieldCodePoints: readonly string[],
+  sentCodePoints: readonly string[],
+  previousFieldCodePoints: readonly string[]
+): HeldRun {
+  const lastCodePoint = fieldCodePoints.at(-1)
+  if (lastCodePoint === undefined) {
+    return NO_HELD_RUN
+  }
+  if (isTerminalLiveHangulCodePoint(lastCodePoint.codePointAt(0) ?? 0)) {
+    return { count: 1, commitsOnPause: true }
+  }
+
+  const readingRun = measureTrailingReadingRun(fieldCodePoints)
+  const readingStart = fieldCodePoints.length - readingRun
+  if (
+    readingRun === 0 ||
+    isConversionResult(fieldCodePoints, previousFieldCodePoints, readingStart)
+  ) {
+    return NO_HELD_RUN
+  }
+
+  // Why: never re-hold text the PTY already echoed, or continuing to type kana
+  // after a committed candidate would erase and replay it (食べる → 食べるもの).
+  const heldStart = Math.max(readingStart, commonPrefixLength(sentCodePoints, fieldCodePoints))
+  const count = fieldCodePoints.length - heldStart
   return count > 0 ? { count, commitsOnPause: false } : NO_HELD_RUN
 }
 
@@ -77,26 +124,22 @@ export type TerminalLiveMirrorStep = {
 export function computeTerminalLiveMirrorStep(
   sentText: string,
   fieldText: string,
-  options: { readonly commitHeld: boolean }
+  options: { readonly commitHeld: boolean; readonly previousHeldText?: string }
 ): TerminalLiveMirrorStep {
   const fieldCodePoints = Array.from(fieldText)
-  const held = options.commitHeld ? NO_HELD_RUN : measureHeldRun(fieldCodePoints)
+  const sentCodePoints = Array.from(sentText)
+  // Why: the field the user was last looking at, which is what a conversion rewrites.
+  const previousFieldCodePoints = Array.from(`${sentText}${options.previousHeldText ?? ''}`)
+  const held = options.commitHeld
+    ? NO_HELD_RUN
+    : measureHeldRun(fieldCodePoints, sentCodePoints, previousFieldCodePoints)
   const heldText = held.count > 0 ? fieldCodePoints.slice(-held.count).join('') : ''
   const targetCodePoints = held.count > 0 ? fieldCodePoints.slice(0, -held.count) : fieldCodePoints
-  const sentCodePoints = Array.from(sentText)
-
-  let commonPrefixLength = 0
-  while (
-    commonPrefixLength < sentCodePoints.length &&
-    commonPrefixLength < targetCodePoints.length &&
-    sentCodePoints[commonPrefixLength] === targetCodePoints[commonPrefixLength]
-  ) {
-    commonPrefixLength += 1
-  }
+  const sharedPrefix = commonPrefixLength(sentCodePoints, targetCodePoints)
 
   return {
-    eraseCount: sentCodePoints.length - commonPrefixLength,
-    appendText: targetCodePoints.slice(commonPrefixLength).join(''),
+    eraseCount: sentCodePoints.length - sharedPrefix,
+    appendText: targetCodePoints.slice(sharedPrefix).join(''),
     nextSentText: targetCodePoints.join(''),
     heldText,
     heldCommitsOnPause: held.commitsOnPause

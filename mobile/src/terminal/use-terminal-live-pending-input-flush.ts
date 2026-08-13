@@ -96,7 +96,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       }
 
       const step = computeTerminalLiveMirrorStep(sentLiveInputTextRef.current, fieldText, {
-        commitHeld
+        commitHeld,
+        previousHeldText: heldLiveInputTextRef.current
       })
       sentLiveInputTextRef.current = step.nextSentText
       heldLiveInputTextRef.current = step.heldText

@@ -43,6 +43,15 @@ function stopTerminalStreamInterval(stream: TerminalStream): void {
   }
 }
 
+// Why: the runtime counts UTF-8 bytes of the whole payload it writes, suffixes
+// included, so a mock that reports UTF-16 units of `text` misreports every CJK
+// send and every Enter.
+function mockTerminalSendBytesWritten(params: Record<string, unknown> | undefined): number {
+  const text = typeof params?.text === 'string' ? params.text : ''
+  const payload = `${text}${params?.enter ? '\r' : ''}${params?.interrupt ? '\x03' : ''}`
+  return Buffer.byteLength(payload, 'utf8')
+}
+
 /** Terminal list/stream/input backend for the mock server. Returns false for
  *  methods it does not own. */
 export function handleMockTerminalRequest(
@@ -125,7 +134,7 @@ export function handleMockTerminalRequest(
           send: {
             handle: 'term-1',
             accepted: true,
-            bytesWritten: String(request.params?.text ?? '').length
+            bytesWritten: mockTerminalSendBytesWritten(request.params)
           }
         })
       )
