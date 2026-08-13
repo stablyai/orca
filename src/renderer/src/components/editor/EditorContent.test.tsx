@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
@@ -10,6 +11,7 @@ vi.mock('@/lib/lazy-with-retry', () => ({
 }))
 
 import { EditorContent, getMarkdownSourceLineOffset } from './EditorContent'
+import { SPREADSHEET_FILE_MIME_TYPES } from '../../../../shared/spreadsheet-file-extensions'
 
 function createOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
   return {
@@ -215,5 +217,92 @@ describe('EditorContent', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain('changed on disk')
     expect(html).toContain('Previewing the modified version of this diff')
+  })
+  it('routes a workbook to the spreadsheet viewer instead of the binary placeholder', () => {
+    const activeFile = createOpenFile({
+      id: '/repo/report.xlsx',
+      filePath: '/repo/report.xlsx',
+      relativePath: 'report.xlsx',
+      language: 'plaintext'
+    })
+    const html = renderToStaticMarkup(
+      <Suspense fallback={null}>
+        <EditorContent
+          activeFile={activeFile}
+          viewStateScopeId={activeFile.id}
+          fileContents={{
+            [activeFile.id]: {
+              content: '',
+              isBinary: true,
+              // Why: the read path marks every previewable binary as an image, so
+              // the workbook branch has to win on mime type alone.
+              isImage: true,
+              mimeType: SPREADSHEET_FILE_MIME_TYPES['.xlsx']
+            }
+          }}
+          diffContents={{}}
+          editBuffers={{}}
+          openFiles={[activeFile]}
+          worktreeEntries={[]}
+          resolvedLanguage="plaintext"
+          isMarkdown={false}
+          isMermaid={false}
+          isCsv={false}
+          isNotebook={false}
+          mdViewMode="rich"
+          isChangesMode={false}
+          sideBySide={false}
+          pendingEditorReveal={null}
+          handleContentChange={vi.fn()}
+          handleContentChangeForFile={vi.fn()}
+          handleDirtyStateHint={vi.fn()}
+          handleSave={vi.fn()}
+          handleSaveForFile={vi.fn()}
+          reloadContent={vi.fn()}
+        />
+      </Suspense>
+    )
+
+    // Why: the workbook viewer is code-split, so a synchronous static render
+    // suspends and emits nothing. What matters is that the branch no longer
+    // falls through to the "cannot display" placeholder.
+    expect(html).toBe('')
+  })
+
+  it('still shows the binary placeholder for a binary it cannot preview', () => {
+    const activeFile = createOpenFile({
+      id: '/repo/app.bin',
+      filePath: '/repo/app.bin',
+      relativePath: 'app.bin',
+      language: 'plaintext'
+    })
+    const html = renderToStaticMarkup(
+      <EditorContent
+        activeFile={activeFile}
+        viewStateScopeId={activeFile.id}
+        fileContents={{ [activeFile.id]: { content: '', isBinary: true } }}
+        diffContents={{}}
+        editBuffers={{}}
+        openFiles={[activeFile]}
+        worktreeEntries={[]}
+        resolvedLanguage="plaintext"
+        isMarkdown={false}
+        isMermaid={false}
+        isCsv={false}
+        isNotebook={false}
+        mdViewMode="rich"
+        isChangesMode={false}
+        sideBySide={false}
+        pendingEditorReveal={null}
+        handleContentChange={vi.fn()}
+        handleContentChangeForFile={vi.fn()}
+        handleDirtyStateHint={vi.fn()}
+        handleSave={vi.fn()}
+        handleSaveForFile={vi.fn()}
+        reloadContent={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Binary file')
   })
 })

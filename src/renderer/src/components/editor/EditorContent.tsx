@@ -26,6 +26,7 @@ import {
   getGitConflictMarkerLineLength
 } from './monaco-conflict-decorations'
 import { getDiffContentSignature } from './diff-content-signature'
+import { getBinaryFilePreviewKind } from './binary-file-preview-kind'
 import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
@@ -42,6 +43,7 @@ const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
+const XlsxViewer = lazy(() => import('./XlsxViewer'))
 
 // Why: module-level for a stable no-op identity so read-only tabs don't rebuild callbacks each render.
 const noopEditorContentChange = (_content: string): void => {}
@@ -498,7 +500,15 @@ export function EditorContent({
       )
     }
     if (fc.isBinary) {
-      if (fc.isImage) {
+      const previewKind = getBinaryFilePreviewKind(fc)
+      if (previewKind === 'spreadsheet') {
+        return (
+          <div className={className}>
+            <XlsxViewer key={contentFile.id} content={fc.content} filePath={contentFile.filePath} />
+          </div>
+        )
+      }
+      if (previewKind === 'image') {
         return (
           <div className={className}>
             <ImageViewer
@@ -744,7 +754,13 @@ export function EditorContent({
       return <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(activeFile)} />
     }
     if (fc.isBinary) {
-      if (fc.isImage) {
+      const previewKind = getBinaryFilePreviewKind(fc)
+      if (previewKind === 'spreadsheet') {
+        return (
+          <XlsxViewer key={activeFile.id} content={fc.content} filePath={activeFile.filePath} />
+        )
+      }
+      if (previewKind === 'image') {
         return (
           <ImageViewer
             content={fc.content}

@@ -15,6 +15,7 @@ import {
   SEARCH_TIMEOUT_MS as SHARED_SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
 import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
+import { SPREADSHEET_FILE_MIME_TYPES } from '../shared/spreadsheet-file-extensions'
 import type { SearchResult as SharedSearchResult } from '../shared/types'
 import {
   absorbPendingRipgrepSpawnError,
@@ -41,6 +42,14 @@ export const DEFAULT_MAX_RESULTS = 2000
 export const IMAGE_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
   '.pdf': 'application/pdf'
+}
+
+// Why: every binary the editor can preview. Kept separate from IMAGE_MIME_TYPES
+// because terminal artifact previews only accept image-shaped payloads — a
+// workbook has to reach the editor's own viewer, not an <img>.
+export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
+  ...IMAGE_MIME_TYPES,
+  ...SPREADSHEET_FILE_MIME_TYPES
 }
 
 // ─── Binary detection ────────────────────────────────────────────────

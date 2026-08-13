@@ -452,6 +452,15 @@
               "refreshCliRegistration": "Refresh CLI registration status and try again."
             }
           }
+        },
+        "background": {
+          "session": {
+            "test": {
+              "state": {
+                "d9fa6e0979": "Terminal 1"
+              }
+            }
+          }
         }
       },
       "remotePairingCopy": {
@@ -8196,7 +8205,12 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "3a0e3a9fdc": "Idioma",
+            "5f4779d525": "言語",
+            "0b03f507c2": "언어",
+            "ab96f8a4b9": "語言",
+            "b6035a3def": "语言"
           }
         },
         "auto": {
@@ -9500,6 +9514,22 @@
               "7c7056940a": "shell",
               "713c4a2f92": "Choose the default shell for new terminal panes on Windows.",
               "13715f9d23": "Default Shell"
+            }
+          },
+          "advanced": {
+            "platform": {
+              "search": {
+                "7d383cc610": "ghostty",
+                "77faf8be39": "Ghostty"
+              }
+            }
+          },
+          "pane": {
+            "appearance": {
+              "search": {
+                "1f4decdd74": "ghostty",
+                "e0cc1b7b47": "Ghostty"
+              }
             }
           }
         },
@@ -13915,6 +13945,20 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "XlsxViewer": {
+          "4688c4c466": "Loading workbook...",
+          "16c54c41e5": "Unable to render workbook",
+          "2952ec35f8": "Empty sheet",
+          "aaf26ba2b6": "{{name}} (hidden)",
+          "cb88b1b447": "{{rowCount}} rows",
+          "2ce5b9eecb": "{{columnCount}} columns",
+          "2c8df21237": "truncated at {{limit}} rows"
+        },
+        "SpreadsheetChart": {
+          "3a8a24e9d0": "Chart",
+          "bc7b6e940e": "This chart type is not rendered",
+          "255f7ec4a9": "Too small to plot at this zoom"
         }
       },
       "diff": {

@@ -1,0 +1,369 @@
+import { describe, expect, it } from 'vitest'
+import { MAX_XLSX_SHEET_ROWS, parseXlsxWorkbook } from './xlsx-workbook'
+import { buildXlsxWorkbook, buildZipArchive } from './xlsx-workbook-test-fixtures'
+
+const DATE_STYLES_XML =
+  '<styleSheet><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="164"/></cellXfs></styleSheet>'
+
+describe('parseXlsxWorkbook', () => {
+  it('reads a workbook end to end from real zipped bytes', async () => {
+    const bytes = buildXlsxWorkbook({
+      sharedStrings: ['Region', 'Revenue', 'North'],
+      sheets: [
+        {
+          name: 'Summary',
+          sheetXml: `
+            <row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>
+            <row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>1250.5</v></c></row>
+          `
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets).toHaveLength(1)
+    expect(workbook.sheets[0]).toMatchObject({
+      name: 'Summary',
+      hidden: false,
+      maxColumns: 2,
+      truncated: false,
+      rows: [
+        ['Region', 'Revenue'],
+        ['North', '1250.5']
+      ]
+    })
+  })
+
+  it('keeps worksheets in workbook order and flags hidden ones', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [
+        { name: 'First', sheetXml: '<row r="1"><c r="A1"><v>1</v></c></row>' },
+        { name: 'Secret', sheetXml: '<row r="1"><c r="A1"><v>2</v></c></row>', hidden: true },
+        { name: 'Third', sheetXml: '<row r="1"><c r="A1"><v>3</v></c></row>' }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets.map((sheet) => [sheet.name, sheet.hidden, sheet.rows[0]?.[0]])).toEqual([
+      ['First', false, '1'],
+      ['Secret', true, '2'],
+      ['Third', false, '3']
+    ])
+  })
+
+  it('applies styles.xml date formats to the sheet values', async () => {
+    const bytes = buildXlsxWorkbook({
+      stylesXml: DATE_STYLES_XML,
+      sheets: [
+        {
+          name: 'Dates',
+          sheetXml:
+            '<row r="1"><c r="A1" s="1"><v>45658</v></c><c r="B1" s="0"><v>45658</v></c></row>'
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.rows).toEqual([['2025-01-01', '45658']])
+  })
+
+  it('reads dates in the 1904 system when the workbook declares it', async () => {
+    const bytes = buildXlsxWorkbook({
+      stylesXml: DATE_STYLES_XML,
+      use1904DateSystem: true,
+      sheets: [{ name: 'Dates', sheetXml: '<row r="1"><c r="A1" s="1"><v>44196</v></c></row>' }]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.rows).toEqual([['2025-01-01']])
+  })
+
+  it('falls back to the conventional worksheet path when the rels part is missing', async () => {
+    const bytes = buildXlsxWorkbook({
+      omitWorkbookRels: true,
+      sheets: [
+        { name: 'One', sheetXml: '<row r="1"><c r="A1"><v>1</v></c></row>' },
+        { name: 'Two', sheetXml: '<row r="1"><c r="A1"><v>2</v></c></row>' }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets.map((sheet) => sheet.rows[0]?.[0])).toEqual(['1', '2'])
+  })
+
+  it('follows the worksheet relationship rather than the sheet ordinal', async () => {
+    // Why: r:id order does not have to match file numbering. Guessing from the
+    // ordinal would silently show the wrong sheet's data under a tab's name.
+    const bytes = buildZipArchive([
+      {
+        name: '_rels/.rels',
+        content:
+          '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'
+      },
+      {
+        name: 'xl/workbook.xml',
+        content:
+          '<workbook><sheets><sheet name="Only" sheetId="1" r:id="rId7"/></sheets></workbook>'
+      },
+      {
+        name: 'xl/_rels/workbook.xml.rels',
+        content:
+          '<Relationships><Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/renamed.xml"/></Relationships>'
+      },
+      {
+        name: 'xl/worksheets/renamed.xml',
+        content:
+          '<worksheet><sheetData><row r="1"><c r="A1" t="str"><v>right</v></c></row></sheetData></worksheet>'
+      },
+      {
+        name: 'xl/worksheets/sheet1.xml',
+        content:
+          '<worksheet><sheetData><row r="1"><c r="A1" t="str"><v>wrong</v></c></row></sheetData></worksheet>'
+      }
+    ])
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.rows).toEqual([['right']])
+  })
+
+  it('locates the workbook part through the package relationships', async () => {
+    const bytes = buildZipArchive([
+      {
+        name: '_rels/.rels',
+        content:
+          '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="/spreadsheet/book.xml"/></Relationships>'
+      },
+      {
+        name: 'spreadsheet/book.xml',
+        content:
+          '<workbook><sheets><sheet name="Elsewhere" sheetId="1" r:id="rId1"/></sheets></workbook>'
+      },
+      {
+        name: 'spreadsheet/_rels/book.xml.rels',
+        content:
+          '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="sheets/one.xml"/></Relationships>'
+      },
+      {
+        name: 'spreadsheet/sheets/one.xml',
+        content:
+          '<worksheet><sheetData><row r="1"><c r="A1" t="str"><v>found</v></c></row></sheetData></worksheet>'
+      }
+    ])
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]).toMatchObject({ name: 'Elsewhere', rows: [['found']] })
+  })
+
+  it('reads cell fills, font colours and bold from styles and theme', async () => {
+    const bytes = buildXlsxWorkbook({
+      stylesXml: `<styleSheet>
+        <fonts count="2"><font><color theme="1"/></font><font><b/><color rgb="FFFFFFFF"/></font></fonts>
+        <fills count="3">
+          <fill><patternFill patternType="none"/></fill>
+          <fill><patternFill patternType="solid"><fgColor theme="4"/></patternFill></fill>
+          <fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/></patternFill></fill>
+        </fills>
+        <cellXfs count="3"><xf fontId="0" fillId="0"/><xf fontId="1" fillId="1"/><xf fontId="0" fillId="2"/></cellXfs>
+      </styleSheet>`,
+      themeXml:
+        '<a:clrScheme><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1></a:clrScheme>',
+      sheets: [
+        {
+          name: 'Styled',
+          sheetXml:
+            '<row r="1"><c r="A1" s="1" t="str"><v>Header</v></c><c r="B1" s="2" t="str"><v>Input</v></c><c r="C1" s="0" t="str"><v>Plain</v></c></row>'
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.styles[0]).toEqual([
+      { backgroundColor: '#4472c4', textColor: '#ffffff', bold: true },
+      { backgroundColor: '#ffff00', textColor: '#000000' },
+      undefined
+    ])
+  })
+
+  it('reads column widths and merged ranges off the worksheet', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [
+        {
+          name: 'Layout',
+          layoutXml:
+            '<cols><col min="2" max="2" width="40" customWidth="1"/></cols><mergeCells count="1"><mergeCell ref="B2:G5"/></mergeCells>',
+          sheetXml: '<row r="2"><c r="B2" t="str"><v>banner</v></c></row>'
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.columnWidths[1]).toBe(285)
+    expect(workbook.sheets[0]?.mergedRanges).toEqual([
+      { rowIndex: 1, columnIndex: 1, rowSpan: 4, columnSpan: 6 }
+    ])
+  })
+
+  it('leaves styles empty for a workbook with no visual styling', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [{ name: 'Plain', sheetXml: '<row r="1"><c r="A1"><v>1</v></c></row>' }]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.styles).toEqual([])
+  })
+
+  it('resolves sharedStrings and styles through their relationship types', async () => {
+    // Why: a producer may name these parts anything. Assuming the conventional
+    // file name would silently lose every string and every date format.
+    const bytes = buildZipArchive([
+      {
+        name: 'xl/workbook.xml',
+        content: '<workbook><sheets><sheet name="One" sheetId="1" r:id="rId1"/></sheets></workbook>'
+      },
+      {
+        name: 'xl/_rels/workbook.xml.rels',
+        content: `<Relationships>
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/one.xml"/>
+          <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="strings.xml"/>
+          <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="formats.xml"/>
+        </Relationships>`
+      },
+      {
+        name: 'xl/worksheets/one.xml',
+        content:
+          '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" s="1"><v>45658</v></c></row></sheetData></worksheet>'
+      },
+      { name: 'xl/strings.xml', content: '<sst><si><t>Renamed</t></si></sst>' },
+      { name: 'xl/formats.xml', content: DATE_STYLES_XML }
+    ])
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.rows).toEqual([['Renamed', '2025-01-01']])
+  })
+
+  it('ignores an external relationship target', async () => {
+    // Why: an external target is a URI, not a part name, so it must not be
+    // resolved as a package path or reused for the sheet it shares an id with.
+    const bytes = buildZipArchive([
+      {
+        name: 'xl/workbook.xml',
+        content: '<workbook><sheets><sheet name="One" sheetId="1" r:id="rId1"/></sheets></workbook>'
+      },
+      {
+        name: 'xl/_rels/workbook.xml.rels',
+        content: `<Relationships>
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink" Target="https://host/other.xlsx" TargetMode="External"/>
+        </Relationships>`
+      },
+      {
+        name: 'xl/worksheets/sheet1.xml',
+        content:
+          '<worksheet><sheetData><row r="1"><c r="A1" t="str"><v>local</v></c></row></sheetData></worksheet>'
+      }
+    ])
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.rows).toEqual([['local']])
+  })
+
+  it('renders a sheet whose worksheet part is missing as empty rather than failing', async () => {
+    const bytes = buildZipArchive([
+      {
+        name: 'xl/workbook.xml',
+        content:
+          '<workbook><sheets><sheet name="Gone" sheetId="1" r:id="rId1"/></sheets></workbook>'
+      }
+    ])
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]).toMatchObject({ name: 'Gone', rows: [], maxColumns: 0 })
+  })
+
+  it('reports a row cap hit on the sheet that hit it', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [
+        {
+          name: 'Huge',
+          sheetXml: `<row r="1"><c r="A1"><v>1</v></c></row><row r="${MAX_XLSX_SHEET_ROWS + 1}"><c r="A${MAX_XLSX_SHEET_ROWS + 1}"><v>2</v></c></row>`
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.truncated).toBe(true)
+    expect(workbook.sheets[0]?.rows).toHaveLength(1)
+  })
+
+  it('resolves in-cell sparklines an export left as formula text', async () => {
+    // Why: these are the formulas a Google Sheets export actually writes — the
+    // SPARKLINE is wrapped in DUMMYFUNCTION with its quotes doubled, and the
+    // cached value is empty, so the chart exists only as text.
+    const columnFormula =
+      'IFERROR(__xludf.DUMMYFUNCTION("SPARKLINE(D17,{""charttype"",""column"";""ymin"", 0; ""ymax"",MAX(D17:E17);""firstcolor"",""#334960""})"),"")'
+    const bytes = buildXlsxWorkbook({
+      sheets: [
+        {
+          name: 'Panel',
+          sheetXml: `
+            <row r="12"><c r="D12" s="0" t="str"><f>${columnFormula.replaceAll('"', '&quot;')}</f><v></v></c></row>
+            <row r="17"><c r="D17"><v>1000</v></c><c r="E17"><v>1500</v></c></row>
+          `
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.sparklines[11]?.[3]).toEqual({
+      chartType: 'column',
+      values: [1000],
+      min: 0,
+      max: 1500,
+      color: '#334960',
+      firstColor: '#334960',
+      negativeColor: '#c0504d'
+    })
+  })
+
+  it('leaves sparklines empty for a sheet that has none', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [{ name: 'Plain', sheetXml: '<row r="1"><c r="A1"><v>1</v></c></row>' }]
+    })
+
+    expect((await parseXlsxWorkbook(bytes)).sheets[0]?.sparklines).toEqual([])
+  })
+
+  it('rejects a package with no workbook part', async () => {
+    const bytes = buildZipArchive([{ name: '[Content_Types].xml', content: '<Types/>' }])
+
+    await expect(parseXlsxWorkbook(bytes)).rejects.toThrow(/xl\/workbook\.xml is missing/)
+  })
+
+  it('rejects a workbook that declares no worksheets', async () => {
+    const bytes = buildZipArchive([
+      { name: 'xl/workbook.xml', content: '<workbook><sheets/></workbook>' }
+    ])
+
+    await expect(parseXlsxWorkbook(bytes)).rejects.toThrow(/declares no worksheets/)
+  })
+
+  it('rejects bytes that are not a zip container', async () => {
+    await expect(parseXlsxWorkbook(new TextEncoder().encode('id,name\n1,a\n'))).rejects.toThrow(
+      /end-of-central-directory record is missing/
+    )
+  })
+})
