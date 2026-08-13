@@ -8,9 +8,10 @@ import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { launchWorktreeBackgroundTerminals } from '@/lib/launch-worktree-background-terminals'
 import { useAppStore } from '@/store'
-import type {
-  AutomationDispatchResult,
-  AutomationPrecheckResult
+import {
+  AUTOMATION_MISSING_AGENT_MESSAGE,
+  type AutomationDispatchResult,
+  type AutomationPrecheckResult
 } from '../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
 import {
@@ -31,6 +32,7 @@ import {
   toSshExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import type { AgentStateHistoryEntry } from '../../../shared/agent-status-types'
 
@@ -123,6 +125,21 @@ export function useAutomationDispatchEvents(): void {
           const ownership = terminalOwnership
           terminalOwnership = null
           return ownership?.finalize() ?? false
+        }
+
+        const agentId = automation.agentId
+        if (!isTuiAgent(agentId)) {
+          // Why: the host already skips agentless runs; this covers an older host
+          // dispatching an automation whose agent is missing or retired — bail out
+          // before any workspace is created for a launch that cannot succeed.
+          await markDispatchResult({
+            runId: run.id,
+            status: 'skipped_unavailable',
+            workspaceId: run.workspaceId,
+            workspaceDisplayName: run.workspaceDisplayName ?? null,
+            error: AUTOMATION_MISSING_AGENT_MESSAGE
+          })
+          return
         }
 
         if (!repo) {
@@ -499,7 +516,7 @@ export function useAutomationDispatchEvents(): void {
           if (automation.reuseSession) {
             const reusableSession = findReusableAutomationSession({
               automationId: automation.id,
-              agentId: automation.agentId,
+              agentId,
               worktreeId: worktree.id,
               currentRunId: run.id,
               runs: await window.api.automations.listRuns({ automationId: automation.id }),
@@ -582,7 +599,7 @@ export function useAutomationDispatchEvents(): void {
             }
           }
           const result = await launchAgentBackgroundSession({
-            agent: automation.agentId,
+            agent: agentId,
             worktreeId: worktree.id,
             prompt: automation.prompt,
             launchSource: 'unknown',

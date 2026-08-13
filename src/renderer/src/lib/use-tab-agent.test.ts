@@ -115,17 +115,7 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('openclaude')
   })
 
-  it('keeps title fallback for real Gemini, MiMo, and Pi titles', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: false,
-        isRemote: false,
-        title: '✦ Gemini CLI',
-        hookAgent: null,
-        launchAgent: undefined
-      })
-    ).toBe('gemini')
-
+  it('keeps title fallback for real MiMo and Pi titles', () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: false,
@@ -327,7 +317,7 @@ describe('resolveTabAgentFromSignals', () => {
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
         isRemote: false,
-        title: '✳ Gemini CLI',
+        title: '✳ Aider',
         hookAgent: 'claude',
         launchAgent: 'claude'
       })
@@ -339,9 +329,9 @@ describe('resolveTabAgentFromSignals', () => {
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
         isRemote: false,
-        title: '✦ Gemini CLI',
+        title: '⠋ Aider',
         hookAgent: 'claude',
-        launchAgent: 'gemini'
+        launchAgent: 'aider'
       })
     ).toBe('claude')
   })
@@ -353,7 +343,7 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: 'Terminal 1',
         hookAgent: 'claude',
-        siblingHookAgent: 'gemini',
+        siblingHookAgent: 'aider',
         launchAgent: 'codex'
       })
     ).toBe('claude')
@@ -390,11 +380,11 @@ describe('resolveTabAgentFromSignals', () => {
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: false,
         isRemote: false,
-        title: '✳ Gemini CLI',
+        title: '✳ Aider',
         hookAgent: null,
-        launchAgent: 'gemini'
+        launchAgent: 'aider'
       })
-    ).toBe('gemini')
+    ).toBe('aider')
   })
 
   it('keeps launch identity over Claude-owned punctuation-prefixed task text', () => {
@@ -462,7 +452,7 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: 'zsh',
         hookAgent: null,
-        siblingHookAgent: 'gemini',
+        siblingHookAgent: 'aider',
         launchAgent: 'claude'
       })
     ).toBe('claude')
@@ -815,14 +805,14 @@ describe('useTabAgent', () => {
   })
 
   it('clears hookless launch identity once its own title evidence ends at a shell', async () => {
-    const geminiTab = { ...baseTab, launchAgent: 'gemini' as const, title: '✦ Gemini CLI' }
+    const aiderTab = { ...baseTab, launchAgent: 'aider' as const, title: '⠋ Aider' }
 
     // Why: agents without hook integration prove activity via a title naming
     // the launched agent; the later shell title is then exit evidence.
-    const root = await renderHookProbe(geminiTab)
+    const root = await renderHookProbe(aiderTab)
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
 
-    await rerenderHookProbe(root, { ...geminiTab, title: 'zsh' })
+    await rerenderHookProbe(root, { ...aiderTab, title: 'zsh' })
 
     expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
   })

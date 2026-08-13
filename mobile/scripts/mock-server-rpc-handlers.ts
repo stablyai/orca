@@ -223,7 +223,7 @@ export function handleRequest(
 
     case 'preflight.detectAgents':
     case 'preflight.detectRemoteAgents':
-      respond(success(request.id, ['claude', 'codex', 'gemini']))
+      respond(success(request.id, ['claude', 'codex', 'cursor']))
       break
 
     case 'ssh.getState':

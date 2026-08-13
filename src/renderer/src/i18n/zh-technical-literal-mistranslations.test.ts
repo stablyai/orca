@@ -71,7 +71,6 @@ describe('zh provider usage wording (#12881)', () => {
       // status bar item menu
       ['3885eb74d8', 'Claude'],
       ['c0909c686e', 'Codex'],
-      ['c1df0d67ec', 'Gemini'],
       ['antigravityUsage', 'Antigravity'],
       ['8c86cd77b0', 'OpenCode Go'],
       ['5e59007df4', 'Kimi'],
@@ -80,7 +79,6 @@ describe('zh provider usage wording (#12881)', () => {
       // Settings > Appearance search index — mirrors the menu labels
       ['9dc15020d7', 'Claude'],
       ['54b1acf24f', 'Codex'],
-      ['5bfb874d05', 'Gemini'],
       ['antigravityUsageTitle', 'Antigravity'],
       ['bc046e7899', 'OpenCode Go'],
       ['3a6c028ea8', 'Kimi'],
@@ -116,7 +114,6 @@ describe('zh provider usage wording (#12881)', () => {
     for (const [key, brand] of [
       ['fda8146810', 'Kimi'],
       ['629251f4b6', 'OpenCode Go'],
-      ['d2375976eb', 'Gemini'],
       ['06741a2f3d', 'MiniMax'],
       ['antigravityUsageDetails', 'Antigravity'],
       ['grokUsageAria', 'Grok']

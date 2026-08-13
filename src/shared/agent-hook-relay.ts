@@ -37,7 +37,6 @@ import type { AgentHookTarget } from './agent-hook-types'
 const AGENT_HOOK_SOURCES = [
   'claude',
   'codex',
-  'gemini',
   'antigravity',
   'amp',
   'opencode',

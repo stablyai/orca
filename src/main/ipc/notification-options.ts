@@ -8,7 +8,6 @@ const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
   claude: 'Claude',
   openclaude: 'OpenClaude',
   codex: 'Codex',
-  gemini: 'Gemini',
   antigravity: 'Antigravity',
   opencode: 'OpenCode',
   cursor: 'Cursor',

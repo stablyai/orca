@@ -5,7 +5,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 
 // Why: a brand-new user has no configured provider, so the bottom-left would
@@ -101,7 +101,6 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
             </span>
             <ClaudeIcon size={13} />
             <OpenAIIcon size={13} />
-            <GeminiIcon size={13} />
             <OpenCodeGoIcon size={13} />
             <AgentIcon agent="kimi" size={13} />
           </div>

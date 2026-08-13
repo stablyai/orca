@@ -12,7 +12,6 @@ const AGENT_NAME_GROUPS = [
   'codex',
   'opencode',
   'mimo',
-  'gemini',
   'droid',
   'grok',
   'cursor'

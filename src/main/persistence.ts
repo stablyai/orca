@@ -163,6 +163,7 @@ import {
   setMigrationUnsupportedPtyPersistenceListener
 } from './agent-hooks/migration-unsupported-pty-state'
 import { agentHookServer } from './agent-hooks/server'
+import { cleanRetiredAgentReferences } from './retired-agent-settings-cleanup'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import {
   backfillAutomationRunNumbers,
@@ -3232,6 +3233,11 @@ export class Store {
           })
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
 
+        // Why: must run before the defaults merge so no migration below reads a retired agent id.
+        if (cleanRetiredAgentReferences(parsed)) {
+          this.loadNeedsSave = true
+        }
+
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
@@ -5383,9 +5389,14 @@ export class Store {
     const dtstart = updates.dtstart ?? current.dtstart
     const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
     const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+    const agentId = updates.agentId ?? current.agentId
     const updated: Automation = {
       ...current,
       ...updates,
+      agentId,
+      // Why: an automation whose agent was retired has no agent to dispatch to,
+      // so it stays paused until the user picks a new one.
+      enabled: agentId !== null && (updates.enabled ?? current.enabled),
       name:
         updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
       precheck: Object.hasOwn(updates, 'precheck')

@@ -70,37 +70,6 @@ describe('agent interrupt inference', () => {
     }
   )
 
-  it.each([
-    ['plain-escape', 'gemini'],
-    ['ctrl-c', 'gemini']
-  ] as const)(
-    'emits a strict baseline request for %s from Gemini immediately',
-    (intent, agentType) => {
-      vi.useFakeTimers()
-      let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
-      const inferInterrupt = vi.fn()
-      const tracker = createAgentInterruptInference({
-        paneKey: PANE_KEY,
-        getStatusEntry: () => entry,
-        inferInterrupt,
-        now: () => 1_100
-      })
-
-      tracker.observeInputIntent(intent)
-
-      expect(inferInterrupt).toHaveBeenCalledWith({
-        paneKey: PANE_KEY,
-        baselineUpdatedAt: 1_000,
-        baselineStateStartedAt: 900,
-        baselinePrompt: 'write tests',
-        baselineAgentType: agentType,
-        intent
-      })
-      tracker.dispose()
-      entry = undefined
-    }
-  )
-
   it('reports Escape while Claude is waiting on AskUserQuestion', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()

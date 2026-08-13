@@ -748,7 +748,7 @@ describe('buildWindowsAgentHookPostCommand', () => {
   })
 
   it('does not resolve curl from the current directory or PATH', () => {
-    const command = buildWindowsAgentHookPostCommand('gemini')
+    const command = buildWindowsAgentHookPostCommand('claude')
 
     expect(command).toMatch(/^"%SystemRoot%\\System32\\curl\.exe"/)
     expect(command).not.toMatch(/^curl\.exe\b/)

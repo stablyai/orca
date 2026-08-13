@@ -41,7 +41,6 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
   it('maps explicit product-name titles to their TuiAgent id', () => {
     expect(resolveExplicitTerminalTitleAgentType('✳ Claude Code')).toBe('claude')
     expect(resolveExplicitTerminalTitleAgentType('⠋ Codex')).toBe('codex')
-    expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
     expect(resolveExplicitTerminalTitleAgentType('MiMo Code')).toBe('mimo-code')
     expect(resolveExplicitTerminalTitleAgentType('⠋ OpenClaude')).toBe('openclaude')
     expect(resolveExplicitTerminalTitleAgentType('OMP')).toBe('omp')
@@ -59,10 +58,10 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
       'opencode'
     )
     expect(resolveExplicitTerminalTitleAgentType('OC | Compare Codex and Claude')).toBe('opencode')
-    // Why: Gemini glyphs inside OpenCode session text must not rebrand the tab.
-    expect(resolveExplicitTerminalTitleAgentType('OC | ✦ Gemini CLI')).toBe('opencode')
+    // Why: another agent's name inside OpenCode session text must not rebrand the tab.
+    expect(resolveExplicitTerminalTitleAgentType('OC | ⠋ Aider')).toBe('opencode')
     expect(getSharedAgentLabel('OC | Compare Codex and Claude')).toBe('OpenCode')
-    expect(getSharedAgentLabel('OC | ✦ Gemini CLI')).toBe('OpenCode')
+    expect(getSharedAgentLabel('OC | ⠋ Aider')).toBe('OpenCode')
     expect(resolveExplicitTerminalTitleAgentType('tmux | OC | ses_123')).toBe('opencode')
     expect(resolveExplicitTerminalTitleAgentType('OC|compact-session')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('oc | Understand about the plugin')).toBeNull()
@@ -74,11 +73,10 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
   })
 
   // Why: adversarial coverage — native OC must not steal Claude/Codex/Cursor/
-  // Gemini/Pi identity, and those agents must keep resolving when titled normally.
+  // Pi identity, and those agents must keep resolving when titled normally.
   it('keeps other agents classified correctly alongside OpenCode native titles', () => {
     expect(resolveExplicitTerminalTitleAgentType('✳ Claude Code')).toBe('claude')
     expect(resolveExplicitTerminalTitleAgentType('⠋ Codex')).toBe('codex')
-    expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
     expect(resolveExplicitTerminalTitleAgentType('Cursor Agent')).toBe('cursor')
     expect(resolveExplicitTerminalTitleAgentType('Pi ready')).toBe('pi')
     expect(resolveExplicitTerminalTitleAgentType('OpenCode ready')).toBe('opencode')

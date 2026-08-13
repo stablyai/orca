@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -19,6 +20,7 @@ import type {
   AutomationRun,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
+import { AUTOMATION_MISSING_AGENT_MESSAGE } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import {
   getLocalExecutionHostLabel,
@@ -91,7 +93,8 @@ import {
   buildHermesCronSchedule,
   formatTimeInput,
   getDefaultWorktree,
-  parseDraftTime
+  parseDraftTime,
+  resolveDraftAgentId
 } from './automation-draft-model'
 import {
   getRepoBackedAutomationSourceContext,
@@ -1122,7 +1125,9 @@ export default function AutomationsPage(): React.JSX.Element {
     const nextDraft: AutomationDraft = {
       name: latest.name,
       prompt: latest.prompt,
-      agentId: latest.agentId,
+      // Preselect the default agent when this one was cleared or is retired —
+      // a ghost id from a mixed-version host would fail the refine on save.
+      agentId: resolveDraftAgentId(latest.agentId, defaultAgent),
       projectId: getAutomationRunRepoId(latest),
       workspaceMode: latest.workspaceMode,
       workspaceId: latest.workspaceId ?? '',
@@ -1513,6 +1518,12 @@ export default function AutomationsPage(): React.JSX.Element {
   }
 
   const toggleAutomation = async (automation: Automation): Promise<void> => {
+    // Why: resuming without a current agent (cleared or retired) would only
+    // schedule runs that fail at dispatch.
+    if (!automation.enabled && !isTuiAgent(automation.agentId)) {
+      toast.error(AUTOMATION_MISSING_AGENT_MESSAGE)
+      return
+    }
     await updateAutomationForTarget(
       automation,
       { enabled: !automation.enabled },

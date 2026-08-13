@@ -72,7 +72,7 @@ describe('native chat session option enrichment', () => {
 
   it('does not probe agents whose catalogs have no discovery command', () => {
     const discover = vi.fn()
-    ensureNativeChatModelEnrichment({ agent: 'gemini', hostKey: 'local', discover })
+    ensureNativeChatModelEnrichment({ agent: 'aider', hostKey: 'local', discover })
     expect(discover).not.toHaveBeenCalled()
   })
 

@@ -11,7 +11,6 @@ import { CodexHookService, codexHookService } from '../codex/hook-service'
 import { DroidHookService, droidHookService } from '../droid/hook-service'
 import { CursorHookService, cursorHookService } from '../cursor/hook-service'
 import { CommandCodeHookService, commandCodeHookService } from '../command-code/hook-service'
-import { GeminiHookService, geminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService, antigravityHookService } from '../antigravity/hook-service'
 import { AmpHookService, ampHookService } from '../amp/hook-service'
 import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
@@ -138,10 +137,6 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/codex-hook.sh',
           install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, '/home/dev')
-        },
-        {
-          path: '/home/dev/.orca/agent-hooks/gemini-hook.sh',
-          install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/antigravity-hook.sh',
@@ -295,8 +290,7 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
   })
 
-  it('installs remote Gemini, Antigravity, Cursor, Command Code, Grok, and Devin configs using their CLI-specific schemas', async () => {
-    const gemini = createFakeSftp()
+  it('installs remote Antigravity, Cursor, Command Code, Grok, and Devin configs using their CLI-specific schemas', async () => {
     const antigravity = createFakeSftp()
     const amp = createFakeSftp()
     const cursor = createFakeSftp()
@@ -311,23 +305,12 @@ describe('remote hook service installers', () => {
 `
     })
 
-    await new GeminiHookService().installRemote(gemini.sftp, '/home/dev')
     await new AntigravityHookService().installRemote(antigravity.sftp, '/home/dev')
     await new AmpHookService().installRemote(amp.sftp, '/home/dev')
     await new CursorHookService().installRemote(cursor.sftp, '/home/dev')
     await new CommandCodeHookService().installRemote(commandCode.sftp, '/home/dev')
     await new GrokHookService().installRemote(grok.sftp, '/home/dev')
     await new DevinHookService().installRemote(devin.sftp, '/home/dev')
-
-    const geminiConfig = JSON.parse(gemini.fs.files.get('/home/dev/.gemini/settings.json')!) as {
-      hooks: Record<string, { hooks: { command: string }[] }[]>
-    }
-    for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool']) {
-      const command = geminiConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
-      expect(command).toContain('/home/dev/.orca/agent-hooks/gemini-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
-    }
-    expect(geminiConfig.hooks.PreToolUse).toBeUndefined()
 
     const antigravityConfig = JSON.parse(
       antigravity.fs.files.get('/home/dev/.gemini/config/hooks.json')!
@@ -571,54 +554,6 @@ describe('remote hook service installers', () => {
     expect(postToolCommands.some((command) => command.includes('antigravity-hook.sh'))).toBe(true)
   })
 
-  it('removes stale remote Gemini PreToolUse hooks while preserving user-authored hooks', async () => {
-    const { sftp, fs } = createFakeSftp()
-    fs.files.set(
-      '/home/dev/.gemini/settings.json',
-      `${JSON.stringify(
-        {
-          hooks: {
-            PreToolUse: [
-              {
-                hooks: [
-                  {
-                    type: 'command',
-                    command:
-                      "if [ -x '/tmp/old/agent-hooks/gemini-hook.sh' ]; then /bin/sh '/tmp/old/agent-hooks/gemini-hook.sh'; fi"
-                  }
-                ]
-              },
-              {
-                hooks: [
-                  {
-                    type: 'command',
-                    command: 'echo user-authored'
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        null,
-        2
-      )}\n`
-    )
-
-    await new GeminiHookService().installRemote(sftp, '/home/dev')
-
-    const config = JSON.parse(fs.files.get('/home/dev/.gemini/settings.json')!) as {
-      hooks: Record<string, { hooks?: { command: string }[] }[]>
-    }
-    const preToolCommands = config.hooks.PreToolUse.flatMap((definition) =>
-      (definition.hooks ?? []).map((hook) => hook.command)
-    )
-    expect(preToolCommands).toEqual(['echo user-authored'])
-    const beforeToolCommands = config.hooks.BeforeTool.flatMap((definition) =>
-      (definition.hooks ?? []).map((hook) => hook.command)
-    )
-    expect(beforeToolCommands.some((command) => command.includes('gemini-hook.sh'))).toBe(true)
-  })
-
   it('installs remote Copilot hooks under the user-level hooks directory', async () => {
     const { sftp, fs } = createFakeSftp()
     fs.dirs.add('/home/dev/.copilot')
@@ -677,7 +612,6 @@ describe('remote hook service installers', () => {
       ['claude', claudeHookService],
       ['openclaude', openClaudeHookService],
       ['codex', codexHookService],
-      ['gemini', geminiHookService],
       ['antigravity', antigravityHookService],
       ['amp', ampHookService],
       ['cursor', cursorHookService],

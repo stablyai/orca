@@ -1251,36 +1251,28 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).not.toHaveBeenCalled()
   })
 
-  it.each([
-    'claude',
-    'codex',
-    'gemini',
-    'opencode',
-    'cursor',
-    'droid',
-    'grok',
-    'devin',
-    'copilot',
-    'hermes'
-  ])('recognizes %s hook agent ids even when the binary name differs', (agentType) => {
-    const dispatchCompletion = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-1:leaf-1',
-      getPtyId: () => 'pty-1',
-      getSettings: () => null,
-      inspectProcess: vi.fn(),
-      dispatchCompletion,
-      isLive: () => true
-    })
+  it.each(['claude', 'codex', 'opencode', 'cursor', 'droid', 'grok', 'devin', 'copilot', 'hermes'])(
+    'recognizes %s hook agent ids even when the binary name differs',
+    (agentType) => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: 'tab-1:leaf-1',
+        getPtyId: () => 'pty-1',
+        getSettings: () => null,
+        inspectProcess: vi.fn(),
+        dispatchCompletion,
+        isLive: () => true
+      })
 
-    coordinator.observeHookStatus({
-      state: 'done',
-      prompt: '',
-      agentType
-    })
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: '',
+        agentType
+      })
 
-    expect(dispatchCompletion).toHaveBeenCalledWith(agentType)
-  })
+      expect(dispatchCompletion).toHaveBeenCalledWith(agentType)
+    }
+  )
 
   it.each(['pi', 'omp'])(
     'defers a %s milestone done without prior working through the quiet window',

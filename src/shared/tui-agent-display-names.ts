@@ -19,7 +19,6 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   pi: 'Pi',
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
-  gemini: 'Gemini',
   antigravity: 'Antigravity',
   aider: 'Aider',
   goose: 'Goose',

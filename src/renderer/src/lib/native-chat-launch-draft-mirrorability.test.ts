@@ -97,7 +97,7 @@ describe('launch draft mirrorability', () => {
     mocks.seedNativeChatLaunchDraft.mockClear()
     seedNativeChatLaunchDraftForAgentTab({
       tabId: 'tab-1',
-      agent: 'gemini',
+      agent: 'aider',
       text: 'https://github.com/o/r/issues/12'
     })
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
@@ -105,7 +105,7 @@ describe('launch draft mirrorability', () => {
       decideInitialAgentTabViewMode({
         experimentalNativeChat: true,
         openAgentTabsInChatByDefault: true,
-        agent: 'gemini',
+        agent: 'aider',
         promptDelivery: 'draft',
         launchDraftText: 'https://github.com/o/r/issues/12'
       })

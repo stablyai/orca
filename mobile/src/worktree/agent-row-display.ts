@@ -65,7 +65,7 @@ export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): st
   return agentStateLabel(agentDotState(row, now))
 }
 
-// Short agent identity label by type (Claude/Codex/Gemini/…), used when no
+// Short agent identity label by type (Claude/Codex/Cursor/…), used when no
 // identity icon is available on mobile. Falls back to the first two letters.
 export function agentIdentityLabel(agentType: string | null): string {
   if (!agentType) {
@@ -75,7 +75,6 @@ export function agentIdentityLabel(agentType: string | null): string {
   const known: Record<string, string> = {
     claude: 'CL',
     codex: 'CX',
-    gemini: 'GM',
     cursor: 'CR',
     copilot: 'CP',
     amp: 'AM',

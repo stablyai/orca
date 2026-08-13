@@ -30,7 +30,6 @@ export type AiVaultDeleteSessionResult =
 //   home and ~/.codex, so a one-sided delete reappears on the next scan.
 // - opencode 1.17.x: a SQLite row, not a file.
 export const AI_VAULT_DELETABLE_AGENTS = [
-  'gemini',
   'copilot',
   'cursor',
   'hermes',

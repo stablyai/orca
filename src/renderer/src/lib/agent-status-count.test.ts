@@ -58,7 +58,7 @@ describe('countWorkingAgents', () => {
         tabsByWorktree: {
           'wt-1': [
             makeTab({ id: 'tab-1', title: '⠂ Claude Code' }),
-            makeTab({ id: 'tab-2', title: '✦ Gemini CLI' })
+            makeTab({ id: 'tab-2', title: '⠋ Droid' })
           ],
           'wt-2': [makeTab({ id: 'tab-3', worktreeId: 'wt-2', title: '⠋ Codex is thinking' })]
         },
@@ -78,7 +78,7 @@ describe('countWorkingAgents', () => {
         runtimePaneTitlesByTabId: {
           'tab-1': {
             1: '⠂ Claude Code',
-            2: '✦ Gemini CLI',
+            2: '⠋ Droid',
             3: '✳ Claude Code'
           }
         },
@@ -94,7 +94,7 @@ describe('countWorkingAgents', () => {
         tabsByWorktree: {
           'wt-1': [
             makeTab({ id: 'tab-1', title: '✳ Claude Code' }),
-            makeTab({ id: 'tab-2', title: '✋ Gemini CLI' }),
+            makeTab({ id: 'tab-2', title: 'Codex · action required' }),
             makeTab({ id: 'tab-3', title: 'bash' }),
             makeTab({ id: 'tab-4', title: '⠂ Claude Code' })
           ]
@@ -129,7 +129,7 @@ describe('countWorkingAgents', () => {
       countWorkingAgents({
         tabsByWorktree: {
           'wt-1': [makeTab({ id: 'tab-1', title: '⠂ Claude Code' })],
-          'wt-deleted': [makeTab({ id: 'tab-2', worktreeId: 'wt-deleted', title: '✦ Gemini CLI' })]
+          'wt-deleted': [makeTab({ id: 'tab-2', worktreeId: 'wt-deleted', title: '⠋ Droid' })]
         },
         runtimePaneTitlesByTabId: {},
         ptyIdsByTabId: livePtyMap('tab-1', 'tab-2'),
@@ -185,7 +185,7 @@ describe('getWorkingAgentsPerWorktree', () => {
         runtimePaneTitlesByTabId: {
           'tab-1': {
             1: '⠂ Claude Code',
-            2: '✦ Gemini CLI',
+            2: '⠋ Droid',
             3: '✳ Claude Code'
           }
         },
@@ -196,7 +196,7 @@ describe('getWorkingAgentsPerWorktree', () => {
       'wt-1': {
         agents: [
           { label: 'Claude Code', status: 'working', tabId: 'tab-1', paneId: 1 },
-          { label: 'Gemini CLI', status: 'working', tabId: 'tab-1', paneId: 2 }
+          { label: 'Droid', status: 'working', tabId: 'tab-1', paneId: 2 }
         ]
       }
     })
@@ -207,7 +207,7 @@ describe('getWorkingAgentsPerWorktree', () => {
       getWorkingAgentsPerWorktree({
         tabsByWorktree: {
           'wt-1': [makeTab({ id: 'tab-1', title: '⠂ Claude Code' })],
-          'wt-deleted': [makeTab({ id: 'tab-2', worktreeId: 'wt-deleted', title: '✦ Gemini CLI' })]
+          'wt-deleted': [makeTab({ id: 'tab-2', worktreeId: 'wt-deleted', title: '⠋ Droid' })]
         },
         runtimePaneTitlesByTabId: {},
         ptyIdsByTabId: livePtyMap('tab-1', 'tab-2'),

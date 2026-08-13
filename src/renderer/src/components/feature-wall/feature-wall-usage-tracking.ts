@@ -10,12 +10,7 @@ export function hasFeatureWallProviderUsageTracking(provider: ProviderRateLimits
   if (!provider) {
     return false
   }
-  return (
-    provider.status === 'ok' ||
-    provider.session !== null ||
-    provider.weekly !== null ||
-    (provider.buckets?.length ?? 0) > 0
-  )
+  return provider.status === 'ok' || provider.session !== null || provider.weekly !== null
 }
 
 export function getFeatureWallUsageProviderConnection(args: {

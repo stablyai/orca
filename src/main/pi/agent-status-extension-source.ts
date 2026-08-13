@@ -1,7 +1,7 @@
 // Why: pi has no settings.json hook surface — its extensibility is the
 // in-process TypeScript extension API (pi.on('agent_start'), 'tool_call',
 // etc.). To get pi panes into the unified agent-hooks pipeline alongside
-// Claude/Codex/Gemini/OpenCode/Cursor, we ship a bundled extension into
+// Claude/Codex/OpenCode/Cursor, we ship a bundled extension into
 // the selected Pi/OMP extension dir (PiTitlebarExtensionService) that POSTs to
 // /hook/<kind> using the same ORCA_AGENT_HOOK_* + ORCA_PANE_KEY env that every
 // PTY already receives from ipc/pty.ts.

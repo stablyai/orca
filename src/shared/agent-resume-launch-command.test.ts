@@ -558,13 +558,13 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
 
   it('does not change other agents', () => {
     const restored = buildAgentResumeStartupPlan({
-      agent: 'gemini',
+      agent: 'opencode',
       providerSession,
       cmdOverrides: {},
       agentArgs: '--resume',
       platform: 'linux'
     })
-    expect(restored?.launchCommand).toBe(`gemini '--resume' '--resume' '${SESSION_ID}'`)
+    expect(restored?.launchCommand).toBe(`opencode '--resume' '--session' '${SESSION_ID}'`)
   })
 
   it('persists the original base command unchanged', () => {

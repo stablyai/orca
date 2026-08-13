@@ -27,7 +27,7 @@ export {
 } from './agent-draft-paste-content'
 
 // Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
-// OpenCode / Gemini / cursor-agent / copilot) treat the inserted text as a
+// OpenCode / cursor-agent / copilot) treat the inserted text as a
 // single atomic paste instead of echoing character-by-character or triggering
 // line-edit shortcuts. Callers choose whether to append Enter after the paste.
 export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START

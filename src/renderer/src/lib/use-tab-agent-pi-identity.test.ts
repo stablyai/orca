@@ -314,10 +314,10 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
         title: 'zsh',
         hookAgent: null,
         focusedCompletedHookAgent: 'claude',
-        siblingCompletedHookAgent: 'gemini',
+        siblingCompletedHookAgent: 'aider',
         launchAgent: undefined
       })
-    ).toBe('gemini')
+    ).toBe('aider')
   })
 
   it('does not let a sibling pane re-own the focused pane ambiguous Pi title', () => {

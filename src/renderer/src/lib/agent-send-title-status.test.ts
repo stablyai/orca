@@ -28,7 +28,7 @@ describe('detectAgentSendTitleStatus', () => {
   )
 
   it('preserves non-OpenCode title behavior', () => {
-    expect(detectAgentSendTitleStatus('✦ Gemini CLI')).toBe('working')
+    expect(detectAgentSendTitleStatus('⠋ Codex')).toBe('working')
     expect(detectAgentSendTitleStatus('Codex ready')).toBe('idle')
     expect(detectAgentSendTitleStatus('zsh')).toBeNull()
   })

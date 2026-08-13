@@ -11,9 +11,17 @@ function createRateLimitStore(): StoreApi<AppState> {
 }
 
 describe('createRateLimitSlice', () => {
-  it('initializes Antigravity usage with a stable pending key', () => {
+  it('initializes every usage provider with a stable pending key', () => {
     const store = createRateLimitStore()
+    const { rateLimits } = store.getState()
 
-    expect(store.getState().rateLimits.antigravity).toBeNull()
+    // Why: the status bar reads these keys before the first poll; a missing key
+    // reads as "provider not supported" rather than "snapshot not in yet".
+    expect(rateLimits.claude).toBeNull()
+    expect(rateLimits.codex).toBeNull()
+    expect(rateLimits.opencodeGo).toBeNull()
+    expect(rateLimits.kimi).toBeNull()
+    expect(rateLimits.minimax).toBeNull()
+    expect(rateLimits.grok).toBeNull()
   })
 })

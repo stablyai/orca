@@ -16,7 +16,6 @@ const CODEX_SESSIONS_DIR = join(
   process.env.CODEX_HOME?.trim() || DEFAULT_CODEX_HOME_DIR,
   'sessions'
 )
-const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
   process.env.COPILOT_HOME?.trim() || join(homedir(), '.copilot'),
   'session-state'
@@ -94,14 +93,6 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
     extensions: ['.jsonl']
-  },
-  gemini: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.geminiSessionsDir ?? GEMINI_SESSIONS_DIR, wslHomeDirs, [
-        '.gemini',
-        'tmp'
-      ]),
-    extensions: ['.json', '.jsonl']
   },
   copilot: {
     rootDirs: (options, wslHomeDirs) =>

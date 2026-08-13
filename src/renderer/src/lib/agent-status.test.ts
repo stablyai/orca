@@ -4,7 +4,6 @@ import {
   clearWorkingIndicators,
   createAgentStatusTracker,
   getAgentLabel,
-  isGeminiTerminalTitle,
   isClaudeAgent,
   isClaudeManagementTitle,
   normalizeTerminalTitle,
@@ -23,27 +22,6 @@ describe('detectAgentStatusFromTitle', () => {
   it('returns null for a title with no agent indicators', () => {
     expect(detectAgentStatusFromTitle('bash')).toBeNull()
     expect(detectAgentStatusFromTitle('vim myfile.ts')).toBeNull()
-  })
-
-  // --- Gemini symbols ---
-  it('detects Gemini permission symbol ✋', () => {
-    expect(detectAgentStatusFromTitle('✋ Gemini CLI')).toBe('permission')
-  })
-
-  it('detects Gemini working symbol ✦', () => {
-    expect(detectAgentStatusFromTitle('✦ Gemini CLI')).toBe('working')
-  })
-
-  it('detects Gemini idle symbol ◇', () => {
-    expect(detectAgentStatusFromTitle('◇ Gemini CLI')).toBe('idle')
-  })
-
-  it('detects Gemini silent working symbol ⏲', () => {
-    expect(detectAgentStatusFromTitle('⏲  Working… (my-project)')).toBe('working')
-  })
-
-  it('Gemini permission takes precedence over working', () => {
-    expect(detectAgentStatusFromTitle('✋✦ Gemini CLI')).toBe('permission')
   })
 
   // --- Braille spinner characters ---
@@ -89,7 +67,7 @@ describe('detectAgentStatusFromTitle', () => {
   })
 
   it('detects "waiting" keyword with agent name', () => {
-    expect(detectAgentStatusFromTitle('gemini waiting for input')).toBe('permission')
+    expect(detectAgentStatusFromTitle('aider waiting for input')).toBe('permission')
   })
 
   it('detects "ready" keyword as idle', () => {
@@ -109,7 +87,7 @@ describe('detectAgentStatusFromTitle', () => {
   })
 
   it('detects "thinking" keyword as working', () => {
-    expect(detectAgentStatusFromTitle('gemini thinking')).toBe('working')
+    expect(detectAgentStatusFromTitle('aider thinking')).toBe('working')
   })
 
   it('detects "running" keyword as working', () => {
@@ -318,17 +296,6 @@ describe('clearWorkingIndicators', () => {
     expect(detectAgentStatusFromTitle(cleared)).not.toBe('working')
   })
 
-  it('strips Gemini working symbol', () => {
-    const cleared = clearWorkingIndicators('✦ Gemini CLI')
-    expect(cleared).toBe('Gemini CLI')
-    expect(detectAgentStatusFromTitle(cleared)).not.toBe('working')
-  })
-
-  it('strips Gemini silent working symbol ⏲', () => {
-    const cleared = clearWorkingIndicators('⏲  Working… (my-project)')
-    expect(detectAgentStatusFromTitle(cleared)).not.toBe('working')
-  })
-
   it('returns original title if no working indicators found', () => {
     expect(clearWorkingIndicators('* claude')).toBe('* claude')
     expect(clearWorkingIndicators('Terminal 1')).toBe('Terminal 1')
@@ -349,17 +316,7 @@ describe('clearWorkingIndicators', () => {
 })
 
 describe('normalizeTerminalTitle', () => {
-  it('collapses Gemini working titles to a stable label', () => {
-    expect(normalizeTerminalTitle('✦  Typing prompt... (workspace)')).toBe('✦ Gemini CLI')
-    expect(normalizeTerminalTitle('⏲  Working… (workspace)')).toBe('✦ Gemini CLI')
-  })
-
-  it('collapses Gemini idle and permission titles to stable labels', () => {
-    expect(normalizeTerminalTitle('◇  Ready (workspace)')).toBe('◇ Gemini CLI')
-    expect(normalizeTerminalTitle('✋  Action Required (workspace)')).toBe('✋ Gemini CLI')
-  })
-
-  it('leaves non-Gemini titles unchanged', () => {
+  it('leaves ordinary titles unchanged', () => {
     expect(normalizeTerminalTitle('⠂ Claude Code')).toBe('⠂ Claude Code')
     expect(normalizeTerminalTitle('bash')).toBe('bash')
   })
@@ -405,39 +362,15 @@ describe('normalizeTerminalTitle', () => {
     expect(normalizeTerminalTitle('π ')).toBe('Pi')
   })
 
-  it('does not collapse Pi-compatible titles whose cwd mentions Gemini', () => {
-    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π: gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - gemini-project')).toBe('Pi')
-  })
-})
-
-describe('isGeminiTerminalTitle', () => {
-  it('detects Gemini titles by symbol or name', () => {
-    expect(isGeminiTerminalTitle('✦  Typing prompt... (workspace)')).toBe(true)
-    expect(isGeminiTerminalTitle('◇  Ready (workspace)')).toBe(true)
-    expect(isGeminiTerminalTitle('gemini waiting for input')).toBe(true)
-  })
-
-  it('does not match other terminal titles', () => {
-    expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
-    expect(isGeminiTerminalTitle('⠋ π - gemini')).toBe(false)
-    expect(isGeminiTerminalTitle('π - gemini')).toBe(false)
-    expect(isGeminiTerminalTitle('⠋ π: gemini')).toBe(false)
-    expect(isGeminiTerminalTitle('π: gemini')).toBe(false)
-    expect(isGeminiTerminalTitle('⠋ π gemini')).toBe(false)
-    expect(isGeminiTerminalTitle('π gemini')).toBe(false)
-    expect(isGeminiTerminalTitle('π -')).toBe(false)
-    expect(isGeminiTerminalTitle('π:')).toBe(false)
-    expect(isGeminiTerminalTitle('π ')).toBe(false)
-    expect(isGeminiTerminalTitle('⠋ π - gemini-project')).toBe(false)
-    expect(isGeminiTerminalTitle('/tmp/gemini/working')).toBe(false)
-    expect(isGeminiTerminalTitle('bash')).toBe(false)
+  it('does not collapse Pi-compatible titles whose cwd mentions another agent', () => {
+    expect(normalizeTerminalTitle('⠋ π - codex')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - codex')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: codex')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: codex')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π codex')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π codex')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π - codex-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - codex-project')).toBe('Pi')
   })
 })
 
@@ -447,13 +380,12 @@ describe('getAgentLabel', () => {
   })
 
   it('treats Claude Code prefixed task titles as Claude even when they mention another CLI', () => {
-    expect(getAgentLabel('✳ Gemini CLI')).toBe('Claude Code')
+    expect(getAgentLabel('✳ Aider')).toBe('Claude Code')
     expect(getAgentLabel('. Compare Opencode Vs Orca')).toBe('Claude Code')
     expect(getAgentLabel('* Review Codex behavior')).toBe('Claude Code')
   })
 
   it('labels supported agent families consistently', () => {
-    expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
     expect(getAgentLabel('OpenClaude running')).toBe('OpenClaude')
@@ -574,39 +506,6 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).not.toHaveBeenCalled()
 
     tracker.handleTitle('✳ User acknowledgment and confirmation') // done → idle
-    expect(onBecameIdle).toHaveBeenCalledTimes(1)
-  })
-
-  // --- Gemini CLI: real title patterns from source code ---
-  it('fires on Gemini CLI working → idle (real title patterns)', () => {
-    const onBecameIdle = vi.fn()
-    const tracker = createAgentStatusTracker(onBecameIdle)
-
-    tracker.handleTitle('◇  Ready (my-project)') // startup idle
-    expect(onBecameIdle).not.toHaveBeenCalled()
-
-    tracker.handleTitle('✦  Implementing feature (my-project)') // working
-    expect(onBecameIdle).not.toHaveBeenCalled()
-
-    tracker.handleTitle('◇  Ready (my-project)') // done → idle
-    expect(onBecameIdle).toHaveBeenCalledTimes(1)
-  })
-
-  it('fires on Gemini CLI working → permission', () => {
-    const onBecameIdle = vi.fn()
-    const tracker = createAgentStatusTracker(onBecameIdle)
-
-    tracker.handleTitle('✦  Working… (my-project)') // working
-    tracker.handleTitle('✋  Action Required (my-project)') // permission
-    expect(onBecameIdle).toHaveBeenCalledTimes(1)
-  })
-
-  it('fires on Gemini CLI silent working → idle', () => {
-    const onBecameIdle = vi.fn()
-    const tracker = createAgentStatusTracker(onBecameIdle)
-
-    tracker.handleTitle('⏲  Working… (my-project)') // silent working
-    tracker.handleTitle('◇  Ready (my-project)') // idle
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -738,17 +637,13 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
-  it('end-to-end: extracts OSC title and detects Gemini transition', () => {
+  it('end-to-end: extracts OSC title and detects the working → idle transition', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
     const oscTitle = (title: string): string => `\x1b]0;${title}\x07`
 
-    const chunks = [
-      oscTitle('◇  Ready (workspace)'),
-      oscTitle('✦  Analyzing code (workspace)'),
-      oscTitle('◇  Ready (workspace)')
-    ]
+    const chunks = [oscTitle('✳ Ready'), oscTitle('⠋ Analyzing code'), oscTitle('✳ Ready')]
 
     for (const chunk of chunks) {
       const title = extractLastOscTitle(chunk)
@@ -834,10 +729,6 @@ describe('formatAgentTypeLabel', () => {
 
   it("maps 'codex' to 'Codex'", () => {
     expect(formatAgentTypeLabel('codex')).toBe('Codex')
-  })
-
-  it("maps 'gemini' to 'Gemini'", () => {
-    expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
   })
 
   it("maps 'antigravity' to 'Antigravity'", () => {

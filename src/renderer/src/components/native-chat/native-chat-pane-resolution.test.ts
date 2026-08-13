@@ -160,12 +160,12 @@ describe('resolveNativeChatSession', () => {
     }
   )
 
-  it('does not resolve unsupported title fallback gemini', () => {
+  it('does not resolve unsupported title fallback aider', () => {
     expect(
       resolveNativeChatSession({
         paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
         launchAgent: null,
-        resolvedAgent: 'gemini',
+        resolvedAgent: 'aider',
         ptyId: 'pty-1'
       })
     ).toBeNull()
@@ -194,7 +194,7 @@ describe('resolveNativeChatSession', () => {
         launchAgent: null,
         agentStatusEntry: entry({
           paneKey,
-          agentType: 'gemini',
+          agentType: 'aider',
           providerSession: { key: 'session_id', id: 'g-1' }
         }),
         ptyId: 'pty-1'
@@ -210,7 +210,7 @@ describe('resolveNativeChatSession', () => {
         launchAgent: null,
         agentStatusEntry: entry({
           paneKey,
-          agentType: 'gemini',
+          agentType: 'aider',
           providerSession: { key: 'session_id', id: 'g-1' }
         }),
         resolvedAgent: 'codex',
@@ -227,7 +227,7 @@ describe('resolveNativeChatSession', () => {
         launchAgent: 'codex',
         agentStatusEntry: entry({
           paneKey,
-          agentType: 'gemini',
+          agentType: 'aider',
           providerSession: { key: 'session_id', id: 'g-1' }
         }),
         resolvedAgent: 'claude',

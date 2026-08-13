@@ -6,15 +6,15 @@ import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletabili
 const NON_LOCAL = 'Only sessions on this device can be deleted.'
 const SYNTHETIC = "This session can't be deleted from Orca."
 
-const localGeminiSession = {
-  agent: 'gemini' as const,
+const localCopilotSession = {
+  agent: 'copilot' as const,
   executionHostId: 'local' as const,
-  filePath: '/home/user/.gemini/sessions/log.jsonl'
+  filePath: '/home/user/.copilot/session-state/log.jsonl'
 }
 
 describe('aiVaultSessionDeleteBlockedReason', () => {
   it('offers Delete for a deletable agent on a local, real path', () => {
-    expect(aiVaultSessionDeleteBlockedReason(localGeminiSession)).toBeNull()
+    expect(aiVaultSessionDeleteBlockedReason(localCopilotSession)).toBeNull()
   })
 
   it('offers Delete for a directory-shaped agent (claude)', () => {
@@ -29,7 +29,7 @@ describe('aiVaultSessionDeleteBlockedReason', () => {
 
   it('blocks ssh- and runtime-hosted sessions regardless of agent', () => {
     for (const executionHostId of ['ssh:dev-box', 'runtime:gpu-box'] as const) {
-      expect(aiVaultSessionDeleteBlockedReason({ ...localGeminiSession, executionHostId })).toBe(
+      expect(aiVaultSessionDeleteBlockedReason({ ...localCopilotSession, executionHostId })).toBe(
         NON_LOCAL
       )
     }

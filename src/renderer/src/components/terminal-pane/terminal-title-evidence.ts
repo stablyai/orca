@@ -35,10 +35,6 @@ export type ResolvePaneTitleDecisionInput = {
   /** Owner used for the display label — may include sticky/tab-scoped launch
    *  identity, which is correct for the visible label. */
   displayOwnerAgentType: AgentType | null | undefined
-  /** Owner used for the renderer veto — must be pane-scoped and current so a
-   *  sibling/reused pane's launch identity cannot keep GPU for a genuine
-   *  Gemini pane. */
-  rendererOwnerAgentType: AgentType | null | undefined
   userGpuMode: TerminalGpuAccelerationMode
   webglUnavailable?: boolean
   inContextLossContainment?: boolean
@@ -47,8 +43,6 @@ export type ResolvePaneTitleDecisionInput = {
 export function resolvePaneTitleDecision(input: ResolvePaneTitleDecisionInput): PaneTitleDecision {
   const displayTitle = resolvePaneDisplayTitle(input.normalizedTitle, input.displayOwnerAgentType)
   const rendererPolicy = resolvePaneRendererPolicy({
-    rawTitle: input.rawTitle,
-    ownerAgentType: input.rendererOwnerAgentType,
     userGpuMode: input.userGpuMode,
     webglUnavailable: input.webglUnavailable,
     inContextLossContainment: input.inContextLossContainment

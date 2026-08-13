@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   haveSameDisabledTuiAgents,
+  isTuiAgentEnabled,
   normalizeDisabledTuiAgents,
   pickTuiAgent
 } from './tui-agent-selection'
@@ -12,7 +13,7 @@ describe('pickTuiAgent', () => {
 
   it('falls back in desktop catalog order when the preference is absent or stale', () => {
     expect(pickTuiAgent(null, ['cursor', 'codex'])).toBe('codex')
-    expect(pickTuiAgent('gemini', ['cursor', 'codex'])).toBe('codex')
+    expect(pickTuiAgent('kimi', ['cursor', 'codex'])).toBe('codex')
     expect(pickTuiAgent(null, ['continue', 'command-code'])).toBe('command-code')
   })
 
@@ -40,5 +41,18 @@ describe('haveSameDisabledTuiAgents', () => {
     expect(haveSameDisabledTuiAgents(['codex', 'claude'], ['claude', 'codex'])).toBe(true)
     expect(haveSameDisabledTuiAgents(['codex', 'unknown'], ['codex'])).toBe(true)
     expect(haveSameDisabledTuiAgents(['codex'], ['claude'])).toBe(false)
+  })
+})
+
+describe('isTuiAgentEnabled', () => {
+  it('returns false for retired or unknown agent ids', () => {
+    expect(isTuiAgentEnabled('gemini')).toBe(false)
+    expect(isTuiAgentEnabled('not-an-agent')).toBe(false)
+    expect(isTuiAgentEnabled(null)).toBe(false)
+  })
+
+  it('returns false when a supported agent is disabled', () => {
+    expect(isTuiAgentEnabled('claude', ['claude'])).toBe(false)
+    expect(isTuiAgentEnabled('claude', ['codex'])).toBe(true)
   })
 })

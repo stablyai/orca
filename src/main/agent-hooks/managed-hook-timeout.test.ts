@@ -28,11 +28,10 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { MANAGED_HOOK_TIMEOUT_MILLISECONDS, MANAGED_HOOK_TIMEOUT_SECONDS } from './installer-utils'
+import { MANAGED_HOOK_TIMEOUT_SECONDS } from './installer-utils'
 import { CodexHookService } from '../codex/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
@@ -66,12 +65,6 @@ const JSON_INSTALLERS = [
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
     configPath: `${REMOTE_HOME}/.codex/hooks.json`,
     install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'gemini',
-    timeout: MANAGED_HOOK_TIMEOUT_MILLISECONDS,
-    configPath: `${REMOTE_HOME}/.gemini/settings.json`,
-    install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, REMOTE_HOME)
   },
   {
     agent: 'antigravity',

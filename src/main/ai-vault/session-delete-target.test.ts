@@ -5,7 +5,6 @@ import { validateAiVaultSessionDeleteTarget } from './session-delete-target'
 // All roots are supplied via rootOptions so these tests never touch the real
 // home directory or filesystem — validation is pure string-path judgement.
 const HOME = join('/tmp', 'orca-ai-vault-delete-fixture-home')
-const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
 const CURSOR_ROOT = join(HOME, '.cursor', 'projects')
 const HERMES_ROOT = join(HOME, '.hermes', 'sessions')
 const OPENCLAW_ROOT = join(HOME, '.openclaw')
@@ -21,53 +20,43 @@ const GROK_ROOT = join(HOME, '.grok', 'sessions')
 describe('validateAiVaultSessionDeleteTarget', () => {
   it('allows a supported agent whose file resolves inside its known root', () => {
     const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
-      filePath: join(GEMINI_ROOT, 'project-a', 'session-1.json'),
+      agent: 'copilot',
+      filePath: join(COPILOT_ROOT, 'session-1.jsonl'),
       executionHostId: 'local',
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+      rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
     expect(result).toEqual({
       allowed: true,
-      agent: 'gemini',
-      resolvedPath: join(GEMINI_ROOT, 'project-a', 'session-1.json'),
+      agent: 'copilot',
+      resolvedPath: join(COPILOT_ROOT, 'session-1.jsonl'),
       removals: [
         {
-          path: join(GEMINI_ROOT, 'project-a', 'session-1.json'),
+          path: join(COPILOT_ROOT, 'session-1.jsonl'),
           kind: 'file',
-          roots: [GEMINI_ROOT]
+          roots: [COPILOT_ROOT]
         }
       ]
     })
   })
 
-  it('allows gemini .jsonl files too, since discovery accepts both extensions', () => {
-    const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
-      filePath: join(GEMINI_ROOT, 'project-a', 'session-1.jsonl'),
-      executionHostId: 'local',
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
-    })
-    expect(result.allowed).toBe(true)
-  })
-
   it('rejects a path that escapes its root via ..', () => {
     const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
-      filePath: join(GEMINI_ROOT, '..', '..', '..', 'etc', 'passwd.json'),
+      agent: 'copilot',
+      filePath: join(COPILOT_ROOT, '..', '..', '..', 'etc', 'passwd.jsonl'),
       executionHostId: 'local',
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+      rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
-    expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'path-outside-known-roots' })
+    expect(result).toEqual({ allowed: false, agent: 'copilot', reason: 'path-outside-known-roots' })
   })
 
   it('rejects a path entirely outside the known roots', () => {
     const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
-      filePath: join(HOME, 'Documents', 'notes.json'),
+      agent: 'copilot',
+      filePath: join(HOME, 'Documents', 'notes.jsonl'),
       executionHostId: 'local',
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+      rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
-    expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'path-outside-known-roots' })
+    expect(result).toEqual({ allowed: false, agent: 'copilot', reason: 'path-outside-known-roots' })
   })
 
   it('rejects a file whose extension the agent never discovers', () => {
@@ -151,12 +140,12 @@ describe('validateAiVaultSessionDeleteTarget', () => {
 
   it('rejects a non-local execution host', () => {
     const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
-      filePath: join(GEMINI_ROOT, 'project-a', 'session-1.json'),
+      agent: 'copilot',
+      filePath: join(COPILOT_ROOT, 'session-1.jsonl'),
       executionHostId: 'ssh:some-host',
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+      rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
-    expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'non-local-host' })
+    expect(result).toEqual({ allowed: false, agent: 'copilot', reason: 'non-local-host' })
   })
 
   // A real OpenCode SQLite-row session (the `<dbPath>#<sessionId>` identity)
@@ -175,22 +164,22 @@ describe('validateAiVaultSessionDeleteTarget', () => {
   // treated as a synthetic SQLite identity rather than a real file to delete.
   it('rejects a deletable-agent path bearing a synthetic # marker', () => {
     const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
-      filePath: join(GEMINI_ROOT, 'project-a', 'db.sqlite#session-1'),
+      agent: 'copilot',
+      filePath: join(COPILOT_ROOT, 'db.sqlite#session-1'),
       executionHostId: 'local',
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+      rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
-    expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'synthetic-path' })
+    expect(result).toEqual({ allowed: false, agent: 'copilot', reason: 'synthetic-path' })
   })
 
   it('rejects a blank filePath', () => {
     const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
+      agent: 'copilot',
       filePath: '   ',
       executionHostId: 'local',
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+      rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
-    expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'invalid-path' })
+    expect(result).toEqual({ allowed: false, agent: 'copilot', reason: 'invalid-path' })
   })
 
   it('allows a droid path under either of its .factory roots', () => {
@@ -256,22 +245,22 @@ describe('validateAiVaultSessionDeleteTarget', () => {
   // toLowerCase); the validator must accept the same uppercase-extension file.
   it('allows an uppercase extension since discovery folds extension case', () => {
     const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
-      filePath: join(GEMINI_ROOT, 'project-a', 'session-1.JSON'),
+      agent: 'copilot',
+      filePath: join(COPILOT_ROOT, 'session-1.JSONL'),
       executionHostId: 'local',
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+      rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
     expect(result.allowed).toBe(true)
   })
 
-  it('allows a gemini file under a WSL-expanded root', () => {
+  it('allows a copilot file under a WSL-expanded root', () => {
     const wslHome = join('/tmp', 'orca-ai-vault-delete-fixture-wsl-home')
     const result = validateAiVaultSessionDeleteTarget({
-      agent: 'gemini',
-      filePath: join(wslHome, '.gemini', 'tmp', 'project-a', 'session-1.json'),
+      agent: 'copilot',
+      filePath: join(wslHome, '.copilot', 'session-state', 'session-1.jsonl'),
       executionHostId: 'local',
       wslHomeDirs: [wslHome],
-      rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+      rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
     expect(result.allowed).toBe(true)
   })

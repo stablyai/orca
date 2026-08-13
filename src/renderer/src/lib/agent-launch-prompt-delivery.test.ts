@@ -106,7 +106,7 @@ describe('deliverLaunchPromptToAgentTab', () => {
     })
     await deliverLaunchPromptToAgentTab({
       tabId: 'unsupported-tab',
-      agent: 'gemini',
+      agent: 'aider',
       content: 'Fix failing checks',
       submit: true,
       forcePaste: true
@@ -169,7 +169,7 @@ describe('deliverLaunchPromptToAgentTab', () => {
     })
     await deliverLaunchPromptToAgentTab({
       tabId: 'unsupported-tab',
-      agent: 'gemini',
+      agent: 'aider',
       content: 'Review first',
       submit: false,
       forcePaste: false
@@ -242,7 +242,7 @@ describe('deliverLaunchPromptToAgentTab', () => {
 
     await deliverLaunchPromptToAgentTab({
       tabId: 'tab-1',
-      agent: 'gemini',
+      agent: 'aider',
       content: 'Large generated prompt',
       submit: true,
       forcePaste: true

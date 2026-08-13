@@ -156,12 +156,6 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: Prime Agent embeds Pi's TUI and decodes CSI-u the same way (see pi above).
     windowsShiftEnterEncoding: 'csi-u'
   },
-  gemini: {
-    detectCmd: 'gemini',
-    launchCmd: 'gemini',
-    expectedProcess: 'gemini',
-    promptInjectionMode: 'flag-prompt-interactive'
-  },
   antigravity: {
     detectCmd: 'agy',
     launchCmd: 'agy',
@@ -332,6 +326,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
   return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
+}
+
+/** Guards launch paths against ids that outlive a retired agent in saved state. */
+export function assertTuiAgent(value: unknown): asserts value is TuiAgent {
+  if (!isTuiAgent(value)) {
+    throw new Error(
+      `Unknown or retired TUI agent: ${typeof value === 'string' ? value : String(value)}`
+    )
+  }
 }
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {

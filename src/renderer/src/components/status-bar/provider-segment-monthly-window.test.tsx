@@ -91,29 +91,6 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).not.toContain('20% used')
   })
 
-  it('selects a named bucket as the tightest provider window', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
-    const limits: ProviderRateLimits = {
-      provider: 'gemini',
-      session: null,
-      weekly: null,
-      buckets: [
-        { ...windowOf(25, 300), name: 'Flash' },
-        { ...windowOf(80, 300), name: 'Pro' }
-      ],
-      updatedAt: Date.now(),
-      error: null,
-      status: 'ok'
-    }
-
-    const markup = renderToStaticMarkup(
-      <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
-    )
-
-    expect(markup).toContain('80% used Pro')
-    expect(markup).not.toContain('25% used')
-  })
-
   // Why: #8378 — status-bar chip showed fixed window size ("5h") while the
   // usage popup showed remaining time for the same resetsAt.
   it('shows remaining session time on the chip when resetsAt is known (repro-8378)', async () => {

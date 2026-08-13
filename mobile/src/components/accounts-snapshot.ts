@@ -34,11 +34,13 @@ export const ProviderRateLimitsSchema = z
     provider: z.enum([
       'claude',
       'codex',
-      'gemini',
       'opencode-go',
       'kimi',
       'minimax',
       'grok',
+      // Why: an older paired host still publishes these retired providers;
+      // rejecting them would fail the whole snapshot over one unused entry.
+      'gemini',
       'antigravity'
     ]),
     session: RateLimitWindowSchema.nullable(),

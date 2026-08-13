@@ -13,6 +13,7 @@ import {
   MANAGED_AGENT_HOOK_STATUS_READERS,
   type ManagedAgentHookInstaller
 } from './managed-agent-hook-registry'
+import { removeRetiredGeminiManagedHooksLocal } from './retired-gemini-hook-cleanup'
 
 export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
 
@@ -110,6 +111,12 @@ export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  // Why: Gemini CLI is gone; strip leftover managed hooks that 404 on /hook/gemini.
+  try {
+    removeRetiredGeminiManagedHooksLocal()
+  } catch (error) {
+    console.warn('[agent-hooks] Failed to clean retired Gemini managed hooks:', error)
+  }
   await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
@@ -166,6 +173,15 @@ export async function installManagedAgentHooks(
 }
 
 export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookInstallStatus[] {
+  // Why: full uninstall must also clear retired Gemini entries that no longer
+  // have a remover in MANAGED_AGENT_HOOK_REMOVERS.
+  if (!options.agents) {
+    try {
+      removeRetiredGeminiManagedHooksLocal()
+    } catch (error) {
+      console.warn('[agent-hooks] Failed to clean retired Gemini managed hooks:', error)
+    }
+  }
   const allowed = options.agents ? new Set(options.agents) : null
   return MANAGED_AGENT_HOOK_REMOVERS.filter(
     ([agent]) => allowed === null || allowed.has(agent)

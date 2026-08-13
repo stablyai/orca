@@ -6,6 +6,7 @@
 import type { SFTPWrapper } from 'ssh2'
 
 import type { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
+import { removeRetiredGeminiManagedHooksRemote } from './retired-gemini-hook-cleanup'
 import {
   buildManagedHookDetectionCommands,
   detectedManagedHookAgents,
@@ -27,7 +28,8 @@ export async function installWslGuestHooks(options: {
   warn: (message: string) => void
 }): Promise<void> {
   const { mux, guestHome, distro, installHooks, settings, warn } = options
-  let agents
+  const sftp = createWslHookSftpAdapter(mux)
+  let agents: ReturnType<typeof detectedManagedHookAgents> = []
   try {
     const detected = (await mux.request('preflight.detectAgents', {
       commands: buildManagedHookDetectionCommands(settings, 'linux')
@@ -39,12 +41,23 @@ export async function installWslGuestHooks(options: {
         error instanceof Error ? error.message : String(error)
       }`
     )
-    return
   }
   if (agents.length === 0) {
+    // Why: installHooks owns retired-agent cleanup, but it only runs when a
+    // supported agent was detected — a guest with only the retired CLI would
+    // otherwise keep posting to a dead hook endpoint.
+    try {
+      await removeRetiredGeminiManagedHooksRemote(sftp, guestHome)
+    } catch (error) {
+      warn(
+        `[agent-hooks] WSL retired Gemini hook cleanup for '${distro}' failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
     return
   }
-  const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
+  const results = await installHooks(sftp, guestHome, {
     codexHomeDir: wslCodexRuntimeHomeForGuestHome(guestHome),
     agents
   })

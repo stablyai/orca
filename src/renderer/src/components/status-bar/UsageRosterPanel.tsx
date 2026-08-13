@@ -20,7 +20,7 @@ import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mod
 type ProviderId = ProviderRateLimits['provider']
 export type UsageSection = { label: string; window: RateLimitWindow }
 
-// Windows/buckets that actually carry data — absent limits arrive as null, but a
+// Windows that actually carry data — absent limits arrive as null, but a
 // partial/rehydrated provider can also carry an undefined window; both must be
 // dropped so downstream consumers never dereference `window.usedPercent`.
 function usedSections(p: ProviderRateLimits): UsageSection[] {
@@ -35,15 +35,11 @@ function providerMaxUsed(sections: UsageSection[]): number {
     : 0
 }
 
-// Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
 function shortLabel(
   p: ProviderRateLimits,
   section: UsageSection,
   useRemainingDuration = false
 ): string {
-  if (p.buckets?.some((b) => b.name === section.label)) {
-    return section.label
-  }
   // fableWeekly shares the 7d window with weekly; label it distinctly so the two
   // don't both render as "wk".
   if (section.window === p.fableWeekly) {

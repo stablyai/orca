@@ -259,14 +259,14 @@ describe('createPaneForegroundAgentTracker', () => {
   })
 
   it('recognizes an agent started from a nested shell on a ladder re-read', async () => {
-    readForegroundProcess.mockResolvedValueOnce('bash').mockResolvedValueOnce('gemini')
+    readForegroundProcess.mockResolvedValueOnce('bash').mockResolvedValueOnce('codex')
     const tracker = makeTracker()
 
     tracker.onCommandStarted()
     await flushSettleRead(COMMAND_SETTLE_MS)
     await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
 
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'gemini', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({ agent: 'codex', shellForeground: false })
   })
 
   it('marks shell foreground on command finished without any foreground read', () => {

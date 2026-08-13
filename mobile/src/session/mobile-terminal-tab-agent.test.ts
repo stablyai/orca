@@ -55,8 +55,10 @@ describe('resolveMobileTerminalTabAgentId', () => {
     ).toBe('codex')
   })
 
-  it('falls back to explicit terminal titles when hook identity is unavailable', () => {
-    expect(resolveMobileTerminalTabAgentId(terminalTab('✦ Gemini CLI'))).toBe('gemini')
+  it('does not map retired Gemini title decorations to an agent id', () => {
+    // Gemini CLI is no longer a TuiAgent; title fallback must not invent an identity.
+    expect(resolveMobileTerminalTabAgentId(terminalTab('✦ Gemini CLI'))).toBeNull()
+    expect(resolveMobileTerminalTabAgentId(terminalTab('Codex ready'))).toBe('codex')
   })
 
   it('does not let title fallback override launch identity', () => {
@@ -76,8 +78,18 @@ describe('resolveMobileTerminalTabAgentId', () => {
 })
 
 describe('getMobileSessionTabTitle', () => {
+  it('keeps retired Gemini titles unstripped when no agent identity is known', () => {
+    // No icon without identity; leave the raw title (including decoration) alone.
+    expect(getMobileSessionTabTitle(terminalTab('✦ Gemini CLI'))).toBe('✦ Gemini CLI')
+  })
+
   it('strips leading agent decorations when an icon is shown', () => {
-    expect(getMobileSessionTabTitle(terminalTab('✦ Gemini CLI'))).toBe('Gemini CLI')
+    expect(getMobileSessionTabTitle(terminalTab('Codex ready', { agentType: 'codex' }))).toBe(
+      'Codex ready'
+    )
+    expect(getMobileSessionTabTitle(terminalTab('✳ investigating', { agentType: 'claude' }))).toBe(
+      'investigating'
+    )
   })
 
   it('falls back for glyph-only agent titles on mobile', () => {

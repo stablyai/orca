@@ -9,7 +9,6 @@ import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
-import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
@@ -40,7 +39,7 @@ type SessionParseCacheEntry = {
 }
 
 // Incremental append-parsing applies only to transcripts that are append-only
-// JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes/gemini-json)
+// JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes)
 // are rewritten in place, Kimi reads a state doc plus a sibling wire file, and
 // OpenCode reads SQLite rows or a doc plus a message dir — those formats keep
 // unchanged-file reuse only and re-parse whole when they change.
@@ -67,10 +66,6 @@ function resumableStateFactoryFor(
       const agent = candidate.agent
       return () => createMessageGraphSessionResumeState(agent, candidate.file)
     }
-    case 'gemini':
-      return candidate.file.path.endsWith('.jsonl')
-        ? () => createGeminiJsonlSessionResumeState(candidate.file)
-        : null
     case 'antigravity':
       return () => createAntigravitySessionResumeState(candidate.file)
     case 'devin':
@@ -166,7 +161,7 @@ function storeEntry(path: string, entry: SessionParseCacheEntry): void {
 /**
  * Parse a session file, reusing prior work where the file is provably
  * unchanged (mtime+size) and, for append-only JSONL transcripts (Claude,
- * Codex, Cursor, Copilot, Droid, OpenClaw/Pi/OMP, Gemini-JSONL), resuming the
+ * Codex, Cursor, Copilot, Droid, OpenClaw/Pi/OMP), resuming the
  * parse from the last consumed byte when the file only grew. This is what
  * keeps the renderer's ~5s forced rescans from re-reading gigabytes of
  * transcripts (STA-1278/STA-1417: main process pegging one core during

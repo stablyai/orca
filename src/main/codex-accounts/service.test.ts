@@ -144,7 +144,6 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     opencodeWorkspaceId: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
-    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
     confirmClosePinnedTab: true,
@@ -235,10 +234,8 @@ function createResetRateLimitState(
   return {
     claude: null,
     codex,
-    gemini: null,
     opencodeGo: null,
     kimi: null,
-    antigravity: null,
     minimax: null,
     grok: null,
     minimaxCookieConfigured: false,

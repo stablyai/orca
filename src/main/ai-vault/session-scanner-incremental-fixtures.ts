@@ -240,45 +240,6 @@ export function ompFixture(): IncrementalAgentFixture {
   }
 }
 
-export function geminiJsonlFixture(): IncrementalAgentFixture {
-  return {
-    agent: 'gemini',
-    fileName: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl',
-    seedLines: [
-      JSON.stringify({
-        sessionId: 'gemini-session-1',
-        startTime: '2026-05-01T10:00:00.000Z',
-        type: 'user',
-        content: 'gemini seed question',
-        timestamp: '2026-05-01T10:00:00.000Z'
-      }),
-      JSON.stringify({
-        type: 'gemini',
-        content: 'gemini seed answer',
-        model: 'gemini-3-pro',
-        tokens: { input: 80, output: 30 },
-        timestamp: '2026-05-01T10:00:30.000Z'
-      })
-    ],
-    appendLines: [
-      JSON.stringify({
-        type: 'user',
-        content: 'gemini follow-up',
-        timestamp: '2026-05-01T10:01:00.000Z'
-      }),
-      JSON.stringify({ $set: { lastUpdated: '2026-05-01T10:01:05.000Z' } })
-    ],
-    truncatedLines: [
-      JSON.stringify({
-        sessionId: 'gemini-session-1',
-        type: 'user',
-        content: 'gemini rewritten',
-        timestamp: '2026-05-01T10:00:00.000Z'
-      })
-    ]
-  }
-}
-
 export function allIncrementalAgentFixtures(): IncrementalAgentFixture[] {
   return [
     codexFixture(),
@@ -289,7 +250,6 @@ export function allIncrementalAgentFixtures(): IncrementalAgentFixture[] {
     piFixture(),
     ompFixture(),
     primeAgentFixture(),
-    geminiJsonlFixture(),
     antigravityFixture()
   ]
 }

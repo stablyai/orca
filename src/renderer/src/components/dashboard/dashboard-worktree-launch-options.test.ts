@@ -66,10 +66,11 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
           disabledTuiAgents: ['claude']
         } as LaunchState['settings']
       }),
-      [card(), card({ paneKey: 'pane-2', agentType: 'gemini' })]
+      [card(), card({ paneKey: 'pane-2', agentType: 'droid' })]
     )
 
-    expect(options).toEqual({ 'worktree-1': ['codex', 'gemini'] })
+    // droid is undetected locally but proven by a running pane, so it stays offerable.
+    expect(options).toEqual({ 'worktree-1': ['codex', 'droid'] })
   })
 
   it('publishes detected launch choices for workspaces without cards', () => {

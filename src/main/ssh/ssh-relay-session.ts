@@ -1297,7 +1297,10 @@ export class SshRelaySession {
         commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
       })) as { agents?: unknown }
       const agents = detectedManagedHookAgents(detected?.agents)
-      if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
+      // Why: an empty agent list still goes to the host — the request also runs
+      // retired-agent hook cleanup, which a host with none of the supported CLIs
+      // installed would otherwise never get.
+      if (shouldContinue && !shouldContinue()) {
         return
       }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()

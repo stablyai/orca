@@ -55,6 +55,7 @@ describe('headless automation workspace create args', () => {
   it('stamps automation provenance for serve-mode new-per-run workspaces', () => {
     const args = buildHeadlessAutomationWorktreeCreateArgs({
       automation,
+      agentId: 'codex',
       run: {
         id: 'run-1',
         title: 'Nightly review run',
@@ -93,6 +94,7 @@ describe('headless automation workspace create args', () => {
   it('falls back to skip for legacy automations without a saved setup decision', () => {
     const args = buildHeadlessAutomationWorktreeCreateArgs({
       automation: { ...automation, setupDecision: undefined },
+      agentId: 'codex',
       run: {
         id: 'run-1',
         title: 'Nightly review run',

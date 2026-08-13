@@ -36,7 +36,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
     store.getState().setRuntimePaneTitle('tab-1', 1, '⠋ Claude')
     const afterWorking = store.getState().sortEpoch
     expect(afterWorking).toBeGreaterThan(before)
-    store.getState().setRuntimePaneTitle('tab-1', 1, '✋ Gemini CLI')
+    store.getState().setRuntimePaneTitle('tab-1', 1, 'Codex · action required')
     expect(store.getState().sortEpoch).toBeGreaterThan(afterWorking)
   })
 
@@ -298,7 +298,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
         'wt-bg': [makeTab({ id: 'tab-1', worktreeId: 'wt-bg' })]
       }
     })
-    store.getState().setRuntimePaneTitle('tab-1', 1, '✋ Gemini CLI')
+    store.getState().setRuntimePaneTitle('tab-1', 1, 'Codex · action required')
     const baseline = store.getState().sortEpoch
     store.getState().clearRuntimePaneTitle('tab-1', 1)
     expect(store.getState().sortEpoch).toBeGreaterThan(baseline)
@@ -373,7 +373,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
     })
     // Seed the classified title while wt-a is INACTIVE so the gate doesn't
     // suppress this preparatory write — we only want to test the gate on clear.
-    store.getState().setRuntimePaneTitle('tab-1', 1, '✋ Gemini CLI')
+    store.getState().setRuntimePaneTitle('tab-1', 1, 'Codex · action required')
     store.setState({ activeWorktreeId: 'wt-a' })
     const baseline = store.getState().sortEpoch
     store.getState().clearRuntimePaneTitle('tab-1', 1)

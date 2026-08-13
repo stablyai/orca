@@ -1,5 +1,9 @@
-import type { Automation } from '../../../../shared/automations-types'
+import {
+  AUTOMATION_MISSING_AGENT_MESSAGE,
+  type Automation
+} from '../../../../shared/automations-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   describeRuntimeCompatBlock,
   evaluateRuntimeCompat
@@ -10,10 +14,10 @@ import {
 } from '../../../../shared/protocol-version'
 import type { AutomationHostTarget } from './automation-host-client'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
+import { getAutomationSourceAvailability } from './automation-source-availability'
 
 export type AutomationTargetAvailability =
   | {
@@ -24,6 +28,7 @@ export type AutomationTargetAvailability =
   | {
       canRunNow: false
       reason:
+        | 'missing-agent'
         | 'missing-project'
         | 'missing-project-host-setup'
         | 'project-host-setup-not-ready'
@@ -67,6 +72,10 @@ export function getAutomationTargetAvailability({
   automationHostTarget,
   sourceHostAvailability
 }: AutomationTargetAvailabilityArgs): AutomationTargetAvailability {
+  // Why: a retired id persisted by an older host is truthy but unlaunchable.
+  if (!isTuiAgent(automation.agentId)) {
+    return unavailable('missing-agent', AUTOMATION_MISSING_AGENT_MESSAGE)
+  }
   if (!repo) {
     return unavailable('missing-project', 'The target project is no longer available.')
   }
@@ -180,86 +189,6 @@ function repoHostMatchesRunContext(
   // Why: repos fetched from a remote runtime are owned by runtime:<env> in the
   // renderer, but saved automations still target the host setup that runs there.
   return targetHostId !== null && getRepoExecutionHostId(repo) === targetHostId
-}
-
-function getAutomationSourceAvailability(
-  sourceContext: TaskSourceContext | null | undefined,
-  sourceHostAvailability: readonly TaskSourceHostAvailability[] | undefined
-): AutomationTargetAvailability | null {
-  if (!sourceContext) {
-    return null
-  }
-  const availability = sourceHostAvailability?.find(
-    (entry) => entry.hostId === sourceContext.hostId
-  )
-  if (!availability) {
-    return null
-  }
-  const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
-  switch (availability.reason) {
-    case undefined:
-      break
-    case 'missing-provider-auth':
-      return unavailable(
-        'source-auth-needed',
-        `Connect the saved ${providerLabel} source account before running manually.`
-      )
-    case 'unavailable-source-tool':
-      return unavailable(
-        'source-tool-unavailable',
-        `Install or configure the ${providerLabel} source tool before running manually.`
-      )
-    case 'unsupported-provider':
-    case 'missing-task-source-capability':
-      return unavailable(
-        'source-provider-unsupported',
-        `The saved ${providerLabel} source is not supported on this automation host.`
-      )
-    case 'checking-task-source-capability':
-      return unavailable(
-        'source-host-unavailable',
-        `Checking the saved ${providerLabel} source host before running manually.`
-      )
-  }
-  if (
-    availability.health === 'disconnected' ||
-    availability.health === 'blocked' ||
-    availability.health === 'error' ||
-    availability.status === 'disconnected' ||
-    availability.status === 'auth-failed' ||
-    availability.status === 'reconnection-failed' ||
-    availability.status === 'error'
-  ) {
-    return unavailable(
-      'source-host-unavailable',
-      `Reconnect the saved ${providerLabel} source host before running manually.`
-    )
-  }
-  if (
-    availability.health === 'connecting' ||
-    availability.status === 'connecting' ||
-    availability.status === 'deploying-relay' ||
-    availability.status === 'reconnecting'
-  ) {
-    return unavailable(
-      'source-host-unavailable',
-      `The saved ${providerLabel} source host is still connecting.`
-    )
-  }
-  return null
-}
-
-function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
 }
 
 function getRuntimeAutomationAvailability(

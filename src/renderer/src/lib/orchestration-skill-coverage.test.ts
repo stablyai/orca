@@ -53,12 +53,11 @@ describe('orchestration skill agent coverage', () => {
     expect(
       getOrchestrationSkillAgentStatuses(
         skills,
-        ['codex', 'gemini', 'droid'],
+        ['codex', 'droid'],
         [source('/Users/test/.agents/skills', null)]
       )
     ).toEqual([
       { agent: 'codex', label: 'Codex', installed: true },
-      { agent: 'gemini', label: 'Gemini', installed: true },
       { agent: 'droid', label: 'Droid', installed: true }
     ])
   })
@@ -76,7 +75,7 @@ describe('orchestration skill agent coverage', () => {
     const sources = [source('/Users/test/.claude/skills', 'claude')]
     expect(agentHasOrchestrationSkill('claude', skills, sources)).toBe(true)
     expect(agentHasOrchestrationSkill('codex', skills, sources)).toBe(false)
-    expect(agentHasOrchestrationSkill('gemini', skills, sources)).toBe(false)
+    expect(agentHasOrchestrationSkill('grok', skills, sources)).toBe(false)
   })
 
   it('marks Codex from plugin cache installs', () => {
@@ -120,7 +119,7 @@ describe('orchestration skill agent coverage', () => {
   it('ignores repo-scoped orchestration installs', () => {
     expect(
       agentHasOrchestrationSkill(
-        'gemini',
+        'codex',
         [
           skill({
             providers: ['agent-skills'],
@@ -175,11 +174,6 @@ describe('orchestration skill agent coverage', () => {
         directoryPath: '/Users/test/.omp/agent/skills/orchestration'
       },
       {
-        agent: 'gemini',
-        rootPath: '/Users/test/.gemini/skills',
-        directoryPath: '/Users/test/.gemini/skills/orchestration'
-      },
-      {
         agent: 'antigravity',
         rootPath: '/Users/test/.gemini/antigravity/skills',
         directoryPath: '/Users/test/.gemini/antigravity/skills/orchestration'
@@ -208,7 +202,6 @@ describe('orchestration skill agent coverage', () => {
       source('/Users/test/.grok/skills', 'grok'),
       source('/Users/test/.config/opencode/skills', 'opencode'),
       source('/Users/test/.pi/agent/skills', 'pi'),
-      source('/Users/test/.gemini/skills', 'gemini'),
       source('/Users/test/.gemini/antigravity/skills', 'antigravity'),
       source('/Users/test/.cursor/skills', 'cursor')
     ]
@@ -231,7 +224,6 @@ describe('orchestration skill agent coverage', () => {
           'grok',
           'opencode',
           'pi',
-          'gemini',
           'antigravity',
           'cursor'
         ],
@@ -349,15 +341,9 @@ describe('orchestration skill agent coverage', () => {
     expect(agentHasOrchestrationSkill('pi', ompInstall, ompSources)).toBe(false)
   })
 
-  it('keeps Gemini and Antigravity distinct despite sharing the ~/.gemini root', () => {
-    const geminiInstall = [
-      skill({
-        providers: ['agent-skills'],
-        sourceKind: 'home',
-        rootPath: '/Users/test/.gemini/skills',
-        directoryPath: '/Users/test/.gemini/skills/orchestration'
-      })
-    ]
+  it('scopes an Antigravity install under ~/.gemini/antigravity to Antigravity alone', () => {
+    // Why: Antigravity nests its skills inside ~/.gemini, so prefix matching on
+    // the home root would hand its coverage to unrelated agents.
     const antigravityInstall = [
       skill({
         providers: ['agent-skills'],
@@ -367,14 +353,11 @@ describe('orchestration skill agent coverage', () => {
       })
     ]
 
-    const geminiSources = [source('/Users/test/.gemini/skills', 'gemini')]
     const antigravitySources = [source('/Users/test/.gemini/antigravity/skills', 'antigravity')]
-    expect(agentHasOrchestrationSkill('gemini', geminiInstall, geminiSources)).toBe(true)
-    expect(agentHasOrchestrationSkill('antigravity', geminiInstall, geminiSources)).toBe(false)
     expect(agentHasOrchestrationSkill('antigravity', antigravityInstall, antigravitySources)).toBe(
       true
     )
-    expect(agentHasOrchestrationSkill('gemini', antigravityInstall, antigravitySources)).toBe(false)
+    expect(agentHasOrchestrationSkill('codex', antigravityInstall, antigravitySources)).toBe(false)
   })
 
   it('marks Claude Agent Teams from ~/.claude/skills like Claude Code', () => {

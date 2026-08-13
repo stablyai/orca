@@ -350,25 +350,6 @@ describe('CommitMessageAiPane', () => {
     expect(markup).not.toContain('Thinking effort')
   })
 
-  it('removes the old Gemini text-generation lockout from the settings pane', () => {
-    const markup = renderPane(
-      buildSettings({
-        commitMessageAi: {
-          enabled: true,
-          agentId: 'gemini',
-          selectedModelByAgent: {},
-          selectedThinkingByModel: {},
-          customPrompt: '',
-          customAgentCommand: ''
-        }
-      })
-    )
-
-    expect(markup).toContain('Action recipes')
-    expect(markup).not.toContain('Gemini Source Control AI is coming soon')
-    expect(markup).not.toContain('Which model Source Control AI uses')
-  })
-
   it('keeps action recipes discoverable in settings search metadata', () => {
     const actionRecipesEntry = getCommitMessageAiPaneSearchEntries().find(
       (entry) => entry.title === 'Action recipes'

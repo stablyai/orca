@@ -17,6 +17,10 @@ export type AutomationRunStatus =
   | 'dispatch_failed'
 export type AutomationRunTrigger = 'scheduled' | 'manual'
 
+/** Shown wherever an automation lost its agent to a retired-agent cleanup. */
+export const AUTOMATION_MISSING_AGENT_MESSAGE =
+  'This automation used an agent Orca no longer ships. Edit it and pick a new agent.'
+
 /** Statuses a run can never leave; only these are safe to evict from history. */
 export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean {
   return (
@@ -92,7 +96,9 @@ export type Automation = {
   name: string
   prompt: string
   precheck: AutomationPrecheck | null
-  agentId: TuiAgent
+  /** null once the saved agent is retired from Orca; such an automation stays
+   *  paused and cannot dispatch until the user picks a new agent. */
+  agentId: TuiAgent | null
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -185,7 +191,6 @@ export type AutomationUpdateInput = Partial<
     | 'name'
     | 'prompt'
     | 'precheck'
-    | 'agentId'
     | 'runContext'
     | 'sourceContext'
     | 'projectId'
@@ -200,7 +205,10 @@ export type AutomationUpdateInput = Partial<
     | 'enabled'
     | 'missedRunGraceMinutes'
   >
->
+> & {
+  /** Non-null: an update may replace a retired agent but never clear one. */
+  agentId?: TuiAgent
+}
 
 export type AutomationDispatchRequest = {
   automation: Automation

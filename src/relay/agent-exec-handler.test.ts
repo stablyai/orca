@@ -1,7 +1,12 @@
 import { execFile, spawn } from 'node:child_process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
-import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
+import {
+  clearInheritedGitConfigEnv,
+  createFakeChild,
+  createHandlers,
+  requestContext
+} from './agent-exec-handler-test-harness'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
 
 vi.mock('child_process', async (importOriginal) => {
@@ -19,9 +24,16 @@ const execFileMock = vi.mocked(execFile)
 type AgentExecResult = { exitCode: number | null; timedOut: boolean }
 
 describe('AgentExecHandler', () => {
+  let restoreGitConfigEnv: (() => void) | undefined
+
   beforeEach(() => {
     spawnMock.mockReset()
     execFileMock.mockReset()
+    restoreGitConfigEnv = clearInheritedGitConfigEnv()
+  })
+
+  afterEach(() => {
+    restoreGitConfigEnv?.()
   })
 
   it('executes a non-interactive command with captured output and stdin', async () => {

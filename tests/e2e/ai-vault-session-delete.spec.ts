@@ -53,28 +53,28 @@ test.describe('AI Vault session delete', () => {
     orcaPage
   }) => {
     const homeDir = await isolatedHome(electronApp)
-    const title = `E2E gemini ${Date.now()}`
-    const dir = path.join(homeDir, '.gemini', 'tmp', 'proj', 'chats')
+    const title = `E2E hermes ${Date.now()}`
+    const dir = path.join(homeDir, '.hermes', 'sessions')
     mkdirSync(dir, { recursive: true })
-    const filePath = path.join(dir, 'session-e2e.json')
+    const filePath = path.join(dir, 'session_e2e.json')
     writeFileSync(
       filePath,
       JSON.stringify({
-        sessionId: 'gemini-e2e',
-        startTime: '2026-07-20T10:00:00.000Z',
-        lastUpdated: '2026-07-20T10:05:00.000Z',
-        messages: [{ type: 'user', content: title, timestamp: '2026-07-20T10:00:00.000Z' }]
+        session_id: 'hermes-e2e',
+        session_start: '2026-07-20T10:00:00.000Z',
+        last_updated: '2026-07-20T10:05:00.000Z',
+        messages: [{ role: 'user', content: title }]
       })
     )
 
-    const session = await findSession(orcaPage, 'gemini', title)
-    expect(session, 'seeded gemini session should be listed').toBeTruthy()
+    const session = await findSession(orcaPage, 'hermes', title)
+    expect(session, 'seeded hermes session should be listed').toBeTruthy()
 
     const result = await deleteSession(orcaPage, session as AiVaultSession)
 
     expect(result.outcome).toBe('deleted')
     expect(existsSync(filePath), 'transcript should be gone from disk').toBe(false)
-    expect(await findSession(orcaPage, 'gemini', title)).toBeFalsy()
+    expect(await findSession(orcaPage, 'hermes', title)).toBeFalsy()
   })
 
   test('trashes a claude directory session and its companions but keeps file-history', async ({

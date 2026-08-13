@@ -36,7 +36,7 @@ vi.mock('../wsl-unc-delete', () => ({
 import { deleteAiVaultSessionFile } from './session-delete'
 
 const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
-const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
+const COPILOT_ROOT = join(HOME, '.copilot', 'session-state')
 const CLAUDE_ROOT = join(HOME, '.claude', 'projects')
 const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
 
@@ -48,10 +48,10 @@ function enoent(): NodeJS.ErrnoException {
 
 function baseArgs(filePath: string) {
   return {
-    agent: 'gemini' as const,
+    agent: 'copilot' as const,
     filePath,
     executionHostId: 'local' as const,
-    rootOptions: { geminiSessionsDir: GEMINI_ROOT }
+    rootOptions: { copilotSessionsDir: COPILOT_ROOT }
   }
 }
 
@@ -63,7 +63,7 @@ describe('deleteAiVaultSessionFile', () => {
   })
 
   it('trashes a regular file whose realpath matches the resolved path', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     lstatMock.mockResolvedValue({ isFile: () => true })
     realpathMock.mockResolvedValue(filePath)
     trashItemMock.mockResolvedValue(undefined)
@@ -75,35 +75,35 @@ describe('deleteAiVaultSessionFile', () => {
   })
 
   it('rejects a directory instead of trashing it', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     lstatMock.mockResolvedValue({ isFile: () => false })
 
     const result = await deleteAiVaultSessionFile(baseArgs(filePath))
 
     expect(result).toEqual({
       outcome: 'rejected',
-      agent: 'gemini',
+      agent: 'copilot',
       reason: 'unexpected-target-kind'
     })
     expect(trashItemMock).not.toHaveBeenCalled()
   })
 
   it('rejects a symlink instead of trashing it (isFile() is false for a symlink under lstat)', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     lstatMock.mockResolvedValue({ isFile: () => false })
 
     const result = await deleteAiVaultSessionFile(baseArgs(filePath))
 
     expect(result).toEqual({
       outcome: 'rejected',
-      agent: 'gemini',
+      agent: 'copilot',
       reason: 'unexpected-target-kind'
     })
     expect(trashItemMock).not.toHaveBeenCalled()
   })
 
   it('rejects a regular file whose realpath escapes the known roots', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     const escaped = join(HOME, 'Documents', 'escaped.json')
     lstatMock.mockResolvedValue({ isFile: () => true })
     // The file's realpath escapes; the root realpaths to itself (not symlinked).
@@ -113,22 +113,22 @@ describe('deleteAiVaultSessionFile', () => {
 
     expect(result).toEqual({
       outcome: 'rejected',
-      agent: 'gemini',
+      agent: 'copilot',
       reason: 'path-outside-known-roots'
     })
     expect(trashItemMock).not.toHaveBeenCalled()
   })
 
   it('accepts a session under a symlinked root by realpath-resolving the roots too', async () => {
-    // GEMINI_ROOT is a symlink to a real target; the file's realpath lands under
+    // COPILOT_ROOT is a symlink to a real target; the file's realpath lands under
     // the real target, which the text-only root would not match. Realpath-ing
     // the root as well keeps this legit delete from a false rejection.
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
-    const realRoot = join('/real', '.gemini', 'tmp')
-    const realFile = join(realRoot, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
+    const realRoot = join('/real', '.copilot', 'session-state')
+    const realFile = join(realRoot, 'session-1.jsonl')
     lstatMock.mockResolvedValue({ isFile: () => true })
     realpathMock.mockImplementation((p: string) =>
-      Promise.resolve(p === GEMINI_ROOT ? realRoot : p === filePath ? realFile : p)
+      Promise.resolve(p === COPILOT_ROOT ? realRoot : p === filePath ? realFile : p)
     )
     trashItemMock.mockResolvedValue(undefined)
 
@@ -139,7 +139,7 @@ describe('deleteAiVaultSessionFile', () => {
   })
 
   it('treats ENOENT from lstat as an idempotent success', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     lstatMock.mockRejectedValue(enoent())
 
     const result = await deleteAiVaultSessionFile(baseArgs(filePath))
@@ -149,7 +149,7 @@ describe('deleteAiVaultSessionFile', () => {
   })
 
   it('treats ENOENT from trashItem as an idempotent success (race with an external delete)', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     lstatMock.mockResolvedValue({ isFile: () => true })
     realpathMock.mockResolvedValue(filePath)
     trashItemMock.mockRejectedValue(enoent())
@@ -160,14 +160,14 @@ describe('deleteAiVaultSessionFile', () => {
   })
 
   it('returns a failure result when trashItem throws a non-ENOENT error', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     lstatMock.mockResolvedValue({ isFile: () => true })
     realpathMock.mockResolvedValue(filePath)
     trashItemMock.mockRejectedValue(new Error('permission denied'))
 
     const result = await deleteAiVaultSessionFile(baseArgs(filePath))
 
-    expect(result).toEqual({ outcome: 'failed', agent: 'gemini', error: 'permission denied' })
+    expect(result).toEqual({ outcome: 'failed', agent: 'copilot', error: 'permission denied' })
   })
 
   it('short-circuits a rejected validation (unsupported agent) before touching the filesystem', async () => {
@@ -187,7 +187,7 @@ describe('deleteAiVaultSessionFile', () => {
   })
 
   it('delegates a WSL UNC file to tryDeleteWslUncPath (non-recursive) and never calls trashItem', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     tryDeleteWslUncPathMock.mockResolvedValue(true)
 
     const result = await deleteAiVaultSessionFile(baseArgs(filePath))
@@ -195,7 +195,7 @@ describe('deleteAiVaultSessionFile', () => {
     expect(result).toEqual({ outcome: 'deleted' })
     expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(resolve(filePath), {
       recursive: false,
-      approvedRoots: [resolve(GEMINI_ROOT)]
+      approvedRoots: [resolve(COPILOT_ROOT)]
     })
     expect(lstatMock).not.toHaveBeenCalled()
     expect(trashItemMock).not.toHaveBeenCalled()
@@ -225,7 +225,7 @@ describe('deleteAiVaultSessionFile', () => {
   })
 
   it('maps a WSL containment rejection to a delete rejection', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    const filePath = join(COPILOT_ROOT, 'session-1.jsonl')
     tryDeleteWslUncPathMock.mockRejectedValue(
       new WslDeleteValidationErrorMock('path-outside-known-roots')
     )
@@ -234,7 +234,7 @@ describe('deleteAiVaultSessionFile', () => {
 
     expect(result).toEqual({
       outcome: 'rejected',
-      agent: 'gemini',
+      agent: 'copilot',
       reason: 'path-outside-known-roots'
     })
     expect(lstatMock).not.toHaveBeenCalled()

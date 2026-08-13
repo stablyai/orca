@@ -91,10 +91,10 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
-        sleepingSessionAgent: 'gemini',
+        sleepingSessionAgent: 'aider',
         launchAgent: 'codex'
       })
-    ).toBe('gemini')
+    ).toBe('aider')
   })
 
   it('keeps a genuine tab icon when its sleeping record matches the launchAgent', () => {

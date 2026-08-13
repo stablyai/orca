@@ -219,7 +219,7 @@ describe('TabBarCreateEntry tab results', () => {
       { id: 'new-browser', kind: 'new-browser', keywords: ['gem'], label: 'New Browser Tab' }
     ]
     const agentOptions: TabAgentLaunchOption[] = [
-      { agent: 'gemini', aliases: ['gemini'], label: 'Gemini' }
+      { agent: 'claude', aliases: ['gem'], label: 'Claude' }
     ]
     renderEntry({ agentOptions, menuOptions })
 

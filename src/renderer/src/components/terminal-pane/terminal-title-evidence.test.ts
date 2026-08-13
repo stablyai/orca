@@ -12,45 +12,29 @@ describe('resolvePaneDisplayTitle', () => {
 })
 
 describe('resolvePaneTitleDecision', () => {
-  it('derives the display label and the renderer veto from a pane-scoped OMP owner', () => {
+  it('derives the display label from the pane-scoped owner while preserving the raw title', () => {
     const decision = resolvePaneTitleDecision({
       normalizedTitle: 'Pi ready',
-      rawTitle: '✦ Gemini CLI',
+      rawTitle: '⠀ Pi ready',
       displayOwnerAgentType: 'omp',
-      rendererOwnerAgentType: 'omp',
       userGpuMode: 'auto'
     })
     expect(decision.displayTitle).toBe('OMP ready')
-    expect(decision.rawTitle).toBe('✦ Gemini CLI')
-    // Why: the OMP owner renames the label and vetoes the Gemini glyph fallback.
+    expect(decision.rawTitle).toBe('⠀ Pi ready')
     expect(decision.rendererPolicy.gpuEnabled).toBe(true)
   })
 
-  it('uses the renderer owner, not the display owner, for the GPU veto', () => {
+  // Why: title text is display-only evidence; it must never reach the GPU gate.
+  it('keeps the renderer policy independent of the title and its owner', () => {
     const decision = resolvePaneTitleDecision({
-      normalizedTitle: 'Pi ready',
-      rawTitle: '✦ Gemini CLI',
-      // Display label follows the sticky/tab-scoped owner, but the renderer veto
-      // sees no current pane-scoped owner, so the genuine Gemini pane goes DOM.
-      displayOwnerAgentType: 'omp',
-      rendererOwnerAgentType: undefined,
-      userGpuMode: 'auto'
+      normalizedTitle: 'bash',
+      rawTitle: 'bash',
+      displayOwnerAgentType: undefined,
+      userGpuMode: 'auto',
+      inContextLossContainment: true
     })
-    expect(decision.displayTitle).toBe('OMP ready')
+    expect(decision.displayTitle).toBe('bash')
     expect(decision.rendererPolicy.gpuEnabled).toBe(false)
-    expect(decision.rendererPolicy.reason).toBe('agent-compatibility')
-  })
-
-  it('DOM-gates a genuine Gemini pane while preserving its raw title', () => {
-    const decision = resolvePaneTitleDecision({
-      normalizedTitle: '✦ Gemini CLI',
-      rawTitle: '✦ Gemini CLI',
-      displayOwnerAgentType: 'gemini',
-      rendererOwnerAgentType: 'gemini',
-      userGpuMode: 'auto'
-    })
-    expect(decision.rawTitle).toBe('✦ Gemini CLI')
-    expect(decision.rendererPolicy.gpuEnabled).toBe(false)
-    expect(decision.rendererPolicy.reason).toBe('agent-compatibility')
+    expect(decision.rendererPolicy.reason).toBe('context-loss')
   })
 })

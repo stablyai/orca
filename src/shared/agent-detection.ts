@@ -13,7 +13,6 @@ export {
   isClaudeManagementTitle,
   isCursorAgentTitle,
   isCursorNativeAgentTitle,
-  isGeminiTerminalTitle,
   isPiTerminalTitle,
   shouldSuppressCursorNativeTitle,
   STRONG_IDLE_KEYWORDS_RE,

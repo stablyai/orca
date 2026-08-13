@@ -1656,35 +1656,6 @@ function extractCodexToolFields(
   return {}
 }
 
-function extractGeminiToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (
-    eventName === 'BeforeTool' ||
-    eventName === 'AfterTool' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-  ) {
-    const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.args) ??
-      deriveToolInputPreview(toolName, hookPayload.input)
-    return toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'args', 'input']) }
-    )
-  }
-  if (eventName === 'AfterAgent') {
-    const message = readString(hookPayload, 'prompt_response')
-    if (message) {
-      return { lastAssistantMessage: message }
-    }
-  }
-  return {}
-}
-
 function readAntigravityToolCall(hookPayload: Record<string, unknown>): {
   toolName?: string
   toolInputSource?: unknown
@@ -2420,8 +2391,6 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
-    case 'gemini':
-      return eventName === 'BeforeAgent'
     case 'antigravity':
       return eventName === 'PreInvocation'
     case 'amp':
@@ -2515,8 +2484,6 @@ function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
-    case 'gemini':
-      return extractGeminiToolFields(eventName, hookPayload)
     case 'antigravity':
       return extractAntigravityToolFields(eventName, hookPayload)
     case 'amp':
@@ -3102,49 +3069,6 @@ function normalizeKimiEvent(
     toolInput: snapshot.toolInput,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted
-  })
-}
-
-function normalizeGeminiEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  // Why: Gemini CLI's native pre-tool event is BeforeTool; PreToolUse/PostToolUse still accepted for legacy Antigravity-compatible payloads.
-  const stateName =
-    eventName === 'BeforeAgent' ||
-    eventName === 'BeforeTool' ||
-    eventName === 'AfterTool' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'AfterAgent'
-        ? 'done'
-        : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('gemini', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('gemini', eventName) }
-  )
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('gemini', eventName)
-    }),
-    agentType: 'gemini',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
   })
 }
 
@@ -4246,9 +4170,6 @@ export function normalizeHookPayload(
     case 'codex':
       payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
-    case 'gemini':
-      payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
     case 'antigravity':
       if (isNewTurnEvent('antigravity', eventName)) {
         resolvedPromptText =
@@ -4420,7 +4341,6 @@ export function normalizeHookPayload(
 export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> = Object.freeze({
   '/hook/claude': 'claude',
   '/hook/codex': 'codex',
-  '/hook/gemini': 'gemini',
   '/hook/antigravity': 'antigravity',
   '/hook/amp': 'amp',
   '/hook/opencode': 'opencode',

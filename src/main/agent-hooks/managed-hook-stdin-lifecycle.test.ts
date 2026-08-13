@@ -75,7 +75,6 @@ import { CopilotHookService } from '../copilot/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
 import { DevinHookService } from '../devin/hook-service'
 import { DroidHookService } from '../droid/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
@@ -124,10 +123,6 @@ const REMOTE_INSTALLERS = [
     install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, REMOTE_HOME)
   },
   {
-    agent: 'gemini',
-    install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
     agent: 'grok',
     install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, REMOTE_HOME)
   },
@@ -147,7 +142,6 @@ const LOCAL_INSTALLERS = [
   { agent: 'cursor', install: () => new CursorHookService().install() },
   { agent: 'devin', install: () => new DevinHookService().install() },
   { agent: 'droid', install: () => new DroidHookService().install() },
-  { agent: 'gemini', install: () => new GeminiHookService().install() },
   { agent: 'grok', install: () => new GrokHookService().install() },
   { agent: 'kimi', install: () => new KimiHookService().install() }
 ] as const
@@ -253,7 +247,7 @@ describe('Windows managed hook stdin structure', () => {
         (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
       )
       mainBatchScripts.push('antigravity-hook.cmd')
-      expect(mainBatchScripts).toHaveLength(10)
+      expect(mainBatchScripts).toHaveLength(9)
       for (const fileName of mainBatchScripts) {
         const script = readFileSync(join(hooksDir, fileName), 'utf8')
         // Why: missing-env path must not touch more.com — hang class from #11549.

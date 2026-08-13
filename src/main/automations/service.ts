@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
 import {
+  AUTOMATION_MISSING_AGENT_MESSAGE,
   isFinalAutomationRunStatus,
   type Automation,
   type AutomationDispatchRequest,
@@ -13,12 +14,12 @@ import type { CodexUsageStore } from '../codex-usage/store'
 import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { collectAutomationRunUsage } from './run-usage-collection'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
 import {
-  didAutomationPrecheckPass,
-  formatAutomationPrecheckFailure
-} from '../../shared/automation-precheck'
+  requestHeadlessAutomationDispatch,
+  type HeadlessAutomationDispatcher
+} from './headless-dispatch'
+import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 
 const DEFAULT_TICK_MS = 60 * 1000
 
@@ -211,6 +212,16 @@ export class AutomationService {
     automation: Automation,
     run: AutomationRun
   ): Promise<AutomationRun> {
+    // Why: a retired agent leaves agentId null (see retired-agent-settings-cleanup).
+    // Fail the run here with an actionable reason instead of at agent launch.
+    if (!isTuiAgent(automation.agentId)) {
+      return this.store.updateAutomationRun({
+        runId: run.id,
+        status: 'skipped_unavailable',
+        workspaceId: automation.workspaceId,
+        error: AUTOMATION_MISSING_AGENT_MESSAGE
+      })
+    }
     const target = resolveAutomationRunTarget(this.store, automation, {
       allowRemoteHostScheduling: this.allowRemoteHostScheduling
     })
@@ -254,63 +265,14 @@ export class AutomationService {
     run: AutomationRun,
     target: Extract<AutomationRunTargetResult, { ok: true }>
   ): Promise<AutomationRun> {
-    const precheckResult =
-      run.trigger === 'scheduled' && automation.precheck
-        ? await this.runPrecheck(automation.id, run.id)
-        : null
-    if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
-      return this.store.updateAutomationRun({
-        runId: run.id,
-        status: 'skipped_precheck',
-        workspaceId: automation.workspaceId,
-        precheckResult,
-        error: formatAutomationPrecheckFailure(precheckResult)
-      })
-    }
-    try {
-      const launch = await this.headlessDispatcher!({ automation, run, target })
-      const launchRunTarget = {
-        workspaceId: launch.workspaceId,
-        workspaceDisplayName: launch.workspaceDisplayName ?? null,
-        terminalSessionId: launch.terminalSessionId,
-        terminalPaneKey: launch.terminalPaneKey ?? null,
-        terminalPtyId: launch.terminalPtyId ?? null
-      }
-      const updated = this.store.updateAutomationRun({
-        runId: run.id,
-        status: 'dispatched',
-        ...launchRunTarget,
-        error: null
-      })
-      if (launch.completion) {
-        void launch.completion
-          .then((completion) =>
-            this.markDispatchResult({
-              runId: run.id,
-              status: completion.status,
-              ...launchRunTarget,
-              precheckResult,
-              outputSnapshot: completion.outputSnapshot ?? null,
-              error: completion.error ?? null
-            })
-          )
-          .catch((error) =>
-            this.markDispatchResult({
-              runId: run.id,
-              status: 'dispatch_failed',
-              ...launchRunTarget,
-              error: error instanceof Error ? error.message : String(error)
-            })
-          )
-      }
-      return updated
-    } catch (error) {
-      return this.store.updateAutomationRun({
-        runId: run.id,
-        status: 'dispatch_failed',
-        workspaceId: automation.workspaceId,
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
+    return await requestHeadlessAutomationDispatch({
+      store: this.store,
+      dispatch: this.headlessDispatcher!,
+      automation,
+      run,
+      target,
+      runPrecheck: () => this.runPrecheck(automation.id, run.id),
+      markDispatchResult: (result) => this.markDispatchResult(result)
+    })
   }
 }

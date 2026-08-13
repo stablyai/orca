@@ -1744,23 +1744,6 @@ export function connectPanePty(
       }) ?? undefined
     )
   }
-  // Why: the renderer veto (owner evidence beating a Gemini-looking title) must
-  // use only pane-scoped, CURRENT ownership. getAuthoritativePaneAgent leads
-  // with the tab-shared `tab.launchAgent` and a never-cleared
-  // `paneStartup.launchAgent`, which would let a sibling split pane or a reused
-  // pane keep WebGL for a genuine Gemini terminal (#7428 regression class).
-  // Launch identity is excluded, and the never-clearing startup seed
-  // (`paneStartup.initialAgentStatus`) too; a stale or `done` explicit row is
-  // ignored via the freshness predicate so a reused pane cannot inherit a prior
-  // agent's veto. Only live foreground command inference and a fresh, active
-  // hook row count. A genuine OMP/Pi pane stays protected owner-independently by
-  // the isPiAgentTitle guard inside isGeminiTerminalTitle.
-  const getPaneScopedRendererOwner = (): AgentType | undefined => {
-    const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
-    return (
-      commandInferredPaneAgent ?? (isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)
-    )
-  }
   const clearInferredInterruptWorkingTitle = (): void => {
     const state = useAppStore.getState()
     const currentTitle = state.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
@@ -2803,13 +2786,11 @@ export function connectPanePty(
     meta?: { staleWorkingTitleClear?: boolean }
   ): void => {
     // Why: one owner-aware decision drives the display label, the runtime/tab
-    // title, task-completion tracking, and the renderer gate, so raw title text
-    // can no longer disable GPU behind stronger owner evidence (#7428/#7447).
+    // title, task-completion tracking, and the renderer gate.
     const decision = resolvePaneTitleDecision({
       normalizedTitle: title,
       rawTitle,
       displayOwnerAgentType: getAuthoritativePaneAgent(),
-      rendererOwnerAgentType: getPaneScopedRendererOwner(),
       userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
     })
     const paneTitle = decision.displayTitle
@@ -3312,7 +3293,7 @@ export function connectPanePty(
   //
   // This path raises the same terminal attention marker as BEL through the
   // shared notification dispatcher. Not every agent CLI reliably emits BEL on
-  // completion (Gemini, some Codex flows), and the highlight needs to remain
+  // completion (some Codex flows), and the highlight needs to remain
   // findable after the OS banner is gone. Double-firing with a concurrent BEL
   // is handled by delaying the BEL OS notification below; main still keeps a
   // 5 s per-worktree dedupe as the final guard.

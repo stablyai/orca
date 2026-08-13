@@ -18,11 +18,6 @@ export const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Cod
 const CLAUDE_MANAGEMENT_TITLE_RE =
   /^\s*(?:"(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?"|'(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?'|(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?)\s+agents\s*$/i
 
-export const GEMINI_WORKING = '\u2726' // ✦
-export const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
-export const GEMINI_IDLE = '\u25C7' // ◇
-export const GEMINI_PERMISSION = '\u270B' // ✋
-
 export function containsBrailleSpinner(title: string): boolean {
   for (const char of title) {
     const codePoint = char.codePointAt(0)
@@ -31,24 +26,6 @@ export function containsBrailleSpinner(title: string): boolean {
     }
   }
   return false
-}
-
-export function isGeminiTerminalTitle(title: string): boolean {
-  // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  ) {
-    return true
-  }
-  // Why: Pi/OMP titles include cwd/session text; substring matching made
-  // paths like "gemini-project" masquerade as Gemini CLI.
-  if (isPiAgentTitle(title)) {
-    return false
-  }
-  return titleHasAgentName(title, 'gemini')
 }
 
 // Why: Grok Build's working OSC titles use a fixed frame shape —
@@ -138,9 +115,6 @@ export function getAgentLabel(title: string): string | null {
   ) {
     return 'Claude Code'
   }
-  if (isGeminiTerminalTitle(title)) {
-    return 'Gemini CLI'
-  }
   // Why: Pi-compatible synthetic titles can carry braille spinners, which the
   // generic agent-title heuristics would otherwise claim first.
   const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)
@@ -214,7 +188,6 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
   Codex: 'codex',
-  'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
   Devin: 'devin',

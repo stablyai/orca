@@ -17,24 +17,21 @@ describe('isStatusBarItemAvailable', () => {
     // don't want a flash of empty status bar on cold start.
     expect(isStatusBarItemAvailable('claude', null)).toBe(true)
     expect(isStatusBarItemAvailable('codex', null)).toBe(true)
-    expect(isStatusBarItemAvailable('gemini', null)).toBe(true)
-    expect(isStatusBarItemAvailable('antigravity', null)).toBe(true)
+    expect(isStatusBarItemAvailable('kimi', null)).toBe(true)
     expect(isStatusBarItemAvailable('grok', null)).toBe(true)
   })
 
   it('hides CLI items not detected on PATH', () => {
     expect(isStatusBarItemAvailable('claude', [])).toBe(false)
     expect(isStatusBarItemAvailable('codex', ['claude'])).toBe(false)
-    expect(isStatusBarItemAvailable('gemini', ['claude', 'codex'])).toBe(false)
-    expect(isStatusBarItemAvailable('antigravity', ['claude', 'codex'])).toBe(false)
+    expect(isStatusBarItemAvailable('kimi', ['claude', 'codex'])).toBe(false)
     expect(isStatusBarItemAvailable('grok', ['claude', 'kimi'])).toBe(false)
   })
 
   it('shows CLI items detected on PATH', () => {
     expect(isStatusBarItemAvailable('claude', ['claude'])).toBe(true)
     expect(isStatusBarItemAvailable('codex', ['codex', 'claude'])).toBe(true)
-    expect(isStatusBarItemAvailable('gemini', ['gemini'])).toBe(true)
-    expect(isStatusBarItemAvailable('antigravity', ['antigravity'])).toBe(true)
+    expect(isStatusBarItemAvailable('kimi', ['kimi'])).toBe(true)
     expect(isStatusBarItemAvailable('grok', ['grok'])).toBe(true)
   })
 })

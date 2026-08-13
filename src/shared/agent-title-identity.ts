@@ -6,7 +6,6 @@ import {
   containsAgentSpinnerGlyph,
   isClaudeManagementTitle,
   isCursorAgentTitle,
-  isGeminiTerminalTitle,
   isPiAgentTitle,
   titleHasAgentName
 } from './agent-title-core'
@@ -61,9 +60,6 @@ export function getAgentLabel(title: string): string | null {
     title.startsWith('* ')
   ) {
     return 'Claude Code'
-  }
-  if (isGeminiTerminalTitle(title)) {
-    return 'Gemini CLI'
   }
   // Why: Pi-compatible synthetic titles can carry braille spinners, which the
   // generic agent-title heuristics would otherwise claim first.

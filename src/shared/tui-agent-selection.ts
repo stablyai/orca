@@ -17,7 +17,6 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'pi',
   'omp',
   'prime-agent',
-  'gemini',
   'antigravity',
   'aider',
   'goose',
@@ -86,8 +85,10 @@ export function haveSameDisabledTuiAgents(left: unknown, right: unknown): boolea
   return leftSet.size === rightSet.size && [...leftSet].every((agent) => rightSet.has(agent))
 }
 
-export function isTuiAgentEnabled(agent: TuiAgent, disabled?: Iterable<unknown> | null): boolean {
-  return !normalizeDisabledTuiAgents(disabled).includes(agent)
+export function isTuiAgentEnabled(agent: unknown, disabled?: Iterable<unknown> | null): boolean {
+  // Why: retired/unknown ids must never count as "enabled" — callers pass
+  // persisted strings that outlive the TuiAgent union.
+  return isTuiAgent(agent) && !normalizeDisabledTuiAgents(disabled).includes(agent)
 }
 
 export function filterEnabledTuiAgents<T extends TuiAgent>(

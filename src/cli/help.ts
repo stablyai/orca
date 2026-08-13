@@ -593,7 +593,7 @@ export function formatFlagHelp(flag: string): string {
     'workspace-status':
       '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
     staged: '--staged               Open staged source-control changes',
-    provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
+    provider: '--provider <agent>     Agent id such as codex, claude, or opencode',
     'source-context':
       '--source-context <json|null> Explicit TaskSourceContext for automation task/provider data',
     trigger: '--trigger <schedule>   Automation schedule preset, cron, or RRULE',

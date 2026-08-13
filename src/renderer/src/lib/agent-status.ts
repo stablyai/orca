@@ -12,7 +12,6 @@ export {
   clearWorkingIndicators,
   createAgentStatusTracker,
   normalizeTerminalTitle,
-  isGeminiTerminalTitle,
   isClaudeAgent,
   isClaudeManagementTitle,
   getAgentLabel
@@ -106,7 +105,6 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   pi: true,
   omp: true,
   'prime-agent': true,
-  gemini: true,
   antigravity: true,
   aider: true,
   goose: true,

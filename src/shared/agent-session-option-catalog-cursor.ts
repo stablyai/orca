@@ -8,20 +8,6 @@ import { removeAgentArgOption } from './agent-session-option-agent-args'
 
 const hasModelFlag = (tokens: readonly string[]): boolean => hasFlag(tokens, ['-m', '--model'])
 
-export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
-  models: [
-    { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview', options: [] },
-    { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview', options: [] },
-    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', options: [] },
-    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', options: [] }
-  ],
-  modelApply: {
-    launchArgs: (value) => ['-m', String(value)],
-    agentArgsOverride: hasModelFlag,
-    midSession: { kind: 'agent-picker', command: '/model' }
-  }
-}
-
 const CURSOR_EFFORT: CatalogOption = {
   id: 'effort',
   label: 'Effort',

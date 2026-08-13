@@ -39,6 +39,17 @@ describe('tui agent startup plans', () => {
     }
   )
 
+  it('rejects retired agent ids before indexing TUI_AGENT_CONFIG', () => {
+    expect(() =>
+      buildAgentStartupPlan({
+        agent: 'gemini' as never,
+        prompt: 'hello',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toThrow(/Unknown or retired TUI agent: gemini/)
+  })
+
   it('uses POSIX quoting when the target shell is Linux', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',

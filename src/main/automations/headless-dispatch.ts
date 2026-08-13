@@ -1,8 +1,15 @@
 import type {
   Automation,
+  AutomationDispatchResult,
+  AutomationPrecheckResult,
   AutomationRun,
   AutomationRunOutputSnapshot
 } from '../../shared/automations-types'
+import {
+  didAutomationPrecheckPass,
+  formatAutomationPrecheckFailure
+} from '../../shared/automation-precheck'
+import type { Store } from '../persistence'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
@@ -69,5 +76,81 @@ export function createHeadlessAutomationOutputSnapshotBuffer(): {
         truncated
       }
     }
+  }
+}
+
+/** Serve-mode run dispatch: precheck, launch through the dispatcher, then persist
+ *  the launch target and its (possibly late) completion. */
+export async function requestHeadlessAutomationDispatch(args: {
+  store: Pick<Store, 'updateAutomationRun'>
+  dispatch: HeadlessAutomationDispatcher
+  automation: Automation
+  run: AutomationRun
+  target: Extract<AutomationRunTargetResult, { ok: true }>
+  runPrecheck: () => Promise<AutomationPrecheckResult | null>
+  markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
+}): Promise<AutomationRun> {
+  const { store, dispatch, automation, run, target, markDispatchResult } = args
+  const precheckResult =
+    run.trigger === 'scheduled' && automation.precheck ? await args.runPrecheck() : null
+  if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
+    return store.updateAutomationRun({
+      runId: run.id,
+      status: 'skipped_precheck',
+      workspaceId: automation.workspaceId,
+      precheckResult,
+      error: formatAutomationPrecheckFailure(precheckResult)
+    })
+  }
+  try {
+    const launch = await dispatch({ automation, run, target })
+    const launchRunTarget = {
+      workspaceId: launch.workspaceId,
+      workspaceDisplayName: launch.workspaceDisplayName ?? null,
+      terminalSessionId: launch.terminalSessionId,
+      terminalPaneKey: launch.terminalPaneKey ?? null,
+      terminalPtyId: launch.terminalPtyId ?? null
+    }
+    const updated = store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      ...launchRunTarget,
+      error: null
+    })
+    if (launch.completion) {
+      void launch.completion
+        .then((completion) =>
+          markDispatchResult({
+            runId: run.id,
+            status: completion.status,
+            ...launchRunTarget,
+            precheckResult,
+            outputSnapshot: completion.outputSnapshot ?? null,
+            error: completion.error ?? null
+          })
+        )
+        .catch((error) =>
+          markDispatchResult({
+            runId: run.id,
+            status: 'dispatch_failed',
+            ...launchRunTarget,
+            precheckResult,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        )
+        // Why: nothing awaits this chain, so a failing markDispatchResult would
+        // otherwise surface as an unhandled rejection.
+        .catch((error) => {
+          console.warn('[automations] Failed to persist headless dispatch result:', error)
+        })
+    }
+    return updated
+  } catch (error) {
+    return store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatch_failed',
+      workspaceId: automation.workspaceId,
+      error: error instanceof Error ? error.message : String(error)
+    })
   }
 }

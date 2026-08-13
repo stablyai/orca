@@ -1,6 +1,6 @@
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
-import type { Repo } from '../../shared/types'
+import type { Repo, TuiAgent } from '../../shared/types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 type HeadlessAutomationRunForWorkspace = Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
@@ -23,11 +23,14 @@ export function buildHeadlessAutomationWorkspaceName(
 
 export function buildHeadlessAutomationWorktreeCreateArgs({
   automation,
+  agentId,
   run,
   repo,
   createdAt = Date.now()
 }: {
   automation: Automation
+  /** Passed separately: `automation.agentId` is null once its agent is retired. */
+  agentId: TuiAgent
   run: HeadlessAutomationRunForWorkspace
   repo: Repo
   createdAt?: number
@@ -38,8 +41,8 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     baseBranch: automation.baseBranch ?? undefined,
     setupDecision: automation.setupDecision ?? 'skip',
     activate: false,
-    createdWithAgent: automation.agentId,
-    startupAgent: automation.agentId,
+    createdWithAgent: agentId,
+    startupAgent: agentId,
     startupPrompt: automation.prompt,
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)

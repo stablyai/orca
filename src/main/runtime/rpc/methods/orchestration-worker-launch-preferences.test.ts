@@ -54,12 +54,6 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support launch-time model selection')
   })
 
-  it('does not expose deprecated Gemini model selection to worker-start', () => {
-    expect(() =>
-      resolveWorkerLaunchPreferences({ agent: 'gemini', model: 'gemini-3-pro-preview' })
-    ).toThrow('does not support launch-time model selection')
-  })
-
   it('rejects preferences when reusing an existing terminal', () => {
     expect(() =>
       assertWorkerLaunchPreferencesCreateTerminal({

@@ -148,7 +148,7 @@ describe('pasteDraftWhenAgentReady', () => {
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
-      agent: 'gemini'
+      agent: 'aider'
     })
     await flushMicrotasks()
 

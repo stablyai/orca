@@ -30,23 +30,6 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
-  it('uses Gemini interactive prompt mode instead of dropping the prompt', () => {
-    expect(
-      buildAgentStartupPlan({
-        agent: 'gemini',
-        prompt: 'Investigate this regression',
-        cmdOverrides: {},
-        platform: 'linux'
-      })
-    ).toEqual({
-      agent: 'gemini',
-      launchCommand: "gemini --prompt-interactive 'Investigate this regression'",
-      expectedProcess: 'gemini',
-      followupPrompt: null,
-      launchConfig: emptyLaunchConfig('gemini')
-    })
-  })
-
   it('uses Antigravity interactive prompt mode with the agy binary', () => {
     expect(
       buildAgentStartupPlan({
@@ -416,7 +399,7 @@ describe('isShellProcess', () => {
   })
 
   it('does not confuse agent processes with the host shell', () => {
-    expect(isShellProcess('gemini')).toBe(false)
+    expect(isShellProcess('aider')).toBe(false)
     expect(isShellProcess('cursor-agent')).toBe(false)
   })
 })

@@ -341,14 +341,14 @@ describe('getForegroundProcessName', () => {
           return {
             stdout: [
               '100 99 Ss   bash -l',
-              '101 100 S    node /home/dev/.local/bin/node_modules/@google/gemini-cli/bundle/gemini.mjs'
+              '101 100 S    node /home/dev/.local/bin/node_modules/@openai/codex/bin/codex.js'
             ].join('\n')
           }
         }
         return new Error('unexpected command')
       })
 
-      await expect(getForegroundProcessName(100, 'node')).resolves.toBe('gemini')
+      await expect(getForegroundProcessName(100, 'node')).resolves.toBe('codex')
     })
   })
 

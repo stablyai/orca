@@ -8,7 +8,6 @@ import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
-import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
@@ -54,14 +53,6 @@ export function remoteSessionSources(
       partitionSubagentTranscripts: partitionSubagentTranscriptPaths
     },
     remoteAntigravitySource(remoteHome, hostPlatform),
-    source(
-      'gemini',
-      remoteHome,
-      hostPlatform,
-      ['.gemini', 'tmp'],
-      ['.json', '.jsonl'],
-      parseGeminiSessionContent
-    ),
     jsonlSource(
       'copilot',
       remoteHome,

@@ -10430,7 +10430,7 @@ export class OrcaRuntimeService {
   ): boolean {
     // Why: status is detected from the RAW title (mirrors the renderer tracker),
     // so working/idle transitions are unaffected by normalization; the records
-    // store the NORMALIZED title so rotating Grok/Pi/Gemini frames collapse to
+    // store the NORMALIZED title so rotating Grok/Pi frames collapse to
     // one stable stored label (#7880) instead of churning `ps`/mobile tabs.
     //
     // Why the identity-only case: the bare cursor-agent literal identifies the pane without
@@ -25623,7 +25623,7 @@ export class OrcaRuntimeService {
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       // Why: mint tabId in main before spawn so paneKey is known at PTY env
-      // build time. Hook-based agent status (Claude/Codex/Cursor/Gemini) keys
+      // build time. Hook-based agent status (Claude/Codex/Cursor) keys
       // off `${tabId}:${leafId}` — without these vars set on the PTY, the
       // hook payload arrives with an empty paneKey and the renderer cannot
       // attribute the event. Use a stable UUID leaf because hooks reject the
@@ -37064,7 +37064,6 @@ const TUI_IDLE_POLL_INTERVAL_MS = 2000
 const TUI_IDLE_QUIESCENCE_MS = 3000
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
-const GEMINI_IDLE_PREFIX = '\u25c7'
 const PI_IDLE_PREFIX = '\u03c0 - '
 
 // Clamp for mobileAutoRestoreFitMs: floor above the legacy 300ms debounce, 1h ceiling (a held PTY beyond that is "I forgot", not intentional).
@@ -37083,7 +37082,6 @@ function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
     isOpenCodeNativeTitle(title) ||
     title.startsWith(CLAUDE_IDLE_PREFIX) ||
     title.startsWith('* ') ||
-    title.includes(GEMINI_IDLE_PREFIX) ||
     title.startsWith(PI_IDLE_PREFIX)
   ) {
     return 'idle'
@@ -37195,6 +37193,7 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
       trimmedEnd -= 1
     }
     if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
+      // Why: Antigravity's ready header lists its Gemini model on its own line.
       if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
         modelIndex = trimmedStart
       }

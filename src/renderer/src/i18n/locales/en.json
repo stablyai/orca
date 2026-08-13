@@ -52,7 +52,6 @@
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",
         "codexToggleDescription": "Show Codex token and cost usage for the active workspace.",
-        "geminiToggleDescription": "Show Gemini token and cost usage for the active workspace.",
         "opencodeGoToggleDescription": "Show OpenCode Go token and cost usage for the active workspace.",
         "kimiToggleDescription": "Show Kimi subscription usage for the active workspace.",
         "minimaxToggleDescription": "Show MiniMax subscription usage for the active workspace.",
@@ -423,7 +422,6 @@
           "8da11d876c": "Goose",
           "b32627f09b": "Aider",
           "691dd11789": "Antigravity",
-          "12e6baa4f7": "Gemini",
           "09973b4d84": "OMP",
           "302934c5d9": "Pi",
           "e7a4ca5103": "OpenCode",
@@ -898,7 +896,7 @@
         "cd50cec5d7": "Coordinate multiple coding agents through Orca.",
         "58a868e8e4": "Orchestration",
         "7c79d3b7bf": "Optional",
-        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.",
+        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, OpenCode Go, MiniMax, and Grok.",
         "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
         "b49abbd2f7": "Agents",
@@ -3382,7 +3380,6 @@
             "24ac89df1a": "Remote Hosts",
             "5e59007df4": "Kimi Usage",
             "8c86cd77b0": "OpenCode Go Usage",
-            "c1df0d67ec": "Gemini Usage",
             "c0909c686e": "Codex Usage",
             "3885eb74d8": "Claude Usage",
             "c8857b40f7": "Refresh usage data",
@@ -3410,10 +3407,8 @@
             "3325d996cb": "Refresh rate limits",
             "fda8146810": "Open Kimi usage details",
             "629251f4b6": "Open OpenCode Go usage details",
-            "d2375976eb": "Open Gemini usage details",
             "3d79122c3f": "kimi",
             "d7a0668acc": "opencode-go",
-            "68efc0345c": "gemini",
             "76b06d4da5": "claude",
             "a28a5dd9b1": "error",
             "cd9d7b40ff": "Restart {{value0}} Sessions",
@@ -5526,12 +5521,6 @@
           "36223200ac": "OpenCode Go Session Cookie",
           "ea631977b5": "Configure OpenCode Go provider settings.",
           "4ac10b4d08": "OpenCode Go",
-          "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "96f3649526": "Use Gemini CLI credentials (experimental)",
-          "d676c41fc6": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "0c7f915b01": "Use Gemini CLI credentials",
-          "973741a871": "Configure Gemini provider settings.",
-          "0c64dc2a64": "Gemini",
           "db209ee572": "Remove",
           "8a0f870153": "Re-authenticate",
           "3d245ef7d9": "Codex reported this sign-in is out of date",
@@ -7932,9 +7921,6 @@
             "7118d2f908": "credentials",
             "933deaf732": "oauth",
             "8630464352": "cli",
-            "e8e1ff3887": "gemini",
-            "bada4a3218": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.",
-            "d819755b02": "Use Gemini CLI credentials",
             "35b461d817": "sign in",
             "f2d666a886": "optional",
             "8b06729e0f": "active",
@@ -8151,9 +8137,6 @@
             "7f72de7cbe": "Show OpenCode Go token and cost usage in the status bar.",
             "bc046e7899": "OpenCode Go Usage",
             "51b0ccd6a2": "google",
-            "2804a920ad": "gemini",
-            "9660c5b2f1": "Show Gemini token and cost usage in the status bar.",
-            "5bfb874d05": "Gemini Usage",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Show Codex token and cost usage in the status bar.",
@@ -8536,7 +8519,6 @@
             "c61b14be7c": "grok",
             "5d9ba08673": "copilot",
             "f472e97440": "aider",
-            "3c30fe2d51": "gemini",
             "5fdf1dc2d1": "omp",
             "9b0bc30160": "pi",
             "882c4896fd": "opencode",
@@ -14599,6 +14581,11 @@
                 "done": "Done",
                 "failed": "Failed"
               }
+            }
+          },
+          "draft": {
+            "model": {
+              "a0f61bd7c9": "No agent"
             }
           }
         },

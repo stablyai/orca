@@ -11,15 +11,69 @@ describe('worktree RPC schemas', () => {
     ).toBe(false)
   })
 
-  it('rejects invalid startup agent values', () => {
+  it('rehomes a retired startup agent prompt as a draft instead of discarding it', () => {
+    // A mixed-version client can still send startupAgent:'gemini' plus a prompt.
+    // Dropping both silently created a plain shell and lost the task text.
     const parsed = WorktreeCreate.safeParse({
       repo: 'repo-1',
       name: 'agent-startup',
-      startupAgent: 'wat',
+      startupAgent: 'gemini',
+      startupPrompt: 'hi'
+    })
+
+    expect(parsed.success).toBe(true)
+    expect(parsed.data?.startupAgent).toBeUndefined()
+    expect(parsed.data?.startupPrompt).toBeUndefined()
+    expect(parsed.data?.startupDraft).toBe('hi')
+  })
+
+  it('keeps an explicit draft when a retired startup agent also carried a prompt', () => {
+    const parsed = WorktreeCreate.parse({
+      repo: 'repo-1',
+      name: 'agent-startup',
+      startupAgent: 'gemini',
+      startupPrompt: 'prompt text',
+      startupDraft: 'draft text'
+    })
+
+    expect(parsed.startupAgent).toBeUndefined()
+    expect(parsed.startupPrompt).toBeUndefined()
+    expect(parsed.startupDraft).toBe('draft text')
+  })
+
+  it('keeps a retired agent draft-only create as a draft create', () => {
+    const parsed = WorktreeCreate.parse({
+      repo: 'repo-1',
+      name: 'agent-startup',
+      startupAgent: 'gemini',
+      startupDraft: 'draft text'
+    })
+
+    expect(parsed.startupAgent).toBeUndefined()
+    expect(parsed.startupDraft).toBe('draft text')
+  })
+
+  it('rejects an unknown startup agent id rather than degrading to a plain shell', () => {
+    const parsed = WorktreeCreate.safeParse({
+      repo: 'repo-1',
+      name: 'agent-startup',
+      startupAgent: 'not-an-agent',
       startupPrompt: 'hi'
     })
 
     expect(parsed.success).toBe(false)
+  })
+
+  it('keeps a supported startup agent and its prompt', () => {
+    const parsed = WorktreeCreate.parse({
+      repo: 'repo-1',
+      name: 'agent-startup',
+      startupAgent: 'claude',
+      startupPrompt: 'hi'
+    })
+
+    expect(parsed.startupAgent).toBe('claude')
+    expect(parsed.startupPrompt).toBe('hi')
   })
 
   it('rejects startup prompts without startup agents', () => {

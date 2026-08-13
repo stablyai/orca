@@ -97,6 +97,21 @@ describe('automation target availability', () => {
     ).toEqual({ canRunNow: true, reason: 'available', message: null })
   })
 
+  it('blocks a cleared or retired agent id', () => {
+    const agentIds: Automation['agentId'][] = [null, 'gemini' as unknown as Automation['agentId']]
+    for (const agentId of agentIds) {
+      expect(
+        getAutomationTargetAvailability({
+          automation: makeAutomation({ agentId }),
+          repo: makeRepo(),
+          workspace: makeWorkspace(),
+          projectHostSetups: [],
+          sshConnectionStates: new Map()
+        }).reason
+      ).toBe('missing-agent')
+    }
+  })
+
   it('blocks missing projects and missing existing workspaces', () => {
     expect(
       getAutomationTargetAvailability({

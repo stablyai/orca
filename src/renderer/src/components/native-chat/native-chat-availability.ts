@@ -35,7 +35,7 @@ export type NativeChatAvailabilityInput = {
 /** Native chat is a rendering of a coding-agent conversation, so the toggle is
  *  only meaningful on terminals that actually run an agent we can parse. Plain
  *  shells, non-terminal surfaces (editor, browser, …), and unsupported agents
- *  (Gemini, …) never qualify. Live identity is authoritative when present;
+ *  never qualify. Live identity is authoritative when present;
  *  launch metadata is next, and title resolution only fills the pre-hook gap for
  *  manually-started Claude/Codex/Grok sessions. */
 export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean {

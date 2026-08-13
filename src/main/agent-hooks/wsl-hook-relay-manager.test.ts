@@ -2,7 +2,7 @@
 // bridge (including a full run of the unchanged remote hook installers), and
 // the per-distro relay manager state machine with fault injection.
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayDispatcher } from '../../relay/dispatcher'
 import { registerWslHookFsHandlers } from '../../relay/wsl-hook-fs-bridge'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
-import { createWslHookSftpAdapter } from './wsl-hook-fs-adapter'
+import { createWslHookSftpAdapter, installWslGuestHooks } from './wsl-hook-fs-adapter'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -121,6 +121,75 @@ describe.skipIf(process.platform === 'win32')(
         adapter.readFile('/etc/passwd', 'utf8', ((e: Error) => resolve(e)) as never)
       })
       expect(outside).toBeInstanceOf(Error)
+    })
+
+    it('strips retired Gemini hooks even when agent detection never succeeds', async () => {
+      // Detection has no handler in this harness, so it fails like a guest with
+      // none of the supported CLIs — cleanup must still have run by then.
+      mkdirSync(join(home, '.gemini'), { recursive: true })
+      mkdirSync(join(home, '.orca', 'agent-hooks'), { recursive: true })
+      const scriptPath = join(home, '.orca', 'agent-hooks', 'gemini-hook.sh')
+      writeFileSync(scriptPath, 'noop', 'utf8')
+      writeFileSync(
+        join(home, '.gemini', 'settings.json'),
+        JSON.stringify({
+          hooks: {
+            BeforeAgent: [{ hooks: [{ type: 'command', command: `/bin/sh '${scriptPath}'` }] }]
+          },
+          theme: 'dark'
+        }),
+        'utf8'
+      )
+      const installHooks = vi.fn()
+
+      await installWslGuestHooks({
+        mux: harness.mux,
+        guestHome: home,
+        distro: 'Ubuntu',
+        installHooks: installHooks as never,
+        settings: null,
+        warn: () => {}
+      })
+
+      const settings = JSON.parse(readFileSync(join(home, '.gemini', 'settings.json'), 'utf8'))
+      expect(settings.hooks).toEqual({})
+      expect(settings.theme).toBe('dark')
+      expect(existsSync(scriptPath)).toBe(false)
+      expect(installHooks).not.toHaveBeenCalled()
+    })
+
+    it('leaves retired Gemini cleanup to the installers once an agent is detected', async () => {
+      // Single ownership: installRemoteManagedAgentHooks already cleans retired
+      // hooks, so the adapter must not run a second pass over the same config.
+      harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
+        agents: ['claude']
+      }))
+      mkdirSync(join(home, '.gemini'), { recursive: true })
+      mkdirSync(join(home, '.orca', 'agent-hooks'), { recursive: true })
+      const scriptPath = join(home, '.orca', 'agent-hooks', 'gemini-hook.sh')
+      writeFileSync(scriptPath, 'noop', 'utf8')
+      const settings = {
+        hooks: {
+          BeforeAgent: [{ hooks: [{ type: 'command', command: `/bin/sh '${scriptPath}'` }] }]
+        }
+      }
+      writeFileSync(join(home, '.gemini', 'settings.json'), JSON.stringify(settings), 'utf8')
+      const installHooks = vi.fn(async () => [])
+
+      await installWslGuestHooks({
+        mux: harness.mux,
+        guestHome: home,
+        distro: 'Ubuntu',
+        installHooks: installHooks as never,
+        settings: null,
+        warn: () => {}
+      })
+
+      expect(installHooks).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(readFileSync(join(home, '.gemini', 'settings.json'), 'utf8'))).toEqual(
+        settings
+      )
+      expect(existsSync(scriptPath)).toBe(true)
     })
 
     it('runs the unchanged remote managed hook installers against a WSL guest home', async () => {

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { AutomationService } from './service'
+import { AUTOMATION_MISSING_AGENT_MESSAGE, type Automation } from '../../shared/automations-types'
 
 const testState = { dir: '' }
 
@@ -24,6 +25,12 @@ async function createStore() {
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
   return new Store()
+}
+
+/** Mirrors the load-time retired-agent cleanup, which nulls agentId in the profile. */
+function clearPersistedAgentId(store: Awaited<ReturnType<typeof createStore>>, id: string): void {
+  const state = (store as unknown as { state: { automations: Automation[] } }).state
+  state.automations.find((entry) => entry.id === id)!.agentId = null
 }
 
 const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
@@ -119,6 +126,57 @@ describe('AutomationService', () => {
         run: expect.objectContaining({ id: run.id, status: 'dispatching' })
       })
     )
+  })
+
+  it('skips dispatch for an automation whose retired agent was cleared', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Retired agent check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    clearPersistedAgentId(store, automation.id)
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({ isDestroyed: () => false, send } as never)
+    service.setRendererReady()
+
+    const run = await service.runNow(automation.id)
+
+    expect(run.status).toBe('skipped_unavailable')
+    expect(run.error).toBe(AUTOMATION_MISSING_AGENT_MESSAGE)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('keeps an agentless automation paused when a client tries to re-enable it', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Retired agent check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    clearPersistedAgentId(store, automation.id)
+
+    expect(store.updateAutomation(automation.id, { enabled: true }).enabled).toBe(false)
+    expect(
+      store.updateAutomation(automation.id, { agentId: 'codex', enabled: true })
+    ).toMatchObject({ agentId: 'codex', enabled: true })
   })
 
   it('skips dispatch when the selected project host setup is gone', async () => {
@@ -599,9 +657,9 @@ describe('AutomationService', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
     const automation = store.createAutomation({
-      name: 'Gemini check',
+      name: 'Cursor check',
       prompt: 'Check spend',
-      agentId: 'gemini',
+      agentId: 'cursor',
       projectId: 'r1',
       workspaceMode: 'existing',
       workspaceId: 'wt1',

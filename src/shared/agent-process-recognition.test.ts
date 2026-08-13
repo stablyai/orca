@@ -195,9 +195,6 @@ describe('agent process recognition', () => {
     expect(
       recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/codex')
     ).toEqual({ agent: 'codex', processName: 'codex' })
-    expect(
-      recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/gemini')
-    ).toEqual({ agent: 'gemini', processName: 'gemini' })
     expect(recognizeAgentProcessFromCommandLine('python3 /opt/homebrew/bin/hermes --tui')).toEqual({
       agent: 'hermes',
       processName: 'hermes'
@@ -227,11 +224,6 @@ describe('agent process recognition', () => {
         String.raw`node C:\Users\dev\AppData\Roaming\npm\node_modules\@openai\codex\bin\codex.js`
       )
     ).toEqual({ agent: 'codex', processName: 'codex' })
-    expect(
-      recognizeAgentProcessFromCommandLine(
-        String.raw`node C:\Users\dev\AppData\Roaming\npm\node_modules\@google\gemini-cli\bundle\gemini.mjs`
-      )
-    ).toEqual({ agent: 'gemini', processName: 'gemini' })
   })
 
   it.each(['earendil-works', 'mariozechner'])('recognizes the @%s Pi npm entrypoint', (scope) => {
@@ -332,7 +324,7 @@ describe('agent process recognition', () => {
   it('does not classify prompt text as a wrapped agent command', () => {
     expect(
       recognizeAgentProcessFromCommandLine(
-        'node /tmp/not-an-agent.js "compare opencode vs orca in Gemini CLI"'
+        'node /tmp/not-an-agent.js "compare opencode vs orca in Codex CLI"'
       )
     ).toBeNull()
     expect(recognizeAgentProcessFromCommandLine(String.raw`node C:\tmp\not-an-agent.js`)).toBeNull()
@@ -342,7 +334,6 @@ describe('agent process recognition', () => {
       )
     ).toBeNull()
     expect(recognizeAgentProcessFromCommandLine(String.raw`node C:\repo\codex.js`)).toBeNull()
-    expect(recognizeAgentProcessFromCommandLine(String.raw`node C:\repo\gemini.mjs`)).toBeNull()
     expect(
       recognizeAgentProcessFromCommandLine(
         String.raw`node C:\repo\node_modules\@example\pi-coding-agent\dist\cli.js`

@@ -7,10 +7,10 @@ import {
 
 describe('tab agent launch options', () => {
   it('orders detected agents by the configured default first', () => {
-    expect(orderTabLaunchAgents('codex', ['claude', 'codex', 'gemini'])).toEqual([
+    expect(orderTabLaunchAgents('codex', ['claude', 'codex', 'aider'])).toEqual([
       'codex',
       'claude',
-      'gemini'
+      'aider'
     ])
   })
 
@@ -32,11 +32,11 @@ describe('tab agent launch options', () => {
   })
 
   it('matches agents on a partial prefix so the launcher actually searches', () => {
-    const options = buildTabAgentLaunchOptions(['claude', 'codex', 'gemini', 'antigravity'])
+    const options = buildTabAgentLaunchOptions(['claude', 'codex', 'aider', 'antigravity'])
 
     // Each is one character short of the full agent name.
-    expect(findMatchingTabAgentLaunchOptions('gemin', options).map((o) => o.agent)).toEqual([
-      'gemini'
+    expect(findMatchingTabAgentLaunchOptions('aide', options).map((o) => o.agent)).toEqual([
+      'aider'
     ])
     expect(findMatchingTabAgentLaunchOptions('clau', options).map((o) => o.agent)).toEqual([
       'claude'

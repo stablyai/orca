@@ -381,10 +381,8 @@ function expectNoGlobalAtlasRecovery(): void {
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
-  const isGeminiTerminalTitle = actual.isGeminiTerminalTitle as (title: string) => boolean
   return {
     ...actual,
-    isGeminiTerminalTitle: vi.fn((title: string) => isGeminiTerminalTitle(title)),
     isClaudeAgent: vi.fn(() => false),
     detectAgentStatusFromTitle: vi.fn((title: string) => {
       if (/Claude (working|done)/.test(title)) {
@@ -2500,31 +2498,6 @@ describe('connectPanePty', () => {
 
   it('drives runtime title, tab title, and renderer policy from one title decision', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const pane = createPane(1)
-    const transport = createMockTransport('pty-gemini')
-    transportFactoryQueue.push(transport)
-    const manager = createManager(1, 1)
-    const deps = createDeps()
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks()
-    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-      | ((title: string, rawTitle: string) => void)
-      | undefined
-    if (!onTitleChange) {
-      throw new Error('missing title callback')
-    }
-    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
-
-    // Display/runtime/tab title and the GPU gate all come from the same decision.
-    expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '✦ Gemini CLI')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '✦ Gemini CLI')
-    // Genuine Gemini under the default `auto` setting takes the DOM fallback.
-    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
-  })
-
-  it('keeps GPU enabled when a pane-scoped OMP owner emits a Gemini-looking title', async () => {
-    const { connectPanePty } = await import('./pty-connection')
     const paneKey = makePaneKey('tab-1', LEAF_1)
     mockStoreState = {
       ...mockStoreState,
@@ -2541,7 +2514,7 @@ describe('connectPanePty', () => {
       }
     } as StoreState
     const pane = createPane(1)
-    const transport = createMockTransport('pty-omp-gemini-cwd')
+    const transport = createMockTransport('pty-omp')
     transportFactoryQueue.push(transport)
     const manager = createManager(1, 1)
     const deps = createDeps()
@@ -2554,11 +2527,13 @@ describe('connectPanePty', () => {
     if (!onTitleChange) {
       throw new Error('missing title callback')
     }
-    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
+    onTitleChange('Pi ready', 'Pi ready')
 
-    // Pane-scoped owner evidence outranks the raw title, so the fallback cannot fire.
+    // Display/runtime/tab title all follow the pane-scoped owner from one decision,
+    // and the GPU gate is resolved alongside them from the user setting alone.
+    expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'OMP ready')
     expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, true)
-    expect(manager.setPaneGpuRendering).not.toHaveBeenCalledWith(1, false)
   })
 
   it('does not let one split pane title change another pane GPU state', async () => {
@@ -2579,138 +2554,11 @@ describe('connectPanePty', () => {
     if (!onTitleChange1) {
       throw new Error('missing title callback for split pane 1')
     }
-    onTitleChange1('✦ Gemini CLI', '✦ Gemini CLI')
+    onTitleChange1('Pi ready', 'Pi ready')
 
     const gpuCalls = manager.setPaneGpuRendering.mock.calls as [number, boolean][]
     expect(gpuCalls.some(([paneId]) => paneId === 1)).toBe(true)
     expect(gpuCalls.every(([paneId]) => paneId !== 2)).toBe(true)
-  })
-
-  it('DOM-gates a genuine Gemini split pane even when the tab launched a non-Gemini agent', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    // The shared tab.launchAgent must not veto the renderer for a sibling pane.
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: {
-        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', launchAgent: 'omp' }]
-      }
-    } as StoreState
-    const pane1 = createPane(1)
-    const pane2 = createPane(2)
-    const transport1 = createMockTransport('pty-split-owner-1')
-    const transport2 = createMockTransport('pty-split-owner-2')
-    transportFactoryQueue.push(transport1, transport2)
-    const manager = createManager(2, 2)
-
-    connectPanePty(pane1 as never, manager as never, createDeps() as never)
-    connectPanePty(pane2 as never, manager as never, createDeps() as never)
-    await flushAsyncTicks()
-    const onTitleChange2 = createdTransportOptions[1]?.onTitleChange as
-      | ((title: string, rawTitle: string) => void)
-      | undefined
-    if (!onTitleChange2) {
-      throw new Error('missing title callback for split pane 2')
-    }
-    onTitleChange2('✦ Gemini CLI', '✦ Gemini CLI')
-
-    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(2, false)
-  })
-
-  it('DOM-gates a genuine Gemini title in a pane whose launch agent was non-Gemini', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const pane = createPane(1)
-    const transport = createMockTransport('pty-reused-gemini')
-    transportFactoryQueue.push(transport)
-    const manager = createManager(1, 1)
-    // Stale, never-cleared launch identity must not veto the renderer.
-    const deps = createDeps({ startup: { command: 'claude', launchAgent: 'claude' } })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks()
-    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-      | ((title: string, rawTitle: string) => void)
-      | undefined
-    if (!onTitleChange) {
-      throw new Error('missing title callback')
-    }
-    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
-
-    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
-  })
-
-  it('DOM-gates a genuine Gemini title when the only pane row is a done non-Gemini agent', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          agentType: 'claude',
-          state: 'done',
-          prompt: '',
-          updatedAt: Date.now(),
-          stateStartedAt: Date.now(),
-          stateHistory: []
-        }
-      }
-    } as StoreState
-    const pane = createPane(1)
-    const transport = createMockTransport('pty-reused-done-row')
-    transportFactoryQueue.push(transport)
-    const manager = createManager(1, 1)
-    const deps = createDeps()
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks()
-    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-      | ((title: string, rawTitle: string) => void)
-      | undefined
-    if (!onTitleChange) {
-      throw new Error('missing title callback')
-    }
-    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
-
-    // A `done` row is a leftover from a prior agent, so it must not veto.
-    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
-  })
-
-  it('DOM-gates a genuine Gemini title when the only pane row is a stale non-Gemini agent', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    const staleAt = Date.now() - 60 * 60 * 1000
-    mockStoreState = {
-      ...mockStoreState,
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          agentType: 'claude',
-          state: 'working',
-          prompt: '',
-          updatedAt: staleAt,
-          stateStartedAt: staleAt,
-          stateHistory: []
-        }
-      }
-    } as StoreState
-    const pane = createPane(1)
-    const transport = createMockTransport('pty-reused-stale-row')
-    transportFactoryQueue.push(transport)
-    const manager = createManager(1, 1)
-    const deps = createDeps()
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks()
-    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-      | ((title: string, rawTitle: string) => void)
-      | undefined
-    if (!onTitleChange) {
-      throw new Error('missing title callback')
-    }
-    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
-
-    // A stale working row (older than AGENT_STATUS_STALE_AFTER_MS) must not veto.
-    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
   })
 
   it('normalizes after shell word deletion edits a typed command to omp', async () => {
@@ -21276,9 +21124,9 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('keeps GPU rendering enabled for OMP titles whose cwd is Gemini', async () => {
+  it('keeps GPU rendering enabled and normalizes an OMP title carrying raw cwd text', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-omp-gemini-cwd')
+    const transport = createMockTransport('pty-omp-cwd')
     transportFactoryQueue.push(transport)
     enableActiveRuntimeEnvironment()
     mockStoreState.tabsByWorktree = {
@@ -21301,7 +21149,7 @@ describe('connectPanePty', () => {
 
     manager.setPaneGpuRendering.mockClear()
 
-    titleHandler('\u280b Pi', '\u280b π: gemini')
+    titleHandler('\u280b Pi', '\u280b π: web-app')
 
     expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
     expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, true)

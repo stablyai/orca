@@ -3,7 +3,6 @@ import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
-import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
@@ -14,6 +13,7 @@ import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { removeRetiredGeminiManagedHooksRemote } from './retired-gemini-hook-cleanup'
 
 export type RemoteManagedHookInstallOptions = {
   /** Explicit CODEX_HOME dir for redirected runtimes (WSL managed runtime
@@ -54,7 +54,6 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
           : undefined
       )
   ],
-  ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
   ['cursor', (sftp, remoteHome) => cursorHookService.installRemote(sftp, remoteHome)],
@@ -82,6 +81,15 @@ export async function installRemoteManagedAgentHooks(
   remoteHome: string,
   options?: RemoteManagedHookInstallOptions
 ): Promise<AgentHookInstallStatus[]> {
+  // Why: strip retired Gemini CLI hooks on remote homes the same way as local.
+  // Aborted-first, like the per-agent installs below: no remote config mutation
+  // after the requesting client has gone away.
+  options?.signal?.throwIfAborted()
+  try {
+    await removeRetiredGeminiManagedHooksRemote(sftp, remoteHome)
+  } catch (error) {
+    console.warn('[agent-hooks] Failed to clean retired remote Gemini managed hooks:', error)
+  }
   // Why: omit/empty allowlist must never mean "install every agent" — that
   // recreates config homes for CLIs the user never installed (issue #11641).
   const allowedAgents = new Set(options?.agents ?? [])

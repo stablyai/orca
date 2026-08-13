@@ -13,7 +13,7 @@ const {
   shortcutLabelMock: vi.fn<() => string | null>(),
   storeState: {
     settings: {
-      defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'gemini' | 'blank' | null,
+      defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'aider' | 'blank' | null,
       disabledTuiAgents: [] as string[]
     },
     worktreesByRepo: {} as Record<string, unknown[]>,
@@ -23,7 +23,7 @@ const {
   },
   openSettingsPageMock: vi.fn(),
   openSettingsTargetMock: vi.fn(),
-  useDetectedAgentsMock: vi.fn(() => ({ detectedIds: ['claude', 'codex', 'gemini'] }))
+  useDetectedAgentsMock: vi.fn(() => ({ detectedIds: ['claude', 'codex', 'aider'] }))
 }))
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -56,7 +56,7 @@ vi.mock('@/lib/agent-catalog', async () => {
     getAgentCatalog: () => [
       { id: 'claude', label: 'Claude' },
       { id: 'codex', label: 'Codex' },
-      { id: 'gemini', label: 'Gemini' }
+      { id: 'aider', label: 'Aider' }
     ],
     AgentIcon: ({ agent }: { agent: string }) => ReactActual.createElement('span', null, agent)
   }
@@ -136,7 +136,7 @@ describe('QuickLaunchAgentMenuItems', () => {
     expect(html.match(/data-dropdown-shortcut="true"/g) ?? []).toHaveLength(1)
     expect(rowMarkup(html, 'Codex')).toContain('⌘⌥T')
     expect(rowMarkup(html, 'Claude')).not.toContain('⌘⌥T')
-    expect(rowMarkup(html, 'Gemini')).not.toContain('⌘⌥T')
+    expect(rowMarkup(html, 'Aider')).not.toContain('⌘⌥T')
   })
 
   it('hides the default-agent shortcut when the action is unbound', () => {

@@ -6153,9 +6153,9 @@ describe('Store', () => {
     expect(store.getSettings().disabledTuiAgents).toEqual(['codex', 'claude', 'claude-agent-teams'])
 
     const updated = store.updateSettings({
-      disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
+      disabledTuiAgents: ['aider', 'not-real', 'aider', 'opencode'] as never
     })
-    expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
+    expect(updated.disabledTuiAgents).toEqual(['aider', 'opencode'])
   })
 
   it('enables Claude Agent Teams by default for fresh installs', async () => {

@@ -7,7 +7,7 @@ describe('terminal quick command agent options', () => {
   it('does not inherit OpenClaude as the second quick-command agent option', () => {
     const ids = getTerminalQuickCommandAgentOptions().map((entry) => entry.id)
 
-    expect(ids.slice(0, 3)).toEqual(['claude', 'codex', 'gemini'])
+    expect(ids.slice(0, 3)).toEqual(['claude', 'codex', 'copilot'])
     expect(ids.indexOf('openclaude')).toBeGreaterThan(ids.indexOf('command-code'))
   })
 

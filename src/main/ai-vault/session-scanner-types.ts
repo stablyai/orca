@@ -14,7 +14,6 @@ export type AiVaultScanOptions = {
   // (codexHome null → unprefixed resume) is testable without the user's home.
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
-  geminiSessionsDir?: string
   antigravityBrainDir?: string
   copilotSessionsDir?: string
   cursorProjectsDir?: string

@@ -92,8 +92,8 @@ describe('Claude Code quarter-circle busy titles (#13889)', () => {
     expect(isDecorativeAgentTitleFrameChange('◐ Say hi', '◑ Say hi')).toBe(true)
   })
 
-  it('does not claim Gemini’s ◇ idle glyph, which neighbors the spinner block', () => {
-    expect(detectAgentStatusFromTitle('◇ Gemini CLI')).toBe('idle')
-    expect(getAgentLabel('◇ Gemini CLI')).toBe('Gemini CLI')
+  it('does not treat the retired Gemini idle glyph as a quarter-circle spinner', () => {
+    expect(detectAgentStatusFromTitle('◇ Gemini CLI')).toBeNull()
+    expect(getAgentLabel('◇ Gemini CLI')).toBeNull()
   })
 })

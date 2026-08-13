@@ -20,7 +20,7 @@ describe('resolveNativeChatToggleShortcutDetectedAgent', () => {
         terminalTabId: 'tab-1',
         terminalLayout: splitLayout,
         agentStatusByPaneKey: {
-          'tab-1:leaf-1': { agentType: 'gemini' },
+          'tab-1:leaf-1': { agentType: 'aider' },
           'tab-1:leaf-2': { agentType: 'codex' }
         }
       })

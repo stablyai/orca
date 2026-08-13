@@ -60,7 +60,7 @@ export function cloneSessionAccumulator(accumulator: SessionAccumulator): Sessio
 }
 
 // Resumable fold for parsers whose only parse state is the accumulator itself
-// (cursor, copilot, droid, openclaw/pi, gemini-jsonl). Parsers with extra
+// (cursor, copilot, droid, openclaw/pi). Parsers with extra
 // closure state (claude, codex) build their own ResumableSessionParseState.
 export function accumulatorFoldResumeState(
   accumulator: SessionAccumulator,

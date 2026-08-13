@@ -141,7 +141,7 @@ describe('NativeChatSessionGate', () => {
     renderResolution({
       paneKey: 'tab-1:leaf-1',
       launchAgent: null,
-      resolvedAgent: 'gemini',
+      resolvedAgent: 'aider',
       ptyId: 'pty-1'
     })
 

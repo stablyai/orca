@@ -384,7 +384,7 @@ describe('resolveAgentForegroundProcess', () => {
                 'node',
                 'C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js',
                 '--prompt',
-                '"line one\r\nName=gemini.exe\r\nProcessId=999"'
+                '"line one\r\nName=droid.exe\r\nProcessId=999"'
               ].join(' '),
               Name: 'node.exe',
               ParentProcessId: 100,
@@ -598,7 +598,7 @@ describe('resolveAgentForegroundProcess', () => {
             'ParentProcessId=100',
             'ProcessId=101',
             '',
-            'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\bundle\\gemini.mjs',
+            'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@mariozechner\\pi-coding-agent\\dist\\cli.js',
             'Name=node.exe',
             'ParentProcessId=100',
             'ProcessId=102',
@@ -668,7 +668,7 @@ describe('resolveAgentForegroundProcess', () => {
             'ParentProcessId=100',
             'ProcessId=101',
             '',
-            'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\bundle\\gemini.mjs --cwd C:\\repo\\other',
+            'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@mariozechner\\pi-coding-agent\\dist\\cli.js --cwd C:\\repo\\other',
             'CreationDate=20260616110200.000000-000',
             'ExecutablePath=C:\\Program Files\\nodejs\\node.exe',
             'Name=node.exe',
@@ -709,10 +709,10 @@ describe('resolveAgentForegroundProcess', () => {
             'ParentProcessId=100',
             'ProcessId=101',
             '',
-            'CommandLine=gemini --cwd C:\\repo\\orca',
+            'CommandLine=droid --cwd C:\\repo\\orca',
             'CreationDate=20260616110200.000000-000',
-            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\gemini.cmd',
-            'Name=gemini.exe',
+            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\droid.cmd',
+            'Name=droid.exe',
             'ParentProcessId=101',
             'ProcessId=102',
             ''
@@ -726,7 +726,7 @@ describe('resolveAgentForegroundProcess', () => {
       resolveAgentForegroundProcess(100, 'powershell.exe', {
         contextPaths: ['C:\\repo\\orca']
       })
-    ).resolves.toBe('gemini')
+    ).resolves.toBe('droid')
   })
 
   it('fails closed for sibling Windows agents that both match the same worktree path', async () => {
@@ -750,10 +750,10 @@ describe('resolveAgentForegroundProcess', () => {
             'ParentProcessId=100',
             'ProcessId=101',
             '',
-            'CommandLine=gemini --cwd C:\\repo\\orca',
+            'CommandLine=droid --cwd C:\\repo\\orca',
             'CreationDate=20260616110200.000000-000',
-            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\gemini.cmd',
-            'Name=gemini.exe',
+            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\droid.cmd',
+            'Name=droid.exe',
             'ParentProcessId=100',
             'ProcessId=102',
             ''

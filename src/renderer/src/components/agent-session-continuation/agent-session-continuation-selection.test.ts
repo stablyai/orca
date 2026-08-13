@@ -16,7 +16,7 @@ describe('chooseInitialContinuationAgent', () => {
     expect(
       chooseInitialContinuationAgent({
         availableAgents: ['codex', 'claude'],
-        sourceAgent: 'gemini',
+        sourceAgent: 'aider',
         defaultAgent: 'claude'
       })
     ).toBe('claude')

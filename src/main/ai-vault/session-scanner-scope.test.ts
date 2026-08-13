@@ -18,7 +18,6 @@ function scopedScanOptions(claudeProjectsDir: string, extra: Partial<AiVaultScan
   return {
     claudeProjectsDir,
     codexSessionsDir: '/nonexistent/codex',
-    geminiSessionsDir: '/nonexistent/gemini',
     antigravityBrainDir: '/nonexistent/antigravity',
     copilotSessionsDir: '/nonexistent/copilot',
     cursorProjectsDir: '/nonexistent/cursor',

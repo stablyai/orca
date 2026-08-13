@@ -214,7 +214,6 @@ describe('skill discovery', () => {
         '/home/test/.config/opencode/skills',
         '/home/test/.pi/agent/skills',
         '/home/test/.omp/agent/skills',
-        '/home/test/.gemini/skills',
         '/home/test/.gemini/antigravity/skills',
         '/home/test/.cursor/skills'
       ])

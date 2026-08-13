@@ -15,6 +15,11 @@ import { TaskSourceContextSchema } from '../../../../shared/task-source-context-
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 
+/** Agent ids Orca no longer ships but a mixed-version client can still send. */
+const RETIRED_STARTUP_AGENTS: readonly unknown[] = ['gemini']
+
+// Why: a typo'd or garbage agent id must still fail loudly; only the retired ids
+// handled by the preprocess below are soft-compat, and they never reach here.
 const OptionalTuiAgent = z
   .unknown()
   .superRefine((value, ctx) => {
@@ -24,6 +29,28 @@ const OptionalTuiAgent = z
   })
   .transform((value): TuiAgent | undefined => (isTuiAgent(value) ? value : undefined))
   .optional()
+
+/**
+ * Why: `startupPrompt` only travels with a `startupAgent`, so dropping a retired
+ * agent orphans its prompt — it would trip the "startupPrompt requires
+ * startupAgent" refinement below, and dropping both silently discarded the
+ * user's task text into a plain shell. Rehome the prompt as `startupDraft`
+ * instead: the host then picks the default/detected agent and drafts the text
+ * into it rather than auto-submitting to an agent the client never chose.
+ */
+function rehomeRetiredStartupAgent(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return value
+  }
+  const params = value as Record<string, unknown>
+  if (!RETIRED_STARTUP_AGENTS.includes(params.startupAgent)) {
+    return value
+  }
+  const { startupAgent: _startupAgent, startupPrompt, startupDraft, ...rest } = params
+  // An explicit draft wins; the prompt only fills an empty draft slot.
+  const rehomedDraft = startupDraft ?? startupPrompt
+  return rehomedDraft === undefined ? rest : { ...rest, startupDraft: rehomedDraft }
+}
 
 const AutomationWorkspaceProvenanceRequest = z.object({
   automationId: z.string(),
@@ -97,7 +124,7 @@ function assertLinkedWorkItemSourceContextMatch(
   }
 }
 
-export const WorktreeCreate = z
+const WorktreeCreateParams = z
   .object({
     repo: z
       .unknown()
@@ -211,6 +238,8 @@ export const WorktreeCreate = z
       })
     }
   })
+
+export const WorktreeCreate = z.preprocess(rehomeRetiredStartupAgent, WorktreeCreateParams)
 
 export const WorktreePrefetchCreateBase = z.object({
   repo: z

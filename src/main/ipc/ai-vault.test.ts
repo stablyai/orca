@@ -783,9 +783,9 @@ describe('listAiVaultSubagentSessions gating', () => {
 
 describe('deleteAiVaultSession', () => {
   const args = {
-    agent: 'gemini' as const,
+    agent: 'copilot' as const,
     sessionId: 'session-1',
-    filePath: '/home/ada/.gemini/tmp/sess.json',
+    filePath: '/home/ada/.copilot/session-state/sess.jsonl',
     executionHostId: 'local' as const
   }
 
@@ -802,7 +802,7 @@ describe('deleteAiVaultSession', () => {
     expect(result).toEqual({ outcome: 'deleted' })
     expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        agent: 'gemini',
+        agent: 'copilot',
         sessionId: args.sessionId,
         filePath: args.filePath,
         executionHostId: 'local'
@@ -817,7 +817,7 @@ describe('deleteAiVaultSession', () => {
   it('does not invalidate any cache when the executor rejects (e.g. non-local host)', async () => {
     mocks.deleteAiVaultSessionFile.mockResolvedValue({
       outcome: 'rejected',
-      agent: 'gemini',
+      agent: 'copilot',
       reason: 'non-local-host'
     })
 
@@ -826,7 +826,7 @@ describe('deleteAiVaultSession', () => {
       executionHostId: 'ssh:dev-box'
     })
 
-    expect(result).toEqual({ outcome: 'rejected', agent: 'gemini', reason: 'non-local-host' })
+    expect(result).toEqual({ outcome: 'rejected', agent: 'copilot', reason: 'non-local-host' })
     expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
     expect(mocks.invalidateSessionParseCacheEntry).not.toHaveBeenCalled()
   })
@@ -834,7 +834,7 @@ describe('deleteAiVaultSession', () => {
   it('does not invalidate any cache when the executor fails', async () => {
     mocks.deleteAiVaultSessionFile.mockResolvedValue({
       outcome: 'failed',
-      agent: 'gemini',
+      agent: 'copilot',
       error: 'EPERM'
     })
 

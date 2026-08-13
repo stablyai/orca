@@ -10,10 +10,8 @@ describe('RateLimitState', () => {
     const state: RateLimitState = {
       claude: null,
       codex: null,
-      gemini: null,
       opencodeGo: null,
       kimi: null,
-      antigravity: null,
       minimax: null,
       grok: null,
       minimaxCookieConfigured: false,
@@ -24,7 +22,7 @@ describe('RateLimitState', () => {
       inactiveCodexAccounts: []
     }
 
-    expect(state.antigravity).toBeNull()
+    expect(state.grok).toBeNull()
     expect(state.minimax).toBeNull()
     expect(state.minimaxCookieConfigured).toBe(false)
   })

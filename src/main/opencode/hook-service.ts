@@ -998,7 +998,7 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
   ].join('\n')
 }
 
-// Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini (the old loopback-IPC path never reached agentStatusByPaneKey).
+// Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex (the old loopback-IPC path never reached agentStatusByPaneKey).
 export class OpenCodeHookService {
   clearPty(_ptyId: string): void {
     // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.

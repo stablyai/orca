@@ -18,11 +18,6 @@ export const CLAUDE_MANAGEMENT_TITLE_RE = new RegExp(
   'i'
 )
 
-export const GEMINI_WORKING = '\u2726' // ✦
-export const GEMINI_SILENT_WORKING = '\u23f2' // ⏲
-export const GEMINI_IDLE = '\u25c7' // ◇
-export const GEMINI_PERMISSION = '\u270b' // ✋
-
 const STRONG_IDLE_KEYWORDS = ['ready', 'idle', 'done'] as const
 const STRONG_WORKING_KEYWORDS = ['working', 'thinking', 'running'] as const
 
@@ -51,25 +46,6 @@ export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 // quarter circles (#13889), which read as "no agent" and looked like an exit.
 // Reserve the whole quarter-circle block so a later frame addition cannot regress this.
 export const QUARTER_CIRCLE_SPINNER_RE = /[\u25d0-\u25d3]/g
-
-export function isGeminiTerminalTitle(title: string): boolean {
-  // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  ) {
-    return true
-  }
-  // Why: Pi/OMP titles include cwd/session text; substring matching made
-  // paths like "gemini-project" masquerade as Gemini CLI.
-  if (isPiAgentTitle(title)) {
-    return false
-  }
-  return titleHasAgentName(title, 'gemini')
-}
-
 export function isPiTerminalTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)
 }
