@@ -291,6 +291,21 @@ export class CodexRuntimeHomeService {
         this.startWslSessionBridgeForLaunch(wslTarget, home)
         return home
       }
+      // Why: explicit system default must not inherit an unverified CODEX_HOME
+      // when the real-home lane is unavailable (Windows / no probe / hook
+      // gate off). Do not use the globally selected managed account.
+      if (!this.canRouteHostSystemDefaultToRealHome()) {
+        this.invalidateBackfillAfterManagedSystemDefaultLaunch()
+        this.syncForCurrentSelection({ runtime: 'host' })
+        syncSystemCodexResourcesIntoManagedHome()
+        syncSystemConfigIntoManagedCodexHome()
+        void startSystemCodexSessionBridgeInBackground(
+          {},
+          resolveHostCodexSessionSourceHome(this.store.getSettings())
+        )
+        return this.getRuntimeHomePath()
+      }
+      this.reconcileLegacySharedHomeForRetainedPanes()
       return null
     }
 
@@ -762,6 +777,10 @@ export class CodexRuntimeHomeService {
 
   isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
     return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
+  }
+
+  private canRouteHostSystemDefaultToRealHome(): boolean {
+    return isShellStartupEnvProbeSupported() && this.realHomeLaneGate()
   }
 
   reconcileLegacySharedHomeForRetainedPanes(): void {

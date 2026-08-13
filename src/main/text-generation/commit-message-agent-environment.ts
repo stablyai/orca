@@ -109,10 +109,21 @@ export async function prepareLocalCommitMessageAgentEnv(
       (resolvers.prepareForCodexLaunch || (ptyId && resolvers.prepareForCodexPtyLaunch))
     ) {
       // Why: undefined means this runtime cannot scope the probe (old host or an
-      // unrecorded PTY); null is an authoritative real-home route.
-      const scopedCodexHomePath = ptyId
-        ? resolvers.prepareForCodexPtyLaunch?.(ptyId, target)
-        : undefined
+      // unrecorded PTY); null is an authoritative real-home route. A throw from
+      // a stale pane record must not fail commit generation — fall back to the
+      // current launch selection instead.
+      let scopedCodexHomePath: string | null | undefined
+      if (ptyId) {
+        try {
+          scopedCodexHomePath = resolvers.prepareForCodexPtyLaunch?.(ptyId, target)
+        } catch (error) {
+          console.warn(
+            '[commit-message] Scoped Codex home resolution failed; using current selection.',
+            error
+          )
+          scopedCodexHomePath = undefined
+        }
+      }
       const codexHomePath =
         scopedCodexHomePath !== undefined
           ? scopedCodexHomePath

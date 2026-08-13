@@ -143,6 +143,27 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     })
   })
 
+  it('uses legacy account discovery when scoped PTY resolution throws', async () => {
+    const prepareForCodexLaunch = vi.fn(() => '/managed/current/home')
+    const prepareForCodexPtyLaunch = vi.fn(() => {
+      throw new Error('Codex pane account is no longer available.')
+    })
+
+    const result = await prepareLocalCommitMessageAgentEnv(
+      'codex',
+      { prepareForCodexLaunch, prepareForCodexPtyLaunch },
+      { runtime: 'host' },
+      'pty-stale'
+    )
+
+    expect(prepareForCodexPtyLaunch).toHaveBeenCalledWith('pty-stale', { runtime: 'host' })
+    expect(prepareForCodexLaunch).toHaveBeenCalledWith({ runtime: 'host' })
+    expect(result).toEqual({
+      ok: true,
+      env: expect.objectContaining({ CODEX_HOME: '/managed/current/home' })
+    })
+  })
+
   it('uses legacy account discovery when the runtime cannot scope an unknown PTY', async () => {
     const prepareForCodexLaunch = vi.fn(() => '/managed/current/home')
 

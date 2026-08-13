@@ -1058,13 +1058,12 @@ function prepareCodexRuntimeHomeForLaunch(
       throw new Error('agent_session_account_runtime_mismatch')
     }
     if (explicitAccountRef.accountId === null && explicitAccountRef.runtime === 'host') {
+      // Why: establish the hook lane before account prep chooses real home vs
+      // the shared mirror. An unusable lane must not fail the launch.
       ensureRealHomeCodexHookState({
         hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
         userDataPath: app.getPath('userData')
       })
-      if (!isRealHomeCodexHookLaneUsable()) {
-        throw new Error('agent_session_account_unavailable')
-      }
     }
     const runtimeHomePath = codexRuntimeHome!.prepareForCodexAccountLaunch(resolvedAccountRef, {
       unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
