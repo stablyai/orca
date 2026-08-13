@@ -60,19 +60,32 @@ describe('android emulator environment', () => {
     expect(avdHome).toBe(path.join(path.sep, 'home', 'dev', '.config', '.android', 'avd'))
   })
 
-  it('Given AVD home overrides When resolving Then the most specific variable wins', () => {
-    // Given / When / Then
+  it('Given AVD home overrides When resolving Then the documented precedence wins', () => {
+    // Given / When / Then: ANDROID_EMULATOR_HOME replaces ~/.android per
+    // `emulator -help-environment`, so it outranks the XDG fallback.
     expect(
       resolveAndroidAvdHome(
         environment({
           env: {
             ANDROID_AVD_HOME: '/explicit/avd',
+            ANDROID_EMULATOR_HOME: '/emulator/.android',
             ANDROID_USER_HOME: '/user/.android',
             XDG_CONFIG_HOME: '/xdg'
           }
         })
       )
     ).toBe('/explicit/avd')
+    expect(
+      resolveAndroidAvdHome(
+        environment({
+          env: {
+            ANDROID_EMULATOR_HOME: '/emulator/.android',
+            ANDROID_USER_HOME: '/user/.android',
+            XDG_CONFIG_HOME: '/xdg'
+          }
+        })
+      )
+    ).toBe(path.join('/emulator/.android', 'avd'))
     expect(
       resolveAndroidAvdHome(
         environment({ env: { ANDROID_USER_HOME: '/user/.android', XDG_CONFIG_HOME: '/xdg' } })

@@ -45,18 +45,17 @@ export function resolveAndroidSdkRoot(environment: AndroidEnvironment): string {
 
 // Why: recent avdmanager writes AVDs under $XDG_CONFIG_HOME/.android while the
 // emulator still defaults to ~/.android, so a freshly created AVD is invisible
-// unless both sides are pointed at the same root.
+// unless both sides are pointed at the same root. ANDROID_EMULATOR_HOME is the
+// emulator's own override for that directory (`emulator -help-environment`).
 export function resolveAndroidAvdHome({ env, homeDir }: AndroidEnvironment): string {
   if (env.ANDROID_AVD_HOME) {
     return env.ANDROID_AVD_HOME
   }
-  if (env.ANDROID_USER_HOME) {
-    return path.join(env.ANDROID_USER_HOME, 'avd')
-  }
-  if (env.XDG_CONFIG_HOME) {
-    return path.join(env.XDG_CONFIG_HOME, '.android', 'avd')
-  }
-  return path.join(homeDir, '.android', 'avd')
+  const androidHome =
+    env.ANDROID_EMULATOR_HOME ??
+    env.ANDROID_USER_HOME ??
+    (env.XDG_CONFIG_HOME ? path.join(env.XDG_CONFIG_HOME, '.android') : null)
+  return path.join(androidHome ?? path.join(homeDir, '.android'), 'avd')
 }
 
 export function resolveAndroidToolPath(environment: AndroidEnvironment, tool: AndroidTool): string {

@@ -145,14 +145,29 @@ async function reversePorts(
   serial: string,
   ports: readonly number[]
 ): Promise<void> {
+  const reversed: number[] = []
+  const failed: number[] = []
   for (const port of ports) {
-    await execFileAsync(adbPath, ['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`], {
-      env: toolEnv
-    }).catch(() => {
-      log(`  ! could not reverse port ${port}`)
-    })
+    const ok = await execFileAsync(
+      adbPath,
+      ['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`],
+      { env: toolEnv }
+    ).then(
+      () => true,
+      () => false
+    )
+    if (ok) {
+      reversed.push(port)
+    } else {
+      failed.push(port)
+    }
   }
-  log(`▸ Reversed ports: ${ports.join(', ')}`)
+  if (reversed.length > 0) {
+    log(`▸ Reversed ports: ${reversed.join(', ')}`)
+  }
+  if (failed.length > 0) {
+    log(`  ! could not reverse: ${failed.join(', ')}`)
+  }
 }
 
 async function main(): Promise<void> {
@@ -169,7 +184,9 @@ async function main(): Promise<void> {
     const runningAvd = parseRunningAvdName(
       await readToolOutput(adbPath, ['-s', serial, 'emu', 'avd', 'name']).catch(() => '')
     )
-    if (options.avd && runningAvd && runningAvd !== options.avd) {
+    // Why: startup matches case-insensitively on a substring, so reuse must too —
+    // otherwise `--avd pixel` rejects the Pixel_7_API_36 it would have booted.
+    if (options.avd && runningAvd && selectAvdName([runningAvd], options.avd) === null) {
       fail(
         `${serial} is running ${runningAvd}, not the requested ${options.avd}.\n` +
           `  Stop it first: adb -s ${serial} emu kill`
