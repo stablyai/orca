@@ -597,9 +597,14 @@ describe('workspace kanban sidebar drop updates', () => {
     })
 
     expect(result.shouldSwitchToManual).toBe(true)
+    // Why: with no prior manualOrder anywhere, the drop backfills every visible row
+    // so the manual order is stable (doing-a > todo-a > doing-b) instead of sparse-
+    // ranking only the dropped row onto the mutable sortOrder.
     expect(result.updates.get('todo-a')).toEqual({
       workspaceStatus: 'doing',
-      manualOrder: 1500
+      manualOrder: 9000
     })
+    expect(result.updates.get('doing-a')).toEqual({ manualOrder: 10_000 })
+    expect(result.updates.get('doing-b')).toEqual({ manualOrder: 8000 })
   })
 })

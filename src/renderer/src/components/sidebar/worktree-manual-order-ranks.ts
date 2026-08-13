@@ -41,6 +41,18 @@ export function buildSparseManualOrderUpdates(args: {
     return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
   }
 
+  // Why: any non-moved row without a persisted manualOrder would otherwise keep
+  // falling back to the mutable sortOrder in the comparator and jump on later
+  // activity, so backfill the whole visible group instead of sparse-ranking only
+  // the moved rows.
+  const ranks = args.rankByWorktreeId
+  if (
+    ranks !== undefined &&
+    args.orderedIds.some((id) => !movedSet.has(id) && getManualOrderRank(ranks, id) === null)
+  ) {
+    return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+  }
+
   const firstMovedIndex = args.orderedIds.findIndex((id) => movedSet.has(id))
   const lastMovedIndex = args.orderedIds.findLastIndex((id) => movedSet.has(id))
   const beforeId = args.orderedIds.slice(0, firstMovedIndex).findLast((id) => !movedSet.has(id))

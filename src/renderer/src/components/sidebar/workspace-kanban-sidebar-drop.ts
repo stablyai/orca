@@ -237,8 +237,10 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
         for (const group of args.groups) {
           for (const worktreeId of group.worktreeIds) {
             const worktree = args.worktreeById.get(worktreeId)
-            if (worktree) {
-              ranks.set(worktreeId, worktree.manualOrder ?? worktree.sortOrder)
+            // Why: only real manualOrder ranks here — holes get backfilled by the ranker,
+            // not masked with the mutable sortOrder.
+            if (worktree?.manualOrder !== undefined) {
+              ranks.set(worktreeId, worktree.manualOrder)
             }
           }
         }

@@ -283,6 +283,27 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
     expect(Array.from(result.updates)).toEqual([['b', { manualOrder: 0 }]])
   })
 
+  it('backfills manualOrder for every visible row when an unmoved row lacks one', () => {
+    // Why: an unmoved row without a persisted manualOrder would otherwise keep
+    // falling back to the mutable sortOrder in the comparator and jump on later
+    // activity, so a reorder must stamp every visible row — not just the moved one.
+    const result = buildManualOrderUpdatesForVisibleGroups({
+      groups: [{ key: 'repo:one', worktreeIds: ['a', 'b', 'c', 'd'] }],
+      sourceGroupKey: 'repo:one',
+      draggedIds: ['b'],
+      dropIndex: 4,
+      now: 10_000,
+      rankByWorktreeId: new Map([
+        ['a', 4000],
+        ['b', 3000],
+        ['d', 1000]
+      ])
+    })
+
+    expect(result.orderedIds).toEqual(['a', 'c', 'd', 'b'])
+    expect(Array.from(result.updates.keys()).sort()).toEqual(['a', 'b', 'c', 'd'])
+  })
+
   it('moves an expanded lineage cluster as one ranked unit', () => {
     const result = buildManualOrderUpdatesForVisibleGroups({
       groups: [{ key: 'all', worktreeIds: ['parent', 'child', 'other'] }],

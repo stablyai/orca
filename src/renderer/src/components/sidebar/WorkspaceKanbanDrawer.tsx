@@ -418,8 +418,10 @@ function WorkspaceKanbanDrawerContent({
             for (const group of boardDragGroups) {
               for (const worktreeId of group.worktreeIds) {
                 const worktree = worktreeById.get(worktreeId)
-                if (worktree) {
-                  ranks.set(worktreeId, worktree.manualOrder ?? worktree.sortOrder)
+                // Why: only real manualOrder ranks here — holes get backfilled by the
+                // ranker, not masked with the mutable sortOrder.
+                if (worktree?.manualOrder !== undefined) {
+                  ranks.set(worktreeId, worktree.manualOrder)
                 }
               }
             }

@@ -25,8 +25,10 @@ function buildRankByWorktreeId(
   for (const group of groups) {
     for (const worktreeId of group.worktreeIds) {
       const worktree = worktreeMap.get(worktreeId)
-      if (worktree) {
-        rankByWorktreeId.set(worktreeId, worktree.manualOrder ?? worktree.sortOrder)
+      // Why: only real manualOrder ranks here — a row still lacking one is a hole
+      // the ranker backfills, rather than masking it with the mutable sortOrder.
+      if (worktree?.manualOrder !== undefined) {
+        rankByWorktreeId.set(worktreeId, worktree.manualOrder)
       }
     }
   }
