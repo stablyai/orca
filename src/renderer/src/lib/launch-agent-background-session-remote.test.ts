@@ -537,7 +537,9 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       { id: 'fw-1', projectGroupId: 'grp-1', folderPath: '/srv/proj', connectionId: 'ssh-1' }
     ]
     state.getKnownWorktreeById = (worktreeId: string) =>
-      worktreeId === 'folder:fw-1' ? { id: 'folder:fw-1', path: '/srv/proj' } : undefined
+      worktreeId === 'folder:fw-1'
+        ? { id: 'folder:fw-1', path: '/srv/proj', hostId: 'ssh:ssh-1' }
+        : undefined
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     await launchAgentBackgroundSession({

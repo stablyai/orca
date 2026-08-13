@@ -238,6 +238,7 @@ import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_TEXT_ACTION_IDS
 } from '../shared/source-control-ai-actions'
+import { normalizeAgentSessionRulesSettings } from '../shared/agent-session-rules'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 import {
   DEFAULT_TUI_AGENT_ARGS,
@@ -3187,6 +3188,23 @@ export class Store {
               parsed.settings?.sourceControlAi,
               legacyCommitMessageAi
             )
+        const rawAgentSessionRules = parsed.settings?.agentSessionRules
+        const migratedAgentSessionRules = normalizeAgentSessionRulesSettings(rawAgentSessionRules)
+        const rawSeenBuiltinRuleIdsList = rawAgentSessionRules?.seenBuiltinRuleIds
+        const rawSeenBuiltinRuleIds = new Set(
+          Array.isArray(rawSeenBuiltinRuleIdsList)
+            ? rawSeenBuiltinRuleIdsList.filter((id): id is string => typeof id === 'string')
+            : []
+        )
+        // Why: persist each newly seeded builtin stamp so a later user deletion is not revived after restart.
+        if (
+          rawAgentSessionRules === undefined ||
+          (migratedAgentSessionRules.seenBuiltinRuleIds ?? []).some(
+            (ruleId) => !rawSeenBuiltinRuleIds.has(ruleId)
+          )
+        ) {
+          this.loadNeedsSave = true
+        }
         // Why (issue #903): old 'true' default broke non-US Option-layer chars; flip 'true'→'auto' once so the layout probe decides.
         const rawOptionAsAlt = parsed.settings?.terminalMacOptionAsAlt
         const alreadyMigrated = parsed.settings?.terminalMacOptionAsAltMigrated === true
@@ -3511,6 +3529,7 @@ export class Store {
             }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
+            agentSessionRules: migratedAgentSessionRules,
             sourceControlGroupOrder: normalizedSourceControlGroupOrder,
             // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
             commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(

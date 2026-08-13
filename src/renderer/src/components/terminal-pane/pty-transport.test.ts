@@ -2515,6 +2515,8 @@ describe('createRemoteRuntimePtyTransport', () => {
               minCompatibleRuntimeClientVersion: 2,
               capabilities: [
                 'agent-session.host-authority.v1',
+                'agent-session.client-default-rules.v1',
+                'agent-session.prompt-delivery-owner.v1',
                 TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY
               ]
             },
@@ -2814,24 +2816,26 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    expect(runtimeCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'terminal.ensureAgentSession',
-      params: {
-        kind: 'explicit',
-        worktree: 'id:repo1::/remote/wt',
-        agent: 'claude',
-        providerSession: { key: 'session_id', id: 'provider-session' },
-        agentArgs: '--permission-mode plan',
-        placement: {
-          tabId: 'tab-1',
-          leafId: '11111111-1111-4111-8111-111111111111'
-        },
-        presentation: 'background'
-      },
-      expectedEnvironmentPairingRevision: undefined,
-      timeoutMs: 15_000
-    })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.ensureAgentSession',
+        params: expect.objectContaining({
+          kind: 'explicit',
+          worktree: 'id:repo1::/remote/wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'provider-session' },
+          agentArgs: '--permission-mode plan',
+          placement: {
+            tabId: 'tab-1',
+            leafId: '11111111-1111-4111-8111-111111111111'
+          },
+          presentation: 'background'
+        }),
+        expectedEnvironmentPairingRevision: undefined,
+        timeoutMs: 15_000
+      })
+    )
     expect(runtimeCall).not.toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'terminal.create',
@@ -2891,25 +2895,27 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    expect(runtimeCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'terminal.createAgentSession',
-      params: {
-        clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
-        worktree: 'id:repo1::/remote/wt',
-        agent: 'codex',
-        prompt: 'fix the race',
-        promptDelivery: 'draft',
-        launchPreferences: { model: 'gpt-5', effort: 'high' },
-        placement: {
-          tabId: 'tab-1',
-          leafId: '11111111-1111-4111-8111-111111111111'
-        },
-        presentation: 'background'
-      },
-      expectedEnvironmentPairingRevision: undefined,
-      timeoutMs: 15_000
-    })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
+          worktree: 'id:repo1::/remote/wt',
+          agent: 'codex',
+          promptDelivery: 'draft',
+          promptDeliveryOwner: 'client',
+          launchPreferences: { model: 'gpt-5', effort: 'high' },
+          placement: {
+            tabId: 'tab-1',
+            leafId: '11111111-1111-4111-8111-111111111111'
+          },
+          presentation: 'background'
+        }),
+        expectedEnvironmentPairingRevision: undefined,
+        timeoutMs: 15_000
+      })
+    )
     expect(runtimeCall).not.toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'terminal.create',

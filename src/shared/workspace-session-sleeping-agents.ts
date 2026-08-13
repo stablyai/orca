@@ -4,6 +4,7 @@ import {
   normalizeAgentProviderSession,
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
+import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { salvagingRecord } from './zod-salvage'
 
@@ -87,6 +88,17 @@ const sleepingAgentSessionRecordSchema = z
     paneKey: z.string().refine((value) => value.length > 0),
     tabId: terminalTabIdSchema.optional(),
     worktreeId: z.string().min(1),
+    // Why: identifies which SSH/runtime host a custom-agent pane belongs to;
+    // dropping it during hydration would strand cold-restore ownership checks
+    // back onto the connectionId fallback (see getSleepingAgentSessionExecutionHostId).
+    // Malformed persisted values are salvaged away rather than kept, matching
+    // this file's salvage-corrupt-data philosophy.
+    executionHostId: z
+      .string()
+      .optional()
+      .transform((value): ExecutionHostId | undefined =>
+        value === undefined ? undefined : (parseExecutionHostId(value)?.id ?? undefined)
+      ),
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: agentProviderSessionSchema,
     prompt: z.string(),

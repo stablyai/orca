@@ -26,6 +26,7 @@ import {
   Palette,
   PanelsTopLeft,
   Play,
+  ScrollText,
   Server,
   ShieldCheck,
   SlidersHorizontal,
@@ -64,6 +65,7 @@ import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifac
 import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
+import { getAgentSessionRulesPaneSearchEntries } from '@/components/settings/agent-session-rules-search'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -220,6 +222,22 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
+    // Why: rules are injected into every supported agent launch (desktop and
+    // web), with per-repo overrides layered in from the Repository pane.
+    {
+      id: 'agentSessionRules',
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.agentSessionRulesTitle',
+        'Agent Session Rules'
+      ),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.agentSessionRulesDescription',
+        'Custom rules for supported agent launches, plus per-repo overrides.'
+      ),
+      icon: ScrollText,
+      searchEntries: getAgentSessionRulesPaneSearchEntries(),
+      group: 'capabilities'
+    },
     ...(showDesktopOnlySettings
       ? [
           {
