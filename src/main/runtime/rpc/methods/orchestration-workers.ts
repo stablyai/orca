@@ -60,9 +60,9 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
       const coordinatorTerminal = await runtime.showTerminal(params.from)
-      const showCoordinatorWorktree = () =>
-        runtime.showManagedWorktree(`id:${coordinatorTerminal.worktreeId}`)
-      const creationWorktree = createsWorktree ? await showCoordinatorWorktree() : undefined
+      const creationWorktree = createsWorktree
+        ? await runtime.showManagedWorktree(`id:${coordinatorTerminal.worktreeId}`)
+        : undefined
       if (creationWorktree) {
         await assertOrchestrationWorktreeCreationSupported({
           runtime,
@@ -73,8 +73,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       let resolvedWorktree = creationWorktree
         ? undefined
         : requestedWorktree === 'current'
-          ? await showCoordinatorWorktree()
-          : await runtime.showManagedWorktree(requestedWorktree)
+          ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
+          : await runtime.showManagedTerminalWorkspace(requestedWorktree)
       let explicitTerminal
       if (params.terminal) {
         explicitTerminal = await runtime.showTerminal(params.terminal)

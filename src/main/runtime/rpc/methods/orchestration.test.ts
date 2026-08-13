@@ -2181,6 +2181,9 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
         id: 'repo::worktree'
       } as never)
+      vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
+        id: 'repo::worktree'
+      } as never)
       vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
         handle: 'term_worker',
         worktreeId: 'repo::worktree',
@@ -2397,6 +2400,10 @@ describe('orchestration RPC methods', () => {
         }
         return { id: 'repo::other', repoId: 'repo' } as never
       })
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'repo::other',
+        repoId: 'repo'
+      } as never)
       const task = db.createTask({ spec: 'existing worktree worker' })
 
       const result = (await call('orchestration.workerStart', {
@@ -2423,6 +2430,37 @@ describe('orchestration RPC methods', () => {
       expect(runtime.showTerminal).toHaveBeenCalledWith('term_coord')
       expect(runtime.showManagedWorktree).not.toHaveBeenCalledWith(
         `id:${FLOATING_TERMINAL_WORKTREE_ID}`
+      )
+      expect(runtime.showManagedTerminalWorkspace).toHaveBeenCalledOnce()
+      expect(runtime.showManagedTerminalWorkspace).toHaveBeenCalledWith('id:repo::other')
+    })
+
+    it('starts in an exact existing folder workspace from a floating coordinator', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.showTerminal).mockResolvedValue({
+        handle: 'term_coord',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        status: 'running'
+      } as never)
+      vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'folder:workspace-1',
+        repoId: 'folder-workspace:group-1'
+      } as never)
+      const task = db.createTask({ spec: 'folder workspace worker' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          worktree: 'folder:workspace-1',
+          agent: 'codex'
+        })
+      ).resolves.toMatchObject({ state: 'ready' })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:folder:workspace-1',
+        expect.objectContaining({ startupAgent: 'codex', surfaceOwner: false })
       )
     })
 
