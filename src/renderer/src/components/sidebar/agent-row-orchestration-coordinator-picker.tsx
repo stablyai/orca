@@ -58,7 +58,6 @@ export function AgentRowOrchestrationCoordinatorPicker({
         return
       }
       onChange(next.paneKey)
-      document.getElementById(optionDomId(next.paneKey))?.focus()
     },
     [disabled, onChange, options, value]
   )
@@ -73,6 +72,7 @@ export function AgentRowOrchestrationCoordinatorPicker({
       </Label>
       <div
         role="listbox"
+        // Why: one Tab stop — parent-managed aria-activedescendant, options are not tabbable.
         tabIndex={disabled || options.length === 0 ? -1 : 0}
         aria-labelledby="orchestration-action-coordinator-label"
         aria-activedescendant={value ? optionDomId(value) : undefined}
@@ -95,7 +95,7 @@ export function AgentRowOrchestrationCoordinatorPicker({
                 id={optionDomId(option.paneKey)}
                 type="button"
                 role="option"
-                tabIndex={selected ? 0 : -1}
+                tabIndex={-1}
                 aria-selected={selected}
                 disabled={disabled}
                 onClick={() => onChange(option.paneKey)}

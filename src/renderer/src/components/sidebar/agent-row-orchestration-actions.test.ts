@@ -159,6 +159,9 @@ describe('dispatchTaskToAgent', () => {
         if (request.method === 'orchestration.runCreate') {
           return ok({ run: { id: 'run_1', objective: 'Fix the login button' } })
         }
+        if (request.method === 'orchestration.workerList') {
+          return ok({ workers: [], counts: {} })
+        }
         if (request.method === 'orchestration.taskList') {
           return ok({ tasks: [], count: 0 })
         }
@@ -227,6 +230,9 @@ describe('dispatchTaskToAgent', () => {
         if (request.method === 'orchestration.runCurrent') {
           return ok({ run: { id: 'run_existing' } })
         }
+        if (request.method === 'orchestration.workerList') {
+          return ok({ workers: [], counts: {} })
+        }
         if (request.method === 'orchestration.taskList') {
           return ok({ tasks: [], count: 0 })
         }
@@ -266,17 +272,17 @@ describe('dispatchTaskToAgent', () => {
         if (request.method === 'orchestration.runCurrent') {
           return ok({ run: { id: 'run_busy' } })
         }
-        if (request.method === 'orchestration.taskList') {
+        if (request.method === 'orchestration.workerList') {
           return ok({
-            tasks: [
+            workers: [
               {
-                id: 'task_busy',
-                status: 'dispatched',
-                assignee_handle: 'term_worker',
-                dispatch_id: 'ctx_busy'
+                dispatchId: 'ctx_busy',
+                taskId: 'task_busy',
+                dispatchStatus: 'dispatched',
+                agentTerminalHandle: 'term_worker'
               }
             ],
-            count: 1
+            counts: {}
           })
         }
         throw new Error(`unexpected ${request.method}`)
@@ -294,6 +300,62 @@ describe('dispatchTaskToAgent', () => {
     expect(callRuntime).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'orchestration.taskCreate' })
     )
+  })
+
+  it('fails the created task when dispatch hits a cross-run assignee lock', async () => {
+    const callRuntime = vi.fn(
+      async (request: { method: string; params?: Record<string, unknown> }) => {
+        if (request.method === 'terminal.resolvePane') {
+          const paneKey = String(request.params?.paneKey ?? '')
+          return resolvePaneResponse(paneKey.startsWith('tab-coord') ? 'term_coord' : 'term_worker')
+        }
+        if (request.method === 'orchestration.runCurrent') {
+          return ok({ run: { id: 'run_new' } })
+        }
+        if (request.method === 'orchestration.workerList') {
+          return ok({ workers: [], counts: {} })
+        }
+        if (request.method === 'orchestration.taskList') {
+          return ok({ tasks: [], count: 0 })
+        }
+        if (request.method === 'orchestration.taskCreate') {
+          return ok({ task: { id: 'task_orphan', status: 'ready' } })
+        }
+        if (request.method === 'orchestration.dispatch') {
+          return {
+            id: 'req-1',
+            ok: false as const,
+            error: {
+              code: 'failed',
+              message:
+                'Terminal term_worker already has an active dispatch (ctx_other for task task_other)'
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (request.method === 'orchestration.taskUpdate') {
+          return ok({ task: { id: 'task_orphan', status: 'failed' } })
+        }
+        throw new Error(`unexpected ${request.method}`)
+      }
+    )
+
+    await expect(
+      dispatchTaskToAgent({
+        workerPaneKey: WORKER_PANE,
+        coordinatorPaneKey: COORD_PANE,
+        spec: 'another job',
+        callRuntime
+      })
+    ).rejects.toThrow(/already has an active dispatch/)
+    expect(callRuntime).toHaveBeenCalledWith({
+      method: 'orchestration.taskUpdate',
+      params: {
+        id: 'task_orphan',
+        status: 'failed',
+        callerTerminalHandle: 'term_coord'
+      }
+    })
   })
 
   it('rejects when coordinator and worker are the same pane', async () => {
@@ -317,17 +379,17 @@ describe('findActiveDispatchForWorker / wait hint', () => {
         if (request.method === 'terminal.resolvePane') {
           return resolvePaneResponse('term_worker')
         }
-        if (request.method === 'orchestration.taskList') {
+        if (request.method === 'orchestration.workerList') {
           return ok({
-            tasks: [
+            workers: [
               {
-                id: 'task_9',
-                status: 'dispatched',
-                assignee_handle: 'term_worker',
-                dispatch_id: 'ctx_9'
+                dispatchId: 'ctx_9',
+                taskId: 'task_9',
+                dispatchStatus: 'dispatched',
+                agentTerminalHandle: 'term_worker'
               }
             ],
-            count: 1
+            counts: {}
           })
         }
         throw new Error(`unexpected ${request.method}`)

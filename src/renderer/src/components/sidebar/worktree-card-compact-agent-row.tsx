@@ -277,7 +277,10 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       {...agentRowOrchestrationDataProps({
         paneKey: agent.paneKey,
         worktreeId: agent.entry.worktreeId ?? agent.tab.worktreeId,
-        coordinatorHandle: agent.entry.orchestration?.coordinatorHandle
+        coordinatorHandle: agent.entry.orchestration?.coordinatorHandle,
+        dispatchId: agent.entry.orchestration?.dispatchId,
+        taskId: agent.entry.orchestration?.taskId,
+        dispatchStatus: agent.entry.orchestration?.dispatchStatus
       })}
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}

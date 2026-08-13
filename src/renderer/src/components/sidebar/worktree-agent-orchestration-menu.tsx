@@ -27,6 +27,9 @@ export type AgentRowOrchestrationTarget = {
   paneKey: string
   worktreeId: string | null
   coordinatorHandle: string | null
+  dispatchId: string | null
+  taskId: string | null
+  dispatchStatus: string | null
 }
 
 function orchestrationTargetFromElement(row: Element): AgentRowOrchestrationTarget | null {
@@ -36,7 +39,10 @@ function orchestrationTargetFromElement(row: Element): AgentRowOrchestrationTarg
   }
   const worktreeId = row.getAttribute('data-worktree-id')?.trim() || null
   const coordinatorHandle = row.getAttribute('data-coordinator-handle')?.trim() || null
-  return { paneKey, worktreeId, coordinatorHandle }
+  const dispatchId = row.getAttribute('data-dispatch-id')?.trim() || null
+  const taskId = row.getAttribute('data-task-id')?.trim() || null
+  const dispatchStatus = row.getAttribute('data-dispatch-status')?.trim() || null
+  return { paneKey, worktreeId, coordinatorHandle, dispatchId, taskId, dispatchStatus }
 }
 
 export function readAgentRowOrchestrationTarget(
@@ -69,6 +75,9 @@ export function agentRowOrchestrationDataProps(target: {
   paneKey: string
   worktreeId?: string | null
   coordinatorHandle?: string | null
+  dispatchId?: string | null
+  taskId?: string | null
+  dispatchStatus?: string | null
 }): Record<string, string> {
   const props: Record<string, string> = {
     [AGENT_ROW_ORCHESTRATION_ATTR]: '',
@@ -80,7 +89,29 @@ export function agentRowOrchestrationDataProps(target: {
   if (target.coordinatorHandle) {
     props['data-coordinator-handle'] = target.coordinatorHandle
   }
+  if (target.dispatchId) {
+    props['data-dispatch-id'] = target.dispatchId
+  }
+  if (target.taskId) {
+    props['data-task-id'] = target.taskId
+  }
+  if (target.dispatchStatus) {
+    props['data-dispatch-status'] = target.dispatchStatus
+  }
   return props
+}
+
+export function activeDispatchFromTarget(
+  target: AgentRowOrchestrationTarget
+): { taskId: string; dispatchId: string } | null {
+  if (
+    (target.dispatchStatus !== 'pending' && target.dispatchStatus !== 'dispatched') ||
+    !target.dispatchId ||
+    !target.taskId
+  ) {
+    return null
+  }
+  return { taskId: target.taskId, dispatchId: target.dispatchId }
 }
 
 type Props = {
@@ -101,6 +132,20 @@ export function WorktreeAgentOrchestrationMenuSection({ target, onRequestAction 
 
   useEffect(() => {
     let cancelled = false
+    const known = activeDispatchFromTarget(target)
+    if (known) {
+      setWorkerBusy(true)
+      setWorkerBusyLabel(
+        translate(
+          'auto.components.dashboard.AgentRowContextMenu.dispatch.busy',
+          'Already has active dispatch {{dispatchId}} (task {{taskId}})',
+          { dispatchId: known.dispatchId, taskId: known.taskId }
+        )
+      )
+      return () => {
+        cancelled = true
+      }
+    }
     setWorkerBusy(false)
     setWorkerBusyLabel(null)
     void findActiveDispatchForWorker({
@@ -129,7 +174,7 @@ export function WorktreeAgentOrchestrationMenuSection({ target, onRequestAction 
     return () => {
       cancelled = true
     }
-  }, [target.paneKey])
+  }, [target])
 
   const copyText = useCallback(async (text: string, successLabel: string) => {
     try {

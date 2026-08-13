@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  activeDispatchFromTarget,
   agentRowOrchestrationDataProps,
   readAgentRowOrchestrationTarget
 } from './worktree-agent-orchestration-menu'
@@ -10,13 +11,19 @@ describe('worktree-agent-orchestration-menu', () => {
       agentRowOrchestrationDataProps({
         paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
         worktreeId: 'wt_1',
-        coordinatorHandle: 'term_coord'
+        coordinatorHandle: 'term_coord',
+        dispatchId: 'ctx_1',
+        taskId: 'task_1',
+        dispatchStatus: 'dispatched'
       })
     ).toEqual({
       'data-agent-row-orchestration': '',
       'data-pane-key': 'tab-1:11111111-1111-4111-8111-111111111111',
       'data-worktree-id': 'wt_1',
-      'data-coordinator-handle': 'term_coord'
+      'data-coordinator-handle': 'term_coord',
+      'data-dispatch-id': 'ctx_1',
+      'data-task-id': 'task_1',
+      'data-dispatch-status': 'dispatched'
     })
   })
 
@@ -32,6 +39,15 @@ describe('worktree-agent-orchestration-menu', () => {
         if (name === 'data-coordinator-handle') {
           return 'term_coord'
         }
+        if (name === 'data-dispatch-id') {
+          return 'ctx_1'
+        }
+        if (name === 'data-task-id') {
+          return 'task_1'
+        }
+        if (name === 'data-dispatch-status') {
+          return 'dispatched'
+        }
         return null
       },
       hasAttribute: (name: string) => name === 'data-agent-row-orchestration'
@@ -43,7 +59,14 @@ describe('worktree-agent-orchestration-menu', () => {
     expect(readAgentRowOrchestrationTarget(target)).toEqual({
       paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
       worktreeId: 'wt_1',
-      coordinatorHandle: 'term_coord'
+      coordinatorHandle: 'term_coord',
+      dispatchId: 'ctx_1',
+      taskId: 'task_1',
+      dispatchStatus: 'dispatched'
+    })
+    expect(activeDispatchFromTarget(readAgentRowOrchestrationTarget(target)!)).toEqual({
+      taskId: 'task_1',
+      dispatchId: 'ctx_1'
     })
   })
 
@@ -60,7 +83,10 @@ describe('worktree-agent-orchestration-menu', () => {
     expect(readAgentRowOrchestrationTarget(null, pathEvent)).toEqual({
       paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
       worktreeId: 'wt_1',
-      coordinatorHandle: null
+      coordinatorHandle: null,
+      dispatchId: null,
+      taskId: null,
+      dispatchStatus: null
     })
   })
 

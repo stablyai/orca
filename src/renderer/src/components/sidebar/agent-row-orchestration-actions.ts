@@ -1,5 +1,9 @@
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import { resolveTerminalHandleForPaneKey } from '@/components/dashboard/agent-row-orchestration-clipboard'
+import {
+  failCreatedTask,
+  findActiveDispatchForWorkerHandle
+} from './agent-row-orchestration-dispatch-lock'
 
 export type {
   ActiveTerminalPaneKeyState,
@@ -10,6 +14,8 @@ export {
   listCoordinatorCandidates,
   resolveCoordinatorPaneKey
 } from './agent-row-orchestration-coordinator'
+export type { ActiveWorkerDispatch } from './agent-row-orchestration-dispatch-lock'
+export { findActiveDispatchForWorker } from './agent-row-orchestration-dispatch-lock'
 
 type CallRuntime = (request: {
   method: string
@@ -76,76 +82,6 @@ async function ensureCoordinatorRun(args: {
     throw new Error('Run create did not return a run id')
   }
   return createdId
-}
-
-export type ActiveWorkerDispatch = {
-  workerHandle: string
-  taskId: string
-  dispatchId: string
-}
-
-// Why: the DB rejects a second active dispatch on the same assignee. Probe
-// taskList so the menu can disable Dispatch before the RPC fails.
-export async function findActiveDispatchForWorker(args: {
-  workerPaneKey: string
-  coordinatorPaneKey?: string | null
-  callRuntime: CallRuntime
-}): Promise<ActiveWorkerDispatch | null> {
-  const workerHandle = await resolveTerminalHandleForPaneKey({
-    paneKey: args.workerPaneKey,
-    callRuntime: args.callRuntime
-  })
-  const coordinatorHandle = args.coordinatorPaneKey
-    ? await resolveTerminalHandleForPaneKey({
-        paneKey: args.coordinatorPaneKey,
-        callRuntime: args.callRuntime
-      })
-    : null
-  return findActiveDispatchForWorkerHandle({
-    workerHandle,
-    coordinatorHandle,
-    callRuntime: args.callRuntime
-  })
-}
-
-// Why: dispatch already resolved the worker handle; reuse it instead of a second
-// terminal.resolvePane round-trip when probing taskList.
-async function findActiveDispatchForWorkerHandle(args: {
-  workerHandle: string
-  coordinatorHandle?: string | null
-  callRuntime: CallRuntime
-}): Promise<ActiveWorkerDispatch | null> {
-  const listResult = assertOk(
-    await args.callRuntime({
-      method: 'orchestration.taskList',
-      params: {
-        status: 'dispatched',
-        // Why: taskList is Run-scoped; without a caller the RPC throws run_required.
-        ...(args.coordinatorHandle ? { callerTerminalHandle: args.coordinatorHandle } : {})
-      }
-    })
-  )
-  if (!isRecord(listResult) || !Array.isArray(listResult.tasks)) {
-    return null
-  }
-  for (const row of listResult.tasks) {
-    if (!isRecord(row)) {
-      continue
-    }
-    if (
-      row.assignee_handle === args.workerHandle &&
-      typeof row.id === 'string' &&
-      typeof row.dispatch_id === 'string' &&
-      row.dispatch_id.length > 0
-    ) {
-      return {
-        workerHandle: args.workerHandle,
-        taskId: row.id,
-        dispatchId: row.dispatch_id
-      }
-    }
-  }
-  return null
 }
 
 export function formatCoordinatorWaitHint(): string {
@@ -240,17 +176,29 @@ export async function dispatchTaskToAgent(args: {
   )
   const taskId = readTaskId(createResult)
 
-  const dispatchResult = assertOk(
-    await args.callRuntime({
-      method: 'orchestration.dispatch',
-      params: {
-        task: taskId,
-        to: workerHandle,
-        from: coordinatorHandle,
-        inject: args.inject !== false
-      }
+  let dispatchResult: unknown
+  try {
+    dispatchResult = assertOk(
+      await args.callRuntime({
+        method: 'orchestration.dispatch',
+        params: {
+          task: taskId,
+          to: workerHandle,
+          from: coordinatorHandle,
+          inject: args.inject !== false
+        }
+      })
+    )
+  } catch (error) {
+    // Why: a false-negative lock probe can create a ready task that dispatch
+    // then rejects (cross-Run assignee lock). Fail that task so it is not left ready.
+    await failCreatedTask({
+      taskId,
+      coordinatorHandle,
+      callRuntime: args.callRuntime
     })
-  )
+    throw error
+  }
   const injected =
     isRecord(dispatchResult) && typeof dispatchResult.injected === 'boolean'
       ? dispatchResult.injected

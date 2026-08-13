@@ -203,7 +203,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       {...agentRowOrchestrationDataProps({
         paneKey: agent.paneKey,
         worktreeId: agent.entry.worktreeId ?? agent.tab.worktreeId,
-        coordinatorHandle: agent.entry.orchestration?.coordinatorHandle
+        coordinatorHandle: agent.entry.orchestration?.coordinatorHandle,
+        dispatchId: agent.entry.orchestration?.dispatchId,
+        taskId: agent.entry.orchestration?.taskId,
+        dispatchStatus: agent.entry.orchestration?.dispatchStatus
       })}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}

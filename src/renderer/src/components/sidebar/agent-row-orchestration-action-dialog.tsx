@@ -26,7 +26,10 @@ import {
 } from './agent-row-orchestration-actions'
 import { dialogCopy } from './agent-row-orchestration-action-copy'
 import { AgentRowOrchestrationCoordinatorPicker } from './agent-row-orchestration-coordinator-picker'
-import type { AgentRowOrchestrationTarget } from './worktree-agent-orchestration-menu'
+import {
+  activeDispatchFromTarget,
+  type AgentRowOrchestrationTarget
+} from './worktree-agent-orchestration-menu'
 
 export type AgentRowOrchestrationActionDialogState = {
   kind: OrchestrationActionKind
@@ -100,6 +103,17 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
     setCoordinatorPaneKey(preferred)
 
     if (kind !== 'dispatch') {
+      return
+    }
+    const known = activeDispatchFromTarget(target)
+    if (known) {
+      setWorkerBusyMessage(
+        translate(
+          'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.busy',
+          'This agent already has an active dispatch ({{dispatchId}} / task {{taskId}}). Wait for worker_done before dispatching again.',
+          { dispatchId: known.dispatchId, taskId: known.taskId }
+        )
+      )
       return
     }
     let cancelled = false
