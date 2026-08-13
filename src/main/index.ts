@@ -1816,6 +1816,7 @@ type ServeOptions = {
   wsPort?: number
   pairingAddress: string | null
   noPairing: boolean
+  noRotatePairing: boolean
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
@@ -1844,6 +1845,7 @@ function getServeOptions(argv = process.argv): ServeOptions {
     ...(wsPort !== undefined ? { wsPort } : {}),
     pairingAddress: valueAfter('--serve-pairing-address'),
     noPairing: argv.includes('--serve-no-pairing'),
+    noRotatePairing: argv.includes('--serve-no-rotate-pairing'),
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
     projectRoot: valueAfter('--serve-project-root')
@@ -1904,7 +1906,8 @@ async function printServeReady(options: ServeOptions): Promise<void> {
     : runtimeRpc.createPairingOffer({
         address: options.pairingAddress,
         name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
-        scope: options.mobilePairing ? 'mobile' : 'runtime'
+        scope: options.mobilePairing ? 'mobile' : 'runtime',
+        noRotate: options.noRotatePairing
       })
   const pairingQr =
     pairing.available && options.mobilePairing

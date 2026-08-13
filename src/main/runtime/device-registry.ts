@@ -97,12 +97,25 @@ export class DeviceRegistry {
   // copy-button flow that encourages regeneration) leaves an orphaned token
   // forever. Returns an existing never-scanned entry if present; otherwise
   // mints a new one and drops any stale pending entries.
+  //
+  // When `noRotate` is true, the lookup ignores `lastSeenAt` so the most-recent
+  // device of this scope is reused across restarts and across pairs. This produces
+  // a stable pairing URL suitable for bookmarking. The caller (cli/runtime-rpc)
+  // is responsible for gating this on a user-facing flag; do not invoke from
+  // places that depend on the implicit rotation-after-pair.
+  //
+  // Why reverse: addDevice appends to `this.devices`, so the most-recent same-scope
+  // entry sits at the end. A forward find() would return the oldest surviving
+  // device of that scope and the pairing URL would point at a stale token.
   getOrCreatePendingDevice(
     name: string,
     scope: DeviceScope = 'mobile',
-    pairingReach: RuntimePairingReach = 'network'
+    pairingReach: RuntimePairingReach = 'network',
+    options?: { noRotate?: boolean }
   ): DeviceEntry {
-    const existing = this.devices.find((d) => d.lastSeenAt === 0 && d.scope === scope)
+    const existing = options?.noRotate
+      ? this.devices.toReversed().find((d) => d.scope === scope)
+      : this.devices.find((d) => d.lastSeenAt === 0 && d.scope === scope)
     if (existing) {
       // Why: the same pending token can be re-advertised at a broader reach; widen it but never narrow it,
       // or a link already handed out for off-host use would stop being served after the next launch.

@@ -80,6 +80,7 @@ export function serveOrcaApp(
     port?: string | null
     pairingAddress?: string | null
     noPairing?: boolean
+    noRotatePairing?: boolean
     mobilePairing?: boolean
     recipeJson?: boolean
     projectRoot?: string | null
@@ -102,6 +103,9 @@ export function serveOrcaApp(
   }
   if (args.noPairing) {
     childArgs.push('--serve-no-pairing')
+  }
+  if (args.noRotatePairing) {
+    childArgs.push('--serve-no-rotate-pairing')
   }
   if (args.mobilePairing) {
     childArgs.push('--serve-mobile-pairing')

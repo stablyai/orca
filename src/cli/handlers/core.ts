@@ -127,6 +127,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
           ? (flags.get('pairing-address') as string)
           : null,
       noPairing: flags.get('no-pairing') === true,
+      noRotatePairing: flags.get('no-rotate-pairing') === true,
       mobilePairing: flags.get('mobile-pairing') === true,
       recipeJson: flags.get('recipe-json') === true,
       projectRoot

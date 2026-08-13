@@ -11,6 +11,7 @@ const SERVE_FLAG = '--serve'
 const CLI_TO_SERVE_FLAG = new Map([
   ['--json', '--serve-json'],
   ['--no-pairing', '--serve-no-pairing'],
+  ['--no-rotate-pairing', '--serve-no-rotate-pairing'],
   ['--mobile-pairing', '--serve-mobile-pairing'],
   ['--recipe-json', '--serve-recipe-json']
 ])

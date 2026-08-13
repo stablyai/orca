@@ -2154,6 +2154,7 @@ describe('orca cli worktree awareness', () => {
       port: '6768',
       pairingAddress: '100.64.1.20',
       noPairing: true,
+      noRotatePairing: false,
       mobilePairing: false,
       recipeJson: false,
       projectRoot: null
@@ -2173,6 +2174,7 @@ describe('orca cli worktree awareness', () => {
       port: null,
       pairingAddress: '100.64.1.20',
       noPairing: false,
+      noRotatePairing: false,
       mobilePairing: true,
       recipeJson: false,
       projectRoot: null
@@ -2199,6 +2201,7 @@ describe('orca cli worktree awareness', () => {
       port: null,
       pairingAddress: 'wss://sandbox.example.com',
       noPairing: false,
+      noRotatePairing: false,
       mobilePairing: false,
       recipeJson: true,
       projectRoot: '/workspace/repo'

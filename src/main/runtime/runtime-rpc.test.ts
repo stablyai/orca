@@ -5721,6 +5721,70 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     }
   })
 
+  it('rotates the pending device after a pair by default, so the URL changes on next launch', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const registry = new DeviceRegistry(userDataPath)
+    const first = registry.getOrCreatePendingDevice('Server', 'runtime')
+    registry.updateLastSeen(first.deviceId)
+    // Default: a previously-paired device is no longer pending, so a fresh pending device is minted.
+    const second = registry.getOrCreatePendingDevice('Server', 'runtime')
+    expect(second.deviceId).not.toBe(first.deviceId)
+    expect(second.token).not.toBe(first.token)
+  })
+
+  it('keeps the same pending device across pairs when noRotate is set, so the URL stays stable', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const registry = new DeviceRegistry(userDataPath)
+    const first = registry.getOrCreatePendingDevice('Server', 'runtime', 'network', {
+      noRotate: true
+    })
+    registry.updateLastSeen(first.deviceId)
+    // With noRotate: the same device entry is returned even after a pair — token is stable.
+    const second = registry.getOrCreatePendingDevice('Server', 'runtime', 'network', {
+      noRotate: true
+    })
+    expect(second.deviceId).toBe(first.deviceId)
+    expect(second.token).toBe(first.token)
+  })
+
+  it('noRotate preserves the pairingReach widening rule so a long-lived URL still reaches off-host', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const registry = new DeviceRegistry(userDataPath)
+    const first = registry.getOrCreatePendingDevice('Server', 'runtime', 'this-computer', {
+      noRotate: true
+    })
+    // A long-lived URL must remain reachable once the operator widens reach to 'network'.
+    // The widening rule applies regardless of noRotate — without it, a previously local URL
+    // would stop working off-host on the next launch.
+    const second = registry.getOrCreatePendingDevice('Server', 'runtime', 'network', {
+      noRotate: true
+    })
+    expect(second.deviceId).toBe(first.deviceId)
+    expect(second.pairingReach).toBe('network')
+  })
+
+  it('noRotate selects the most-recent same-scope device, not the oldest surviving one', () => {
+    // Why: addDevice appends to the registry, so the most-recent same-scope entry sits at the end.
+    // A forward find() would return the oldest device and the URL would point at a stale token.
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const registry = new DeviceRegistry(userDataPath)
+    const older = registry.addDevice('Old server', 'runtime', 'network')
+    const newer = registry.addDevice('New server', 'runtime', 'network')
+    // Mark both devices as paired so default rotation cannot reuse either existing entry —
+    // without noRotate, getOrCreatePendingDevice would mint a third device here.
+    registry.updateLastSeen(older.deviceId)
+    registry.updateLastSeen(newer.deviceId)
+    // With noRotate, the lookup must return the newer entry (last in the array).
+    const resolved = registry.getOrCreatePendingDevice('Server', 'runtime', 'network', {
+      noRotate: true
+    })
+    expect(resolved.deviceId).toBe(newer.deviceId)
+    expect(resolved.token).toBe(newer.token)
+    expect(resolved.deviceId).not.toBe(older.deviceId)
+    // Confirm no third device was minted.
+    expect(registry.listDevices()).toHaveLength(2)
+  })
+
   it('binds all interfaces at startup for a connected device paired before pairingReach existed', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     // Why: registries written by older desktops only ever held network-reach grants; a missing field must

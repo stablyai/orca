@@ -667,6 +667,9 @@ export class OrcaRuntimeRpcServer {
     // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
     // next launch bind every interface. Defaults to network reach, which is what every other caller means.
     reach?: RuntimePairingReach
+    // Why: --no-rotate-pairing lets the operator pin a static pairing URL across restarts and pairs.
+    // Default false preserves the implicit rotation-after-pair semantics that revoke a leaked URL on next launch.
+    noRotate?: boolean
   }):
     | PairingOfferUnavailable
     | {
@@ -706,7 +709,9 @@ export class OrcaRuntimeRpcServer {
       const reach = args.reach ?? 'network'
       device = args.rotate
         ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, {
+            noRotate: args.noRotate
+          })
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
