@@ -83,8 +83,7 @@ describe('packaged CLI assets', () => {
   itRunsUnixShell('replaces the shell process in packaged Unix launchers', async () => {
     for (const launcher of [linuxLauncherAsset, darwinLauncherAsset]) {
       const content = await readFile(launcher, 'utf8')
-      expect(content).toContain('export ELECTRON_RUN_AS_NODE=1')
-      expect(content).toContain('exec "$ELECTRON" "$CLI" "$@"')
+      expect(content).toContain('ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"')
     }
   })
 
