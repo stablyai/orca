@@ -2176,8 +2176,12 @@ function extractCommandCodeToolFields(
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveFallbackToolInputPreview(hookPayload.tool_input)
+    // Why: ask_user_question arrives as PreToolUse then blocks on the user's
+    // answer. Capture the full question payload so the live card can render the
+    // options, matching the Claude/Grok interactive-question path.
+    const interactivePrompt = deriveInteractivePrompt(toolName, hookPayload.tool_input, eventName)
     const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
+      { toolName, toolInput, interactivePrompt },
       { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
     )
     if (eventName === 'PostToolUse') {
@@ -3963,8 +3967,26 @@ function normalizeCommandCodeEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  const stateName =
-    eventName === 'PreToolUse' || eventName === 'PostToolUse'
+  // Why: Command Code 0.44+ fires SessionStart (source: startup/resume/clear) on
+  // (re)start. Reset stale per-turn state without painting a working row before a
+  // real turn, matching Codex/Grok session handling.
+  if (eventName === 'SessionStart') {
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const toolName =
+    readString(hookPayload, 'tool_name') ??
+    readString(hookPayload, 'toolName') ??
+    readString(hookPayload, 'tool_display_name')
+  // Why: ask_user_question fires PreToolUse then blocks awaiting the user's
+  // answer (no PostToolUse/Stop until answered). Surface it as `waiting` so the
+  // sidebar flags attention, matching Claude PermissionRequest / Grok / Kimi.
+  const isUserInputPreTool = eventName === 'PreToolUse' && isAskUserQuestionTool(toolName)
+
+  const stateName = isUserInputPreTool
+    ? 'waiting'
+    : eventName === 'PreToolUse' || eventName === 'PostToolUse'
       ? 'working'
       : eventName === 'Stop'
         ? 'done'

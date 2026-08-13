@@ -47,10 +47,13 @@ describe('CommandCodeHookService', () => {
     ) as {
       hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
     }
-    expect(Object.keys(config.hooks).sort()).toEqual(['PostToolUse', 'PreToolUse', 'Stop'].sort())
+    expect(Object.keys(config.hooks).sort()).toEqual(
+      ['PostToolUse', 'PreToolUse', 'SessionStart', 'Stop'].sort()
+    )
     expect(config.hooks.PreToolUse[0].matcher).toBe('.*')
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
     expect(config.hooks.Stop[0].matcher).toBeUndefined()
+    expect(config.hooks.SessionStart[0].matcher).toBeUndefined()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
       process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /command-code-hook/
     )

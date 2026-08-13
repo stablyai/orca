@@ -31,7 +31,11 @@ const COMMAND_CODE_EVENTS = [
     eventName: 'PostToolUse',
     definition: { matcher: '.*', hooks: [{ type: 'command', command: '' }] }
   },
-  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } }
+  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: Command Code 0.44+ fires SessionStart (source: startup/resume/clear).
+  // Older builds reject unknown events with a skip-warning, so installing it is
+  // forward-safe and lets Orca reset stale turn state on resume like Claude/Codex.
+  { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } }
 ] as const
 
 function getConfigPath(): string {

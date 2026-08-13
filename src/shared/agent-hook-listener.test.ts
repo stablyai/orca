@@ -1092,6 +1092,68 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
+  it('maps Command Code ask_user_question to waiting with the question card', () => {
+    const askState = createHookListenerState()
+    const questionInput = {
+      questions: [
+        {
+          question: 'Which line is your favorite?',
+          header: 'Favorite',
+          options: [{ label: 'Line 1' }, { label: 'Line 2' }]
+        }
+      ]
+    }
+    const waiting = normalizeHookPayload(
+      askState,
+      'command-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'ask_user_question',
+          tool_display_name: 'QUESTION',
+          tool_input: questionInput
+        }
+      },
+      'production'
+    )
+    expect(waiting?.payload).toMatchObject({ state: 'waiting', agentType: 'command-code' })
+    expect(waiting?.payload.interactivePrompt).toBe(JSON.stringify(questionInput))
+
+    // Answering the question (PostToolUse) returns to working and clears the card.
+    const answered = normalizeHookPayload(
+      askState,
+      'command-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'ask_user_question',
+          tool_display_name: 'QUESTION',
+          tool_input: questionInput,
+          tool_response: 'Line 2'
+        }
+      },
+      'production'
+    )
+    expect(answered?.payload.state).toBe('working')
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('resets Command Code turn state on SessionStart without painting a row', () => {
+    const sessionState = createHookListenerState()
+    const result = normalizeHookPayload(
+      sessionState,
+      'command-code',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', source: 'resume' }
+      },
+      'production'
+    )
+    expect(result).toBeNull()
+  })
+
   it('reads newline-heavy Command Code transcripts without line-array splitting', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-large-transcript-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')

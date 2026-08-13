@@ -381,7 +381,7 @@ describe('remote hook service installers', () => {
     ) as {
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
     }
-    for (const eventName of ['PreToolUse', 'PostToolUse', 'Stop']) {
+    for (const eventName of ['PreToolUse', 'PostToolUse', 'Stop', 'SessionStart']) {
       const definition = commandCodeConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/command-code-hook.sh')
@@ -390,6 +390,7 @@ describe('remote hook service installers', () => {
     expect(commandCodeConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(commandCodeConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
     expect(commandCodeConfig.hooks.Stop?.[0]?.matcher).toBeUndefined()
+    expect(commandCodeConfig.hooks.SessionStart?.[0]?.matcher).toBeUndefined()
 
     const grokConfig = JSON.parse(grok.fs.files.get('/home/dev/.grok/hooks/orca-status.json')!) as {
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
