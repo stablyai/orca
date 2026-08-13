@@ -32,14 +32,24 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('accepts max effort on Codex models whose ceiling allows it', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'codex',
+        model: 'gpt-5.6-luna',
+        effort: 'max'
+      }).preferences
+    ).toEqual({ model: 'gpt-5.6-luna', effort: 'max' })
+  })
+
   it('rejects model-specific effort combinations the catalog disproves', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({
         agent: 'codex',
-        model: 'gpt-5.6-luna',
-        effort: 'xhigh'
+        model: 'gpt-5.5',
+        effort: 'max'
       })
-    ).toThrow('does not support effort xhigh')
+    ).toThrow('does not support effort max')
   })
 
   it('rejects effort without a model', () => {
