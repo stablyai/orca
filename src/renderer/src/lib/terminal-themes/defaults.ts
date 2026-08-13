@@ -1,4 +1,5 @@
 import type { TerminalThemeMap } from './types'
+import { LIGHT_CONTENT_SURFACE_HEX } from '../light-surface-tokens'
 
 export const DEFAULT_TERMINAL_THEMES: TerminalThemeMap = {
   // Most colors come from Ghostty. Orca raises dark selection contrast because Ghostty's
@@ -29,10 +30,10 @@ export const DEFAULT_TERMINAL_THEMES: TerminalThemeMap = {
   },
 
   'Builtin Tango Light': {
-    background: '#ffffff',
+    background: LIGHT_CONTENT_SURFACE_HEX,
     foreground: '#2e3434',
     cursor: '#2e3434',
-    cursorAccent: '#ffffff',
+    cursorAccent: LIGHT_CONTENT_SURFACE_HEX,
     selectionBackground: '#accef7',
     selectionForeground: '#2e3434',
     black: '#2e3436',
