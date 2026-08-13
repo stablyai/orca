@@ -3,6 +3,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
+import { getDeepSeekStatusBarToggleSearchEntry } from './appearance-status-bar-deepseek-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
@@ -200,6 +201,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
       )
     },
     getGrokStatusBarToggleSearchEntry(),
+    getDeepSeekStatusBarToggleSearchEntry(),
     {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),

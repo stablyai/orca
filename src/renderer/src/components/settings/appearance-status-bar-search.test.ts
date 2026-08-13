@@ -43,4 +43,17 @@ describe('getStatusBarToggles', () => {
       expect.arrayContaining(['status bar', 'minimax', 'usage', 'subscription', 'cookie'])
     )
   })
+
+  it('includes DeepSeek usage so Appearance can toggle the default-on status item', () => {
+    const deepSeekToggle = getStatusBarToggles().find((entry) => entry.id === 'deepseek')
+
+    expect(deepSeekToggle).toMatchObject({
+      title: 'DeepSeek Usage',
+      description: 'Show DeepSeek prepaid balance from DEEPSEEK_API_KEY.',
+      toggleDescription: 'Show DeepSeek prepaid balance when DEEPSEEK_API_KEY is set.'
+    })
+    expect(deepSeekToggle?.keywords).toEqual(
+      expect.arrayContaining(['status bar', 'deepseek', 'usage', 'balance', 'api key'])
+    )
+  })
 })

@@ -22,6 +22,7 @@ describe('getProviderDisplayName', () => {
     expect(getProviderDisplayName('opencode-go')).toBe('OpenCode Go')
     expect(getProviderDisplayName('kimi')).toBe('Kimi')
     expect(getProviderDisplayName('grok')).toBe('Grok')
+    expect(getProviderDisplayName('deepseek')).toBe('DeepSeek')
   })
 
   it('falls back to the raw provider id when no mapping exists', () => {
