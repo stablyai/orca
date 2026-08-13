@@ -70,13 +70,14 @@ export function createStoredWebRuntimeEnvironment(args: {
   previousEnvironment?: StoredWebRuntimeEnvironment | null
   connectionDependency?: 'ssh-tunnel'
 }): StoredWebRuntimeEnvironment {
-  const id = `web-${createBrowserUuid()}`
+  const sameServerEnvironment = getSameServerEnvironment(args.previousEnvironment, args.offer)
+  const id = sameServerEnvironment?.id ?? `web-${createBrowserUuid()}`
   const now = Date.now()
-  const compatibleEnvironmentIds = getCompatibleEnvironmentIds(args.previousEnvironment, args.offer)
+  const compatibleEnvironmentIds = sameServerEnvironment?.compatibleEnvironmentIds ?? []
   return {
     id,
     name: args.name.trim() || 'Orca Server',
-    createdAt: now,
+    createdAt: sameServerEnvironment?.createdAt ?? now,
     updatedAt: now,
     lastUsedAt: null,
     runtimeId: null,
@@ -97,14 +98,14 @@ export function createStoredWebRuntimeEnvironment(args: {
   }
 }
 
-function getCompatibleEnvironmentIds(
+function getSameServerEnvironment(
   previous: StoredWebRuntimeEnvironment | null | undefined,
   offer: WebPairingOffer
-): string[] {
+): StoredWebRuntimeEnvironment | null {
   if (!previous?.endpoints.some((endpoint) => endpoint.publicKeyB64 === offer.publicKeyB64)) {
-    return []
+    return null
   }
-  return [...new Set([...(previous.compatibleEnvironmentIds ?? []), previous.id])]
+  return previous
 }
 
 export function redactStoredWebRuntimeEnvironment(

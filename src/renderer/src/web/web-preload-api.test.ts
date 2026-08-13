@@ -363,6 +363,21 @@ describe('web runtime environment identity', () => {
     ).resolves.toMatchObject({ id: paired.environment.id, name: 'Server A again' })
   })
 
+  it('keeps the execution-host identity when re-pairing the same server key', async () => {
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Server A again',
+      pairingCode: encodePairingCode({ publicKeyB64: 'public-key' })
+    })
+
+    expect(paired.environment.id).toBe('web-server-a')
+    expect(paired.environment).not.toHaveProperty('compatibleEnvironmentIds')
+  })
+
   it('ignores malformed persisted compatibility ids when resolving selectors', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
