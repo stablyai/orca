@@ -1361,7 +1361,8 @@
         "addSshHostHint": "Use an existing machine over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
         "addRemoteOrcaServerHint": "Pair another Orca runtime",
-        "hostConnectionFailed": "Connection failed"
+        "hostConnectionFailed": "Connection failed",
+        "childWorkspaceParentHint": "\"{{parent}}\"의 하위 워크스페이스로 생성됩니다."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -4549,6 +4550,7 @@
           "697d0f6e1b": "고정 해제",
           "250de158fd": "워크스페이스 제거",
           "changeParentWorkspace": "상위 워크트리 변경...",
+          "newChildWorkspace": "새 하위 워크스페이스...",
           "setParentWorkspace": "상위 워크트리 설정...",
           "workspaceSection": "워크스페이스",
           "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",

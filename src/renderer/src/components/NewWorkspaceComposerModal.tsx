@@ -45,6 +45,10 @@ type ComposerModalData = {
   initialGitHubWorkItem?: GitHubWorkItem | null
   taskSourceContext?: TaskSourceContext | null
   initialBaseBranch?: string
+  /** Worktree the created workspace should nest under as a lineage child; its
+   *  branch is the default base when no Start-from source is picked. Set by the
+   *  sidebar's "New Child Workspace" context-menu action. */
+  parentWorktreeId?: string
   initialWorkspaceStatus?: WorkspaceStatus
   enableIssueAutomation?: boolean
   /** Telemetry surface that opened the composer. Set by each
@@ -143,6 +147,7 @@ function QuickTabBody({
     initialProjectGroupId: modalData.initialProjectGroupId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
+    ...(modalData.parentWorktreeId ? { parentWorktreeId: modalData.parentWorktreeId } : {}),
     persistDraft: false,
     onCreated: onClose,
     isSubmissionCancelled,

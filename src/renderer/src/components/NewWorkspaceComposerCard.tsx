@@ -8,6 +8,7 @@ import {
   ChevronDown,
   CornerDownLeft,
   FolderPlus,
+  FolderTree,
   LoaderCircle,
   PlugZap,
   Settings2
@@ -132,6 +133,8 @@ type NewWorkspaceComposerCardProps = {
   smartNameJiraSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
+  /** Parent context when composing a child workspace from the sidebar. */
+  childWorkspaceParent?: { displayName: string } | null
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: () => void
   advancedOpen: boolean
@@ -343,6 +346,7 @@ export default function NewWorkspaceComposerCard({
   smartNameGitHubSourceContext,
   smartNameJiraSourceContext,
   forkPushWarning,
+  childWorkspaceParent,
   detectedAgentIds,
   onOpenAgentSettings,
   advancedOpen,
@@ -810,6 +814,21 @@ export default function NewWorkspaceComposerCard({
             <p className="flex items-start gap-1.5 text-[11px] text-yellow-600 dark:text-yellow-500">
               <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
               <span>{forkPushWarning}</span>
+            </p>
+          ) : null}
+          {childWorkspaceParent ? (
+            <p
+              className="flex items-start gap-1.5 text-[11px] text-muted-foreground"
+              data-testid="child-workspace-parent-hint"
+            >
+              <FolderTree className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+              <span>
+                {translate(
+                  'auto.components.NewWorkspaceComposerCard.childWorkspaceParentHint',
+                  'Created as a child workspace of "{{parent}}".',
+                  { parent: childWorkspaceParent.displayName }
+                )}
+              </span>
             </p>
           ) : null}
           {/* Why (#5181): sits under the branch selection (not Name, which can differ) so reusing the picked branch is an explicit choice. */}

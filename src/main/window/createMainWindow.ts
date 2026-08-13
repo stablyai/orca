@@ -714,6 +714,9 @@ export function createMainWindow(
       case 'openNewWorkspace':
         mainWindow.webContents.send('ui:openNewWorkspace')
         return
+      case 'openNewChildWorkspace':
+        mainWindow.webContents.send('ui:openNewChildWorkspace')
+        return
       case 'deleteCurrentWorkspace':
         mainWindow.webContents.send('ui:deleteCurrentWorkspace')
         return

@@ -1470,7 +1470,8 @@
         "addSshHostHint": "Use an existing machine over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
         "addRemoteOrcaServerHint": "Pair another Orca runtime",
-        "hostConnectionFailed": "Connection failed"
+        "hostConnectionFailed": "Connection failed",
+        "childWorkspaceParentHint": "Created as a child workspace of \"{{parent}}\"."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -4782,6 +4783,7 @@
           "697d0f6e1b": "Unpin",
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
+          "newChildWorkspace": "New Child Workspace...",
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",

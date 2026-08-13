@@ -2786,6 +2786,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
+    onOpenNewChildWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
     onOpenWorkspaceBoard: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,

@@ -34,6 +34,7 @@ export type KeybindingActionId =
   | 'app.settings'
   | 'app.forceReload'
   | 'workspace.create'
+  | 'workspace.createChild'
   | 'workspace.rename'
   | 'workspace.delete'
   | 'workspace.openBoard'
@@ -261,7 +262,15 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'create', 'new workspace'],
-    defaultBindings: platformBindings(['Mod+N', 'Mod+Shift+N'])
+    defaultBindings: platformBindings(['Mod+N'])
+  },
+  {
+    id: 'workspace.createChild',
+    title: 'Create child worktree of active workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'worktree', 'create', 'child', 'stacked', 'lineage'],
+    defaultBindings: platformBindings(['Mod+Shift+N'])
   },
   {
     id: 'workspace.rename',

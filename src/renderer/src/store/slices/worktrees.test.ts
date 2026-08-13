@@ -5000,6 +5000,59 @@ describe('createWorktree base status merge', () => {
     })
   })
 
+  it('attributes an explicitly picked parent to a manual action, overriding active scope', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/child',
+      repoId: 'repo1',
+      path: '/path/child',
+      instanceId: 'child-instance'
+    })
+    store.setState({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1')
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    // Padding covers params 4-25; `options` is the trailing 26th parameter.
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature',
+        'origin/main',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { parentWorktreeId: 'repo1::/path/parent' }
+      )
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentWorkspace: worktreeWorkspaceKey('repo1::/path/parent'),
+        parentWorkspaceCaptureSource: 'manual-action'
+      })
+    )
+  })
+
   it('merges create result metadata into a worktree inserted by the watcher race', async () => {
     const store = createTestStore()
     const watcherWorktree = makeWorktree({

@@ -70,6 +70,10 @@ export type WorktreeCreationRequest = {
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
   branchNameOverride?: string
+  /** Worktree recorded as the lineage parent at create time; its branch is the
+   *  default base when no explicit baseBranch was picked. Dropped if the parent
+   *  stops qualifying (deleted, other repo/host) by submit. */
+  parentWorktreeId?: string
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number
   linkedGitLabIssue?: number

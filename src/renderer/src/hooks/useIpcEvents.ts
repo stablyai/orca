@@ -8,6 +8,8 @@ import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { activateAndRevealWorktree, activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import { canCreateChildWorkspace } from '@/lib/worktree-create-parent'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
@@ -503,6 +505,46 @@ export function openNewWorkspaceFromShortcut(
     return
   }
   state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
+}
+
+export function openNewChildWorkspaceFromShortcut(
+  state: Pick<
+    AppState,
+    | 'activeModal'
+    | 'activeView'
+    | 'taskPageData'
+    | 'openModal'
+    | 'activeWorktreeId'
+    | 'worktreesByRepo'
+    | 'repos'
+  >
+): void {
+  if (state.activeModal === 'new-workspace-composer') {
+    return
+  }
+  const worktree = state.activeWorktreeId
+    ? getWorktreeMapFromState(state).get(state.activeWorktreeId)
+    : undefined
+  const eligibleParent =
+    worktree &&
+    canCreateChildWorkspace({
+      repo: getRepoMapFromState(state).get(worktree.repoId),
+      branch: worktree.branch,
+      isFolderWorkspace: parseWorkspaceKey(worktree.id)?.type === 'folder'
+    })
+      ? worktree
+      : null
+  if (!eligibleParent) {
+    // Why: Mod+Shift+N used to alias workspace.create; without an eligible
+    // active workspace it still opens the plain composer instead of dying.
+    state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
+    return
+  }
+  state.openModal('new-workspace-composer', {
+    initialRepoId: eligibleParent.repoId,
+    parentWorktreeId: eligibleParent.id,
+    telemetrySource: 'shortcut'
+  })
 }
 
 export function resolveBrowserSessionTabTarget(
@@ -1345,6 +1387,15 @@ export function useIpcEvents(): void {
         openNewWorkspaceFromShortcut(store)
       })
     )
+
+    if (window.api.ui.onOpenNewChildWorkspace) {
+      unsubs.push(
+        window.api.ui.onOpenNewChildWorkspace(() => {
+          const store = useAppStore.getState()
+          openNewChildWorkspaceFromShortcut(store)
+        })
+      )
+    }
 
     if (window.api.ui.onDeleteCurrentWorkspace) {
       unsubs.push(

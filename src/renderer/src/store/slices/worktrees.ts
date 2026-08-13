@@ -3938,10 +3938,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
           const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
           const activeScope = parseWorkspaceKey(get().activeWorkspaceKey ?? '')
-          const parentWorkspace =
-            activeScope?.type === 'folder'
+          const parentWorkspace = options?.parentWorktreeId
+            ? worktreeWorkspaceKey(options.parentWorktreeId)
+            : activeScope?.type === 'folder'
               ? folderWorkspaceKey(activeScope.folderWorkspaceId)
               : undefined
+          // Why: a parent picked from the sidebar is a manual choice that need not be
+          // the active workspace, so it must not be attributed to active context.
+          const parentWorkspaceCaptureSource = options?.parentWorktreeId
+            ? ('manual-action' as const)
+            : undefined
           const createArgs = {
             repoId,
             name: candidateName,
@@ -3968,6 +3974,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(parentWorkspace ? { parentWorkspace } : {}),
+            ...(parentWorkspaceCaptureSource ? { parentWorkspaceCaptureSource } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
             ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
@@ -4025,6 +4032,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                       : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(parentWorkspace ? { parentWorkspace } : {}),
+                    ...(parentWorkspaceCaptureSource
+                      ? { parentWorkspaceCaptureSource }
+                      : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
                     ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
@@ -4073,6 +4083,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 ...s.worktreesByRepo,
                 [repoId]: nextWorktrees
               },
+              ...(result.lineage
+                ? {
+                    worktreeLineageById: {
+                      ...s.worktreeLineageById,
+                      [result.worktree.id]: result.lineage
+                    }
+                  }
+                : {}),
               ...(result.workspaceLineage
                 ? {
                     workspaceLineageByChildKey: {

@@ -727,6 +727,12 @@ export type WorktreeLineageCaptureSource =
   | 'active-workspace'
   | 'manual-action'
 
+/** Capture sources an in-app create can attribute its parent workspace to. */
+export type CreateWorktreeParentCaptureSource = Extract<
+  WorktreeLineageCaptureSource,
+  'active-workspace' | 'manual-action'
+>
+
 export type WorktreeLineageCapture = {
   source: WorktreeLineageCaptureSource
   confidence: WorktreeLineageCaptureConfidence
@@ -2314,8 +2320,11 @@ export type CreateWorktreeArgs = {
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
   manualOrder?: number
-  /** Parent workspace for in-app creates launched from a folder workspace. */
+  /** Parent workspace for in-app creates: the active folder workspace, or a
+   *  worktree chosen explicitly through the child-workspace action. */
   parentWorkspace?: WorkspaceKey
+  /** How `parentWorkspace` was chosen. Absent means the active workspace. */
+  parentWorkspaceCaptureSource?: CreateWorktreeParentCaptureSource
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Set when the renderer knows this auto-generated branch should be renamed

@@ -1361,7 +1361,8 @@
         "addSshHostHint": "既存のマシンを SSH 経由で使用します",
         "addRemoteOrcaServer": "リモート Orca サーバーを追加",
         "addRemoteOrcaServerHint": "別の Orca ランタイムとペアリングします",
-        "hostConnectionFailed": "接続に失敗しました"
+        "hostConnectionFailed": "接続に失敗しました",
+        "childWorkspaceParentHint": "「{{parent}}」の子ワークスペースとして作成されます。"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "ワークツリーを作成する",
@@ -4549,6 +4550,7 @@
           "697d0f6e1b": "固定を解除する",
           "250de158fd": "ワークスペースを削除",
           "changeParentWorkspace": "親ワークツリーを変更…",
+          "newChildWorkspace": "新しい子ワークスペース…",
           "setParentWorkspace": "親ワークツリーを設定…",
           "workspaceSection": "ワークスペース",
           "primaryDeleteDisabled": "プライマリワークツリーは削除できません。代わりにプロジェクトを削除してください。",

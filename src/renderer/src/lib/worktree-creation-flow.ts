@@ -17,6 +17,7 @@ import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
+import { resolveWorktreeCreateParent } from '@/lib/worktree-create-parent'
 import type { CreateWorktreeResult } from '../../../shared/types'
 import {
   findPendingLinkedWorkItemCreationId,
@@ -103,6 +104,17 @@ async function executeWorktreeCreation(
     return
   }
 
+  // Why: the parent is re-resolved at create time (not menu-open time) so the
+  // child bases on the branch the parent points at now, and a parent that was
+  // deleted or left behind by a repo switch drops the link instead of failing.
+  const createParent = preparedRequest.parentWorktreeId
+    ? resolveWorktreeCreateParent(
+        useAppStore.getState(),
+        preparedRequest.parentWorktreeId,
+        preparedRequest.repoId
+      )
+    : null
+
   let result: CreateWorktreeResult
   try {
     const backendStartup = resolveBackendDraftStartup(preparedRequest)
@@ -111,7 +123,7 @@ async function executeWorktreeCreation(
       .createWorktree(
         preparedRequest.repoId,
         preparedRequest.name,
-        preparedRequest.baseBranch,
+        preparedRequest.baseBranch ?? (createParent?.branch || undefined),
         preparedRequest.setupDecision,
         preparedRequest.sparseCheckout,
         preparedRequest.telemetrySource,
@@ -135,6 +147,7 @@ async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          ...(createParent ? { parentWorktreeId: createParent.id } : {}),
           ...(preparedRequest.linkedWorkItem !== undefined
             ? { linkedWorkItem: preparedRequest.linkedWorkItem }
             : {}),

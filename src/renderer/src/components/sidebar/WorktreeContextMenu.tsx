@@ -22,6 +22,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  GitBranchPlus,
   Kanban,
   Trash2,
   Unlink,
@@ -64,6 +65,7 @@ import {
 } from './workspace-lineage-menu-actions'
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
+import { canCreateChildWorkspace } from '@/lib/worktree-create-parent'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -754,6 +756,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     )
   }, [activeContextWorktrees, updateWorktreeLineage])
 
+  // Why: no initialBaseBranch — seeding it would occupy the Start-from slot and
+  // block name/issue sources. The parent's branch becomes the base at create time.
+  const handleCreateChildWorkspace = useCallback(() => {
+    openModal('new-workspace-composer', {
+      initialRepoId: worktree.repoId,
+      parentWorktreeId: worktree.id,
+      telemetrySource: 'sidebar'
+    })
+  }, [openModal, worktree.id, worktree.repoId])
+
   const suppressOpeningPointerEvent = useCallback((event: React.SyntheticEvent) => {
     const contextMenuOpenedAt = contextMenuOpenedAtRef.current
     if (
@@ -961,6 +973,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 </>
               ) : null}
               <DropdownMenuSeparator />
+              {canCreateChildWorkspace({
+                repo,
+                branch: worktree.branch,
+                isFolderWorkspace: folderWorkspaceId !== null
+              }) && (
+                <DropdownMenuItem onSelect={handleCreateChildWorkspace} disabled={isDeleting}>
+                  <GitBranchPlus className="size-3.5" />
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.newChildWorkspace',
+                    'New Child Workspace...'
+                  )}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onSelect={handleOpenParentPicker}
                 disabled={isWorktreeParentPickerDisabled({ isDeleting, eligibleParentCount })}

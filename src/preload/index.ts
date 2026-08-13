@@ -3598,6 +3598,11 @@ const api = {
       ipcRenderer.on('ui:openNewWorkspace', listener)
       return () => ipcRenderer.removeListener('ui:openNewWorkspace', listener)
     },
+    onOpenNewChildWorkspace: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:openNewChildWorkspace', listener)
+      return () => ipcRenderer.removeListener('ui:openNewChildWorkspace', listener)
+    },
     onDeleteCurrentWorkspace: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:deleteCurrentWorkspace', listener)

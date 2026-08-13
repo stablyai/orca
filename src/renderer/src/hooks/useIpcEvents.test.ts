@@ -7,6 +7,7 @@ import {
   getNewlyConnectedRuntimeEnvironmentIds,
   getNewlyDisconnectedRuntimeEnvironmentIds,
   getRuntimeProjectRefreshEnvironmentIds,
+  openNewChildWorkspaceFromShortcut,
   openNewWorkspaceFromShortcut,
   resolveBrowserSessionTabTarget,
   resolveZoomTarget
@@ -877,6 +878,86 @@ describe('openNewWorkspaceFromShortcut', () => {
       activeModal: 'new-workspace-composer',
       activeView: 'terminal',
       taskPageData: {},
+      openModal
+    } as never)
+
+    expect(openModal).not.toHaveBeenCalled()
+  })
+})
+
+describe('openNewChildWorkspaceFromShortcut', () => {
+  const eligibleState = {
+    activeModal: 'none',
+    activeView: 'terminal',
+    taskPageData: {},
+    activeWorktreeId: 'wt-1',
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', branch: 'refs/heads/feat/x' }] },
+    repos: [{ id: 'repo-1', connectionId: null }]
+  }
+
+  it('opens the composer seeded with the active worktree as parent', () => {
+    const openModal = vi.fn()
+
+    openNewChildWorkspaceFromShortcut({ ...eligibleState, openModal } as never)
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      initialRepoId: 'repo-1',
+      parentWorktreeId: 'wt-1',
+      telemetrySource: 'shortcut'
+    })
+  })
+
+  it('falls back to the plain composer without an eligible active workspace', () => {
+    const openModal = vi.fn()
+
+    openNewChildWorkspaceFromShortcut({
+      ...eligibleState,
+      activeWorktreeId: null,
+      openModal
+    } as never)
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut'
+    })
+  })
+
+  it('falls back for branchless rows', () => {
+    const openModal = vi.fn()
+
+    openNewChildWorkspaceFromShortcut({
+      ...eligibleState,
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', branch: '' }] },
+      openModal
+    } as never)
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut'
+    })
+  })
+
+  it('falls back for folder workspaces even when they report a branch', () => {
+    const openModal = vi.fn()
+
+    openNewChildWorkspaceFromShortcut({
+      ...eligibleState,
+      activeWorktreeId: 'folder:folder-1',
+      worktreesByRepo: {
+        'repo-1': [{ id: 'folder:folder-1', repoId: 'repo-1', branch: 'refs/heads/feat/x' }]
+      },
+      openModal
+    } as never)
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut'
+    })
+  })
+
+  it('does not reopen the composer when it is already active', () => {
+    const openModal = vi.fn()
+
+    openNewChildWorkspaceFromShortcut({
+      ...eligibleState,
+      activeModal: 'new-workspace-composer',
       openModal
     } as never)
 

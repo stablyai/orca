@@ -44,6 +44,7 @@ import type {
   RemoteTrackingBase
 } from '../runtime/orca-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
+import { recordWorktreeLineageForCreatedWorktree } from './worktree-create-lineage'
 import {
   buildPosixRunnerScript,
   buildWindowsRunnerScript,
@@ -244,7 +245,10 @@ function recordWorkspaceLineageForCreatedWorktree(
     parentWorkspaceKey: args.parentWorkspace,
     parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
     origin: 'manual',
-    capture: { source: 'active-workspace', confidence: 'explicit' },
+    capture: {
+      source: args.parentWorkspaceCaptureSource ?? 'active-workspace',
+      confidence: 'explicit'
+    },
     createdAt
   })
 }
@@ -1835,6 +1839,13 @@ export async function createRemoteWorktree(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  const lineage = recordWorktreeLineageForCreatedWorktree(
+    store,
+    args.parentWorkspace,
+    worktree,
+    now,
+    args.parentWorkspaceCaptureSource
+  )
 
   // Why: shared/symlink paths, `orca.yaml` shared directories, and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so all are skipped here.
 
@@ -1881,7 +1892,8 @@ export async function createRemoteWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree: { ...worktree, workspaceLineage },
+    worktree: { ...worktree, ...(lineage ? { lineage } : {}), workspaceLineage },
+    ...(lineage ? { lineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
@@ -2444,6 +2456,13 @@ export async function createLocalWorktree(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  const lineage = recordWorktreeLineageForCreatedWorktree(
+    store,
+    args.parentWorkspace,
+    worktree,
+    now,
+    args.parentWorkspaceCaptureSource
+  )
   // Why: reuse the roots creation already paid for via `git worktree list` so later IPC doesn't lazily rescan and trip macOS privacy prompts.
   registerWorktreeRootsForRepo(store, repo.id, [
     repo.path,
@@ -2546,7 +2565,8 @@ export async function createLocalWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree: { ...worktree, workspaceLineage },
+    worktree: { ...worktree, ...(lineage ? { lineage } : {}), workspaceLineage },
+    ...(lineage ? { lineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(stagedStartup.activationSetup
       ? { setup: stagedStartup.activationSetup }
