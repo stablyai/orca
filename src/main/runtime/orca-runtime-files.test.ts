@@ -104,7 +104,12 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 }))
 
-import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
+import {
+  awaitRuntimeFileWatcherUnsubscribes,
+  RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES,
+  RuntimeFileCommands
+} from './orca-runtime-files'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/git-diff-transport-budget'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   resetSshConnectionGenerations,
@@ -2578,6 +2583,92 @@ describe('RuntimeFileCommands', () => {
 
       await expect(commands.resolveTerminalPath('id:wt-1', 'src/x.ts')).rejects.toThrow(
         'Remote connection dropped'
+      )
+    })
+  })
+
+  // Why: mobile opens every image tab through files.readPreview, so this constant is the most
+  // reachable way to overflow the outbound envelope and kill the socket.
+  describe('previewable binary budget', () => {
+    const previewTempDirs: string[] = []
+
+    afterEach(async () => {
+      await Promise.all(previewTempDirs.map((dir) => rm(dir, { recursive: true, force: true })))
+      previewTempDirs.length = 0
+    })
+
+    async function previewFixture(): Promise<string> {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-preview-budget-'))
+      previewTempDirs.push(dir)
+      await writeFile(join(dir, 'logo.png'), 'fake-png')
+      return dir
+    }
+
+    it('stays inside the transport ceiling once base64-inflated', () => {
+      const base64Bytes = Math.ceil(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES / 3) * 4
+
+      expect(base64Bytes).toBeLessThanOrEqual(REMOTE_RPC_MAX_CONTENT_BYTES)
+    })
+
+    it('rejects a previewable image one byte above the cap', async () => {
+      const dir = await previewFixture()
+      const { commands } = createRuntimeFileCommands({ path: dir })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({
+        isDirectory: () => false,
+        size: RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
+      })
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).rejects.toThrow(
+        'file_too_large'
+      )
+    })
+
+    it('returns full base64 for a previewable image at the cap', async () => {
+      const dir = await previewFixture()
+      const { commands } = createRuntimeFileCommands({ path: dir })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({
+        isDirectory: () => false,
+        size: RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES
+      })
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual({
+        content: Buffer.from('fake-png').toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+    })
+
+    it('rejects an SSH text preview past the decoded text limit the local branch enforces', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      // NUL-free control bytes: sniffed as text, yet each escapes to six JSON bytes.
+      const content = '\u0001'.repeat(1024 * 1024)
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: content.length }),
+        readFile: vi.fn().mockResolvedValue({ content, isBinary: false })
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
+        'file_too_large'
+      )
+    })
+
+    it('still returns an SSH binary preview inside the base64 cap', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const preview = { content: 'a'.repeat(1024 * 1024), isBinary: true, isImage: true }
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi
+          .fn()
+          .mockResolvedValue({ type: 'file', size: RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES }),
+        readFile: vi.fn().mockResolvedValue(preview)
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual(
+        preview
       )
     })
   })

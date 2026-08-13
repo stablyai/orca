@@ -4,6 +4,10 @@ import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
 import { deriveSharedKey, decrypt, encrypt, generateKeyPair } from './e2ee-crypto'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 
+const trackMock = vi.hoisted(() => vi.fn())
+
+vi.mock('../../telemetry/client', () => ({ track: trackMock }))
+
 // Repro for gap (a): the streaming JSON reply path (encryptedReply) had no
 // bufferedAmount gate, so a fast producer over a slow link (legacy
 // terminal.subscribe, which has NO seq/resync) ballooned ws.bufferedAmount
@@ -116,6 +120,10 @@ describe('E2EE text reply backpressure', () => {
 
     expect(first.onError).not.toHaveBeenCalled()
     expect(second.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
+    // Why: this close kills the whole remote session, so it has to be countable.
+    expect(trackMock).toHaveBeenCalledWith('remote_outbound_budget_close', {
+      emitter: 'queue'
+    })
     first.channel.destroy()
     expect(outboundMemoryBudget.evidence().queuedBytes).toBe(0)
   })
