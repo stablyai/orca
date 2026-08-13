@@ -2,7 +2,7 @@ import { execFile, spawn } from 'node:child_process'
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
@@ -20,6 +20,24 @@ const builderConfig = require('../../../config/electron-builder.config.cjs') as 
 }
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
 const darwinLauncherAsset = new URL('../../../resources/darwin/bin/orca', import.meta.url)
+const unixLauncherFixtures = [
+  {
+    name: 'Linux',
+    asset: linuxLauncherAsset,
+    appDir: ['Orca'],
+    launcher: ['resources', 'bin', 'orca-ide'],
+    executable: ['orca-ide'],
+    cli: ['resources', 'app.asar.unpacked', 'out', 'cli', 'index.js']
+  },
+  {
+    name: 'macOS',
+    asset: darwinLauncherAsset,
+    appDir: ['Orca.app'],
+    launcher: ['Contents', 'Resources', 'bin', 'orca'],
+    executable: ['Contents', 'MacOS', 'Orca'],
+    cli: ['Contents', 'Resources', 'app.asar.unpacked', 'out', 'cli', 'index.js']
+  }
+] as const
 
 describe('packaged CLI assets', () => {
   it('ships embedded skill guides with the CLI instead of source Markdown', () => {
@@ -107,68 +125,70 @@ describe('packaged CLI assets', () => {
     }
   })
 
-  itRunsUnixShell.each(unixTerminationSignals)(
-    'delivers %s to the Linux executable and releases its listener',
-    async (signal) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-signal-'))
-      const appDir = join(root, 'Orca')
-      const resourcesDir = join(appDir, 'resources')
-      const launcherDir = join(resourcesDir, 'bin')
-      const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
-      const launcherPath = join(launcherDir, 'orca-ide')
-      const electronPath = join(appDir, 'orca-ide')
-      const statePath = join(root, 'listener-state.json')
-      let executablePid: number | null = null
-      let launcher: ReturnType<typeof spawn> | null = null
-      try {
-        await mkdir(launcherDir, { recursive: true })
-        await mkdir(cliDir, { recursive: true })
-        await copyFile(linuxLauncherAsset, launcherPath)
-        await writeFile(join(cliDir, 'index.js'), '', 'utf8')
-        await writeFile(
-          electronPath,
-          `#!/usr/bin/env node
+  itRunsUnixShell.each(unixLauncherFixtures)(
+    'delivers Unix termination signals to the $name executable and releases its listener',
+    async (launcherFixture) => {
+      for (const signal of unixTerminationSignals) {
+        const root = await mkdtemp(join(tmpdir(), 'orca-unix-cli-signal-'))
+        const appDir = join(root, ...launcherFixture.appDir)
+        const launcherPath = join(appDir, ...launcherFixture.launcher)
+        const electronPath = join(appDir, ...launcherFixture.executable)
+        const cliPath = join(appDir, ...launcherFixture.cli)
+        const statePath = join(root, `${signal}-listener-state.json`)
+        let executablePid: number | null = null
+        let launcher: ReturnType<typeof spawn> | null = null
+        try {
+          await mkdir(dirname(launcherPath), { recursive: true })
+          await mkdir(dirname(electronPath), { recursive: true })
+          await mkdir(dirname(cliPath), { recursive: true })
+          await copyFile(launcherFixture.asset, launcherPath)
+          await writeFile(cliPath, '', 'utf8')
+          await writeFile(
+            electronPath,
+            `#!/usr/bin/env node
 const fs = require('node:fs')
 const net = require('node:net')
 const server = net.createServer()
+const shutdown = () => server.close(() => process.exit(0))
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
 server.listen(0, '127.0.0.1', () => {
   fs.writeFileSync(process.env.ORCA_TEST_LISTENER_STATE, JSON.stringify({
     pid: process.pid,
     port: server.address().port
   }))
 })
-const shutdown = () => server.close(() => process.exit(0))
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
 `,
-          { encoding: 'utf8', mode: 0o755 }
-        )
+            { encoding: 'utf8', mode: 0o755 }
+          )
 
-        launcher = spawn(launcherPath, [], {
-          env: { ...process.env, ORCA_TEST_LISTENER_STATE: statePath },
-          stdio: 'ignore'
-        })
-        const state = await waitForListenerState(statePath)
-        executablePid = state.pid
-        const launcherPid = launcher.pid
-        launcher.kill(signal)
-        const launcherExit = await waitForChildExit(launcher, 5_000)
-        const exitCode = launcherExit?.[0]
-        const exitSignal = launcherExit?.[1]
+          launcher = spawn(launcherPath, [], {
+            env: { ...process.env, ORCA_TEST_LISTENER_STATE: statePath },
+            stdio: 'ignore'
+          })
+          const state = await waitForListenerState(statePath)
+          executablePid = state.pid
+          const launcherPid = launcher.pid
+          const launcherExitPromise = waitForChildExit(launcher, 5_000)
+          launcher.kill(signal)
+          const launcherExit = await launcherExitPromise
+          const exitCode = launcherExit?.[0]
+          const exitSignal = launcherExit?.[1]
 
-        expect.soft(executablePid).toBe(launcherPid)
-        expect.soft(launcherExit).not.toBeNull()
-        expect.soft(exitCode).toBe(0)
-        expect.soft(exitSignal).toBeNull()
-        expect.soft(await waitForPortRelease(state.port)).toBe(true)
-      } finally {
-        if (launcher?.pid) {
-          await terminateSyntheticProcess(launcher.pid)
+          expect.soft(executablePid).toBe(launcherPid)
+          expect.soft(launcherExit).not.toBeNull()
+          expect.soft(exitCode).toBe(0)
+          expect.soft(exitSignal).toBeNull()
+          expect.soft(await waitForPortRelease(state.port)).toBe(true)
+        } finally {
+          if (launcher?.pid) {
+            await terminateSyntheticProcess(launcher.pid)
+          }
+          if (executablePid && executablePid !== launcher?.pid) {
+            await terminateSyntheticProcess(executablePid)
+          }
+          await rm(root, { recursive: true, force: true })
         }
-        if (executablePid && executablePid !== launcher?.pid) {
-          await terminateSyntheticProcess(executablePid)
-        }
-        await rm(root, { recursive: true, force: true })
       }
     }
   )
@@ -361,6 +381,10 @@ function waitForChildExit(
   timeoutMs: number
 ): Promise<readonly [number | null, NodeJS.Signals | null] | null> {
   return new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolve([child.exitCode, child.signalCode])
+      return
+    }
     const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
       clearTimeout(timeout)
       resolve([code, signal])
@@ -377,11 +401,19 @@ async function terminateSyntheticProcess(pid: number): Promise<void> {
   if (!isProcessAlive(pid)) {
     return
   }
-  process.kill(pid, 'SIGTERM')
+  try {
+    process.kill(pid, 'SIGTERM')
+  } catch {
+    return
+  }
   if (await waitForProcessExit(pid, 1_000)) {
     return
   }
-  process.kill(pid, 'SIGKILL')
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch {
+    return
+  }
   if (!(await waitForProcessExit(pid, 1_000))) {
     throw new Error(`Failed to terminate synthetic launcher process ${pid}`)
   }
