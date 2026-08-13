@@ -194,6 +194,12 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
       }
       await orcaPage.waitForTimeout(100)
     }
+    if ((await source.count()) > 0) {
+      await scroller.evaluate((element) => {
+        element.scrollTop = element.scrollHeight
+        element.dispatchEvent(new Event('scroll', { bubbles: true }))
+      })
+    }
     await expect
       .poll(() => source.count(), {
         timeout: 10_000,
