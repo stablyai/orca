@@ -230,11 +230,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     e.stopPropagation()
   }, [])
 
-  // Why: root leaf siblings reserve a leading spacer when any root has a chevron, keeping the state-dot column aligned (descendants already indent).
-  const anyRootHasChildren = rootAgents.some(
-    (agent) => (childrenByParentPaneKey.get(agent.paneKey) ?? []).length > 0
-  )
-
   const renderAgentBranch = (
     agent: DashboardAgentRowData,
     ancestorPaneKeys: ReadonlySet<string> = new Set()
@@ -245,7 +240,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
-    const isRootAgent = ancestorPaneKeys.size === 0
     // Why: spawned child agents are actionable work, so show them as soon as the parent appears (disclosure still folds noise).
     const expanded = !collapsedLineageParents.has(agent.paneKey)
     const sendTarget = isAgentSendTargetModeActive
@@ -277,8 +271,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onToggleChildAgents={
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
-          // Why: keep leaf rows aligned with parent rows — see anyRootHasChildren above.
-          reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
@@ -307,7 +299,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
-    const isRootAgent = ancestorPaneKeys.size === 0
     const expanded = !collapsedLineageParents.has(agent.paneKey)
     const sendTarget = isAgentSendTargetModeActive
       ? (sendTargetsByPaneKey.get(agent.paneKey) ?? {
@@ -333,7 +324,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onToggleChildAgents={
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
-          reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           cacheTimerActive={cacheTimerActive}
         />
