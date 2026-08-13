@@ -1,6 +1,10 @@
 /* eslint-disable max-lines */
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import {
+  clearUpdaterInstallCommitted,
+  markUpdaterInstallCommitted
+} from './updater-install-commitment'
 import type {
   LinuxPackageInstallInstructions,
   LinuxPackageInstallRecovery,
@@ -715,6 +719,11 @@ async function performQuitAndInstall(): Promise<void> {
   if (deferHeadlessServeInstall('install', pendingVersion)) {
     return
   }
+  // Why: main owns this from here on. It precedes the package revalidation await
+  // below so an unrelated check error during that window cannot leave renderers
+  // believing no install is under way, and it reaches every renderer including
+  // the popout, whose chunks are read from the same archive.
+  markUpdaterInstallCommitted()
   // Why: the retained .deb/.rpm sits on a user-writable path that a root package manager is about
   // to read, and nothing re-checks it after download. Re-prove it here — before any teardown — so a
   // swapped or vanished package aborts instead of being installed as root. The synchronous guard
@@ -723,6 +732,7 @@ async function performQuitAndInstall(): Promise<void> {
     // Why: the renderer armed its restart before invoking, and it infers the abort from the error
     // status — which a stale-cycle verdict deliberately withholds. Signal the abandon here, where
     // it cannot depend on that decision, or the window keeps skipping its unsaved-work prompt.
+    clearUpdaterInstallCommitted()
     mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
     return
   }
@@ -874,6 +884,7 @@ async function performQuitAndInstall(): Promise<void> {
 }
 
 function resetQuitForUpdateState(): void {
+  clearUpdaterInstallCommitted()
   quitAndInstallInProgress = false
   quittingForUpdate = false
   updateInstallCommitted = false

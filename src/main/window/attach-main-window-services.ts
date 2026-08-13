@@ -1,5 +1,7 @@
 /* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import { randomUUID } from 'node:crypto'
+import { isUpdaterInstallCommitted } from '../updater-install-commitment'
+import { UPDATER_IS_INSTALL_COMMITTED_SYNC_CHANNEL } from '../../shared/updater-install-events'
 
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
@@ -544,6 +546,12 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:showLinuxPackage')
   ipcMain.removeHandler('updater:listBuilds')
 
+  ipcMain.removeAllListeners(UPDATER_IS_INSTALL_COMMITTED_SYNC_CHANNEL)
+  // Why: preload reads this before any document script, so a window created or
+  // reloaded mid-install knows before its first lazy import.
+  ipcMain.on(UPDATER_IS_INSTALL_COMMITTED_SYNC_CHANNEL, (event) => {
+    event.returnValue = isUpdaterInstallCommitted()
+  })
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
   ipcMain.handle('updater:check', (_event, options?: UpdateCheckOptions) => {

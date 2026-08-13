@@ -1,5 +1,8 @@
 /* eslint-disable max-lines -- Why: preload is the audited renderer/Electron IPC contract; co-locating the surface eases security and type-drift review. */
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
+import { createInstallCommitmentReader } from './updater-install-commitment-bridge'
+
+const readInstallCommitted = createInstallCommitmentReader(ipcRenderer)
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
@@ -3094,6 +3097,12 @@ const api = {
         awaitBeforeUnloadCheckpoint
       ),
 
+    // Why: captured before any document script runs, so a window created or
+    // reloaded during an install knows before its first lazy import. The async
+    // seed below cannot be relied on — the Linux package install blocks main.
+    // A live read of preload's buffered value, not a snapshot: the renderer's first
+    // lazy import must see a commitment that landed after preload sampled.
+    isInstallCommittedNow: () => readInstallCommitted(),
     onStatus: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)
       ipcRenderer.on('updater:status', listener)

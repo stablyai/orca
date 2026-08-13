@@ -4,6 +4,7 @@ import {
   requestLazyChunkRecoveryReload,
   type LazyChunkRecoveryReloadOutcome
 } from './lazy-chunk-recovery-reload'
+import { isUpdaterInstallCommitted } from './updater-install-commitment'
 
 /**
  * Resilient replacement for React.lazy.
@@ -106,7 +107,10 @@ export function resetLazyChunkReloadRequestsForTest(): void {
   reloadRequestInFlight = false
 }
 
-type ReloadBreadcrumbName = 'lazy_chunk_reload' | 'lazy_chunk_reload_vetoed'
+type ReloadBreadcrumbName =
+  | 'lazy_chunk_reload'
+  | 'lazy_chunk_reload_vetoed'
+  | 'lazy_chunk_reload_skipped'
 
 function recordReloadBreadcrumb(
   name: ReloadBreadcrumbName,
@@ -192,6 +196,21 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
 
   const reloadKey = options.reloadKey ?? 'unknown'
   const failureMessage = lastError instanceof Error ? lastError.message : String(lastError)
+
+  // The installer replaces app.asar underneath us, so chunks read at their old
+  // offsets return another file's bytes. Reloading cannot land — the process is
+  // already being torn down — and waiting out the grace window only delays the
+  // restart. Contain immediately and leave the guard clean for the next document.
+  if (isUpdaterInstallCommitted()) {
+    recordReloadBreadcrumb(
+      'lazy_chunk_reload_skipped',
+      reloadKey,
+      failureMessage,
+      'update-install-in-progress'
+    )
+    throw containedChunkFailure(lastError, reloadKey)
+  }
+
   const reloadGuardState = readChunkReloadGuardState()
 
   if (

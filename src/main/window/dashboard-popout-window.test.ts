@@ -133,6 +133,10 @@ vi.mock('../ipc/ui', () => ({ sendToTrustedUIRenderer: sendToTrustedUIRendererMo
 vi.mock('./privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: installNavigationPolicyMock
 }))
+const installCommittedMock = vi.fn(() => false)
+vi.mock('../updater-install-commitment', () => ({
+  isUpdaterInstallCommitted: () => installCommittedMock()
+}))
 
 import {
   createOrFocusDashboardPopout,
@@ -173,6 +177,7 @@ const RENDERER_URL = 'http://localhost:5173'
 describe('createOrFocusDashboardPopout', () => {
   beforeEach(() => {
     instances.length = 0
+    installCommittedMock.mockReturnValue(false)
     isMock.dev = false
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
     getAllDisplaysMock.mockReturnValue([{ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }])
@@ -244,6 +249,33 @@ describe('createOrFocusDashboardPopout', () => {
     const win = instances[0]
     expect(win.loadFile).not.toHaveBeenCalled()
     expect(win.loadURL).toHaveBeenCalledWith(`${RENDERER_URL}/popout.html?view=kanban`)
+  })
+
+
+  it('refuses to open a new popout once an update install is committed', () => {
+    // Reviewer P1: a popout created during the Linux revalidation window never saw
+    // the broadcast, and its seed IPC can go unanswered because the package install
+    // blocks main inside spawnSync — so its first lazy render would read a swapped
+    // archive and request the doomed recovery reload.
+    installCommittedMock.mockReturnValue(true)
+
+    const created = createOrFocusDashboardPopout(makeStore() as never)
+
+    expect(created).toBeNull()
+    expect(instances).toHaveLength(0)
+  })
+
+  it('still focuses an already-open popout during an install', () => {
+    // It already exists, is already registered, and already got the broadcast;
+    // refusing to focus it would be a gratuitous regression.
+    const store = makeStore()
+    const existing = createOrFocusDashboardPopout(store as never)
+    installCommittedMock.mockReturnValue(true)
+
+    const focused = createOrFocusDashboardPopout(store as never)
+
+    expect(focused).toBe(existing)
+    expect(instances).toHaveLength(1)
   })
 
   it('focuses the existing window instead of creating a second one', () => {

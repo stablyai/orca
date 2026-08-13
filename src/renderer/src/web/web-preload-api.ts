@@ -3186,6 +3186,9 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
   return {
     getVersion: () => Promise.resolve('web'),
     getStatus: () => Promise.resolve({ state: 'idle' } as never),
+    // Why: the web build serves chunks over HTTP from a running server, so no
+    // installer ever swaps the archive underneath it.
+    isInstallCommittedNow: () => false,
     check: () => Promise.resolve(),
     download: () => Promise.resolve(),
     quitAndInstall: () => Promise.resolve(),

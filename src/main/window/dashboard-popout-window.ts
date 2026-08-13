@@ -1,4 +1,5 @@
 import { app, BrowserWindow, nativeTheme, type WebContents } from 'electron'
+import { isUpdaterInstallCommitted } from '../updater-install-commitment'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
@@ -140,7 +141,7 @@ export function createOrFocusDashboardPopout(
   store: Store | null,
   view?: string,
   options: { getKeybindings?: () => KeybindingOverrides | undefined } = {}
-): BrowserWindow {
+): BrowserWindow | null {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
     if (dashboardPopoutWindow.isMinimized()) {
       dashboardPopoutWindow.restore()
@@ -150,6 +151,15 @@ export function createOrFocusDashboardPopout(
       dashboardPopoutWindow.webContents.send('dashboard:viewRequested', view)
     }
     return dashboardPopoutWindow
+  }
+
+  // Why: the installer is replacing app.asar, so this window's lazy chunks would be
+  // read from a swapped archive. It cannot be told to stand down in time either —
+  // its seed is an IPC round trip, and the Linux package install blocks main inside
+  // spawnSync, so the answer can arrive after the chunk has already failed. The app
+  // is seconds from restarting; refusing to open a new window is the safe answer.
+  if (isUpdaterInstallCommitted()) {
+    return null
   }
 
   const initialView = view ?? DEFAULT_VIEW

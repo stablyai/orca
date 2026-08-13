@@ -1743,6 +1743,32 @@ describe('updater', () => {
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
   })
 
+  it('commits install state before the native installer, and clears it on recovery', async () => {
+    // Cross-layer wiring: renderers read this to stop loading lazy chunks out of an
+    // archive the installer is replacing. If this call is ever dropped, every
+    // renderer silently loses that protection while the tests stay green.
+    vi.useFakeTimers()
+    const commitment = await import('./updater-install-commitment')
+    commitment.resetUpdaterInstallCommitmentForTest()
+
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+    setupAutoUpdater(mainWindow as never)
+
+    let committedWhenInstallerRan: boolean | null = null
+    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+      committedWhenInstallerRan = commitment.isUpdaterInstallCommitted()
+      autoUpdaterMock.emit('error', new Error('installer refused'))
+    })
+
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(committedWhenInstallerRan).toBe(true)
+    // A failed install leaves the archive intact, so renderers must recover normally.
+    expect(commitment.isUpdaterInstallCommitted()).toBe(false)
+  })
+
   it('runs pre-quit cleanup before local PTY cleanup during update install', async () => {
     vi.useFakeTimers()
 
@@ -4264,6 +4290,31 @@ describe('updater', () => {
 
     // Why: hashing 160 MB outlives the cycle it started in, and Check for Updates stays enabled
     // while it runs — a verdict from the old cycle must not replace the card that took over.
+    it('commits before revalidation, so renderers are covered while the hash runs', async () => {
+      // The window this closes: hashing a 160 MB package keeps the event loop live,
+      // and any document created or reloaded during it reads commitment at preload.
+      // Marking after the hash would leave those documents loading chunks out of an
+      // archive the installer is about to replace.
+      const commitment = await import('./updater-install-commitment')
+      commitment.resetUpdaterInstallCommitmentForTest()
+      const revalidation = holdRevalidation()
+      const { updater } = await startUpdater('deb')
+      await reachDownloaded(updater, downloadedEvent())
+
+      updater.quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+
+      // Still inside the hash — the verdict has not been delivered.
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(commitment.isUpdaterInstallCommitted()).toBe(true)
+
+      revalidation.settle({ ok: false, reason: 'hash-mismatch' })
+      await settleQuitAndInstall()
+
+      // A refused package leaves the archive intact, so recovery must come back.
+      expect(commitment.isUpdaterInstallCommitted()).toBe(false)
+    })
+
     it('drops an abort verdict once a newer check replaced the card', async () => {
       const revalidation = holdRevalidation()
       const { send, updater } = await startUpdater('deb')

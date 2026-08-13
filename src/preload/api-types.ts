@@ -2715,6 +2715,8 @@ export type PreloadApi = {
     onChanged: (callback: (event: RemoteWorkspaceChangedEvent) => void) => () => void
   }
   updater: {
+    /** Synchronous live read of preload's buffered commitment, safe before React mounts. */
+    isInstallCommittedNow: () => boolean
     getVersion: () => Promise<string>
     getStatus: () => Promise<UpdateStatus>
     check: (options?: UpdateCheckOptions) => Promise<void>
