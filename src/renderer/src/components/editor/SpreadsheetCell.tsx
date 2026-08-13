@@ -131,6 +131,12 @@ export function SpreadsheetCell({
           ? getSpreadsheetCellAlignmentClass(cell)
           : SPREADSHEET_ALIGNMENT_CLASSES[cellStyle.horizontalAlignment],
         VERTICAL_ALIGNMENT_CLASSES[cellStyle?.verticalAlignment ?? defaultVerticalAlignment],
+        // Why: a spreadsheet's line box is the type itself, not the roomier
+        // leading an app uses for reading. Inheriting the app's put a 24pt value
+        // in a 48px line box inside the 18pt row its author fixed, so the clip
+        // took the top half of the digits — Excel measures the glyphs, which do
+        // fit. Wrapped text keeps a little more so its lines stay apart.
+        wrapsText ? 'leading-tight' : 'leading-none',
         wrapsText && 'py-1 whitespace-pre-wrap break-words',
         cellStyle?.bold === true && 'font-semibold',
         cellStyle?.italic === true && 'italic'

@@ -61,6 +61,7 @@ export function SpreadsheetGridOverlay({
             VERTICAL_ALIGNMENT_CLASSES[
               placement.style?.verticalAlignment ?? defaultVerticalAlignment
             ],
+            placement.style?.wrapText === true ? 'leading-tight' : 'leading-none',
             placement.style?.wrapText === true && 'py-1 whitespace-pre-wrap break-words',
             placement.style?.bold === true && 'font-semibold',
             placement.style?.italic === true && 'italic'

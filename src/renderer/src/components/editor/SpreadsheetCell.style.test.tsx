@@ -190,6 +190,44 @@ describe('SpreadsheetCell colours and font', () => {
   })
 })
 
+describe('SpreadsheetCell line height', () => {
+  it('holds an unwrapped label to the height of its own glyphs', () => {
+    const cell = renderCell()
+
+    expect(cell.classList).toContain('leading-none')
+    expect(cell.classList).not.toContain('leading-tight')
+  })
+
+  it('keeps a little leading between the lines of a wrapped label', () => {
+    const cell = renderCell({ cellStyle: { wrapText: true } })
+
+    expect(cell.classList).toContain('leading-tight')
+    expect(cell.classList).not.toContain('leading-none')
+  })
+
+  it('holds a label scaled far above the sheet to its glyphs too', () => {
+    const cell = renderCell({ cellStyle: { fontScale: 2.4 } })
+
+    expect(cell.style.fontSize).toBe('31px')
+    expect(cell.classList).toContain('leading-none')
+    expect(cell.classList).not.toContain('leading-tight')
+  })
+
+  it('keeps the wrapped leading of a label scaled far above the sheet', () => {
+    const cell = renderCell({ cellStyle: { fontScale: 2.4, wrapText: true } })
+
+    expect(cell.classList).toContain('leading-tight')
+    expect(cell.classList).not.toContain('leading-none')
+  })
+
+  it('sits a label on the bottom of its row without loosening its leading', () => {
+    const cell = renderCell({ defaultVerticalAlignment: 'bottom' })
+
+    expect(cell.classList).toContain('items-end')
+    expect(cell.classList).toContain('leading-none')
+  })
+})
+
 describe('SpreadsheetCell borders, indent and spans', () => {
   it('replaces the gridline on the declared edge and keeps it everywhere else', () => {
     const cell = renderCell({
