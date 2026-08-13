@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { translate } from '@/i18n/i18n'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
@@ -10,6 +10,7 @@ import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
   attachEphemeralVmRuntimeToWorkspace,
+  adoptEphemeralVmProvisionedRoot,
   cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
 } from '@/lib/ephemeral-vm-worktree-creation'
@@ -26,6 +27,13 @@ import {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { persistCreatedWorktreeNote } from '@/lib/worktree-creation-note'
+import { preflightWorktreeCreationAgentTrust } from '@/lib/worktree-creation-agent-trust'
+import {
+  canSeedCreatedWorktreeInBackground,
+  hasCreatedWorktreeTerminalHandoff
+} from '@/lib/worktree-creation-terminal-handoff'
 import {
   buildWorktreeCreationStartupOpt,
   getInitialWorktreeCreationPhase,
@@ -67,33 +75,6 @@ function revealPendingCreation(
   store.setSidebarOpen(true)
 }
 
-async function preflightAgentTrust(
-  request: WorktreeCreationRequest,
-  path: string,
-  connectionId?: string | null
-): Promise<void> {
-  // Why: trust-gated agents (cursor-agent, copilot) consume the bracketed paste
-  // as menu input on first launch. Pre-write the trust artifact before any
-  // terminal spawns. Best-effort — the worktree already exists, so a failure
-  // here must not strand it.
-  if (!request.agent || !window.api.agentTrust?.markTrusted) {
-    return
-  }
-  const preflight = TUI_AGENT_CONFIG[request.agent].preflightTrust
-  if (!preflight) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset: preflight,
-      workspacePath: path,
-      ...(connectionId ? { connectionId } : {})
-    })
-  } catch {
-    // Best-effort: continue with launch.
-  }
-}
-
 async function executeWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest
@@ -106,47 +87,55 @@ async function executeWorktreeCreation(
   let result: CreateWorktreeResult
   try {
     const backendStartup = resolveBackendDraftStartup(preparedRequest)
-    result = await useAppStore
-      .getState()
-      .createWorktree(
-        preparedRequest.repoId,
-        preparedRequest.name,
-        preparedRequest.baseBranch,
-        preparedRequest.setupDecision,
-        preparedRequest.sparseCheckout,
-        preparedRequest.telemetrySource,
-        preparedRequest.displayName,
-        preparedRequest.linkedIssue,
-        preparedRequest.linkedPR,
-        preparedRequest.pushTarget,
-        preparedRequest.agent ?? undefined,
-        preparedRequest.linkedLinearIssue,
-        preparedRequest.branchNameOverride,
-        preparedRequest.workspaceStatus,
-        preparedRequest.linkedGitLabMR,
-        preparedRequest.linkedGitLabIssue,
-        backendStartup,
-        preparedRequest.pendingFirstAgentMessageRename,
-        creationId,
-        preparedRequest.linkedLinearIssueWorkspaceId,
-        preparedRequest.linkedLinearIssueOrganizationUrlKey,
-        preparedRequest.linkedBitbucketPR,
-        preparedRequest.linkedAzureDevOpsPR,
-        preparedRequest.linkedGiteaPR,
-        preparedRequest.compareBaseRef,
-        {
-          ...(preparedRequest.linkedWorkItem !== undefined
-            ? { linkedWorkItem: preparedRequest.linkedWorkItem }
-            : {}),
-          ...(preparedRequest.linkedTaskSourceContext !== undefined
-            ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
-            : {}),
-          // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
-          ...(!backendStartup && preparedRequest.agent && preparedRequest.launchDraftPrompt
-            ? { startupDraft: preparedRequest.launchDraftPrompt }
-            : {})
-        }
-      )
+    result =
+      preparedRequest.ephemeralVmCheckoutMode === 'provisioned-root'
+        ? await adoptEphemeralVmProvisionedRoot(preparedRequest)
+        : await useAppStore
+            .getState()
+            .createWorktree(
+              preparedRequest.repoId,
+              preparedRequest.name,
+              preparedRequest.baseBranch,
+              preparedRequest.setupDecision,
+              preparedRequest.sparseCheckout,
+              preparedRequest.telemetrySource,
+              preparedRequest.displayName,
+              preparedRequest.linkedIssue,
+              preparedRequest.linkedPR,
+              preparedRequest.pushTarget,
+              preparedRequest.agent ?? undefined,
+              preparedRequest.linkedLinearIssue,
+              preparedRequest.branchNameOverride,
+              preparedRequest.workspaceStatus,
+              preparedRequest.linkedGitLabMR,
+              preparedRequest.linkedGitLabIssue,
+              backendStartup,
+              preparedRequest.pendingFirstAgentMessageRename,
+              creationId,
+              preparedRequest.linkedLinearIssueWorkspaceId,
+              preparedRequest.linkedLinearIssueOrganizationUrlKey,
+              preparedRequest.linkedBitbucketPR,
+              preparedRequest.linkedAzureDevOpsPR,
+              preparedRequest.linkedGiteaPR,
+              preparedRequest.compareBaseRef,
+              {
+                ...(preparedRequest.linkedWorkItem !== undefined
+                  ? { linkedWorkItem: preparedRequest.linkedWorkItem }
+                  : {}),
+                ...(preparedRequest.linkedTaskSourceContext !== undefined
+                  ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
+                  : {}),
+                // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
+                ...(!backendStartup && preparedRequest.agent && preparedRequest.launchDraftPrompt
+                  ? { startupDraft: preparedRequest.launchDraftPrompt }
+                  : {})
+              }
+            )
+    if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+      return
+    }
+    await attachEphemeralVmRuntimeToWorkspace(preparedRequest, result.worktree.id)
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
     // silently rather than surfacing an error for work they already dismissed.
@@ -178,8 +167,6 @@ async function executeWorktreeCreation(
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     return
   }
-  await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
-
   const backendSpawned = result.startupTerminal?.spawned === true
   if (preparedRequest.startupPlan && !backendSpawned && !preparedRequest.startupPlan.launchToken) {
     // Why: delayed delivery must target the exact pane spawned from this queued
@@ -189,9 +176,13 @@ async function executeWorktreeCreation(
   const startupOpt = buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
 
   if (worktree.path) {
+    const trustState = useAppStore.getState()
     const repoConnectionId =
-      useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
-    await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)
+      (worktree.hostId
+        ? findRepoForHost(trustState.repos, worktree.repoId, { hostId: worktree.hostId })
+        : trustState.repos.find((repo) => repo.id === worktree.repoId)
+      )?.connectionId ?? null
+    await preflightWorktreeCreationAgentTrust(preparedRequest, worktree.path, repoConnectionId)
   }
 
   // `createWorktree` already inserted the real worktree row. Leaving for an app
@@ -207,45 +198,63 @@ async function executeWorktreeCreation(
 
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null
+  let terminalHandoffSafe = true
   if (shouldActivateOnCompletion) {
     activation = activateAndRevealWorktree(worktree.id, {
       sidebarRevealBehavior: 'auto',
+      ...(worktree.hostId ? { executionHostId: worktree.hostId } : {}),
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
       ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
       ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
     })
+    terminalHandoffSafe = activation !== false
     primaryTabId = activation === false ? null : activation.primaryTabId
   } else {
     // The user moved on. Seed the worktree's terminal + setup in the background
     // (setActiveTab only writes global focus for the active worktree, so this is
     // safe) without yanking them back to it.
-    primaryTabId = ensureWorktreeHasInitialTerminal(
-      useAppStore.getState(),
-      worktree.id,
-      startupOpt,
-      result.setup,
-      preparedRequest.issueCommand,
-      result.defaultTabs,
-      {
-        activateCreatedTabs: false,
-        ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+    terminalHandoffSafe = canSeedCreatedWorktreeInBackground(completionState, worktree)
+    if (!terminalHandoffSafe) {
+      primaryTabId = null
+      if (hasCreatedWorktreeTerminalHandoff(preparedRequest, result)) {
+        toast.error(
+          translate(
+            'auto.lib.worktreeCreationFlow.backgroundStartupOwnerAmbiguous',
+            'Workspace created, but automatic startup was skipped because its host is ambiguous.'
+          )
+        )
       }
-    )
+    } else {
+      primaryTabId = ensureWorktreeHasInitialTerminal(
+        completionState,
+        worktree.id,
+        startupOpt,
+        result.setup,
+        preparedRequest.issueCommand,
+        result.defaultTabs,
+        {
+          activateCreatedTabs: false,
+          ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+        }
+      )
+    }
   }
 
   // Why: clearing synchronously right after activation lets React commit the
   // panel→terminal swap in one frame — no two-row flicker, no empty-terminal flash.
   useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
-  seedAgentTabStateAfterWorktreeCreate({
-    request: preparedRequest,
-    worktreeId: worktree.id,
-    primaryTabId,
-    startupTerminalTabId: result.startupTerminal?.tabId,
-    backendSpawned
-  })
-  if (preparedRequest.startupPlan && !backendSpawned) {
+  if (terminalHandoffSafe) {
+    seedAgentTabStateAfterWorktreeCreate({
+      request: preparedRequest,
+      worktreeId: worktree.id,
+      primaryTabId,
+      startupTerminalTabId: result.startupTerminal?.tabId,
+      backendSpawned
+    })
+  }
+  if (terminalHandoffSafe && preparedRequest.startupPlan && !backendSpawned) {
     void ensureAgentStartupInTerminal({
       worktreeId: worktree.id,
       primaryTabId,
@@ -259,13 +268,7 @@ async function executeWorktreeCreation(
   // Why: awaiting the note IPC before the swap would add a visible round-trip to
   // the panel→terminal transition; it's cosmetic, so it runs last.
   if (preparedRequest.note) {
-    try {
-      await useAppStore.getState().updateWorktreeMeta(worktree.id, {
-        comment: preparedRequest.note
-      })
-    } catch {
-      console.error('Failed to update worktree meta after creation')
-    }
+    await persistCreatedWorktreeNote(worktree, preparedRequest.note)
   }
 }
 

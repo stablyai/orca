@@ -6237,7 +6237,8 @@ const WorktreeList = React.memo(function WorktreeList({
     (repo: Repo) => {
       openModal('confirm-remove-folder', {
         repoId: repo.id,
-        displayName: repo.displayName
+        displayName: repo.displayName,
+        hostId: getRepoExecutionHostId(repo)
       })
     },
     [openModal]

@@ -168,7 +168,10 @@ import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { acquireDirectSshDetectedWorktreeRefresh } from '@/store/slices/worktrees'
+import {
+  acquireDirectSshDetectedWorktreeRefresh,
+  provisionedRootRuntimeWorkspaceKeysForHost
+} from '@/store/slices/worktrees'
 import { createDirectSshWorktreeRefreshScheduler } from './direct-ssh-worktree-refresh-scheduler'
 import {
   createDirectSshReconnectCoordinator,
@@ -942,11 +945,17 @@ export function useIpcEvents(): void {
         const runtimeOwner = { runtimeEnvironmentId: environmentId }
         await useAppStore.getState().fetchProjectGroups(runtimeOwner)
         await useAppStore.getState().fetchFolderWorkspaces(runtimeOwner)
+        const provisionedRootRuntimeWorkspaceKeys =
+          await provisionedRootRuntimeWorkspaceKeysForHost(
+            toRuntimeExecutionHostId(environmentId),
+            useAppStore.getState().runtimeEnvironments
+          )
         await refreshRuntimeProjectWorktreesAndLineage(
           environmentId,
           repos,
           (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
-          (options) => useAppStore.getState().fetchWorktreeLineage(options)
+          (options) => useAppStore.getState().fetchWorktreeLineage(options),
+          provisionedRootRuntimeWorkspaceKeys
         )
       },
       onError: (error) => {

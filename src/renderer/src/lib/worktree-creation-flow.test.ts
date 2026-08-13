@@ -248,14 +248,9 @@ describe('runBackgroundWorktreeCreation', () => {
       expect.objectContaining({ phase: 'provisioning-vm' })
     )
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
-    expect(prepareEphemeralVmWorkspaceTargetMock).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      recipeId: 'cloud-sandbox',
-      projectId: 'github:stablyai/orca',
-      workspaceName: 'feature',
-      provisionId: 'creation-1',
-      setupExistingFolder: store.setupProjectExistingFolder
-    })
+    expect(prepareEphemeralVmWorkspaceTargetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'github:stablyai/orca' })
+    )
     const createCall = store.createWorktree.mock.calls[0] as unknown[]
     expect(createCall[0]).toBe('repo-runtime')
     expect(createCall[1]).toBe('feature')

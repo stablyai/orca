@@ -20,6 +20,7 @@ import {
   runEphemeralVmRecipeStart
 } from '../../shared/ephemeral-vm-recipe-runner'
 import type { OrcaVmRecipe } from '../../shared/types'
+import { stripGitRemoteUrlCredentials } from '../../shared/git-remote-identity'
 
 export const VM_HANDLERS: Record<string, CommandHandler> = {
   'vm recipe doctor': async ({ flags, cwd, json }) => {
@@ -144,8 +145,25 @@ async function doctorRecipeWithProvision(
     return baseline
   }
 
-  const start = await runEphemeralVmRecipeStart({ repoPath, recipe })
+  const repoUrl = process.env.ORCA_REPO_URL
+    ? (stripGitRemoteUrlCredentials(process.env.ORCA_REPO_URL) ?? undefined)
+    : undefined
+  const context = {
+    repoUrl,
+    branch: process.env.ORCA_REPO_BRANCH,
+    ref: process.env.ORCA_REPO_REF,
+    orcaVersion: process.env.ORCA_VERSION
+  }
+  const start = await runEphemeralVmRecipeStart({ repoPath, recipe, context })
   if (!start.ok) {
+    const cleanup = start.recipeResult
+      ? await runEphemeralVmRecipeCleanup({
+          repoPath,
+          recipe,
+          context: start.context,
+          recipeResult: start.recipeResult
+        })
+      : null
     return {
       ...baseline,
       ok: false,
@@ -167,7 +185,17 @@ async function doctorRecipeWithProvision(
           stdout: capTranscriptStream(start.stdout),
           stderr: capTranscriptStream(start.stderr),
           parseError: start.error
-        }
+        },
+        ...(cleanup
+          ? {
+              destroy: {
+                exitCode: cleanup.exitCode,
+                signal: cleanup.signal,
+                stdout: capTranscriptStream(cleanup.stdout),
+                stderr: capTranscriptStream(cleanup.stderr)
+              }
+            }
+          : {})
       }
     }
   }

@@ -84,10 +84,12 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
       projectId: 'project-1',
       hostId: 'runtime:env-1',
       path: '/workspace/repo',
+      kind: 'git',
       setupMethod: 'imported-existing-folder'
     })
     expect(result).toEqual({
       ok: true,
+      checkoutMode: 'orca-worktree',
       setup: {
         ...setupResult,
         setup: { ...setupResult.setup, hostId: 'runtime:env-1' }
@@ -154,10 +156,12 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
       projectId: 'project-1',
       hostId: 'ssh:runtime-ssh-runtime-1',
       path: '/workspace/repo',
+      kind: 'git',
       setupMethod: 'imported-existing-folder'
     })
     expect(result).toEqual({
       ok: true,
+      checkoutMode: 'orca-worktree',
       setup: {
         ...setupResult,
         setup: { ...setupResult.setup, hostId: 'ssh:runtime-ssh-runtime-1' }

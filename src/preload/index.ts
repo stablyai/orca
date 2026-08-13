@@ -785,6 +785,9 @@ const api = {
 
     listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
 
+    isRuntimeOwnedSshAuthorityCurrent: (args) =>
+      ipcRenderer.invoke('worktrees:isRuntimeOwnedSshAuthorityCurrent', args),
+
     listKnownForExecutionHost: (args) =>
       ipcRenderer.invoke('worktrees:listKnownForExecutionHost', args),
 

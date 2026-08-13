@@ -65,6 +65,17 @@ describe('EphemeralVmRuntimesSection helpers', () => {
     ).toEqual(['new', 'old'])
   })
 
+  it('keeps a cleaned runtime visible while its hidden SSH target remains', () => {
+    const runtime = makeRuntime({
+      status: 'cleaned',
+      cleanupStatus: 'succeeded',
+      sshTargetId: 'runtime-ssh-1'
+    })
+
+    expect(getVisibleEphemeralVmRuntimes([runtime])).toEqual([runtime])
+    expect(getEphemeralVmRuntimeStatusLabel(runtime)).toBe('Cleanup failed')
+  })
+
   it('prioritizes cleanup status in the visible label', () => {
     expect(getEphemeralVmRuntimeStatusLabel(makeRuntime())).toBe('Running')
     expect(getEphemeralVmRuntimeStatusLabel(makeRuntime({ cleanupStatus: 'failed' }))).toBe(
@@ -164,6 +175,33 @@ describe('EphemeralVmRuntimesSection', () => {
     })
 
     await vi.waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith('provider delete failed'))
+    expect(toastMocks.success).not.toHaveBeenCalled()
+  })
+
+  it('surfaces hidden SSH target cleanup failures as retryable', async () => {
+    window.api.ephemeralVm.cleanup = vi.fn().mockResolvedValue(
+      makeRuntime({
+        status: 'cleanup_failed',
+        cleanupStatus: 'succeeded',
+        cleanupLastError: 'Failed to remove the hidden SSH target.'
+      })
+    )
+    window.api.ephemeralVm.listRuntimes = vi
+      .fn()
+      .mockResolvedValue([makeRuntime({ status: 'cleanup_failed', cleanupStatus: 'succeeded' })])
+    const container = await renderSection()
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Retry cleanup'))
+    const retryButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Retry cleanup'
+    )
+    await act(async () => {
+      retryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    await vi.waitFor(() =>
+      expect(toastMocks.error).toHaveBeenCalledWith('Failed to remove the hidden SSH target.')
+    )
     expect(toastMocks.success).not.toHaveBeenCalled()
   })
 

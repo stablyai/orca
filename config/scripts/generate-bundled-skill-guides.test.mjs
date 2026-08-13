@@ -127,6 +127,18 @@ describe('bundled skill guide generator', () => {
     }
   })
 
+  it('keeps provisioned-root checkout ownership an explicit niche opt-in', async () => {
+    const source = await readFile(
+      path.join(projectDir, 'skill-guides', 'orca-per-workspace-env.md'),
+      'utf8'
+    )
+
+    expect(source).toContain("Preserve Orca's existing checkout behavior by default")
+    expect(source).toContain('Do not ask most users about checkout ownership')
+    expect(source).toContain('Never migrate a working schema-v1 recipe')
+    expect(source).toContain('Disposability alone does not select checkout ownership')
+  })
+
   it('builds deterministic artifacts and verifies the checked-in outputs', async () => {
     const first = await buildArtifacts(projectDir)
     const second = await buildArtifacts(projectDir)

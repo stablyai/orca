@@ -3,7 +3,10 @@ import { useAppStore } from '@/store'
 import { prepareEphemeralVmWorkspaceTarget } from '@/lib/ephemeral-vm-workspace-target'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/types'
+import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import type { CreateWorktreeResult, Repo, WorktreeMeta } from '../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 const MAX_PROVISIONING_LOG_CHARS = 12_000
 
@@ -15,6 +18,13 @@ export async function prepareRequestForCreate(
     return request
   }
   const store = useAppStore.getState()
+  if (request.ephemeralVmRecipe.checkoutMode === 'provisioned-root' && request.sparseCheckout) {
+    store.updatePendingWorktreeCreation(creationId, {
+      status: 'error',
+      error: getProvisionedRootSparseCheckoutError()
+    })
+    return null
+  }
   store.updatePendingWorktreeCreation(creationId, {
     phase: 'provisioning-vm',
     provisioningLog: ''
@@ -36,6 +46,11 @@ export async function prepareRequestForCreate(
       projectId:
         resolvePortableEphemeralVmProjectId(sourceRepo) ?? request.ephemeralVmRecipe.projectId,
       workspaceName: request.name,
+      ...(sourceRepo?.gitRemoteIdentity?.remoteUrl
+        ? { repoUrl: sourceRepo.gitRemoteIdentity.remoteUrl }
+        : {}),
+      branch: request.branchNameOverride ?? request.name,
+      ...(request.baseBranch ? { ref: request.baseBranch } : {}),
       provisionId: creationId,
       setupExistingFolder: store.setupProjectExistingFolder
     })
@@ -59,8 +74,14 @@ export async function prepareRequestForCreate(
   const preparedRequest: WorktreeCreationRequest = {
     ...request,
     repoId: preparedTarget.setup.repo.id,
-    ...getEphemeralVmPortableBaseSelection(request),
+    ...(preparedTarget.checkoutMode === 'provisioned-root'
+      ? {
+          baseBranch: request.baseBranch,
+          compareBaseRef: request.compareBaseRef
+        }
+      : getEphemeralVmPortableBaseSelection(request)),
     ephemeralVmRuntimeId: preparedTarget.runtimeId,
+    ephemeralVmCheckoutMode: preparedTarget.checkoutMode,
     ...(preparedTarget.environmentId
       ? { ephemeralVmRuntimeEnvironmentId: preparedTarget.environmentId }
       : {}),
@@ -145,19 +166,111 @@ export async function attachEphemeralVmRuntimeToWorkspace(
   if (!request.ephemeralVmRuntimeId) {
     return
   }
-  try {
-    await window.api.ephemeralVm.attachWorkspace({
-      runtimeId: request.ephemeralVmRuntimeId,
-      workspaceId
-    })
-    if (request.ephemeralVmRuntimeEnvironmentId) {
-      void useAppStore
-        .getState()
-        .refreshRuntimeEnvironmentStatus(request.ephemeralVmRuntimeEnvironmentId)
-    }
-  } catch (error) {
-    console.error('Failed to attach ephemeral VM runtime to workspace:', error)
+  await window.api.ephemeralVm.attachWorkspace({
+    runtimeId: request.ephemeralVmRuntimeId,
+    workspaceId
+  })
+  if (request.ephemeralVmRuntimeEnvironmentId) {
+    void useAppStore
+      .getState()
+      .refreshRuntimeEnvironmentStatus(request.ephemeralVmRuntimeEnvironmentId)
   }
+}
+
+export async function adoptEphemeralVmProvisionedRoot(
+  request: WorktreeCreationRequest
+): Promise<CreateWorktreeResult> {
+  if (request.sparseCheckout) {
+    throw new Error(getProvisionedRootSparseCheckoutError())
+  }
+  const store = useAppStore.getState()
+  const hostId = request.workspaceRunContext?.hostId
+  const authoritative = await store.fetchWorktrees(request.repoId, {
+    ...(hostId ? { executionHostId: hostId } : {}),
+    requireAuthoritative: true
+  })
+  if (authoritative !== true) {
+    throw new Error('Could not verify the recipe-provisioned Git checkout.')
+  }
+
+  const expectedPath = request.workspaceRunContext?.path
+  const normalizedExpectedPath = expectedPath
+    ? normalizeRuntimePathForComparison(expectedPath)
+    : null
+  const refreshedStore = useAppStore.getState()
+  const parsedHost = hostId ? parseExecutionHostId(hostId) : null
+  const worktree = (refreshedStore.worktreesByRepo[request.repoId] ?? []).find(
+    (candidate) =>
+      candidate.isMainWorktree &&
+      (!hostId ||
+        candidate.hostId === hostId ||
+        (parsedHost?.kind === 'runtime' &&
+          candidate.runtimeOwnerEnvironmentId === parsedHost.environmentId)) &&
+      normalizedExpectedPath !== null &&
+      normalizeRuntimePathForComparison(candidate.path) === normalizedExpectedPath
+  )
+  if (!worktree) {
+    throw new Error('The recipe projectRoot is not the imported Git checkout root.')
+  }
+
+  const now = Date.now()
+  const metadata: Partial<WorktreeMeta> = {
+    displayName: request.displayName ?? request.name,
+    ...(hostId ? { hostId: worktree.hostId ?? hostId } : {}),
+    ephemeralVmCheckoutMode: 'provisioned-root',
+    lastActivityAt: now,
+    createdAt: now,
+    ...(refreshedStore.sortBy === 'manual' ? { manualOrder: now } : {}),
+    ...(request.compareBaseRef || request.baseBranch
+      ? { baseRef: request.compareBaseRef ?? request.baseBranch }
+      : {}),
+    ...(request.pushTarget ? { pushTarget: request.pushTarget } : {}),
+    ...(request.agent ? { createdWithAgent: request.agent } : {}),
+    ...(request.pendingFirstAgentMessageRename && request.agent
+      ? { pendingFirstAgentMessageRename: true }
+      : {}),
+    ...(request.linkedIssue !== undefined ? { linkedIssue: request.linkedIssue } : {}),
+    ...(request.linkedPR !== undefined ? { linkedPR: request.linkedPR } : {}),
+    ...(request.linkedLinearIssue !== undefined
+      ? { linkedLinearIssue: request.linkedLinearIssue }
+      : {}),
+    ...(request.linkedLinearIssueWorkspaceId !== undefined
+      ? { linkedLinearIssueWorkspaceId: request.linkedLinearIssueWorkspaceId }
+      : {}),
+    ...(request.linkedLinearIssueOrganizationUrlKey !== undefined
+      ? { linkedLinearIssueOrganizationUrlKey: request.linkedLinearIssueOrganizationUrlKey }
+      : {}),
+    ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
+    ...(request.linkedGitLabIssue !== undefined
+      ? { linkedGitLabIssue: request.linkedGitLabIssue }
+      : {}),
+    ...(request.linkedBitbucketPR !== undefined
+      ? { linkedBitbucketPR: request.linkedBitbucketPR }
+      : {}),
+    ...(request.linkedAzureDevOpsPR !== undefined
+      ? { linkedAzureDevOpsPR: request.linkedAzureDevOpsPR }
+      : {}),
+    ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
+    ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
+    ...(request.linkedTaskSourceContext !== undefined
+      ? { linkedTaskSourceContext: request.linkedTaskSourceContext }
+      : {}),
+    ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})
+  }
+  const updated = await refreshedStore.updateWorktreeMeta(worktree.id, metadata, {
+    executionHostId: hostId
+  })
+  if (!updated.ok) {
+    throw new Error(updated.error)
+  }
+  return { worktree: { ...worktree, ...metadata } }
+}
+
+function getProvisionedRootSparseCheckoutError(): string {
+  return translate(
+    'auto.lib.ephemeralVmWorktreeCreation.sparseCheckoutUnsupported',
+    'Provisioned-root recipes do not support sparse checkout.'
+  )
 }
 
 function resolvePortableEphemeralVmProjectId(repo: Repo | undefined): string | null {
@@ -177,6 +290,18 @@ export async function cleanupEphemeralVmRuntimeForFailedCreate(
 ): Promise<void> {
   if (!request.ephemeralVmRuntimeId) {
     return
+  }
+  const setupId = request.workspaceRunContext?.projectHostSetupId
+  if (setupId) {
+    try {
+      const deleted = await useAppStore.getState().deleteProjectHostSetup({ setupId })
+      if (!deleted) {
+        return
+      }
+    } catch (error) {
+      console.error('Failed to remove ephemeral VM project setup after creation failed:', error)
+      return
+    }
   }
   try {
     await window.api.ephemeralVm.cleanup({ runtimeId: request.ephemeralVmRuntimeId })

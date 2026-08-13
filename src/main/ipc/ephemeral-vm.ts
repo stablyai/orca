@@ -111,6 +111,9 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         projectId?: string
         workspaceId?: string
         provisionId?: string
+        repoUrl?: string
+        branch?: string
+        ref?: string
       }
     ): Promise<EphemeralVmProvisionIpcResult> => {
       const repo = getRecipeRepo(store, args.repoId)
@@ -152,6 +155,10 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           projectId: args.projectId,
           workspaceId: args.workspaceId,
           workspaceName: args.workspaceName,
+          repoUrl: args.repoUrl,
+          branch: args.branch,
+          ref: args.ref,
+          orcaVersion: app.getVersion(),
           ...(controller ? { signal: controller.signal } : {}),
           onStdout: (chunk) => sendProvisionEvent('stdout', chunk),
           onStderr: (chunk) => sendProvisionEvent('stderr', chunk)

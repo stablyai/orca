@@ -247,6 +247,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   manualOrder: OptionalFiniteNumber,
   lastActivityAt: OptionalFiniteNumber,
   createdAt: OptionalFiniteNumber,
+  ephemeralVmCheckoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
   sparseDirectories: z.array(z.string()).optional(),
   sparseBaseRef: OptionalString,
   sparsePresetId: OptionalString,

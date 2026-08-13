@@ -10,17 +10,24 @@ import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
  * routes through project removal, which must not leak the live Docker/VM and its
  * hidden SSH target.
  *
- * Returns the runtime-owned SSH target ids that were destroyed so the caller can
- * purge the now-orphaned project that pointed at them.
+ * Returns matched runtime ids plus destroyed SSH target ids for caller-side state cleanup.
  */
+export type EphemeralVmRuntimeCleanupMatches = {
+  runtimeIds: string[]
+  sshTargetIds: string[]
+}
+
 export async function cleanupEphemeralVmRuntimesForDeleted(args: {
   workspaceIds?: readonly string[]
   // Raw runtime-owned SSH target ids (e.g. a removed repo's connectionId) whose
   // backing runtime should also be torn down, even if no workspace id matched.
   runtimeOwnedSshTargetIds?: readonly string[]
-}): Promise<string[]> {
-  const destroyedSshTargetIds: string[] = []
+}): Promise<EphemeralVmRuntimeCleanupMatches> {
+  const matches: EphemeralVmRuntimeCleanupMatches = { runtimeIds: [], sshTargetIds: [] }
   try {
+    if (!window.api.ephemeralVm?.listRuntimes) {
+      return matches
+    }
     const workspaceIdSet = new Set(args.workspaceIds ?? [])
     const sshTargetIdSet = new Set(
       (args.runtimeOwnedSshTargetIds ?? []).filter((id) => isRuntimeOwnedSshTargetId(id))
@@ -28,18 +35,21 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
     const runtimes = await window.api.ephemeralVm.listRuntimes()
     const matchingRuntimes = runtimes.filter(
       (runtime) =>
-        runtime.cleanupStatus !== 'succeeded' &&
+        (runtime.cleanupStatus !== 'succeeded' || runtime.sshTargetId !== undefined) &&
         ((runtime.workspaceId !== undefined && workspaceIdSet.has(runtime.workspaceId)) ||
           (runtime.sshTargetId !== undefined && sshTargetIdSet.has(runtime.sshTargetId)))
     )
     for (const runtime of matchingRuntimes) {
-      if (runtime.sshTargetId) {
-        destroyedSshTargetIds.push(runtime.sshTargetId)
+      const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
+      if (cleaned.status === 'cleaned') {
+        matches.runtimeIds.push(runtime.id)
       }
-      await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
+      if (runtime.sshTargetId && !cleaned.sshTargetId) {
+        matches.sshTargetIds.push(runtime.sshTargetId)
+      }
     }
   } catch (error) {
     console.error('Failed to clean up ephemeral VM runtime for deleted workspace:', error)
   }
-  return destroyedSshTargetIds
+  return matches
 }

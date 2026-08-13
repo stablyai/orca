@@ -2291,6 +2291,11 @@ describe('orca cli worktree awareness', () => {
 
   it('runs vm recipe doctor provision mode and invokes cleanup', async () => {
     const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-provision-'))
+    const originalSourceEnv = {
+      url: process.env.ORCA_REPO_URL,
+      branch: process.env.ORCA_REPO_BRANCH,
+      ref: process.env.ORCA_REPO_REF
+    }
     const pairingCode = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint: 'ws://sandbox.example.com:6767',
@@ -2365,6 +2370,9 @@ describe('orca cli worktree awareness', () => {
           return cleanupChild
         })
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      process.env.ORCA_REPO_URL = 'https://token@git.example.com/team/repo.git'
+      process.env.ORCA_REPO_BRANCH = 'doctor-workspace'
+      process.env.ORCA_REPO_REF = 'origin/main'
 
       await main([
         'vm',
@@ -2400,6 +2408,11 @@ describe('orca cli worktree awareness', () => {
       // The transcript carries both stages so the agent can self-diagnose.
       expect(output.provisionTranscript?.provision.exitCode).toBe(0)
       expect(output.provisionTranscript?.destroy?.exitCode).toBe(0)
+      expect(spawnMock.mock.calls[0]?.[1]?.env).toMatchObject({
+        ORCA_REPO_URL: 'https://git.example.com/team/repo.git',
+        ORCA_REPO_BRANCH: 'doctor-workspace',
+        ORCA_REPO_REF: 'origin/main'
+      })
       const cleanupPayload = JSON.parse(
         String(vi.mocked(cleanupChild.stdin.end).mock.calls[0]?.[0])
       ) as { recipeId: string; recipeResult: { projectRoot: string } }
@@ -2408,6 +2421,17 @@ describe('orca cli worktree awareness', () => {
         recipeResult: { projectRoot: '/workspace/repo' }
       })
     } finally {
+      for (const [name, value] of Object.entries({
+        ORCA_REPO_URL: originalSourceEnv.url,
+        ORCA_REPO_BRANCH: originalSourceEnv.branch,
+        ORCA_REPO_REF: originalSourceEnv.ref
+      })) {
+        if (value === undefined) {
+          delete process.env[name]
+        } else {
+          process.env[name] = value
+        }
+      }
       rmSync(repoPath, { recursive: true, force: true })
     }
   })

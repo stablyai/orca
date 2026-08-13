@@ -101,6 +101,7 @@ describe('prepareEphemeralVmWorkspaceTarget failure paths', () => {
       projectId: 'project-1',
       hostId: 'runtime:env-1',
       path: '/workspace/not-a-repo',
+      kind: 'git',
       setupMethod: 'imported-existing-folder'
     })
     expect(cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-1' })

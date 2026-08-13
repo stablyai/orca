@@ -4480,7 +4480,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ephemeralVmRecipe = {
             sourceRepoId: repoId,
             recipeId: activeEphemeralVmRecipeId,
-            projectId: selectedWorkspaceTarget.target.projectId
+            projectId: selectedWorkspaceTarget.target.projectId,
+            checkoutMode:
+              ephemeralVmRecipes.find((recipe) => recipe.id === activeEphemeralVmRecipeId)
+                ?.checkoutMode ?? 'orca-worktree'
           }
         }
 
@@ -4606,6 +4609,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepoRequiresConnection,
       selectedWorkspaceTarget,
       selectedEphemeralVmRecipeId,
+      ephemeralVmRecipes,
       ephemeralVmsEnabled,
       showProjectRequiredError,
       settings?.agentCmdOverrides,

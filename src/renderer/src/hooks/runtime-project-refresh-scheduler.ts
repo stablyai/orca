@@ -31,15 +31,19 @@ export async function refreshRuntimeProjectWorktrees(
     repoId: string,
     options: {
       executionHostId: ExecutionHostId
+      provisionedRootRuntimeWorkspaceKeys?: ReadonlySet<string>
       suppressRemoteLineageRefresh: true
     }
   ) => Promise<unknown>,
-  concurrency = DEFAULT_REFRESH_CONCURRENCY
+  options?: {
+    concurrency?: number
+    provisionedRootRuntimeWorkspaceKeys?: ReadonlySet<string>
+  }
 ): Promise<void> {
   let nextIndex = 0
   const failures: { repoId: string; error: unknown }[] = []
   const repoIds = [...new Set(repos.map((repo) => repo.id))]
-  const workerCount = Math.min(concurrency, repoIds.length)
+  const workerCount = Math.min(options?.concurrency ?? DEFAULT_REFRESH_CONCURRENCY, repoIds.length)
   const executionHostId = toRuntimeExecutionHostId(environmentId)
 
   // Why: one coalesced event can represent many repos; bound probes without dropping host identity.
@@ -52,6 +56,11 @@ export async function refreshRuntimeProjectWorktrees(
         try {
           await fetchWorktrees(repoId, {
             executionHostId,
+            ...(options?.provisionedRootRuntimeWorkspaceKeys
+              ? {
+                  provisionedRootRuntimeWorkspaceKeys: options.provisionedRootRuntimeWorkspaceKeys
+                }
+              : {}),
             suppressRemoteLineageRefresh: true
           })
         } catch (error) {
@@ -74,12 +83,15 @@ export async function refreshRuntimeProjectWorktreesAndLineage(
   environmentId: string,
   repos: readonly { id: string }[],
   fetchWorktrees: Parameters<typeof refreshRuntimeProjectWorktrees>[2],
-  fetchWorktreeLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>
+  fetchWorktreeLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>,
+  provisionedRootRuntimeWorkspaceKeys?: ReadonlySet<string>
 ): Promise<void> {
   const executionHostId = toRuntimeExecutionHostId(environmentId)
   let worktreeFailure: { error: unknown } | null = null
   try {
-    await refreshRuntimeProjectWorktrees(environmentId, repos, fetchWorktrees)
+    await refreshRuntimeProjectWorktrees(environmentId, repos, fetchWorktrees, {
+      provisionedRootRuntimeWorkspaceKeys
+    })
   } catch (error) {
     worktreeFailure = { error }
   }

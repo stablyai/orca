@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { deriveGitRemoteIdentity, normalizeGitRemoteUrl } from './git-remote-identity'
+import {
+  deriveGitRemoteIdentity,
+  normalizeGitRemoteUrl,
+  stripGitRemoteUrlCredentials
+} from './git-remote-identity'
 
 describe('normalizeGitRemoteUrl', () => {
   it('normalizes HTTPS and SSH GitHub remotes to the same canonical key', () => {
@@ -41,6 +45,32 @@ describe('normalizeGitRemoteUrl', () => {
   it('rejects Windows local filesystem remotes', () => {
     expect(normalizeGitRemoteUrl('C:\\Repos\\sample-app.git')).toBeNull()
     expect(normalizeGitRemoteUrl('C:/Repos/sample-app.git')).toBeNull()
+  })
+})
+
+describe('stripGitRemoteUrlCredentials', () => {
+  it('removes embedded HTTPS credentials and signed query parameters', () => {
+    expect(
+      stripGitRemoteUrlCredentials(
+        'https://user:secret@git.example.com/team/repo.git?token=secret#fragment'
+      )
+    ).toBe('https://git.example.com/team/repo.git')
+    expect(stripGitRemoteUrlCredentials('https://token@git.example.com/team/repo.git')).toBe(
+      'https://git.example.com/team/repo.git'
+    )
+  })
+
+  it('preserves SSH remote usernames', () => {
+    expect(stripGitRemoteUrlCredentials('ssh://git@git.example.com/team/repo.git')).toBe(
+      'ssh://git@git.example.com/team/repo.git'
+    )
+    expect(stripGitRemoteUrlCredentials('git@git.example.com:team/repo.git')).toBe(
+      'git@git.example.com:team/repo.git'
+    )
+  })
+
+  it('fails closed for malformed HTTP URLs', () => {
+    expect(stripGitRemoteUrlCredentials('https://token@%')).toBeNull()
   })
 })
 

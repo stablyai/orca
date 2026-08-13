@@ -51,6 +51,23 @@ export function normalizeGitRemoteUrl(remoteUrl: string): string | null {
   }
 }
 
+export function stripGitRemoteUrlCredentials(remoteUrl: string): string | null {
+  const trimmed = remoteUrl.trim()
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return trimmed
+  }
+  try {
+    const parsed = new URL(trimmed)
+    parsed.username = ''
+    parsed.password = ''
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
 export function parseGitRemoteVerboseOutput(stdout: string): GitRemoteEntry[] {
   const entries: GitRemoteEntry[] = []
   for (const rawLine of stdout.split(/\r?\n/)) {

@@ -885,19 +885,21 @@
         "direct SSH detected-worktree scheduling",
         "direct SSH reconnect telemetry",
         "direct SSH host catalog authority",
-        "direct SSH generation-scope rollover"
+        "direct SSH generation-scope rollover",
+        "runtime-owned SSH provisioned-root adoption"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Local deterministic evidence covers git-common classification, desktop watcher debounce counts, non-overlapping poller semantics, macOS native-watch fallback, preload cleanup, Source Control active-visible repo filtering, the direct SSH five-slot fair scheduler, timeout barrier, aggregate privacy schema, coordinator-to-renderer telemetry wiring, host-catalog provenance rejection, and process generation-scope rollover across sibling targets. A macOS Electron client completed a direct SSH disconnect/reconnect against an ephemeral Linux Docker target with exact host/authority hydration and remote proof-file verification. Linux/Windows desktop clients, multi-target live fanout, paired-client, and WSL runs remain gaps.",
+      "coverageNotes": "Local deterministic evidence covers git-common classification, desktop watcher debounce counts, non-overlapping poller semantics, macOS native-watch fallback, preload cleanup, Source Control active-visible repo filtering, the direct SSH five-slot fair scheduler, timeout barrier, aggregate privacy schema, coordinator-to-renderer telemetry wiring, host-catalog provenance rejection, process generation-scope rollover across sibling targets, and main-derived authority for hidden runtime-owned SSH provisioned-root scans. A macOS Electron client completed a direct SSH disconnect/reconnect against an ephemeral Linux Docker target with exact host/authority hydration and remote proof-file verification. Linux/Windows desktop clients, multi-target live fanout, paired-client, and WSL runs remain gaps.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/7086"],
-      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control; external head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. Direct SSH reconnect discovery must stay host- and authority-qualified, reject contradictory main-catalog provenance without returning rows, admit at most five locally unsettled provider calls, retain a retrying timeout barrier, and emit one identifier-free aggregate product event per target operation. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
-      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. For direct SSH, reject catalog rows whose explicit and legacy host provenance contradict, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, count locally unsettled attempts and round-robin admissions, keep lineage blocked through the first timeout retry, distinguish timeout/rejection/cancel/stale results, and reject telemetry properties carrying target, repo, host, path, label, user, request, lease, terminal, or raw-error data.",
+      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control; external head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. Direct SSH reconnect discovery must stay host- and authority-qualified, reject contradictory main-catalog provenance without returning rows, admit at most five locally unsettled provider calls, retain a retrying timeout barrier, and emit one identifier-free aggregate product event per target operation. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted. Provisioned-root may use main-derived authority only for hidden runtime-owned SSH targets; ordinary SSH remains renderer-authority-gated and no hidden authority enters renderer SSH state.",
+      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. For direct SSH, reject catalog rows whose explicit and legacy host provenance contradict, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, count locally unsettled attempts and round-robin admissions, keep lineage blocked through the first timeout retry, distinguish timeout/rejection/cancel/stale results, and reject telemetry properties carrying target, repo, host, path, label, user, request, lease, terminal, or raw-error data. For runtime-owned SSH, derive and rotate authority in main, reject the mode on user targets, keep lease modes distinct, admit only a matching authority-stamped result, preserve strict owner concurrency, and leave renderer SSH state empty.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ssh/ssh-connection-generation.test.ts src/main/ssh/ssh-provider-authority.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktrees.test.ts src/renderer/src/store/slices/detected-worktree-refresh-leases.test.ts src/renderer/src/store/slices/worktrees.test.ts src/renderer/src/lib/ephemeral-vm-provisioned-root-adoption.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/direct-ssh-reconnect-telemetry-schema.test.ts src/renderer/src/lib/direct-ssh-reconnect-product-telemetry.test.ts src/renderer/src/hooks/direct-ssh-worktree-refresh-scheduler.test.ts src/renderer/src/hooks/direct-ssh-reconnect-coordinator.test.ts src/renderer/src/hooks/useIpcEvents.test.ts --reporter=dot",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -912,6 +914,10 @@
         "src/main/ipc/repos-remote.test.ts",
         "src/main/ssh/ssh-connection-generation.test.ts",
         "src/main/ssh/ssh-provider-authority.test.ts",
+        "src/main/ipc/worktrees.test.ts",
+        "src/renderer/src/store/slices/detected-worktree-refresh-leases.test.ts",
+        "src/renderer/src/store/slices/worktrees.test.ts",
+        "src/renderer/src/lib/ephemeral-vm-provisioned-root-adoption.test.ts",
         "src/shared/direct-ssh-reconnect-telemetry-schema.test.ts",
         "src/renderer/src/lib/direct-ssh-reconnect-product-telemetry.test.ts",
         "src/renderer/src/hooks/direct-ssh-worktree-refresh-scheduler.test.ts",
@@ -998,6 +1004,33 @@
           ]
         },
         {
+          "file": "src/main/ipc/worktrees.test.ts",
+          "assertions": [
+            "main derives provider authority only for explicit runtime-owned SSH scans",
+            "ordinary SSH cannot opt into main-derived authority",
+            "authority rotation aborts an in-flight runtime-owned scan without durable mutation",
+            "renderer commit validation rejects authority that rotated after the scan"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/detected-worktree-refresh-leases.test.ts",
+          "assertions": ["runtime-owned scans coalesce only with the same explicit authority mode"]
+        },
+        {
+          "file": "src/renderer/src/store/slices/worktrees.test.ts",
+          "assertions": [
+            "runtime-owned authoritative scans merge without publishing renderer SSH state",
+            "ordinary SSH remains renderer-authority-gated",
+            "wrong-target stamps, rotated authority, and stale missing-owner results cannot merge"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/ephemeral-vm-provisioned-root-adoption.test.ts",
+          "assertions": [
+            "provisioned-root requests an authoritative scan for its runtime-owned SSH host"
+          ]
+        },
+        {
           "file": "src/renderer/src/hooks/direct-ssh-worktree-refresh-scheduler.test.ts",
           "assertions": [
             "coordinator-owned locally unsettled provider work never exceeds five and target lanes round-robin",
@@ -1053,6 +1086,15 @@
           "result": "passed",
           "durationSeconds": 1.61,
           "summary": "Three main-process catalog and authority files passed with 118 tests, including contradictory catalog provenance rejection and all-target generation-scope revocation."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktrees.test.ts src/renderer/src/store/slices/detected-worktree-refresh-leases.test.ts src/renderer/src/store/slices/worktrees.test.ts src/renderer/src/lib/ephemeral-vm-provisioned-root-adoption.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 2.8,
+          "summary": "Four focused main/renderer provisioned-root authority files passed with 554 tests; the renderer reproduction was red before the main-derived mode and green after it while ordinary SSH and post-scan rotation remained fenced."
         },
         {
           "date": "2026-07-27",

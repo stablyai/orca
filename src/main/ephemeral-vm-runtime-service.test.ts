@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -8,6 +8,7 @@ import {
   cleanupEphemeralVmRuntime,
   provisionEphemeralVmRuntime
 } from './ephemeral-vm-runtime-service'
+import { attachEphemeralVmRuntimeToWorkspace } from './ephemeral-vm-runtime-attachment'
 import type { OrcaVmRecipe } from '../shared/types'
 
 const tempDirs: string[] = []
@@ -63,7 +64,10 @@ describe('ephemeral VM runtime service', () => {
         '  schemaVersion: 1,',
         `  pairingCode: ${JSON.stringify(makePairingCode())},`,
         "  projectRoot: '/workspace/repo',",
-        '  userData: { providerResourceId: process.env.ORCA_VM_INSTANCE_ID }',
+        '  userData: {',
+        '    providerResourceId: process.env.ORCA_VM_INSTANCE_ID,',
+        '    repoUrl: process.env.ORCA_REPO_URL',
+        '  }',
         '}))'
       ].join('\n')
     )
@@ -76,6 +80,7 @@ describe('ephemeral VM runtime service', () => {
         '  const payload = JSON.parse(input)',
         '  if (payload.recipeResult.projectRoot !== "/workspace/repo") process.exit(12)',
         '  if (!payload.recipeResult.userData.providerResourceId) process.exit(13)',
+        "  require('fs').appendFileSync('cleanup-count.txt', 'x')",
         '  console.error(`cleanup:${payload.instanceId}`)',
         '})'
       ].join('\n')
@@ -83,6 +88,7 @@ describe('ephemeral VM runtime service', () => {
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
+      checkoutMode: 'orca-worktree',
       // Repo-owned recipes predate plugin bounds; snapshotting must not fail
       // after create has already provisioned external resources.
       description: 'x'.repeat(2_048),
@@ -97,6 +103,7 @@ describe('ephemeral VM runtime service', () => {
       repoId: 'repo-1',
       projectId: 'project-1',
       workspaceName: 'Fix Login Race',
+      repoUrl: 'https://token@git.example.com/team/repo.git?signature=secret',
       now: 1_000
     })
 
@@ -107,24 +114,32 @@ describe('ephemeral VM runtime service', () => {
     expect(provisioned.runtime).toMatchObject({
       id: provisioned.start.context.instanceId,
       recipeId: 'cloud-sandbox',
-      recipe,
       repoId: 'repo-1',
       projectId: 'project-1',
       workspaceName: 'Fix Login Race',
+      repoUrl: 'https://git.example.com/team/repo.git',
       status: 'running',
       cleanupStatus: 'not_started',
       createdAt: 1_000,
       updatedAt: 1_000
     })
+    expect(provisioned.runtime.recipeResult.userData).toMatchObject({
+      repoUrl: 'https://git.example.com/team/repo.git'
+    })
+    expect(provisioned.runtime.recipe).not.toHaveProperty('checkoutMode')
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([provisioned.runtime])
 
-    const cleanup = await cleanupEphemeralVmRuntime({
+    const cleanupArgs = {
       userDataPath,
       repoPath,
       recipe,
       runtimeId: provisioned.runtime.id,
       now: 2_000
-    })
+    }
+    const [cleanup] = await Promise.all([
+      cleanupEphemeralVmRuntime(cleanupArgs),
+      cleanupEphemeralVmRuntime(cleanupArgs)
+    ])
 
     expect(cleanup).toMatchObject({
       ok: true,
@@ -136,6 +151,20 @@ describe('ephemeral VM runtime service', () => {
         cleanupLastAttemptAt: 2_000
       }
     })
+    expect(readFileSync(join(repoPath, 'cleanup-count.txt'), 'utf8')).toBe('x')
+
+    await expect(cleanupEphemeralVmRuntime(cleanupArgs)).resolves.toMatchObject({
+      ok: true,
+      runtime: { status: 'cleaned' }
+    })
+    expect(() =>
+      attachEphemeralVmRuntimeToWorkspace({
+        userDataPath,
+        runtimeId: provisioned.runtime.id,
+        workspaceId: 'late-workspace'
+      })
+    ).toThrow('Cannot attach cleaned ephemeral VM runtime')
+    expect(readFileSync(join(repoPath, 'cleanup-count.txt'), 'utf8')).toBe('x')
   })
 
   it('does not persist a runtime when recipe output cannot be parsed', async () => {

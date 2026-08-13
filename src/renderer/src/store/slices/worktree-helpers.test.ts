@@ -68,4 +68,27 @@ describe('applyWorktreeUpdates', () => {
     expect(result['repo-a']?.[0]?.displayName).toBe('Project A')
     expect(result['repo-a']?.[0]?.comment).toBe('edited')
   })
+
+  it('can limit a same-id update to one execution host', () => {
+    const first = makeWorktree({
+      id: 'repo-a::/workspace/repo',
+      repoId: 'repo-a',
+      hostId: 'ssh:first'
+    })
+    const second = makeWorktree({
+      id: first.id,
+      repoId: 'repo-a',
+      hostId: 'ssh:second'
+    })
+
+    const result = applyWorktreeUpdates(
+      { 'repo-a': [first, second] },
+      first.id,
+      { comment: 'first only' },
+      (worktree) => worktree.hostId === 'ssh:first'
+    )
+
+    expect(result['repo-a']?.[0]?.comment).toBe('first only')
+    expect(result['repo-a']?.[1]).toBe(second)
+  })
 })

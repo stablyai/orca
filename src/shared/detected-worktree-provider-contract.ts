@@ -19,9 +19,22 @@ export type DirectSshDetectedWorktreeRequest = {
   expectedAuthority: DirectSshAuthority
 }
 
+export type RuntimeOwnedSshDetectedWorktreeRequest = {
+  providerRequestId: ProviderRequestId
+  repoId: string
+  executionHostId: SshExecutionHostId
+  authoritySource: 'main-runtime-owned-ssh'
+}
+
+export type RuntimeOwnedSshAuthorityValidationArgs = {
+  executionHostId: SshExecutionHostId
+  authority: DirectSshAuthority
+}
+
 export type ListDetectedWorktreesArgs =
   | LocalDetectedWorktreeRequest
   | DirectSshDetectedWorktreeRequest
+  | RuntimeOwnedSshDetectedWorktreeRequest
 
 export type ListKnownWorktreesForExecutionHostArgs = {
   repoId: string

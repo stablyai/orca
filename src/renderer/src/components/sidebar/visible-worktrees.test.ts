@@ -400,6 +400,20 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([folder.id])
   })
 
+  it('keeps provisioned-root feature workspaces visible when default branches are hidden', () => {
+    const provisioned = makeWorktree('provisioned')
+    provisioned.isMainWorktree = true
+    provisioned.ephemeralVmCheckoutMode = 'provisioned-root'
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [provisioned] },
+      [provisioned.id],
+      visibleOptions({ hideDefaultBranchWorkspace: true })
+    )
+
+    expect(result).toEqual([provisioned.id])
+  })
+
   it('filters worktrees to a selected SSH host scope', () => {
     const local = makeWorktree('local', 'repo1')
     const remote = makeWorktree('remote', 'repo2')

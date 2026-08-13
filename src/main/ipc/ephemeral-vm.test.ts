@@ -11,6 +11,7 @@ const {
   handleMock,
   removeHandlerMock,
   getPathMock,
+  getVersionMock,
   connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTargetMock,
   removeRuntimeOwnedSshTargetMock,
@@ -19,6 +20,7 @@ const {
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   getPathMock: vi.fn(),
+  getVersionMock: vi.fn(() => '1.4.178'),
   connectRuntimeOwnedSshTargetMock: vi.fn(),
   disconnectRuntimeOwnedSshTargetMock: vi.fn(),
   removeRuntimeOwnedSshTargetMock: vi.fn(),
@@ -27,7 +29,8 @@ const {
 
 vi.mock('electron', () => ({
   app: {
-    getPath: getPathMock
+    getPath: getPathMock,
+    getVersion: getVersionMock
   },
   ipcMain: {
     handle: handleMock,
@@ -347,7 +350,13 @@ describe('registerEphemeralVmHandlers', () => {
         '  schemaVersion: 1,',
         `  pairingCode: ${JSON.stringify(makePairingCode())},`,
         "  projectRoot: '/workspace/repo',",
-        '  userData: { providerResourceId: process.env.ORCA_VM_INSTANCE_ID }',
+        '  userData: {',
+        '    providerResourceId: process.env.ORCA_VM_INSTANCE_ID,',
+        '    repoUrl: process.env.ORCA_REPO_URL,',
+        '    branch: process.env.ORCA_REPO_BRANCH,',
+        '    ref: process.env.ORCA_REPO_REF,',
+        '    orcaVersion: process.env.ORCA_VERSION',
+        '  }',
         '}))'
       ].join('\n')
     )
@@ -367,7 +376,10 @@ describe('registerEphemeralVmHandlers', () => {
     const result = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox',
-      workspaceName: 'Fix Login Race'
+      workspaceName: 'Fix Login Race',
+      repoUrl: 'git@example.com:team/repo.git',
+      branch: 'fix-login-race',
+      ref: 'origin/main'
     } as never)) as {
       ok: boolean
       runtime?: { id: string; repoId?: string; status?: string; runtimeEnvironmentId?: string }
@@ -382,7 +394,19 @@ describe('registerEphemeralVmHandlers', () => {
       runtime: {
         repoId: 'repo-1',
         status: 'running',
-        runtimeEnvironmentId: result.environment?.id
+        runtimeEnvironmentId: result.environment?.id,
+        repoUrl: 'git@example.com:team/repo.git',
+        branch: 'fix-login-race',
+        ref: 'origin/main',
+        orcaVersion: '1.4.178',
+        recipeResult: {
+          userData: {
+            repoUrl: 'git@example.com:team/repo.git',
+            branch: 'fix-login-race',
+            ref: 'origin/main',
+            orcaVersion: '1.4.178'
+          }
+        }
       }
     })
     const runtimes = await handlers.get('ephemeralVm:listRuntimes')?.(null, undefined as never)
@@ -571,7 +595,8 @@ describe('registerEphemeralVmHandlers', () => {
       startPath,
       [
         'console.log(JSON.stringify({',
-        '  schemaVersion: 1,',
+        '  schemaVersion: 2,',
+        "  checkoutMode: 'provisioned-root',",
         `  pairingCode: ${JSON.stringify(makePairingCode())},`,
         "  projectRoot: '/workspace/repo'",
         '}))'
@@ -593,9 +618,10 @@ describe('registerEphemeralVmHandlers', () => {
         'if (payload.mode !== "resume") process.exit(2)',
         "fs.writeFileSync('resume-mode.txt', payload.mode)",
         'console.log(JSON.stringify({',
-        '  schemaVersion: 1,',
+        '  schemaVersion: 2,',
+        "  checkoutMode: 'provisioned-root',",
         `  pairingCode: ${JSON.stringify(resumedPairingCode)},`,
-        "  projectRoot: '/workspace/resumed'",
+        "  projectRoot: '/workspace/repo'",
         '}))'
       ].join('\n')
     )
@@ -605,6 +631,7 @@ describe('registerEphemeralVmHandlers', () => {
         'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
+        '    checkoutMode: provisioned-root',
         `    create: ${JSON.stringify(nodeCommand(startPath))}`,
         `    suspend: ${JSON.stringify(nodeCommand(suspendPath))}`,
         `    resume: ${JSON.stringify(nodeCommand(resumePath))}`,
@@ -644,7 +671,8 @@ describe('registerEphemeralVmHandlers', () => {
     expect(resumed).toEqual(
       expect.objectContaining({
         status: 'running',
-        recipeResult: expect.objectContaining({ projectRoot: '/workspace/resumed' })
+        resumeConnectionPending: false,
+        recipeResult: expect.objectContaining({ projectRoot: '/workspace/repo' })
       })
     )
     expect(readFileSync(join(repoPath, 'resume-mode.txt'), 'utf8')).toBe('resume')
@@ -654,6 +682,38 @@ describe('registerEphemeralVmHandlers', () => {
     expect(environment?.endpoints[0]?.endpoint).toBe('wss://resumed.example.com')
     expect(invalidateRuntimeEnvironmentTransportMock).toHaveBeenCalledWith(
       provisioned.environment.id
+    )
+
+    await handlers.get('ephemeralVm:suspendWorkspace')?.(null, {
+      workspaceId: 'workspace-1'
+    } as never)
+    writeFileSync(
+      resumePath,
+      [
+        'console.log(JSON.stringify({',
+        '  schemaVersion: 2,',
+        "  checkoutMode: 'provisioned-root',",
+        `  pairingCode: ${JSON.stringify(resumedPairingCode)},`,
+        "  projectRoot: '/workspace/moved'",
+        '}))'
+      ].join('\n')
+    )
+
+    const resumeWorkspace = handlers.get('ephemeralVm:resumeWorkspace')!
+    await expect(resumeWorkspace(null, { workspaceId: 'workspace-1' } as never)).rejects.toThrow(
+      'must keep projectRoot stable'
+    )
+    const runtimes = (await handlers.get('ephemeralVm:listRuntimes')?.(
+      null,
+      undefined as never
+    )) as { id: string; recipeResult: { projectRoot: string } }[]
+    expect(runtimes.find((runtime) => runtime.id === provisioned.runtime.id)).toMatchObject({
+      status: 'resume_failed',
+      provisionedProjectRoot: '/workspace/repo',
+      recipeResult: { projectRoot: '/workspace/moved' }
+    })
+    await expect(resumeWorkspace(null, { workspaceId: 'workspace-1' } as never)).rejects.toThrow(
+      'must keep projectRoot stable'
     )
   })
 

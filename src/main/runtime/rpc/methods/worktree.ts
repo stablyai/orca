@@ -222,6 +222,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         manualOrder: params.manualOrder,
         lastActivityAt: params.lastActivityAt,
         createdAt: params.createdAt,
+        ephemeralVmCheckoutMode: params.ephemeralVmCheckoutMode,
         sparseDirectories: params.sparseDirectories,
         sparseBaseRef: params.sparseBaseRef,
         sparsePresetId: params.sparsePresetId,

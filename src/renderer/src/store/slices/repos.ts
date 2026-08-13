@@ -3374,6 +3374,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             ).result
       const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
       const repoHostId = repo ? getRepoExecutionHostId(repo) : null
+      const removedWorktreeIds =
+        repo && repoHostId ? getKnownRepoWorktreeIds(get(), repo.id, repoHostId) : []
       set((s) => {
         const projectHostSetups = s.projectHostSetups.filter(
           (setup) => setup.id !== result.setup.id
@@ -3388,13 +3390,53 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             : s.projects
         const survivingRepoIds = new Set(repos.map((r) => r.id))
         const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
+        const nextWorktreesByRepo = { ...s.worktreesByRepo }
+        const remainingWorktrees = (nextWorktreesByRepo[repo?.id ?? ''] ?? []).filter(
+          (worktree) => !repoHostId || !worktreeBelongsToHost(worktree, repoHostId)
+        )
+        if (repo) {
+          if (remainingWorktrees.length > 0) {
+            nextWorktreesByRepo[repo.id] = remainingWorktrees
+          } else {
+            delete nextWorktreesByRepo[repo.id]
+          }
+        }
+        const nextDetectedWorktreesByRepo = { ...s.detectedWorktreesByRepo }
+        if (repo && nextDetectedWorktreesByRepo[repo.id]) {
+          const detected = nextDetectedWorktreesByRepo[repo.id]
+          const remainingDetected = detected.worktrees.filter(
+            (worktree) => !repoHostId || !worktreeBelongsToHost(worktree, repoHostId)
+          )
+          if (remainingDetected.length > 0) {
+            nextDetectedWorktreesByRepo[repo.id] = { ...detected, worktrees: remainingDetected }
+          } else {
+            delete nextDetectedWorktreesByRepo[repo.id]
+          }
+        }
         return {
           repos,
           projects,
           projectHostSetups,
+          worktreesByRepo: nextWorktreesByRepo,
+          detectedWorktreesByRepo: nextDetectedWorktreesByRepo,
           ...omitSparsePresetsForRepos(s, removedRepoIds)
         }
       })
+      if (removedWorktreeIds.length > 0) {
+        const state = get()
+        const retainedWorktreeIds = new Set([
+          ...Object.values(state.worktreesByRepo).flatMap((worktrees) =>
+            worktrees.map((worktree) => worktree.id)
+          ),
+          ...Object.values(state.detectedWorktreesByRepo).flatMap((result) =>
+            result.worktrees.map((worktree) => worktree.id)
+          )
+        ])
+        const purgeIds = removedWorktreeIds.filter((id) => !retainedWorktreeIds.has(id))
+        if (purgeIds.length > 0) {
+          state.purgeWorktreeTerminalState(purgeIds)
+        }
+      }
       return { ...result, repo }
     } catch (err) {
       console.error('Failed to delete project host setup:', err)
@@ -3533,13 +3575,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
-      // Why: an SSH per-workspace-env's workspace is the repo's main worktree, so removal routes here; tear down its ephemeral runtime first so it doesn't leak.
-      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
-        await cleanupEphemeralVmRuntimesForDeleted({
-          workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
-          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
-        })
+      for (const [creationId, pending] of Object.entries(get().pendingWorktreeCreations)) {
+        if (
+          pending.request.repoId === projectId &&
+          (pending.request.workspaceRunContext?.hostId ?? ownerHostId) === ownerHostId
+        ) {
+          get().removePendingWorktreeCreation(creationId)
+        }
       }
+      const initialWorktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+      const runtimeOwnedSshTargetIds = isRuntimeOwnedSshTargetId(ownerRepo.connectionId)
+        ? [ownerRepo.connectionId as string]
+        : undefined
       // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
       // Why: repos:remove is id-only and would delete every host's row; scope local removal to the owning host so cross-host duplicates keep other rows.
@@ -3555,9 +3602,19 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       } catch (err) {
         // Why: the owner already dropped this project, so purge the local ghost row instead of aborting (#11994).
         if (!hasRuntimeRpcErrorCode(err, 'repo_not_found')) {
-          throw err
+          const cleanup = await cleanupEphemeralVmRuntimesForDeleted({
+            workspaceIds: initialWorktreeIds,
+            ...(runtimeOwnedSshTargetIds ? { runtimeOwnedSshTargetIds } : {})
+          })
+          if (cleanup.runtimeIds.length === 0) {
+            throw err
+          }
         }
       }
+
+      const worktreeIds = Array.from(
+        new Set([...initialWorktreeIds, ...getKnownRepoWorktreeIds(get(), projectId, ownerHostId)])
+      )
 
       get().clearOrcaHookTrustForRepo(projectId)
       const repoPath = get().repos.find((repo) =>
@@ -3568,7 +3625,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       clearRepoSlugCacheEntry(projectId)
 
       // Kill PTYs for all worktrees belonging to this repo
-      const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
       const localAgentContextProjectIds =
         ownerHostId === LOCAL_EXECUTION_HOST_ID
           ? [
@@ -3604,6 +3660,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           }
         }
       }
+
+      // Provisioned roots delete through the project row, so destroy their runtime after remote work stops.
+      await cleanupEphemeralVmRuntimesForDeleted({
+        workspaceIds: worktreeIds,
+        ...(runtimeOwnedSshTargetIds ? { runtimeOwnedSshTargetIds } : {})
+      })
 
       // Why: use the canonical per-worktree purge to evict all worktree-scoped maps (hand-deletion leaked most); runs before the set() below so it still sees tabsByWorktree.
       get().purgeWorktreeTerminalState(worktreeIds)

@@ -5,19 +5,20 @@ import {
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import {
-  getEphemeralVmRecipeResultConnection,
-  getEphemeralVmRecipeResultPairingCode
-} from '../../shared/ephemeral-vm-recipes'
-import {
-  removeEnvironment,
-  updateEnvironmentFromPairingCode
-} from '../../shared/runtime-environment-store'
+import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
+import { removeEnvironment } from '../../shared/runtime-environment-store'
 import {
   cleanupEphemeralVmRuntime,
   resumeEphemeralVmRuntime,
   suspendEphemeralVmRuntime
 } from '../ephemeral-vm-runtime-service'
+import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm-runtime-attachment'
+import { resumeEphemeralVmRuntimeEnvironment } from '../ephemeral-vm-runtime-environment-resume'
+import {
+  continueEphemeralVmRuntimeResume,
+  createEphemeralVmRuntimeResumeCoordinator
+} from '../ephemeral-vm-runtime-resume-continuation'
+import { removeEphemeralVmRuntimeSshTarget } from '../ephemeral-vm-runtime-ssh-cleanup'
 import {
   buildEphemeralVmRecipeCleanupCommand,
   buildEphemeralVmRecipeCleanupPayload
@@ -39,6 +40,7 @@ export type EphemeralVmCleanupCommandResult = {
 }
 
 export function registerEphemeralVmRuntimeHandlers(store: Store): void {
+  const coordinateRuntimeResume = createEphemeralVmRuntimeResumeCoordinator()
   ipcMain.removeHandler('ephemeralVm:attachWorkspace')
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
   ipcMain.removeHandler('ephemeralVm:cleanup')
@@ -53,8 +55,9 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.handle(
     'ephemeralVm:attachWorkspace',
     (_event, args: { runtimeId: string; workspaceId: string }): EphemeralVmRuntimeRecord => {
-      return updateEphemeralVmRuntimeStatus(app.getPath('userData'), args.runtimeId, {
-        status: 'running',
+      return attachEphemeralVmRuntimeToWorkspace({
+        userDataPath: app.getPath('userData'),
+        runtimeId: args.runtimeId,
         workspaceId: args.workspaceId
       })
     }
@@ -73,23 +76,28 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (!runtime.repoId) {
         throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
       }
-      let resolved: ReturnType<typeof getRuntimeRecipeContext>
-      try {
-        resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
-      } catch (error) {
-        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-          status: 'cleanup_failed',
-          cleanupStatus: 'failed',
-          cleanupLastAttemptAt: Date.now(),
-          cleanupLastError: error instanceof Error ? error.message : String(error)
+      let result
+      if (runtime.cleanupStatus === 'succeeded') {
+        result = { ok: true as const, runtime, skipped: false }
+      } else {
+        let resolved: ReturnType<typeof getRuntimeRecipeContext>
+        try {
+          resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+        } catch (error) {
+          return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+            status: 'cleanup_failed',
+            cleanupStatus: 'failed',
+            cleanupLastAttemptAt: Date.now(),
+            cleanupLastError: error instanceof Error ? error.message : String(error)
+          })
+        }
+        result = await cleanupEphemeralVmRuntime({
+          userDataPath,
+          repoPath: resolved.repo.repo.path,
+          recipe: resolved.recipe,
+          runtimeId: runtime.id
         })
       }
-      const result = await cleanupEphemeralVmRuntime({
-        userDataPath,
-        repoPath: resolved.repo.repo.path,
-        recipe: resolved.recipe,
-        runtimeId: runtime.id
-      })
       if (result.ok && runtime.runtimeEnvironmentId) {
         try {
           removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
@@ -100,14 +108,11 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       }
       // Remove even on cleanup_failed (removal is idempotent via the deterministic
       // id) so a terminal cleanup never orphans the hidden SSH target.
-      if (runtime.sshTargetId) {
-        await removeRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
-        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-          connectionMode: null,
-          sshTargetId: null
-        })
-      }
-      return result.runtime
+      return removeEphemeralVmRuntimeSshTarget({
+        userDataPath,
+        runtime: result.runtime,
+        removeTarget: removeRuntimeOwnedSshTarget
+      })
     }
   )
 
@@ -160,48 +165,68 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (!runtime?.repoId) {
         return null
       }
-      if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
+      const retryConnection = runtime.resumeConnectionPending === true
+      if (
+        runtime.status !== 'suspended' &&
+        runtime.status !== 'resume_failed' &&
+        !retryConnection
+      ) {
         return runtime
       }
-      const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
-      const result = await resumeEphemeralVmRuntime({
-        userDataPath,
-        repoPath: recipeContext.repo.repo.path,
-        recipe: recipeContext.recipe,
-        runtimeId: runtime.id
-      })
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-      if (!result.skipped && runtime.runtimeEnvironmentId) {
-        const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
-        if (!pairingCode) {
-          throw new Error('Resume result did not include an Orca Server pairing code.')
-        }
-        updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
-          pairingCode
+      return coordinateRuntimeResume(runtime.id, async () => {
+        const result = await continueEphemeralVmRuntimeResume(runtime, async () => {
+          const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+          return resumeEphemeralVmRuntime({
+            userDataPath,
+            repoPath: recipeContext.repo.repo.path,
+            recipe: recipeContext.recipe,
+            runtimeId: runtime.id
+          })
         })
-        invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
-      }
-      const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
-      if (!result.skipped && connection.type === 'ssh') {
-        try {
-          const ssh = await connectRuntimeOwnedSshTarget({
-            runtimeId: result.runtime.id,
-            connection
-          })
-          return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-            connectionMode: 'ssh',
-            sshTargetId: ssh.targetId
-          })
-        } catch (error) {
-          updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-            status: 'resume_failed'
-          })
-          throw error
+        if (!result.ok) {
+          throw new Error(result.error)
         }
-      }
-      return result.runtime
+        if (result.skipped) {
+          return result.runtime
+        }
+        const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
+        if (connection.type === 'orca-server') {
+          if (!runtime.runtimeEnvironmentId) {
+            updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+              status: 'resume_failed',
+              resumeConnectionPending: true
+            })
+            throw new Error('Ephemeral VM runtime has no runtime environment to reconnect.')
+          }
+          return resumeEphemeralVmRuntimeEnvironment({
+            userDataPath,
+            environmentId: runtime.runtimeEnvironmentId,
+            runtime: result.runtime,
+            invalidateTransport: invalidateRuntimeEnvironmentTransport
+          })
+        }
+        if (connection.type === 'ssh') {
+          try {
+            const ssh = await connectRuntimeOwnedSshTarget({
+              runtimeId: result.runtime.id,
+              connection
+            })
+            return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+              status: 'running',
+              resumeConnectionPending: false,
+              connectionMode: 'ssh',
+              sshTargetId: ssh.targetId
+            })
+          } catch (error) {
+            updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+              status: 'resume_failed',
+              resumeConnectionPending: true
+            })
+            throw error
+          }
+        }
+        return result.runtime
+      })
     }
   )
 
@@ -218,6 +243,10 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           projectId: resolved.runtime.projectId,
           workspaceId: resolved.runtime.workspaceId,
           workspaceName: resolved.runtime.workspaceName,
+          repoUrl: resolved.runtime.repoUrl,
+          branch: resolved.runtime.branch,
+          ref: resolved.runtime.ref,
+          orcaVersion: resolved.runtime.orcaVersion,
           repoPath: resolved.repo.repo.path
         },
         recipeResult: resolved.runtime.recipeResult

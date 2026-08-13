@@ -1,100 +1,43 @@
-import type { OrcaVmRecipe } from '../shared/types'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus,
   upsertEphemeralVmRuntime
 } from '../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
-import { getEphemeralVmRecipeResultConnection } from '../shared/ephemeral-vm-recipes'
+import {
+  getEphemeralVmRecipeResultConnection,
+  getEphemeralVmRecipeResultProjectRoot
+} from '../shared/ephemeral-vm-recipes'
+import {
+  persistFailedEphemeralVmResume,
+  validateEphemeralVmResumeIntegrity
+} from './ephemeral-vm-resume-integrity'
+import { stripGitRemoteUrlCredentials } from '../shared/git-remote-identity'
 import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeResume,
   runEphemeralVmRecipeSuspend,
-  runEphemeralVmRecipeStart,
-  type EphemeralVmRecipeContext,
-  type EphemeralVmRecipeStartFailure,
-  type EphemeralVmRecipeStartSuccess
+  runEphemeralVmRecipeStart
 } from './ephemeral-vm-recipe-runner'
+import {
+  getEphemeralVmRuntimeRecipeContext,
+  getPersistedEphemeralVmRecipe
+} from './ephemeral-vm-runtime-recipe-context'
+import type {
+  CleanupEphemeralVmRuntimeArgs,
+  CleanupEphemeralVmRuntimeResult,
+  ProvisionEphemeralVmRuntimeArgs,
+  ProvisionEphemeralVmRuntimeResult,
+  ResumeEphemeralVmRuntimeResult,
+  SuspendEphemeralVmRuntimeResult
+} from './ephemeral-vm-runtime-service-types'
+export type * from './ephemeral-vm-runtime-service-types'
 
-export type ProvisionEphemeralVmRuntimeArgs = {
-  userDataPath: string
-  repoPath: string
-  recipe: OrcaVmRecipe
-  repoId?: string
-  projectId?: string
-  workspaceId?: string
-  workspaceName?: string
-  repoUrl?: string
-  branch?: string
-  ref?: string
-  orcaVersion?: string
-  now?: number
-  signal?: AbortSignal
-  onStdout?: (chunk: string) => void
-  onStderr?: (chunk: string) => void
-}
-
-export type ProvisionEphemeralVmRuntimeResult =
-  | {
-      ok: true
-      start: EphemeralVmRecipeStartSuccess
-      runtime: EphemeralVmRuntimeRecord
-    }
-  | {
-      ok: false
-      start: EphemeralVmRecipeStartFailure
-    }
-
-export type CleanupEphemeralVmRuntimeArgs = {
-  userDataPath: string
-  repoPath: string
-  recipe: OrcaVmRecipe
-  runtimeId: string
-  now?: number
-  signal?: AbortSignal
-  onStdout?: (chunk: string) => void
-  onStderr?: (chunk: string) => void
-}
-
-export type CleanupEphemeralVmRuntimeResult =
-  | {
-      ok: true
-      runtime: EphemeralVmRuntimeRecord
-      skipped: boolean
-    }
-  | {
-      ok: false
-      runtime: EphemeralVmRuntimeRecord
-      error: string
-    }
-
-export type SuspendEphemeralVmRuntimeResult =
-  | {
-      ok: true
-      runtime: EphemeralVmRuntimeRecord
-      skipped: boolean
-    }
-  | {
-      ok: false
-      runtime: EphemeralVmRuntimeRecord
-      error: string
-    }
-
-export type ResumeEphemeralVmRuntimeResult =
-  | {
-      ok: true
-      runtime: EphemeralVmRuntimeRecord
-      skipped: boolean
-    }
-  | {
-      ok: false
-      runtime: EphemeralVmRuntimeRecord
-      error: string
-    }
+const cleanupInFlight = new Map<string, Promise<CleanupEphemeralVmRuntimeResult>>()
 
 export async function provisionEphemeralVmRuntime(
   args: ProvisionEphemeralVmRuntimeArgs
 ): Promise<ProvisionEphemeralVmRuntimeResult> {
+  const repoUrl = stripGitRemoteUrlCredentials(args.repoUrl ?? '') ?? undefined
   const start = await runEphemeralVmRecipeStart({
     repoPath: args.repoPath,
     recipe: args.recipe,
@@ -102,7 +45,7 @@ export async function provisionEphemeralVmRuntime(
       projectId: args.projectId,
       workspaceId: args.workspaceId,
       workspaceName: args.workspaceName,
-      repoUrl: args.repoUrl,
+      repoUrl,
       branch: args.branch,
       ref: args.ref,
       orcaVersion: args.orcaVersion
@@ -112,6 +55,17 @@ export async function provisionEphemeralVmRuntime(
     onStderr: args.onStderr
   })
   if (!start.ok) {
+    if (start.recipeResult) {
+      await runEphemeralVmRecipeCleanup({
+        repoPath: args.repoPath,
+        recipe: args.recipe,
+        context: start.context,
+        recipeResult: start.recipeResult,
+        signal: args.signal,
+        onStdout: args.onStdout,
+        onStderr: args.onStderr
+      }).catch(() => undefined)
+    }
     return { ok: false, start }
   }
 
@@ -120,11 +74,18 @@ export async function provisionEphemeralVmRuntime(
   const runtime = upsertEphemeralVmRuntime(args.userDataPath, {
     id: start.context.instanceId ?? start.context.recipeId,
     recipeId: args.recipe.id,
-    recipe: args.recipe,
+    recipe: getPersistedEphemeralVmRecipe(args.recipe),
     ...(args.repoId ? { repoId: args.repoId } : {}),
     ...(args.projectId ? { projectId: args.projectId } : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
     ...(args.workspaceName ? { workspaceName: args.workspaceName } : {}),
+    ...(repoUrl ? { repoUrl } : {}),
+    ...(args.branch ? { branch: args.branch } : {}),
+    ...(args.ref ? { ref: args.ref } : {}),
+    ...(args.orcaVersion ? { orcaVersion: args.orcaVersion } : {}),
+    ...(args.recipe.checkoutMode === 'provisioned-root'
+      ? { provisionedProjectRoot: getEphemeralVmRecipeResultProjectRoot(start.result) }
+      : {}),
     status: 'running',
     connectionMode: connection.type,
     cleanupStatus: args.recipe.destroyDisabled ? 'disabled' : 'not_started',
@@ -137,7 +98,26 @@ export async function provisionEphemeralVmRuntime(
   return { ok: true, start, runtime }
 }
 
-export async function cleanupEphemeralVmRuntime(
+export function cleanupEphemeralVmRuntime(
+  args: CleanupEphemeralVmRuntimeArgs
+): Promise<CleanupEphemeralVmRuntimeResult> {
+  const key = `${args.userDataPath}\0${args.runtimeId}`
+  const existing = cleanupInFlight.get(key)
+  if (existing) {
+    return existing
+  }
+  const cleanup = cleanupEphemeralVmRuntimeOnce(args)
+  cleanupInFlight.set(key, cleanup)
+  const forget = (): void => {
+    if (cleanupInFlight.get(key) === cleanup) {
+      cleanupInFlight.delete(key)
+    }
+  }
+  void cleanup.then(forget, forget)
+  return cleanup
+}
+
+async function cleanupEphemeralVmRuntimeOnce(
   args: CleanupEphemeralVmRuntimeArgs
 ): Promise<CleanupEphemeralVmRuntimeResult> {
   const existing = listEphemeralVmRuntimes(args.userDataPath).find(
@@ -145,6 +125,13 @@ export async function cleanupEphemeralVmRuntime(
   )
   if (!existing) {
     throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
+  }
+  if (existing.status === 'cleaned') {
+    return {
+      ok: true,
+      runtime: existing,
+      skipped: existing.cleanupStatus === 'disabled'
+    }
   }
 
   const now = args.now ?? Date.now()
@@ -158,7 +145,7 @@ export async function cleanupEphemeralVmRuntime(
   const cleanup = await runEphemeralVmRecipeCleanup({
     repoPath: args.repoPath,
     recipe: args.recipe,
-    context: contextFromRuntime(args.repoPath, running),
+    context: getEphemeralVmRuntimeRecipeContext(args.repoPath, running),
     recipeResult: running.recipeResult,
     signal: args.signal,
     onStdout: args.onStdout,
@@ -196,7 +183,7 @@ export async function suspendEphemeralVmRuntime(
   const suspend = await runEphemeralVmRecipeSuspend({
     repoPath: args.repoPath,
     recipe: args.recipe,
-    context: contextFromRuntime(args.repoPath, existing),
+    context: getEphemeralVmRuntimeRecipeContext(args.repoPath, existing),
     recipeResult: existing.recipeResult,
     signal: args.signal,
     onStdout: args.onStdout,
@@ -230,7 +217,7 @@ export async function resumeEphemeralVmRuntime(
   const resume = await runEphemeralVmRecipeResume({
     repoPath: args.repoPath,
     recipe: args.recipe,
-    context: contextFromRuntime(args.repoPath, existing),
+    context: getEphemeralVmRuntimeRecipeContext(args.repoPath, existing),
     recipeResult: existing.recipeResult,
     signal: args.signal,
     onStdout: args.onStdout,
@@ -238,31 +225,30 @@ export async function resumeEphemeralVmRuntime(
   })
 
   if (!resume.ok) {
-    const failed = updateEphemeralVmRuntimeStatus(args.userDataPath, existing.id, {
-      status: 'resume_failed',
-      updatedAt: Date.now()
+    return persistFailedEphemeralVmResume({
+      userDataPath: args.userDataPath,
+      existing,
+      error: resume.error,
+      recipeResult: resume.recipeResult
     })
-    return { ok: false, runtime: failed, error: resume.error }
+  }
+
+  if (!resume.skipped) {
+    const integrity = validateEphemeralVmResumeIntegrity({
+      userDataPath: args.userDataPath,
+      existing,
+      resume
+    })
+    if (!integrity.ok) {
+      return integrity
+    }
   }
 
   const runtime = updateEphemeralVmRuntimeStatus(args.userDataPath, existing.id, {
     status: 'running',
     ...(!resume.skipped ? { recipeResult: resume.result } : {}),
+    resumeConnectionPending: !resume.skipped,
     updatedAt: Date.now()
   })
   return { ok: true, runtime, skipped: resume.skipped }
-}
-
-function contextFromRuntime(
-  repoPath: string,
-  runtime: EphemeralVmRuntimeRecord
-): EphemeralVmRecipeContext {
-  return {
-    instanceId: runtime.id,
-    recipeId: runtime.recipeId,
-    projectId: runtime.projectId,
-    workspaceId: runtime.workspaceId,
-    workspaceName: runtime.workspaceName,
-    repoPath
-  }
 }

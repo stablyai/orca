@@ -22,6 +22,23 @@ describe('refreshRuntimeProjectWorktrees', () => {
     })
   })
 
+  it('reuses one provisioned-root snapshot across sequential worker waves', async () => {
+    const runtimeWorkspaceKeys = new Set(['workspace-1\0runtime:env-1'])
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+
+    await refreshRuntimeProjectWorktrees(
+      'env-1',
+      Array.from({ length: 7 }, (_, index) => ({ id: `repo-${index}` })),
+      fetchWorktrees,
+      { concurrency: 2, provisionedRootRuntimeWorkspaceKeys: runtimeWorkspaceKeys }
+    )
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(7)
+    for (const [, options] of fetchWorktrees.mock.calls) {
+      expect(options.provisionedRootRuntimeWorkspaceKeys).toBe(runtimeWorkspaceKeys)
+    }
+  })
+
   it('runs one final host lineage refresh after a repo failure', async () => {
     const error = new Error('repo refresh failed')
     const fetchWorktrees = vi.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(error)

@@ -14,6 +14,9 @@ export type PrepareEphemeralVmWorkspaceTargetArgs = {
   recipeId: string
   projectId: string
   workspaceName: string
+  repoUrl?: string
+  branch?: string
+  ref?: string
   provisionId?: string
   setupExistingFolder: (
     args: ProjectHostSetupExistingFolderArgs
@@ -25,6 +28,7 @@ export type PrepareEphemeralVmWorkspaceTargetResult =
       ok: true
       setup: ProjectHostSetupResult
       runtimeId: string
+      checkoutMode: 'orca-worktree' | 'provisioned-root'
       environmentId?: string
       stderr: string
       warnings: EphemeralVmRecipeResultWarning[]
@@ -43,6 +47,9 @@ export async function prepareEphemeralVmWorkspaceTarget(
     recipeId: args.recipeId,
     projectId: args.projectId,
     workspaceName: args.workspaceName,
+    ...(args.repoUrl ? { repoUrl: args.repoUrl } : {}),
+    ...(args.branch ? { branch: args.branch } : {}),
+    ...(args.ref ? { ref: args.ref } : {}),
     ...(args.provisionId ? { provisionId: args.provisionId } : {})
   })
   if (!provisioned.ok) {
@@ -77,6 +84,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
       projectId: args.projectId,
       hostId,
       path: getEphemeralVmRecipeResultProjectRoot(provisioned.runtime.recipeResult),
+      kind: 'git',
       setupMethod: 'imported-existing-folder'
     })
   } catch (error) {
@@ -112,6 +120,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
     ok: true,
     setup,
     runtimeId: provisioned.runtime.id,
+    checkoutMode: provisioned.runtime.recipe?.checkoutMode ?? 'orca-worktree',
     stderr: provisioned.stderr,
     warnings: provisioned.warnings
   } satisfies PrepareEphemeralVmWorkspaceTargetResult

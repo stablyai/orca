@@ -37,7 +37,11 @@ import {
  * the definition in one place prevents the two surfaces from drifting.
  */
 export function isDefaultBranchWorkspace(worktree: Worktree): boolean {
-  return worktree.isMainWorktree && worktree.branch.trim() !== ''
+  return (
+    worktree.isMainWorktree &&
+    worktree.branch.trim() !== '' &&
+    worktree.ephemeralVmCheckoutMode !== 'provisioned-root'
+  )
 }
 
 /**
@@ -71,13 +75,9 @@ export function isSleepingSweepExemptionNarrowingList(
   return !showSleepingWorkspaces && alwaysShowDefaultBranchWorkspace === false
 }
 
-export function isAutomationGeneratedWorkspace(worktree: Worktree): boolean {
-  return worktree.automationProvenance?.kind === 'created-by-automation'
-}
-
-export function isCliCreatedWorkspace(worktree: Worktree): boolean {
-  return worktree.cliProvenance?.kind === 'created-by-cli'
-}
+export const isAutomationGeneratedWorkspace = (worktree: Worktree): boolean =>
+  worktree.automationProvenance?.kind === 'created-by-automation'
+export const isCliCreatedWorkspace = (w: Worktree) => w.cliProvenance?.kind === 'created-by-cli'
 
 /**
  * Whether a worktree sits on a detached HEAD (a commit, not a branch).

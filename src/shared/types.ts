@@ -518,6 +518,8 @@ export type Worktree = {
   creatorProvenance?: WorkspaceCreatorProvenance
   /** Host-specific setup used to create/run this workspace. */
   projectHostSetupId?: string
+  /** Checkout ownership for a recipe-provisioned main workspace. */
+  ephemeralVmCheckoutMode?: EphemeralVmCheckoutMode
   displayName: string
   comment: string
   linkedIssue: number | null
@@ -650,6 +652,8 @@ export type WorktreeMeta = {
   hostId?: ExecutionHostId
   /** See Worktree.projectHostSetupId. Persisted for project-first workspace ownership. */
   projectHostSetupId?: string
+  /** See Worktree.ephemeralVmCheckoutMode. */
+  ephemeralVmCheckoutMode?: EphemeralVmCheckoutMode
   /** See Worktree.creatorProvenance. */
   creatorProvenance?: WorkspaceCreatorProvenance
   displayName: string
@@ -2218,10 +2222,13 @@ export type OrcaDefaultTabTemplate = {
   command?: string
 }
 
+export type EphemeralVmCheckoutMode = 'orca-worktree' | 'provisioned-root'
+
 export type OrcaVmRecipe = {
   id: string
   name: string
   create: string
+  checkoutMode?: EphemeralVmCheckoutMode
   description?: string
   suspend?: string
   resume?: string
