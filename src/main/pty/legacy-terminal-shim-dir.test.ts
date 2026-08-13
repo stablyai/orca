@@ -66,7 +66,11 @@ describe('legacy terminal shim neutralization', () => {
         expect(statSync(path).mode & 0o111).not.toBe(0)
       }
     }
-    expect(readFileSync(join(legacyRoot, 'VERSION'), 'utf8')).toBe('7\n')
+    // Why: must not equal the retired shim's own '7', or a rolled-back build treats its wrappers
+    // as current and never rewrites them.
+    const version = readFileSync(join(legacyRoot, 'VERSION'), 'utf8')
+    expect(version).toBe('7-neutralized\n')
+    expect(version.trim()).not.toBe('7')
   })
 
   it('rejects stale Windows real-command paths inside the wrapper directory', () => {
@@ -145,6 +149,38 @@ describe('legacy terminal shim neutralization', () => {
       neutralizeLegacyTerminalShimDir(userData)
       expect(readFileSync(gitWrapper, 'utf8')).toBe('recreated after success')
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  itOnPosixNonRoot('warns and stops retrying once the ladder is exhausted', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const userData = makeUserDataDir()
+    const posixDir = join(userData, 'orca-terminal-attribution', 'posix')
+    mkdirSync(posixDir, { recursive: true })
+    writeFileSync(join(posixDir, 'git'), 'legacy attribution wrapper')
+    // Why: keep every attempt failing so the ladder runs to exhaustion.
+    chmodSync(posixDir, 0o500)
+    try {
+      neutralizeLegacyTerminalShimDir(userData)
+      // 1s + 5s + 15s + 30s covers every configured delay, plus slack for a fifth that must not fire.
+      await vi.advanceTimersByTimeAsync(120_000)
+
+      expect(readFileSync(join(posixDir, 'git'), 'utf8')).toBe('legacy attribution wrapper')
+      const messages = warn.mock.calls.map((call) => String(call[0]))
+      expect(messages.filter((message) => message.includes('neutralization attempt'))).toHaveLength(
+        5
+      )
+      expect(messages.some((message) => message.includes('gave up neutralizing'))).toBe(true)
+
+      // Exhausted means quiet: no further timers, so no further warnings.
+      warn.mockClear()
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      chmodSync(posixDir, 0o700)
+      warn.mockRestore()
       vi.useRealTimers()
     }
   })
