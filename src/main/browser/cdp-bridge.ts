@@ -1162,6 +1162,11 @@ export class CdpBridge {
       source: ANTI_DETECTION_SCRIPT
     })
 
+    // Why: keep the opaque base background across bridge takeovers so dark-color-scheme documents stay readable.
+    await sender('Emulation.setDefaultBackgroundColorOverride', {
+      color: { r: 255, g: 255, b: 255, a: 1 }
+    })
+
     // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.
     this.removeDebuggerListeners(guest, state)
 

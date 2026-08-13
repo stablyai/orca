@@ -59,8 +59,9 @@ export function ensureBrowserPageWebview({
   webview.style.height = '100%'
   webview.style.border = 'none'
   webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
-  // Why: some pages never paint a background, and a white viewport matches
-  // normal browser behavior instead of leaking Orca chrome through the guest.
+  // Why: fallback for guests without a CDP debugger (e.g. DevTools open) so Orca chrome
+  // never leaks through; attached guests get an opaque base via
+  // Emulation.setDefaultBackgroundColorOverride, which Blink flips per document color scheme.
   webview.style.background = '#ffffff'
   registerPersistentWebview(browserTabId, webview)
   activeContainer.appendChild(webview)

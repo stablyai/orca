@@ -309,6 +309,14 @@ export class BrowserManager {
               source: ANTI_DETECTION_SCRIPT
             })
           )
+          // Why: webview guests default to a transparent base background, so dark-color-scheme
+          // documents (e.g. Chromium's application/json viewer) render light text over the pane's
+          // white fallback. An opaque base lets Blink pick the canvas color per document scheme.
+          .then(() =>
+            guest.debugger.sendCommand('Emulation.setDefaultBackgroundColorOverride', {
+              color: { r: 255, g: 255, b: 255, a: 1 }
+            })
+          )
           .catch(() => {})
       } catch {
         /* best-effort — debugger may be unavailable */

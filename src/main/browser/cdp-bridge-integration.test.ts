@@ -175,6 +175,14 @@ function createMockGuest(
         return {}
       case 'Page.addScriptToEvaluateOnNewDocument':
         return { identifier: 'mock-script-id' }
+      case 'Emulation.setDefaultBackgroundColorOverride': {
+        // Why: CDP RGBA alpha is a float in [0, 1]; reject out-of-range payloads like real Chromium may.
+        const color = params?.color as { r: number; g: number; b: number; a?: number } | undefined
+        if (color && color.a !== undefined && (color.a < 0 || color.a > 1)) {
+          throw new Error(`RGBA alpha out of range [0, 1]: ${color.a}`)
+        }
+        return {}
+      }
       case 'Runtime.enable':
         return {}
       default:
