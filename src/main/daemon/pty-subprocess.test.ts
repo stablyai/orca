@@ -1485,6 +1485,50 @@ describe('createPtySubprocess', () => {
     expect(proc.write).toHaveBeenCalledWith('ls\n')
   })
 
+  // Regression: a thrown write used to set `dead`, silencing all later input.
+  it('keeps input alive after a transient write throw on a live PTY', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    proc.write.mockImplementationOnce(() => {
+      throw new Error('write EAGAIN: resource temporarily unavailable')
+    })
+
+    expect(() => handle.write('a')).not.toThrow()
+    handle.write('b')
+
+    expect(proc.write).toHaveBeenLastCalledWith('b')
+  })
+
+  it('stops forwarding writes after the PTY process exits', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    proc._simulateExit(0)
+    handle.write('after-exit')
+
+    expect(proc.write).not.toHaveBeenCalled()
+  })
+
+  it('keeps the session writable after a transient resize throw on a live PTY', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    proc.resize.mockImplementationOnce(() => {
+      throw new Error('resize EINVAL')
+    })
+
+    expect(() => handle.resize(120, 40)).not.toThrow()
+    handle.resize(100, 30)
+    handle.write('still alive\n')
+
+    expect(proc.resize).toHaveBeenLastCalledWith(100, 30)
+    expect(proc.write).toHaveBeenCalledWith('still alive\n')
+  })
+
   it('forwards resize calls', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
