@@ -5029,5 +5029,17 @@
   },
   "auto.components.right.sidebar.AiVaultPanel.noAgentsSelected": {
     "ko": "선택된 에이전트가 없습니다"
+  },
+  "auto.components.settings.DeveloperPermissionsPane.f903bf20b5": {
+    "ko": "터미널과 개발 도구가 로컬 네트워크의 서비스에 연결할 수 있도록 허용합니다. macOS는 이 권한의 현재 상태를 Orca에 보고하지 않습니다."
+  },
+  "components.native-chat.approval.allow": {
+    "ko": "허용"
+  },
+  "components.native-chat.approval.deny": {
+    "ko": "거부"
+  },
+  "auto.components.sidebar.AddRemoteHostDialog.sshImportSynced": {
+    "ko": "{{value0}} 호스트{{value1}}을(를) Orca에 추가했습니다."
   }
 }

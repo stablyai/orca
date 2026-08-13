@@ -5094,7 +5094,7 @@
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "한 다음 출력된 페어링 URL을 붙여넣으세요.",
           "sshImportAlreadySynced": "~/.ssh/config가 이미 동기화되어 있습니다.",
-          "sshImportSynced": "{{value0}} 호스트{{value1}}을(를) 동기화했습니다.",
+          "sshImportSynced": "{{value0}} 호스트{{value1}}을(를) Orca에 추가했습니다.",
           "sshImportFailed": "SSH 구성을 가져오지 못했습니다.",
           "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다.",
           "advanced": "고급",
@@ -5753,7 +5753,7 @@
           "b2210b1b4f": "블루투스",
           "dfbc12c8c8": "USB 장치와 통신하는 하드웨어 디버깅 및 장치 도구입니다.",
           "bf51e4a542": "USB 장치",
-          "f903bf20b5": "네트워크의 개발 서버를 검색하고 액세스합니다.",
+          "f903bf20b5": "터미널과 개발 도구가 로컬 네트워크의 서비스에 연결할 수 있도록 허용합니다. macOS는 이 권한의 현재 상태를 Orca에 보고하지 않습니다.",
           "e7bb06007c": "LAN",
           "4a73f5217a": "다른 로컬 앱을 제어하는 ​​스크립트를 위한 Apple 이벤트.",
           "e119f0d66b": "자동화",
@@ -8896,7 +8896,7 @@
             "46d99ef4bb": "불투명도",
             "4c643695aa": "terminal 배경의 투명도를 제어합니다.",
             "b36fd2416d": "배경 불투명도",
-            "d4daf4f612": "녹이다",
+            "d4daf4f612": "정지 해제",
             "88561b3499": "정지됨",
             "0a05629060": "복구",
             "f66a7cf715": "터미널",
@@ -14425,8 +14425,8 @@
       },
       "approval": {
         "title": "{{value0}}을(를) 허용하시겠습니까?",
-        "allow": "허용하다",
-        "deny": "부인하다"
+        "allow": "허용",
+        "deny": "거부"
       },
       "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요"
     },

@@ -18,7 +18,21 @@ const correctedValues = {
   'auto.components.right.sidebar.source.control.discard.confirmation.40e9357b2a':
     '이렇게 하면 HEAD에서 파일을 복원하고 파일 삭제를 취소합니다. 이 작업은 취소할 수 없습니다.',
   'auto.components.right.sidebar.source.control.primary.action.5a477d80cb':
-    '모든 변경 사항 스테이징'
+    '모든 변경 사항 스테이징',
+  // MT dropped the second English sentence, so the macOS caveat was invisible in Korean.
+  'auto.components.settings.DeveloperPermissionsPane.f903bf20b5':
+    '터미널과 개발 도구가 로컬 네트워크의 서비스에 연결할 수 있도록 허용합니다. macOS는 이 권한의 현재 상태를 Orca에 보고하지 않습니다.',
+  // Agent approval buttons: '부인하다' is courtroom-register denial, not a UI action.
+  'components.native-chat.approval.allow': '허용',
+  'components.native-chat.approval.deny': '거부',
+  // English says "Added ... to Orca"; the Korean claimed a sync instead.
+  'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced':
+    '{{value0}} 호스트{{value1}}을(를) Orca에 추가했습니다.'
+} as const
+
+// Settings-search keyword, so it lives in SEARCH_KEYWORD_OVERRIDES rather than the key overrides.
+const correctedSearchKeywords = {
+  'auto.components.settings.terminal.search.d4daf4f612': '정지 해제'
 } as const
 
 function getLocaleValue(path: string): unknown {
@@ -48,5 +62,20 @@ describe('Korean UI semantic mistranslation fixes', () => {
     for (const [path, expected] of Object.entries(correctedValues)) {
       expect(overrides[path]?.ko, path).toBe(expected)
     }
+  })
+
+  it('keeps the corrected settings-search keywords in the Korean catalog', () => {
+    for (const [path, expected] of Object.entries(correctedSearchKeywords)) {
+      expect(getLocaleValue(path), path).toBe(expected)
+    }
+  })
+
+  it('pins unfreeze to the frozen-state wording in the search keyword overrides', async () => {
+    const { SEARCH_KEYWORD_OVERRIDES } =
+      (await import('../../../../config/scripts/locale-search-keyword-overrides.mjs')) as {
+        SEARCH_KEYWORD_OVERRIDES: Record<string, Record<string, string>>
+      }
+
+    expect(SEARCH_KEYWORD_OVERRIDES.ko?.unfreeze).toBe('정지 해제')
   })
 })

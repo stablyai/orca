@@ -97,7 +97,9 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     compose: '작성',
     verify: '검증',
     keep: '유지',
-    'check #': '체크 #'
+    'check #': '체크 #',
+    // Pairs with the existing `frozen` → '정지됨' rendering; MT read this as thawing ice ('녹이다').
+    unfreeze: '정지 해제'
   },
   zh: {
     dark: '深色',
