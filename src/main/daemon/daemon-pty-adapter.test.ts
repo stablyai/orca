@@ -3997,5 +3997,59 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(aExits).toEqual([{ id: 'sess-a', code: -1 }])
       expect(bExits).toEqual([{ id: 'sess-a', code: -1 }])
     })
+
+    it('keeps listeners already snapshotted when another listener unsubscribes them', () => {
+      const calls: string[] = []
+      let unsubscribeSecond = () => {}
+      adapter.onExit(() => {
+        calls.push('first')
+        unsubscribeSecond()
+      })
+      unsubscribeSecond = adapter.onExit(() => calls.push('second'))
+
+      const internals = adapter as unknown as { activeSessionIds: Set<string> }
+      internals.activeSessionIds.add('sess-a')
+      adapter.fanoutSyntheticExits(-1)
+
+      internals.activeSessionIds.add('sess-b')
+      adapter.fanoutSyntheticExits(-1)
+
+      expect(calls).toEqual(['first', 'second', 'first'])
+    })
+
+    it('isolates each listener from synthetic exit payload mutations', () => {
+      const secondListenerPayloads: { id: string; code: number }[] = []
+      adapter.onExit((payload) => {
+        payload.id = 'mutated'
+        payload.code = 99
+      })
+      adapter.onExit((payload) => secondListenerPayloads.push(payload))
+
+      const internals = adapter as unknown as { activeSessionIds: Set<string> }
+      internals.activeSessionIds.add('sess-a')
+      adapter.fanoutSyntheticExits(-1)
+
+      expect(secondListenerPayloads).toEqual([{ id: 'sess-a', code: -1 }])
+    })
+
+    it('emits matching synthetic and daemon exit payloads with incarnation IDs', async () => {
+      const exits: { id: string; code: number; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const { id } = await adapter.spawn({ sessionId: 'payload-parity', cols: 80, rows: 24 })
+
+      lastSubprocess._simulateExit(-1)
+      await waitFor(() => exits.length === 1)
+      const daemonExit = exits[0]!
+
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+      }
+      internals.activeSessionIds.add(id)
+      internals.sessionIncarnations.set(id, daemonExit.incarnationId!)
+      adapter.fanoutSyntheticExits(-1)
+
+      expect(exits).toEqual([daemonExit, daemonExit])
+    })
   })
 })

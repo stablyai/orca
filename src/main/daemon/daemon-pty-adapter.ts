@@ -99,6 +99,29 @@ type HistoryRecoveryContext = {
   identityChanged: boolean
 }
 
+type PtyExitListenerPayload = {
+  id: string
+  code: number
+  incarnationId?: PtyIncarnationId
+}
+
+function fanoutListenerSnapshot<TPayload>(
+  listeners: readonly ((payload: TPayload) => void)[],
+  createPayload: () => TPayload
+): void {
+  for (const listener of listeners.slice()) {
+    listener(createPayload())
+  }
+}
+
+function createPtyExitListenerPayload(
+  id: string,
+  code: number,
+  incarnationId?: PtyIncarnationId
+): PtyExitListenerPayload {
+  return { id, code, ...(incarnationId ? { incarnationId } : {}) }
+}
+
 // Why take-and-clear together: every consuming branch must reset the field, so pairing them stops one from forgetting.
 function takeRecoveryFreeze(
   historyRecovery: HistoryRecoveryContext,
@@ -193,11 +216,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     transformed?: boolean
     seq?: number
   }) => void)[] = []
-  private exitListeners: ((payload: {
-    id: string
-    code: number
-    incarnationId?: PtyIncarnationId
-  }) => void)[] = []
+  private exitListeners: ((payload: PtyExitListenerPayload) => void)[] = []
   private backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   // Why: lets main fan a dead-endpoint signal to every affected pane, not just the written one (STA-2373 sibling-freeze).
   private writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
@@ -1543,16 +1562,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     for (const id of ids) {
       this.coldRestoreCache.delete(id)
       // Why: don't catch listener throws — matches the natural onExit fanout so synthetic exits keep the same error semantics.
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-      for (const listener of [...this.exitListeners]) {
-        listener({
-          id,
-          code,
-          ...(this.sessionIncarnations.get(id)
-            ? { incarnationId: this.sessionIncarnations.get(id) }
-            : {})
-        })
-      }
+      fanoutListenerSnapshot(this.exitListeners, () =>
+        createPtyExitListenerPayload(id, code, this.sessionIncarnations.get(id))
+      )
       this.sessionIncarnations.delete(id)
     }
   }
@@ -1607,9 +1619,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return () => {}
   }
 
-  onExit(
-    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
-  ): () => void {
+  onExit(callback: (payload: PtyExitListenerPayload) => void): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -1630,10 +1640,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   private emitWriteUnavailable(id: string): void {
-    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-    for (const listener of [...this.writeUnavailableListeners]) {
-      listener({ id })
-    }
+    fanoutListenerSnapshot(this.writeUnavailableListeners, () => ({ id }))
   }
 
   dispose(): void {
@@ -2275,10 +2282,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   private emitBackgroundStreamEvent(payload: PtyBackgroundStreamEvent): void {
-    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-    for (const listener of [...this.backgroundStreamListeners]) {
-      listener(payload)
-    }
+    fanoutListenerSnapshot(this.backgroundStreamListeners, () => payload)
   }
 
   private async doRespawn(
@@ -2317,18 +2321,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
       if (event.event === 'data') {
         this.markSessionDirty(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.dataListeners]) {
-          listener({
-            id: event.sessionId,
-            data: event.payload.data,
-            ...((event.payload.rawLength ?? event.payload.sequenceChars) === undefined
-              ? {}
-              : { sequenceChars: event.payload.rawLength ?? event.payload.sequenceChars }),
-            ...(event.payload.transformed ? { transformed: true } : {}),
-            ...(event.payload.seq === undefined ? {} : { seq: event.payload.seq })
-          })
-        }
+        fanoutListenerSnapshot(this.dataListeners, () => ({
+          id: event.sessionId,
+          data: event.payload.data,
+          ...((event.payload.rawLength ?? event.payload.sequenceChars) === undefined
+            ? {}
+            : { sequenceChars: event.payload.rawLength ?? event.payload.sequenceChars }),
+          ...(event.payload.transformed ? { transformed: true } : {}),
+          ...(event.payload.seq === undefined ? {} : { seq: event.payload.seq })
+        }))
       } else if (event.event === 'sessionBackgroundMarker') {
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
@@ -2415,14 +2416,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.initialCwds.delete(event.sessionId)
         this.wslDistrosBySessionId.delete(event.sessionId)
         this.sessionIncarnations.delete(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.exitListeners]) {
-          listener({
-            id: event.sessionId,
-            code: event.payload.code,
-            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {})
-          })
-        }
+        fanoutListenerSnapshot(this.exitListeners, () =>
+          createPtyExitListenerPayload(
+            event.sessionId,
+            event.payload.code,
+            event.payload.incarnationId
+          )
+        )
       }
     })
   }
