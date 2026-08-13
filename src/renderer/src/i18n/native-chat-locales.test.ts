@@ -42,7 +42,16 @@ describe('native chat locale copy', () => {
         expect(composer[key].trim()).not.toBe('')
         expect(composer[key]).not.toBe(englishComposer[key])
       }
-      for (const key of ['fast', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const) {
+      for (const key of [
+        'fast',
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+        'max',
+        'ultra'
+      ] as const) {
         expect(composer.optionValue[key].trim()).not.toBe('')
         expect(composer.optionValue[key]).not.toBe(englishComposer.optionValue[key])
       }
