@@ -196,7 +196,10 @@ import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
 } from '../runtime/terminal-model-query-authority'
-import { setTerminalViewAttributes } from '../runtime/terminal-view-attribute-store'
+import {
+  getTerminalViewColorQueryReplyColors,
+  setTerminalViewAttributes
+} from '../runtime/terminal-view-attribute-store'
 import { validateTerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
@@ -4816,7 +4819,13 @@ export function registerPtyHandlers(
       if (!args.connectionId && !isDaemonHostSpawn) {
         spawnOptions.codexHomePathOverride = { value: selectedCodexHomePath }
       }
-      const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
+      // Why fallback: non-agent panes (e.g. a shell with Oh My Posh) also emit
+      // OSC 10/11 during startup; without ingress the renderer answers the query
+      // and the cooked-mode echo leaks as visible text (#12112 for agents, same
+      // root cause for plain shells on POSIX). The view-attribute store holds the
+      // renderer-pushed theme colors, so every pane can suppress its own echo.
+      const startupTerminalColorQueryReplyColors =
+        getStartupTerminalColorQueryReplyColors(args) ?? getTerminalViewColorQueryReplyColors()
       if (startupTerminalColorQueryReplyColors) {
         spawnOptions.startupIngress = {
           colors: startupTerminalColorQueryReplyColors,
@@ -6257,7 +6266,10 @@ export function registerPtyHandlers(
         }
         // Why: the daemon-backed provider skips LocalPtyProvider's buildSpawnEnv, so assemble the same host-local env here for parity.
         // Safety: skip entirely for SSH — every injection is a loopback secret or a local path that leaks or misleads on the remote host.
-        const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
+        // Why fallback: same rationale as the local path — non-agent panes
+        // also leak OSC 10/11 reply echoes on POSIX without ingress.
+        const startupTerminalColorQueryReplyColors =
+          getStartupTerminalColorQueryReplyColors(args) ?? getTerminalViewColorQueryReplyColors()
         // Why: forward pane env to SSH only when the relay hook path is enabled, or a newer relay could emit statuses this build can't route.
         const sshSourceEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
         const baseEnvWithAuth = claudeAuth
