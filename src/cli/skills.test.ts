@@ -441,6 +441,7 @@ describe('orca skills CLI', () => {
       [
         '/d',
         '/c',
+        '@',
         'C:\\Program Files\\nodejs\\npx.cmd',
         '--yes',
         'skills',
@@ -709,7 +710,7 @@ describe('orca skills CLI', () => {
     await resultPromise
 
     expect(spawnMock.mock.calls[0]?.[0]).toBe('C:\\Windows\\System32\\cmd.exe')
-    expect(spawnMock.mock.calls[0]?.[1]?.slice(0, 3)).toEqual(['/d', '/c', npx])
+    expect(spawnMock.mock.calls[0]?.[1]?.slice(0, 4)).toEqual(['/d', '/c', '@', npx])
   })
 
   it('never puts the current directory on the child PATH when npx is unresolvable', async () => {

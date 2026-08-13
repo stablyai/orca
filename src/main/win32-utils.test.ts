@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -11,6 +12,11 @@ import {
   resolveWindowsCommand,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from './win32-utils'
+
+// Why: the exact pairing that breaks — a default VS Code install path needs
+// quoting, and so does the workspace path, which is what trips cmd.exe.
+const VS_CODE_SHIM = 'C:\\Users\\dev\\AppData\\Local\\Programs\\Microsoft VS Code\\bin\\code.cmd'
+const SPACED_WORKSPACE = 'C:\\Users\\dev\\Desktop Folder\\my project'
 
 function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
@@ -69,9 +75,9 @@ describe('getSpawnArgsForWindows', () => {
           '--foo'
         ])
         expect(spawnCmd).toBe('C:\\Windows\\System32\\cmd.exe')
-        // Why: /d disables AutoRun; /c runs the batch command and exits.
-        // Separate argv entries avoid cmd.exe seeing Node-escaped quotes.
-        expect(spawnArgs).toEqual(['/d', '/c', 'C:\\tools\\codex.cmd', 'login', '--foo'])
+        // Why: /d disables AutoRun; /c runs the batch command and exits. `@`
+        // keeps the first character unquoted so cmd.exe never strips outer quotes.
+        expect(spawnArgs).toEqual(['/d', '/c', '@', 'C:\\tools\\codex.cmd', 'login', '--foo'])
       })
     } finally {
       if (originalComSpec === undefined) {
@@ -102,6 +108,7 @@ describe('getSpawnArgsForWindows', () => {
         getCmdExePath(),
         '/d',
         '/c',
+        '@',
         'C:\\Tools\\idea.cmd',
         'C:\\workspaces\\orca'
       ])
@@ -115,7 +122,7 @@ describe('getSpawnArgsForWindows', () => {
   it('keeps the waiting form for batch launches without detachedGui', () => {
     withPlatform('win32', () => {
       const { spawnArgs } = getSpawnArgsForWindows('C:\\Tools\\idea.cmd', ['C:\\workspaces\\orca'])
-      expect(spawnArgs).toEqual(['/d', '/c', 'C:\\Tools\\idea.cmd', 'C:\\workspaces\\orca'])
+      expect(spawnArgs).toEqual(['/d', '/c', '@', 'C:\\Tools\\idea.cmd', 'C:\\workspaces\\orca'])
     })
   })
 
@@ -143,6 +150,7 @@ describe('getSpawnArgsForWindows', () => {
       expect(spawnArgs).toEqual([
         '/d',
         '/c',
+        '@',
         'C:\\tools\\code.cmd',
         '--remote',
         'wsl+Ubuntu Preview',
@@ -150,6 +158,128 @@ describe('getSpawnArgsForWindows', () => {
       ])
     })
   })
+
+  it('keeps a space-bearing launcher path intact when an argument is also quoted', () => {
+    withPlatform('win32', () => {
+      const { spawnArgs } = getSpawnArgsForWindows(VS_CODE_SHIM, [SPACED_WORKSPACE])
+      expect(spawnArgs).toEqual(['/d', '/c', '@', VS_CODE_SHIM, SPACED_WORKSPACE])
+    })
+  })
+
+  it('keeps a space-bearing launcher path intact through the detached GUI form', () => {
+    withPlatform('win32', () => {
+      const { spawnArgs } = getSpawnArgsForWindows(VS_CODE_SHIM, [SPACED_WORKSPACE], {
+        detachedGui: true
+      })
+      // Why: `start` hands the inner cmd its own command line, so the inner
+      // `/c` needs the same bare leading token as the waiting form.
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        'start',
+        '',
+        '/B',
+        getCmdExePath(),
+        '/d',
+        '/c',
+        '@',
+        VS_CODE_SHIM,
+        SPACED_WORKSPACE
+      ])
+    })
+  })
+
+  // Why: argv-shape assertions cannot see the actual defect — cmd.exe re-parses
+  // the line libuv builds, so only a real spawn proves the launcher survives.
+  function withSpacedLauncher<T>(body: (launcher: string, tempDir: string) => T): T {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-batch-spawn-'))
+    try {
+      const launcherDir = join(tempDir, 'Spaced Launcher Dir')
+      mkdirSync(launcherDir)
+      const launcher = join(launcherDir, 'edit.cmd')
+      writeFileSync(
+        launcher,
+        [
+          '@echo off',
+          'break>"%~dp0argv.txt"',
+          ':loop',
+          'if "%~1"=="" goto done',
+          // Why: the `arg=` prefix keeps a bare `/?` operand from being read as a
+          // help request by `echo` itself, which would log its usage text instead.
+          'echo arg=%~1>>"%~dp0argv.txt"',
+          'shift',
+          'goto loop',
+          ':done',
+          'exit /b 7',
+          ''
+        ].join('\r\n')
+      )
+      return body(launcher, tempDir)
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  }
+
+  it.skipIf(process.platform !== 'win32')(
+    'round-trips arguments and the exit code through a real spaced-path .cmd',
+    () => {
+      withSpacedLauncher((launcher, tempDir) => {
+        const workspacePath = join(tempDir, 'my project')
+        mkdirSync(workspacePath)
+
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(launcher, [workspacePath])
+        const result = spawnSync(spawnCmd, spawnArgs, { windowsHide: true })
+
+        expect(result.status).toBe(7)
+        expect(readFileSync(join(launcher, '..', 'argv.txt'), 'utf-8').trim()).toBe(
+          `arg=${workspacePath}`
+        )
+      })
+    }
+  )
+
+  // Why: `call` would satisfy the quoting fix too, but as an internal command it
+  // treats `/?` anywhere in the line as a request for its own help — silently
+  // swallowing the launch. `@` is not a command, so the operand reaches the shim.
+  it.skipIf(process.platform !== 'win32')(
+    'forwards a /? operand to the launcher instead of printing shell help',
+    () => {
+      withSpacedLauncher((launcher) => {
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(launcher, ['/?'])
+        const result = spawnSync(spawnCmd, spawnArgs, { windowsHide: true })
+
+        expect(result.status).toBe(7)
+        expect(readFileSync(join(launcher, '..', 'argv.txt'), 'utf-8').trim()).toBe('arg=/?')
+      })
+    }
+  )
+
+  // Why: `call` reports the ERRORLEVEL live at end of script, so a shim ending on
+  // a statement after a benign failed probe would start reporting failure. The
+  // prefix must not change which exit code callers branching on status observe.
+  it.skipIf(process.platform !== 'win32')(
+    'leaves the exit code of a shim ending after a nonzero ERRORLEVEL unchanged',
+    () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'orca-batch-exit-'))
+      try {
+        const launcher = join(tempDir, 'probe.cmd')
+        // Why: `endlocal` after a failed probe is the shape real shims produce;
+        // the bare form reports the last statement's code, which is 0 here.
+        writeFileSync(
+          launcher,
+          ['@echo off', 'setlocal', 'cmd /c exit 9', 'endlocal', ''].join('\r\n')
+        )
+
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(launcher, [])
+        const wrapped = spawnSync(spawnCmd, spawnArgs, { windowsHide: true })
+        const direct = spawnSync(getCmdExePath(), ['/d', '/c', launcher], { windowsHide: true })
+
+        expect(wrapped.status).toBe(direct.status)
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('passes .exe through unchanged on win32', () => {
     withPlatform('win32', () => {
@@ -189,7 +319,7 @@ describe('getSpawnArgsForWindows', () => {
     withPlatform('win32', () => {
       expect(
         getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['package,name;version']).spawnArgs
-      ).toEqual(['/d', '/c', 'C:\\tools\\agent.cmd', 'package,name;version'])
+      ).toEqual(['/d', '/c', '@', 'C:\\tools\\agent.cmd', 'package,name;version'])
     })
   })
 
@@ -200,10 +330,10 @@ describe('getSpawnArgsForWindows', () => {
       const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
       expect(getSpawnArgsForWindows(npx, ['C:\\dev\\app (fork)'])).toEqual({
         spawnCmd: getCmdExePath(),
-        spawnArgs: ['/d', '/c', npx, 'C:\\dev\\app (fork)']
+        spawnArgs: ['/d', '/c', '@', npx, 'C:\\dev\\app (fork)']
       })
       expect(getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['close)', '(open']).spawnArgs).toEqual(
-        ['/d', '/c', 'C:\\tools\\agent.cmd', 'close)', '(open']
+        ['/d', '/c', '@', 'C:\\tools\\agent.cmd', 'close)', '(open']
       )
     })
   })
