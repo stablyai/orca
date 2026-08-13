@@ -195,6 +195,7 @@ import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
+import { CommittedBranchChangesPanel } from './CommittedBranchChangesPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import {
@@ -544,7 +545,7 @@ const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const CAPPED_STATUS_RETRY_TIMEOUT_MS = 15_000
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
-const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
+const DEFAULT_COLLAPSED_SECTIONS = ['branch', 'history'] as const
 const SUBMODULE_WORKTREE_ONLY_LABEL = 'Stage inside submodule'
 const SUBMODULE_WORKTREE_ONLY_TOOLTIP =
   'The parent repo (including Stage All) cannot stage file changes inside a submodule'
@@ -6208,108 +6209,96 @@ function SourceControlInner(): React.JSX.Element {
               onRetry={() => void refreshBranchCompare()}
             />
           ) : null}
+        </div>
 
-          {branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
-            <div>
-              <SectionHeader
-                label={translate(
-                  'auto.components.right.sidebar.SourceControl.d7ae61269b',
-                  'Committed on Branch'
-                )}
+        {(branchSummary?.status === 'ready' && hasFilteredBranchEntries) || isGitHistoryVisible ? (
+          <div
+            data-testid="source-control-docked-panels"
+            className="z-10 shrink-0 bg-sidebar/95 backdrop-blur-sm"
+          >
+            {branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
+              <CommittedBranchChangesPanel
                 count={filteredBranchEntries.length}
-                isCollapsed={collapsedSections.has('branch')}
+                collapsed={collapsedSections.has('branch')}
                 onToggle={() => toggleSection('branch')}
-                actions={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (activeWorktreeId && worktreePath && branchSummary) {
-                        openBranchAllDiffs(activeWorktreeId, worktreePath, branchSummary)
-                      }
-                    }}
-                  >
-                    {translate(
-                      'auto.components.right.sidebar.SourceControl.48db37cca9',
-                      'View all'
-                    )}
-                  </Button>
-                }
-              />
-              {!collapsedSections.has('branch') &&
-                (sourceControlViewMode === 'tree' ? (
-                  <SourceControlVirtualFileList
-                    rows={visibleBranchTreeRows}
-                    scrollElement={fileListScrollElement}
-                    getRowKey={(node) => node.key}
-                    renderRow={(node) => {
-                      if (node.type === 'directory') {
+                onViewAll={() => {
+                  if (activeWorktreeId && worktreePath) {
+                    openBranchAllDiffs(activeWorktreeId, worktreePath, branchSummary)
+                  }
+                }}
+              >
+                {(branchListScrollElement) =>
+                  sourceControlViewMode === 'tree' ? (
+                    <SourceControlVirtualFileList
+                      rows={visibleBranchTreeRows}
+                      scrollElement={branchListScrollElement}
+                      getRowKey={(node) => node.key}
+                      renderRow={(node) => {
+                        if (node.type === 'directory') {
+                          return (
+                            <SourceControlBranchTreeDirectoryRow
+                              key={node.key}
+                              node={node}
+                              isCollapsed={collapsedTreeDirs.has(node.key)}
+                              onToggle={() => toggleTreeDir(node.key)}
+                            />
+                          )
+                        }
                         return (
-                          <SourceControlBranchTreeDirectoryRow
+                          <BranchEntryRow
                             key={node.key}
-                            node={node}
-                            isCollapsed={collapsedTreeDirs.has(node.key)}
-                            onToggle={() => toggleTreeDir(node.key)}
+                            entry={node.entry}
+                            currentWorktreeId={currentWorktreeId}
+                            worktreePath={worktreePath}
+                            depth={node.depth}
+                            onRevealInExplorer={revealInExplorer}
+                            connectionId={activeConnectionId}
+                            onOpen={(event) => openCommittedDiff(node.entry, event)}
+                            commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
+                            showPathHint={false}
                           />
                         )
-                      }
-                      return (
+                      }}
+                    />
+                  ) : (
+                    <SourceControlVirtualFileList
+                      rows={filteredBranchEntries}
+                      scrollElement={branchListScrollElement}
+                      getRowKey={(entry) => `branch:${entry.path}`}
+                      renderRow={(entry) => (
                         <BranchEntryRow
-                          key={node.key}
-                          entry={node.entry}
+                          key={`branch:${entry.path}`}
+                          entry={entry}
                           currentWorktreeId={currentWorktreeId}
                           worktreePath={worktreePath}
-                          depth={node.depth}
                           onRevealInExplorer={revealInExplorer}
                           connectionId={activeConnectionId}
-                          onOpen={(event) => openCommittedDiff(node.entry, event)}
-                          commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
-                          showPathHint={false}
+                          onOpen={(event) => openCommittedDiff(entry, event)}
+                          commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                         />
-                      )
-                    }}
-                  />
-                ) : (
-                  <SourceControlVirtualFileList
-                    rows={filteredBranchEntries}
-                    scrollElement={fileListScrollElement}
-                    getRowKey={(entry) => `branch:${entry.path}`}
-                    renderRow={(entry) => (
-                      <BranchEntryRow
-                        key={`branch:${entry.path}`}
-                        entry={entry}
-                        currentWorktreeId={currentWorktreeId}
-                        worktreePath={worktreePath}
-                        onRevealInExplorer={revealInExplorer}
-                        connectionId={activeConnectionId}
-                        onOpen={(event) => openCommittedDiff(entry, event)}
-                        commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
-                      />
-                    )}
-                  />
-                ))}
-            </div>
-          )}
+                      )}
+                    />
+                  )
+                }
+              </CommittedBranchChangesPanel>
+            )}
 
-          {isGitHistoryVisible && (
-            // Why: the graph is reference context, so keep it docked at the bottom as the pane scrolls.
-            <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
-              <GitHistoryPanel
-                state={gitHistoryState}
-                collapsed={collapsedSections.has('history')}
-                onToggle={() => toggleSection('history')}
-                onRefresh={() => void refreshGitHistory()}
-                onOpenCommit={(item) => void openHistoryCommitDiff(item)}
-                onLoadCommitFiles={loadCommitFiles}
-                onOpenCommitFile={openCommitFile}
-                onCommitAction={handleCommitAction}
-              />
-            </div>
-          )}
-        </div>
+            {isGitHistoryVisible && (
+              <div className="border-t border-border">
+                <GitHistoryPanel
+                  state={gitHistoryState}
+                  collapsed={collapsedSections.has('history')}
+                  onToggle={() => toggleSection('history')}
+                  onRefresh={() => void refreshGitHistory()}
+                  onOpenCommit={(item) => void openHistoryCommitDiff(item)}
+                  onLoadCommitFiles={loadCommitFiles}
+                  onOpenCommitFile={openCommitFile}
+                  onCommitAction={handleCommitAction}
+                />
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {selectedKeys.size > 0 && (
           <BulkActionBar

@@ -265,6 +265,14 @@ function doubleClickUncommitted(path: string): void {
 }
 
 function clickBranchRow(init: MouseEventInit = {}): void {
+  const toggle = container.querySelector<HTMLButtonElement>(
+    '[data-testid="committed-branch-changes-panel"] button[aria-expanded]'
+  )
+  expect(toggle?.getAttribute('aria-expanded')).toBe('false')
+  act(() => {
+    toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+
   const label = [...container.querySelectorAll('span')].find(
     (candidate) => candidate.textContent === 'branch.ts'
   )

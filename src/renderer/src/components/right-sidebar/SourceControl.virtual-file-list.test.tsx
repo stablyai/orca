@@ -4,7 +4,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type {
+  GitBranchChangeEntry,
+  GitBranchCompareSummary,
+  GitStatusEntry
+} from '../../../../shared/types'
 import SourceControl from './SourceControl'
 import {
   SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
@@ -97,6 +101,22 @@ function manyEntries(count: number): GitStatusEntry[] {
   return Array.from({ length: count }, (_, index) =>
     gitEntry({ path: `src/file-${String(index).padStart(3, '0')}.ts` })
   )
+}
+
+function branchEntry(path: string): GitBranchChangeEntry {
+  return { path, status: 'modified', added: 1, removed: 0 }
+}
+
+function readyBranchSummary(changedFiles: number): GitBranchCompareSummary {
+  return {
+    baseRef: 'origin/main',
+    baseOid: 'base-oid',
+    compareRef: 'HEAD',
+    headOid: 'head-oid',
+    mergeBase: 'base-oid',
+    changedFiles,
+    status: 'ready'
+  }
 }
 
 function noopAsync(value: unknown = undefined): () => Promise<unknown> {
@@ -289,6 +309,36 @@ function virtualList(): HTMLDivElement | null {
 }
 
 describe('SourceControl virtualized changed-files list', () => {
+  it('docks committed branch changes above commits and expands them on demand', () => {
+    const entries = [branchEntry('src/committed.ts')]
+    resetState({
+      gitBranchChangesByWorktree: { [mocks.activeWorktree.id]: entries },
+      gitBranchCompareSummaryByWorktree: {
+        [mocks.activeWorktree.id]: readyBranchSummary(entries.length)
+      }
+    })
+    renderSourceControl()
+
+    const dock = container.querySelector('[data-testid="source-control-docked-panels"]')
+    const panel = container.querySelector('[data-testid="committed-branch-changes-panel"]')
+    const toggle = panel?.querySelector<HTMLButtonElement>('button[aria-expanded]')
+
+    expect(dock).toBeTruthy()
+    expect(panel?.parentElement).toBe(dock)
+    expect(scroller().contains(panel)).toBe(false)
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-testid="committed-branch-changes-body"]')).toBeNull()
+    expect(dock?.lastElementChild?.textContent).toContain('Commits')
+
+    act(() => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('[data-testid="committed-branch-changes-body"]')).toBeTruthy()
+    expect(panel?.textContent).toContain('committed.ts')
+  })
+
   it('bounds mounted rows by viewport + overscan with 500 entries', () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: manyEntries(500) }
