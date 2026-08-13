@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   appendNormalizedToTailBuffer,
   appendNormalizedToMultilineTailBufferUnwindowed
@@ -58,6 +58,35 @@ function randomRedrawChunk(rng: () => number): string {
 }
 
 describe('windowed redraw tail equivalence', () => {
+  it('trims redraw rows without the quadratic whitespace regex', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    try {
+      const directResult = appendNormalizedToMultilineTailBufferUnwindowed(
+        [],
+        `${' '.repeat(3994)}status`,
+        '\rnext',
+        false,
+        null
+      )
+      const windowedResult = appendNormalizedToTailBuffer(
+        [`${' '.repeat(3990)}status `, ...Array.from({ length: 50 }, (_, i) => `line ${i}`)],
+        '',
+        '\x1b[1A\rnext',
+        null
+      )
+
+      expect(directResult.partialLine).toBe(`next${' '.repeat(3990)}status`)
+      expect(windowedResult.lines[0]).toBe(`${' '.repeat(3990)}status`)
+      expect(
+        replaceSpy.mock.calls.some(
+          ([search]) => search instanceof RegExp && search.source === String.raw`[ \t]+$`
+        )
+      ).toBe(false)
+    } finally {
+      replaceSpy.mockRestore()
+    }
+  })
+
   it('matches the unwindowed reference across 500 randomized cases', () => {
     const rng = mulberry32(42)
     for (let round = 0; round < 500; round++) {

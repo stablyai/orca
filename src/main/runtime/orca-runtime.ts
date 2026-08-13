@@ -36274,7 +36274,7 @@ function appendNormalizedToMultilineTailBuffer(
     const line = lines[index]!
     const lastChar = line.charCodeAt(line.length - 1)
     if (lastChar === 32 || lastChar === 9) {
-      lines[index] = line.replace(/[ \t]+$/g, '')
+      lines[index] = trimTerminalLineRight(line)
     }
   }
   for (const line of windowed.lines) {
@@ -36488,7 +36488,7 @@ function finalizeRetainedTerminalRows(
   newlyCompletedLines: string[]
 } {
   let truncated = initialTruncated
-  let retainedRows = rows.map((row) => ({ ...row, text: row.text.replace(/[ \t]+$/g, '') }))
+  let retainedRows = rows.map((row) => ({ ...row, text: trimTerminalLineRight(row.text) }))
 
   if (retainedRows.length > MAX_TAIL_LINES + 1) {
     const removeCount = retainedRows.length - (MAX_TAIL_LINES + 1)
