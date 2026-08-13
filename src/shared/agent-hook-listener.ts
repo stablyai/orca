@@ -2056,14 +2056,41 @@ function extractPiToolFields(
     const toolName = readString(hookPayload, 'tool_name')
     const rawToolInput = hookPayload.tool_input
     const toolInput = deriveToolInputPreview(toolName, rawToolInput)
-    // Why: OMP shares this extractor; only derive interactivePrompt for Pi so OMP ask_user_question metadata stays unchanged.
+    const promptToolName =
+      agentKind === 'omp' && toolName === 'ask' ? 'ask_user_question' : toolName
     const interactivePrompt =
-      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
-        ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
+      (agentKind === 'pi' || agentKind === 'omp') &&
+      (eventName === 'tool_call' || eventName === 'tool_execution_start')
+        ? deriveInteractivePrompt(promptToolName, rawToolInput, eventName)
         : undefined
     return toolUpdate(
       { toolName, toolInput, interactivePrompt },
       { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+    )
+  }
+  if (agentKind === 'omp' && eventName === 'tool_approval_requested') {
+    const toolName = readString(hookPayload, 'tool_name')
+    const reason = readString(hookPayload, 'reason') ?? ''
+    return toolUpdate(
+      {
+        toolName,
+        toolInput: reason || undefined,
+        interactivePrompt:
+          toolName === undefined
+            ? undefined
+            : JSON.stringify({ approval: { tool: toolName, summary: reason } })
+      },
+      { hasToolInputField: true }
+    )
+  }
+  if (agentKind === 'omp' && eventName === 'tool_approval_resolved') {
+    return toolUpdate(
+      {
+        toolName: readString(hookPayload, 'tool_name'),
+        toolInput: undefined,
+        interactivePrompt: undefined
+      },
+      { hasToolInputField: true }
     )
   }
   if (eventName === 'message_end' && hookPayload.role === 'assistant') {
@@ -3847,25 +3874,28 @@ function normalizePiCompatibleEvent(
     return null
   }
 
-  // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
+  // Why: gate on the event's own tool_name so a stale cached prompt can't re-enter blocked.
   const toolName = readString(hookPayload, 'tool_name')
   const isPiCompatibleAsk =
     ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
       (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
+  const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
 
-  const stateName = isPiCompatibleAsk
-    ? 'blocked'
-    : eventName === 'before_agent_start' ||
-        eventName === 'agent_start' ||
-        eventName === 'tool_call' ||
-        eventName === 'tool_execution_start' ||
-        eventName === 'tool_execution_end' ||
-        eventName === 'message_end'
-      ? 'working'
-      : eventName === 'agent_end'
-        ? 'done'
-        : null
+  const stateName =
+    isPiCompatibleAsk || isOmpApprovalRequest
+      ? 'blocked'
+      : eventName === 'before_agent_start' ||
+          eventName === 'agent_start' ||
+          eventName === 'tool_call' ||
+          eventName === 'tool_execution_start' ||
+          eventName === 'tool_execution_end' ||
+          eventName === 'tool_approval_resolved' ||
+          eventName === 'message_end'
+        ? 'working'
+        : eventName === 'agent_end'
+          ? 'done'
+          : null
 
   if (!stateName) {
     return null
