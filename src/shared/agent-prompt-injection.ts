@@ -1,4 +1,5 @@
 import { iterateTerminalInputChunks, TERMINAL_INPUT_CHUNK_MAX_BYTES } from './terminal-input'
+import type { TuiAgent } from './types'
 
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
@@ -19,6 +20,18 @@ export const AGENT_PROMPT_SUBMIT_DELAY_MS = getAgentPromptSubmitDelayMs(process.
 const ESCAPE = '\x1b'
 const INERT_ESCAPE = '<ESC>'
 
+// Why (#9838): Grok's welcome/composer can swallow bracketed-paste frames while
+// still accepting plain `terminal send --enter`. Prefer the path that matches
+// the working manual workaround for dispatch --inject.
+const PLAIN_TEXT_AGENT_PROMPT_AGENTS = new Set<TuiAgent>(['grok'])
+
+export function usesBracketedPasteForAgentPrompt(agent: TuiAgent | null | undefined): boolean {
+  if (!agent) {
+    return true
+  }
+  return !PLAIN_TEXT_AGENT_PROMPT_AGENTS.has(agent)
+}
+
 export function sanitizeAgentPromptText(text: string): string {
   let escapeIndex = text.indexOf(ESCAPE)
   if (escapeIndex === -1) {
@@ -37,6 +50,14 @@ export function sanitizeAgentPromptText(text: string): string {
 
 export function buildAgentPromptPasteBytes(prompt: string): string {
   return `${AGENT_PROMPT_BRACKETED_PASTE_START}${sanitizeAgentPromptText(prompt)}${AGENT_PROMPT_BRACKETED_PASTE_END}`
+}
+
+/** Body written before the delayed submit Enter. Bracketed paste for most agents; plain text for Grok (#9838). */
+export function buildAgentPromptBodyBytes(prompt: string, agent?: TuiAgent | null): string {
+  if (usesBracketedPasteForAgentPrompt(agent)) {
+    return buildAgentPromptPasteBytes(prompt)
+  }
+  return sanitizeAgentPromptText(prompt)
 }
 
 export function buildAgentPromptSubmitBytes(): string {

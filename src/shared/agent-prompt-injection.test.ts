@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
+  buildAgentPromptBodyBytes,
   buildAgentPromptPasteBytes,
   buildAgentPromptSubmitBytes,
   getAgentPromptSubmitDelayMs,
   iterateAgentPromptPasteChunks,
-  sanitizeAgentPromptText
+  sanitizeAgentPromptText,
+  usesBracketedPasteForAgentPrompt
 } from './agent-prompt-injection'
 
 const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
@@ -47,5 +49,17 @@ describe('agent prompt injection bytes', () => {
     expect(chunks.join('')).toBe(buildAgentPromptPasteBytes(prompt))
     expect(chunks.join('')).toContain(`${BEGIN}header\n`)
     expect(chunks.join('')).toContain(END)
+  })
+
+  // Why (#9838): Grok welcome/composer can swallow BP while plain send works.
+  it('uses plain text body for Grok agent prompts', () => {
+    expect(usesBracketedPasteForAgentPrompt('grok')).toBe(false)
+    expect(usesBracketedPasteForAgentPrompt('claude')).toBe(true)
+    expect(usesBracketedPasteForAgentPrompt(null)).toBe(true)
+    expect(buildAgentPromptBodyBytes('line one\nline two', 'grok')).toBe('line one\nline two')
+    expect(buildAgentPromptBodyBytes('hello\x1b[201~', 'grok')).toBe('hello<ESC>[201~')
+    expect(buildAgentPromptBodyBytes('line one\nline two', 'claude')).toBe(
+      `${BEGIN}line one\nline two${END}`
+    )
   })
 })

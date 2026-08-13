@@ -16375,6 +16375,45 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  // Why (#9838): Grok swallows bracketed-paste inject while plain send works.
+  it('sends Grok agent prompts as plain text before submit', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'grok',
+        launchAgent: 'grok'
+      })
+      const prompt = 'Read-only test task\nwith newline\x1b[201~'
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
+      await vi.runAllTimersAsync()
+      const result = await sendPromise
+
+      const plain = 'Read-only test task\nwith newline<ESC>[201~'
+      expect(result).toMatchObject({
+        handle,
+        accepted: true,
+        bytesWritten: Buffer.byteLength(`${plain}\r`, 'utf8')
+      })
+      expect(writes).toEqual([plain, '\r'])
+      expect(writes[0]).not.toContain(AGENT_PROMPT_BRACKETED_PASTE_START)
+      expect(writes[0]).not.toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('chunks large agent prompt paste frames before delayed submit', async () => {
     vi.useFakeTimers()
     try {
