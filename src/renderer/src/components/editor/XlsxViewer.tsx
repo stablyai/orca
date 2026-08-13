@@ -54,6 +54,8 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
   }, [content, locale])
 
   const sheets = loadState.status === 'ready' ? loadState.workbook.sheets : []
+  const workbookFontFamily =
+    loadState.status === 'ready' ? loadState.workbook.defaultFontFamily : undefined
   // Why: derive the active tab instead of resetting it in an Effect — opening a
   // different file must start on its first sheet without a stale-tab repaint.
   const activeSheetIndex =
@@ -106,6 +108,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           sparklines={activeSheet.sparklines}
           headerAlignment="center"
           defaultVerticalAlignment="bottom"
+          fontFamily={workbookFontFamily}
         />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">

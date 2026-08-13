@@ -1,4 +1,5 @@
 import { pickReadableCellTextColor } from './spreadsheet-cell-contrast'
+import { resolveXlsxFontFamily } from './xlsx-font-family'
 import { parseXlsxCellBorders, type XlsxCellBorders } from './xlsx-cell-borders'
 import { parseXlsxCellFormats } from './xlsx-cell-formats'
 import { resolveXlsxColor } from './xlsx-color'
@@ -20,12 +21,20 @@ export type XlsxCellStyle = {
   italic?: boolean
   /** Font size relative to the workbook default; 1 leaves the app's own size. */
   fontScale?: number
+  /** The typeface the cell declares, as a CSS font-family value. */
+  fontFamily?: string
   borders?: XlsxCellBorders
 }
 
 export type XlsxCellStyles = {
   /** False when no cell format carries a fill, font colour or bold. */
   hasVisualStyles: boolean
+  /**
+   * The workbook's own default typeface, as a CSS font-family value. A sheet is
+   * laid out for it: how much fits in a column and where wrapped text breaks both
+   * follow from the face, not just its size.
+   */
+  defaultFontFamily?: string
   /**
    * The style for a cell's `s` index, or undefined when it has none. Returns the
    * same object for the same index, so a sheet stores references rather than one
@@ -86,6 +95,14 @@ export function parseXlsxCellStyles(
     if (fontScale !== undefined) {
       style.fontScale = fontScale
     }
+    // Why: only a cell that departs from the workbook's face needs to say so; the
+    // default is set once on the sheet.
+    if (font?.name !== undefined && font.name !== fonts[0]?.name) {
+      const fontFamily = resolveXlsxFontFamily(font.name)
+      if (fontFamily !== undefined) {
+        style.fontFamily = fontFamily
+      }
+    }
     const cellBorders = borders[cellFormat.borderId]
     if (cellBorders !== undefined) {
       style.borders = cellBorders
@@ -111,6 +128,7 @@ export function parseXlsxCellStyles(
 
   return {
     hasVisualStyles,
+    defaultFontFamily: resolveXlsxFontFamily(fonts[0]?.name),
     getStyle: (styleIndex) => {
       if (styleIndex === undefined) {
         return undefined
@@ -195,7 +213,13 @@ function resolveFontScale(
   return Math.abs(scale - 1) < 0.05 ? undefined : Number(scale.toFixed(3))
 }
 
-type XlsxFont = { color?: string; bold?: boolean; italic?: boolean; sizePt?: number }
+type XlsxFont = {
+  color?: string
+  bold?: boolean
+  italic?: boolean
+  sizePt?: number
+  name?: string
+}
 
 function parseFonts(stylesXml: string, themePalette: XlsxThemePalette): XlsxFont[] {
   const fonts: XlsxFont[] = []
@@ -206,13 +230,23 @@ function parseFonts(stylesXml: string, themePalette: XlsxThemePalette): XlsxFont
         color: readFontColor(font.inner, themePalette),
         bold: hasToggleElement(font.inner, 'b'),
         italic: hasToggleElement(font.inner, 'i'),
-        sizePt: readFontSize(font.inner)
+        sizePt: readFontSize(font.inner),
+        name: readFontName(font.inner)
       })
     })
     return false
   })
 
   return fonts
+}
+
+function readFontName(fontXml: string): string | undefined {
+  let name: string | undefined
+  forEachXlsxXmlElement(fontXml, 'name', (element) => {
+    name = element.attributes.val
+    return false
+  })
+  return name
 }
 
 function readFontColor(fontXml: string, themePalette: XlsxThemePalette): string | undefined {

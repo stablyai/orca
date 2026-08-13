@@ -47,6 +47,8 @@ export type XlsxSheet = {
 
 export type XlsxWorkbook = {
   sheets: XlsxSheet[]
+  /** The workbook's default typeface, as a CSS font-family value. */
+  defaultFontFamily?: string
 }
 
 const PACKAGE_RELATIONSHIPS_PART_PATH = '_rels/.rels'
@@ -164,7 +166,7 @@ export async function parseXlsxWorkbook(
   if (sheets.length === 0) {
     throw new Error('Not a valid workbook: it declares no worksheets')
   }
-  return { sheets }
+  return { sheets, defaultFontFamily: cellStyles.defaultFontFamily }
 }
 
 // Why: the workbook part is addressed through the package relationships rather

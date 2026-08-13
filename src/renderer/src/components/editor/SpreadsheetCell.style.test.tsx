@@ -148,6 +148,30 @@ describe('SpreadsheetCell colours and font', () => {
     expect(renderCell({ cellStyle: { fontScale: 1 } }).style.fontSize).toBe('13px')
   })
 
+  it('applies the typeface a cell declares', () => {
+    const cell = renderCell({
+      cellStyle: { fontFamily: '"Lato", ui-sans-serif, system-ui, sans-serif' }
+    })
+
+    expect(cell.style.fontFamily).toBe('Lato, ui-sans-serif, system-ui, sans-serif')
+  })
+
+  it('leaves the typeface to the sheet when the cell declares none', () => {
+    expect(renderCell().style.fontFamily).toBe('')
+  })
+
+  it('carries the typeface and the font size of a cell that changes each', () => {
+    const cell = renderCell({
+      cellStyle: {
+        fontScale: 2,
+        fontFamily: '"Century Gothic", ui-sans-serif, system-ui, sans-serif'
+      }
+    })
+
+    expect(cell.style.fontSize).toBe('26px')
+    expect(cell.style.fontFamily).toBe('"Century Gothic", ui-sans-serif, system-ui, sans-serif')
+  })
+
   it('emboldens only a bold cell', () => {
     expect(renderCell({ cellStyle: { bold: true } }).className).toContain('font-semibold')
     expect(renderCell({ cellStyle: { bold: false } }).className).not.toContain('font-semibold')

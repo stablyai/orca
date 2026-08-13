@@ -120,6 +120,106 @@ describe('parseXlsxCellStyles', () => {
   })
 })
 
+describe('parseXlsxCellStyles fonts', () => {
+  // Modelled on a real workbook whose default face is Arial and which switches a
+  // few cells to Lato and Raleway.
+  const FONT_STYLES_XML =
+    '<styleSheet><fonts count="6">' +
+    '<font><sz val="11"/><name val="Arial"/></font>' +
+    '<font><b/><sz val="11"/><name val="Arial"/></font>' +
+    '<font><sz val="11"/><name val="Lato"/></font>' +
+    '<font><b/><sz val="11"/><name val="Arial&quot;; background:url(x)"/></font>' +
+    '<font><sz val="22"/><name val="Raleway"/></font>' +
+    '<font><sz val="11"/><name val="Arial"/></font>' +
+    '</fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills>' +
+    '<cellXfs count="6">' +
+    '<xf fontId="0" fillId="0"/>' +
+    '<xf fontId="1" fillId="0" applyFont="1"/>' +
+    '<xf fontId="2" fillId="0" applyFont="1"/>' +
+    '<xf fontId="3" fillId="0" applyFont="1"/>' +
+    '<xf fontId="4" fillId="0" applyFont="1"/>' +
+    '<xf fontId="5" fillId="0" applyFont="1"/>' +
+    '</cellXfs></styleSheet>'
+
+  const ARIAL_STACK = '"Arial", ui-sans-serif, system-ui, sans-serif'
+  const LATO_STACK = '"Lato", ui-sans-serif, system-ui, sans-serif'
+
+  it("reports the workbook's own default typeface", () => {
+    expect(parseXlsxCellStyles(FONT_STYLES_XML, []).defaultFontFamily).toBe(ARIAL_STACK)
+  })
+
+  it('reports no default typeface when the first font names none', () => {
+    const styles = parseXlsxCellStyles(
+      '<styleSheet><fonts count="1"><font><sz val="11"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><cellXfs count="1"><xf fontId="0" fillId="0"/></cellXfs></styleSheet>',
+      []
+    )
+
+    expect(styles.defaultFontFamily).toBeUndefined()
+  })
+
+  it('reports no default typeface for a workbook without a styles part', () => {
+    expect(parseXlsxCellStyles('', []).defaultFontFamily).toBeUndefined()
+  })
+
+  it('drops an unusable default font name without disturbing the rest of the parse', () => {
+    const styles = parseXlsxCellStyles(
+      '<styleSheet><fonts count="2">' +
+        '<font><sz val="11"/><name val="Arial&quot;; background:url(x)"/></font>' +
+        '<font><b/><sz val="11"/><name val="Lato"/></font>' +
+        '</fonts><fills count="2"><fill><patternFill patternType="none"/></fill>' +
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/></patternFill></fill></fills>' +
+        '<cellXfs count="1"><xf fontId="1" fillId="1" applyFont="1" applyFill="1"/></cellXfs></styleSheet>',
+      []
+    )
+
+    expect(styles.defaultFontFamily).toBeUndefined()
+    expect(styles.getStyle(0)).toEqual({
+      backgroundColor: '#ffff00',
+      textColor: '#000000',
+      bold: true,
+      fontFamily: LATO_STACK
+    })
+  })
+
+  it('leaves a cell on the workbook face without a typeface of its own', () => {
+    const styles = parseXlsxCellStyles(FONT_STYLES_XML, [])
+
+    expect(styles.getStyle(1)).toEqual({ bold: true })
+    expect(styles.getStyle(5)).toBeUndefined()
+  })
+
+  it('reports the typeface of a cell that departs from the workbook face', () => {
+    expect(parseXlsxCellStyles(FONT_STYLES_XML, []).getStyle(2)).toEqual({
+      fontFamily: LATO_STACK
+    })
+  })
+
+  it('keeps the other traits of a cell whose font name is unusable', () => {
+    expect(parseXlsxCellStyles(FONT_STYLES_XML, []).getStyle(3)).toEqual({ bold: true })
+  })
+
+  it('counts a departing typeface as visual styling on its own', () => {
+    const styles = parseXlsxCellStyles(
+      '<styleSheet><fonts count="2">' +
+        '<font><sz val="11"/><name val="Arial"/></font>' +
+        '<font><sz val="11"/><name val="Lato"/></font>' +
+        '</fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills>' +
+        '<cellXfs count="1"><xf fontId="1" fillId="0" applyFont="1"/></cellXfs></styleSheet>',
+      []
+    )
+
+    expect(styles.getStyle(0)).toEqual({ fontFamily: LATO_STACK })
+    expect(styles.hasVisualStyles).toBe(true)
+  })
+
+  it('reports both the typeface and the size of a cell that changes each', () => {
+    expect(parseXlsxCellStyles(FONT_STYLES_XML, []).getStyle(4)).toEqual({
+      fontScale: 2,
+      fontFamily: '"Raleway", ui-sans-serif, system-ui, sans-serif'
+    })
+  })
+})
+
 describe('parseXlsxCellStyles alignment', () => {
   const ALIGNED_STYLES_XML =
     '<styleSheet><fonts count="1"><font/></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><cellXfs count="10">' +

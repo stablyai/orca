@@ -13,6 +13,8 @@ export type SpreadsheetCellStyle = {
   italic?: boolean
   /** Font size relative to the file's own default. */
   fontScale?: number
+  /** The typeface the cell declares, when it departs from the file's default. */
+  fontFamily?: string
   horizontalAlignment?: 'left' | 'right' | 'center'
   verticalAlignment?: SpreadsheetVerticalAlignment
   /** Author-set indent level, in spreadsheet indent units. */
@@ -143,6 +145,7 @@ export function SpreadsheetCell({
         ...(cellStyle?.fontScale === undefined
           ? {}
           : { fontSize: Math.round(fontSizePx * cellStyle.fontScale) }),
+        ...(cellStyle?.fontFamily === undefined ? {} : { fontFamily: cellStyle.fontFamily }),
         // Why: an author-set edge replaces the default gridline on that side only,
         // so a cell with one underline keeps the grid intact everywhere else.
         ...buildSpreadsheetCellBorderStyle(cellStyle?.borders),

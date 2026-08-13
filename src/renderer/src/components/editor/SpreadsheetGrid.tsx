@@ -65,6 +65,12 @@ type SpreadsheetGridProps = {
    * default and centers in its row.
    */
   defaultVerticalAlignment?: SpreadsheetVerticalAlignment
+  /**
+   * Typeface the file is laid out for, as a CSS font-family value. How much fits
+   * in a column and where wrapped text breaks both follow from the face, so a
+   * workbook is drawn in its own rather than the app's.
+   */
+  fontFamily?: string
 }
 
 export type { SpreadsheetCellBorderEdge, SpreadsheetCellStyle } from './SpreadsheetCell'
@@ -94,7 +100,8 @@ export function SpreadsheetGrid({
   drawings,
   sparklines,
   headerAlignment = 'left',
-  defaultVerticalAlignment = 'middle'
+  defaultVerticalAlignment = 'middle',
+  fontFamily
 }: SpreadsheetGridProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Why: reuse the editor's own zoom level rather than a control of our own, so
@@ -232,7 +239,7 @@ export function SpreadsheetGrid({
     <div
       ref={scrollRef}
       className="relative min-h-0 flex-1 overflow-auto scrollbar-editor bg-spreadsheet-surface text-spreadsheet-foreground tabular-nums"
-      style={{ fontSize: fontSizePx }}
+      style={{ fontSize: fontSizePx, fontFamily }}
     >
       <div
         role="table"
