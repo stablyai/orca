@@ -91,6 +91,38 @@ describe('mergeAiVaultListResults', () => {
     ).toBe('2026-08-02T00:00:10.000Z')
   })
 
+  // `scannedAt` is only `z.string()` on the wire, so a leg may legally send an
+  // ISO variant that sorts against the local stamp differently than it reads.
+  // Both cases below invert under a lexicographic compare.
+  it('orders remote stamps by instant, not by string', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
+
+    // '...:05Z' sorts after '...:05.500Z' ('Z' > '.') but is half a second older.
+    expect(
+      mergeAiVaultListResults(
+        [
+          { ...listResult([]), scannedAt: '2026-08-02T00:00:05Z' },
+          { ...listResult([]), scannedAt: '2026-08-02T00:00:05.500Z' }
+        ],
+        undefined
+      ).scannedAt
+    ).toBe('2026-08-02T00:00:05.500Z')
+
+    // A -05:00 offset makes this five hours in the future, but it sorts below
+    // the local stamp ('-' < '.'), so a string compare would accept it and pin
+    // the merged stamp above every later local rescan.
+    expect(
+      mergeAiVaultListResults(
+        [
+          { ...listResult([]), scannedAt: '2026-08-02T00:00:10-05:00' },
+          { ...listResult([]), scannedAt: '2026-08-02T00:00:04.000Z' }
+        ],
+        undefined
+      ).scannedAt
+    ).toBe('2026-08-02T00:00:04.000Z')
+  })
+
   it('does not cap an Unlimited all-host merge', () => {
     const sessions = Array.from({ length: 1001 }, (_, index) => session(index))
     const merged = mergeAiVaultListResults([{ ...listResult([]), sessions }], undefined, true)

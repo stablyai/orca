@@ -2,7 +2,9 @@ import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-va
 import { areValuesEqual } from '@/store/slices/repo-identity-reconcile'
 import { reuseEqualCatalogRows } from '@/store/slices/worktree-catalog-reconciliation'
 
-export const EMPTY_AI_VAULT_SESSIONS: AiVaultSession[] = []
+// One instance is shared by every mounted hook, so it is frozen: an in-place
+// sort or push by any consumer would otherwise leak into every other panel.
+export const EMPTY_AI_VAULT_SESSIONS: readonly AiVaultSession[] = Object.freeze([])
 
 // Why: listSessions always structured-clones nested session rows (previewMessages,
 // subagent). A TTL miss remints scannedAt even when the disk contents did not

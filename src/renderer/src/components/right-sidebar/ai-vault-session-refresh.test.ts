@@ -441,6 +441,81 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.scanResult).toBe(firstResult)
   })
 
+  // An 'all' result is a merge of legs on independent clocks, stamped with the
+  // newest leg. A paired host whose clock lags the desktop can return new
+  // sessions while the merged stamp repeats, so the stamp guard above must not
+  // decide anything under 'all' — only the structural reconcile may.
+  it('applies a changed all-host result whose merged scannedAt stood still', async () => {
+    const pinned = '2026-07-01T00:00:00.000Z'
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [makeVaultSession(1)],
+      issues: [],
+      scannedAt: pinned
+    })
+    await renderHook([], 'all')
+    await flushMicrotasks()
+    expect(latest?.sessions).toHaveLength(1)
+
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [makeVaultSession(1), makeVaultSession(2)],
+      issues: [],
+      scannedAt: pinned
+    })
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.sessions).toHaveLength(2)
+    expect(latest?.sessions[1]?.id).toBe('session-2')
+  })
+
+  // The main process routes an empty or unrecognized scope to the same all-host
+  // merge, so the renderer has to read those as merged too or the guard returns
+  // for exactly the results it cannot reason about.
+  it('treats a scope that normalizes to all-host as merged', async () => {
+    const pinned = '2026-07-01T00:00:00.000Z'
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [makeVaultSession(1)],
+      issues: [],
+      scannedAt: pinned
+    })
+    await renderHook([], '' as ExecutionHostScope)
+    await flushMicrotasks()
+    expect(latest?.sessions).toHaveLength(1)
+
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [makeVaultSession(1), makeVaultSession(2)],
+      issues: [],
+      scannedAt: pinned
+    })
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.sessions).toHaveLength(2)
+  })
+
+  it('still reuses all-host identity when a repeated stamp carries an unchanged body', async () => {
+    const pinned = '2026-07-01T00:00:00.000Z'
+    const first: AiVaultListResult = {
+      sessions: [makeVaultSession(1)],
+      issues: [],
+      scannedAt: pinned
+    }
+    listSessionsMock.mockResolvedValueOnce(first)
+    await renderHook([], 'all')
+    await flushMicrotasks()
+    const applied = latest?.scanResult
+    const appliedSessions = latest?.sessions
+
+    // Dropping the stamp guard for 'all' must not reintroduce the churn: the
+    // reconcile still has to recognise an independently cloned identical body.
+    listSessionsMock.mockResolvedValueOnce(structuredClone(first))
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.scanResult).toBe(applied)
+    expect(latest?.sessions).toBe(appliedSessions)
+  })
+
   it('keeps session row identity when a reminted scan is a structuredClone of the same nested rows', async () => {
     const session = makeVaultSession(1)
     const first: AiVaultListResult = {
@@ -501,9 +576,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
       sessions: [
         {
           ...session,
-          previewMessages: [
-            { role: 'user', text: 'original ask', timestamp: session.modifiedAt }
-          ]
+          previewMessages: [{ role: 'user', text: 'original ask', timestamp: session.modifiedAt }]
         },
         sibling
       ],
