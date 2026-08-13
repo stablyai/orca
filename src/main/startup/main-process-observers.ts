@@ -17,6 +17,7 @@ import { AgentSessionTransitionRecorder } from '../stats/agent-session-transitio
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
+import { KimiUsageStore } from '../kimi-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 
@@ -124,4 +125,5 @@ export function initializeMainProcessObservers(): void {
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)
+  state.kimiUsage = new KimiUsageStore(store)
 }
