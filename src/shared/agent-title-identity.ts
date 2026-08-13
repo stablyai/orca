@@ -34,7 +34,11 @@ export function isClaudeAgent(title: string): boolean {
   if (containsAgentSpinnerGlyph(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
-    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
+    return (
+      !isCursorAgentTitle(title) &&
+      !lower.includes('openclaude') &&
+      !titleHasAgentName(title, 'bullet')
+    )
   }
 
   const trimmedTitle = title.trimStart()
@@ -43,6 +47,12 @@ export function isClaudeAgent(title: string): boolean {
   )
 }
 
+/**
+ * Returns the display label of the agent that owns a terminal title, or null
+ * when the title names no agent. Order matters: agents whose names are also
+ * ordinary words (Cursor, Bullet) are matched as name tokens before the generic
+ * braille-spinner fallback hands the title to Claude.
+ */
 export function getAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
@@ -101,6 +111,9 @@ export function getAgentLabel(title: string): string | null {
   }
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
+  }
+  if (titleHasAgentName(title, 'bullet')) {
+    return 'Bullet'
   }
   // Why: `cursor` is ordinary editor vocabulary, not identity. Match Cursor's closed
   // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.

@@ -111,6 +111,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Trae subcommand or flag — `--` stops both in its Cobra parser.
     argvPromptSeparator: '--'
   },
+  bullet: {
+    detectCmd: 'bullet',
+    launchCmd: 'bullet',
+    expectedProcess: 'bullet',
+    // Why: `bullet [prompt]` takes the task as a positional argv, same as Claude/Codex.
+    promptInjectionMode: 'argv'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
