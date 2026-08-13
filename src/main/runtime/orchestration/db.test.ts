@@ -219,6 +219,23 @@ describe('OrchestrationDb', () => {
       expect(JSON.parse(child.deps)).toEqual([parent.id])
     })
 
+    it('creates a late dependent as ready when every dep is already completed', () => {
+      const d = createDb()
+      const parent = d.createTask({ spec: 'parent' })
+      d.updateTaskStatus(parent.id, 'completed')
+      const child = d.createTask({ spec: 'child', deps: [parent.id] })
+      expect(child.status).toBe('ready')
+    })
+
+    it('keeps a late dependent pending until every dep is completed', () => {
+      const d = createDb()
+      const first = d.createTask({ spec: 'first' })
+      const second = d.createTask({ spec: 'second' })
+      d.updateTaskStatus(first.id, 'completed')
+      const child = d.createTask({ spec: 'child', deps: [first.id, second.id] })
+      expect(child.status).toBe('pending')
+    })
+
     it('promotes pending tasks when deps complete', () => {
       const d = createDb()
       const t1 = d.createTask({ spec: 'first' })

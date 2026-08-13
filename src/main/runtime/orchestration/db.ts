@@ -3780,9 +3780,11 @@ export class OrchestrationDb {
       }
     }
     const id = generateId('task')
-    const depsJson = JSON.stringify(task.deps ?? [])
-    const hasDeps = (task.deps ?? []).length > 0
-    const status: TaskStatus = hasDeps ? 'pending' : 'ready'
+    const deps = task.deps ?? []
+    const depsJson = JSON.stringify(deps)
+    // Why: late-created dependents never see a completion event; reuse the all-completed rule.
+    const status: TaskStatus =
+      deps.length > 0 && !this.areTaskDependenciesSatisfied(deps) ? 'pending' : 'ready'
     const display = buildOrchestrationTaskDisplayMetadata({
       spec: task.spec,
       taskTitle: task.taskTitle,
@@ -3925,6 +3927,10 @@ export class OrchestrationDb {
     return this.getTask(id)
   }
 
+  private areTaskDependenciesSatisfied(deps: string[]): boolean {
+    return deps.every((depId) => this.getTask(depId)?.status === 'completed')
+  }
+
   // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
   private promoteReadyTasks(completedTaskId: string): void {
     const candidates = this.db
@@ -3936,12 +3942,7 @@ export class OrchestrationDb {
       if (!deps.includes(completedTaskId)) {
         continue
       }
-
-      const allDepsCompleted = deps.every((depId) => {
-        const dep = this.getTask(depId)
-        return dep?.status === 'completed'
-      })
-      if (allDepsCompleted) {
+      if (this.areTaskDependenciesSatisfied(deps)) {
         this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       }
     }
