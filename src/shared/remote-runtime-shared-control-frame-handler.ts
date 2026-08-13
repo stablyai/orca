@@ -1,6 +1,7 @@
 import { parseAuthenticatedFrame, parseReadyFrame } from './remote-runtime-request-frames'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
+  AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
 } from './protocol-version'
@@ -43,7 +44,8 @@ export function handleSharedControlTextFrame(args: {
       deviceToken: args.deviceToken,
       clientCapabilities: [
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY
       ]
     })
     return

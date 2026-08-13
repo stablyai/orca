@@ -1,12 +1,14 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Check, ExternalLink, Info } from 'lucide-react'
+import { Check, ExternalLink } from 'lucide-react'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
 import type { TuiAgent } from '../../../../shared/types'
+import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { translate } from '@/i18n/i18n'
+
+type SelectableAgentPermissionMode = Exclude<AgentPermissionMode, 'mixed'>
 
 const AGENT_GRID_MAX_ROWS = 4
 
@@ -18,8 +20,8 @@ type AgentStepProps = {
   onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
   detectedSet: Set<TuiAgent>
   isDetecting: boolean
-  yoloPermissions?: boolean
-  onYoloPermissionsChange?: (enabled: boolean) => void
+  agentPermissionMode?: SelectableAgentPermissionMode | null
+  onAgentPermissionModeChange?: (mode: SelectableAgentPermissionMode) => void
 }
 
 function useAgentGridScrollMaxHeight(
@@ -64,8 +66,8 @@ export function AgentStep({
   onSelect,
   detectedSet,
   isDetecting,
-  yoloPermissions = true,
-  onYoloPermissionsChange
+  agentPermissionMode = 'yolo',
+  onAgentPermissionModeChange
 }: AgentStepProps) {
   const agentCatalog = getAgentCatalog()
   const detected = agentCatalog.filter((agent) => detectedSet.has(agent.id))
@@ -190,62 +192,55 @@ export function AgentStep({
           </div>
         </div>
       </section>
-      <YoloPermissionsControl
-        yoloPermissions={yoloPermissions}
-        onYoloPermissionsChange={onYoloPermissionsChange}
-      />
+      <AgentPermissionsControl mode={agentPermissionMode} onChange={onAgentPermissionModeChange} />
     </div>
   )
 }
 
-function YoloPermissionsControl({
-  yoloPermissions,
-  onYoloPermissionsChange
+function AgentPermissionsControl({
+  mode,
+  onChange
 }: {
-  yoloPermissions: boolean
-  onYoloPermissionsChange?: (enabled: boolean) => void
+  mode: SelectableAgentPermissionMode | null
+  onChange?: (mode: SelectableAgentPermissionMode) => void
 }): React.JSX.Element {
   return (
-    <label className="mt-auto flex shrink-0 cursor-pointer items-center justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3 transition-colors hover:bg-muted/40">
-      <span className="flex min-w-0 items-center gap-3">
-        <Checkbox
-          checked={yoloPermissions}
-          onCheckedChange={(checked) => onYoloPermissionsChange?.(checked === true)}
-          className="border-border bg-card data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-          aria-label={translate(
-            'auto.components.onboarding.AgentStep.yoloPermissionsLabel',
-            'Yolo / Dangerously skip permissions'
-          )}
-        />
+    <div className="mt-auto flex shrink-0 items-start justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3">
+      <span className="min-w-0">
         <span className="min-w-0 text-sm font-medium text-foreground">
+          {translate('auto.components.onboarding.AgentStep.f90b42acbb', 'Agent Permissions')}
+        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
           {translate(
-            'auto.components.onboarding.AgentStep.yoloPermissionsLabel',
-            'Yolo / Dangerously skip permissions'
+            'auto.components.onboarding.AgentStep.e4799d3a54',
+            'Manual prompts for every check, Auto for vendor-recommended defaults, or Yolo to skip permission prompts.'
           )}
         </span>
       </span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label={translate(
-              'auto.components.onboarding.AgentStep.yoloPermissionsInfo',
-              'Agent permission info'
-            )}
-            onPointerDown={(event) => event.preventDefault()}
-            className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <Info className="size-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={6} style={{ zIndex: 120 }}>
-          {translate(
-            'auto.components.onboarding.AgentStep.yoloPermissionsTooltip',
-            'Skip permission checks for agents for less interruptions'
-          )}
-        </TooltipContent>
-      </Tooltip>
-    </label>
+      <SettingsSegmentedControl<SelectableAgentPermissionMode>
+        value={mode}
+        onChange={(next) => onChange?.(next)}
+        ariaLabel={translate(
+          'auto.components.onboarding.AgentStep.f90b42acbb',
+          'Agent Permissions'
+        )}
+        size="sm"
+        options={[
+          {
+            value: 'manual',
+            label: translate('auto.components.onboarding.AgentStep.9c219f644f', 'Manual')
+          },
+          {
+            value: 'auto',
+            label: translate('auto.components.onboarding.AgentStep.9659ea9cce', 'Auto')
+          },
+          {
+            value: 'yolo',
+            label: translate('auto.components.onboarding.AgentStep.e8e2990559', 'Yolo')
+          }
+        ]}
+      />
+    </div>
   )
 }
 

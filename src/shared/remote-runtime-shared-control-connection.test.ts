@@ -21,6 +21,7 @@ import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-co
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
 import {
+  AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
 } from './protocol-version'
@@ -67,7 +68,8 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       deviceToken: 'device-token',
       clientCapabilities: [
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY
       ]
     })
     expect(server.requests.map((request) => request.method)).toEqual([

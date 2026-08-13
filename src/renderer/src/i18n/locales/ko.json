@@ -5362,7 +5362,7 @@
           "agentPermissions": "Agent 권한",
           "agentPermissionsInfo": "Agent 권한 정보",
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
-          "agentPermissionsDescription": "Orca가 agents를 실행할 때 권한 프롬프트를 줄일지, 수동 확인을 유지할지 선택합니다.",
+          "agentPermissionsDescription": "Orca가 agents를 실행할 때 수동, Auto, Yolo 권한 기본값을 선택합니다.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "수동",
           "3f1bdf3cb4": "환경 텍스트가 너무 커서 안전하게 파싱할 수 없습니다.",
@@ -5372,7 +5372,8 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAuto": "Auto"
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -7594,9 +7595,16 @@
             "a79d266f71": "세션",
             "afbf35be68": "안정적인 세션",
             "agentPermissions": "Agent 권한",
-            "agentPermissionsDescription": "agent 권한 기본값을 Yolo와 수동 사이에서 전환합니다.",
+            "agentPermissionsDescription": "agent 권한 기본값을 수동, Auto, Yolo 사이에서 전환합니다.",
             "agentRuntime": "Agent 런타임",
-            "agentRuntimeDescription": "기본적으로 Windows 또는 WSL에서 agents를 감지하고 시작할지 선택합니다."
+            "agentRuntimeDescription": "기본적으로 Windows 또는 WSL에서 agents를 감지하고 시작할지 선택합니다.",
+            "auto": "auto",
+            "permission": "권한",
+            "permissions": "권한",
+            "yolo": "yolo",
+            "manual": "수동",
+            "skip": "건너뛰기",
+            "checks": "확인"
           }
         },
         "appearance": {
@@ -11473,9 +11481,11 @@
           "1eee1c7bd8": "PATH에서 agents를 찾지 못했습니다. 나중에 설치할 항목을 선택하거나 빈 terminal로 계속 진행하세요.",
           "hideAgents": "agents 숨기기",
           "showMoreAgents": "agents {{value0}}개 더 보기→",
-          "yoloPermissionsLabel": "Yolo / 권한 확인 위험하게 건너뛰기",
-          "yoloPermissionsInfo": "Agent 권한 정보",
-          "yoloPermissionsTooltip": "중단을 줄이기 위해 agents 권한 확인을 건너뜁니다."
+          "f90b42acbb": "에이전트 권한",
+          "e4799d3a54": "수동은 매번 확인하고, Auto는 공급업체 권장 기본값을 사용하며, Yolo는 권한 프롬프트를 건너뜁니다.",
+          "9c219f644f": "수동",
+          "9659ea9cce": "Auto",
+          "e8e2990559": "Yolo"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter를 눌러 명령을 실행하고 요청 시 npx를 확인합니다. 나중에 설정에서 설정할 수도 있습니다.",

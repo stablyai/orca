@@ -5374,10 +5374,10 @@
           "6f99bf5dd0": "Sin argumentos predeterminados",
           "8fbe1f37c1": "Entorno",
           "2d133152fa": "Sin entorno predeterminado",
-          "agentPermissions": "Permisos de Agents",
-          "agentPermissionsInfo": "Información de permisos de Agents",
-          "agentPermissionsTooltip": "No se aplica a agents con argumentos de lanzamiento sobrescritos.",
-          "agentPermissionsDescription": "Elige si Orca lanza agents con menos prompts de permisos o con checks manuales.",
+          "agentPermissions": "Permisos de agentes",
+          "agentPermissionsInfo": "Información sobre los permisos de los agentes",
+          "agentPermissionsTooltip": "No se aplica a los agentes cuyos argumentos de lanzamiento hayas personalizado.",
+          "agentPermissionsDescription": "Elige Manual, Auto o Yolo como permisos predeterminados al lanzar agentes.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
@@ -5387,7 +5387,8 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAuto": "Auto"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -7609,9 +7610,16 @@
             "a79d266f71": "sesión",
             "afbf35be68": "sesión estable",
             "agentPermissions": "Permisos de agentes",
-            "agentPermissionsDescription": "Cambia los permisos predeterminados de los agentes entre Yolo y Manual.",
+            "agentPermissionsDescription": "Cambia los permisos predeterminados de los agentes entre Manual, Auto y Yolo.",
             "agentRuntime": "Runtime del agente",
-            "agentRuntimeDescription": "Elige si los agentes se detectan y ejecutan en Windows o en WSL de forma predeterminada."
+            "agentRuntimeDescription": "Elige si los agentes se detectan y ejecutan en Windows o en WSL de forma predeterminada.",
+            "auto": "auto",
+            "permission": "permiso",
+            "permissions": "permisos",
+            "yolo": "yolo",
+            "manual": "manual",
+            "skip": "omitir",
+            "checks": "comprobaciones"
           }
         },
         "appearance": {
@@ -11473,9 +11481,11 @@
           "1eee1c7bd8": "No se detectaron agentes en tu PATH. Elige uno para instalarlo más tarde o continúa con una terminal en blanco.",
           "hideAgents": "Ocultar agentes",
           "showMoreAgents": "Mostrar {{value0}} agentes más→",
-          "yoloPermissionsLabel": "Yolo / Omitir permisos de forma peligrosa",
-          "yoloPermissionsInfo": "Información de permisos del agente",
-          "yoloPermissionsTooltip": "Omite las comprobaciones de permisos de los agentes para reducir interrupciones"
+          "f90b42acbb": "Permisos de agentes",
+          "e4799d3a54": "Manual solicita confirmación en cada comprobación, Auto usa los valores predeterminados recomendados por el proveedor y Yolo omite las solicitudes de permiso.",
+          "9c219f644f": "Manual",
+          "9659ea9cce": "Auto",
+          "e8e2990559": "Yolo"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Pulsa Enter para ejecutar el comando y confirma npx si se te solicita. También puedes configurarlo más tarde en Configuración.",

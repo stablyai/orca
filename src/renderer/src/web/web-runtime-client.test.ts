@@ -12,6 +12,7 @@ import {
 } from '../../../shared/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
+  AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
@@ -83,7 +84,8 @@ describe('WebRuntimeClient', () => {
       deviceToken: 'token',
       clientCapabilities: [
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY
       ]
     })
 

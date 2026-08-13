@@ -1,7 +1,7 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './types'
 
-export type AgentPermissionMode = 'yolo' | 'manual' | 'mixed'
+export type AgentPermissionMode = 'yolo' | 'auto' | 'manual' | 'mixed'
 
 export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--dangerously-skip-permissions',
@@ -31,8 +31,26 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   trae: '--yolo'
 }
 
+// Why: agents absent here have no vendor intermediate preset and intentionally stay manual.
+export const AUTO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
+  claude: '--permission-mode auto',
+  'claude-agent-teams': '--permission-mode auto',
+  openclaude: '--permission-mode auto',
+  codex: '--approve-for-me',
+  antigravity: '--mode=accept-edits',
+  gemini: '--approval-mode auto_edit',
+  'qwen-code': '--approval-mode auto',
+  grok: '--permission-mode auto',
+  devin: '--permission-mode smart'
+}
+
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
   goose: { GOOSE_MODE: 'auto' }
+}
+
+// Why: agents absent here have no vendor intermediate preset and intentionally stay manual.
+export const AUTO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
+  goose: { GOOSE_MODE: 'smart_approve' }
 }
 
 const PERMISSION_AGENT_IDS = Object.keys(TUI_AGENT_CONFIG).filter(
@@ -40,7 +58,7 @@ const PERMISSION_AGENT_IDS = Object.keys(TUI_AGENT_CONFIG).filter(
 )
 
 function normalizeArgs(value: string | null | undefined): string {
-  return value?.trim() ?? ''
+  return value ?? ''
 }
 
 function sameEnv(
@@ -55,26 +73,65 @@ function sameEnv(
   return leftEntries.every(([name, value]) => right?.[name] === value)
 }
 
-function resolveAgentPermissionMode(args: string, yoloArgs: string): AgentPermissionMode {
+function isKnownPermissionArgsPreset(agent: TuiAgent, args: string): boolean {
+  if (!args) {
+    return true
+  }
+  if (args === (YOLO_TUI_AGENT_ARGS[agent] ?? '')) {
+    return true
+  }
+  return args === (AUTO_TUI_AGENT_ARGS[agent] ?? '')
+}
+
+function isKnownPermissionEnvPreset(
+  agent: TuiAgent,
+  env: Record<string, string> | null | undefined
+): boolean {
+  return (
+    sameEnv(env, {}) ||
+    sameEnv(env, YOLO_TUI_AGENT_ENV[agent]) ||
+    sameEnv(env, AUTO_TUI_AGENT_ENV[agent])
+  )
+}
+
+function resolveAgentPermissionMode(
+  args: string,
+  yoloArgs: string,
+  autoArgs: string | undefined
+): AgentPermissionMode {
   if (!args) {
     return 'manual'
   }
-  return args === yoloArgs ? 'yolo' : 'mixed'
+  if (args === yoloArgs) {
+    return 'yolo'
+  }
+  if (autoArgs && args === autoArgs) {
+    return 'auto'
+  }
+  return 'mixed'
 }
 
 function resolveAgentEnvPermissionMode(
   env: Record<string, string> | null | undefined,
-  yoloEnv: Record<string, string> | undefined
+  yoloEnv: Record<string, string> | undefined,
+  autoEnv: Record<string, string> | undefined
 ): AgentPermissionMode {
   if (sameEnv(env, {})) {
     return 'manual'
   }
-  return sameEnv(env, yoloEnv) ? 'yolo' : 'mixed'
+  if (sameEnv(env, yoloEnv)) {
+    return 'yolo'
+  }
+  return sameEnv(env, autoEnv) ? 'auto' : 'mixed'
 }
 
-function combinePermissionModes(modes: AgentPermissionMode[]): AgentPermissionMode {
+function combinePermissionModes(
+  modes: AgentPermissionMode[],
+  sawManualForAutoCapableAgent = false
+): AgentPermissionMode {
   let sawYolo = false
   let sawManual = false
+  let sawAuto = false
   let sawMixed = false
 
   for (const mode of modes) {
@@ -82,12 +139,21 @@ function combinePermissionModes(modes: AgentPermissionMode[]): AgentPermissionMo
       sawYolo = true
     } else if (mode === 'manual') {
       sawManual = true
+    } else if (mode === 'auto') {
+      sawAuto = true
     } else {
       sawMixed = true
     }
   }
 
-  if (sawMixed || (sawYolo && sawManual)) {
+  if (sawMixed) {
+    return 'mixed'
+  }
+  // Why: Auto only sets verified agents; the rest intentionally stay manual.
+  if (sawAuto) {
+    return sawYolo || sawManualForAutoCapableAgent ? 'mixed' : 'auto'
+  }
+  if (sawYolo && sawManual) {
     return 'mixed'
   }
   return sawYolo ? 'yolo' : 'manual'
@@ -103,12 +169,19 @@ export function resolveTuiAgentPermissionMode(args: {
     modes.push(
       resolveAgentPermissionMode(
         normalizeArgs(args.agentArgs),
-        YOLO_TUI_AGENT_ARGS[args.agent] ?? ''
+        YOLO_TUI_AGENT_ARGS[args.agent] ?? '',
+        AUTO_TUI_AGENT_ARGS[args.agent]
       )
     )
   }
   if (args.agent in YOLO_TUI_AGENT_ENV) {
-    modes.push(resolveAgentEnvPermissionMode(args.agentEnv, YOLO_TUI_AGENT_ENV[args.agent]))
+    modes.push(
+      resolveAgentEnvPermissionMode(
+        args.agentEnv,
+        YOLO_TUI_AGENT_ENV[args.agent],
+        AUTO_TUI_AGENT_ENV[args.agent]
+      )
+    )
   }
 
   return combinePermissionModes(modes)
@@ -119,18 +192,60 @@ export function resolveAgentPermissionModeSummary(args: {
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>> | null
 }): AgentPermissionMode {
   const modes: AgentPermissionMode[] = []
+  let sawManualForAutoCapableAgent = false
 
   for (const agent of PERMISSION_AGENT_IDS) {
-    modes.push(
+    const mode = resolveTuiAgentPermissionMode({
+      agent,
+      agentArgs: args.agentDefaultArgs?.[agent],
+      agentEnv: args.agentDefaultEnv?.[agent]
+    })
+    modes.push(mode)
+    if (mode === 'manual' && (agent in AUTO_TUI_AGENT_ARGS || agent in AUTO_TUI_AGENT_ENV)) {
+      sawManualForAutoCapableAgent = true
+    }
+  }
+
+  return combinePermissionModes(modes, sawManualForAutoCapableAgent)
+}
+
+export function hasAutoAgentPermissionPreset(args: {
+  agentDefaultArgs?: Partial<Record<TuiAgent, string>> | null
+  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>> | null
+}): boolean {
+  return PERMISSION_AGENT_IDS.some(
+    (agent) =>
       resolveTuiAgentPermissionMode({
         agent,
         agentArgs: args.agentDefaultArgs?.[agent],
         agentEnv: args.agentDefaultEnv?.[agent]
-      })
-    )
-  }
+      }) === 'auto'
+  )
+}
 
-  return combinePermissionModes(modes)
+export function projectAgentPermissionSettingsForLegacyClient(args: {
+  agentDefaultArgs?: Partial<Record<TuiAgent, string>> | null
+  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>> | null
+}): {
+  agentDefaultArgs: Partial<Record<TuiAgent, string>>
+  agentDefaultEnv: Partial<Record<TuiAgent, Record<string, string>>>
+} {
+  const agentDefaultArgs = { ...args.agentDefaultArgs }
+  const agentDefaultEnv = { ...args.agentDefaultEnv }
+  if (!hasAutoAgentPermissionPreset(args)) {
+    return { agentDefaultArgs, agentDefaultEnv }
+  }
+  // Why: legacy onboarding treats unknown Auto presets as Yolo and can widen empty fallbacks.
+  for (const agent of PERMISSION_AGENT_IDS) {
+    delete agentDefaultArgs[agent]
+    delete agentDefaultEnv[agent]
+  }
+  return { agentDefaultArgs, agentDefaultEnv }
+}
+
+/** True when the mode auto-resolves tool approvals (yolo or vendor auto). */
+export function isAutoApprovingPermissionMode(mode: AgentPermissionMode): boolean {
+  return mode === 'yolo' || mode === 'auto'
 }
 
 export function applyAgentPermissionMode(args: {
@@ -146,18 +261,30 @@ export function applyAgentPermissionMode(args: {
 
   for (const agent of PERMISSION_AGENT_IDS) {
     if (agent in YOLO_TUI_AGENT_ARGS) {
-      const yoloArgs = YOLO_TUI_AGENT_ARGS[agent] ?? ''
-      const currentArgs = normalizeArgs(nextArgs[agent])
-      if (!currentArgs || currentArgs === yoloArgs) {
-        nextArgs[agent] = args.mode === 'yolo' ? yoloArgs : ''
+      // Why: overwrite only exact presets; whitespace changes are user-authored custom args.
+      const currentArgs = nextArgs[agent] ?? ''
+      if (isKnownPermissionArgsPreset(agent, currentArgs)) {
+        if (args.mode === 'yolo') {
+          nextArgs[agent] = YOLO_TUI_AGENT_ARGS[agent] ?? ''
+        } else if (args.mode === 'auto') {
+          nextArgs[agent] = AUTO_TUI_AGENT_ARGS[agent] ?? ''
+        } else {
+          nextArgs[agent] = ''
+        }
       }
     }
 
     if (agent in YOLO_TUI_AGENT_ENV) {
-      const yoloEnv = YOLO_TUI_AGENT_ENV[agent]
       const currentEnv = nextEnv[agent]
-      if (sameEnv(currentEnv, {}) || sameEnv(currentEnv, yoloEnv)) {
-        nextEnv[agent] = args.mode === 'yolo' ? { ...yoloEnv } : {}
+      if (isKnownPermissionEnvPreset(agent, currentEnv)) {
+        if (args.mode === 'yolo') {
+          nextEnv[agent] = { ...YOLO_TUI_AGENT_ENV[agent] }
+        } else if (args.mode === 'auto') {
+          // Why: mirror args branch — auto env preset when verified, else manual {}.
+          nextEnv[agent] = AUTO_TUI_AGENT_ENV[agent] ? { ...AUTO_TUI_AGENT_ENV[agent] } : {}
+        } else {
+          nextEnv[agent] = {}
+        }
       }
     }
   }

@@ -290,8 +290,8 @@ export default function OnboardingFlow({
                   onSelect={flow.setSelectedAgent}
                   detectedSet={flow.detectedSet}
                   isDetecting={flow.isDetectingAgents}
-                  yoloPermissions={flow.yoloPermissions}
-                  onYoloPermissionsChange={flow.setYoloPermissions}
+                  agentPermissionMode={flow.agentPermissionMode}
+                  onAgentPermissionModeChange={flow.setAgentPermissionMode}
                 />
               )}
               {currentStep.id === 'theme' && (

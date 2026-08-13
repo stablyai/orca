@@ -14,6 +14,7 @@ import {
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 import {
+  AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
 } from './protocol-version'
@@ -74,7 +75,8 @@ describe('subscribeRemoteRuntimeRequest', () => {
       deviceToken: 'device-token',
       clientCapabilities: [
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY
       ]
     })
     const bytes = new Uint8Array([1, 2, 3])

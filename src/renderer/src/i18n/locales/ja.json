@@ -5361,10 +5361,11 @@
           "2d133152fa": "デフォルト環境なし",
           "agentPermissions": "Agent の権限",
           "agentPermissionsInfo": "Agent 権限情報",
-          "agentPermissionsTooltip": "起動引数を上書きしている Agent には適用されません。",
-          "agentPermissionsDescription": "Orca が権限プロンプトの少ない Agent を起動するか、手動チェックを含む Agent を起動するかを選択します。",
+          "agentPermissionsTooltip": "カスタムの Agent 起動引数はモードを切り替えても変更されません。",
+          "agentPermissionsDescription": "Agent 起動時の権限の既定値を「手動」「Auto」「Yolo」から選択します。",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手動",
+          "agentPermissionsAuto": "Auto",
           "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。",
           "codexSessionSource": "インポートする Codex ホーム",
           "codexSessionSourceInfo": "Codex 履歴のインポートについて",
@@ -7631,9 +7632,16 @@
             "a79d266f71": "セッション",
             "afbf35be68": "安定したセッション",
             "agentPermissions": "Agent の権限",
-            "agentPermissionsDescription": "Agent の権限の既定値を Yolo と Manual で切り替えます。",
+            "agentPermissionsDescription": "Agent の権限の既定値を「手動」「Auto」「Yolo」から切り替えます。",
             "agentRuntime": "Agent のランタイム",
-            "agentRuntimeDescription": "デフォルトで Agent を Windows または WSL のどちらで検出および起動するかを選択します。"
+            "agentRuntimeDescription": "デフォルトで Agent を Windows または WSL のどちらで検出および起動するかを選択します。",
+            "auto": "auto",
+            "permission": "権限",
+            "permissions": "権限",
+            "yolo": "yolo",
+            "manual": "手動",
+            "skip": "スキップ",
+            "checks": "チェック"
           }
         },
         "appearance": {
@@ -11473,9 +11481,11 @@
           "1eee1c7bd8": "PATH 上に Agent が検出されませんでした。後でインストールするものを選択するか、空のターミナルを使用して続行します。",
           "hideAgents": "Agent を非表示にする",
           "showMoreAgents": "{{value0}} 件の Agent をさらに表示→",
-          "yoloPermissionsLabel": "Yolo / 危険: 権限チェックをスキップ",
-          "yoloPermissionsInfo": "Agent 権限情報",
-          "yoloPermissionsTooltip": "Agent の権限チェックをスキップして割り込みを減らす"
+          "f90b42acbb": "Agent の権限",
+          "e4799d3a54": "手動は毎回確認し、Auto はベンダー推奨の既定値を使用し、Yolo は権限プロンプトをスキップします。",
+          "9c219f644f": "手動",
+          "9659ea9cce": "Auto",
+          "e8e2990559": "Yolo"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter キーを押してコマンドを実行し、要求されたら npx を確認します。これは、後で [設定] で設定することもできます。",

@@ -1,4 +1,10 @@
 import type { PersistedUIState } from '../../../../shared/types'
+import { AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  hasAutoAgentPermissionPreset,
+  projectAgentPermissionSettingsForLegacyClient
+} from '../../../../shared/tui-agent-permissions'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcMethod } from '../core'
 import {
   FeatureInteractionIdParam,
@@ -11,18 +17,56 @@ import {
 
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-rpc-schema'
 
+function supportsAutoAgentPermissionSettings(
+  clientCapabilities: readonly string[] | undefined
+): boolean {
+  return (
+    clientCapabilities === undefined ||
+    clientCapabilities.includes(AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY)
+  )
+}
+
+function projectSettingsForClient(
+  settings: ReturnType<OrcaRuntimeService['getClientSettings']>,
+  clientCapabilities: readonly string[] | undefined
+): typeof settings {
+  if (supportsAutoAgentPermissionSettings(clientCapabilities)) {
+    return settings
+  }
+  return {
+    ...settings,
+    ...projectAgentPermissionSettingsForLegacyClient(settings)
+  }
+}
+
 export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'settings.get',
     params: null,
-    handler: (_params, { runtime }) => ({ settings: runtime.getClientSettings() })
+    handler: (_params, { runtime, clientCapabilities }) => ({
+      settings: projectSettingsForClient(runtime.getClientSettings(), clientCapabilities)
+    })
   }),
   defineMethod({
     name: 'settings.update',
     params: SettingsUpdate,
-    handler: async (params, { runtime }) => ({
-      settings: await runtime.updateClientSettings(params)
-    })
+    handler: async (params, { runtime, clientCapabilities }) => {
+      const updates = { ...params }
+      if (
+        !supportsAutoAgentPermissionSettings(clientCapabilities) &&
+        hasAutoAgentPermissionPreset(runtime.getClientSettings())
+      ) {
+        // Legacy clients cannot round-trip Auto and may otherwise widen it to Yolo.
+        delete updates.agentDefaultArgs
+        delete updates.agentDefaultEnv
+      }
+      return {
+        settings: projectSettingsForClient(
+          await runtime.updateClientSettings(updates),
+          clientCapabilities
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'settings.getTerminalQuickCommands',
