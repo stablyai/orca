@@ -134,7 +134,8 @@ export function writeSecureFile(
 }
 
 export function fsyncFileSync(path: string): void {
-  const descriptor = openSync(path, 'r')
+  // Why: FlushFileBuffers needs write access on Windows, or fsyncSync throws EPERM.
+  const descriptor = openSync(path, process.platform === 'win32' ? 'r+' : 'r')
   try {
     fsyncSync(descriptor)
   } finally {
