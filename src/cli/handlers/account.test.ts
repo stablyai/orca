@@ -595,4 +595,75 @@ describe('account CLI handlers', () => {
 
     expect(callMock).toHaveBeenCalledWith('accounts.list', { refreshUsage: false })
   })
+
+  it('selects a numbered Codex account through the existing runtime RPC', async () => {
+    const codexAccounts = {
+      accounts: [
+        {
+          id: 'codex-3',
+          email: 'codex-three@example.com',
+          workspaceLabel: 'Codex #3｜F Team'
+        }
+      ],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    callMock.mockImplementation((method: string) =>
+      Promise.resolve({
+        id: 'test',
+        ok: true,
+        result:
+          method === 'accounts.list'
+            ? { claude: { accounts: [], activeAccountId: null }, codex: codexAccounts }
+            : {
+                ...codexAccounts,
+                activeAccountId: null,
+                activeAccountIdsByRuntime: { host: 'codex-3', wsl: {} }
+              },
+        _meta: { runtimeId: 'test-runtime' }
+      })
+    )
+
+    await ACCOUNT_HANDLERS['account select']({
+      ...context('codex'),
+      flags: new Map([
+        ['agent', 'codex'],
+        ['account', '#3']
+      ])
+    })
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'accounts.list', { refreshUsage: false })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'accounts.selectCodex', {
+      accountId: 'codex-3'
+    })
+  })
+
+  it('fails closed when the runtime does not read the selected account back', async () => {
+    const codexAccounts = {
+      accounts: [{ id: 'codex-3', email: 'codex-three@example.com', workspaceLabel: 'Codex #3' }],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    callMock.mockImplementation((method: string) =>
+      Promise.resolve({
+        id: 'test',
+        ok: true,
+        result:
+          method === 'accounts.list'
+            ? { claude: { accounts: [], activeAccountId: null }, codex: codexAccounts }
+            : codexAccounts,
+        _meta: { runtimeId: 'test-runtime' }
+      })
+    )
+
+    await expect(
+      ACCOUNT_HANDLERS['account select']({
+        ...context('codex'),
+        flags: new Map([
+          ['agent', 'codex'],
+          ['account', '#3']
+        ])
+      })
+    ).rejects.toMatchObject({ code: 'operation_unknown' })
+  })
 })

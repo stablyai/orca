@@ -1047,6 +1047,7 @@ import type {
   CodexResetCreditRejectedBeforeProviderReason
 } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import { getCodexPaneAccount } from '../codex/codex-pane-account-registry'
 import type { RateLimitService } from '../rate-limits/service'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
@@ -31701,6 +31702,25 @@ export class OrcaRuntimeService {
   private nextTitleObservationSequence(): number {
     this.titleObservationSequence += 1
     return this.titleObservationSequence
+  }
+
+  // Why: CODEX_HOME is baked into the PTY at spawn, so the pane account registry is the only
+  // ground truth for which managed account a worker terminal actually launched under — immune to
+  // the select→start ABA race that an active-account re-read cannot detect.
+  getCodexTerminalLaunchAccount(handle: string): { known: boolean; accountId: string | null } {
+    try {
+      const pty = this.getLivePtyForHandle(handle)
+      if (!pty) {
+        return { known: false, accountId: null }
+      }
+      const record = getCodexPaneAccount(pty.pty.ptyId)
+      if (!record) {
+        return { known: false, accountId: null }
+      }
+      return { known: true, accountId: record.accountId }
+    } catch {
+      return { known: false, accountId: null }
+    }
   }
 
   // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.

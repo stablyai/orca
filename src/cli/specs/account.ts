@@ -28,5 +28,20 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
       'Lists the accounts on this machine. `--environment` / `--pairing-code` are rejected rather than ignored; run it on the host whose accounts you want to see.'
     ],
     examples: ['orca account list']
+  },
+  {
+    path: ['account', 'select'],
+    summary: 'Select one managed Claude or Codex account on this Orca host',
+    usage: 'orca account select --agent claude|codex --account <id|email|label|#number> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'account'],
+    notes: [
+      'Selection is local-runtime only. The selector must resolve uniquely; exact account IDs are safest.',
+      'Codex accepts a unique workspace number such as #3 when the managed account label contains that number.',
+      'This command never copies credentials between managed accounts.'
+    ],
+    examples: [
+      'orca account select --agent codex --account "#3"',
+      'orca account select --agent codex --account <account-id>'
+    ]
   }
 ]

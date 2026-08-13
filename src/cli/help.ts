@@ -21,6 +21,7 @@ Agent Discovery:
 Accounts:
   account add               Add a managed Claude or Codex account on this Orca host
   account list              List managed Claude and Codex accounts on this Orca host
+  account select            Select a managed Claude or Codex account on this Orca host
 
 Skills:
   skills list               List version-matched skill guides bundled with this Orca CLI
@@ -107,11 +108,13 @@ Orchestration:
   orchestration dispatch    Dispatch a task to a terminal
   orchestration dispatch-show Show dispatch context for a task
   orchestration worker-start Start a supervised worker locally or on a connected Orca server
+  orchestration worker-supervise Run a Codex worker with ordered account failover
   orchestration worker-show Inspect one supervised worker
   orchestration worker-read Read bounded output from one supervised worker
   orchestration worker-stop Fence one Dispatch; stop only its supervised worker
   orchestration worker-abandon Fence an uncertain worker without claiming it stopped
   orchestration worker-release Release a settled worker's terminal after archiving its output
+  orchestration worker-accept Record coordinator acceptance and release the worker terminal
   orchestration worker-retain Keep a worker terminal live for debugging
   orchestration worker-list Report worker terminal resource accounting
   orchestration coordinator-start Start the legacy automatic coordinator loop
@@ -223,6 +226,7 @@ Common Commands:
   orca agent-context [--json]
   orca account add [--agent claude|codex] [--json]
   orca account list [--json]
+  orca account select --agent claude|codex --account <id|email|label|#number> [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -507,8 +511,10 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   // Why: the shared --agent help describes launching a TUI agent in a terminal,
   // which is the wrong meaning here — this selects the account provider.
-  if (command === 'account add' && flag === 'agent') {
-    return '--agent <id>           Account provider: claude or codex (default claude)'
+  if ((command === 'account add' || command === 'account select') && flag === 'agent') {
+    return command === 'account add'
+      ? '--agent <id>           Account provider: claude or codex (default claude)'
+      : '--agent <id>           Account provider: claude or codex'
   }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
