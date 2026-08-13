@@ -15,6 +15,11 @@ import {
   canClickBlockedCreateReviewReason,
   resolveHostedReviewAuthInstruction
 } from './source-control-create-review-blocked-action'
+import {
+  commitSyncTitle as resolveCommitSyncTitle,
+  createBlockedHint as resolveCreateBlockedHint,
+  rebaseItemCopy
+} from './source-control-dropdown-copy'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
@@ -238,31 +243,15 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       commitDisabledReason !== null
   }
 
-  const commitSyncTitle = (() => {
-    if (upstreamLoading) {
-      return 'Checking branch status…'
-    }
-    if (publishBlockedByPRLoading) {
-      return 'Checking PR status…'
-    }
-    if (publishBlockedByMergedPR) {
-      return 'PR is already merged'
-    }
-    if (publishBlockedByDetachedHead) {
-      return 'Check out a branch before syncing commits'
-    }
-    if (!hasUpstream) {
-      // Why: direct the user to Publish Branch (the primary action) rather than naming a nonexistent compound action.
-      return 'Publish the branch first to sync commits'
-    }
-    if (shouldForcePushWithLease) {
-      return (
-        commitDisabledReason ??
-        'Use Commit & Force Push — remote only has older copies of local commits'
-      )
-    }
-    return commitDisabledReason ?? 'Commit, then pull and push'
-  })()
+  const commitSyncTitle = resolveCommitSyncTitle({
+    upstreamLoading,
+    publishBlockedByPRLoading,
+    publishBlockedByMergedPR,
+    publishBlockedByDetachedHead,
+    hasUpstream,
+    shouldForcePushWithLease,
+    commitDisabledReason
+  })
   const commitSyncItem: DropdownItem = {
     kind: 'commit_sync',
     label: translate(
@@ -395,18 +384,11 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const rebaseBaseLabel = rebaseBaseRef ? formatRebaseBaseRef(rebaseBaseRef) : null
   const hasRemoteBaseRef = rebaseBaseLabel?.includes('/') === true
+  const rebaseCopy = rebaseItemCopy({ rebaseBaseLabel, hasRemoteBaseRef, hasDirtyLocalChanges })
   const rebaseItem: DropdownItem = {
     kind: 'rebase_base',
-    label: rebaseBaseLabel ? `Rebase from ${rebaseBaseLabel}` : 'Rebase from Base',
-    title: (() => {
-      if (!rebaseBaseLabel || !hasRemoteBaseRef) {
-        return 'Choose a remote base branch to rebase from'
-      }
-      if (hasDirtyLocalChanges) {
-        return 'Try rebasing; git may require committing or stashing local changes first'
-      }
-      return `Rebase current branch with latest commits from ${rebaseBaseLabel}`
-    })(),
+    label: rebaseCopy.label,
+    title: rebaseCopy.title,
     disabled: globalBusy || !rebaseBaseRef || !hasRemoteBaseRef
   }
 
@@ -458,35 +440,13 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       publishBlockedByDetachedHead
   }
 
-  const createBlockedHint = (() => {
-    switch (hostedReviewCreation?.blockedReason) {
-      case 'dirty':
-        return 'Commit changes first'
-      case 'detached_head':
-        return 'Check out a branch first'
-      case 'default_branch':
-        return 'Switch to a feature branch'
-      case 'no_upstream':
-        return 'Publish Branch'
-      case 'needs_push':
-        return 'Push first'
-      case 'needs_sync':
-        return shouldForcePushWithLease ? 'Force Push first' : 'Sync first'
-      case 'auth_required':
-        return `${createReviewCopy.authInstruction} in this environment`
-      case 'unsupported_provider':
-        return 'Unsupported provider'
-      case 'existing_review':
-        return `A ${createReviewCopy.reviewLabel} already exists`
-      case 'fork_head_unsupported':
-        return 'Fork head unsupported'
-      case 'base_not_on_remote':
-        return 'Base branch is not on the remote'
-      case null:
-      case undefined:
-        return upstreamLoading ? 'Checking branch status…' : 'Branch is not ready'
-    }
-  })()
+  const createBlockedHint = resolveCreateBlockedHint({
+    blockedReason: hostedReviewCreation?.blockedReason,
+    shouldForcePushWithLease,
+    upstreamLoading,
+    authInstruction: createReviewCopy.authInstruction,
+    reviewLabel: createReviewCopy.reviewLabel
+  })
 
   const createPRItem: DropdownItem = {
     kind: 'create_pr',
