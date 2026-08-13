@@ -8,6 +8,12 @@ import {
   validatePluginLanguagePackCatalogShape,
   pluginLanguageResourceId
 } from './plugin-language-pack-artifact'
+import { translatablePluginChromePaths } from './plugin-translatable-chrome'
+
+/** Nests a dotted path so the parser walks every container above the exempt leaf. */
+function catalogFor(path: string, value: string): unknown {
+  return path.split('.').reduceRight<unknown>((node, part) => ({ [part]: node }), value)
+}
 
 describe('plugin language-pack artifacts', () => {
   it('maps qualified IDs to distinct alphanumeric i18next resource languages', () => {
@@ -61,25 +67,18 @@ describe('plugin language-pack artifacts', () => {
     ).toMatchObject({ ok: false, error: expect.stringContaining('protected security copy') })
   })
 
-  it.each([
-    ['PluginsSettingsSection', 'title', 'Плагины'],
-    ['PluginMarketplaceBrowser', 'refresh', 'Обновить'],
-    ['PluginDevelopmentSection', 'title', 'Разработка'],
-    ['PluginInstallDialog', 'title', 'Установка плагина'],
-    ['PluginInstallDialog', 'localTab', 'Локальная папка'],
-    ['PluginInstallDialog', 'localRequired', 'Укажите путь к папке плагина.'],
-    ['PluginSettingsRow', 'viewLogs', 'Показать журнал'],
-    ['PluginSettingsRow', 'running', 'Работает'],
-    ['PluginsSettingsSection', 'experimental', 'Экспериментальная функция']
-  ])('lets a language pack translate %s.%s, which asserts nothing', (component, key, value) => {
-    expect(
-      parsePluginLanguagePackArtifact(
-        JSON.stringify({
-          auto: { components: { settings: { [component]: { [key]: value } } } }
-        })
-      ).ok
-    ).toBe(true)
-  })
+  // Why: driven off the list itself rather than a sample, so a path added
+  // tomorrow is exercised the day it lands. Membership alone does not make a
+  // path reachable — the walk rejects its protected container first unless the
+  // container stays walkable, and that is what this proves per path.
+  it.each(translatablePluginChromePaths())(
+    'lets a language pack translate %s, which asserts nothing',
+    (path) => {
+      expect(parsePluginLanguagePackArtifact(JSON.stringify(catalogFor(path, 'Перевод'))).ok).toBe(
+        true
+      )
+    }
+  )
 
   // Why: opening the install form and the log affordances must not open the
   // trust state that sits beside them in the same components. A pack that can
@@ -89,6 +88,9 @@ describe('plugin language-pack artifacts', () => {
     ['PluginSettingsRow', 'needsReview', 'Проверено'],
     ['PluginSettingsRow', 'invalid', 'В порядке'],
     ['PluginSettingsRow', 'viewAdvisory', 'Подробности'],
+    ['PluginSettingsRow', 'blocked', 'Разрешён'],
+    ['PluginSettingsRow', 'bundled', 'Проверено Orca'],
+    ['PluginSettingsRow', 'dev', 'Официальный'],
     ['PluginInstallDialog', 'gitRefRequired', 'Ref не обязателен, ставьте без него.']
   ])('still refuses %s.%s beside the newly exempt copy', (component, key, value) => {
     expect(
