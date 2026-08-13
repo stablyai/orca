@@ -93,6 +93,7 @@ vi.mock('./web-runtime-browser-materialization', () => ({
 }))
 
 const ENVIRONMENT_ID = 'web-env-1'
+const SECOND_ENVIRONMENT_ID = 'web-env-2'
 const RUNTIME_EXECUTION_HOST_ID = toRuntimeExecutionHostId(ENVIRONMENT_ID)
 const WORKTREE_ID = 'repo::/worktree'
 const FOCUS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -721,7 +722,6 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     )
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'client-preview-group'
       })
@@ -751,7 +751,6 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'client-preview-group'
       })
@@ -799,14 +798,22 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'client-preview-group'
       })
     ).toBe(false)
   })
 
-  it('keeps a split reserved by an overlapping browser creation', async () => {
+  it('keeps a split reserved after ownership moves to an overlapping browser creation', async () => {
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      runtimeStatusByEnvironmentId: new Map(
+        [ENVIRONMENT_ID, SECOND_ENVIRONMENT_ID].map((environmentId) => [
+          environmentId,
+          { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }
+        ])
+      )
+    })
     let resolveFirstList!: (response: unknown) => void
     let resolveSecondList!: (response: unknown) => void
     const firstList = new Promise((resolve) => {
@@ -854,7 +861,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     await vi.waitFor(() => expect(listCount).toBe(1))
     const second = createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
-      environmentId: ENVIRONMENT_ID,
+      environmentId: SECOND_ENVIRONMENT_ID,
       clientTargetGroupId: 'client-preview-group',
       clientTargetGroupCreated: false,
       focusOnCreate: false
@@ -862,7 +869,6 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     await vi.waitFor(() => expect(createCount).toBe(2))
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'client-preview-group'
       })
@@ -873,18 +879,68 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       ok: false,
       error: { code: 'remote_runtime_timeout', message: 'first preview timed out' }
     })
-    await vi.waitFor(() => expect(listCount).toBe(2))
+    await vi.waitFor(() => expect(listCount).toBeGreaterThanOrEqual(2))
     resolveSecondList({ id: 'second-list', ok: true, result: makeSnapshot() })
     await expect(second).resolves.toBe(true)
     await expect(first).resolves.toBe(false)
     expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
     expect(mocks.hasMaterializedWebRuntimeBrowserPage).toHaveBeenCalledWith(
       expect.anything(),
-      ENVIRONMENT_ID,
+      SECOND_ENVIRONMENT_ID,
       WORKTREE_ID,
       'remote-browser-page-2',
       'client-preview-group'
     )
+  })
+
+  it('transfers empty-split cleanup when both overlapping creations fail', async () => {
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      runtimeStatusByEnvironmentId: new Map(
+        [ENVIRONMENT_ID, SECOND_ENVIRONMENT_ID].map((environmentId) => [
+          environmentId,
+          { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }
+        ])
+      )
+    })
+    let rejectFirst!: (error: Error) => void
+    let rejectSecond!: (error: Error) => void
+    const runtimeCall = vi
+      .fn()
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectSecond = reject
+        })
+      )
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    const first = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: true,
+      focusOnCreate: false
+    })
+    const second = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: SECOND_ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: false,
+      focusOnCreate: false
+    })
+    rejectFirst(new Error('first host offline'))
+    await expect(first).rejects.toThrow('did not confirm whether the browser tab was created')
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
+
+    rejectSecond(new Error('second host offline'))
+    await expect(second).rejects.toThrow('did not confirm whether the browser tab was created')
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledOnce()
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
   })
 
   it('accepts subscription materialization when the eager reconciliation fails', async () => {

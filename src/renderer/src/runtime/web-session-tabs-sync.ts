@@ -1897,7 +1897,7 @@ function buildMirroredHostGroups({
     if (
       !seen.has(group.id) &&
       (group.tabOrder.length > 0 ||
-        isWebSessionBrowserPlacementGroupReserved({ environmentId, worktreeId, groupId: group.id }))
+        isWebSessionBrowserPlacementGroupReserved({ worktreeId, groupId: group.id }))
     ) {
       orderedGroups.push(group)
     }
@@ -2814,7 +2814,6 @@ function applyWebSessionTabsSnapshotWithContext(
         group.id === targetGroupId ||
         group.tabOrder.length > 0 ||
         isWebSessionBrowserPlacementGroupReserved({
-          environmentId,
           worktreeId,
           groupId: group.id
         })

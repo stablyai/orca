@@ -1676,13 +1676,15 @@
             "a post-create timeout returns false only after exact host close and a confirming snapshot",
             "unconfirmed cleanup rejects so callers cannot create a competing local fallback",
             "the canonical placement and a newly-created empty split are released on rollback",
-            "one failed preview cannot remove a shared split still reserved by an overlapping creation"
+            "one failed preview cannot remove a shared split still reserved after an environment ownership change",
+            "if every overlapping creation fails, the last reservation closes the caller-created empty split"
           ]
         },
         {
           "file": "src/renderer/src/runtime/web-session-browser-placement.test.ts",
           "assertions": [
-            "pending page placements are bounded and independently reserve shared groups",
+            "pending page placements are bounded and reserve worktree groups across environment ownership changes",
+            "caller-created cleanup transfers to the last failed overlapping reservation",
             "worktree and environment teardown clear only their own placement state"
           ]
         },

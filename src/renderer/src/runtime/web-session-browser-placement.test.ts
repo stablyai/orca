@@ -5,6 +5,7 @@ import {
   forgetWebSessionBrowserPlacement,
   isWebSessionBrowserPlacementGroupReserved,
   recordWebSessionBrowserPlacement,
+  releaseWebSessionBrowserPlacementGroup,
   resetWebSessionBrowserPlacementsForTests,
   takeWebSessionBrowserPlacementGroup
 } from './web-session-browser-placement'
@@ -32,7 +33,6 @@ describe('web session browser placement', () => {
     })
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'preview-group'
       })
@@ -45,11 +45,45 @@ describe('web session browser placement', () => {
     })
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'preview-group'
       })
     ).toBe(false)
+  })
+
+  it('transfers caller-created group cleanup to the last failed reservation', () => {
+    recordWebSessionBrowserPlacement({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-1',
+      groupId: 'preview-group',
+      callerCreatedGroup: true
+    })
+    recordWebSessionBrowserPlacement({
+      environmentId: 'environment-2',
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-2',
+      groupId: 'preview-group'
+    })
+
+    expect(
+      releaseWebSessionBrowserPlacementGroup({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-1',
+        groupId: 'preview-group',
+        callerCreatedGroup: true
+      })
+    ).toBe(false)
+    expect(
+      releaseWebSessionBrowserPlacementGroup({
+        environmentId: 'environment-2',
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-2',
+        groupId: 'preview-group',
+        callerCreatedGroup: false
+      })
+    ).toBe(true)
   })
 
   it('bounds pending page placements', () => {
@@ -71,7 +105,6 @@ describe('web session browser placement', () => {
     ).toBeUndefined()
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'group-0'
       })
@@ -104,7 +137,6 @@ describe('web session browser placement', () => {
 
     expect(
       isWebSessionBrowserPlacementGroupReserved({
-        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         groupId: 'group-0'
       })
