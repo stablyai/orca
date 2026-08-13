@@ -259,6 +259,30 @@ describe('foreground serve crash supervisor', () => {
     expect(args.spawnChildMock).toHaveBeenCalledOnce()
   })
 
+  it('cleans exact quarantine when a concurrent owner wins after recovery', async () => {
+    const collision = new FakeChildProcess(4101)
+    const retry = new FakeChildProcess(4102)
+    const cleanupSingletonQuarantine = vi.fn(async () => undefined)
+    const args = supervisorArgs(collision, {
+      healthProbe: vi.fn(async () => ({ healthy: true as const, runtimeId: 'runtime-winner' })),
+      recoverSingleton: vi.fn(async () => ({
+        state: 'recovered' as const,
+        ownerPid: 4000,
+        quarantined: ['SingletonLock.test']
+      })),
+      cleanupSingletonQuarantine
+    })
+    args.spawnChildMock.mockReturnValue(retry as never)
+
+    const result = superviseForegroundServe(args)
+    collision.emit('exit', SERVE_ALREADY_RUNNING_EXIT_CODE, null)
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledOnce())
+    retry.emit('exit', SERVE_ALREADY_RUNNING_EXIT_CODE, null)
+
+    await expect(result).resolves.toBe(SERVE_ALREADY_RUNNING_EXIT_CODE)
+    expect(cleanupSingletonQuarantine).toHaveBeenCalledWith(['SingletonLock.test'])
+  })
+
   it('allows one stale-lock retry again after a recovered child becomes healthy', async () => {
     const collisionOne = new FakeChildProcess(4101)
     const healthyOne = new FakeChildProcess(4102)

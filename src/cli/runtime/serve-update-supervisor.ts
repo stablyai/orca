@@ -179,6 +179,12 @@ export async function superviseForegroundServe(
     }
     if (result.code === SERVE_ALREADY_RUNNING_EXIT_CODE) {
       if (singletonRetryUsed || !args.recoverSingleton) {
+        if (singletonRetryUsed && args.healthProbe) {
+          const health = await args.healthProbe().catch(() => null)
+          if (health?.healthy) {
+            await cleanupPendingSingletonQuarantine()
+          }
+        }
         return SERVE_ALREADY_RUNNING_EXIT_CODE
       }
       const recovery = await args.recoverSingleton()
