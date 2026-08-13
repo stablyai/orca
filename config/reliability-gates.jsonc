@@ -3116,13 +3116,16 @@
       "invariant": "Every agent launch surface must advertise the provider set detected on its explicit execution authority and launch on that same authority; a local Floating Workspace must never inherit an unrelated active project's WSL, SSH, or paired-runtime context.",
       "oracle": "Model an active WSL project and a native-Windows Floating Workspace with WSL-only Claude and host-only Codex. Keep both detection consumers mounted, require their advertised sets to stay disjoint through refresh, require the legacy active-project inventory to remain unchanged, then independently assert the Floating launch call and PTY transport select local IPC with no WSL project runtime.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts --reporter=dot",
+        "Headed Electron/CDP STA-4027 journey on Orca environment windows 2 with a selected Ubuntu-24.04 WSL project and local Floating Workspace"
       ],
       "testFiles": [
         "src/renderer/src/hooks/useDetectedAgents.test.tsx",
         "src/renderer/src/hooks/useAgentDetectionTarget.test.ts",
         "src/renderer/src/store/slices/detected-agents.test.ts",
+        "src/renderer/src/store/slices/local-detected-agent-state.test.ts",
+        "src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts",
         "src/renderer/src/lib/local-preflight-context.test.ts",
         "src/renderer/src/lib/launch-agent-in-new-tab.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts"
@@ -3133,6 +3136,20 @@
           "assertions": [
             "the active WSL project advertises only its WSL agent while Floating advertises only the native-host agent",
             "Floating refresh preserves both scoped inventories and does not overwrite the legacy active-project inventory"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/local-detected-agent-state.test.ts",
+          "assertions": [
+            "same-context callers deduplicate without cached broadcast fanout",
+            "refresh supersedes stale detection and failed cold refresh remains retryable",
+            "project removal evicts settled and in-flight context state"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts",
+          "assertions": [
+            "removing one project evicts its authority-scoped agent inventory without disturbing another project"
           ]
         },
         {
@@ -3153,10 +3170,10 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "The Windows-mode authority oracle passed independent WSL/local inventory, refresh isolation, and Floating launch-call assertions."
+          "summary": "Seven focused files passed independent WSL/local inventory, refresh isolation, cache lifecycle, project eviction, and Floating launch-call assertions."
         },
         {
           "date": "2026-08-12",
@@ -3166,19 +3183,28 @@
           "result": "passed",
           "durationSeconds": 20,
           "summary": "The full PTY connection suite passed the independent Floating native-host transport oracle."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "Headed Electron/CDP STA-4027 journey on Orca environment windows 2 with a selected Ubuntu-24.04 WSL project and local Floating Workspace",
+          "result": "passed",
+          "durationSeconds": 22.3,
+          "summary": "Environment abfee683-80eb-4ac3-ada0-da5d1b6303a6, runtime b3bea13e-f6b7-41e7-b850-0a118f7eda38: Floating advertised native Claude/Codex without WSL-only Gemini and launched Claude through native PowerShell with local host ownership while the WSL project remained active."
         }
       ],
       "runtimeBudget": {
         "p95Seconds": 40,
-        "scope": "six focused renderer authority, cache, and launch test files"
+        "scope": "eight focused renderer authority, cache, eviction, and launch test files"
       },
       "flakeHistory": {
         "status": "soaking",
-        "evidence": "The deterministic oracle uses mocked provider results and React effect barriers. One exact-head PR run passed the full Node 24/26 matrix; a duplicate run's transient shard failures passed on rerun, but long-term soak history is not yet available."
+        "evidence": "The deterministic oracle uses mocked provider results and React effect barriers. Exact-head PR run 31644438349 passed the full Node 24/26 matrix; an earlier patch-identical run's transient shard failures passed on rerun, but long-term soak history is not yet available."
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical oracle fails on merged PR #13995 and origin/main 1136503c6a because Floating receives the WSL-only Claude inventory while launch remains local. The candidate passes; disabling the scoped Floating target reproduces the mismatch."
+        "evidence": "The byte-identical oracle fails on merged PR #13995 and the tested latest-main snapshot ebe5125476 because Floating receives the WSL-only Claude inventory while launch remains local. The candidate passes; disabling the scoped Floating target reproduces the mismatch."
       },
       "performanceBudget": {
         "required": true,
