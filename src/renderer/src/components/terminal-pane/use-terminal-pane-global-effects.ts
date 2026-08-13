@@ -104,6 +104,7 @@ export function useTerminalPaneGlobalEffects({
   })
   const {
     captureViewportPositions,
+    restoreRememberedPinnedViewports,
     withSuppressedScrollTracking,
     applyPendingFollowOutputRequests,
     scheduleFollowOutputIfNeeded
@@ -159,6 +160,7 @@ export function useTerminalPaneGlobalEffects({
         wasVisible,
         shouldUseLightTabResume,
         captureViewportPositions,
+        restoreRememberedPinnedViewports,
         withSuppressedScrollTracking
       })
       renderingSuspendedByVisibilityRef.current = false

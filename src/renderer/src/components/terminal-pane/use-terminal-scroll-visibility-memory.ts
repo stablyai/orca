@@ -4,11 +4,14 @@ import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-sch
 import {
   cancelDeferredScrollRestore,
   captureScrollState,
-  getTerminalOutputEpoch
+  getTerminalOutputEpoch,
+  releaseScrollStateMarker,
+  restoreScrollState
 } from '@/lib/pane-manager/pane-scroll'
 import {
   getTerminalScrollIntentKind,
-  markTerminalFollowOutput
+  markTerminalFollowOutput,
+  markTerminalPinnedViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
@@ -27,6 +30,7 @@ type UseTerminalScrollVisibilityMemoryArgs = {
 
 type TerminalScrollVisibilityMemory = {
   captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
+  restoreRememberedPinnedViewports: () => Set<number>
   withSuppressedScrollTracking: (callback: () => void) => void
   applyPendingFollowOutputRequests: () => boolean
   scheduleFollowOutputIfNeeded: (paneId: number) => void
@@ -53,11 +57,24 @@ export function useTerminalScrollVisibilityMemory({
     []
   )
 
+  // Why: captureScrollState registers xterm markers; dropping an entry without
+  // disposing them leaks a marker per pane per visibility flip.
+  const storeVisibleScrollSnapshot = useCallback(
+    (paneId: number, snapshot: VisibleScrollSnapshot): void => {
+      const previous = visibleScrollSnapshotsRef.current.get(paneId)
+      if (previous && previous !== snapshot) {
+        releaseScrollStateMarker(previous.scrollState)
+      }
+      visibleScrollSnapshotsRef.current.set(paneId, snapshot)
+    },
+    []
+  )
+
   const rememberVisibleScrollSnapshot = useCallback(
     (paneId: number, terminal: Terminal): void => {
-      visibleScrollSnapshotsRef.current.set(paneId, captureVisibleScrollSnapshot(terminal))
+      storeVisibleScrollSnapshot(paneId, captureVisibleScrollSnapshot(terminal))
     },
-    [captureVisibleScrollSnapshot]
+    [captureVisibleScrollSnapshot, storeVisibleScrollSnapshot]
   )
 
   const captureViewportPositions = useCallback(
@@ -74,7 +91,7 @@ export function useTerminalScrollVisibilityMemory({
           }
           const state = captureScrollState(pane.terminal)
           if (!useRememberedSnapshots || !remembered) {
-            visibleScrollSnapshotsRef.current.set(pane.id, {
+            storeVisibleScrollSnapshot(pane.id, {
               scrollState: state,
               outputEpoch: getTerminalOutputEpoch(pane.terminal)
             })
@@ -83,8 +100,37 @@ export function useTerminalScrollVisibilityMemory({
         })
       )
     },
-    [managerRef]
+    [managerRef, storeVisibleScrollSnapshot]
   )
+
+  const restoreRememberedPinnedViewports = useCallback((): Set<number> => {
+    const restoredPaneIds = new Set<number>()
+    const manager = managerRef.current
+    if (!manager) {
+      return restoredPaneIds
+    }
+    for (const pane of manager.getPanes()) {
+      const remembered = visibleScrollSnapshotsRef.current.get(pane.id)
+      if (!remembered) {
+        continue
+      }
+      const { scrollState } = remembered
+      // Why: a pane that was following output must keep snapping to the bottom,
+      // and restoring into an alternate buffer knocks a live TUI's cursor (#1298).
+      if (scrollState.wasAtBottom || scrollState.bufferType !== 'normal') {
+        continue
+      }
+      // Why: the hide-time markers survive scrollback trim and the viewport
+      // collapse that display:none can inflict; the stored line number does not.
+      if (restoreScrollState(pane.terminal, scrollState)) {
+        markTerminalPinnedViewport(pane.terminal)
+        // restoreScrollState disposes the markers, so re-anchor for the next hide.
+        storeVisibleScrollSnapshot(pane.id, captureVisibleScrollSnapshot(pane.terminal))
+      }
+      restoredPaneIds.add(pane.id)
+    }
+    return restoredPaneIds
+  }, [captureVisibleScrollSnapshot, managerRef, storeVisibleScrollSnapshot])
 
   const withSuppressedScrollTracking = useCallback((callback: () => void): void => {
     suppressScrollTrackingRef.current = true
@@ -172,8 +218,9 @@ export function useTerminalScrollVisibilityMemory({
     }
     const panes = manager.getPanes()
     const livePaneIds = new Set(panes.map((pane) => pane.id))
-    for (const paneId of visibleScrollSnapshotsRef.current.keys()) {
+    for (const [paneId, snapshot] of visibleScrollSnapshotsRef.current) {
       if (!livePaneIds.has(paneId)) {
+        releaseScrollStateMarker(snapshot.scrollState)
         visibleScrollSnapshotsRef.current.delete(paneId)
         pendingFollowOutputPaneIdsRef.current.delete(paneId)
       }
@@ -182,6 +229,7 @@ export function useTerminalScrollVisibilityMemory({
 
   return {
     captureViewportPositions,
+    restoreRememberedPinnedViewports,
     withSuppressedScrollTracking,
     applyPendingFollowOutputRequests,
     scheduleFollowOutputIfNeeded

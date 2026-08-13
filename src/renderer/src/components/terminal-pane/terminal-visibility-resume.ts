@@ -29,6 +29,7 @@ type ResumeTerminalVisibilityArgs = {
   wasVisible: boolean
   shouldUseLightTabResume: boolean
   captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
+  restoreRememberedPinnedViewports: () => Set<number>
   withSuppressedScrollTracking: (callback: () => void) => void
 }
 
@@ -58,6 +59,7 @@ export function resumeTerminalVisibility({
   wasVisible,
   shouldUseLightTabResume,
   captureViewportPositions,
+  restoreRememberedPinnedViewports,
   withSuppressedScrollTracking
 }: ResumeTerminalVisibilityArgs): void {
   // Why: hiding the surface fired mouseleave, which cleared xterm's current
@@ -66,7 +68,12 @@ export function resumeTerminalVisibility({
   for (const pane of manager.getPanes()) {
     resetTerminalLinkifierHoverState(pane.terminal)
   }
-  syncTerminalViewportIntents(manager)
+  // Why: while the surface was display:none xterm's live viewport can collapse
+  // to line 0. Re-anchor from the hide-time content markers first, otherwise the
+  // resample below writes that 0 over the user's durable pin. Only on a real
+  // reveal — a stayed-visible resume's snapshot predates live user scrolling.
+  const restoredPaneIds = wasVisible ? undefined : restoreRememberedPinnedViewports()
+  syncTerminalViewportIntents(manager, restoredPaneIds)
   // Why: WebGL resume can disturb xterm's viewport bookkeeping before the
   // post-resume fit runs. Capture numeric viewport positions first; the
   // restore path avoids content matching so duplicate agent log lines do
@@ -229,8 +236,14 @@ function enforceTerminalViewportIntents(manager: PaneManager): void {
   }
 }
 
-function syncTerminalViewportIntents(manager: PaneManager): void {
+function syncTerminalViewportIntents(
+  manager: PaneManager,
+  skipPaneIds?: ReadonlySet<number>
+): void {
   for (const pane of manager.getPanes()) {
+    if (skipPaneIds?.has(pane.id)) {
+      continue
+    }
     // Why: native scrollback trimming moves a pinned viewport content-stably.
     // Capture that live position before resume/fit can disturb it.
     syncTerminalScrollIntentFromViewport(pane.terminal)

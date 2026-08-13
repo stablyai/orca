@@ -63,13 +63,18 @@ function createManager(order: string[] = []): FakeManager {
   }
 }
 
-function resumeArgs(manager: FakeManager, shouldUseLightTabResume: boolean) {
+function resumeArgs(
+  manager: FakeManager,
+  shouldUseLightTabResume: boolean,
+  restoredPaneIds: Set<number> = new Set()
+) {
   return {
     manager: manager as never as PaneManager,
     isActive: true,
     wasVisible: false,
     shouldUseLightTabResume,
     captureViewportPositions: vi.fn(() => new Map()),
+    restoreRememberedPinnedViewports: vi.fn(() => restoredPaneIds),
     withSuppressedScrollTracking: (callback: () => void) => callback()
   }
 }
@@ -105,6 +110,44 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(syncTerminalScrollIntentFromViewport.mock.invocationCallOrder[0]).toBeLessThan(
       enforceTerminalCurrentScrollIntent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
+  })
+
+  it('re-anchors a remembered pin before sampling the post-reveal viewport', async () => {
+    // Regression (#8715): returning to a worktree resampled xterm's collapsed
+    // viewport into the durable intent, pinning the pane at buffer line 0.
+    const terminal = { name: 'pinned-terminal' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ id: 3, terminal }])
+    const { enforceTerminalCurrentScrollIntent, syncTerminalScrollIntentFromViewport } = vi.mocked(
+      await import('@/lib/pane-manager/terminal-scroll-intent')
+    )
+    const args = resumeArgs(manager, true, new Set([3]))
+
+    resumeTerminalVisibility(args)
+
+    expect(args.restoreRememberedPinnedViewports).toHaveBeenCalledTimes(1)
+    expect(syncTerminalScrollIntentFromViewport).not.toHaveBeenCalled()
+    expect(enforceTerminalCurrentScrollIntent).toHaveBeenCalledWith(terminal)
+    expect(args.restoreRememberedPinnedViewports.mock.invocationCallOrder[0]).toBeLessThan(
+      enforceTerminalCurrentScrollIntent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
+  })
+
+  it('does not replay a stale snapshot when the surface never went hidden', async () => {
+    // An isActive flip re-runs the resume while visible; the remembered snapshot
+    // predates any scrolling the user did since, so replaying it would rewind them.
+    const terminal = { name: 'still-visible-terminal' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ id: 3, terminal }])
+    const { syncTerminalScrollIntentFromViewport } = vi.mocked(
+      await import('@/lib/pane-manager/terminal-scroll-intent')
+    )
+    const args = { ...resumeArgs(manager, true, new Set([3])), wasVisible: true }
+
+    resumeTerminalVisibility(args)
+
+    expect(args.restoreRememberedPinnedViewports).not.toHaveBeenCalled()
+    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledWith(terminal)
   })
 
   it('resets each pane linkifier hover cache on reveal so links recover without a scroll', () => {

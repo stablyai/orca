@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 1),
   getTerminalScrollIntentKind: vi.fn(() => 'followOutput'),
-  markTerminalFollowOutput: vi.fn()
+  markTerminalFollowOutput: vi.fn(),
+  markTerminalPinnedViewport: vi.fn(),
+  releaseScrollStateMarker: vi.fn(),
+  restoreScrollState: vi.fn(() => true)
 }))
 
 const reactRefState = vi.hoisted(() => ({
@@ -67,12 +70,15 @@ vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
 vi.mock('@/lib/pane-manager/pane-scroll', () => ({
   cancelDeferredScrollRestore: mocks.cancelDeferredScrollRestore,
   captureScrollState: mocks.captureScrollState,
-  getTerminalOutputEpoch: mocks.getTerminalOutputEpoch
+  getTerminalOutputEpoch: mocks.getTerminalOutputEpoch,
+  releaseScrollStateMarker: mocks.releaseScrollStateMarker,
+  restoreScrollState: mocks.restoreScrollState
 }))
 
 vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
   getTerminalScrollIntentKind: mocks.getTerminalScrollIntentKind,
-  markTerminalFollowOutput: mocks.markTerminalFollowOutput
+  markTerminalFollowOutput: mocks.markTerminalFollowOutput,
+  markTerminalPinnedViewport: mocks.markTerminalPinnedViewport
 }))
 
 describe('useTerminalScrollVisibilityMemory', () => {
@@ -83,6 +89,17 @@ describe('useTerminalScrollVisibilityMemory', () => {
     resetHookRefs()
     vi.clearAllMocks()
     mocks.getTerminalScrollIntentKind.mockReturnValue('followOutput')
+    // mockClear leaves queued once-values behind; drop them so a case that
+    // consumes fewer than it queues cannot bleed into the next one.
+    mocks.captureScrollState.mockReset()
+    mocks.captureScrollState.mockReturnValue({
+      bufferType: 'normal',
+      wasAtBottom: true,
+      viewportY: 0,
+      baseY: 0
+    })
+    mocks.restoreScrollState.mockReset()
+    mocks.restoreScrollState.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -165,6 +182,92 @@ describe('useTerminalScrollVisibilityMemory', () => {
     expect(mocks.cancelDeferredScrollRestore).not.toHaveBeenCalled()
     expect(mocks.markTerminalFollowOutput).not.toHaveBeenCalled()
     expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+  })
+
+  it('restores a remembered pinned viewport and re-pins the durable intent', () => {
+    // Regression (#8715): the hide-time snapshot was captured but never replayed,
+    // so returning to the worktree left the pane at the top of the scrollback.
+    const pinned = { bufferType: 'normal', wasAtBottom: false, viewportY: 500, baseY: 5000 }
+    const reanchored = { bufferType: 'normal', wasAtBottom: false, viewportY: 500, baseY: 5000 }
+    mocks.captureScrollState.mockReturnValueOnce(pinned).mockReturnValueOnce(reanchored)
+    const terminal = { onScroll: vi.fn(() => ({ dispose: vi.fn() })) }
+    const manager = { getPanes: vi.fn(() => [{ id: 1, terminal }]) }
+
+    beginHookRender()
+    const visibilityMemory = useTerminalScrollVisibilityMemory({
+      managerRef: { current: manager as never },
+      isVisibleRef: { current: true },
+      visibleResumeCompleteRef: { current: true },
+      paneCount: 1
+    })
+
+    visibilityMemory.captureViewportPositions(false)
+    const restored = visibilityMemory.restoreRememberedPinnedViewports()
+
+    expect(mocks.restoreScrollState).toHaveBeenCalledWith(terminal, pinned)
+    expect(mocks.markTerminalPinnedViewport).toHaveBeenCalledWith(terminal)
+    expect(restored).toEqual(new Set([1]))
+    // restoreScrollState disposes the markers, so the entry must be re-anchored.
+    expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves follow-output and alternate-buffer panes to their existing resume paths', () => {
+    mocks.captureScrollState
+      .mockReturnValueOnce({
+        bufferType: 'normal',
+        wasAtBottom: true,
+        viewportY: 5000,
+        baseY: 5000
+      })
+      .mockReturnValueOnce({
+        bufferType: 'alternate',
+        wasAtBottom: false,
+        viewportY: 0,
+        baseY: 0
+      })
+    const following = { onScroll: vi.fn(() => ({ dispose: vi.fn() })) }
+    const altScreen = { onScroll: vi.fn(() => ({ dispose: vi.fn() })) }
+    const manager = {
+      getPanes: vi.fn(() => [
+        { id: 1, terminal: following },
+        { id: 2, terminal: altScreen }
+      ])
+    }
+
+    beginHookRender()
+    const visibilityMemory = useTerminalScrollVisibilityMemory({
+      managerRef: { current: manager as never },
+      isVisibleRef: { current: true },
+      visibleResumeCompleteRef: { current: true },
+      paneCount: 2
+    })
+
+    visibilityMemory.captureViewportPositions(false)
+    const restored = visibilityMemory.restoreRememberedPinnedViewports()
+
+    expect(mocks.restoreScrollState).not.toHaveBeenCalled()
+    expect(restored.size).toBe(0)
+  })
+
+  it('releases the previous markers when a pane snapshot is replaced', () => {
+    const first = { bufferType: 'normal', wasAtBottom: false, viewportY: 10, baseY: 100 }
+    mocks.captureScrollState.mockReturnValueOnce(first)
+    const terminal = { onScroll: vi.fn(() => ({ dispose: vi.fn() })) }
+    const manager = { getPanes: vi.fn(() => [{ id: 1, terminal }]) }
+
+    beginHookRender()
+    const visibilityMemory = useTerminalScrollVisibilityMemory({
+      managerRef: { current: manager as never },
+      isVisibleRef: { current: true },
+      visibleResumeCompleteRef: { current: true },
+      paneCount: 1
+    })
+
+    visibilityMemory.captureViewportPositions(false)
+    expect(mocks.releaseScrollStateMarker).not.toHaveBeenCalled()
+    visibilityMemory.captureViewportPositions(false)
+
+    expect(mocks.releaseScrollStateMarker).toHaveBeenCalledWith(first)
   })
 
   it('cancels pending follow-output frames on cleanup', () => {
