@@ -35502,6 +35502,108 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('applies linked-checkout source visibility to mobile summaries', async () => {
+    const linkedPath = '/tmp/linked'
+    const scratchPath = `${linkedPath}/.claude/worktrees/review`
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: TEST_REPO_PATH,
+        head: 'main',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: linkedPath,
+        head: 'linked',
+        branch: 'feature/linked',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: scratchPath,
+        head: 'scratch',
+        branch: 'feature/review',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const makeRuntime = (externalWorktreeVisibility: 'hide' | 'show', claude: 'hide' | 'show') => {
+      const repo = {
+        ...store.getRepos()[0],
+        externalWorktreeVisibility,
+        externalWorktreeVisibilityLegacy: false,
+        worktreeVisibilitySourcePreferences: { builtIn: { claude, gsd: 'hide' as const } }
+      }
+      return new OrcaRuntimeService({
+        ...store,
+        getRepos: () => [repo],
+        getRepo: () => repo
+      } as never)
+    }
+
+    const hiddenSource = await makeRuntime('show', 'hide').getWorktreePs()
+    const shownSource = await makeRuntime('hide', 'show').getWorktreePs()
+
+    expect(hiddenSource.worktrees.map((worktree) => worktree.path)).not.toContain(scratchPath)
+    expect(shownSource.worktrees.map((worktree) => worktree.path)).toContain(scratchPath)
+  })
+
+  it('resolves files through a source-visible linked-checkout worktree', async () => {
+    const linkedPath = '/tmp/linked'
+    const scratchPath = `${linkedPath}/.claude/worktrees/review`
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: TEST_REPO_PATH,
+        head: 'main',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: linkedPath,
+        head: 'linked',
+        branch: 'feature/linked',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: scratchPath,
+        head: 'scratch',
+        branch: 'feature/review',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const repo = {
+      ...store.getRepos()[0],
+      externalWorktreeVisibility: 'hide' as const,
+      externalWorktreeVisibilityLegacy: false,
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show' as const, gsd: 'hide' as const }
+      }
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => [repo],
+      getRepo: () => repo
+    } as never)
+
+    const target = await (
+      runtime as unknown as {
+        resolveKnownWorkspaceFileTarget: (
+          path: string,
+          executionHostId: 'local'
+        ) => Promise<{ worktree: { path: string }; relativePath: string } | null>
+      }
+    ).resolveKnownWorkspaceFileTarget(`${scratchPath}/src/app.ts`, 'local')
+
+    expect(target).toMatchObject({
+      worktree: { path: scratchPath },
+      relativePath: 'src/app.ts'
+    })
+  })
+
   it('marks saved session tabs with live PTYs as host sidebar activity', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()

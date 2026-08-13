@@ -30,6 +30,78 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+vi.mock('./browser-cookie-clear-store', () => ({
+  openCookieClearStore: (targetSession: {
+    cookies: {
+      get: (filter: object) => Promise<unknown>
+      remove: (url: string, name: string) => Promise<void>
+      set?: (details: Record<string, unknown>) => Promise<void>
+    }
+  }) => ({
+    get: (filter: object) => targetSession.cookies.get(filter),
+    remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
+    snapshotClearIdentities: async (
+      items: {
+        cookie: {
+          name: string
+          value: string
+          domain?: string
+          path?: string
+          secure?: boolean
+          httpOnly?: boolean
+          sameSite: string
+          expirationDate?: number
+          hostOnly?: boolean
+        }
+        url: string
+      }[]
+    ) =>
+      items.map(({ cookie, url }) => ({
+        url,
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        hostOnly: cookie.hostOnly,
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        sameSite: cookie.sameSite,
+        expirationDate: cookie.expirationDate
+      })),
+    restoreClearIdentities: async (
+      identities: {
+        url: string
+        name: string
+        value: string
+        domain?: string
+        path?: string
+        secure?: boolean
+        httpOnly?: boolean
+        sameSite: string
+        expirationDate?: number
+        hostOnly?: boolean
+      }[]
+    ) => {
+      if (!targetSession.cookies.set) {
+        return
+      }
+      for (const identity of identities.toReversed()) {
+        await targetSession.cookies.set({
+          url: identity.url,
+          name: identity.name,
+          value: identity.value,
+          ...(identity.hostOnly ? {} : { domain: identity.domain }),
+          ...(identity.path ? { path: identity.path } : {}),
+          secure: identity.secure,
+          httpOnly: identity.httpOnly,
+          sameSite: identity.sameSite,
+          ...(identity.expirationDate ? { expirationDate: identity.expirationDate } : {})
+        })
+      }
+    },
+    dispose: () => undefined
+  })
+}))
 
 import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
@@ -268,21 +340,28 @@ describe('native Chromium import excludes the Google cookie family', () => {
     ])
   })
 
-  // Why (STA-4061): reconstruction drops partition keys, so a rejected removal must not rebuild
-  // anything — not the excluded Google rows, and not the non-Google rows that were already gone.
-  it('fails the import without reconstructing any cookie when selective removal rejects', async () => {
+  // Why (STA-4090): a rejected removal must restore cookies already deleted in the same clear
+  // without writing imported rows or touching the live Google session.
+  it('fails the import without permanently deleting a cookie removed before a later rejection', async () => {
     const sourceCookiesPath = seedSource([
       { domain: '.example.com', name: 'session', value: 'new' }
     ])
     seedTarget([{ domain: '.example.com', name: 'stale', value: 'stale' }])
-    cookiesGetMock.mockResolvedValue([
+    let jar = [
       existingCookie('.google.com', 'SID'),
       existingCookie('.example.com', 'removed-first'),
       existingCookie('.other.test', 'stale')
-    ])
+    ]
+    cookiesGetMock.mockImplementation(async () => [...jar])
     cookiesRemoveMock.mockImplementation(async (_url: string, name: string) => {
       if (name === 'stale') {
         throw new Error('cookie store unavailable')
+      }
+      jar = jar.filter((entry) => entry.name !== name)
+    })
+    cookiesSetMock.mockImplementation(async (details: { domain?: string; name: string }) => {
+      if (!jar.some((entry) => entry.name === details.name)) {
+        jar.push(existingCookie(details.domain ?? '.example.com', details.name))
       }
     })
     clearDataMock.mockRejectedValue(new Error('storage busy'))
@@ -293,7 +372,10 @@ describe('native Chromium import excludes the Google cookie family', () => {
     expect(result.ok || result.reason).toContain('Could not clear existing cookies')
     expect(clearDataMock).toHaveBeenCalledOnce()
     expect(cookiesRemoveMock.mock.calls.map(([, name]) => name)).toEqual(['removed-first', 'stale'])
-    expect(cookiesSetMock).not.toHaveBeenCalled()
+    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(
+      expect.arrayContaining(['removed-first'])
+    )
+    expect(jar.map((entry) => entry.name).sort()).toEqual(['SID', 'removed-first', 'stale'])
     expect(setPendingCookieImportMock).not.toHaveBeenCalled()
   })
 })

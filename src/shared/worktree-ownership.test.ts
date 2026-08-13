@@ -512,6 +512,56 @@ describe('agent scratch worktrees', () => {
     }
   })
 
+  it('applies built-in source preferences independently after legacy migration', () => {
+    const repo = makeRepo({
+      agentWorktreeVisibility: 'show',
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'hide', gsd: 'show' }
+      }
+    })
+    const settings = makeSettings()
+
+    expect(
+      toDetectedWorktree({
+        repo,
+        settings,
+        worktree: makeWorktree({ path: scratchPath, isMainWorktree: false }),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      }).visible
+    ).toBe(false)
+    expect(
+      toDetectedWorktree({
+        repo,
+        settings,
+        worktree: makeWorktree({
+          path: '/repos/app/.gsd-workspaces/phase-1',
+          isMainWorktree: false
+        }),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      }).visible
+    ).toBe(true)
+  })
+
+  it('lets a custom source override ordinary external visibility', () => {
+    const customPath = '/srv/team-worktrees/feature'
+    const repo = makeRepo({
+      externalWorktreeVisibility: 'show',
+      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team-worktrees' }],
+      worktreeVisibilitySourcePreferences: { custom: { team: 'hide' } }
+    })
+    const settings = makeSettings()
+    const detected = toDetectedWorktree({
+      repo,
+      settings,
+      worktree: makeWorktree({ path: customPath, isMainWorktree: false }),
+      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+    })
+
+    expect(detected.visibilitySource).toEqual({ kind: 'custom', id: 'team' })
+    expect(detected.visible).toBe(false)
+    expect(applyMetadataFallbackVisibility(detected).visible).toBe(false)
+  })
+
   it('still shows agent scratch for the selected checkout or an explicit import', () => {
     const repo = makeRepo({
       externalWorktreeVisibility: 'hide',

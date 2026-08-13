@@ -310,6 +310,13 @@
       "port": "端口",
       "pr": "PR"
     },
+    "linearIssue": {
+      "createLabel": "从 Linear 议题 {{value0}} 创建工作树：{{value1}}",
+      "pendingLabel": "从 Linear 议题 {{value0}} 创建工作树",
+      "loadingLabel": "加载 Linear 议题{{value0}}",
+      "createHint": "从 Linear 议题创建工作树",
+      "loadingHint": "正在加载 Linear 议题..."
+    },
     "renderCapOverflow": "还有 {{value0}} 项 — 滚动或继续输入以缩小范围",
     "filter": {
       "emptyTitle": "没有结果匹配当前筛选",
@@ -336,6 +343,10 @@
       "clearProjects": "清除项目",
       "back": "返回",
       "ariaActive": "筛选：{{value0}} 项已启用。"
+    },
+    "taskUrl": {
+      "loadingHint": "正在加载 {{value0}}...",
+      "createHint": "从 {{value0}} 创建工作树"
     }
   },
   "auto": {
@@ -966,9 +977,7 @@
             "toast": {
               "restartFallbackUnavailableNone": "{{value0}} 个 Cookie 均无法加载，且重启回退不可用。此配置文件的旧 Cookie 已被替换。请重试导入。",
               "restartFallbackUnavailablePartial": "已导入 {{value1}} 个 Cookie 中的 {{value0}} 个。其余无法加载，且重启回退不可用。请重试导入。",
-              "googleCookiesSkipped": "未导入 Google cookie。使用此配置文件在 Orca 中打开浏览器，然后登录 Google。",
-              "googleDirectSignInAction": "登录谷歌",
-              "googleDirectSignInUnavailable": "无法打开浏览器配置文件。打开它并登录accounts.google.com。"
+              "googleCookiesSkipped": "未导入 Google cookie。使用此配置文件在 {{value0}} 上的 Orca 中打开浏览器，然后登录 Google。"
             }
           }
         }
@@ -1196,7 +1205,7 @@
         "a9fb10afca": "终端",
         "5235c215ca": "选择任务页和侧栏显示的任务提供商",
         "85f4fd7710": "任务来源",
-        "ab4b21b58e": "分支命名、基础引用和 Git AI Author",
+        "ab4b21b58e": "分支命名、基础引用和 Git AI Author。",
         "09607cb0fe": "Git 和源代码控制",
         "33a5e1d597": "连接 GitHub、GitLab、Linear 和代码托管服务",
         "2b043783ef": "集成",
@@ -1238,7 +1247,8 @@
         "artifactsTitle": "Artifacts",
         "artifactsDescription": "分享 HTML / Markdown，并管理公开链接",
         "automationsTitle": "自动化",
-        "automationsDescription": "安排代理工作，并控制侧边栏是否显示自动化"
+        "automationsDescription": "安排代理工作，并控制侧边栏是否显示自动化",
+        "floatingWorkspaceWebDescription": "全局终端和 Markdown 选项卡。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -3372,16 +3382,20 @@
             "removedBody": "此工作区的 SSH 主机已被移除，无法再连接。请移除工作区以清理 — 远程文件不会受影响。",
             "removeWorkspaceButton": "移除工作区"
           },
+          "TerminalQuickCommandsSubmenu": {
+            "3ccc7981bb": "主机不可用",
+            "54f29b7c0d": "正在加载主机…"
+          },
           "TerminalPaneDisconnectedBanner": {
+            "sshPaneTitle": "终端断开",
+            "sshPaneBody": "Orca 目前无法到达该航站楼。 shell 可能仍在主机上运行，​​因此启动一个新的 shell 不会影响它。",
+            "tryAgainButton": "再试一次",
+            "startNewTerminalButton": "启动一个新终端",
             "retryingTitle": "正在重新连接到远程运行时",
             "disconnectedTitle": "远程运行时已断开连接",
             "retryingBody": "Orca 将重试最多一分钟。如果连接恢复，此终端将恢复。",
             "disconnectedBody": "自动重试已停止。重新连接以恢复此终端会话。",
             "reconnectButton": "重新连接"
-          },
-          "TerminalQuickCommandsSubmenu": {
-            "3ccc7981bb": "主机不可用",
-            "54f29b7c0d": "正在加载主机…"
           }
         }
       },
@@ -5302,8 +5316,12 @@
         "WorktreeVisibilityHelpPopover": {
           "c41f2d7e90": "哪些工作树默认隐藏？",
           "8db4e19a26": "此设置不会隐藏通过 Orca 创建的工作树。",
-          "54a7c2f183": "对于新添加的仓库，手动或通过其他工具创建的工作树默认隐藏，以免侧边栏出现意外内容。",
-          "b9e0d43675": "“始终显示”会显示当前及以后创建的非 Orca 工作树，包括 .claude/worktrees/* 和 .gsd-workspaces/* 下的智能体工作树。关闭时，可使用下方的“显示”逐个添加。"
+          "ec1e6a10fb": "其他工作树默认隐藏，以免侧边栏意外变得杂乱。",
+          "1c68c9cf77": "启用来源可显示其当前及未来的所有工作树，也可以在下方单独显示工作树。"
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "无需启用来源即可单独显示一个工作树。",
+          "showWorktree": "显示位于 {{value1}} 的 {{value0}}"
         },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "非 Orca 工作树",
@@ -5317,10 +5335,18 @@
           "b8d24e61f5": "无法列出此仓库的工作树。",
           "c5e70a93b1": "重试",
           "7d21c5e848": "已隐藏的工作树（{{value0}}）",
-          "9b53f7a160": "选择要单独显示的隐藏工作树。",
           "2f80cd4b97": "显示中…",
           "e64b81d3a9": "显示",
-          "d40d436fc2": "无法更新工作树可见性。请重试。"
+          "d40d436fc2": "无法更新工作树可见性。请重试。",
+          "unsupportedHost": "此主机不支持按来源设置工作树可见性。请更新主机上的 Orca 以更改此设置。",
+          "search": "搜索隐藏的工作树",
+          "searchPlaceholder": "搜索 {{value0}} 个工作树…",
+          "noMatches": "没有匹配的工作树",
+          "allShown": "已显示所有检测到的工作树",
+          "noneFound": "未找到非 Orca 工作树",
+          "tryDifferentSearch": "请尝试其他名称或路径。",
+          "disableSource": "禁用来源后可单独管理其工作树。",
+          "appearWhenDetected": "Orca 检测到新工作树后，它们会显示在这里。"
         },
         "add": {
           "repo": {
@@ -5850,6 +5876,26 @@
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "跳转到顶部"
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "其他位置",
+          "custom": "自定义位置",
+          "otherPath": "所列来源之外",
+          "invalidPath": "请输入此主机上的绝对路径。",
+          "duplicatePath": "此位置已在列表中。",
+          "limit": "请先移除一个自定义位置再添加新位置。",
+          "sources": "来源",
+          "sourcesDescription": "已启用来源的当前及未来工作树会显示在侧边栏中。",
+          "found": "找到 {{value0}} 个",
+          "remove": "移除 {{value0}}",
+          "removeLocation": "移除自定义位置",
+          "toggle": "显示 {{value0}} 的当前及未来工作树",
+          "addLocation": "添加位置",
+          "worktreeRoot": "工作树根目录",
+          "add": "添加",
+          "rootHelp": "Orca 会识别此文件夹下的工作树。"
         }
       },
       "shared": {
@@ -7723,7 +7769,7 @@
           "3de4bbb841": "终端",
           "dd72ed437a": "选择在\"任务\"页面和侧栏中显示的任务提供者",
           "11faa2f7dd": "任务来源",
-          "cfa34f4465": "分支命名、基础引用和 Git AI Author",
+          "cfa34f4465": "分支命名、基础引用和 Git AI Author。",
           "70100f94c7": "Git 和源代码控制",
           "b07041697f": "连接 GitHub、GitLab、Linear 和代码托管服务",
           "c9ca101a3b": "集成",
@@ -11154,6 +11200,11 @@
               "disconnectFailed": "无法删除保存的 Bitbucket 凭据。"
             }
           }
+        },
+        "DaemonDegradedNotice": {
+          "title": "新终端未保存",
+          "body": "终端主机停止响应。 Orca 保留了它，而不是结束它可能仍在托管的任何内容，但在主机再次响应之前它无法到达这些终端 - 重新打开窗格重试，一旦响应就可以工作。新终端在主机外部打开，并在您退出 Orca 时关闭。重新启动主机通常会清除此问题，并结束每个终端 - 包括仍在保留的终端和在其外部运行的终端。",
+          "action": "重启主机"
         }
       },
       "right": {
@@ -12908,7 +12959,8 @@
             "searchJira": "搜索 Jira 议题或粘贴议题 URL",
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "无法关联此 Jira 议题。请选择匹配的站点或重新连接 Jira，然后重试",
-            "emoji": "Emoji"
+            "emoji": "Emoji",
+            "loadingLinearIssue": "正在加载 Linear 议题..."
           },
           "ProjectCombobox": {
             "empty": "没有匹配搜索的项目。",
@@ -15097,7 +15149,9 @@
           "tableStatus": "状态",
           "tableActions": "操作",
           "newAutomation": "新建自动化",
-          "rowActions": "自动化操作"
+          "rowActions": "自动化操作",
+          "tableLastRun": "最后一次运行",
+          "noListMatches": "没有自动化匹配。"
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "正在加载自动化"
@@ -15207,6 +15261,14 @@
                 "cbd6ff6dd8": "未启动工作区"
               }
             }
+          },
+          "list": {
+            "last": {
+              "run": {
+                "done": "完成",
+                "failed": "失败的"
+              }
+            }
           }
         },
         "external": {
@@ -15239,6 +15301,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "自动化操作"
+        },
+        "AutomationListFilterMenu": {
+          "removeFilter": "删除 {{value0}} 过滤器",
+          "failed": "失败的",
+          "succeeded": "成功了",
+          "neverRan": "从来没有跑过",
+          "filters": "过滤器",
+          "all": "全部",
+          "clear": "清除过滤器"
+        },
+        "AutomationListSortHeader": {
+          "sortedAscending": "{{value0}}，升序排序",
+          "sortedDescending": "{{value0}}，降序排序"
         }
       },
       "agent": {
@@ -16244,7 +16319,13 @@
       "clear": "清除搜索",
       "results": "显示 {{shown}} / {{total}}"
     },
-    "settingsLabel": "代理仪表盘设置"
+    "settingsLabel": "代理仪表盘设置",
+    "host": {
+      "sshNamed": "SSH 主机·{{host}}",
+      "ssh": "SSH 主机",
+      "remoteNamed": "远程 Orca 主机 · {{host}}",
+      "remote": "远程 Orca 主机"
+    }
   },
   "dashboard": {
     "sidebar": {

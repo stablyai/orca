@@ -116,7 +116,8 @@ test.describe('Voice microphone selection', () => {
 
     const microphone = orcaPage.getByRole('combobox', { name: 'Microphone' })
     await expect(microphone).toHaveText('System default')
-    await microphone.click()
+    // Settings can still be animating; keyboard activation does not depend on its position.
+    await microphone.press('Space')
     await expect(orcaPage.getByRole('option', { name: 'USB Microphone' })).toBeVisible()
     await orcaPage.getByRole('option', { name: 'USB Microphone' }).click()
 
@@ -147,7 +148,7 @@ test.describe('Voice microphone selection', () => {
     await prepareVoiceSettings(orcaPage, 'stale-airpods-id', 'AirPods')
 
     const microphone = orcaPage.getByRole('combobox', { name: 'Microphone' })
-    await microphone.click()
+    await microphone.press('Space')
     await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toBeVisible()
     await orcaPage.keyboard.press('Escape')
 
@@ -165,7 +166,7 @@ test.describe('Voice microphone selection', () => {
     })
 
     await expect(microphone).toHaveText('AirPods')
-    await microphone.click()
+    await microphone.press('Space')
     await expect(orcaPage.getByRole('option', { name: 'AirPods' })).toBeVisible()
     await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toHaveCount(0)
     await orcaPage.keyboard.press('Escape')

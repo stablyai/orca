@@ -111,6 +111,18 @@ export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type { ForkSyncMode, GitForkSyncExpectedUpstream, GitForkSyncResult } from './git-fork-sync'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
+export type BuiltInWorktreeVisibilitySourceId = 'claude' | 'gsd'
+
+export type CustomWorktreeVisibilitySource = {
+  id: string
+  rootPath: string
+}
+
+export type WorktreeVisibilitySourcePreferences = {
+  builtIn?: Partial<Record<BuiltInWorktreeVisibilitySourceId, ExternalWorktreeVisibility>>
+  custom?: Record<string, ExternalWorktreeVisibility>
+}
+
 export type ProjectProviderIdentity = {
   provider: 'github'
   owner: string
@@ -291,6 +303,10 @@ export type Repo = {
   importedExternalWorktreePaths?: string[]
   /** Opt-in repo policy for coding-agent scratch worktrees; absent means hide. */
   agentWorktreeVisibility?: ExternalWorktreeVisibility
+  /** User-defined roots classified independently from ordinary external worktrees. */
+  customWorktreeVisibilitySources?: CustomWorktreeVisibilitySource[]
+  /** Per-source visibility; absent built-ins inherit the legacy agent policy. */
+  worktreeVisibilitySourcePreferences?: WorktreeVisibilitySourcePreferences
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
   /** Paths (relative to the primary checkout) that should be APFS clone-copied
@@ -707,6 +723,10 @@ export type DetectedWorktree = Worktree & {
   ownership: WorktreeOwnership
   selectedCheckout: boolean
   visible: boolean
+  /** Optional additive source identity; older hosts omit it. */
+  visibilitySource?:
+    | { kind: 'built-in'; id: BuiltInWorktreeVisibilitySourceId }
+    | { kind: 'custom'; id: string }
 }
 
 export type DetectedWorktreeListResult = {

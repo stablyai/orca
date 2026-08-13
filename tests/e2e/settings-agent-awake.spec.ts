@@ -150,15 +150,15 @@ test.describe('Agent awake setting', () => {
       name: 'Keep computer awake'
     })
     const offMode = keepAwakeModes.getByRole('radio', { name: 'Off' })
-    const autoMode = keepAwakeModes.getByRole('radio', { name: 'Auto' })
+    const agentMode = keepAwakeModes.getByRole('radio', { name: 'Agent' })
 
     await expect(offMode).toHaveAttribute('aria-checked', 'true')
-    await autoMode.click()
-    await expect(autoMode).toHaveAttribute('aria-checked', 'true')
+    await agentMode.click()
+    await expect(agentMode).toHaveAttribute('aria-checked', 'true')
     await expect
       .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
         timeout: 5_000,
-        message: 'keep-awake mode did not persist after selecting Auto'
+        message: 'keep-awake mode did not persist after selecting Agent'
       })
       .toBe('auto')
 
