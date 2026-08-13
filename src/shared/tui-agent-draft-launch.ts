@@ -1,4 +1,5 @@
 import {
+  appendSessionRulesConfigOverride,
   appendSessionRulesFlag,
   appendSessionRulesFileCleanup,
   appliedSessionOptionProps,
@@ -83,11 +84,20 @@ export function buildAgentDraftLaunchPlan(args: {
     args.agentSessionRulesText?.trim() && !hasNativeRulesInjection
       ? prependSessionRulesToPrompt(trimmed, args.agentSessionRulesText)
       : trimmed
-  const commandWithSessionRules = appendSessionRulesFlag(
-    baseCommand.command,
+  // Why: mirrors buildAgentStartupPlan — a config-override agent (e.g. Codex) needs its rules
+  // embedded via appendSessionRulesConfigOverride too, not just the text/file argv flag. Currently
+  // dormant (no agent combines draftPromptFlag/draftPromptEnvVar with a config override), but silent
+  // if left out the moment one does — see #38.
+  const commandWithSessionRules = appendSessionRulesConfigOverride(
+    appendSessionRulesFlag(
+      baseCommand.command,
+      config,
+      args.agentSessionRulesFilePath,
+      hasNativeRulesInjection ? args.agentSessionRulesText : null,
+      rulesDeliveryShell
+    ),
     config,
-    args.agentSessionRulesFilePath,
-    hasNativeRulesInjection ? args.agentSessionRulesText : null,
+    args.agentSessionRulesText,
     rulesDeliveryShell
   )
   const launchConfig = buildSleepingAgentLaunchConfig({
