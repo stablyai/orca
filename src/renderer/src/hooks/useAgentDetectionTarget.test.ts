@@ -161,3 +161,12 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
     expect(repoIdReads).toBe(100)
   })
 })
+
+describe('parseAgentDetectionTargetKey', () => {
+  it.each(['local:missing-context', 'local:%:host'])(
+    'falls back to unscoped local detection for malformed key %s',
+    (key) => {
+      expect(parseAgentDetectionTargetKey(key)).toEqual({ kind: 'local' })
+    }
+  )
+})

@@ -80,10 +80,17 @@ export function parseAgentDetectionTargetKey(
     const [encodedWorktreeId, encodedContextKey] = key
       .slice(`${AGENT_DETECTION_LOCAL_TARGET_KEY}:`.length)
       .split(':')
-    return {
-      kind: 'local',
-      worktreeId: decodeURIComponent(encodedWorktreeId),
-      contextKey: decodeURIComponent(encodedContextKey)
+    if (!encodedWorktreeId || !encodedContextKey) {
+      return { kind: 'local' }
+    }
+    try {
+      return {
+        kind: 'local',
+        worktreeId: decodeURIComponent(encodedWorktreeId),
+        contextKey: decodeURIComponent(encodedContextKey)
+      }
+    } catch {
+      return { kind: 'local' }
     }
   }
   if (key.startsWith('ssh:')) {
