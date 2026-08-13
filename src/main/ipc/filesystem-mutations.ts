@@ -360,8 +360,10 @@ export type StagedExternalImportEntry =
   | { relativePath: string; kind: 'directory' }
   | { relativePath: string; kind: 'file'; contentBase64: string }
 
-const REMOTE_IMPORT_MAX_FILE_BYTES = 25 * 1024 * 1024
-const REMOTE_IMPORT_MAX_TOTAL_BYTES = 100 * 1024 * 1024
+const REMOTE_IMPORT_MAX_FILE_MB = 25
+const REMOTE_IMPORT_MAX_TOTAL_MB = 100
+const REMOTE_IMPORT_MAX_FILE_BYTES = REMOTE_IMPORT_MAX_FILE_MB * 1024 * 1024
+const REMOTE_IMPORT_MAX_TOTAL_BYTES = REMOTE_IMPORT_MAX_TOTAL_MB * 1024 * 1024
 
 class RuntimeUploadSymlinkError extends Error {}
 
@@ -499,7 +501,12 @@ async function stageOneSourceForRuntimeUpload(
   try {
     const entries = sourceStat.isDirectory()
       ? await stageDirectoryEntries(resolvedSource)
-      : [(await stageFileEntry(resolvedSource, '')).entry]
+      : // Why: a top-level file's staged relativePath must stay '', so its
+        // name reaches error messages via a display-only option.
+        [
+          (await stageFileEntry(resolvedSource, '', { displayName: basename(resolvedSource) }))
+            .entry
+        ]
     return {
       sourcePath,
       status: 'staged',
@@ -525,22 +532,20 @@ async function stageDirectoryEntries(rootPath: string): Promise<StagedExternalIm
   const rootRealPath = await realpath(rootPath)
 
   async function visit(dirPath: string): Promise<void> {
+    // Why: the root itself has no relative path, and filesystem roots also
+    // have no basename; keep their failure labels actionable and non-empty.
+    const dirDisplayPath =
+      normalizeRelativeUploadPath(relative(rootPath, dirPath)) ||
+      basename(rootPath) ||
+      'root directory'
     const dirStat = await lstat(dirPath)
     if (dirStat.isSymbolicLink()) {
-      throw new RuntimeUploadSymlinkError(
-        `Symlink not allowed in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
-      )
+      throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${dirDisplayPath}'`)
     }
     if (!dirStat.isDirectory()) {
-      throw new Error(
-        `Unsupported file type in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
-      )
+      throw new Error(`Unsupported file type in '${dirDisplayPath}'`)
     }
-    await assertRealPathInsideRoot(
-      rootRealPath,
-      dirPath,
-      normalizeRelativeUploadPath(relative(rootPath, dirPath))
-    )
+    await assertRealPathInsideRoot(rootRealPath, dirPath, dirDisplayPath)
     const dirEntries = await readdir(dirPath, { withFileTypes: true })
     for (const entry of dirEntries) {
       const childPath = join(dirPath, entry.name)
@@ -572,10 +577,13 @@ async function stageDirectoryEntries(rootPath: string): Promise<StagedExternalIm
 async function stageFileEntry(
   filePath: string,
   relativePath: string,
-  options?: { rootRealPath?: string; totalBytesBefore?: number }
+  options?: { rootRealPath?: string; totalBytesBefore?: number; displayName?: string }
 ): Promise<{ entry: StagedExternalImportEntry; byteLength: number }> {
   const statResult = await lstat(filePath)
-  const displayPath = normalizeRelativeUploadPath(relativePath)
+  const entryRelativePath = normalizeRelativeUploadPath(relativePath)
+  // Why: the staged entry must keep the top-level '' relativePath; only
+  // user-facing failure reasons get the display-name fallback.
+  const displayPath = entryRelativePath || options?.displayName || ''
   if (statResult.isSymbolicLink()) {
     throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${displayPath}'`)
   }
@@ -589,7 +597,7 @@ async function stageFileEntry(
     options?.totalBytesBefore === undefined
       ? statResult.size
       : options.totalBytesBefore + statResult.size
-  assertRemoteUploadBudget(relativePath, statResult.size, initialTotalBytes)
+  assertRemoteUploadBudget(displayPath, statResult.size, initialTotalBytes)
   const fileHandle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
     const openedStat = await fileHandle.stat()
@@ -607,7 +615,7 @@ async function stageFileEntry(
       options?.totalBytesBefore === undefined
         ? openedStat.size
         : options.totalBytesBefore + openedStat.size
-    assertRemoteUploadBudget(relativePath, openedStat.size, totalBytes)
+    assertRemoteUploadBudget(displayPath, openedStat.size, totalBytes)
     const buffer = await fileHandle.readFile()
     const afterReadStat = await fileHandle.stat()
     if (afterReadStat.size !== openedStat.size) {
@@ -615,7 +623,7 @@ async function stageFileEntry(
     }
     return {
       entry: {
-        relativePath: displayPath,
+        relativePath: entryRelativePath,
         kind: 'file',
         contentBase64: buffer.toString('base64')
       },
@@ -643,15 +651,16 @@ async function assertRealPathInsideRoot(
 }
 
 function assertRemoteUploadBudget(
-  relativePath: string,
+  displayPath: string,
   fileBytes: number,
   totalBytes: number
 ): void {
   if (fileBytes > REMOTE_IMPORT_MAX_FILE_BYTES) {
-    throw new Error(`'${relativePath}' is too large for remote import`)
+    const fileLabel = displayPath ? `'${displayPath}'` : 'File'
+    throw new Error(`${fileLabel} exceeds the ${REMOTE_IMPORT_MAX_FILE_MB} MB remote import limit`)
   }
   if (totalBytes > REMOTE_IMPORT_MAX_TOTAL_BYTES) {
-    throw new Error('Remote import is too large')
+    throw new Error(`Remote import exceeds the ${REMOTE_IMPORT_MAX_TOTAL_MB} MB total limit`)
   }
 }
 

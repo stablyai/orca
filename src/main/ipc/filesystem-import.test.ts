@@ -522,6 +522,34 @@ describe('fs:importExternalPaths', () => {
     expect(closeMock).toHaveBeenCalled()
   })
 
+  it('reports the per-file remote import limit before reading an oversized file', async () => {
+    const sourcePath = '/tmp/dropped/large.bin'
+    const resolvedPath = path.resolve(sourcePath)
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === resolvedPath) {
+        return {
+          size: 80 * 1024 * 1024,
+          ino: 1,
+          dev: 1,
+          isFile: () => true,
+          isDirectory: () => false,
+          isSymbolicLink: () => false
+        }
+      }
+      throw enoent()
+    })
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: { status: string; reason?: string }[] }
+
+    expect(result.sources[0]).toMatchObject({
+      status: 'failed',
+      reason: "'large.bin' exceeds the 25 MB remote import limit"
+    })
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
   it('stages runtime upload directories whose child names start with dotdot characters', async () => {
     const sourcePath = '/tmp/dropped/project'
     const resolvedPath = path.resolve(sourcePath)
@@ -704,7 +732,7 @@ describe('fs:importExternalPaths', () => {
 
     expect(result.sources[0]).toMatchObject({
       status: 'failed',
-      reason: 'Remote import is too large'
+      reason: 'Remote import exceeds the 100 MB total limit'
     })
     expect(readFileMock).toHaveBeenCalledTimes(4)
     expect(openMock).not.toHaveBeenCalledWith(filePaths.at(-1), expect.anything())
@@ -744,7 +772,7 @@ describe('fs:importExternalPaths', () => {
 
     expect(result.sources[0]).toMatchObject({
       status: 'failed',
-      reason: "File changed during upload staging: ''"
+      reason: "File changed during upload staging: 'logo.png'"
     })
     expect(readFileHandleMock).not.toHaveBeenCalled()
   })
@@ -773,7 +801,33 @@ describe('fs:importExternalPaths', () => {
 
     expect(result.sources[0]).toMatchObject({
       status: 'failed',
-      reason: "Path escaped upload root during staging: ''"
+      reason: "Path escaped upload root during staging: 'assets'"
+    })
+  })
+
+  it('keeps the runtime upload failure label non-empty for a filesystem root', async () => {
+    const sourcePath = path.parse(path.resolve('.')).root
+    lstatMock
+      .mockResolvedValueOnce({
+        isFile: () => false,
+        isDirectory: () => true,
+        isSymbolicLink: () => false
+      })
+      .mockResolvedValueOnce({
+        isFile: () => true,
+        isDirectory: () => false,
+        isSymbolicLink: () => false
+      })
+    realpathMock.mockResolvedValue(sourcePath)
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: { status: string; reason?: string }[] }
+
+    expect(path.basename(sourcePath)).toBe('')
+    expect(result.sources[0]).toMatchObject({
+      status: 'failed',
+      reason: "Unsupported file type in 'root directory'"
     })
   })
 })

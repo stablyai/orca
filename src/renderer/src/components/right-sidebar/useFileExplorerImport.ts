@@ -5,6 +5,7 @@ import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { translate } from '@/i18n/i18n'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
+import { getFileExplorerImportFailureToast } from './file-explorer-import-feedback'
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
@@ -98,14 +99,15 @@ export function useFileExplorerImport({
           }
 
           if (failed.length > 0) {
-            const noun = failed.length === 1 ? 'file' : 'files'
-            toast.error(
-              translate(
-                'auto.components.right.sidebar.useFileExplorerImport.132fd0e1e9',
-                'Failed to import {{value0}} {{value1}}.',
-                { value0: failed.length, value1: noun }
-              )
-            )
+            const message = getFileExplorerImportFailureToast(failed)
+            // Why: sonner renders string descriptions with collapsed whitespace;
+            // pre-line keeps the one-reason-per-line format. Multi-line reasons
+            // need more than sonner's 4s default to read and act on.
+            toast.error(message.title, {
+              description: message.description,
+              descriptionClassName: 'whitespace-pre-line',
+              duration: 60_000
+            })
           } else if (skipped.length > 0 && imported.length === 0) {
             const noun = skipped.length === 1 ? 'file' : 'files'
             toast.error(
