@@ -152,18 +152,20 @@
   --orca-security-border: #e5e5e5;
   --orca-security-input: #e5e5e5;
   --orca-security-ring: #a1a1a1;
-  --background: #fff;
-  --editor-surface: #ffffff;
+  /* Light "cream" surface ladder — mirrors dark elevation.
+     Keep in sync with src/renderer/src/lib/light-surface-tokens.ts. */
+  --background: #fdfcfa;
+  --editor-surface: #f6f4ef;
   --foreground: #0a0a0a;
-  --card: #fff;
+  --card: #fcfbf8;
   --card-foreground: #0a0a0a;
-  --popover: #fff;
+  --popover: #fcfbf8;
   --popover-foreground: #0a0a0a;
   --primary: #171717;
   --primary-foreground: #fafafa;
   --secondary: #f5f5f5;
   --secondary-foreground: #171717;
-  --muted: #f5f5f5;
+  --muted: #f2f1ec;
   --muted-foreground: #737373;
   --accent: #f5f5f5;
   --accent-foreground: #171717;
@@ -199,7 +201,7 @@
   --worktree-sidebar-accent-foreground: #171717;
   --worktree-sidebar-border: #e5e5e5;
   --worktree-sidebar-ring: #a1a1a1;
-  --sidebar: #fafafa;
+  --sidebar: #f8f7f3;
   --sidebar-foreground: #0a0a0a;
   --sidebar-primary: #171717;
   --sidebar-primary-foreground: #fafafa;
