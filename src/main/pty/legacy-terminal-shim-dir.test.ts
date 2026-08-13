@@ -123,6 +123,33 @@ describe('legacy terminal shim neutralization', () => {
     }
   })
 
+  it('guards both cmd PATH walks so an empty variable cannot break parsing', () => {
+    // Why: `%VAR:;=" "%` on an empty variable leaves an unbalanced quote that desynchronizes
+    // cmd parsing for the rest of the file, turning the not-found branch into
+    // `1>&2 was unexpected at this time.` Reproduced on Windows before this guard.
+    const userData = makeUserDataDir()
+    const win32Dir = join(userData, 'orca-terminal-attribution', 'win32')
+    mkdirSync(win32Dir, { recursive: true })
+
+    neutralizeLegacyTerminalShimDir(userData)
+
+    for (const command of ['git', 'gh'] as const) {
+      const cmd = readFileSync(join(win32Dir, `${command}.cmd`), 'utf8')
+      expect(cmd).toContain('if not defined PATH goto :orca_path_walked')
+      expect(cmd).toContain('if not defined orca_clean_path goto :orca_candidates_walked')
+      for (const [guard, loop] of [
+        ['if not defined PATH goto :orca_path_walked', 'for %%P in ("%PATH:;='],
+        [
+          'if not defined orca_clean_path goto :orca_candidates_walked',
+          'for %%P in ("%orca_clean_path:;='
+        ]
+      ] as const) {
+        expect(cmd.indexOf(guard)).toBeGreaterThan(-1)
+        expect(cmd.indexOf(guard)).toBeLessThan(cmd.indexOf(loop))
+      }
+    }
+  })
+
   itOnPosix('does not let an empty PATH element resolve the command from the cwd', async () => {
     // Why (STA-4169): an empty PATH element means the current directory on POSIX.
     const userData = makeUserDataDir()

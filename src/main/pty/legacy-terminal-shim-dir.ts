@@ -31,7 +31,11 @@ set "orca_real=%ORCA_REAL___ORCA_UPPER_COMMAND__%"
 set "orca_wrapper_dir=%~dp0"
 set "orca_legacy_wrapper_dir=%ORCA_ATTRIBUTION_SHIM_DIR%"
 set "orca_clean_path="
+rem Why: an empty PATH leaves the substitution below with an unbalanced quote, which
+rem desynchronizes cmd parsing for the rest of the file. Skip the line entirely instead.
+if not defined PATH goto :orca_path_walked
 for %%P in ("%PATH:;=" "%") do call :orca_append_path "%%~P"
+:orca_path_walked
 set "PATH=%orca_clean_path%"
 set "ORCA_ENABLE_GIT_ATTRIBUTION="
 set "ORCA_GIT_COMMIT_TRAILER="
@@ -47,7 +51,9 @@ if defined orca_real if not exist "%orca_real%" set "orca_real="
 if defined orca_real goto run
 rem Why: an unqualified Windows command lookup searches the current directory before PATH, so a
 rem repository-local __ORCA_COMMAND__.exe would win. Walk the cleaned PATH ourselves instead.
+if not defined orca_clean_path goto :orca_candidates_walked
 for %%P in ("%orca_clean_path:;=" "%") do call :orca_try_candidate "%%~P"
+:orca_candidates_walked
 if not defined orca_real (
   echo Orca compatibility wrapper could not locate __ORCA_COMMAND__ on PATH. 1>&2
   exit /b 127
