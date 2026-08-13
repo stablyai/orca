@@ -1908,7 +1908,22 @@
         "jiraLinkSourceUnavailable": "无法关联此 Jira 议题。请重新连接 Jira 或选择匹配的站点，然后重试。",
         "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
         "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
-        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。",
+        "jiraFiltersMenuLabel": "筛选器",
+        "jiraFiltersSavedHeading": "已保存在 Jira",
+        "jiraFiltersCustomHeading": "我的筛选器",
+        "jiraFiltersLoadingSaved": "加载中…",
+        "jiraFiltersSavedEmpty": "没有已保存的筛选器",
+        "jiraFiltersNewCustom": "新建自定义筛选器…",
+        "jiraFiltersEditAria": "编辑筛选器“{{name}}”",
+        "jiraFiltersDeleteAria": "删除筛选器“{{name}}”",
+        "jiraFiltersDialogTitleEdit": "编辑筛选器",
+        "jiraFiltersDialogTitleNew": "新建筛选器",
+        "jiraFiltersDialogDescription": "保存在此设备上。JQL 将在你连接的 Jira 站点上运行。",
+        "jiraFiltersNameLabel": "名称",
+        "jiraFiltersNamePlaceholder": "例如:我的未解决缺陷",
+        "jiraFiltersJqlLabel": "JQL",
+        "jiraFiltersSave": "保存"
       },
       "Terminal": {
         "73768427cf": "关闭",

@@ -19,6 +19,7 @@ import {
   searchIssues,
   updateIssue
 } from '../jira/issues'
+import { listSavedFilters } from '../jira/saved-filters'
 import type {
   JiraConnectArgs,
   JiraCreateIssueArgs,
@@ -246,6 +247,10 @@ export function registerJiraHandlers(): void {
 
   ipcMain.handle('jira:listProjects', async (_event, args?: { siteId?: JiraSiteSelection }) => {
     return listProjects(normalizeSiteSelection(args?.siteId))
+  })
+
+  ipcMain.handle('jira:listSavedFilters', async (_event, args?: { siteId?: JiraSiteSelection }) => {
+    return listSavedFilters(normalizeSiteSelection(args?.siteId))
   })
 
   ipcMain.handle(

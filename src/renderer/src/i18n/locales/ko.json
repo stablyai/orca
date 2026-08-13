@@ -1908,7 +1908,22 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "{{value0}} 페이지는 GitHub 검색이 반환할 수 있는 범위를 벗어났습니다.",
         "loadPageFailed": "GitHub에서 {{value0}} 페이지를 불러오지 못했습니다.",
-        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다."
+        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다.",
+        "jiraFiltersMenuLabel": "필터",
+        "jiraFiltersSavedHeading": "Jira에 저장됨",
+        "jiraFiltersCustomHeading": "내 필터",
+        "jiraFiltersLoadingSaved": "불러오는 중…",
+        "jiraFiltersSavedEmpty": "저장된 필터가 없습니다",
+        "jiraFiltersNewCustom": "새 사용자 지정 필터…",
+        "jiraFiltersEditAria": "필터 “{{name}}” 편집",
+        "jiraFiltersDeleteAria": "필터 “{{name}}” 삭제",
+        "jiraFiltersDialogTitleEdit": "필터 편집",
+        "jiraFiltersDialogTitleNew": "새 필터",
+        "jiraFiltersDialogDescription": "이 기기에 저장됩니다. JQL은 연결된 Jira 사이트에서 실행됩니다.",
+        "jiraFiltersNameLabel": "이름",
+        "jiraFiltersNamePlaceholder": "예: 내 미해결 버그",
+        "jiraFiltersJqlLabel": "JQL",
+        "jiraFiltersSave": "저장"
       },
       "Terminal": {
         "73768427cf": "닫기",

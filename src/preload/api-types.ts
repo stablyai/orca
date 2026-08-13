@@ -211,6 +211,7 @@ import type {
   JiraIssueUpdate,
   JiraPriority,
   JiraProject,
+  JiraSavedFilter,
   JiraSiteSelection,
   JiraTransition,
   JiraUser,
@@ -2311,6 +2312,7 @@ export type PreloadApi = {
     }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
     issueComments: (args: { key: string; siteId?: string }) => Promise<JiraComment[]>
     listProjects: (args?: { siteId?: JiraSiteSelection }) => Promise<JiraProject[]>
+    listSavedFilters: (args?: { siteId?: JiraSiteSelection }) => Promise<JiraSavedFilter[]>
     listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) => Promise<JiraIssueType[]>
     listCreateFields: (args: {
       projectIdOrKey: string

@@ -1908,7 +1908,22 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "La página {{value0}} está más allá de lo que la búsqueda de GitHub puede devolver.",
         "loadPageFailed": "No se pudo cargar la página {{value0}} desde GitHub.",
-        "loadPageNoMoreResults": "No hay más resultados en la página {{value0}}."
+        "loadPageNoMoreResults": "No hay más resultados en la página {{value0}}.",
+        "jiraFiltersMenuLabel": "Filtros",
+        "jiraFiltersSavedHeading": "Guardados en Jira",
+        "jiraFiltersCustomHeading": "Mis filtros",
+        "jiraFiltersLoadingSaved": "Cargando…",
+        "jiraFiltersSavedEmpty": "No hay filtros guardados",
+        "jiraFiltersNewCustom": "Nuevo filtro personalizado…",
+        "jiraFiltersEditAria": "Editar el filtro “{{name}}”",
+        "jiraFiltersDeleteAria": "Eliminar el filtro “{{name}}”",
+        "jiraFiltersDialogTitleEdit": "Editar filtro",
+        "jiraFiltersDialogTitleNew": "Nuevo filtro",
+        "jiraFiltersDialogDescription": "Se guarda en este dispositivo. El JQL se ejecuta en tus sitios de Jira conectados.",
+        "jiraFiltersNameLabel": "Nombre",
+        "jiraFiltersNamePlaceholder": "p. ej., Mis bugs abiertos",
+        "jiraFiltersJqlLabel": "JQL",
+        "jiraFiltersSave": "Guardar"
       },
       "Terminal": {
         "73768427cf": "Cerrar",

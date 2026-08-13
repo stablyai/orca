@@ -2020,7 +2020,22 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "jiraFiltersMenuLabel": "Filters",
+        "jiraFiltersSavedHeading": "Saved in Jira",
+        "jiraFiltersCustomHeading": "My filters",
+        "jiraFiltersLoadingSaved": "Loading…",
+        "jiraFiltersSavedEmpty": "No saved filters",
+        "jiraFiltersNewCustom": "New custom filter…",
+        "jiraFiltersEditAria": "Edit filter “{{name}}”",
+        "jiraFiltersDeleteAria": "Delete filter “{{name}}”",
+        "jiraFiltersDialogTitleEdit": "Edit filter",
+        "jiraFiltersDialogTitleNew": "New filter",
+        "jiraFiltersDialogDescription": "Saved on this device. The JQL runs against your connected Jira sites.",
+        "jiraFiltersNameLabel": "Name",
+        "jiraFiltersNamePlaceholder": "e.g. My open bugs",
+        "jiraFiltersJqlLabel": "JQL",
+        "jiraFiltersSave": "Save"
       },
       "Terminal": {
         "73768427cf": "Close",

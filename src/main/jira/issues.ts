@@ -169,7 +169,7 @@ function toIssueSearchFailureError(error: unknown): unknown {
   return new Error(`Error ${status}: ${error.message}`)
 }
 
-function shouldSurfaceSiteFailure(
+export function shouldSurfaceSiteFailure(
   selection: JiraSiteSelection | null | undefined,
   entryCount: number
 ): boolean {

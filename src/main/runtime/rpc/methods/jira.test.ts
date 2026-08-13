@@ -172,6 +172,7 @@ describe('jira RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       jiraListProjects: vi.fn().mockResolvedValue([{ id: 'project-1' }]),
+      jiraListSavedFilters: vi.fn().mockResolvedValue([{ id: 'filter-1' }]),
       jiraListIssueTypes: vi.fn().mockResolvedValue([{ id: 'type-1' }]),
       jiraListCreateFields: vi.fn().mockResolvedValue([{ key: 'customfield_10010' }]),
       jiraListPriorities: vi.fn().mockResolvedValue([{ id: 'priority-1' }]),
@@ -184,6 +185,7 @@ describe('jira RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
 
     await dispatcher.dispatch(makeRequest('jira.listProjects', { siteId: 'all' }))
+    await dispatcher.dispatch(makeRequest('jira.listSavedFilters', { siteId: 'site-1' }))
     await dispatcher.dispatch(
       makeRequest('jira.listIssueTypes', { projectIdOrKey: 'project-1', siteId: 'site-1' })
     )
@@ -210,6 +212,7 @@ describe('jira RPC methods', () => {
     )
 
     expect(runtime.jiraListProjects).toHaveBeenCalledWith('all')
+    expect(runtime.jiraListSavedFilters).toHaveBeenCalledWith('site-1')
     expect(runtime.jiraListIssueTypes).toHaveBeenCalledWith('project-1', 'site-1')
     expect(runtime.jiraListCreateFields).toHaveBeenCalledWith('project-1', 'type-1', 'site-1')
     expect(runtime.jiraListPriorities).toHaveBeenCalledWith('site-1')

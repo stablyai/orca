@@ -134,6 +134,16 @@ export type JiraIssueUpdate = {
 
 export type JiraIssueFilter = 'assigned' | 'reported' | 'all' | 'done'
 
+/** A saved filter fetched from Jira (owned or favourite), with its JQL expanded. */
+export type JiraSavedFilter = {
+  id: string
+  name: string
+  jql: string
+  siteId: string
+  siteName?: string
+  favourite?: boolean
+}
+
 export type JiraConnectArgs = {
   siteUrl: string
   // Ignored for 'server' auth: self-hosted PATs authenticate via Bearer

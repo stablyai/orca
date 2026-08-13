@@ -227,6 +227,11 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => runtime.jiraListProjects(params?.siteId)
   }),
   defineMethod({
+    name: 'jira.listSavedFilters',
+    params: SiteSelection,
+    handler: async (params, { runtime }) => runtime.jiraListSavedFilters(params?.siteId)
+  }),
+  defineMethod({
     name: 'jira.listIssueTypes',
     params: ProjectIssueTypes,
     handler: async (params, { runtime }) =>

@@ -1966,6 +1966,9 @@ const api = {
     listProjects: (args?: { siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listProjects', args),
 
+    listSavedFilters: (args?: { siteId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('jira:listSavedFilters', args),
+
     listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listIssueTypes', args),
 
