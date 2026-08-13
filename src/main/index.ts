@@ -2236,7 +2236,7 @@ void app.whenReady().then(async () => {
     }
     if ('discordRichPresenceEnabled' in updates) {
       // The manager reads isEnabled() on the next status change; force an immediate refresh.
-      discordPresenceManager?.refresh?.()
+      discordPresenceManager?.refresh()
     }
   })
   // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.

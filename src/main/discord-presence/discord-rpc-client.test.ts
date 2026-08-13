@@ -44,7 +44,8 @@ class SyncSocket extends EventEmitter {
     return this
   }
 
-  removeAllListeners(_event?: string) {
+  removeAllListeners(event?: string) {
+    super.removeAllListeners(event)
     return this
   }
 
@@ -63,6 +64,23 @@ class SyncSocket extends EventEmitter {
     const buf = Buffer.concat(this.written)
     const frame = decodeFrame(buf)
     return frame?.payload ?? null
+  }
+}
+
+// Socket that always errors before the connect callback fires (pipe not found)
+class FailSocket extends EventEmitter {
+  connect(_opts: Record<string, unknown>, _cb?: () => void) {
+    process.nextTick(() => this.emit('error', new Error('ENOENT')))
+    return this
+  }
+  write(_data: Uint8Array | string, cb?: (err?: Error) => void): boolean {
+    if (cb) cb()
+    return true
+  }
+  destroy() { return this }
+  removeAllListeners(event?: string) {
+    super.removeAllListeners(event)
+    return this
   }
 }
 
@@ -138,12 +156,22 @@ describe('createDiscordRpcClient', () => {
     expect(cb).toHaveBeenCalled()
   })
 
-  it('connect() rejects on socket error', async () => {
+  it('connect() rejects on error during handshake', async () => {
     const sock = new SyncSocket()
     const client = createDiscordRpcClient(CLIENT_ID, () => sock)
 
     const promise = client.connect()
     sock.emit('error', new Error('ECONNREFUSED'))
     await expect(promise).rejects.toThrow('ECONNREFUSED')
+  })
+
+  it('connect() rejects when all IPC pipes are unavailable', async () => {
+    let created = 0
+    const client = createDiscordRpcClient(CLIENT_ID, () => {
+      created++
+      return new FailSocket()
+    })
+    await expect(client.connect()).rejects.toThrow('Discord IPC not found (tried pipes 0-9)')
+    expect(created).toBe(10)
   })
 })

@@ -9,6 +9,14 @@ const OP_FRAME = 1
 const OP_PING = 3
 const OP_PONG = 4
 
+/** Discord closed the socket after receiving our handshake — almost always an invalid client_id. Retrying will not help. */
+export class DiscordHandshakeRejectedError extends Error {
+  constructor() {
+    super('Discord rejected the handshake — check your client_id (ORCA_DISCORD_CLIENT_ID)')
+    this.name = 'DiscordHandshakeRejectedError'
+  }
+}
+
 export interface DiscordRpcClient {
   connect(): Promise<void>
   setActivity(activity: DiscordActivity | null): Promise<void>
@@ -93,21 +101,12 @@ export function createDiscordRpcClient(
 
         socket.on('error', onError)
 
-        if (process.platform === 'win32') {
-          socket.connect({ path: pipePath }, () => {
-            if (settled) return
-            settled = true
-            socket!.removeListener('error', onError)
-            performHandshake(resolve, reject)
-          })
-        } else {
-          socket.connect({ path: pipePath }, () => {
-            if (settled) return
-            settled = true
-            socket!.removeListener('error', onError)
-            performHandshake(resolve, reject)
-          })
-        }
+        socket.connect({ path: pipePath }, () => {
+          if (settled) return
+          settled = true
+          socket!.removeListener('error', onError)
+          performHandshake(resolve, reject)
+        })
       }
 
       function performHandshake(resolve: (v: void) => void, reject: (err: Error) => void) {
@@ -118,7 +117,7 @@ export function createDiscordRpcClient(
         }
         socket.on('error', onError)
         socket.on('close', (..._args: unknown[]) => {
-          reject(new Error('Socket closed during handshake'))
+          reject(new DiscordHandshakeRejectedError())
         })
 
         let handshakeData = Buffer.alloc(0)
@@ -168,7 +167,6 @@ export function createDiscordRpcClient(
         } else if (opcode === OP_FRAME) {
           try {
             const msg = JSON.parse(payload)
-            // Resolve pending request if nonce matches
             if (msg.nonce && pendingRequests.has(msg.nonce)) {
               pendingRequests.get(msg.nonce)!.resolve()
               pendingRequests.delete(msg.nonce)
@@ -179,6 +177,10 @@ export function createDiscordRpcClient(
     })
 
     socket.on('close', (..._args: unknown[]) => {
+      for (const { reject } of pendingRequests.values()) {
+        reject(new Error('Disconnected'))
+      }
+      pendingRequests.clear()
       disconnectCb?.()
     })
   }
@@ -206,6 +208,10 @@ export function createDiscordRpcClient(
   }
 
   function disconnect() {
+    for (const { reject } of pendingRequests.values()) {
+      reject(new Error('Disconnected'))
+    }
+    pendingRequests.clear()
     if (socket) {
       socket.destroy()
       socket = null

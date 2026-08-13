@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { DiscordPresenceManager } from './discord-presence-manager'
+import { DiscordHandshakeRejectedError } from './discord-rpc-client'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { DiscordActivity } from './discord-presence-activity'
 
@@ -148,6 +149,34 @@ describe('DiscordPresenceManager', () => {
     subscribeChanges.mock.calls[0][0]()
     const activity = client.setActivity.mock.calls[0][0] as DiscordActivity
     expect(activity.state).toBe('5 terminals open')
+  })
+
+  it('does not retry when handshake is rejected (invalid client_id)', async () => {
+    const subscribeChanges = vi.fn().mockReturnValue(() => {})
+    const client = makeClient()
+    client.connect.mockRejectedValue(new DiscordHandshakeRejectedError())
+
+    const mgr = new DiscordPresenceManager({
+      getSnapshot: vi.fn().mockReturnValue([]),
+      subscribeChanges,
+      client,
+      isEnabled: () => true,
+      assetKey: 'orca'
+    })
+
+    mgr.start()
+    await flush()
+
+    // Connected once, rejected, should NOT schedule reconnect or retry
+    expect(client.connect).toHaveBeenCalledTimes(1)
+
+    // Subsequent onChange calls (e.g. from agent state changes) must not trigger a new connect
+    const changeCb = subscribeChanges.mock.calls[0][0] as () => void
+    changeCb()
+    changeCb()
+    await flush()
+
+    expect(client.connect).toHaveBeenCalledTimes(1)
   })
 
   it('stop() unsubscribes and disconnects', async () => {

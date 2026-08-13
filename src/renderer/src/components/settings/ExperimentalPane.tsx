@@ -311,11 +311,11 @@ export function ExperimentalPane({
       {showDiscordRichPresence ? (
         <SearchableSetting
           title={translate(
-            'auto.components.settings.experimental.search.discordRichPresence.title',
+            'auto.components.settings.ExperimentalPane.discordRichPresence.title',
             'Discord Rich Presence'
           )}
           description={translate(
-            'auto.components.settings.experimental.search.discordRichPresence.description',
+            'auto.components.settings.ExperimentalPane.discordRichPresence.description',
             'Show live agent activity on your Discord profile.'
           )}
           keywords={getExperimentalSearchEntry().discordRichPresence.keywords}
@@ -326,13 +326,13 @@ export function ExperimentalPane({
             <div className="min-w-0 shrink space-y-0.5">
               <Label>
                 {translate(
-                  'auto.components.settings.experimental.search.discordRichPresence.title',
+                  'auto.components.settings.ExperimentalPane.discordRichPresence.title',
                   'Discord Rich Presence'
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
                 {translate(
-                  'auto.components.settings.experimental.search.discordRichPresence.copy',
+                  'auto.components.settings.ExperimentalPane.discordRichPresence.copy',
                   'Shows your active agents, blocked state, and terminal count on your Discord profile while Orca is open. Requires the Discord desktop app. Your agent activity is only shared with your own Discord account.'
                 )}
               </p>
@@ -340,7 +340,7 @@ export function ExperimentalPane({
             <SettingsSwitch
               checked={discordRichPresenceEnabled}
               ariaLabel={translate(
-                'auto.components.settings.experimental.search.discordRichPresence.toggleLabel',
+                'auto.components.settings.ExperimentalPane.discordRichPresence.toggleLabel',
                 'Toggle Discord Rich Presence'
               )}
               onChange={() => updateSettings({ discordRichPresenceEnabled: !discordRichPresenceEnabled })}

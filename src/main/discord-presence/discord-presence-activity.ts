@@ -99,7 +99,6 @@ export function buildDiscordActivity(
 
   const details = `${snapshot.working} agent${snapshot.working !== 1 ? 's' : ''} working`
 
-  // Build state: agent types (up to 3) + optional blocked signal
   const parts: string[] = []
   const displayed = snapshot.agentTypes.slice(0, 3)
   parts.push(...displayed)

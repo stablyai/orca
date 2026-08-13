@@ -3,6 +3,7 @@ import type { DiscordActivity } from './discord-presence-activity'
 import { createPresenceThrottle } from './discord-presence-throttle'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { DiscordRpcClient } from './discord-rpc-client'
+import { DiscordHandshakeRejectedError } from './discord-rpc-client'
 
 export type DiscordPresenceManagerDeps = {
   getSnapshot: () => AgentStatusIpcPayload[]
@@ -27,6 +28,7 @@ export class DiscordPresenceManager {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectDelay = RECONNECT_BASE_DELAY_MS
   private stopped = false
+  private handshakeFailed = false
 
   constructor(deps: DiscordPresenceManagerDeps) {
     this.deps = deps
@@ -37,12 +39,11 @@ export class DiscordPresenceManager {
   }
 
   start(): void {
-    console.log('[discord-presence] start() called')
     if (this.unsubscribe) return // already started
     this.stopped = false
+    this.handshakeFailed = false
     this.unsubscribe = this.deps.subscribeChanges(() => this.onChange())
     this.deps.client.onDisconnect(() => this.onDisconnect())
-    console.log('[discord-presence] subscribed to status changes')
     void this.connectAndPublish()
   }
 
@@ -52,7 +53,6 @@ export class DiscordPresenceManager {
   }
 
   stop(): void {
-    console.log('[discord-presence] stop() called')
     this.stopped = true
     this.unsubscribe?.()
     this.unsubscribe = null
@@ -66,7 +66,6 @@ export class DiscordPresenceManager {
 
   private async connectAndPublish(): Promise<void> {
     if (!this.deps.isEnabled()) {
-      console.log('[discord-presence] feature disabled, skipping connect')
       return
     }
     try {
@@ -77,6 +76,11 @@ export class DiscordPresenceManager {
       console.log('[discord-presence] connected, publishing initial state')
       this.onChange()
     } catch (err) {
+      if (err instanceof DiscordHandshakeRejectedError) {
+        this.handshakeFailed = true
+        console.error('[discord-presence] handshake rejected — set ORCA_DISCORD_CLIENT_ID to a valid Discord Application ID and restart Orca')
+        return
+      }
       console.error('[discord-presence] connect failed:', err)
       this.scheduleReconnect()
     }
@@ -101,7 +105,6 @@ export class DiscordPresenceManager {
 
   private onChange(): void {
     const enabled = this.deps.isEnabled()
-    console.log('[discord-presence] onChange called, isEnabled:', enabled, 'connected:', this.connected)
     if (!enabled) {
       if (this.connected) {
         this.deps.client.setActivity(null).catch(() => {})
@@ -109,21 +112,18 @@ export class DiscordPresenceManager {
       return
     }
     if (!this.connected) {
-      void this.connectAndPublish()
+      if (!this.handshakeFailed) void this.connectAndPublish()
       return
     }
     const snapshot = {
       ...aggregateAgentStatus(this.deps.getSnapshot()),
       activeTerminals: this.deps.getActiveTerminalCount?.() ?? 0
     }
-    console.log('[discord-presence] snapshot:', JSON.stringify(snapshot))
     const activity = buildDiscordActivity(snapshot, this.deps.assetKey)
-    console.log('[discord-presence] activity:', JSON.stringify(activity))
     this.throttle(activity)
   }
 
   private publish(activity: DiscordActivity | null): void {
-    console.log('[discord-presence] publish:', activity === null ? 'clear' : activity.details)
     this.deps.client.setActivity(activity).catch((err) => {
       console.error('[discord-presence] publish failed:', err)
     })
