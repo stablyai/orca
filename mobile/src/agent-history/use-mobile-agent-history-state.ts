@@ -117,7 +117,8 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         const response = await client.sendRequest('aiVault.listSessions', {
           limit: MOBILE_AI_VAULT_SESSION_LIMIT,
           force: options.force,
-          scopePaths
+          scopePaths,
+          includeOwnedSshHosts: true
         })
         if (!isCurrent()) {
           return

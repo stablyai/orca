@@ -164,14 +164,17 @@ describe('aiVault.listSessions params schema', () => {
     expect(parsed.success).toBe(false)
   })
 
-  it('rejects non-runtime execution host ids before dispatch', () => {
+  it('rejects host ids that are neither a runtime nor an SSH target', () => {
     expect(
       AiVaultListSessionsParams.safeParse({ executionHostId: 'not-a-runtime-host' }).success
     ).toBe(false)
     expect(AiVaultListSessionsParams.safeParse({ executionHostId: 'local' }).success).toBe(false)
     expect(AiVaultListSessionsParams.safeParse({ executionHostId: 'ssh:dev-box' }).success).toBe(
-      false
+      true
     )
+    expect(
+      AiVaultListSessionsParams.safeParse({ executionHostId: 'runtime:hub-runtime' }).success
+    ).toBe(true)
   })
 })
 

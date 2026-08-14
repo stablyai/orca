@@ -12,8 +12,20 @@ const SshTarget = z.object({
   targetId: z.string().min(1)
 })
 
-function listRegisteredSshTargetSummaries(): { id: string; label: string }[] {
+function listRegisteredSshTargetIdentities(): { id: string; label: string }[] {
   return listRegisteredSshTargets().map(({ id, label }) => ({ id, label }))
+}
+
+function listRegisteredSshTargetSummaries(): {
+  id: string
+  label: string
+  connected: boolean
+}[] {
+  return listRegisteredSshTargets().map(({ id, label }) => ({
+    id,
+    label,
+    connected: getRegisteredSshState(id)?.status === 'connected'
+  }))
 }
 
 export const SSH_METHODS: RpcMethod[] = [
@@ -40,12 +52,13 @@ export const SSH_METHODS: RpcMethod[] = [
     name: 'ssh.listTargets',
     params: null,
     // Why: legacy clients can call this method directly, so it must preserve the same HUB-private secret boundary.
-    handler: () => ({ targets: listRegisteredSshTargetSummaries() })
+    handler: () => ({ targets: listRegisteredSshTargetIdentities() })
   }),
   defineMethod({
     name: 'ssh.listTargetSummaries',
     params: null,
     // Why: paired clients need display identity only; SSH addresses, jump chains, and credentials remain HUB-private.
+    // `connected` is optional for old readers and lets all-hosts skip disconnected targets.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
   }),
   defineMethod({

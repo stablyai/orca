@@ -16,6 +16,7 @@ export type RuntimeAiVaultHostInfo = {
 
 export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
+  includeOwnedSshHosts?: boolean
 }
 
 export type RuntimeAiVaultScanner = (

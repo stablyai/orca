@@ -7,12 +7,7 @@ import {
 } from '../ai-vault/cached-session-list'
 import { deleteAiVaultSession, registerAiVaultDeleteHandler } from './ai-vault-delete'
 import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
-import {
-  aiVaultScanIssueResult,
-  cancelledAiVaultListResult,
-  mergeAiVaultListResults
-} from '../ai-vault/session-list-results'
-import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
+import { cancelledAiVaultListResult } from '../ai-vault/session-list-results'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
 import {
@@ -26,27 +21,15 @@ import {
 } from '../../shared/ai-vault-types'
 import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-handler'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  requestedExecutionHostScope,
-  toRuntimeExecutionHostId,
-  toSshExecutionHostId,
-  type ExecutionHostScope
-} from '../../shared/execution-host'
-import { getActiveSshAiVaultHostInfos } from './ssh'
+import { LOCAL_EXECUTION_HOST_ID, requestedExecutionHostScope } from '../../shared/execution-host'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
-import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
-import {
-  scanRuntimeAiVaultSessions,
-  type RuntimeAiVaultHostInfo,
-  type RuntimeAiVaultScanner
-} from './ai-vault-runtime-scan'
+import type { RuntimeAiVaultHostInfo, RuntimeAiVaultScanner } from './ai-vault-runtime-scan'
 import {
   invalidateAiVaultHostLegCache,
   resetAiVaultHostLegCacheForTests,
   scanHostLegWithCache
 } from './ai-vault-host-leg-cache'
+import { scanAiVaultSessionsByHostScope } from './ai-vault-host-scope-scan'
 import { requestedAiVaultSessionDepth } from '../../shared/ai-vault-session-depth'
 import type {
   AiVaultSessionTitlesArgs,
@@ -54,23 +37,25 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import {
   resolveAiVaultSessionTitlesByHost,
-  type RuntimeAiVaultSessionTitleResolver
+  type RuntimeAiVaultSessionTitleResolver,
+  type RuntimeOwnedSshAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
-
-const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
-// Why: a remote home with many agent roots routinely needs seconds to walk,
-// stat and parse. The old shared 3s bound emptied healthy SSH hosts in the
-// all-hosts view; the relay gets a real scan budget and the whole leg (relay
-// attempt plus any legacy crawl) stays bounded so one host can't hold the
-// merge open.
-const AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS = 15_000
-const AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS = 20_000
+import type { RuntimeOwnedSshAiVaultHost } from '../ai-vault/runtime-owned-ssh-session-list'
+import type { RuntimeOwnedSshAiVaultScanner } from './ai-vault-runtime-owned-ssh'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
     getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
     resolveRuntimeAiVaultSessionTitles?: RuntimeAiVaultSessionTitleResolver
+    listRuntimeOwnedSshAiVaultTargets?: (
+      environmentId: string
+    ) => Promise<readonly RuntimeOwnedSshAiVaultHost[]>
+    findRuntimeOwningSshAiVaultHost?: (
+      targetId: string
+    ) => Promise<RuntimeOwnedSshAiVaultHost | null>
+    scanRuntimeOwnedSshAiVaultSessions?: RuntimeOwnedSshAiVaultScanner
+    resolveRuntimeOwnedSshAiVaultSessionTitles?: RuntimeOwnedSshAiVaultSessionTitleResolver
   }
 
 let scanCoordinator = new AiVaultScanCoordinator()
@@ -85,7 +70,11 @@ const aiVaultDeleteDeps = {
 const resolveAiVaultSessionTitles = (
   args: AiVaultSessionTitlesArgs
 ): Promise<AiVaultSessionTitlesResult> =>
-  resolveAiVaultSessionTitlesByHost(args, handlerOptions.resolveRuntimeAiVaultSessionTitles)
+  resolveAiVaultSessionTitlesByHost(args, {
+    resolveRuntime: handlerOptions.resolveRuntimeAiVaultSessionTitles,
+    findRuntimeOwningSshAiVaultHost: handlerOptions.findRuntimeOwningSshAiVaultHost,
+    resolveRuntimeOwnedSsh: handlerOptions.resolveRuntimeOwnedSshAiVaultSessionTitles
+  })
 
 async function listAiVaultSessions(
   args?: AiVaultListArgs,
@@ -113,7 +102,15 @@ async function listAiVaultSessions(
     force: args?.force,
     signal: options.signal,
     start: (scanSignal) => {
-      const scan = () => scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, key)
+      const scan = () =>
+        scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, key, {
+          getActiveRuntimeAiVaultHostInfos: handlerOptions.getActiveRuntimeAiVaultHostInfos,
+          scanRuntimeAiVaultSessions: handlerOptions.scanRuntimeAiVaultSessions,
+          listRuntimeOwnedSshAiVaultTargets: handlerOptions.listRuntimeOwnedSshAiVaultTargets,
+          findRuntimeOwningSshAiVaultHost: handlerOptions.findRuntimeOwningSshAiVaultHost,
+          scanRuntimeOwnedSshAiVaultSessions: handlerOptions.scanRuntimeOwnedSshAiVaultSessions,
+          scanLocal: scanLocalAiVaultSessions
+        })
       if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
         return scan()
       }
@@ -126,123 +123,6 @@ async function listAiVaultSessions(
       })
     }
   })
-}
-
-async function scanAiVaultSessionsByHostScope(
-  args: AiVaultListArgs | undefined,
-  executionHostScope: ExecutionHostScope,
-  signal?: AbortSignal,
-  cacheKey = ''
-): Promise<AiVaultListResult> {
-  const depth = requestedAiVaultSessionDepth(args)
-  const scopePaths = args?.scopePaths ?? []
-  if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
-    return scanLocalAiVaultSessionsAsIssue(args, signal)
-  }
-  if (executionHostScope === 'all') {
-    const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
-    const sshHosts = getActiveSshAiVaultHostInfosResult()
-    const runtimeResults = [
-      ...(runtimeHosts.issue ? [runtimeHosts.issue] : []),
-      ...(sshHosts.issue ? [sshHosts.issue] : [])
-    ]
-    const scannedResults = await Promise.all([
-      scanLocalAiVaultSessionsAsIssue(args, signal),
-      ...sshHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${toSshExecutionHostId(hostInfo.targetId)}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanSshAiVaultSessions(hostInfo.targetId, args, {
-              signal,
-              timeoutMs: AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS
-            })
-        })
-      ),
-      ...runtimeHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${hostInfo.executionHostId}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanRuntimeAiVaultSessions({
-              hostInfo,
-              scanner: handlerOptions.scanRuntimeAiVaultSessions,
-              listArgs: args,
-              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS }
-            })
-        })
-      )
-    ])
-    return mergeAiVaultListResults(
-      [...scannedResults, ...runtimeResults],
-      args?.limit,
-      args?.unlimited
-    )
-  }
-
-  const parsed = parseExecutionHostId(executionHostScope)
-  if (parsed?.kind === 'ssh') {
-    return scanSshAiVaultSessions(parsed.targetId, args, { signal })
-  }
-  if (parsed?.kind === 'runtime') {
-    return scanRuntimeAiVaultSessions({
-      hostInfo: {
-        environmentId: parsed.environmentId,
-        executionHostId: toRuntimeExecutionHostId(parsed.environmentId)
-      },
-      scanner: handlerOptions.scanRuntimeAiVaultSessions,
-      listArgs: args,
-      options: { signal }
-    })
-  }
-
-  return aiVaultScanIssueResult({
-    executionHostId: executionHostScope,
-    path: executionHostScope,
-    message: 'Agent Session History is not available for this execution host.'
-  })
-}
-
-function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
-  return discoverAiVaultHosts(() => handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? [], {
-    path: 'runtime environments',
-    fallbackMessage: 'Runtime hosts are unavailable.'
-  })
-}
-
-function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targetId: string }> {
-  return discoverAiVaultHosts(getActiveSshAiVaultHostInfos, {
-    path: 'SSH hosts',
-    fallbackMessage: 'SSH hosts are unavailable.'
-  })
-}
-
-// Why: the SSH legs already degrade to an issue row so one bad host can't take
-// the shared Promise.all down; the local leg can throw too (parse-cache load,
-// WSL home resolution, scanner service supervision) and would otherwise discard
-// every host's sessions under 'all', or replace the list with a raw error string
-// under single-host scope.
-async function scanLocalAiVaultSessionsAsIssue(
-  args: AiVaultListArgs | undefined,
-  signal: AbortSignal | undefined
-): Promise<AiVaultListResult> {
-  try {
-    return await scanLocalAiVaultSessions(args, signal)
-  } catch (error) {
-    if (isAiVaultScanCancelledError(error)) {
-      throw error
-    }
-    return aiVaultScanIssueResult({
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      path: 'this computer',
-      message: error instanceof Error ? error.message : 'Local session scan failed.'
-    })
-  }
 }
 
 async function scanLocalAiVaultSessions(

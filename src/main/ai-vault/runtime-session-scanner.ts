@@ -5,7 +5,7 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../shared/ai-vault-types'
-import { toRuntimeExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import type {
@@ -26,6 +26,7 @@ export type RuntimeAiVaultHostInfo = {
 
 export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
+  includeOwnedSshHosts?: boolean
 }
 
 // Why: zod strips unknown keys, so the repin home must be declared or the
@@ -64,7 +65,8 @@ export async function scanRuntimeAiVaultSessions(
       // cap). Dropped paths only lose the older-than-recency-cap guarantee,
       // never the recent sessions themselves.
       scopePaths: args.scopePaths?.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT),
-      executionHostId
+      executionHostId,
+      ...(options.includeOwnedSshHosts === true ? { includeOwnedSshHosts: true } : {})
     },
     options.timeoutMs
   )
@@ -156,8 +158,16 @@ function withRuntimeExecutionHost(
   executionHostId: `runtime:${string}`
 ): AiVaultListResult {
   return {
-    sessions: result.sessions.map((session) => retagRuntimeSession(session, executionHostId)),
-    issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
+    sessions: result.sessions.map((session) =>
+      parseExecutionHostId(session.executionHostId)?.kind === 'ssh'
+        ? session
+        : retagRuntimeSession(session, executionHostId)
+    ),
+    issues: result.issues.map((issue) =>
+      issue.executionHostId && parseExecutionHostId(issue.executionHostId)?.kind === 'ssh'
+        ? issue
+        : { ...issue, executionHostId }
+    ),
     scannedAt: result.scannedAt
   }
 }

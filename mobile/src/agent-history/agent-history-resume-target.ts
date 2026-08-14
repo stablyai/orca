@@ -122,6 +122,13 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
   folderWorkspaces?: readonly MobileAiVaultResumeFolderWorkspace[]
   projectGroups?: readonly MobileAiVaultResumeProjectGroup[]
 }): MobileAiVaultSessionResumeTarget {
+  if (parseExecutionHostId(args.session.executionHostId)?.kind === 'ssh') {
+    return {
+      status: 'blocked',
+      message:
+        'This session lives on an SSH host. Open it from the desktop app connected to that host.'
+    }
+  }
   const sessionWorktree = resolveMobileAgentHistorySessionWorktree({
     session: args.session,
     worktrees: args.worktrees,

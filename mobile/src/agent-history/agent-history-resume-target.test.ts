@@ -160,6 +160,20 @@ describe('mobile AI Vault resume target guards', () => {
     expect(mobileAiVaultResumeTargetBlockMessage('unknown')).toContain('local workspace')
   })
 
+  it('does not resume an SSH-stamped session onto the active local worktree', () => {
+    const target = resolveMobileAiVaultSessionResumeTarget({
+      session: session({
+        executionHostId: 'ssh:hub-owned-host',
+        cwd: '/Users/ada/repo/app'
+      }),
+      activeWorktreeId: 'route-wt',
+      worktrees: [worktree({ worktreeId: 'route-wt', path: '/Users/ada/repo/app' })],
+      repos
+    })
+    expect(target.status).toBe('blocked')
+    expect(target.status === 'blocked' && target.message).toContain('SSH host')
+  })
+
   it('resolves project-scope rows to the matched session worktree before the route worktree', () => {
     const target = resolveMobileAiVaultSessionResumeTarget({
       session: session({ cwd: '/Users/ada/repo/feature/src' }),

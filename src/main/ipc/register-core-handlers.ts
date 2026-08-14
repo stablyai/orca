@@ -25,6 +25,7 @@ import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
+import { AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS } from './ai-vault-host-scope-scan'
 import { registerNativeChatHandlers } from './native-chat'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
@@ -91,6 +92,12 @@ import {
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
 } from '../ai-vault/runtime-session-scanner'
+import {
+  findRuntimeOwningSshAiVaultHost,
+  listRuntimeOwnedSshAiVaultTargets,
+  resolveRuntimeOwnedSshAiVaultSessionTitles,
+  scanRuntimeOwnedSshAiVaultSessions
+} from '../ai-vault/runtime-owned-ssh-session-list'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from './plugin-marketplaces'
 
@@ -224,6 +231,29 @@ export function registerCoreHandlers(
       scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options),
     resolveRuntimeAiVaultSessionTitles: async (environmentId, args) =>
       resolveRuntimeAiVaultSessionTitles(app.getPath('userData'), environmentId, args),
+    listRuntimeOwnedSshAiVaultTargets: async (environmentId) =>
+      listRuntimeOwnedSshAiVaultTargets(app.getPath('userData'), environmentId, {
+        timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS
+      }),
+    findRuntimeOwningSshAiVaultHost: async (targetId) =>
+      findRuntimeOwningSshAiVaultHost(app.getPath('userData'), targetId, {
+        timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS
+      }),
+    scanRuntimeOwnedSshAiVaultSessions: async (environmentId, targetId, args, options) =>
+      scanRuntimeOwnedSshAiVaultSessions(
+        app.getPath('userData'),
+        environmentId,
+        targetId,
+        args,
+        options
+      ),
+    resolveRuntimeOwnedSshAiVaultSessionTitles: async (environmentId, targetId, args) =>
+      resolveRuntimeOwnedSshAiVaultSessionTitles(
+        app.getPath('userData'),
+        environmentId,
+        targetId,
+        args
+      ),
     prepareRuntimeSessionResume: async (environmentId, args) =>
       prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
   })

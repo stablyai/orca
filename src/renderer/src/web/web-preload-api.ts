@@ -1604,24 +1604,50 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
       const requestedScope = normalizeExecutionHostScope(
         args?.executionHostScope ?? executionHostId
       )
+      const parsedScope = parseExecutionHostId(requestedScope)
+      if (parsedScope?.kind === 'ssh') {
+        return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
+          limit: args?.limit,
+          unlimited: args?.unlimited,
+          force: args?.force,
+          scopePaths: args?.scopePaths,
+          executionHostId: parsedScope.id
+        }).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : ''
+          if (/invalid (runtime )?execution host id/i.test(message)) {
+            return webAiVaultUnsupportedSshHostResult(parsedScope.id)
+          }
+          throw error
+        })
+      }
       if (requestedScope !== 'all' && requestedScope !== executionHostId) {
         return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
       }
-      // Why: no local filesystem in the browser, so every history scan runs on and is stamped as the paired runtime host.
+      // Why: no local filesystem in the browser, so every history scan runs on
+      // the paired runtime. `all` also asks that runtime for SSH hosts it owns.
       return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
         limit: args?.limit,
+        unlimited: args?.unlimited,
         force: args?.force,
         scopePaths: args?.scopePaths,
-        executionHostId
+        executionHostId,
+        ...(requestedScope === 'all' ? { includeOwnedSshHosts: true } : {})
       })
     },
     resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
       const environment = requireActiveEnvironment()
       const executionHostId = toRuntimeExecutionHostId(environment.id)
-      if (
-        args.executionHostScope &&
-        normalizeExecutionHostScope(args.executionHostScope) !== executionHostId
-      ) {
+      const requestedScope = args.executionHostScope
+        ? normalizeExecutionHostScope(args.executionHostScope)
+        : executionHostId
+      const parsedScope = parseExecutionHostId(requestedScope)
+      if (parsedScope?.kind === 'ssh') {
+        return callRuntimeResult<AiVaultSessionTitlesResult>('aiVault.resolveSessionTitles', {
+          requests: args.requests,
+          executionHostId: parsedScope.id
+        }).catch(() => ({ titles: [] }))
+      }
+      if (requestedScope !== executionHostId) {
         return Promise.resolve({ titles: [] })
       }
       return callRuntimeResult<AiVaultSessionTitlesResult>('aiVault.resolveSessionTitles', {
@@ -1662,6 +1688,25 @@ function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultL
         message: translate(
           'auto.web.webPreloadApi.aiVaultUnavailableForHost',
           'Agent Session History is not available for this execution host.'
+        )
+      }
+    ],
+    scannedAt: new Date().toISOString()
+  }
+}
+
+function webAiVaultUnsupportedSshHostResult(executionHostId: ExecutionHostId): AiVaultListResult {
+  return {
+    sessions: [],
+    issues: [
+      {
+        executionHostId,
+        agent: 'codex',
+        kind: 'host',
+        path: executionHostId,
+        message: translate(
+          'auto.web.webPreloadApi.aiVaultUnsupportedSshHost',
+          'This Orca server cannot scan Agent Session History on its SSH hosts. Update the server and try again.'
         )
       }
     ],

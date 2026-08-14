@@ -223,7 +223,8 @@
         "loopbackPairingBlocked": "This access link points back to this device.",
         "remotePairingUnreachable": "Cannot reach Orca at {{endpoint}}.",
         "remotePairingInvalidDetails": "This access link contains invalid connection details.",
-        "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again."
+        "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again.",
+        "aiVaultUnsupportedSshHost": "This Orca server cannot scan Agent Session History on its SSH hosts. Update the server and try again."
       },
       "web": {
         "preload": {

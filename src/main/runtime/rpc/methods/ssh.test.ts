@@ -116,6 +116,12 @@ describe('ssh RPC methods', () => {
       }
     ]
     listRegisteredSshTargetsMock.mockReturnValueOnce(targets)
+    getRegisteredSshStateMock.mockReturnValueOnce({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
 
@@ -123,7 +129,7 @@ describe('ssh RPC methods', () => {
 
     expect(response).toMatchObject({
       ok: true,
-      result: { targets: [{ id: 'ssh-1', label: 'Dev box' }] }
+      result: { targets: [{ id: 'ssh-1', label: 'Dev box', connected: true }] }
     })
     expect(JSON.stringify(response)).not.toContain('dev.internal')
     expect(JSON.stringify(response)).not.toContain('/secret/key')

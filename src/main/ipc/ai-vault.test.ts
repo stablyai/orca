@@ -165,7 +165,7 @@ describe('listAiVaultSessions host routing', () => {
         limit: undefined,
         scopePaths: ['/home/ada/repo']
       },
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
+      expect.objectContaining({ signal: expect.any(AbortSignal), timeoutMs: undefined })
     )
     expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
     expect(scanned.sessions[0]).toMatchObject({

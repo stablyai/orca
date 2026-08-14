@@ -68,6 +68,27 @@ describe('runtime AI Vault session scanner', () => {
     )
   })
 
+  it('asks the runtime to include SSH hosts it owns when the all-hosts scan opts in', async () => {
+    await scanRuntimeAiVaultSessions(
+      '/user-data',
+      'env-1',
+      { limit: 25 },
+      { includeOwnedSshHosts: true }
+    )
+
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'aiVault.listSessions',
+      {
+        limit: 25,
+        executionHostId: 'runtime:env-1',
+        includeOwnedSshHosts: true
+      },
+      undefined
+    )
+  })
+
   it('surfaces project scope truncation from the runtime transport bound', async () => {
     const scopePaths = Array.from({ length: 80 }, (_, index) => `/srv/repo-${index}`)
 
@@ -109,9 +130,38 @@ describe('runtime AI Vault session scanner', () => {
     ])
     expect(scanResult.issues).toEqual([
       expect.objectContaining({
-        executionHostId: 'runtime:env-1',
+        executionHostId: 'ssh:dev-box',
         agent: 'codex',
         path: '/sessions/session-1.jsonl'
+      })
+    ])
+  })
+
+  it('keeps SSH-stamped rows from a runtime that scanned hosts it owns', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: result(
+        [session('local', 'session-1'), session('ssh:hub-owned-host', 'session-ssh')],
+        []
+      )
+    })
+
+    const scanResult = await scanRuntimeAiVaultSessions(
+      '/user-data',
+      'env-1',
+      {},
+      { includeOwnedSshHosts: true }
+    )
+
+    expect(scanResult.sessions).toEqual([
+      expect.objectContaining({
+        executionHostId: 'runtime:env-1',
+        sessionId: 'session-1'
+      }),
+      expect.objectContaining({
+        id: 'ssh:hub-owned-host:codex:session-ssh:/sessions/session-ssh.jsonl',
+        executionHostId: 'ssh:hub-owned-host',
+        sessionId: 'session-ssh'
       })
     ])
   })
