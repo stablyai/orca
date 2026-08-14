@@ -41,8 +41,9 @@ export async function loadJournal(
   const snapshot = await readJournalSnapshotFile(journalDir)
   const log = await readJournalLog(journalDir)
   const epoch = resolveEpoch(snapshot, log.rows)
+  const unsafeLog = log.unreadable || log.malformed > 0
   if (!epoch) {
-    return log.unreadable ? emptyReadOnlyLoad(sessionId) : null
+    return unsafeLog ? emptyReadOnlyLoad(sessionId) : null
   }
 
   const compactedThrough = snapshot?.epoch === epoch ? snapshot.compactedThrough : 0
@@ -71,7 +72,7 @@ export async function loadJournal(
     state,
     tailRows,
     compactedThrough,
-    readOnly: log.unreadable,
+    readOnly: unsafeLog,
     corrupt,
     sizeBytes: tailRows.reduce((total, row) => total + journalRowByteLength(row), 0)
   }

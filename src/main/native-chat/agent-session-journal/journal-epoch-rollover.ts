@@ -7,7 +7,12 @@
 
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandle } from '../../../shared/agent-session-journal-types'
-import { compactJournal } from './journal-compaction'
+import { pruneJournalBlobs } from './journal-blob-store'
+import {
+  rewriteJournalLog,
+  writeJournalSnapshotFile,
+  type JournalSnapshotFile
+} from './journal-log-file'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -23,6 +28,9 @@ export async function publishNewEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   now: number
+  writeSnapshot?: typeof writeJournalSnapshotFile
+  rewriteLog?: typeof rewriteJournalLog
+  pruneBlobs?: typeof pruneJournalBlobs
 }): Promise<{ state: JournalReducerState; row: JournalRow }> {
   const row: JournalRow = {
     kind: 'epoch',
@@ -35,13 +43,22 @@ export async function publishNewEpoch(input: {
     ts: input.now
   }
   const state = createJournalReducerState(input.sessionId, input.epoch)
-  await compactJournal({
-    journalDir: input.journalDir,
-    state,
-    tailRows: [row],
-    policy: { minTailRows: 1, retainTailMs: Number.POSITIVE_INFINITY },
-    now: input.now
-  })
+  const snapshot: JournalSnapshotFile = {
+    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    epoch: input.epoch,
+    compactedThrough: 1,
+    items: [],
+    submissions: [],
+    receipts: [],
+    aliases: [],
+    tail: [row]
+  }
+  await (input.writeSnapshot ?? writeJournalSnapshotFile)(input.journalDir, snapshot)
+  // The durable snapshot already made this epoch authoritative. A failed log
+  // cleanup must not make the caller resume writes against the old in-memory
+  // epoch; stale rows are safe because recovery filters them by snapshot epoch.
+  await (input.rewriteLog ?? rewriteJournalLog)(input.journalDir, [row]).catch(() => undefined)
+  await (input.pruneBlobs ?? pruneJournalBlobs)(input.journalDir, new Set())
   applyJournalRow(state, row)
   state.oldestSequence = 1
   return { state, row }

@@ -9,6 +9,7 @@
 
 import type {
   AgentJournalAcceptanceReceipt,
+  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
@@ -187,12 +188,37 @@ export function renderJournalState(state: JournalReducerState): AgentJournalSnap
 export function referencedBlobDigests(state: JournalReducerState): Set<string> {
   const digests = new Set<string>()
   for (const item of state.items.values()) {
-    const body = item.body
-    if (body.kind === 'tool-call' && body.output?.truncated) {
-      digests.add(body.output.digest)
+    for (const digest of referencedBlobDigestsForBody(item.body)) {
+      digests.add(digest)
     }
-    if (body.kind === 'diff' && body.patch.truncated) {
-      digests.add(body.patch.digest)
+  }
+  return digests
+}
+
+/** Every structured bounded-payload location supported by the journal. */
+export function referencedBlobDigestsForBody(body: AgentJournalItemBody): Set<string> {
+  const digests = new Set<string>()
+  if (body.kind === 'tool-call' && body.output?.truncated) {
+    digests.add(body.output.digest)
+  }
+  if (body.kind === 'diff' && body.patch.truncated) {
+    digests.add(body.patch.digest)
+  }
+  if (body.kind === 'status' && body.providerFrame?.payload.truncated) {
+    digests.add(body.providerFrame.payload.digest)
+  }
+  return digests
+}
+
+/** Digests needed to replay retained raw rows, including superseded revisions. */
+export function referencedBlobDigestsForRows(rows: readonly JournalRow[]): Set<string> {
+  const digests = new Set<string>()
+  for (const row of rows) {
+    if (row.kind !== 'item') {
+      continue
+    }
+    for (const digest of referencedBlobDigestsForBody(row.body)) {
+      digests.add(digest)
     }
   }
   return digests

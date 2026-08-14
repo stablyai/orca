@@ -10,6 +10,7 @@
 
 import {
   referencedBlobDigests,
+  referencedBlobDigestsForRows,
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
@@ -78,7 +79,11 @@ export async function compactJournal(input: {
   await rewriteJournalLog(input.journalDir, retained)
   // Blobs are pruned last: a crash before this leaks bytes, whereas pruning
   // first would strand a snapshot pointing at a payload that no longer exists.
-  await pruneJournalBlobs(input.journalDir, referencedBlobDigests(input.state))
+  const retainedDigests = referencedBlobDigests(input.state)
+  for (const digest of referencedBlobDigestsForRows(retained)) {
+    retainedDigests.add(digest)
+  }
+  await pruneJournalBlobs(input.journalDir, retainedDigests)
 
   return {
     tailRows: retained,
@@ -98,6 +103,6 @@ function retainTail(
   const floor = now - policy.retainTailMs
   const byAge = rows.findIndex((row) => row.ts >= floor)
   const byCount = rows.length - policy.minTailRows
-  const start = byAge < 0 ? byCount : Math.min(byAge, byCount)
+  const start = byAge === -1 ? byCount : Math.min(byAge, byCount)
   return rows.slice(start)
 }

@@ -321,15 +321,33 @@ describe('schema', () => {
     expect(await readFile(logPath, 'utf-8')).toContain('"v":99')
   })
 
-  it('skips a malformed line without giving up the journal', async () => {
+  it('fails closed on a malformed line without deleting valid rows', async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('a'), { fence: 1 })
     const logPath = join(root, JOURNAL_LOG_FILE)
     await writeFile(logPath, `${await readFile(logPath, 'utf-8')}{not json\n`, 'utf-8')
 
     const reopened = await open()
-    expect(reopened.isReadOnly).toBe(false)
+    expect(reopened.isReadOnly).toBe(true)
     expect(reopened.snapshot().items).toHaveLength(1)
+    await expect(reopened.appendItem(item(1), body('b'), { fence: 1 })).rejects.toMatchObject({
+      code: 'journal_read_only'
+    })
+    expect(await readFile(logPath, 'utf8')).toContain('{not json')
+  })
+
+  it('does not append behind a partial trailing row after restart', async () => {
+    const journal = await open()
+    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    const logPath = join(root, JOURNAL_LOG_FILE)
+    await writeFile(logPath, `${await readFile(logPath, 'utf8')}{"v":1`, 'utf8')
+
+    const reopened = await open()
+    expect(reopened.isReadOnly).toBe(true)
+    await expect(reopened.appendItem(item(1), body('lost'), { fence: 1 })).rejects.toMatchObject({
+      code: 'journal_read_only'
+    })
+    expect((await open()).snapshot().items).toHaveLength(1)
   })
 })
 

@@ -1,9 +1,7 @@
 // The append-only journal store for one agent session.
 //
-// Sequence numbers are assigned inside the same serialized append that makes
-// the row durable, so an `(epoch, sequence)` space has exactly one writer and
-// no gaps or reuse. Every mutating call carries the runtime fence; a stale
-// fence is rejected outright rather than merged or queued for the new owner.
+// Sequence assignment and durable writes share one queue. Every mutation also
+// carries a runtime fence so a superseded writer cannot re-enter that queue.
 
 import { randomUUID } from 'node:crypto'
 import type {
@@ -17,12 +15,16 @@ import type {
   AgentJournalSubmission,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { compactJournal, type JournalCompactionPolicy } from './journal-compaction'
 import { resolveJournalResume, type JournalResume } from './journal-cursor'
 import { publishNewEpoch } from './journal-epoch-rollover'
-import { appendJournalRows, ensureJournalDir } from './journal-log-file'
+import {
+  JournalAppendStorage,
+  type JournalBlobPayload,
+  type JournalItemAppendOptions
+} from './journal-append-storage'
+import { ensureJournalDir } from './journal-log-file'
 import { loadJournal } from './journal-open'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS, type JournalPayloadLimits } from './journal-payload-bounds'
 import {
@@ -31,16 +33,9 @@ import {
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
-import {
-  journalRowByteLength,
-  type AgentJournalEpochReason,
-  type JournalRow
-} from './journal-row-schema'
-import {
-  assertJournalFence,
-  assertJournalWritable,
-  JournalAppendBudget
-} from './journal-write-guards'
+import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
+import { journalRowBase } from './journal-row-base'
+import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -67,11 +62,7 @@ export type ResolveDispatchInput = {
   | { state: 'rejected' | 'unknown'; reason?: string | null }
 )
 
-export type JournalAppendResult = {
-  cursor: AgentJournalCursor
-  itemId: string
-  revision: number
-}
+export type JournalAppendResult = { cursor: AgentJournalCursor; itemId: string; revision: number }
 
 export async function openAgentSessionJournal(
   options: AgentSessionJournalOptions
@@ -84,7 +75,7 @@ export async function openAgentSessionJournal(
 export class AgentSessionJournal {
   private readonly identity: AgentSessionJournalIdentity
   private readonly journalDir: string
-  private readonly budget: JournalAppendBudget
+  private readonly storage: JournalAppendStorage
   private readonly compaction: JournalCompactionPolicy | undefined
   private readonly now: () => number
   private readonly mintEpoch: () => string
@@ -92,7 +83,6 @@ export class AgentSessionJournal {
   private state: JournalReducerState
   private tailRows: JournalRow[] = []
   private compactedThrough = 0
-  private sizeBytes = 0
   private readOnly = false
   /** Serializes sequence assignment with the durable write behind it. */
   private writes: Promise<unknown> = Promise.resolve()
@@ -100,10 +90,8 @@ export class AgentSessionJournal {
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
     this.journalDir = options.journalDir
-    this.budget = new JournalAppendBudget(
-      options.identity.sessionId,
-      options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
-    )
+    const limits = options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
+    this.storage = new JournalAppendStorage(options.identity.sessionId, options.journalDir, limits)
     this.compaction = options.compaction
     this.now = options.now ?? (() => Date.now())
     this.mintEpoch = options.mintEpoch ?? randomUUID
@@ -111,7 +99,7 @@ export class AgentSessionJournal {
   }
 
   get isReadOnly(): boolean {
-    return this.readOnly
+    return this.readOnly || this.storage.isPoisoned
   }
 
   get epoch(): string {
@@ -122,14 +110,14 @@ export class AgentSessionJournal {
     return this.journalDir
   }
 
-  /** Highest sequence folded into the snapshot; rows at or below it are no
-   *  longer individually replayable. */
+  /** Rows at or below this snapshot sequence are no longer replayable. */
   get compactionBoundary(): number {
     return this.compactedThrough
   }
 
   async open(): Promise<void> {
     await ensureJournalDir(this.journalDir)
+    await this.storage.open()
     const loaded = await loadJournal(this.journalDir, this.identity.sessionId)
     if (!loaded) {
       await this.startEpoch('session_created', 0)
@@ -138,7 +126,6 @@ export class AgentSessionJournal {
     this.state = loaded.state
     this.tailRows = loaded.tailRows
     this.compactedThrough = loaded.compactedThrough
-    this.sizeBytes = loaded.sizeBytes
     this.readOnly = loaded.readOnly
     if (loaded.corrupt && !loaded.readOnly) {
       // A reader that observes a gap rolls the epoch rather than rendering a
@@ -163,8 +150,7 @@ export class AgentSessionJournal {
     return this.submissions().filter((entry) => entry.dispatchState === 'pending')
   }
 
-  /** The durable answer to "did my send land?" — a reconnecting client asking
-   *  again gets this instead of re-sending. */
+  /** Durable send result used to deduplicate reconnects. */
   receiptFor(clientMessageId: string): AgentJournalAcceptanceReceipt | null {
     return this.state.receipts.get(clientMessageId) ?? null
   }
@@ -195,12 +181,11 @@ export class AgentSessionJournal {
     )
   }
 
-  /** Upsert by stable identity. The revision is assigned here so a caller
-   *  cannot accidentally publish a revision the reducer will drop. */
+  /** Upsert by stable identity with a host-assigned revision. */
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: { fence: number; observedAt?: number; recovered?: true } = { fence: 0 }
+    options: JournalItemAppendOptions = { fence: 0 }
   ): Promise<JournalAppendResult> {
     const itemId = agentJournalItemKey(identity)
     return this.enqueue((seq, ts) => {
@@ -211,10 +196,10 @@ export class AgentSessionJournal {
         itemId,
         revision,
         body,
-        ...this.rowBase(seq, options.fence, options.observedAt ?? ts),
+        ...journalRowBase(this.state.epoch, seq, options.fence, options.observedAt ?? ts),
         ...(options.recovered ? { recovered: options.recovered } : {})
       }
-    }).then((row) => ({
+    }, options.blobs).then((row) => ({
       cursor: { epoch: row.epoch, sequence: row.seq },
       itemId,
       revision: (row as Extract<JournalRow, { kind: 'item' }>).revision
@@ -229,15 +214,16 @@ export class AgentSessionJournal {
     return this.enqueue((seq, ts) => {
       const resolved = this.state.aliases.get(itemId) ?? itemId
       const revision = (this.state.items.get(resolved)?.revision ?? 0) + 1
-      return { kind: 'tombstone', itemId, revision, ...this.rowBase(seq, options.fence, ts) }
+      return {
+        kind: 'tombstone',
+        itemId,
+        revision,
+        ...journalRowBase(this.state.epoch, seq, options.fence, ts)
+      }
     }).then((row) => ({ epoch: row.epoch, sequence: row.seq }))
   }
 
-  /**
-   * Write-ahead submission row. It is durable before the caller dispatches
-   * anything, and it doubles as the optimistic user bubble so an accepted echo
-   * reconciles into an existing slot instead of appending a second copy.
-   */
+  /** Durable write-ahead row and optimistic user bubble. */
   appendSubmission(input: {
     clientMessageId: string
     payloadFingerprint: string
@@ -250,17 +236,11 @@ export class AgentSessionJournal {
       payloadFingerprint: input.payloadFingerprint,
       providerHandle: this.identity.providerHandle,
       body: input.body,
-      ...this.rowBase(seq, input.fence, ts)
+      ...journalRowBase(this.state.epoch, seq, input.fence, ts)
     })).then((row) => ({ epoch: row.epoch, sequence: row.seq }))
   }
 
-  /**
-   * Advance a submission to exactly one of accepted / rejected / unknown.
-   *
-   * Accepting REQUIRES the provider identity rather than a free-form id: the
-   * adopted key is what the provider's echo will upsert into, so a mismatched
-   * string here would silently give the user a second copy of their own message.
-   */
+  /** Settle a submission. Accepted rows adopt the provider's stable identity. */
   resolveDispatch(input: ResolveDispatchInput): Promise<AgentJournalCursor> {
     const providerItemId =
       input.state === 'accepted' ? agentJournalItemKey(input.providerIdentity) : null
@@ -270,13 +250,12 @@ export class AgentSessionJournal {
       state: input.state,
       providerItemId,
       reason: input.state === 'accepted' ? null : (input.reason ?? null),
-      ...this.rowBase(seq, input.fence, ts),
+      ...journalRowBase(this.state.epoch, seq, input.fence, ts),
       ...(input.recovered ? { recovered: input.recovered } : {})
     })).then((row) => ({ epoch: row.epoch, sequence: row.seq }))
   }
 
-  /** On restart every `pending` submission becomes `unknown` before the session
-   *  accepts a writer. Orca never re-sends on the user's behalf. */
+  /** Restarted pending submissions become unknown; Orca never re-sends them. */
   async markPendingSubmissionsUnknown(fence: number): Promise<string[]> {
     const pending = this.pendingSubmissions().map((entry) => entry.clientMessageId)
     for (const clientMessageId of pending) {
@@ -292,26 +271,35 @@ export class AgentSessionJournal {
   }
 
   async compact(): Promise<void> {
-    assertJournalWritable(this.readOnly, this.identity.sessionId)
-    const result = await compactJournal({
-      journalDir: this.journalDir,
-      state: this.state,
-      tailRows: this.tailRows,
-      policy: this.compaction,
-      now: this.now()
+    await this.serialize(async () => {
+      this.assertMutationWritable()
+      let result
+      try {
+        result = await compactJournal({
+          journalDir: this.journalDir,
+          state: this.state,
+          tailRows: this.tailRows,
+          policy: this.compaction,
+          now: this.now()
+        })
+      } catch (error) {
+        await this.storage.remeasureAfterMutation()
+        throw error
+      }
+      this.tailRows = result.tailRows
+      this.compactedThrough = result.compactedThrough
+      this.state.oldestSequence = result.oldestSequence
+      await this.storage.remeasureAfterMutation()
     })
-    this.tailRows = result.tailRows
-    this.compactedThrough = result.compactedThrough
-    this.state.oldestSequence = result.oldestSequence
-    this.sizeBytes = this.tailRows.reduce((total, row) => total + journalRowByteLength(row), 0)
   }
 
-  /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,
-   *  and an unreadable schema. It invalidates every cursor; clients reload. */
+  /** Roll away an invalid journal prefix and force client snapshot reload. */
   async rollEpoch(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
-    assertJournalWritable(this.readOnly, this.identity.sessionId)
-    await this.startEpoch(reason, fence)
-    return this.cursor()
+    return this.serialize(async () => {
+      this.assertMutationWritable()
+      await this.startEpoch(reason, fence)
+      return this.cursor()
+    })
   }
 
   private async startEpoch(reason: AgentJournalEpochReason, fence: number): Promise<void> {
@@ -326,42 +314,34 @@ export class AgentSessionJournal {
     })
     this.state = published.state
     this.tailRows = [published.row]
-    this.compactedThrough = 0
-    this.sizeBytes = journalRowByteLength(published.row)
+    this.compactedThrough = 1
+    await this.storage.remeasureAfterMutation()
   }
 
-  private rowBase(
-    seq: number,
-    fence: number,
-    ts: number
-  ): { v: number; epoch: string; seq: number; fence: number; ts: number } {
-    return {
-      v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-      epoch: this.state.epoch,
-      seq,
-      fence,
-      ts
-    }
-  }
-
-  /**
-   * Assign the next sequence, make the row durable, and fold it through the
-   * SAME reducer replay uses — all inside one serialized step, so concurrent
-   * callers cannot interleave and mint the same sequence.
-   */
-  private enqueue(build: (seq: number, ts: number) => JournalRow): Promise<JournalRow> {
-    const run = this.writes.then(async () => {
-      assertJournalWritable(this.readOnly, this.identity.sessionId)
+  /** Assign, persist, and reduce one row in the same serialized step. */
+  private enqueue(
+    build: (seq: number, ts: number) => JournalRow,
+    blobs: readonly JournalBlobPayload[] = []
+  ): Promise<JournalRow> {
+    return this.serialize(async () => {
+      this.assertMutationWritable()
       const ts = this.now()
       const row = build(this.state.lastSequence + 1, ts)
       assertJournalFence(row.fence, this.state.highestFence)
-      this.budget.assert(row, ts, this.sizeBytes)
-      await appendJournalRows(this.journalDir, [row])
+      await this.storage.append(row, ts, blobs)
       applyJournalRow(this.state, row)
       this.tailRows.push(row)
-      this.sizeBytes += journalRowByteLength(row)
       return row
     })
+  }
+
+  private assertMutationWritable(): void {
+    assertJournalWritable(this.readOnly, this.identity.sessionId)
+    this.storage.assertWritable()
+  }
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.writes.then(operation)
     this.writes = run.catch(() => undefined)
     return run
   }
