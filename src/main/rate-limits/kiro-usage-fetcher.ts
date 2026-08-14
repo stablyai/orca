@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import { getSpawnArgsForWindows } from '../win32-utils'
 
 const CLI_TIMEOUT_MS = 20_000
 const MONTHLY_WINDOW_MINUTES = 43_200
@@ -61,9 +62,12 @@ function resolveKiroCommand(): string {
 
 const runCommand: CommandRunner = (command, args, signal) =>
   new Promise((resolve, reject) => {
+    // Why: execFile cannot launch configured .cmd/.bat shims directly on
+    // Windows; route them through cmd.exe like the other usage fetchers.
+    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
     execFile(
-      command,
-      args,
+      spawnCmd,
+      spawnArgs,
       { encoding: 'utf8', timeout: CLI_TIMEOUT_MS, maxBuffer: 1024 * 1024, signal },
       (error, stdout, stderr) => {
         if (error) {

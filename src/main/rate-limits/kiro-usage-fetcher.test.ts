@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+import { execFile } from 'node:child_process'
+import { getSpawnArgsForWindows } from '../win32-utils'
 import { fetchKiroRateLimits, parseKiroUsageOutput } from './kiro-usage-fetcher'
+
+vi.mock('node:child_process', () => ({ execFile: vi.fn() }))
+vi.mock('../win32-utils', () => ({ getSpawnArgsForWindows: vi.fn() }))
+
+const KIRO_USAGE_OUTPUT =
+  'Estimated Usage | resets on 2026-09-01 | KIRO PRO\nCredits (10 of 100 covered in plan)\n10%'
 
 describe('Kiro usage fetcher', () => {
   it('parses the official CLI usage command output', () => {
@@ -19,8 +27,7 @@ Credits (1233.74 of 2000 covered in plan)
 
   it('runs the local non-model usage command', async () => {
     const runner = vi.fn().mockResolvedValue({
-      stdout:
-        'Estimated Usage | resets on 2026-09-01 | KIRO PRO\nCredits (10 of 100 covered in plan)\n10%',
+      stdout: KIRO_USAGE_OUTPUT,
       stderr: ''
     })
 
@@ -30,6 +37,36 @@ Credits (1233.74 of 2000 covered in plan)
       '/tmp/kiro-cli',
       ['chat', '/usage', '--no-interactive', '--wrap', 'never'],
       undefined
+    )
+    expect(result.status).toBe('ok')
+  })
+
+  it('launches configured .cmd shims through the shared Windows batch launcher', async () => {
+    vi.mocked(getSpawnArgsForWindows).mockReturnValue({
+      spawnCmd: 'C:\\Windows\\System32\\cmd.exe',
+      spawnArgs: ['/d', '/c', 'C:\\Users\\me\\bin\\kiro-cli.cmd', 'chat']
+    })
+    vi.mocked(execFile).mockImplementation(
+      ((_command, _args, _options, callback) => {
+        callback(null, KIRO_USAGE_OUTPUT, '')
+        return undefined as never
+      }) as unknown as typeof execFile
+    )
+
+    const result = await fetchKiroRateLimits({ command: 'C:\\Users\\me\\bin\\kiro-cli.cmd' })
+
+    expect(getSpawnArgsForWindows).toHaveBeenCalledWith('C:\\Users\\me\\bin\\kiro-cli.cmd', [
+      'chat',
+      '/usage',
+      '--no-interactive',
+      '--wrap',
+      'never'
+    ])
+    expect(execFile).toHaveBeenCalledWith(
+      'C:\\Windows\\System32\\cmd.exe',
+      ['/d', '/c', 'C:\\Users\\me\\bin\\kiro-cli.cmd', 'chat'],
+      expect.anything(),
+      expect.any(Function)
     )
     expect(result.status).toBe('ok')
   })
