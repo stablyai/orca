@@ -33,6 +33,10 @@ vi.mock('./opencode-go-usage-fetcher', () => ({
   fetchOpenCodeGoRateLimits: vi.fn()
 }))
 
+vi.mock('./zcode-usage-fetcher', () => ({
+  fetchZcodeRateLimits: vi.fn()
+}))
+
 vi.mock('./minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
