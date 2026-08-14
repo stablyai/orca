@@ -797,6 +797,10 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
     expect(closeTab).toHaveBeenCalledWith('page-offscreen')
     // The renderer close IPC must not be used in headless mode.
     expect(ipcMainOnMock).not.toHaveBeenCalledWith('browser:tabCloseReply', expect.anything())
+    await expect(
+      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-other' })
+    ).rejects.toMatchObject({ code: 'browser_tab_not_found' })
+    expect(closeTab).toHaveBeenCalledTimes(1)
   })
 
   it('closes the active headless tab on an implicit close', async () => {

@@ -1901,10 +1901,18 @@
           ]
         },
         {
+          "file": "src/main/runtime/orca-runtime-browser.test.ts",
+          "assertions": [
+            "explicit renderer cleanup bypasses guest registration while retaining typed missing-page behavior",
+            "offscreen cleanup rejects a page outside the requested worktree"
+          ]
+        },
+        {
           "file": "src/renderer/src/hooks/useIpcEvents.test.ts",
           "assertions": [
             "renderer-backed creation preserves the requested canonical page ID while keeping its workspace identity independent",
-            "closing an absent renderer page returns browser_tab_not_found instead of an untyped failure"
+            "closing an absent renderer page returns browser_tab_not_found instead of an untyped failure",
+            "explicit cleanup cannot close a page owned by another worktree"
           ]
         },
         {

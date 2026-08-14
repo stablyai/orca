@@ -1640,6 +1640,13 @@ export class RuntimeBrowserCommands {
       if (!resolvedTabId) {
         return { closed: false }
       }
+      if (explicitPage && !bridge.getRegisteredTabs(worktreeId).has(resolvedTabId)) {
+        const scope = worktreeId ? ' in this worktree' : ''
+        throw new BrowserError(
+          'browser_tab_not_found',
+          `Browser page ${resolvedTabId} was not found${scope}`
+        )
+      }
       await offscreen.closeTab(resolvedTabId)
       return { closed: true }
     }
