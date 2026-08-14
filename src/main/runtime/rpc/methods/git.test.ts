@@ -3,6 +3,8 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { GIT_METHODS } from './git'
+import { GitHistory } from './git-params'
+import { readGitHistoryOptions } from '../../../../shared/git-history-request-options'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -213,6 +215,62 @@ describe('git RPC methods', () => {
       baseRef: 'origin/main'
     })
     expect(response).toMatchObject({ ok: true, result: history })
+  })
+
+  // Why: the params schema strips unknown keys, so an option missing from it never reaches git —
+  // that is how paging shipped inert over the runtime RPC. Keep the cursor pinned to the schema.
+  it('forwards a paging cursor to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitHistory: vi.fn().mockResolvedValue({
+        items: [],
+        hasIncomingChanges: false,
+        hasOutgoingChanges: false,
+        hasMore: false,
+        limit: 50
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.history', {
+        worktree: 'id:wt-1',
+        limit: 50,
+        cursor: {
+          anchor: 'a'.repeat(40),
+          loaded: 100,
+          after: { id: 'b'.repeat(40), parentIds: ['c'.repeat(40)] }
+        }
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.getRuntimeGitHistory).toHaveBeenCalledWith('id:wt-1', {
+      limit: 50,
+      baseRef: null,
+      cursor: {
+        anchor: 'a'.repeat(40),
+        loaded: 100,
+        after: { id: 'b'.repeat(40), parentIds: ['c'.repeat(40)] }
+      }
+    })
+  })
+
+  // Why: the RPC schema and the shared reader validate the same cursor on different transports, so
+  // a bound on one is a cursor our own backend can hand out that only that transport rejects — the
+  // click then errors instead of degrading. An octopus merge is the seam that finds it.
+  it('accepts every cursor shape the backend can emit, on both validators', () => {
+    const parentIds = Array.from({ length: 300 }, (_, index) =>
+      index.toString(16).padStart(40, '0')
+    )
+    const cursor = {
+      anchor: 'a'.repeat(40),
+      loaded: 2,
+      after: { id: 'b'.repeat(40), parentIds }
+    }
+
+    expect(readGitHistoryOptions({ cursor }).cursor).toEqual(cursor)
+    expect(GitHistory.safeParse({ worktree: 'id:wt-1', cursor }).success).toBe(true)
   })
 
   it('routes common mutations to the runtime', async () => {

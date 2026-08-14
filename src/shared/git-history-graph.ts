@@ -102,6 +102,9 @@ export function buildGitHistoryViewModels(
   mergeBase?: string
 ): GitHistoryItemViewModel[] {
   let colorIndex = -1
+  // Why: parent lookup runs per merge parent per commit. Scanning the array made the whole build
+  // quadratic in the number of loaded commits, which paging now makes reachable.
+  const itemsById = new Map(historyItems.map((item) => [item.id, item]))
   const viewModels: GitHistoryItemViewModel[] = []
 
   for (const historyItem of historyItems) {
@@ -131,7 +134,7 @@ export function buildGitHistoryViewModels(
       if (index === 0) {
         colorIdentifier = getLabelColorIdentifier(historyItem, colorMap)
       } else {
-        const parent = historyItems.find((item) => item.id === historyItem.parentIds[index])
+        const parent = itemsById.get(historyItem.parentIds[index]!)
         colorIdentifier = parent ? getLabelColorIdentifier(parent, colorMap) : undefined
       }
 

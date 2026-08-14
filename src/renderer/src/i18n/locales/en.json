@@ -10852,7 +10852,8 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
             "e5e81e59a6": "Resize commits",
-            "6d1e0a7c3b": "Failed to load commit files"
+            "6d1e0a7c3b": "Failed to load commit files",
+            "loadMoreCommits": "Load more commits"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Close",

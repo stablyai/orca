@@ -195,6 +195,8 @@ import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
+import { GIT_HISTORY_DEFAULT_LIMIT, type GitHistoryCursor } from '../../../../shared/git-history'
+import { foldGitHistoryPage } from './git-history-page-accumulator'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import {
@@ -4950,73 +4952,99 @@ function SourceControlInner(): React.JSX.Element {
 
   refreshBranchCompareRef.current = refreshBranchCompare
 
-  const refreshGitHistory = useCallback(async (): Promise<void> => {
-    if (
-      !activeWorktreeId ||
-      !worktreePath ||
-      isFolder ||
-      !isBranchVisible ||
-      !isGitHistoryExpanded ||
-      !isGitHistoryVisible
-    ) {
-      return
-    }
-
-    const worktreeId = activeWorktreeId
-    const requestId = gitHistoryRequestSeqRef.current + 1
-    gitHistoryRequestSeqRef.current = requestId
-    gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
-    setGitHistoryByWorktree((prev) => {
-      const previous = prev[worktreeId]
-      return {
-        ...prev,
-        [worktreeId]: previous?.result
-          ? { status: 'refreshing', result: previous.result }
-          : { status: 'loading' }
-      }
-    })
-
-    try {
-      const connectionId = getConnectionId(worktreeId) ?? undefined
-      const result = await getRuntimeGitHistory(
-        {
-          // Why: route the history read by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
-          worktreeId,
-          worktreePath,
-          connectionId
-        },
-        { limit: 50, baseRef: compareBaseRef }
-      )
-      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+  const loadGitHistoryPage = useCallback(
+    async (cursor?: GitHistoryCursor): Promise<void> => {
+      if (
+        !activeWorktreeId ||
+        !worktreePath ||
+        isFolder ||
+        !isBranchVisible ||
+        !isGitHistoryExpanded ||
+        !isGitHistoryVisible
+      ) {
         return
       }
-      setGitHistoryByWorktree((prev) => ({ ...prev, [worktreeId]: { status: 'ready', result } }))
-    } catch (error) {
-      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
-        return
-      }
-      const message = error instanceof Error ? error.message : 'Failed to load commits'
+
+      const worktreeId = activeWorktreeId
+      const requestId = gitHistoryRequestSeqRef.current + 1
+      gitHistoryRequestSeqRef.current = requestId
+      gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
       setGitHistoryByWorktree((prev) => {
         const previous = prev[worktreeId]
         return {
           ...prev,
           [worktreeId]: previous?.result
-            ? { status: 'error', result: previous.result, error: message }
-            : { status: 'error', error: message }
+            ? { status: 'refreshing', result: previous.result }
+            : { status: 'loading' }
         }
       })
+
+      try {
+        const connectionId = getConnectionId(worktreeId) ?? undefined
+        const result = await getRuntimeGitHistory(
+          {
+            // Why: route the history read by the repo OWNER host, not the focused runtime.
+            settings: activeRepoSettings,
+            worktreeId,
+            worktreePath,
+            connectionId
+          },
+          { limit: GIT_HISTORY_DEFAULT_LIMIT, baseRef: compareBaseRef, cursor }
+        )
+        if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+          return
+        }
+        setGitHistoryByWorktree((prev) => ({
+          ...prev,
+          // Why: fold against the state this page is landing on, not a snapshot from before the
+          // request. Whether the page appends or replaces is the accumulator's call.
+          [worktreeId]: {
+            status: 'ready',
+            result: foldGitHistoryPage(prev[worktreeId]?.result, result, cursor)
+          }
+        }))
+      } catch (error) {
+        if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+          return
+        }
+        const message = error instanceof Error ? error.message : 'Failed to load commits'
+        setGitHistoryByWorktree((prev) => {
+          const previous = prev[worktreeId]
+          return {
+            ...prev,
+            [worktreeId]: previous?.result
+              ? { status: 'error', result: previous.result, error: message }
+              : { status: 'error', error: message }
+          }
+        })
+      }
+    },
+    [
+      activeRepoSettings,
+      activeWorktreeId,
+      compareBaseRef,
+      isBranchVisible,
+      isFolder,
+      isGitHistoryExpanded,
+      isGitHistoryVisible,
+      worktreePath
+    ]
+  )
+
+  const refreshGitHistory = useCallback(async (): Promise<void> => {
+    await loadGitHistoryPage()
+  }, [loadGitHistoryPage])
+
+  const loadMoreGitHistory = useCallback(async (): Promise<void> => {
+    // Why: the cursor comes off the landed result rather than a locally counted offset, so a failed
+    // page retries the same page instead of skipping one, and a host that cannot page (older
+    // remote, no cursor echoed) simply offers nothing to load.
+    const cursor = gitHistoryState.result?.nextCursor
+    if (!cursor) {
+      return
     }
-  }, [
-    activeRepoSettings,
-    activeWorktreeId,
-    compareBaseRef,
-    isBranchVisible,
-    isFolder,
-    isGitHistoryExpanded,
-    isGitHistoryVisible,
-    worktreePath
-  ])
+    await loadGitHistoryPage(cursor)
+  }, [gitHistoryState, loadGitHistoryPage])
 
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   refreshGitHistoryRef.current = refreshGitHistory
@@ -6299,9 +6327,11 @@ function SourceControlInner(): React.JSX.Element {
             <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
               <GitHistoryPanel
                 state={gitHistoryState}
+                worktreeId={activeWorktreeId ?? undefined}
                 collapsed={collapsedSections.has('history')}
                 onToggle={() => toggleSection('history')}
                 onRefresh={() => void refreshGitHistory()}
+                onLoadMore={() => void loadMoreGitHistory()}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
                 onLoadCommitFiles={loadCommitFiles}
                 onOpenCommitFile={openCommitFile}

@@ -67,6 +67,7 @@ import {
   resolveEffectiveGitUpstream
 } from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
+import { readGitHistoryOptions } from '../shared/git-history-request-options'
 import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 import {
   removeSafeUntrackedDiscardTarget,
@@ -424,10 +425,11 @@ export class GitHandler {
 
   private async history(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
-    return loadGitHistoryFromExecutor(this.git.bind(this), worktreePath, {
-      limit: typeof params.limit === 'number' ? params.limit : undefined,
-      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
-    })
+    return loadGitHistoryFromExecutor(
+      this.git.bind(this),
+      worktreePath,
+      readGitHistoryOptions(params)
+    )
   }
 
   private async getDiff(params: Record<string, unknown>, context?: RequestContext) {

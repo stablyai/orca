@@ -29,6 +29,7 @@ import type {
   TuiAgent
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import { readGitHistoryOptions } from '../../shared/git-history-request-options'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
@@ -1296,7 +1297,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
-      const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
+      const options: GitHistoryOptions = readGitHistoryOptions(args)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {

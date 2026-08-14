@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: this table is the runtime git RPC contract; splitting it would make method coverage harder to audit. */
 import { defineMethod, type RpcMethod } from '../core'
+import { readGitHistoryOptions } from '../../../../shared/git-history-request-options'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import {
@@ -124,10 +125,7 @@ export const GIT_METHODS: RpcMethod[] = [
     name: 'git.history',
     params: GitHistory,
     handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitHistory(params.worktree, {
-        limit: params.limit,
-        baseRef: params.baseRef
-      })
+      runtime.getRuntimeGitHistory(params.worktree, readGitHistoryOptions(params))
   }),
   defineMethod({
     name: 'git.conflictOperation',

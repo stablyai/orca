@@ -8,12 +8,16 @@ import {
   GIT_HISTORY_DEFAULT_LIMIT,
   GIT_HISTORY_MAX_LIMIT,
   type GitHistoryExecutor,
+  type GitHistoryItem,
   type GitHistoryItemRef,
   type GitHistoryOptions,
-  type GitHistoryResult
+  type GitHistoryResult,
+  type GitHistorySeam
 } from './git-history-types'
 
 export type {
+  GitHistoryCursor,
+  GitHistorySeam,
   GitHistoryExecutor,
   GitHistoryGraphColorId,
   GitHistoryItem,
@@ -164,6 +168,14 @@ async function resolveNamedRef(
   return revision ? gitHistoryRefFromFullName(fullName, normalized, revision) : undefined
 }
 
+function isGitHistorySeam(row: GitHistoryItem | undefined, seam: GitHistorySeam): boolean {
+  return (
+    row?.id === seam.id &&
+    row.parentIds.length === seam.parentIds.length &&
+    row.parentIds.every((parentId, index) => parentId === seam.parentIds[index])
+  )
+}
+
 export async function loadGitHistoryFromExecutor(
   git: GitHistoryExecutor,
   cwd: string,
@@ -182,9 +194,14 @@ export async function loadGitHistoryFromExecutor(
   }
 
   const { currentRef, branchName } = await resolveCurrentRef(git, cwd, headOid)
-  const [remoteRef, rawBaseRef] = await Promise.all([
+  // Why: an anchor can go stale (rebase, amend, prune, branch switch). Resolving it first means a
+  // dead anchor degrades to a fresh first page instead of failing the whole panel on a bad
+  // revision — and it rides the existing batch so paging costs no extra round trip.
+  const requestedAnchor = options.cursor?.anchor?.trim() || undefined
+  const [remoteRef, rawBaseRef, anchor] = await Promise.all([
     resolveUpstreamRef(git, cwd, branchName),
-    resolveNamedRef(git, cwd, options.baseRef)
+    resolveNamedRef(git, cwd, options.baseRef),
+    requestedAnchor ? resolveCommit(git, cwd, requestedAnchor) : Promise.resolve(null)
   ])
 
   const baseRef =
@@ -194,7 +211,14 @@ export async function loadGitHistoryFromExecutor(
 
   // Why: this panel is scoped to the active workspace. Upstream and base refs
   // stay as comparison metadata so old workspaces do not list newly fetched upstream/base commits.
-  const historyRevisions = [headOid]
+  // Why: page by offset into a walk pinned to the cursor's anchor, so page N costs one page of
+  // output rather than N pages and stays a continuation of page 1 even if HEAD moves mid-paging.
+  // Why: an unresolved anchor restarts at page 1, so its offset goes with it. `loaded` counts the
+  // rows already shown, and the last of those is re-read as the seam, hence -1.
+  const resume =
+    anchor && options.cursor && options.cursor.loaded > 0
+      ? { anchor, skip: Math.trunc(options.cursor.loaded) - 1, after: options.cursor.after }
+      : undefined
 
   let mergeBase: string | undefined
   if (remoteRef?.revision && currentRef.revision && remoteRef.revision !== currentRef.revision) {
@@ -206,20 +230,50 @@ export async function loadGitHistoryFromExecutor(
     }
   }
 
-  const { stdout } = await git(
-    [
-      'log',
-      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
-      '-z',
-      '--topo-order',
-      '--decorate=full',
-      `-n${limit + 1}`,
-      ...historyRevisions
-    ],
-    cwd
-  )
-  const parsed = parseGitHistoryLog(stdout)
+  // Why: skipping into the walk keeps every page the same size however deep paging goes, and keeps
+  // the order identical to one uninterrupted walk, so no commit is repeated or dropped. The extra
+  // row a resumed page asks for is the seam: the last row already on screen, re-read to prove the
+  // walk still leads with it. +1 beyond that tells a full page apart from the last one.
+  const readPage = async (tip: string, skip: number, extra: number): Promise<GitHistoryItem[]> => {
+    const { stdout } = await git(
+      [
+        'log',
+        `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
+        '-z',
+        '--topo-order',
+        '--decorate=full',
+        `-n${limit + 1 + extra}`,
+        ...(skip > 0 ? [`--skip=${skip}`] : []),
+        tip
+      ],
+      cwd
+    )
+    return parseGitHistoryLog(stdout)
+  }
+
+  let walkTip = resume?.anchor ?? headOid
+  let skip = resume?.skip ?? 0
+  let parsed = await readPage(walkTip, skip, resume ? 1 : 0)
+  let continuedCursor = false
+  if (resume) {
+    // Why: an anchor resolving does not prove its ancestry is unchanged, and neither does the seam
+    // keeping its id — replace refs and grafts rewrite a commit's parents in place. If the walk no
+    // longer produces exactly the row the previous page ended on, this is a different history and
+    // splicing it on would skip commits and leave the seam's drawn edge pointing at nothing.
+    continuedCursor = isGitHistorySeam(parsed[0], resume.after)
+    if (continuedCursor) {
+      parsed = parsed.slice(1)
+    } else {
+      walkTip = headOid
+      skip = 0
+      parsed = await readPage(walkTip, skip, 0)
+    }
+  }
   const items = parsed.slice(0, limit)
+  const seamRow = items.at(-1)
+  const hasMore = parsed.length > limit
+  // Rows of this walk now accounted for: those skipped, the seam, and this page.
+  const loaded = skip + (continuedCursor ? 1 : 0) + items.length
   const hasIncomingChanges =
     Boolean(remoteRef?.revision && mergeBase) && remoteRef?.revision !== mergeBase
   const hasOutgoingChanges =
@@ -234,7 +288,16 @@ export async function loadGitHistoryFromExecutor(
     mergeBase,
     hasIncomingChanges,
     hasOutgoingChanges,
-    hasMore: parsed.length > limit,
-    limit
+    hasMore,
+    limit,
+    continuedCursor,
+    nextCursor:
+      hasMore && items.length > 0
+        ? {
+            anchor: walkTip,
+            loaded,
+            after: { id: seamRow?.id ?? '', parentIds: seamRow?.parentIds ?? [] }
+          }
+        : undefined
   }
 }
