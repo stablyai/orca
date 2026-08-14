@@ -10,12 +10,12 @@ function source(relativePath: string): string {
 
 describe('agent dashboard performance isolation', () => {
   it('keeps all dashboard feature modules out of the disabled app and sidebar path', () => {
-    const app = source('App.tsx')
+    const backgroundServices = source('app-shell/AppBackgroundServices.tsx')
     const sidebar = source('components/sidebar/index.tsx')
     const nav = source('components/sidebar/SidebarNav.tsx')
 
-    expect(app).not.toMatch(/from ['"].*DashboardPopoutBridge['"]/)
-    expect(app).toContain("import('./components/dashboard/DashboardPopoutBridge')")
+    expect(backgroundServices).not.toMatch(/from ['"].*DashboardPopoutBridge['"]/)
+    expect(backgroundServices).toContain("import('../components/dashboard/DashboardPopoutBridge')")
     expect(sidebar).not.toMatch(/from ['"].*AgentDashboard(?:Drawer|SidebarHost)['"]/)
     expect(sidebar).toContain("import('./AgentDashboardSidebarHost')")
     expect(nav).not.toContain('useAgentBucketCounts')

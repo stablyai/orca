@@ -178,7 +178,6 @@ inline src/relay/pty-handler.test.ts
 inline src/relay/pty-handler.ts
 inline src/relay/relay.ts
 inline src/relay/workspace-space-scan.ts
-inline src/renderer/src/App.tsx
 inline src/renderer/src/components/GitHubItemDialog.tsx
 inline src/renderer/src/components/GitLabItemDialog.tsx
 inline src/renderer/src/components/JiraIssueWorkspace.tsx
