@@ -192,6 +192,28 @@ export async function saveHostDockWidth(width: number): Promise<void> {
   await AsyncStorage.setItem(DOCK_WIDTH_KEY, String(clampHostDockWidth(width)))
 }
 
+export type TerminalKeypadLayout = 'shortcuts' | 'keyboard'
+
+const TERMINAL_KEYPAD_LAYOUT_KEY = 'orca:terminalKeypadLayout'
+export const DEFAULT_TERMINAL_KEYPAD_LAYOUT: TerminalKeypadLayout = 'shortcuts'
+
+function isTerminalKeypadLayout(value: unknown): value is TerminalKeypadLayout {
+  return value === 'shortcuts' || value === 'keyboard'
+}
+
+export async function loadTerminalKeypadLayout(): Promise<TerminalKeypadLayout> {
+  try {
+    const raw = await AsyncStorage.getItem(TERMINAL_KEYPAD_LAYOUT_KEY)
+    return isTerminalKeypadLayout(raw) ? raw : DEFAULT_TERMINAL_KEYPAD_LAYOUT
+  } catch {
+    return DEFAULT_TERMINAL_KEYPAD_LAYOUT
+  }
+}
+
+export async function saveTerminalKeypadLayout(layout: TerminalKeypadLayout): Promise<void> {
+  await AsyncStorage.setItem(TERMINAL_KEYPAD_LAYOUT_KEY, layout)
+}
+
 export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'

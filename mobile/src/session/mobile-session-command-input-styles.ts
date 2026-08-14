@@ -2,6 +2,14 @@ import { StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 
+// Accessory-key grid geometry, shared with useMobileKeypadHeight so the
+// resize snap lands exactly on whole rows. Keys are a fixed height (instead of
+// padding-derived) so every row is the same pixel stride regardless of which
+// keys are rendered.
+export const ACCESSORY_KEY_HEIGHT = 30
+export const ACCESSORY_ROW_GAP = spacing.xs
+export const ACCESSORY_GRID_VERTICAL_PADDING = spacing.xs * 2
+
 export const mobileSessionCommandInputStyles = StyleSheet.create({
   createWarningBanner: {
     flexDirection: 'row',
@@ -67,29 +75,49 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   commandDock: {
     zIndex: 20
   },
-  accessoryBar: {
-    flexDirection: 'row',
+  keypadResizeHandle: {
     alignItems: 'center',
+    justifyContent: 'center',
+    height: 12,
+    backgroundColor: colors.bgPanel
+  },
+  keypadResizeHandleActive: {
+    backgroundColor: colors.borderSubtle
+  },
+  keypadResizeHandleGrip: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.textMuted,
+    opacity: 0.5
+  },
+  accessoryBar: {
+    // Why row: the scroll view's flex:1 must grow horizontally; in a column its
+    // flexBasis:0 would override the explicit height and collapse the grid.
+    flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
-  accessoryScroll: {
+  accessoryKeysScroll: {
     flex: 1,
     minWidth: 0
   },
-  accessoryContent: {
+  accessoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: ACCESSORY_ROW_GAP,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    gap: spacing.xs
+    paddingVertical: spacing.xs
   },
   accessoryKey: {
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
+    height: ACCESSORY_KEY_HEIGHT,
     borderRadius: radii.button,
     minWidth: 36,
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   accessoryKeyPressed: {
     backgroundColor: colors.borderSubtle
@@ -119,14 +147,11 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   keyboardDismissKey: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing.sm,
-    marginVertical: spacing.xs,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 0,
+    height: ACCESSORY_KEY_HEIGHT,
     borderRadius: radii.button,
-    minWidth: 36,
-    height: 28
+    minWidth: 36
   },
   keyboardDismissGlyph: {
     alignItems: 'center',
@@ -177,13 +202,25 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     borderRadius: radii.input,
     paddingHorizontal: spacing.sm + 2
   },
-
   liveInputFocusTargetPressed: {
     backgroundColor: colors.borderSubtle
   },
-
   liveInputFocusTargetDisabled: {
     opacity: 0.45
+  },
+
+  keypadToggleButton: {
+    backgroundColor: colors.bgRaised,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  keypadTogglePressed: {
+    backgroundColor: colors.borderSubtle
   },
 
   liveInputCapture: {

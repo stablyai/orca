@@ -12,6 +12,7 @@ import {
   loadHostSidebarWidth,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
+  loadTerminalKeypadLayout,
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
@@ -19,6 +20,7 @@ import {
   saveHostSidebarWidth,
   savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
+  saveTerminalKeypadLayout,
   saveTerminalLinkOpenMode
 } from './preferences'
 import {
@@ -453,6 +455,38 @@ describe('host dock width preference', () => {
     expect(clampHostDockWidth(HOST_DOCK_MIN_WIDTH - 10)).toBe(HOST_DOCK_MIN_WIDTH)
     expect(clampHostDockWidth(HOST_DOCK_MAX_WIDTH + 10)).toBe(HOST_DOCK_MAX_WIDTH)
     expect(clampHostDockWidth(337.6)).toBe(338)
+  })
+})
+
+describe('terminal keypad layout preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('defaults to the shortcut layout when unset', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+
+    await expect(loadTerminalKeypadLayout()).resolves.toBe('shortcuts')
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:terminalKeypadLayout')
+  })
+
+  it('loads the full keyboard layout when stored', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('keyboard')
+
+    await expect(loadTerminalKeypadLayout()).resolves.toBe('keyboard')
+  })
+
+  it('falls back to shortcuts for an invalid stored value', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('numpad')
+
+    await expect(loadTerminalKeypadLayout()).resolves.toBe('shortcuts')
+  })
+
+  it('persists the selected layout', async () => {
+    await saveTerminalKeypadLayout('keyboard')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalKeypadLayout', 'keyboard')
   })
 })
 
