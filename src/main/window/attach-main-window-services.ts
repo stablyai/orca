@@ -500,9 +500,9 @@ function registerRuntimeWindowLifecycle(
   })
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
-    const revision = runtime.markRendererReloading(mainWindow.id)
+    const fence = runtime.markRendererReloading(mainWindow.id)
     return () => {
-      if (revision !== null && runtime.markRendererReloadCancelled(mainWindow.id, revision)) {
+      if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
         rendererNotifications.onMainFrameReloadCancelled()
       }
     }

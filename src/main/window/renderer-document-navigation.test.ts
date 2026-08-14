@@ -64,6 +64,37 @@ describe('renderer document navigation', () => {
     expect(cancel).toHaveBeenCalledOnce()
   })
 
+  it('shares one reload fence across concurrent provisional navigations', () => {
+    const cancel = vi.fn()
+    const onStarted = vi.fn(() => cancel)
+    const fixture = createFixture('http://localhost:5173/', onStarted)
+
+    fixture.navigate?.({}, 'http://localhost:5173/reload-a', false, true)
+    fixture.navigate?.({}, 'http://localhost:5173/reload-b', false, true)
+
+    expect(onStarted).toHaveBeenCalledOnce()
+    fixture.failProvisionalLoad?.(
+      {},
+      -3,
+      'aborted',
+      'http://localhost:5173/reload-a',
+      true,
+      1,
+      1
+    )
+    expect(cancel).not.toHaveBeenCalled()
+    fixture.failProvisionalLoad?.(
+      {},
+      -3,
+      'aborted',
+      'http://localhost:5173/reload-b',
+      true,
+      1,
+      1
+    )
+    expect(cancel).toHaveBeenCalledOnce()
+  })
+
   it('does not cancel a navigation after its document commits', () => {
     const cancel = vi.fn()
     const fixture = createFixture('file:///opt/orca/renderer/index.html', vi.fn(() => cancel))

@@ -2751,6 +2751,11 @@ function getSetupRunnerCommandPlatformForLaunch(
   return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
 }
 
+export type RuntimeRendererReloadFence = Readonly<{
+  revision: number
+  recovery: 'renderer' | 'headless' | 'reloading'
+}>
+
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
@@ -28643,27 +28648,31 @@ export class OrcaRuntimeService {
     return false
   }
 
-  markRendererReloading(windowId: number): number | null {
+  markRendererReloading(windowId: number): RuntimeRendererReloadFence | null {
     if (
       windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
       this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
       this.headlessGraphFallbackAvailable
     ) {
       this.attachWindow(windowId)
-      return this.authoritativeWindowId === windowId
-        ? this.graphReloadLifecycle.getActiveRevision()
+      const revision = this.graphReloadLifecycle.getActiveRevision()
+      return this.authoritativeWindowId === windowId && revision !== null
+        ? { revision, recovery: 'headless' }
         : null
     }
     if (windowId !== this.authoritativeWindowId) {
       return null
     }
     if (this.graphStatus === 'reloading') {
-      return this.graphReloadLifecycle.begin(windowId)
+      return {
+        revision: this.graphReloadLifecycle.begin(windowId),
+        recovery: this.shouldRestoreHeadlessGraph(windowId) ? 'headless' : 'reloading'
+      }
     }
     if (this.graphStatus !== 'ready') {
       return null
     }
-    return this.beginGraphReload(windowId)
+    return { revision: this.beginGraphReload(windowId), recovery: 'renderer' }
   }
 
   private beginGraphReload(windowId: number): number {
@@ -28681,22 +28690,26 @@ export class OrcaRuntimeService {
     return revision
   }
 
-  markRendererReloadCancelled(windowId: number, revision: number): boolean {
+  markRendererReloadCancelled(windowId: number, fence: RuntimeRendererReloadFence): boolean {
     if (
       windowId !== this.authoritativeWindowId ||
       this.graphStatus !== 'reloading' ||
-      !this.graphReloadLifecycle.settle(revision, 'cancelled')
+      !this.graphReloadLifecycle.settle(fence.revision, 'cancelled')
     ) {
       return false
     }
-    if (this.shouldRestoreHeadlessGraph(windowId)) {
+    if (fence.recovery === 'headless' && this.shouldRestoreHeadlessGraph(windowId)) {
       this.restoreHeadlessGraphAuthority()
       return false
     }
-    this.graphStatus = 'ready'
-    this.setTerminalSideEffectConsumerAvailable(true)
-    this.refreshWritableFlags()
-    return true
+    if (fence.recovery === 'renderer') {
+      this.graphStatus = 'ready'
+      this.setTerminalSideEffectConsumerAvailable(true)
+      this.refreshWritableFlags()
+      return true
+    }
+    this.graphReloadLifecycle.begin(windowId)
+    return false
   }
 
   markGraphReady(windowId: number): void {

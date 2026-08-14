@@ -2490,32 +2490,48 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 
-  it('restores a surviving renderer only for the current cancelled reload', () => {
+  it('restores a surviving renderer when its reload is cancelled', () => {
     const runtime = createRuntime()
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.markGraphReady(TEST_WINDOW_ID)
-    const supersededRevision = runtime.markRendererReloading(TEST_WINDOW_ID)
-    const currentRevision = runtime.markRendererReloading(TEST_WINDOW_ID)
-    if (supersededRevision === null || currentRevision === null) {
-      throw new Error('expected active renderer reload revisions')
+    const fence = runtime.markRendererReloading(TEST_WINDOW_ID)
+    if (fence === null) {
+      throw new Error('expected active renderer reload fence')
     }
 
-    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, supersededRevision)).toBe(false)
+    expect(fence.recovery).toBe('renderer')
     expect(runtime.getStatus().graphStatus).toBe('reloading')
-    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, currentRevision)).toBe(true)
+    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, fence)).toBe(true)
     expect(runtime.getStatus().graphStatus).toBe('ready')
+  })
+
+  it('keeps an earlier committed reload fenced when a later reload is cancelled', () => {
+    const runtime = createRuntime()
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+    const committedFence = runtime.markRendererReloading(TEST_WINDOW_ID)
+    const cancelledFence = runtime.markRendererReloading(TEST_WINDOW_ID)
+    if (committedFence === null || cancelledFence === null) {
+      throw new Error('expected active renderer reload fences')
+    }
+
+    expect(cancelledFence.recovery).toBe('reloading')
+    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, committedFence)).toBe(false)
+    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, cancelledFence)).toBe(false)
+    expect(runtime.getStatus().graphStatus).toBe('reloading')
   })
 
   it('restores headless authority when desktop promotion navigation is cancelled', () => {
     const runtime = createRuntime()
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.attachWindow(TEST_WINDOW_ID)
-    const revision = runtime.markRendererReloading(TEST_WINDOW_ID)
-    if (revision === null) {
-      throw new Error('expected active promotion reload revision')
+    const fence = runtime.markRendererReloading(TEST_WINDOW_ID)
+    if (fence === null) {
+      throw new Error('expected active promotion reload fence')
     }
 
-    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, revision)).toBe(false)
+    expect(fence.recovery).toBe('headless')
+    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, fence)).toBe(false)
     expect(runtime.getStatus()).toMatchObject({
       authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
       graphStatus: 'ready'
