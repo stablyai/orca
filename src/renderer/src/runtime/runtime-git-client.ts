@@ -22,7 +22,7 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
-import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
@@ -49,12 +49,7 @@ export type RuntimePullRequestGenerationInput = {
 }
 
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
-  Partial<
-    Pick<
-      GlobalSettings,
-      'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
-    >
-  >
+  Partial<Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>>
 
 type RuntimeDiscoverCommitMessageModelsResult =
   | {
@@ -96,12 +91,7 @@ export type RuntimeGeneratePullRequestFieldsOverrides = RuntimeGenerateCommitMes
 function getRuntimeCommitMessageSettings(
   settings: RuntimeGitSettings | null | undefined,
   connectionId?: string
-): Partial<
-  Pick<
-    GlobalSettings,
-    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
-  >
-> & {
+): Partial<Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>> & {
   commitMessageDiscoveryHostKey?: string
 } {
   if (!settings) {
@@ -117,9 +107,6 @@ function getRuntimeCommitMessageSettings(
       : {}),
     ...(settings.agentCmdOverrides !== undefined
       ? { agentCmdOverrides: settings.agentCmdOverrides }
-      : {}),
-    ...(settings.enableGitHubAttribution !== undefined
-      ? { enableGitHubAttribution: settings.enableGitHubAttribution }
       : {}),
     commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }

@@ -24,16 +24,35 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
   }
 }
 
+function emitGoogleCookieImportWarning(
+  summary: BrowserCookieImportSummary,
+  executionHostLabel: string
+): void {
+  if (!summary.googleCookiesSkipped) {
+    return
+  }
+  toast.warning(
+    translate(
+      'auto.lib.browser.cookie.import.toast.googleCookiesSkipped',
+      'Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.',
+      { value0: executionHostLabel }
+    ),
+    { duration: 12000 }
+  )
+}
+
 // Why: a degraded import returns ok:true with a warning, so every call site must route it to a
 // warning toast instead of reporting an unqualified success (#9355).
 export function emitBrowserCookieImportToast(
   summary: BrowserCookieImportSummary,
-  successMessage: string
+  successMessage: string,
+  executionHostLabel: string
 ): void {
   const warning = summary.warning
   if (warning) {
     toast.warning(formatCookieImportWarning(warning))
-    return
+  } else {
+    toast.success(successMessage)
   }
-  toast.success(successMessage)
+  emitGoogleCookieImportWarning(summary, executionHostLabel)
 }

@@ -112,7 +112,7 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
     const observeRender = (): void => {
       renderEvents += 1
       const paintedAt = performance.now()
-      for (const entry of awaitingRender.splice(0, awaitingRender.length)) {
+      for (const entry of awaitingRender.splice(0)) {
         entry.sample.keyToRenderMs = paintedAt - entry.startedAt
       }
     }

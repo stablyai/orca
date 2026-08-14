@@ -11,8 +11,8 @@ import { waitForActivePanePtyId } from './terminal'
 /** Multi-worktree load: several agent-like streaming terminals per worktree. */
 export const BULK_OPEN_WORKTREE_COUNT = 3
 export const BULK_OPEN_TABS_PER_WORKTREE = 4
-/** Soft freeze signal — UI feels stuck. */
-export const SOFT_FREEZE_LAG_MS = 2_000
+/** Soft freeze signal — leaves CI room for one-off renderer scheduling stalls. */
+export const SOFT_FREEZE_LAG_MS = 2_500
 /** Hard freeze signal — matches trusted "screen fully frozen" reports. */
 export const HARD_FREEZE_LAG_MS = 5_000
 

@@ -181,7 +181,7 @@ export default function FolderWorkspacePrChecksPanel({
           workflowRunId: check.workflowRunId,
           checkName: check.name,
           url: check.url,
-          prRepo: null
+          prRepo: row.githubRepository ?? null
         },
         { repoId: row.repo.id }
       )

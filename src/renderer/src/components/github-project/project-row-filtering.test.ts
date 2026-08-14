@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github-project-types'
+import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 import type { Repo } from '../../../../shared/types'
 import {
   filterProjectTableRowsByOpenRepos,

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LinearIssueContextResult, LinearIssueRequest } from '../../shared/linear-agent-access'
+import type { LinearIssueContextResult, LinearIssueRequest } from '../../shared/linear/agent-access'
 import type { ResolvedIssue } from './issue-context-client'
 import { ACTIVITY_QUERY } from './issue-activity-raw'
 import {

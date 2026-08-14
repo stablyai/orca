@@ -12,12 +12,14 @@ import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentCard, type PRCommentCardActions } from './PRCommentCard'
 import { PRCommentComposer } from './PRCommentComposer'
 import {
-  PR_COMMENT_AUDIENCE_FILTERS,
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
-  getPRCommentAudienceEmptyLabel,
   type PRCommentAudienceFilter
-} from './pr-comment-audience'
+} from '../../../../src/shared/pr-comment-audience'
+import {
+  PR_COMMENT_AUDIENCE_FILTERS,
+  getPRCommentAudienceEmptyLabel
+} from './pr-comment-audience-labels'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -25,7 +27,7 @@ import {
   groupPRComments,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from './pr-comment-groups'
+} from '../../../../src/shared/pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
 

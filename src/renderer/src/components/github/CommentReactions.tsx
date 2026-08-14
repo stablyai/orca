@@ -37,9 +37,15 @@ export function CommentReactions({
 }: {
   reactions?: GitHubReaction[]
   className?: string
-  onReactionChange?: (content: GitHubReactionContent, reacted: boolean) => Promise<void> | void
+  onReactionChange?: (
+    content: GitHubReactionContent,
+    reacted: boolean
+  ) => Promise<boolean> | boolean
 }): React.JSX.Element | null {
   const visibleReactions = (reactions ?? []).filter((reaction) => reaction.count > 0)
+  const addReactionButtonRef = React.useRef<HTMLButtonElement>(null)
+  const pickerGroupRef = React.useRef<HTMLDivElement>(null)
+  const mutationPendingRef = React.useRef(false)
   const [open, setOpen] = React.useState(false)
   const [pendingContent, setPendingContent] = React.useState<GitHubReactionContent | null>(null)
   if (visibleReactions.length === 0 && !onReactionChange) {
@@ -48,16 +54,25 @@ export function CommentReactions({
 
   const changeReaction = async (
     content: GitHubReactionContent,
-    reacted: boolean
+    reacted: boolean,
+    closePicker: boolean,
+    focusTriggerAfterChange = false
   ): Promise<void> => {
-    if (!onReactionChange || pendingContent) {
+    if (!onReactionChange || mutationPendingRef.current) {
       return
     }
+    mutationPendingRef.current = true
     setPendingContent(content)
-    setOpen(false)
+    if (focusTriggerAfterChange) {
+      addReactionButtonRef.current?.focus()
+    }
     try {
-      await onReactionChange(content, reacted)
+      const changed = await onReactionChange(content, reacted)
+      if (changed && closePicker) {
+        setOpen(false)
+      }
     } finally {
+      mutationPendingRef.current = false
       setPendingContent(null)
     }
   }
@@ -76,7 +91,7 @@ export function CommentReactions({
               type="button"
               variant="outline"
               size="xs"
-              disabled={pendingContent !== null}
+              aria-disabled={pendingContent !== null}
               className={cn(
                 'h-6 gap-1 rounded-full px-2 text-[12px] font-normal',
                 reaction.viewerHasReacted && 'border-ring bg-accent text-accent-foreground'
@@ -91,7 +106,14 @@ export function CommentReactions({
                   value2: reaction.count === 1 ? '' : 's'
                 }
               )}
-              onClick={() => void changeReaction(reaction.content, !reaction.viewerHasReacted)}
+              onClick={() =>
+                void changeReaction(
+                  reaction.content,
+                  !reaction.viewerHasReacted,
+                  false,
+                  Boolean(reaction.viewerHasReacted && reaction.count === 1)
+                )
+              }
             >
               <span aria-hidden="true">{REACTION_EMOJI[reaction.content]}</span>
               <span className="tabular-nums">{reaction.count}</span>
@@ -121,10 +143,11 @@ export function CommentReactions({
             <TooltipTrigger asChild>
               <PopoverTrigger asChild>
                 <Button
+                  ref={addReactionButtonRef}
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  disabled={pendingContent !== null}
+                  aria-disabled={pendingContent !== null}
                   className="text-muted-foreground hover:text-foreground"
                   aria-label={pickerLabel}
                 >
@@ -136,8 +159,23 @@ export function CommentReactions({
               {pickerLabel}
             </TooltipContent>
           </Tooltip>
-          <PopoverContent align="start" side="top" sideOffset={6} className="w-auto p-1.5">
-            <div className="grid grid-cols-4 gap-1" aria-label={pickerLabel} role="group">
+          <PopoverContent
+            align="start"
+            side="top"
+            sideOffset={6}
+            className="w-auto p-1.5"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault()
+              pickerGroupRef.current?.focus()
+            }}
+          >
+            <div
+              ref={pickerGroupRef}
+              className="grid grid-cols-4 gap-1"
+              aria-label={pickerLabel}
+              role="group"
+              tabIndex={-1}
+            >
               {GITHUB_REACTION_ORDER.map((content) => {
                 const reaction = reactions?.find((candidate) => candidate.content === content)
                 const reacted = Boolean(reaction?.viewerHasReacted)
@@ -147,7 +185,7 @@ export function CommentReactions({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    disabled={pendingContent !== null}
+                    aria-disabled={pendingContent !== null}
                     className={cn('text-lg', reacted && 'bg-accent text-accent-foreground')}
                     aria-label={
                       reacted
@@ -163,7 +201,7 @@ export function CommentReactions({
                           )
                     }
                     aria-pressed={reacted}
-                    onClick={() => void changeReaction(content, !reacted)}
+                    onClick={() => void changeReaction(content, !reacted, true)}
                   >
                     <span aria-hidden="true">{REACTION_EMOJI[content]}</span>
                   </Button>

@@ -8,10 +8,25 @@ describe('useMobileNativeChatTerminalStream', () => {
   let harnessRenderCount = 0
   const subscriptionsRef = { current: new Map<string, () => void>() }
   const subscribingRef = { current: new Set<string>() }
+  const leaseOnlyRef = { current: new Set<string>() }
   const webReadyRef = { current: new Set(['terminal-1']) }
   const initializedRef = { current: new Set(['terminal-1']) }
-  const subscribe = vi.fn((handle: string) => subscriptionsRef.current.set(handle, () => {}))
-  const unsubscribe = vi.fn((handle: string) => subscriptionsRef.current.delete(handle))
+  /** Mirrors the route's subscribe-time coverage guess, which is what decides whether
+   *  the host opens a lease-only stream or a streaming one. */
+  let subscribeOpensLeaseOnly = false
+  const registerSubscription = (handle: string): void => {
+    subscriptionsRef.current.set(handle, () => {})
+    if (subscribeOpensLeaseOnly) {
+      leaseOnlyRef.current.add(handle)
+    } else {
+      leaseOnlyRef.current.delete(handle)
+    }
+  }
+  const subscribe = vi.fn(registerSubscription)
+  const unsubscribe = vi.fn((handle: string) => {
+    subscriptionsRef.current.delete(handle)
+    leaseOnlyRef.current.delete(handle)
+  })
   const notifyWebReadyRef = { current: (_handle: string, _wasAlreadyReady: boolean): void => {} }
   const notifyListedHandlesRef = { current: (_liveHandles: ReadonlySet<string>): void => {} }
   const hasTabsRecoveryNeedRef = { current: (): boolean => false }
@@ -19,6 +34,8 @@ describe('useMobileNativeChatTerminalStream', () => {
   beforeEach(() => {
     subscriptionsRef.current = new Map([['terminal-1', () => {}]])
     subscribingRef.current = new Set()
+    leaseOnlyRef.current = new Set()
+    subscribeOpensLeaseOnly = false
     webReadyRef.current = new Set(['terminal-1'])
     initializedRef.current = new Set(['terminal-1'])
     harnessRenderCount = 0
@@ -51,6 +68,7 @@ describe('useMobileNativeChatTerminalStream', () => {
       streamRevision,
       subscriptionsRef,
       subscribingRef,
+      leaseOnlyRef,
       webReadyRef,
       initializedRef,
       subscribe,
@@ -105,6 +123,111 @@ describe('useMobileNativeChatTerminalStream', () => {
 
     expect(unsubscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
     expect(subscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
+  })
+
+  /** What switchTab does synchronously on the tap, before the route re-renders: the
+   *  coverage it reads still describes the chat tab being left, so the incoming
+   *  terminal gets a lease-only subscribe — the shape that renders nothing. */
+  function handOffToTerminalTwo(): void {
+    subscribeOpensLeaseOnly = true
+    subscribe('terminal-2')
+    subscribeOpensLeaseOnly = false
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+  }
+
+  it('trades a lease-only stream for output when a chat tab hands off to a terminal tab', async () => {
+    webReadyRef.current.add('terminal-2')
+    initializedRef.current.add('terminal-2')
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    handOffToTerminalTwo()
+
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, { showNativeChat: false, activeHandle: 'terminal-2' })
+      )
+    })
+
+    expect(unsubscribe).toHaveBeenCalledWith('terminal-2')
+    expect(subscribe).toHaveBeenCalledWith('terminal-2')
+    expect(leaseOnlyRef.current.has('terminal-2')).toBe(false)
+    // The lease-only stream carried no scrollback, so xterm is empty — a stale
+    // initialized mark would drop the replacement snapshot and keep the tab blank.
+    expect(initializedRef.current.has('terminal-2')).toBe(false)
+  })
+
+  it('settles once a lease-only stream has been replaced by a full one', async () => {
+    webReadyRef.current.add('terminal-2')
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    handOffToTerminalTwo()
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, { showNativeChat: false, activeHandle: 'terminal-2' })
+      )
+    })
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, {
+          showNativeChat: false,
+          activeHandle: 'terminal-2',
+          streamRevision: 1
+        })
+      )
+    })
+
+    // A stream that renders is settled — resubscribing it again would be a loop.
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(unsubscribe).not.toHaveBeenCalled()
+  })
+
+  it('repairs a lease-only stream once its WebView reports ready', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    handOffToTerminalTwo()
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, { showNativeChat: false, activeHandle: 'terminal-2' })
+      )
+    })
+
+    // Cold WebView: the resume must wait, and the route's own web-ready path bails
+    // because the lease-only subscription already counts as live.
+    expect(subscribe).not.toHaveBeenCalled()
+
+    await act(async () => {
+      webReadyRef.current.add('terminal-2')
+      notifyWebReadyRef.current('terminal-2', false)
+    })
+
+    expect(unsubscribe).toHaveBeenCalledWith('terminal-2')
+    expect(subscribe).toHaveBeenCalledWith('terminal-2')
+  })
+
+  it('keeps a covered lease-only stream instead of trading it for output (#10681)', async () => {
+    subscribeOpensLeaseOnly = true
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { showNativeChat: true, streamRevision: 1 }))
+    })
+
+    // Lease-only is the correct shape under chat; swapping it for output would drop
+    // the input floor the composer holds.
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(unsubscribe).not.toHaveBeenCalled()
+    expect(leaseOnlyRef.current.has('terminal-1')).toBe(true)
   })
 
   it('re-subscribes a covered stream torn down under chat (#10681)', async () => {
@@ -174,9 +297,7 @@ describe('useMobileNativeChatTerminalStream', () => {
 
       expect(subscribe).toHaveBeenCalledTimes(5)
     } finally {
-      subscribe.mockImplementation((handle: string) =>
-        subscriptionsRef.current.set(handle, () => {})
-      )
+      subscribe.mockImplementation(registerSubscription)
     }
   })
 

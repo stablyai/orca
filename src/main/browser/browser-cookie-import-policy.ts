@@ -53,6 +53,40 @@ export function normalizeCookieImportDomain(domain: string): string | null {
   return normalized
 }
 
+// Why (STA-3811): registrable families whose sessions are device-bound server-side, so a
+// transplanted cookie is rejected (or flagged and expired within ~1h) no matter how faithfully
+// it is copied. Signing in directly inside Orca is the only path that produces a working
+// session, so an import must never write these cookies and never remove them either — the
+// live session is always more valuable than anything an import could put in its place.
+// Entries must be canonical lowercase ASCII (punycode) registrable domains, never subdomains or
+// public suffixes, because clearData derives one excluded origin and matches at that boundary.
+// Adding a site is one entry here.
+// youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
+// its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
+// users actually asked for.
+const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
+export const NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `https://${root}`
+)
+
+export function isNonTransplantableCookieDomain(domain: string): boolean {
+  const normalized = normalizeCookieDomain(domain)
+  if (!normalized) {
+    return false
+  }
+  return NON_TRANSPLANTABLE_DOMAINS.some(
+    (root) => normalized === root || normalized.endsWith(`.${root}`)
+  )
+}
+
+// Why: Chromium stores host_key lowercase as 'google.com', '.google.com' or 'sub.google.com';
+// the LIKE pattern covers the leading-dot row and cannot match lookalikes ('withgoogle.com').
+export const NON_TRANSPLANTABLE_HOST_KEY_SQL = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `host_key = '${root}' OR host_key LIKE '%.${root}'`
+).join(' OR ')
+
+// Why: subsumed by the domain exclusion above for google.com — kept because it is the general
+// rule for rotation-only cookies and applies to any family added without a full exclusion.
 export function isGoogleSourceBoundCookie(name: string, domain: string): boolean {
   if (!GOOGLE_SOURCE_BOUND_COOKIE_NAMES.has(name)) {
     return false
@@ -123,7 +157,7 @@ function overlapsImportedDomain(
   return domainSuffixes(domain).some((suffix) => scopes.descendantRoots.has(suffix))
 }
 
-function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
+export function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
   try {
     const url = new URL(`${cookie.secure ? 'https' : 'http'}://${domain}/`)
     url.pathname = cookie.path?.startsWith('/') ? cookie.path : '/'

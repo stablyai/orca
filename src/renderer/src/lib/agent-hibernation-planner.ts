@@ -267,10 +267,7 @@ export function planAgentHibernationCandidates(
     }
     if (
       runtimeLivenessRequiredWorktreeIds.has(worktreeId) &&
-      !Object.prototype.hasOwnProperty.call(
-        snapshot.runtimeLivePtyIdsByWorktreeId ?? {},
-        worktreeId
-      )
+      !Object.hasOwn(snapshot.runtimeLivePtyIdsByWorktreeId ?? {}, worktreeId)
     ) {
       continue
     }

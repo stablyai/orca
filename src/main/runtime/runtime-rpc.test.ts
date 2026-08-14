@@ -6026,7 +6026,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     const wideStartGate = new Promise<void>((resolve) => {
       releaseWideStart = resolve
     })
-    let wideStopSpy: ReturnType<typeof vi.spyOn> | null = null
+    let wideStopSpy: ReturnType<typeof vi.spyOn> = null
     vi.spyOn(target, 'startWebSocketTransport').mockImplementation(async (opts) => {
       if (opts.host === '0.0.0.0') {
         // Why: hold the widen mid-flight (loopback already stopped) so stop() must race the rebind.

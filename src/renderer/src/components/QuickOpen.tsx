@@ -1,4 +1,4 @@
-import React, { useCallback, useDeferredValue, useMemo, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
@@ -21,6 +21,8 @@ import {
   QuickOpenInstallRgGuidance
 } from '@/components/quick-open-install-rg-guidance'
 
+const QUICK_OPEN_CLOSE_LINGER_MS = 300
+
 function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <span className="rounded-full border border-border/60 bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-foreground/85">
@@ -31,6 +33,24 @@ function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Eleme
 
 export default function QuickOpen(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'quick-open')
+  const [lingering, setLingering] = useState(visible)
+  useEffect(() => {
+    if (visible) {
+      setLingering(true)
+      return
+    }
+    // Why: keep scan cancellation and the dialog exit animation mounted before releasing remote file state.
+    const timer = window.setTimeout(() => setLingering(false), QUICK_OPEN_CLOSE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [visible])
+
+  if (!visible && !lingering) {
+    return null
+  }
+  return <QuickOpenContent visible={visible} />
+}
+
+function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element {
   const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const openFile = useAppStore((s) => s.openFile)

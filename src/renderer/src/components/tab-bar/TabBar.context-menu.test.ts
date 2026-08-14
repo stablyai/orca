@@ -497,6 +497,26 @@ describe('TabBar context menu wiring', () => {
     expect(menuLabels[3]).toContain('New Browser Tab')
   })
 
+  it('omits impossible paired-web actions while keeping terminal and markdown', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      onNewFileTab: () => {},
+      onOpenFileTab: () => {},
+      onNewSimulatorTab: () => {}
+    })
+
+    const menuLabels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(menuLabels.some((label) => label.includes('New Terminal'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('New Markdown'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('Open Markdown...'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('Browser'))).toBe(false)
+    expect(menuLabels.some((label) => label.includes('Mobile Emulator'))).toBe(false)
+  })
+
   it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {
     const onNewSimulatorTab = vi.fn()
     appStoreSnapshot.unifiedTabsByWorktree = {

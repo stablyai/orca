@@ -47,6 +47,14 @@ export function localizedHostedReviewCopy(
       providerName: 'Gitea'
     }
   }
+  if (provider === 'bitbucket') {
+    return {
+      shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
+      reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),
+      titleLabel: translate('auto.i18n.hostedReview.copy.d8e2f6a0b9', 'Pull Request'),
+      providerName: 'Bitbucket'
+    }
+  }
   return {
     shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
     reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),

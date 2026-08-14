@@ -1,4 +1,11 @@
-import type { CheckStatus, PRCheckDetail, PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type {
+  CheckStatus,
+  GitHubRepositoryIdentity,
+  PRCheckDetail,
+  PRInfo,
+  Repo,
+  Worktree
+} from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { AppState } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -59,6 +66,7 @@ export type ParentPrChecksRow = {
   reviewState: HostedReviewInfo['state'] | null
   reviewStatus: HostedReviewInfo['status'] | null
   provider: HostedReviewInfo['provider'] | null
+  githubRepository?: GitHubRepositoryIdentity | null
   summary: string
   detailNames: string[]
   checks: PRCheckDetail[]

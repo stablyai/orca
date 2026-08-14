@@ -4,17 +4,14 @@ import {
   getSettingsFocusedExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+
+export { getRepoHostIdentityForParts }
 
 type RepoIdentityParts = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
 export function getRepoHostIdentity(repo: RepoIdentityParts): string {
   return getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
-}
-
-export function getRepoHostIdentityForParts(repoId: string, hostId: string): string {
-  // Why: host ids and repo ids can contain punctuation; NUL keeps the composite
-  // key collision-free without escaping user/provider-owned strings.
-  return `${hostId}\0${repoId}`
 }
 
 export function repoMatchesHostIdentity(
@@ -29,7 +26,7 @@ export function findRepoForHost<T extends RepoIdentityParts>(
   repos: readonly T[],
   repoId: string,
   options: {
-    hostId?: ExecutionHostId | string | null
+    hostId?: ExecutionHostId | (string & {}) | null
     settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   } = {}
 ): T | null {

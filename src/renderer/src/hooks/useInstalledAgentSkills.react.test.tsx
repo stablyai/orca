@@ -13,6 +13,7 @@ import type { GlobalSettings } from '../../../shared/types'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { INSTALLED_AGENT_SKILL_DISCOVERY_FRESH_MS } from './installed-agent-skill-discovery-cache'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   type InstalledAgentSkillState,
@@ -39,7 +40,6 @@ function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
     directoryPath: '/Users/test/.agents/skills/example-skill',
     skillFilePath: '/Users/test/.agents/skills/example-skill/SKILL.md',
     installed: true,
-    fileCount: 1,
     updatedAt: null,
     ...overrides
   }
@@ -216,7 +216,8 @@ describe('useInstalledAgentSkill', () => {
 
     expect(latestState?.installed).toBe(false)
     expect(discover).toHaveBeenNthCalledWith(1, undefined)
-    expect(discover).toHaveBeenNthCalledWith(2, undefined)
+    // A forced refresh must also bypass the host's shared scans, not just this cache.
+    expect(discover).toHaveBeenNthCalledWith(2, { refresh: true })
   })
 
   it('returns installed from refresh when a legacy Linear skill is discovered', async () => {
@@ -289,13 +290,15 @@ describe('useInstalledAgentSkill', () => {
     })
   })
 
-  it('stays settled through a focus rescan so status surfaces do not flash', async () => {
+  it('serves a focus rescan from cache so window switching does not walk disk', async () => {
+    // Why: the freshness window is wall-clock, so pin the clock — a stalled runner
+    // could otherwise cross it mid-test and turn this into a flake.
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
     const firstScan = deferred<SkillDiscoveryResult>()
-    const focusScan = deferred<SkillDiscoveryResult>()
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValueOnce(firstScan.promise)
-      .mockReturnValueOnce(focusScan.promise)
+      .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -310,21 +313,48 @@ describe('useInstalledAgentSkill', () => {
     })
     expect(latestState?.settled).toBe(true)
     expect(latestState?.installed).toBe(true)
+    expect(discover).toHaveBeenCalledTimes(1)
 
+    for (let focusEvent = 0; focusEvent < 5; focusEvent += 1) {
+      await act(async () => {
+        window.dispatchEvent(new Event('focus'))
+      })
+      await flushMicrotasks()
+    }
+
+    // Focus is a backstop, not a mutation signal: a burst of window switches
+    // costs no scans, and the surface never flashes unsettled.
+    expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.loading).toBe(false)
+    expect(latestState?.settled).toBe(true)
+    expect(latestState?.installed).toBe(true)
+  })
+
+  it('rescans on focus once the cached scan is no longer fresh', async () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    const startedAt = 1_700_000_000_000
+    nowSpy.mockReturnValue(startedAt)
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    await flushMicrotasks()
+    expect(discover).toHaveBeenCalledTimes(1)
+
+    nowSpy.mockReturnValue(startedAt + INSTALLED_AGENT_SKILL_DISCOVERY_FRESH_MS + 1)
     await act(async () => {
       window.dispatchEvent(new Event('focus'))
     })
+    await flushMicrotasks()
 
-    // The forced rescan is in flight, but the previous result is still current.
-    expect(latestState?.loading).toBe(true)
-    expect(latestState?.settled).toBe(true)
-    expect(latestState?.installed).toBe(true)
-
-    focusScan.resolve(discoveryResult([skill({ name: 'orca-linear' })]))
-    await act(async () => {
-      await focusScan.promise
-    })
-    expect(latestState?.settled).toBe(true)
+    // The freshness window is what bounds the storm; past it, focus still reads disk.
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(discover).toHaveBeenLastCalledWith(undefined)
   })
 
   it('reuses cached discovery when another surface finishes re-checking', async () => {
@@ -351,13 +381,13 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(true)
   })
 
-  it('clears loading when a silent refresh supersedes an in-flight focus rescan', async () => {
+  it('clears loading when a silent refresh supersedes an in-flight forced rescan', async () => {
     const firstScan = deferred<SkillDiscoveryResult>()
-    const focusScan = deferred<SkillDiscoveryResult>()
+    const forcedScan = deferred<SkillDiscoveryResult>()
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValueOnce(firstScan.promise)
-      .mockReturnValueOnce(focusScan.promise)
+      .mockReturnValueOnce(forcedScan.promise)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -369,8 +399,10 @@ describe('useInstalledAgentSkill', () => {
       await firstScan.promise
     })
 
+    // The recheck button forces past the cache without clearing it, so the silent
+    // refresh below can still be served from it while this scan is in flight.
     await act(async () => {
-      window.dispatchEvent(new Event('focus'))
+      void latestState?.refresh()
     })
     expect(latestState?.loading).toBe(true)
 
@@ -382,9 +414,9 @@ describe('useInstalledAgentSkill', () => {
     await flushMicrotasks()
     expect(latestState?.loading).toBe(false)
 
-    focusScan.resolve(discoveryResult([skill({ name: 'orca-linear' })]))
+    forcedScan.resolve(discoveryResult([skill({ name: 'orca-linear' })]))
     await act(async () => {
-      await focusScan.promise
+      await forcedScan.promise
     })
     expect(latestState?.loading).toBe(false)
   })

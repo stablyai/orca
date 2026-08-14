@@ -79,7 +79,7 @@ try {
 
 function readArg(name) {
   const index = args.indexOf(name)
-  return index >= 0 ? args[index + 1] : undefined
+  return index !== -1 ? args[index + 1] : undefined
 }
 
 function embeddedInfoPlist(identifier) {

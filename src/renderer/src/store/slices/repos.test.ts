@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { workItemsCacheKey } from './github'
-import type { Project, ProjectHostSetup } from '../../../../shared/types'
+import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
   installReposRuntimeRoutingHarness,
@@ -50,6 +50,46 @@ describe('repo slice runtime routing', () => {
     ])
     expect(reposList).toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('keeps the repos array identity across a refetch that changes nothing', async () => {
+    // Why: main rebuilds nested records (hookSettings et al) per list and IPC clones them, so a
+    // production-shaped repo — not a scalar-only fixture — is what proves reconciliation works.
+    const hydrated = (): Repo => ({
+      ...localRepo,
+      kind: 'git',
+      gitUsername: 'octocat',
+      hookSettings: { mode: 'auto', scripts: { setup: 'echo hi', archive: '' } },
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/octocat/local',
+        remoteName: 'origin',
+        remoteUrl: 'git@github.com:octocat/local.git'
+      },
+      importedExternalWorktreePaths: ['/local/wt']
+    })
+    reposList.mockImplementation(async () => [hydrated()])
+    const store = createTestStore()
+    await store.getState().fetchRepos()
+    const reposRef = store.getState().repos
+
+    await store.getState().fetchRepos()
+
+    // Why: identity-keyed renderer memos (repo lookup index, selectors) rebuild on a new array.
+    expect(store.getState().repos).toBe(reposRef)
+    expect(store.getState().repos[0]).toBe(reposRef[0])
+  })
+
+  it('replaces the repos array identity when a refetch adds a repo', async () => {
+    reposList.mockResolvedValue([localRepo])
+    const store = createTestStore()
+    await store.getState().fetchRepos()
+    const reposRef = store.getState().repos
+    reposList.mockResolvedValue([localRepo, { ...localRepo, id: 'second', path: '/second' }])
+
+    await store.getState().fetchRepos()
+
+    expect(store.getState().repos).not.toBe(reposRef)
+    expect(store.getState().repos).toHaveLength(2)
   })
 
   it('fetches repos from the active remote runtime environment', async () => {

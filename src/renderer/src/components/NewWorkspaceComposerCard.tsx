@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { SwitchIndicator } from '@/components/ui/switch'
 import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
@@ -83,7 +84,7 @@ type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
-  eligibleRepos: RepoOption[]
+  eligibleRepos: readonly RepoOption[]
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]
   selectedProjectId?: string | null
@@ -97,7 +98,7 @@ type NewWorkspaceComposerCardProps = {
   selectedEphemeralVmRecipeId?: string | null
   onEphemeralVmRecipeChange?: (recipeId: string | null) => void
   ephemeralVmRecipeError?: string | null
-  repoBackedSearchRepos?: RepoOption[]
+  repoBackedSearchRepos?: readonly RepoOption[]
   repoBackedSourcesDisabled?: boolean
   allowSmartNameAddProject?: boolean
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
@@ -1209,20 +1210,7 @@ export default function NewWorkspaceComposerCard({
             onClick={() => onCreateMultipleChange?.(!createMultiple)}
             className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <span
-              aria-hidden
-              className={cn(
-                'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors',
-                createMultiple ? 'bg-foreground' : 'bg-muted-foreground/30'
-              )}
-            >
-              <span
-                className={cn(
-                  'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-                  createMultiple ? 'translate-x-4.5' : 'translate-x-0.5'
-                )}
-              />
-            </span>
+            <SwitchIndicator checked={createMultiple} />
             <span className="text-muted-foreground transition-colors group-hover:text-foreground">
               {translate('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
             </span>

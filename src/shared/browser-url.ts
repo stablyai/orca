@@ -223,7 +223,7 @@ export function buildSearchUrl(
       return sessionSearchUrl
     }
   }
-  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query)}`
+  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.toWellFormed())}`
 }
 
 export function looksLikeSearchQuery(input: string): boolean {

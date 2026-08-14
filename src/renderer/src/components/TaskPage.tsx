@@ -43,6 +43,7 @@ import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { compareNumericLocaleText } from '@/lib/locale-text-collators'
 import {
   getSettingsFocusedExecutionHostId,
   parseExecutionHostId,
@@ -126,11 +127,11 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { parseTaskQuery, stripRepoQualifiers, withQualifier } from '../../../shared/task-query'
-import { githubProjectHost } from '../../../shared/github-project-identity'
+import { githubProjectHost } from '../../../shared/github/project-identity'
 import {
   buildLinearTeamUrl,
   getLinearOrganizationUrlKeyFromIssueUrl
-} from '../../../shared/linear-links'
+} from '../../../shared/linear/links'
 import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFilterDropdowns'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
@@ -286,7 +287,7 @@ import {
 import {
   linearIssueAttributeFilterSignature,
   type LinearIssueAttributeFilter
-} from '../../../shared/linear-issue-attribute-filter'
+} from '../../../shared/linear/issue-attribute-filter'
 import {
   DEFAULT_LINEAR_GROUP_BY,
   DEFAULT_LINEAR_ORDER_BY,
@@ -295,7 +296,7 @@ import {
   selectLinearWorkspaceIssueFilter,
   serializeLinearIssueViewResumeState,
   setLinearWorkspaceIssueFilter
-} from '../../../shared/linear-issue-view-resume-state'
+} from '../../../shared/linear/issue-view-resume-state'
 import { loadLinearIssueView, saveLinearIssueView } from './linear-issue-view-storage'
 import {
   isNewIssueDraftContentful,
@@ -348,7 +349,7 @@ import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
-} from '../../../shared/github-pr-merge-methods'
+} from '../../../shared/github/pull-request-merge-methods'
 import type {
   GitHubOwnerRepo,
   GitHubAssignableUser,
@@ -381,7 +382,7 @@ import type { GitLabProjectRef } from '../../../shared/gitlab-types'
 import {
   LINEAR_ISSUE_LIST_MAX,
   clampLinearIssueListLimit
-} from '../../../shared/linear-issue-read-limits'
+} from '../../../shared/linear/issue-read-limits'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -846,7 +847,7 @@ function compareLinearIssues(a: LinearIssue, b: LinearIssue, orderBy: LinearOrde
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   }
   if (orderBy === 'identifier') {
-    return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
+    return compareNumericLocaleText(a.identifier, b.identifier)
   }
 
   const priorityDelta = getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority)
@@ -6959,7 +6960,7 @@ export default function TaskPage(): React.JSX.Element {
     const authorityPage = pages.findIndex((page) =>
       page?.some((item) => authorityItemKeys.has(taskPageGitHubItemKey(item.repoId, item.id)))
     )
-    const quietPage = authorityPage >= 0 ? authorityPage : currentPage
+    const quietPage = authorityPage !== -1 ? authorityPage : currentPage
     const visiblePage = currentPage > quietPage ? currentPage : undefined
     const pageItemKeys = (page: number): Set<string> =>
       new Set((pages[page] ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id)))

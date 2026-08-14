@@ -35,7 +35,7 @@ function makeSpan(overrides: Record<string, unknown> = {}): Record<string, unkno
     kind: 'internal',
     startTimeUnixNano: String(now - 1_000_000_000n),
     endTimeUnixNano: String(now),
-    durationMs: 1.0,
+    durationMs: 1,
     attributes: {},
     events: [],
     exit: { _tag: 'Success' },

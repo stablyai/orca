@@ -36,9 +36,7 @@ function buildForkWorkspaceName(sourceName: string): string {
 }
 
 function resolveTuiAgent(value: string | null | undefined): TuiAgent | null {
-  return value && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
-    ? (value as TuiAgent)
-    : null
+  return value && Object.hasOwn(TUI_AGENT_CONFIG, value) ? (value as TuiAgent) : null
 }
 
 function getUsableForkBase(

@@ -39,7 +39,7 @@ import type {
   GitHubProjectViewError,
   GitHubProjectViewSummary,
   ListProjectViewsResult
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import type { GitHubWorkItem } from '../../../../shared/types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
@@ -64,7 +64,8 @@ import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-c
 import {
   githubProjectHost,
   githubProjectIdentityKey
-} from '../../../../shared/github-project-identity'
+} from '../../../../shared/github/project-identity'
+import { buildProjectWorkItem } from './project-work-item'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>
@@ -90,43 +91,6 @@ function listProjectViewsForRuntime(
 function getProjectViewSourceScope(settings: Parameters<typeof getActiveRuntimeTarget>[0]): string {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
-}
-
-export function buildProjectWorkItem(
-  row: GitHubProjectRow,
-  repoId: string,
-  host?: string
-): GitHubWorkItem | null {
-  if (row.itemType !== 'ISSUE' && row.itemType !== 'PULL_REQUEST') {
-    return null
-  }
-  if (row.content.number == null || !row.content.url) {
-    return null
-  }
-  const [owner, repo] = row.content.repository?.split('/') ?? []
-  // Why: Project rows can reach mutation controls before detail hydration, so
-  // preserve their host-bearing repository identity on the initial item.
-  const prRepo = owner && repo ? { owner, repo, host: githubProjectHost(host) } : undefined
-  return {
-    id: `${row.itemType === 'PULL_REQUEST' ? 'pr' : 'issue'}:${row.content.number}`,
-    type: row.itemType === 'PULL_REQUEST' ? 'pr' : 'issue',
-    number: row.content.number,
-    title: row.content.title,
-    state:
-      row.content.state === 'MERGED'
-        ? 'merged'
-        : row.content.state === 'CLOSED'
-          ? 'closed'
-          : row.content.isDraft
-            ? 'draft'
-            : 'open',
-    url: row.content.url,
-    labels: row.content.labels.map((label) => label.name),
-    updatedAt: row.updatedAt,
-    author: null,
-    repoId,
-    prRepo
-  }
 }
 
 export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JSX.Element {

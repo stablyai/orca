@@ -8,6 +8,10 @@ export function resolveMobileNativeChatTerminalStreamAction(args: {
   activeTabType: string | null
   streamActive: boolean
   streamCovered: boolean
+  /** The active stream was opened as an input lease, so the host sends `subscribed`
+   *  and nothing else — no scrollback, no data. Distinguishes a stream that renders
+   *  from one that only holds the input floor. */
+  streamIsLeaseOnly: boolean
   webViewReady: boolean
 }): MobileNativeChatTerminalStreamAction {
   if (!args.activeHandle || args.activeTabType !== 'terminal') {
@@ -22,7 +26,13 @@ export function resolveMobileNativeChatTerminalStreamAction(args: {
     // the composer locked forever — nothing else re-subscribes a covered handle.
     return args.streamActive ? 'none' : 'rearm'
   }
-  return (args.streamCovered || !args.streamActive) && args.webViewReady ? 'resume' : 'none'
+  // Why `streamIsLeaseOnly`: switching from a chat tab to a terminal tab subscribes the
+  // incoming handle before the route learns chat is gone, so it lands a lease-only stream
+  // on an uncovered handle. Without this input that is indistinguishable from a healthy
+  // stream and the terminal renders blank until restart.
+  return (args.streamCovered || args.streamIsLeaseOnly || !args.streamActive) && args.webViewReady
+    ? 'resume'
+    : 'none'
 }
 
 export function isTerminalCoveredByNativeChat(

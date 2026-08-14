@@ -30,7 +30,8 @@ export async function mergeGitHubHostedReview(args: {
         method: args.method,
         prRepo: args.prRepo ?? null
       },
-      { timeoutMs: 30_000 }
+      // Why: GitHub stack merges can run asynchronously for several minutes.
+      { timeoutMs: 4 * 60_000 }
     )
   }
   return window.api.gh.mergePR({

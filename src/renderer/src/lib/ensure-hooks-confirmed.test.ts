@@ -291,7 +291,10 @@ describe('ensureHooksConfirmed', () => {
       repos: [
         {
           id: 'repo-1',
+          path: '/repo-1',
           displayName: 'Repo One',
+          badgeColor: 'blue',
+          addedAt: 1,
           hookSettings: {
             mode: 'auto',
             commandSourcePolicy: 'local-only',
@@ -318,7 +321,10 @@ describe('ensureHooksConfirmed', () => {
       repos: [
         {
           id: 'repo-1',
+          path: '/repo-1',
           displayName: 'Repo One',
+          badgeColor: 'blue',
+          addedAt: 1,
           hookSettings: {
             mode: 'auto',
             scripts: { setup: 'echo local', archive: '' }

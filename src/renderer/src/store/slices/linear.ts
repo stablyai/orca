@@ -18,7 +18,7 @@ import type {
   LinearWorkspaceSelection
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
-import { clampLinearIssueListLimit } from '../../../../shared/linear-issue-read-limits'
+import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
@@ -53,7 +53,7 @@ import {
   isEmptyLinearIssueAttributeFilter,
   linearIssueAttributeFilterSignature,
   type LinearIssueAttributeFilter
-} from '../../../../shared/linear-issue-attribute-filter'
+} from '../../../../shared/linear/issue-attribute-filter'
 
 const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
 const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.

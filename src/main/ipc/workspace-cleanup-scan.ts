@@ -5,7 +5,7 @@ import type { IGitProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { GitWorktreeInfo, Repo, Worktree } from '../../shared/types'
 import { mergeWorktree } from './worktree-logic'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanError,

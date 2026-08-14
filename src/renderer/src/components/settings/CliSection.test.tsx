@@ -4,6 +4,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
+} from '@/lib/agent-feature-install-commands'
 import { CliSection } from './CliSection'
 
 const capturedPanel = vi.hoisted(() => ({
@@ -11,6 +15,7 @@ const capturedPanel = vi.hoisted(() => ({
   props: null as null | {
     command: string
     installedCommand: string
+    terminalRuntime?: { runtime: 'host' | 'wsl'; wslDistro?: string | null; label: string }
     freshnessSkillName?: string
     getPrerequisiteStatus: () => Promise<unknown>
     onBeforeOpenTerminal: () => Promise<void>
@@ -135,12 +140,13 @@ describe('CliSection project runtime defaults', () => {
         sourceKinds: ['global']
       })
     )
-    expect(capturedPanel.props?.command).toMatch(
-      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -d 'Ubuntu' -- sh -c 'eval \\"`printf %s [A-Za-z0-9+/=]+ \| base64 -d`\\"'/
-    )
-    expect(capturedPanel.props?.installedCommand).toMatch(
-      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -d 'Ubuntu' -- sh -c 'eval \\"`printf %s [A-Za-z0-9+/=]+ \| base64 -d`\\"'/
-    )
+    expect(capturedPanel.props?.command).toBe(ORCA_CLI_SKILL_INSTALL_COMMAND)
+    expect(capturedPanel.props?.installedCommand).toBe(ORCA_CLI_SKILL_UPDATE_COMMAND)
+    expect(capturedPanel.props?.terminalRuntime).toEqual({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      label: 'WSL Ubuntu'
+    })
     expect(getWslInstallStatus).toHaveBeenCalledWith({ distro: 'Ubuntu' })
     expect(getWslInstallStatus).toHaveBeenCalledTimes(2)
   })

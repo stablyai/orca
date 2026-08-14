@@ -28,7 +28,6 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
-import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import {
   isTerminalLeafId,
@@ -43,7 +42,7 @@ import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
-} from '../../../../shared/worktree-id'
+} from '../../../../shared/worktree/id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
@@ -72,6 +71,12 @@ import { isClaudeAgent } from '@/lib/agent-status'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import {
+  applyGeneratedTabTitleUpdates,
+  applyTerminalTabTitleUpdates,
+  type GeneratedTabTitleUpdate,
+  type TerminalTabTitleUpdate
+} from './terminal-tab-title-batch'
 import {
   dedupeTabOrder,
   ensureGroup,
@@ -227,16 +232,6 @@ function consumePendingActivationSpawn(
   return count === 2 ? true : count - 1
 }
 
-function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
-  return (
-    tab.customTitle?.trim() ||
-    tab.quickCommandLabel?.trim() ||
-    tab.defaultTitle?.trim() ||
-    tab.title ||
-    `Terminal ${(index ?? 0) + 1}`
-  )
-}
-
 function getPathDisplayName(path: string, fallback: string): string {
   const normalized = path.trim().replace(/[\\/]+$/g, '')
   const basename = normalized.split(/[\\/]/).findLast(Boolean)?.trim()
@@ -337,36 +332,6 @@ function getTerminalTabOwnerWorktreeId(
     terminalTabOwnerCache = nextCache
   }
   return terminalTabOwnerCache.get(tabId) ?? null
-}
-
-function updateUnifiedTerminalLabel(
-  unifiedTabs: Tab[],
-  terminalTabId: string,
-  label: string
-): Tab[] | null {
-  const unifiedIndex = unifiedTabs.findIndex(
-    (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
-  )
-  if (unifiedIndex === -1 || unifiedTabs[unifiedIndex]?.label === label) {
-    return null
-  }
-  return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
-}
-
-function updateUnifiedTerminalGeneratedLabel(
-  unifiedTabs: Tab[],
-  terminalTabId: string,
-  generatedLabel: string
-): Tab[] | null {
-  const unifiedIndex = unifiedTabs.findIndex(
-    (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
-  )
-  if (unifiedIndex === -1 || unifiedTabs[unifiedIndex]?.generatedLabel === generatedLabel) {
-    return null
-  }
-  return unifiedTabs.map((entry, index) =>
-    index === unifiedIndex ? { ...entry, generatedLabel } : entry
-  )
 }
 
 function getTabIdFromPaneKey(paneKey: string): string | null {
@@ -670,6 +635,7 @@ export type TerminalSlice = {
       /** Initial native-chat view mode; agent launches pass 'chat' when openAgentTabsInChatByDefault is on, else omitted for the 'terminal' default. */
       viewMode?: Tab['viewMode']
       startupCwd?: string
+      forceHostRuntime?: boolean
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -689,12 +655,14 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  updateTabTitles: (updates: readonly TerminalTabTitleUpdate[]) => void
   setAiVaultTabTitle: (tabId: string, aiVaultTitle: AiVaultSessionTitle | null) => void
   setGeneratedTabTitleFromAgentPrompt: (
     paneKey: string,
     prompt: string,
     options?: { replaceExistingGeneratedTitle?: boolean }
   ) => void
+  setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
@@ -1379,7 +1347,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           : null,
         // Why: new terminals enter the worktree's repo-scoped WSL distro even when the global Windows shell is PowerShell/cmd.exe.
         isWslWorktree,
-        isRemoteWorktree ? undefined : getLocalProjectExecutionRuntimeContext(s, worktreeId)
+        isRemoteWorktree || options?.forceHostRuntime
+          ? undefined
+          : getLocalProjectExecutionRuntimeContext(s, worktreeId)
       )
       tab = {
         id,
@@ -1396,6 +1366,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         createdAt: Date.now(),
         ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
         ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
+        ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
         ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
         // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
         ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
@@ -1998,77 +1969,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   updateTabTitle: (tabId, title) => {
-    set((s) => {
-      // Why: update only the owner to preserve selector equality for background worktrees.
-      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
-      if (!ownerWorktreeId) {
-        return s
+    set((state) => {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+      const ownerByTabId = ownerWorktreeId
+        ? new Map([[tabId, ownerWorktreeId]])
+        : new Map<string, string>()
+      const result = applyTerminalTabTitleUpdates(state, [{ tabId, title }], ownerByTabId)
+      if (result.runtimeGraphChanged) {
+        scheduleRuntimeGraphSync()
       }
-      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
-      const tabIndex = tabs.findIndex((t) => t.id === tabId)
-      const currentTab = tabs[tabIndex]
-      if (!currentTab) {
-        return s
+      return result.patch ?? state
+    })
+  },
+
+  updateTabTitles: (updates) => {
+    if (updates.length === 0) {
+      return
+    }
+    set((state) => {
+      const result = applyTerminalTabTitleUpdates(state, updates)
+      if (result.runtimeGraphChanged) {
+        scheduleRuntimeGraphSync()
       }
-      const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
-      const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
-      if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
-        const unifiedTabsWithCurrentLabel = updateUnifiedTerminalLabel(
-          currentUnifiedTabs,
-          tabId,
-          currentTab.title
-        )
-        return unifiedTabsWithCurrentLabel
-          ? {
-              unifiedTabsByWorktree: {
-                ...s.unifiedTabsByWorktree,
-                [ownerWorktreeId]: unifiedTabsWithCurrentLabel
-              }
-            }
-          : s
-      }
-      const unifiedTabsWithUpdatedLabel = updateUnifiedTerminalLabel(
-        currentUnifiedTabs,
-        tabId,
-        nextTitle
-      )
-      if (currentTab.title === nextTitle) {
-        return unifiedTabsWithUpdatedLabel
-          ? {
-              unifiedTabsByWorktree: {
-                ...s.unifiedTabsByWorktree,
-                [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
-              }
-            }
-          : s
-      }
-      const ownerTabs = tabs.map((tab) =>
-        tab.id === tabId
-          ? {
-              ...tab,
-              // Why: PTYs can briefly emit an empty title as an agent exits; keep the stable fallback instead of a blank tab.
-              title: nextTitle,
-              defaultTitle:
-                tab.defaultTitle ??
-                (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
-                (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
-            }
-          : tab
-      )
-      scheduleRuntimeGraphSync()
-      const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
-      // Why: title changes affect sorting, except active-worktree remount side effects.
-      const isActive = ownerWorktreeId === s.activeWorktreeId
-      const nextState: Partial<AppState> = isActive
-        ? { tabsByWorktree: nextTabsByWorktree }
-        : { tabsByWorktree: nextTabsByWorktree, sortEpoch: s.sortEpoch + 1 }
-      if (unifiedTabsWithUpdatedLabel) {
-        nextState.unifiedTabsByWorktree = {
-          ...s.unifiedTabsByWorktree,
-          [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
-        }
-      }
-      return nextState
+      return result.patch ?? state
     })
   },
 
@@ -2105,18 +2028,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {
     // Why: setAgentStatus is high-frequency; skip derive/set unless the feature is on and this tab still needs a (re)generated title.
-    if (get().settings?.tabAutoGenerateTitle !== true) {
-      return
-    }
+    const state = get()
     const tabId = getTabIdFromPaneKey(paneKey)
-    if (!tabId || prompt.length === 0) {
+    if (!tabId || prompt.length === 0 || state.settings?.tabAutoGenerateTitle !== true) {
       return
     }
-    const ownerWorktreeId = getTerminalTabOwnerWorktreeId(get().tabsByWorktree, tabId)
+    const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
     if (!ownerWorktreeId) {
       return
     }
-    const tabs = get().tabsByWorktree[ownerWorktreeId] ?? []
+    const tabs = state.tabsByWorktree[ownerWorktreeId] ?? []
     const currentTab = tabs.find((tab) => tab.id === tabId)
     if (!currentTab || currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
       return
@@ -2125,57 +2046,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
       return
     }
-    const generatedTitle = deriveGeneratedTabTitle(prompt)
-    if (!generatedTitle || existingGeneratedTitle === generatedTitle) {
+    set((latestState) => {
+      const result = applyGeneratedTabTitleUpdates(
+        latestState,
+        [{ paneKey, prompt, options }],
+        new Map([[tabId, ownerWorktreeId]])
+      )
+      if (result.runtimeGraphChanged) {
+        scheduleRuntimeGraphSync()
+      }
+      return result.patch ?? latestState
+    })
+  },
+
+  setGeneratedTabTitlesFromAgentPrompts: (updates) => {
+    if (updates.length === 0) {
       return
     }
-    set((s) => {
-      const ownerTabsForWrite = s.tabsByWorktree[ownerWorktreeId]
-      if (!ownerTabsForWrite) {
-        return s
+    set((state) => {
+      const result = applyGeneratedTabTitleUpdates(state, updates)
+      if (result.runtimeGraphChanged) {
+        scheduleRuntimeGraphSync()
       }
-      const tabIndex = ownerTabsForWrite.findIndex((tab) => tab.id === tabId)
-      const tabForWrite = ownerTabsForWrite[tabIndex]
-      // Why: re-check inside set so concurrent renames / setting flips win.
-      if (
-        !tabForWrite ||
-        s.settings?.tabAutoGenerateTitle !== true ||
-        tabForWrite.customTitle?.trim() ||
-        tabForWrite.quickCommandLabel?.trim()
-      ) {
-        return s
-      }
-      const latestGeneratedTitle = tabForWrite.generatedTitle?.trim()
-      if (
-        latestGeneratedTitle &&
-        (latestGeneratedTitle === generatedTitle || options?.replaceExistingGeneratedTitle !== true)
-      ) {
-        return s
-      }
-      const ownerTabs = ownerTabsForWrite.map((tab) =>
-        tab.id === tabId ? { ...tab, generatedTitle } : tab
-      )
-      const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
-      const unifiedTabsWithGeneratedLabel = updateUnifiedTerminalGeneratedLabel(
-        currentUnifiedTabs,
-        tabId,
-        generatedTitle
-      )
-      scheduleRuntimeGraphSync()
-      return {
-        tabsByWorktree: {
-          ...s.tabsByWorktree,
-          [ownerWorktreeId]: ownerTabs
-        },
-        ...(unifiedTabsWithGeneratedLabel
-          ? {
-              unifiedTabsByWorktree: {
-                ...s.unifiedTabsByWorktree,
-                [ownerWorktreeId]: unifiedTabsWithGeneratedLabel
-              }
-            }
-          : {})
-      }
+      return result.patch ?? state
     })
   },
 

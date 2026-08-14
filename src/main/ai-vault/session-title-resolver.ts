@@ -5,7 +5,7 @@ import {
   type AiVaultSessionTitleRequest,
   type AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
-import { resolveAiVaultSessionTitlesInWorker } from './session-scanner-worker-spawn'
+import { resolveAiVaultSessionTitlesInBackground } from './session-scanner-background'
 
 const TRANSCRIPT_PATH_MAX_LENGTH = 32_768
 
@@ -42,5 +42,5 @@ export async function resolveLocalAiVaultSessionTitles(
       deduped.set(key, normalized)
     }
   }
-  return resolveAiVaultSessionTitlesInWorker([...deduped.values()], signal)
+  return resolveAiVaultSessionTitlesInBackground([...deduped.values()], signal)
 }

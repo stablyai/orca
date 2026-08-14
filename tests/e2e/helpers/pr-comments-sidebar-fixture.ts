@@ -10,7 +10,7 @@ export type PRCommentsSidebarSeed = {
 export const FIXTURE_COMMENTS: PRComment[] = [
   {
     id: 101,
-    author: 'alice',
+    author: 'coderabbitai',
     authorAvatarUrl: '',
     body: 'Please update this handler before merge.',
     createdAt: '2026-05-14T10:00:00.000Z',
@@ -18,6 +18,7 @@ export const FIXTURE_COMMENTS: PRComment[] = [
     reactionSubjectId: 'PRRC_101',
     threadId: 'thread-open',
     path: 'src/handler.ts',
+    isBot: true,
     isResolved: false
   },
   {
