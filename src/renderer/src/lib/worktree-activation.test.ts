@@ -125,6 +125,15 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
+  it('does not recreate a terminal after an explicit empty state was persisted', () => {
+    const store = createMockStore({ tabsByWorktree: { 'wt-1': [] } })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+  })
+
   it('creates configured default tabs once with title, color, and opted-in commands', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))

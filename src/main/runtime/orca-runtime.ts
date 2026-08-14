@@ -32927,7 +32927,7 @@ export class OrcaRuntimeService {
   }
 
   private resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
-    const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+    const handle = this.issueHandle(leaf)
     if (!handle) {
       return
     }

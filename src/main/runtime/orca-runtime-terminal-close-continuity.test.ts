@@ -176,6 +176,28 @@ describe('terminal close and handle incarnation continuity', () => {
     })
   })
 
+  it('resolves a retained handle waiter when idle arrives during renderer reload', async () => {
+    const harness = createHarness()
+    const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u280b Working on task\x07output\n', 100)
+    const waiting = harness.runtime.waitForTerminal(before.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 1_000
+    })
+
+    harness.runtime.markRendererReloading(1)
+    harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u2733 Task complete\x07done\n', 200)
+
+    await expect(waiting).resolves.toMatchObject({
+      handle: before.handle,
+      condition: 'tui-idle',
+      satisfied: true
+    })
+    harness.syncFixtureGraph()
+    const [after] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    expect(after.handle).toBe(before.handle)
+  })
+
   it('stales the old handle when the same PTY id names a new incarnation', async () => {
     const harness = createHarness()
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals

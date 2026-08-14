@@ -1474,6 +1474,9 @@ function Terminal(): React.JSX.Element | null {
   // Why: on host unmount no reconciliation effect runs again, so dispose every remaining parked watcher.
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
   // Auto-create first tab when worktree activates
+  const activeWorktreeHasTerminalState = activeWorktreeId
+    ? Object.hasOwn(tabsByWorktree, activeWorktreeId)
+    : false
   useEffect(() => {
     if (!workspaceSessionReady) {
       return
@@ -1488,12 +1491,18 @@ function Terminal(): React.JSX.Element | null {
 
     // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
     const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-    if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    if (!shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
       return
     }
     // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    activeWorktreeId,
+    activeWorktreeHasTerminalState,
+    createTab,
+    reconcileWorktreeTabModel
+  ])
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {
