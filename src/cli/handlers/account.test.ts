@@ -103,6 +103,18 @@ describe('account CLI handlers', () => {
     ).toContain('Acme workspace (active)  account-uuid-a')
   })
 
+  it.each([null, '   '] as const)(
+    'falls back to email when workspaceLabel is %j',
+    (workspaceLabel) => {
+      expect(
+        formatAccountsBlock('Codex', {
+          accounts: [{ id: 'account-uuid-a', email: 'user@example.com', workspaceLabel }],
+          activeAccountId: 'account-uuid-a'
+        })
+      ).toContain('user@example.com (active)  account-uuid-a')
+    }
+  )
+
   function context(agent: string, json = false): HandlerContext {
     return {
       client,
