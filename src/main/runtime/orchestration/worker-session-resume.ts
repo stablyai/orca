@@ -153,7 +153,7 @@ export function captureRemoteWorkerResumeCheckpoint(args: {
   }
   const session = args.runtime.getExactWorkerProviderSession(
     attachment.terminal_handle,
-    Date.parse(attachment.created_at)
+    sqliteUtcTimestampToMs(attachment.created_at)
   )
   const authority = args.runtime.getOrchestrationDispatchAuthority(attachment.terminal_handle)
   if (
@@ -212,6 +212,15 @@ export function resolveRemoteWorkerResumeCheckpoint(args: {
     )
   }
   return resolveCheckpointRow(args.sourceDispatchId, row)
+}
+
+function sqliteUtcTimestampToMs(value: string): number {
+  // SQLite datetime('now') is UTC with no zone; Date.parse would treat it as local time.
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value
+  const parsed = Date.parse(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function readStartAgent(startOptions: string | undefined): string | null {

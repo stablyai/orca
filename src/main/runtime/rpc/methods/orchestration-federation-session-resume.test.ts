@@ -7,6 +7,7 @@ import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
+import { captureRemoteWorkerResumeCheckpoint } from '../../orchestration/worker-session-resume'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { createFederationWorkerStartRequest } from './orchestration-federation-test-request'
@@ -68,6 +69,7 @@ describe('orchestration federated worker session resume', () => {
     homeRuntime.stopOrchestrationFederationRelay()
     homeDb.close()
     workerDb.close()
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
   })
 
@@ -195,6 +197,77 @@ describe('orchestration federated worker session resume', () => {
     expect(
       workerDb.getRemoteDispatchAttachment(homeDb.getDispatchContext(followUp.id)?.id ?? '')
     ).toBeUndefined()
+  })
+
+  it('observes remote provider sessions after the attachment UTC timestamp', () => {
+    vi.stubEnv('TZ', 'America/Los_Angeles')
+    const dispatchId = 'ctx_remote_resume_ts'
+    const createdAt = '2026-08-13 12:00:00'
+    workerDb.createRemoteDispatchAttachment({
+      dispatchId,
+      taskId: 'task_remote_resume_ts',
+      homePeerFingerprint: 'windows_peer_fingerprint',
+      protocolVersion: 3,
+      runtimeEpoch: workerRuntime.getRuntimeId(),
+      mutationReceipt: {
+        callerFingerprint: 'windows_peer_fingerprint',
+        requestId: 'remote_resume_ts_request',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'remote_resume_ts_hash'
+      }
+    })
+    const sqlite = (
+      workerDb as unknown as {
+        db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } }
+      }
+    ).db
+    sqlite
+      .prepare(
+        `UPDATE remote_dispatch_attachments
+         SET terminal_handle = ?, worktree_id = ?, process_incarnation = ?, created_at = ?
+         WHERE dispatch_id = ?`
+      )
+      .run(
+        'term_windows_worker',
+        'repo::windows-worktree',
+        'windows_runtime:pty:1',
+        createdAt,
+        dispatchId
+      )
+    const observedAfter: number[] = []
+    vi.spyOn(workerRuntime, 'getExactWorkerProviderSession').mockImplementation(
+      (_handle, after) => {
+        observedAfter.push(after)
+        return {
+          paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          processIncarnation: 'windows_runtime:pty:1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'remote-provider-secret' },
+          observedAt: Date.now()
+        }
+      }
+    )
+    vi.spyOn(workerRuntime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      terminalHandle: 'term_windows_worker',
+      paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      processIncarnation: 'windows_runtime:pty:1',
+      worktreeId: 'repo::windows-worktree',
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
+
+    expect(
+      captureRemoteWorkerResumeCheckpoint({
+        runtime: workerRuntime,
+        db: workerDb,
+        dispatchId
+      })
+    ).toBe('captured')
+
+    const utcObservedAfter = Date.parse('2026-08-13T12:00:00Z')
+    expect(observedAfter).toEqual([utcObservedAfter])
+    const localObservedAfter = Date.parse(createdAt)
+    expect(localObservedAfter).not.toBe(utcObservedAfter)
+    expect(observedAfter[0]).not.toBe(localObservedAfter)
   })
 })
 
