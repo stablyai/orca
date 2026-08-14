@@ -86,7 +86,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--branch <name>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -94,6 +94,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'host',
       'project-host-setup',
       'name',
+      'branch',
       'agent',
       'prompt',
       'base-branch',
@@ -110,6 +111,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'This creates a new checkout. For a fresh agent in an existing worktree, use `orca terminal create --worktree active --command "codex"` instead.',
       'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
+      'Use --branch to set the git branch name verbatim, bypassing both the slugified --name and the global branch prefix. This is the only way to create a branch containing slashes, such as feat/PROJ-123-thing. The name is validated with `git check-ref-format`.',
       'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
       'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
       'Use --no-parent when the new worktree should be independent of the current context.',
@@ -123,6 +125,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: [
       'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
+      'orca worktree create --name PROJ-123 --branch feat/PROJ-123-add-login --json',
       'orca worktree create --repo id:<repoId> --name related-task --json',
       'orca worktree create --project github:stablyai/orca --host runtime:gpu --name benchmark --json',
       'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',

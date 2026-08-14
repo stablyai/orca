@@ -1242,6 +1242,68 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('forwards --branch as branchNameOverride so slashes survive', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create_branch_flag', {
+        worktree: buildWorktree('/tmp/repo/PROJ-123', 'feat/PROJ-123-add-login', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'PROJ-123',
+        '--branch',
+        'feat/PROJ-123-add-login',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({
+        name: 'PROJ-123',
+        // Why: the whole point of the flag. --name alone is slugified into
+        // `feat-PROJ-123-add-login`, which is a different branch.
+        branchNameOverride: 'feat/PROJ-123-add-login'
+      })
+    )
+  })
+
+  it('omits branchNameOverride when --branch is absent', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create_no_branch_flag', {
+        worktree: buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'feature', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    // Why: sending the key at all would make the runtime skip the git-username
+    // probe and keep the generated name, changing existing behavior.
+    const payload = callMock.mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('branchNameOverride')
+  })
+
   it('normalizes bare Linear identifiers through worktree.create', async () => {
     queueFixtures(
       callMock,

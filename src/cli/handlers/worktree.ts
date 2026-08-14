@@ -229,10 +229,16 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const branchNameOverride = getOptionalStringFlag(flags, 'branch')
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
       name: getRequiredStringFlag(flags, 'name'),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+      // Why: --name is slugified into the branch, which collapses slashes, so
+      // the CLI could not produce the `type/scope` branch names many teams
+      // require. --branch reaches the same override the composer already
+      // exposes, and the runtime validates it with `git check-ref-format`.
+      ...(branchNameOverride ? { branchNameOverride } : {}),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
