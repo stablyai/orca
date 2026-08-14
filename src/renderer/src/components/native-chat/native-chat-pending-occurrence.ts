@@ -114,9 +114,8 @@ export function matchingNativeChatUserTexts(
 }
 
 /**
- * How many leading pending texts concatenate exactly to `userText`.
- * Covers rapid-send glue ("joke"+"continue" → "jokecontinue") without matching
- * unrelated prefixes ("hi" ↛ "history").
+ * How many leading pending texts concatenate exactly to `userText`, with or
+ * without one normalized whitespace separator at each send boundary.
  */
 export function countLeadingPendingTextsGluedToUserText(
   pendingTexts: readonly string[],
@@ -125,17 +124,23 @@ export function countLeadingPendingTextsGluedToUserText(
   if (pendingTexts.length === 0 || userText.length === 0) {
     return 0
   }
-  let combined = ''
+  let candidates = new Set<string>()
   for (let index = 0; index < pendingTexts.length; index += 1) {
     const piece = pendingTexts[index]
     if (!piece) {
       return 0
     }
-    combined += piece
-    if (combined === userText) {
+    const next =
+      index === 0
+        ? new Set([piece])
+        : new Set(
+            [...candidates].flatMap((candidate) => [candidate + piece, `${candidate} ${piece}`])
+          )
+    candidates = new Set([...next].filter((candidate) => userText.startsWith(candidate)))
+    if (candidates.has(userText)) {
       return index + 1
     }
-    if (!userText.startsWith(combined)) {
+    if (candidates.size === 0) {
       return 0
     }
   }

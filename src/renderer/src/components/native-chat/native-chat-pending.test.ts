@@ -189,11 +189,51 @@ describe('prunePendingSends', () => {
     ).toEqual([])
   })
 
+  it('prunes optimistic sends glued with a retained whitespace separator', () => {
+    const pending = [pendingOf('p1', 'tell me a joke '), pendingOf('p2', 'continue')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'tell me a joke continue'),
+        assistantMessage('a1', 'a joke')
+      ])
+    ).toEqual([])
+  })
+
+  it('matches mixed separated and separator-less rapid sends', () => {
+    const pending = [pendingOf('p1', 'first'), pendingOf('p2', 'second '), pendingOf('p3', 'third')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'firstsecond third'),
+        assistantMessage('a1', 'done')
+      ])
+    ).toEqual([])
+  })
+
+  it('prunes repeated prompts represented by one separated transcript turn', () => {
+    const pending = [pendingOf('p1', 'repeat '), pendingOf('p2', 'repeat')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'repeat repeat'),
+        assistantMessage('a1', 'done')
+      ])
+    ).toEqual([])
+  })
+
   it('does not treat an unrelated longer user turn as a glued match', () => {
     const pending = [pendingOf('p1', 'hi')]
     expect(
       prunePendingSends(pending, [
         userMessage('u1', 'history of the project'),
+        assistantMessage('a1', 'ok')
+      ])
+    ).toEqual(pending)
+  })
+
+  it('does not accept a separated glue candidate that is only a user-text prefix', () => {
+    const pending = [pendingOf('p1', 'hi'), pendingOf('p2', 'story')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'hi story continued'),
         assistantMessage('a1', 'ok')
       ])
     ).toEqual(pending)
