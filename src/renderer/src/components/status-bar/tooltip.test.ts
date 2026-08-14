@@ -326,6 +326,54 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('returns only Antigravity buckets because its summaries duplicate them', () => {
+    const p: ProviderRateLimits = {
+      provider: 'antigravity',
+      session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 80, windowMinutes: 10_080, resetsAt: null, resetDescription: null },
+      buckets: [
+        {
+          name: 'Gemini 5h',
+          usedPercent: 20,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'Gemini wk',
+          usedPercent: 80,
+          windowMinutes: 10_080,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'Claude/GPT 5h',
+          usedPercent: 40,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'Claude/GPT wk',
+          usedPercent: 10,
+          windowMinutes: 10_080,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    expect(getWindowSections(p)).toEqual(
+      p.buckets?.map((bucket) => ({
+        label: bucket.name,
+        window: bucket
+      }))
+    )
+  })
+
   it('returns session and weekly when buckets are absent', () => {
     const p: ProviderRateLimits = {
       provider: 'claude',

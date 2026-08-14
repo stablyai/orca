@@ -8,7 +8,8 @@
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/relay/**/*",
-    "../src/types/**/*"
+    "../src/types/**/*",
+    "../tests/e2e/helpers/local-https-test-certificate.ts"
   ],
   "compilerOptions": {
     "composite": true,

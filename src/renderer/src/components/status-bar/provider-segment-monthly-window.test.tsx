@@ -43,6 +43,23 @@ function grokMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLi
   }
 }
 
+function antigravityLimits(tightestResetsAt: number | null = null): ProviderRateLimits {
+  return {
+    provider: 'antigravity',
+    session: windowOf(40, 300),
+    weekly: windowOf(80, 10_080),
+    buckets: [
+      { ...windowOf(20, 300), name: 'Gemini 5h' },
+      { ...windowOf(80, 10_080, tightestResetsAt), name: 'Gemini wk' },
+      { ...windowOf(40, 300), name: 'Claude/GPT 5h' },
+      { ...windowOf(10, 10_080), name: 'Claude/GPT wk' }
+    ],
+    updatedAt: Date.now(),
+    error: null,
+    status: 'ok'
+  }
+}
+
 describe('ProviderSegment monthly window', () => {
   it('renders a monthly-only snapshot in the chip instead of a bare icon', async () => {
     const { ProviderSegment } = await import('./StatusBar')
@@ -181,6 +198,42 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).toContain('20% used wk')
     expect(markup).toContain('30% used Fable')
     expect(markup).not.toContain('40% used')
+  })
+
+  it('keeps Antigravity verbose output to its derived summary windows', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={antigravityLimits()} compact={false} display="used" mode="verbose" />
+    )
+
+    expect(markup).toContain('40% used 5h')
+    expect(markup).toContain('80% used wk')
+    expect(markup).not.toContain('Gemini wk')
+    expect(markup).not.toContain('Claude/GPT')
+  })
+
+  it("selects Antigravity's tightest named bucket in compact mode", async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const now = 1_700_000_000_000
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    try {
+      const markup = renderToStaticMarkup(
+        <ProviderSegment
+          p={antigravityLimits(now + 43 * 60_000)}
+          compact={false}
+          display="used"
+          mode="compact"
+        />
+      )
+
+      expect(markup).toContain('80% used 43m')
+      expect(markup).not.toContain('Gemini wk')
+      expect(markup).not.toContain('Claude/GPT')
+    } finally {
+      dateNow.mockRestore()
+    }
   })
 })
 

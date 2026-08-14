@@ -9,6 +9,7 @@ import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -28,6 +29,10 @@ vi.mock('./codex-fetcher', () => ({
 
 vi.mock('./gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
 }))
 
 vi.mock('./kimi-fetcher', () => ({
@@ -128,6 +133,7 @@ function unavailableProvider(
 function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 24))
   vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => okProvider('gemini', 0))
+  vi.mocked(fetchAntigravityRateLimits).mockImplementation(async () => okProvider('antigravity', 0))
   vi.mocked(fetchOpenCodeGoRateLimits).mockImplementation(async () => okProvider('opencode-go', 0))
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
@@ -174,6 +180,9 @@ describe('RateLimitService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(
+      okProvider('antigravity', 0, Date.now())
+    )
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
     vi.mocked(fetchKimiRateLimits).mockResolvedValue(okProvider('kimi', 0, Date.now()))
     vi.mocked(fetchMiniMaxRateLimits).mockResolvedValue(okProvider('minimax', 0, Date.now()))
@@ -236,6 +245,7 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
     expect(fetchCodexRateLimits).not.toHaveBeenCalled()
     expect(fetchGeminiRateLimits).not.toHaveBeenCalled()
+    expect(fetchAntigravityRateLimits).not.toHaveBeenCalled()
     expect(fetchOpenCodeGoRateLimits).not.toHaveBeenCalled()
     expect(fetchKimiRateLimits).not.toHaveBeenCalled()
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
@@ -1376,7 +1386,7 @@ describe('RateLimitService', () => {
     expect(service.getState().inactiveCodexAccounts).toEqual([])
   })
 
-  it('fetches Gemini and OpenCode Go alongside Claude and Codex', async () => {
+  it('fetches Gemini, Antigravity, and OpenCode Go alongside Claude and Codex', async () => {
     const service = new RateLimitService()
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=abc123',
@@ -1392,6 +1402,9 @@ describe('RateLimitService', () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 30, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce(
+      okProvider('antigravity', 35, Date.now())
+    )
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
       okProvider('opencode-go', 40, Date.now())
     )
@@ -1410,6 +1423,10 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal)
+    })
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith(
       'session=abc123',
@@ -1428,6 +1445,8 @@ describe('RateLimitService', () => {
     expect(state.codex?.session?.usedPercent).toBe(20)
     expect(state.gemini?.status).toBe('ok')
     expect(state.gemini?.session?.usedPercent).toBe(30)
+    expect(state.antigravity?.status).toBe('ok')
+    expect(state.antigravity?.session?.usedPercent).toBe(35)
     expect(state.opencodeGo?.status).toBe('ok')
     expect(state.opencodeGo?.session?.usedPercent).toBe(40)
   })
@@ -2117,6 +2136,7 @@ describe('RateLimitService', () => {
     vi.mocked(fetchClaudeRateLimits).mockRejectedValueOnce(new Error('claude down'))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockRejectedValueOnce(new Error('gemini down'))
+    vi.mocked(fetchAntigravityRateLimits).mockRejectedValueOnce(new Error('antigravity down'))
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
       okProvider('opencode-go', 40, Date.now())
     )
@@ -2129,6 +2149,8 @@ describe('RateLimitService', () => {
     expect(state.codex?.status).toBe('ok')
     expect(state.gemini?.status).toBe('error')
     expect(state.gemini?.error).toBe('gemini down')
+    expect(state.antigravity?.status).toBe('error')
+    expect(state.antigravity?.error).toBe('antigravity down')
     expect(state.opencodeGo?.status).toBe('ok')
   })
 

@@ -143,6 +143,11 @@ export function getWindowSections(
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
+    // Why: Antigravity's summaries are derived from these same four buckets;
+    // appending Weekly would duplicate one family in Detailed mode.
+    if (p.provider === 'antigravity') {
+      return bucketSections
+    }
     return [
       ...bucketSections,
       {
