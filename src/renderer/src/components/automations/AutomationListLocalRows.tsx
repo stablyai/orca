@@ -31,6 +31,8 @@ import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import type { AutomationHostTarget } from './automation-host-client'
+import { getLocalAutomationLastRunSnapshot } from './automation-list-last-run'
+import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { getAgentLabel } from './automation-draft-model'
@@ -48,7 +50,7 @@ export function AutomationListLocalRows({
   automations,
   selectedId,
   isSelectedLocal,
-  runs,
+  lastRunByAutomationId,
   relativeNow,
   repoMap,
   worktreeMap,
@@ -67,7 +69,7 @@ export function AutomationListLocalRows({
   automations: readonly Automation[]
   selectedId: string | null | undefined
   isSelectedLocal: boolean
-  runs: readonly AutomationRun[]
+  lastRunByAutomationId: ReadonlyMap<string, AutomationRun>
   relativeNow: number
   repoMap: ReadonlyMap<string, Repo>
   worktreeMap: ReadonlyMap<string, Worktree>
@@ -86,19 +88,6 @@ export function AutomationListLocalRows({
   onToggle: (automation: Automation) => void
   onDelete: (automation: Automation) => void
 }): React.JSX.Element {
-  // Why: one pass over runs instead of a full scan per rendered automation —
-  // this list re-renders on the relativeNow timer.
-  const lastRunByAutomationId = React.useMemo(() => {
-    const latest = new Map<string, AutomationRun>()
-    for (const run of runs) {
-      const existing = latest.get(run.automationId)
-      if (!existing || run.createdAt > existing.createdAt) {
-        latest.set(run.automationId, run)
-      }
-    }
-    return latest
-  }, [runs])
-
   return (
     <>
       {automations.map((automation) => {
@@ -132,6 +121,7 @@ export function AutomationListLocalRows({
           ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
           : getLocalExecutionHostLabel()
         const lastRun = lastRunByAutomationId.get(automation.id)
+        const lastRunSnapshot = getLocalAutomationLastRunSnapshot(automation, lastRun)
         const lastRunCost =
           lastRun?.usage?.status === 'known'
             ? formatAutomationCost(lastRun.usage.estimatedCostUsd)
@@ -213,6 +203,7 @@ export function AutomationListLocalRows({
                 <span className="min-w-0 truncate text-muted-foreground" title={nextRunLabel}>
                   {nextRunLabel}
                 </span>
+                <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
                 <AutomationListStatusCell enabled={automation.enabled} />
                 <Tooltip>
                   <TooltipTrigger asChild>

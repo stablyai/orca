@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { ipcMain, type BrowserWindow } from 'electron'
+import { app, ipcMain, type BrowserWindow } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
@@ -19,6 +19,7 @@ import { isPathInsideOrEqual, isWindowsAbsolutePathLike } from '../../shared/cro
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
 import type {
   AutomationWorkspaceProvenance,
+  AdoptProvisionedRootArgs,
   CliWorkspaceProvenance,
   CreateWorktreeArgs,
   CreateWorktreeResult,
@@ -66,7 +67,10 @@ import {
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../shared/worktree-ownership'
-import { createAgentScratchWorktreePathMatcher } from '../../shared/agent-scratch-worktrees'
+import {
+  createWorktreeVisibilitySourceMatcher,
+  normalizeCustomWorktreeVisibilitySources
+} from '../../shared/worktree-visibility-sources'
 import {
   assertWorktreeCleanForRemoval,
   forceDeleteLocalBranch,
@@ -143,6 +147,7 @@ import {
 } from '../ssh/ssh-provider-authority'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
+import { adoptProvisionedRootSshCheckout } from '../provisioned-root-ssh-adoption'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -850,10 +855,10 @@ function buildDetectedGitWorktrees(
   const liveWorktrees = dedupeWorktreesByPath(
     gitWorktrees.filter((gitWorktree) => !gitWorktree.prunable)
   )
-  const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
-    repo.path,
-    ...liveWorktrees.map((worktree) => worktree.path)
-  ])
+  const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
+    [repo.path, ...liveWorktrees.map((worktree) => worktree.path)],
+    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+  )
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     let meta = store.getWorktreeMeta(worktreeId)
@@ -865,7 +870,7 @@ function buildDetectedGitWorktrees(
       settings,
       knownOrcaLayouts,
       isLegacyRepoForVisibility,
-      agentScratchWorktreePathMatcher
+      worktreeVisibilitySourceMatcher
     })
     if (!detected.visible) {
       return detected
@@ -879,7 +884,7 @@ function buildDetectedGitWorktrees(
       settings,
       knownOrcaLayouts,
       isLegacyRepoForVisibility,
-      agentScratchWorktreePathMatcher
+      worktreeVisibilitySourceMatcher
     })
   })
   return projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
@@ -1001,14 +1006,20 @@ function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
 
 function buildFolderDetectedWorktrees(store: Store, repo: Repo): DetectedWorktree[] {
   const settings = store.getSettings()
-  return listFolderWorkspaces(store, repo).map((worktree) =>
+  const worktrees = listFolderWorkspaces(store, repo)
+  const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
+    [repo.path, ...worktrees.map((worktree) => worktree.path)],
+    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+  )
+  return worktrees.map((worktree) =>
     toDetectedWorktree({
       repo,
       worktree,
       meta: store.getWorktreeMeta(worktree.id),
       settings,
       knownOrcaLayouts: [],
-      isLegacyRepoForVisibility: true
+      isLegacyRepoForVisibility: true,
+      worktreeVisibilitySourceMatcher
     })
   )
 }
@@ -1081,10 +1092,10 @@ function buildDisconnectedDetectedWorktrees(
   worktrees: Worktree[]
 ): DetectedWorktree[] {
   const settings = store.getSettings()
-  const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
-    repo.path,
-    ...worktrees.map((worktree) => worktree.path)
-  ])
+  const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
+    [repo.path, ...worktrees.map((worktree) => worktree.path)],
+    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+  )
   const detected = worktrees.map((worktree) => {
     const meta = store.getWorktreeMeta(worktree.id)
     const detected = toDetectedWorktree({
@@ -1094,7 +1105,7 @@ function buildDisconnectedDetectedWorktrees(
       settings,
       knownOrcaLayouts: [],
       isLegacyRepoForVisibility: true,
-      agentScratchWorktreePathMatcher
+      worktreeVisibilitySourceMatcher
     })
     return applyMetadataFallbackVisibility(detected)
   })
@@ -1816,6 +1827,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:forgetRemovedForExecutionHost')
   ipcMain.removeHandler('worktrees:cancelListDetected')
   ipcMain.removeHandler('worktrees:create')
+  ipcMain.removeHandler('worktrees:adoptProvisionedRoot')
   ipcMain.removeHandler('worktrees:prefetchCreateBase')
   ipcMain.removeHandler('worktrees:resolvePrBase')
   ipcMain.removeHandler('worktrees:resolveMrBase')
@@ -2248,6 +2260,59 @@ export function registerWorktreeHandlers(
           branch: result.worktree.branch
         })
 
+        return result
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'worktrees:adoptProvisionedRoot',
+    async (_event, rawArgs: AdoptProvisionedRootArgs): Promise<CreateWorktreeResult> => {
+      const args = normalizeLinkedWorkItemFields(rawArgs)
+      return withWorktreeSpan({ stage: 'create' }, async () => {
+        const repo = findExactRepoOwner(store, args.repoId, args.executionHostId)
+        if (!repo || isFolderRepo(repo)) {
+          throw new Error('Provisioned-root repository ownership is missing or ambiguous.')
+        }
+        const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
+        const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
+        const automationProvenance = resolveAutomationWorkspaceProvenance({
+          authority: runtime,
+          repoSelector: args.repoId,
+          repo,
+          request: args.automationProvenanceRequest
+        })
+        let result: CreateWorktreeResult
+        try {
+          result = await adoptProvisionedRootSshCheckout({
+            userDataPath: app.getPath('userData'),
+            request: { ...args, automationProvenance },
+            repo,
+            store,
+            isRepoCurrent: () => isCapturedRepoCurrent(store, repo, args.executionHostId)
+          })
+        } catch (error) {
+          releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+          track('workspace_create_failed', {
+            source,
+            error_class: classifyWorkspaceCreateError(error),
+            ...getCohortAtEmit()
+          })
+          throw error
+        }
+        finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+        track('workspace_created', {
+          source,
+          from_existing_branch: false,
+          ...getCohortAtEmit()
+        })
+        notifyWorktreesChanged(mainWindow, repo.id)
+        options?.onWorktreeLifecycle?.({
+          kind: 'created',
+          worktreeId: result.worktree.id,
+          path: result.worktree.path,
+          branch: result.worktree.branch
+        })
         return result
       })
     }

@@ -266,6 +266,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>
         rows.filter((row) => row.to_handle === handle && row.read === 0 && !row.delivered_at),
+      getUndeliveredUnreadMailboxHandles: () => [toHandle()],
       getActiveCoordinatorRun: () => null,
       getCurrentRunForPane: () => undefined,
       // Consulted by onPtyExit's dispatch-failure path.

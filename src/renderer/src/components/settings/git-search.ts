@@ -121,22 +121,5 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
-  ...getAutoRenameBranchSearchEntries(),
-  {
-    title: translate('auto.components.settings.git.search.bc7d9f69ce', 'Orca Attribution'),
-    description: translate(
-      'auto.components.settings.git.search.118c23484b',
-      'Add Orca attribution to commits, PRs, and issues.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.git.search.d088806071', 'github'),
-      ...translateSearchKeyword('auto.components.settings.git.search.16f53f7323', 'gh'),
-      ...translateSearchKeyword('auto.components.settings.git.search.6bdea421bb', 'pr'),
-      ...translateSearchKeyword('auto.components.settings.git.search.af0a144bfb', 'issue'),
-      ...translateSearchKeyword('auto.components.settings.git.search.61f9f5d1fc', 'co-author'),
-      ...translateSearchKeyword('auto.components.settings.git.search.8461c908ae', 'coauthored'),
-      ...translateSearchKeyword('auto.components.settings.git.search.1b93c1143c', 'attribution'),
-      ...translateSearchKeyword('auto.components.settings.git.search.61eab13403', 'orca')
-    ]
-  }
+  ...getAutoRenameBranchSearchEntries()
 ])

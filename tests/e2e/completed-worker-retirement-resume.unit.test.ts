@@ -269,7 +269,7 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
       : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-  vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({ id: WORKTREE_ID } as never)
+  vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({ id: WORKTREE_ID } as never)
   vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
     handle: TERMINAL_HANDLE,
     worktreeId: WORKTREE_ID,

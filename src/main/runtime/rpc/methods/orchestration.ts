@@ -451,16 +451,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             'Remote worker_done requires outcome=succeeded|failed.'
           )
         }
-        if (
-          outcome &&
-          remoteAttachment.protocol_version <
-            ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
-        ) {
-          throw new OrchestrationError(
-            'capability_unsupported',
-            'The Run-home runtime cannot confirm worker_done settlement. Update it before retrying; no report was queued.'
-          )
-        }
+        const supportsLifecycleSettlement =
+          remoteAttachment.protocol_version >=
+          ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
         const relay = db.enqueueFederationRelay({
           dispatchId: remoteAttachment.dispatch_id,
           direction: 'to_home',
@@ -473,15 +466,27 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             priority: params.priority ?? 'normal',
             threadId: params.threadId ?? null,
             payload: params.payload ?? null
-          })
+          }),
+          ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})
         })
-        const lifecycle = outcome
-          ? await waitForFederatedLifecycleSettlement(runtime, relay.dispatch_id, relay.sequence, {
-              timeoutMs: 30_000,
-              signal
-            })
-          : undefined
-        if (outcome && !lifecycle) {
+        const lifecycle =
+          outcome && supportsLifecycleSettlement
+            ? await waitForFederatedLifecycleSettlement(
+                runtime,
+                relay.dispatch_id,
+                relay.sequence,
+                {
+                  timeoutMs: 30_000,
+                  signal
+                }
+              )
+            : outcome
+              ? {
+                  action: outcome === 'succeeded' ? ('completed' as const) : ('failed' as const),
+                  authority: 'worker_server_legacy' as const
+                }
+              : undefined
+        if (outcome && supportsLifecycleSettlement && !lifecycle) {
           throw new OrchestrationError(
             'operation_unknown',
             'worker_done was queued, but the Run-home runtime did not confirm settlement. Verify the Task and Dispatch before retrying.'

@@ -1735,6 +1735,7 @@ export function createRemoteRuntimePtyTransport(
     setAttachmentReady(false)
     let transportClosed = false
     let subscriptionAttached = false
+    let subscriptionSnapshotHadContent = false
     // Why: viewport handed to subscribe; a resize during the round-trip falls back to the refresh-only one-shot RPC, replayed through the stream below once current.
     const subscribedViewport = desiredViewport
     const isCurrentSubscription = (): boolean =>
@@ -1760,6 +1761,7 @@ export function createRemoteRuntimePtyTransport(
         onSnapshot: (data, meta) => {
           // Why: an empty snapshot can still carry a pending mid-escape tail that must replay so the next live chunk completes it.
           if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {
+            subscriptionSnapshotHadContent = true
             if (subscribedPtyId && bufferPtyShutdownReplayData(subscribedPtyId, data)) {
               return
             }
@@ -1806,6 +1808,12 @@ export function createRemoteRuntimePtyTransport(
           markRecoveryHealthy()
           emitRecoveryState()
           storedCallbacks.onConnect?.()
+          // Why: a recovery subscribe replays nothing when the host's push snapshot is
+          // empty (idle or exited pane), so ask for the retained buffer instead of
+          // waiting for bytes that an exited process will never send.
+          if (expectedRecoveryEpoch !== undefined && !subscriptionSnapshotHadContent) {
+            storedCallbacks.onStreamRecovered?.()
+          }
           storedCallbacks.onStatus?.('shell')
         },
         onEnd: () => {

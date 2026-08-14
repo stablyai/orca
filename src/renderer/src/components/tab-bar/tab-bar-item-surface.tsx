@@ -149,7 +149,11 @@ export function renderTabBarItems({
           onCloseOthers={() => onCloseOthers(item.id)}
           onCloseToRight={() => onCloseToRight(item.id)}
           onCloseToLeft={() => onCloseToLeft(item.id)}
-          onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
+          onDuplicate={
+            runtime.managedBrowserCreationEnabled
+              ? () => onDuplicateBrowserTab?.(item.id)
+              : undefined
+          }
           onTogglePin={() => togglePinned(item)}
           dragData={dragData}
           dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}

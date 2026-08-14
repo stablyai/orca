@@ -46,7 +46,10 @@ import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import {
+  registerHttpLinkStoreAccessor,
+  registerRuntimeHttpLinkBrowserOpener
+} from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
 import {
   registerRendererMemoryProfileContributor,
@@ -104,6 +107,10 @@ export const useAppStore = create<AppState>()((...a) => {
 })
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
+registerRuntimeHttpLinkBrowserOpener(async (request) => {
+  const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
+  await openWorkspaceBrowserTab(request)
+})
 
 // Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
 // so OOM crash reports identify what grew without a local repro.

@@ -7,24 +7,35 @@ import {
   recordFederationAckCheckpoint,
   type FederationAckIdentity
 } from './federation-ack-checkpoints'
-import { parseRelayedMessage } from './federation-sync'
+import { parseRelayedMessage, syncFederatedDispatch } from './federation-sync'
 
 function createIdleSyncHarness() {
   let remoteRuntimeEpoch = 'remote_epoch_1'
   let blockedAck: { reached: () => void; released: Promise<void> } | null = null
   let blockedPull: { reached: () => void; released: Promise<void> } | null = null
+  let relayEligible = true
   const federated = {
     environment_id: 'environment_windows',
     environment_name: 'windows',
     peer_fingerprint: 'windows_peer_fingerprint',
-    to_home_imported_sequence: 2
+    remote_runtime_epoch: remoteRuntimeEpoch,
+    to_home_imported_sequence: 2,
+    to_home_acknowledged_sequence: 0
   }
   const createDb = () =>
     ({
       getFederatedDispatch: () => federated,
       getDispatchContextById: () => ({ run_id: 'run_home', task_id: 'task_home' }),
       getWorkerDispatch: () => ({ state: 'ready' }),
-      listPendingFederationRelay: () => []
+      listPendingFederationRelay: () => [],
+      isFederatedDispatchRelayEligible: () => relayEligible,
+      recordFederatedHomeAcknowledgment: (params: {
+        remoteRuntimeEpoch: string
+        sequence: number
+      }) => {
+        federated.remote_runtime_epoch = params.remoteRuntimeEpoch
+        federated.to_home_acknowledged_sequence = params.sequence
+      }
     }) as never
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(createDb())
@@ -67,6 +78,9 @@ function createIdleSyncHarness() {
     restartRemote: () => {
       remoteRuntimeEpoch = 'remote_epoch_2'
     },
+    settleDispatch: () => {
+      relayEligible = false
+    },
     replaceDb: () => runtime.setOrchestrationDb(createDb()),
     blockAck: () => {
       let noteReached!: () => void
@@ -104,6 +118,125 @@ describe('federation relay parsing', () => {
 })
 
 describe('federation relay acknowledgments', () => {
+  it('drains a terminal retry from the page after the first terminal report', async () => {
+    const pending = Array.from({ length: 51 }, (_, index) => {
+      const sequence = index + 1
+      const terminal = sequence >= 50
+      return {
+        dispatch_id: 'dispatch_remote',
+        direction: 'to_home' as const,
+        sequence,
+        message_id: `message_${sequence}`,
+        kind: terminal ? 'worker_done' : 'status',
+        payload: JSON.stringify({
+          subject: terminal ? 'Done' : 'Progress',
+          body: terminal ? `Attempt ${sequence}` : `Update ${sequence}`,
+          type: terminal ? 'worker_done' : 'status',
+          ...(terminal
+            ? {
+                payload: JSON.stringify({
+                  taskId: 'task_home',
+                  dispatchId: 'dispatch_remote',
+                  outcome: 'succeeded'
+                })
+              }
+            : {})
+        })
+      }
+    })
+    const federated = {
+      environment_id: 'environment_windows',
+      environment_name: 'windows',
+      peer_fingerprint: 'windows_peer_fingerprint',
+      remote_runtime_epoch: 'remote_epoch_1',
+      protocol_version: 3,
+      to_home_imported_sequence: 0,
+      to_home_acknowledged_sequence: 0
+    }
+    let pendingToWorker = [{ sequence: 1 }]
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb({
+      getFederatedDispatch: () => federated,
+      getDispatchContextById: () => ({ run_id: 'run_home', task_id: 'task_home' }),
+      importFederatedRelayItem: ({
+        sequence,
+        message,
+        lifecycle
+      }: {
+        sequence: number
+        message: { to: string; type: 'status' | 'worker_done' }
+        lifecycle:
+          | { kind: 'worker_report'; outcome: 'succeeded' | 'failed' }
+          | { kind: 'none' | 'heartbeat' | 'rejected' }
+      }) => {
+        federated.to_home_imported_sequence = sequence
+        return {
+          message: { to_handle: message.to, type: message.type },
+          duplicate: false,
+          ...(lifecycle.kind === 'worker_report'
+            ? { lifecycle: { action: 'settled', outcome: lifecycle.outcome } }
+            : {})
+        }
+      },
+      recordFederatedHomeAcknowledgment: ({ sequence }: { sequence: number }) => {
+        federated.to_home_acknowledged_sequence = sequence
+      },
+      getWorkerDispatch: () => ({ state: 'ready' }),
+      listPendingFederationRelay: () => pendingToWorker,
+      acknowledgeFederationRelay: () => {
+        pendingToWorker = []
+      }
+    } as never)
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      peerFingerprint: federated.peer_fingerprint
+    } as never)
+    vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+    const remoteCall = vi
+      .spyOn(runtime, 'callOrchestrationWorkerServer')
+      .mockImplementation(async (_environmentId, method, params) => {
+        if (method === 'orchestration.federationPull') {
+          return { runtimeEpoch: 'remote_epoch_1', items: pending.slice(0, 50) }
+        }
+        if (method === 'orchestration.federationAck') {
+          const throughSequence = (params as { throughSequence: number }).throughSequence
+          pending.splice(
+            0,
+            pending.findIndex((item) => item.sequence > throughSequence) === -1
+              ? pending.length
+              : pending.findIndex((item) => item.sequence > throughSequence)
+          )
+          return { acknowledgedThrough: throughSequence }
+        }
+        if (method === 'orchestration.federationImport') {
+          return { acknowledgedThrough: 1 }
+        }
+        throw new Error(`Unexpected method ${method}`)
+      })
+
+    const result = await syncFederatedDispatch(runtime, 'dispatch_remote')
+
+    expect(result).toEqual({ imported: 51, acknowledgedThrough: 51 })
+    expect(pending).toHaveLength(0)
+    expect(remoteCall.mock.calls.map(([, method]) => method)).toEqual([
+      'orchestration.federationPull',
+      'orchestration.federationAck',
+      'orchestration.federationImport',
+      'orchestration.federationPull',
+      'orchestration.federationAck'
+    ])
+    expect(
+      remoteCall.mock.calls
+        .filter(([, method]) => method === 'orchestration.federationAck')
+        .map(([, , params]) => params)
+    ).toEqual([
+      expect.objectContaining({ throughSequence: 50 }),
+      expect.objectContaining({
+        throughSequence: 51,
+        settlements: [expect.objectContaining({ sequence: 51 })]
+      })
+    ])
+  })
+
   it('acknowledges only new progress until remote runtime identity changes', async () => {
     const { runtime, remoteCall, advanceCursor, restartRemote } = createIdleSyncHarness()
     const ackCalls = () =>
@@ -207,6 +340,39 @@ describe('federation relay acknowledgments', () => {
     expect(
       remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
     ).toHaveLength(2)
+  })
+
+  it('releases the checkpoint once a dispatch is no longer relay eligible', async () => {
+    const { runtime, settleDispatch } = createIdleSyncHarness()
+    const identity: FederationAckIdentity = {
+      environmentId: 'environment_windows',
+      peerFingerprint: 'windows_peer_fingerprint',
+      remoteRuntimeEpoch: 'remote_epoch_1'
+    }
+    const ackedThrough = () =>
+      getFederationAckedThrough(acquireFederationAckLease(runtime, 'dispatch_remote'), identity)
+
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    expect(ackedThrough()).toBe(2)
+
+    settleDispatch()
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    expect(ackedThrough()).toBe(0)
+  })
+
+  it('leaves the durable watermark suppressing acks after the checkpoint is released', async () => {
+    const { runtime, remoteCall, settleDispatch } = createIdleSyncHarness()
+    const ackCalls = () =>
+      remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
+
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    expect(ackCalls()).toHaveLength(1)
+
+    settleDispatch()
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+
+    expect(ackCalls()).toHaveLength(1)
   })
 
   it('matches checkpoints only to their exact remote identity and never moves backward', () => {

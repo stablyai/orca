@@ -92,7 +92,10 @@ const WORKER_TERMINAL_LIST_STATES = [
 ] as const
 
 type LifecycleSendResult =
-  | { action: 'completed' | 'failed'; authority?: 'run_home' }
+  | {
+      action: 'completed' | 'failed'
+      authority?: 'run_home' | 'worker_server_legacy'
+    }
   | { action: 'settled'; outcome: 'succeeded' | 'failed'; duplicate?: boolean }
   | { action: 'rejected'; code: string; reason: string }
 

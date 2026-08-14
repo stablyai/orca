@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostLineageSnapshot } from '../../../shared/host-lineage-contract'
 import type { HostRepoCatalogSnapshot } from '../../../shared/host-repo-catalog-contract'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
-import type { Repo } from '../../../shared/types'
+import type { Repo, WorktreeLineage, WorkspaceLineage } from '../../../shared/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '../store/types'
 import { createDirectSshHostHydration } from './direct-ssh-host-hydration'
@@ -38,6 +38,34 @@ function state(overrides: Record<string, unknown> = {}): AppState {
     workspaceLineageByChildKey: {},
     ...overrides
   } as unknown as AppState
+}
+
+function productionLineage(worktreeId: string, parentWorktreeId: string): WorktreeLineage {
+  return {
+    worktreeId,
+    worktreeInstanceId: `${worktreeId}-instance`,
+    parentWorktreeId,
+    parentWorktreeInstanceId: `${parentWorktreeId}-instance`,
+    origin: 'orchestration',
+    capture: { source: 'orchestration-context', confidence: 'explicit' },
+    taskId: 'task-1',
+    coordinatorHandle: 'coord-1',
+    createdAt: 1
+  }
+}
+
+function productionWorkspaceLineage(childId: string, parentId: string): WorkspaceLineage {
+  return {
+    childWorkspaceKey: worktreeWorkspaceKey(childId),
+    childInstanceId: `${childId}-instance`,
+    parentWorkspaceKey: worktreeWorkspaceKey(parentId),
+    parentInstanceId: `${parentId}-instance`,
+    origin: 'orchestration',
+    capture: { source: 'orchestration-context', confidence: 'explicit' },
+    taskId: 'task-1',
+    coordinatorHandle: 'coord-1',
+    createdAt: 1
+  }
 }
 
 function hostSnapshot(
@@ -339,6 +367,79 @@ describe('createDirectSshHostHydration', () => {
       [worktreeWorkspaceKey('a::/work')]: { parentWorkspaceKey: 'fresh-a-workspace' },
       [folderWorkspaceKey('folder-a')]: { parentWorkspaceKey: 'fresh-folder' }
     })
+  })
+
+  it('keeps lineage map identity for a cloned no-op host snapshot', async () => {
+    const owner = authority()
+    const hostLineage = productionLineage('a::/work', 'a::/parent')
+    const foreignLineage = productionLineage('b::/work', 'b::/parent')
+    const hostWorkspace = productionWorkspaceLineage('a::/work', 'a::/parent')
+    const foreignWorkspace = productionWorkspaceLineage('b::/work', 'b::/parent')
+    const store = createStore<AppState>(() =>
+      state({
+        repos: [repo('a', 'target-a'), repo('b', 'target-b')],
+        worktreesByRepo: {
+          a: [{ id: 'a::/work', repoId: 'a', hostId: 'ssh:target-a' }],
+          b: [{ id: 'b::/work', repoId: 'b', hostId: 'ssh:target-b' }]
+        },
+        worktreeLineageById: {
+          'a::/work': hostLineage,
+          'b::/work': foreignLineage
+        },
+        workspaceLineageByChildKey: {
+          [worktreeWorkspaceKey('a::/work')]: hostWorkspace,
+          [worktreeWorkspaceKey('b::/work')]: foreignWorkspace
+        }
+      })
+    )
+    const snapshot: HostLineageSnapshot = {
+      authoritative: true,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:target-a',
+        ...owner
+      },
+      worktreeLineageById: {
+        'a::/work': hostLineage
+      },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey('a::/work')]: hostWorkspace
+      }
+    }
+    let publications = 0
+    store.subscribe(() => {
+      publications += 1
+    })
+    const hydration = createDirectSshHostHydration({
+      store,
+      listRepos: vi.fn(),
+      listLineage: vi.fn(async () => structuredClone(snapshot)),
+      isCurrentAuthority: () => true
+    })
+    const beforeLineage = store.getState().worktreeLineageById
+    const beforeWorkspace = store.getState().workspaceLineageByChildKey
+
+    await expect(
+      hydration.readHostScopedLineage({
+        ...owner,
+        catalogRevision: 0,
+        repoRefs: [{ repoId: 'a', executionHostId: 'ssh:target-a' }],
+        authorityRequirement: 'required',
+        reason: 'reconnect'
+      })
+    ).resolves.toBe('complete')
+
+    expect(store.getState().worktreeLineageById).toBe(beforeLineage)
+    expect(store.getState().workspaceLineageByChildKey).toBe(beforeWorkspace)
+    expect(store.getState().worktreeLineageById['a::/work']).toBe(hostLineage)
+    expect(store.getState().worktreeLineageById['b::/work']).toBe(foreignLineage)
+    expect(store.getState().workspaceLineageByChildKey[worktreeWorkspaceKey('a::/work')]).toBe(
+      hostWorkspace
+    )
+    expect(store.getState().workspaceLineageByChildKey[worktreeWorkspaceKey('b::/work')]).toBe(
+      foreignWorkspace
+    )
+    expect(publications).toBe(0)
   })
 
   it('rejects lineage captured before a newer same-authority catalog revision', async () => {

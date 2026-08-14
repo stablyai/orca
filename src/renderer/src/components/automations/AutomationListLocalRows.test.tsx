@@ -6,11 +6,13 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   Automation,
+  AutomationRun,
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
 import { AutomationListLocalRows } from './AutomationListLocalRows'
 import { AutomationListExternalRows } from './AutomationListExternalRows'
+import { indexLatestAutomationRuns } from './automation-list-last-run'
 
 // Why: Tooltip needs a provider in the app; stub so rows render standalone.
 vi.mock('@/components/ui/tooltip', () => ({
@@ -84,16 +86,42 @@ function makeExternalManager(): ExternalAutomationManager {
   }
 }
 
+function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
+  return {
+    id: 'run-1',
+    automationId: 'automation-1',
+    title: 'test',
+    scheduledFor: 1,
+    status: 'dispatch_failed',
+    trigger: 'scheduled',
+    workspaceId: 'worktree-1',
+    sessionKind: 'terminal',
+    chatSessionId: null,
+    terminalSessionId: null,
+    terminalPaneKey: null,
+    terminalPtyId: null,
+    outputSnapshot: null,
+    precheckResult: null,
+    usage: null,
+    error: 'boom',
+    startedAt: Date.now() - 8 * 60 * 60 * 1000,
+    dispatchedAt: Date.now() - 8 * 60 * 60 * 1000,
+    createdAt: Date.now() - 8 * 60 * 60 * 1000,
+    ...overrides
+  }
+}
+
 function renderLocalRows(handlers: {
   onSelect: (automationId: string) => void
   onDelete?: (automation: Automation) => void
+  runs?: AutomationRun[]
 }) {
   return render(
     <AutomationListLocalRows
       automations={[makeAutomation()]}
       selectedId={null}
       isSelectedLocal={true}
-      runs={[]}
+      lastRunByAutomationId={indexLatestAutomationRuns(handlers.runs ?? [])}
       relativeNow={Date.now()}
       repoMap={new Map()}
       worktreeMap={new Map()}
@@ -160,6 +188,11 @@ describe('Automation list row selection', () => {
 
     expect(onDelete).toHaveBeenCalledTimes(1)
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('shows last-run status and relative time', () => {
+    renderLocalRows({ onSelect: vi.fn(), runs: [makeRun()] })
+    expect(screen.getByText('Failed 8h ago')).toBeTruthy()
   })
 
   it('still selects when the local row itself is clicked', async () => {

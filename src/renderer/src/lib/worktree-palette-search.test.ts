@@ -540,6 +540,75 @@ describe('worktree-palette-search', () => {
     })
   })
 
+  it('matches a pasted GitHub issue URL to the linked worktree instead of the URL text', () => {
+    const results = searchWorktrees(
+      [
+        makeWorktree({ id: 'wt-issue', linkedIssue: 14198 }),
+        makeWorktree({ id: 'wt-other', linkedIssue: 7, displayName: 'github.com' })
+      ],
+      'https://github.com/stablyai/orca/issues/14198',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        worktreeId: 'wt-issue',
+        matchedField: 'issue',
+        supportingText: {
+          labelKind: 'issue',
+          text: 'Issue #14198',
+          matchRange: { start: 0, end: 'Issue #14198'.length }
+        }
+      })
+    ])
+  })
+
+  it('matches a pasted GitHub pull URL to the linked worktree', () => {
+    const results = searchWorktrees(
+      [
+        makeWorktree({
+          id: 'wt-pr',
+          linkedPR: 12789,
+          linkedWorkItem: {
+            provider: 'github',
+            type: 'pr',
+            number: 12789,
+            title: 'Perf',
+            url: 'https://github.com/stablyai/orca/pull/12789'
+          }
+        }),
+        makeWorktree({ id: 'wt-issue', linkedIssue: 12789 })
+      ],
+      'https://github.com/stablyai/orca/pull/12789',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results.map((result) => result.worktreeId)).toEqual(['wt-pr'])
+  })
+
+  it('matches a pasted Linear issue URL to the linked worktree', () => {
+    const results = searchWorktrees(
+      [
+        makeWorktree({
+          id: 'wt-linear',
+          linkedLinearIssue: 'STA-4052',
+          linkedLinearIssueOrganizationUrlKey: 'stably'
+        }),
+        makeWorktree({ id: 'wt-name', displayName: 'linear.app' })
+      ],
+      'https://linear.app/stably/issue/STA-4052/agent-terminals-disappearing-randomly',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results.map((result) => result.worktreeId)).toEqual(['wt-linear'])
+  })
+
   it('matches workspace ports by port number before issue and PR numbers', () => {
     const results = searchWorktrees(
       [makeWorktree({ id: 'wt-port', linkedIssue: 3000 })],

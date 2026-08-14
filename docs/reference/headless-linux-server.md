@@ -166,6 +166,7 @@ Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
 StandardOutput=journal
 StandardError=journal
+KillMode=mixed
 Restart=on-failure
 RestartPreventExitStatus=3 4
 RestartSec=5
@@ -176,6 +177,10 @@ WantedBy=multi-user.target
 
 Replace `100.64.1.20` with the LAN, Tailscale, tunnel, or public hostname that
 clients should use.
+
+`KillMode=mixed` sends the graceful stop signal only to Orca's main process,
+then retains systemd's cgroup-wide `SIGKILL` fallback if shutdown times out.
+This lets Orca keep its owned Xvfb alive until Electron disconnects cleanly.
 
 The foreground CLI supervises Electron after startup. Readiness requires a
 WebSocket handshake, a reachable local runtime RPC, and a ready runtime graph.

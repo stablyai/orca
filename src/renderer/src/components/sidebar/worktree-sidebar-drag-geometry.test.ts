@@ -159,20 +159,20 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
       scrollTop: 0
     }
 
-    expect(resolveWorktreeSidebarDropAnchorIndex({ anchor, rects: COLLAPSED })).toBeNull()
+    expect(resolveWorktreeSidebarDropAnchorIndex({ anchor, groupIds: GROUP_IDS })).toBeNull()
     expect(
       resolveWorktreeSidebarDropAnchorIndex({
         anchor: { beforeWorktreeId: 'c', pointerY: 0, scrollTop: 0 },
-        rects: COLLAPSED
+        groupIds: GROUP_IDS
       })
     ).toBe(2)
     // A null anchor id means end-of-group, which survives any row count change.
     expect(
       resolveWorktreeSidebarDropAnchorIndex({
         anchor: { beforeWorktreeId: null, pointerY: 0, scrollTop: 0 },
-        rects: COLLAPSED
+        groupIds: GROUP_IDS
       })
-    ).toBe(COLLAPSED.length)
+    ).toBe(GROUP_IDS.length)
   })
 
   it('keeps one live coordinate space across a session refresh', () => {

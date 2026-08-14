@@ -13,7 +13,7 @@ import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
-import { openFilePreviewToSide } from '@/lib/file-preview'
+import { openFilePreviewToSide, useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 import { canOpenDiffSectionPreviewToSide } from './diff-section-preview'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { getCombinedDiffSectionConnectionId } from './combined-diff-section-connection'
@@ -247,6 +247,7 @@ export default function CombinedDiffViewer({
     selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
+  const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -1291,7 +1292,10 @@ export default function CombinedDiffViewer({
         !canOpenDiffSectionPreviewToSide({
           path: section.path,
           status: section.status,
-          isCommitSurface: isCommitMode
+          isCommitSurface: isCommitMode,
+          canOpenWorkspaceFileBrowser: canOpenWorkspaceFileBrowserForPath(
+            joinPath(file.filePath, section.path)
+          )
         })
       ) {
         return
@@ -1313,7 +1317,14 @@ export default function CombinedDiffViewer({
         sourceGroupId
       })
     },
-    [activeGroupId, file.filePath, file.id, file.worktreeId, isCommitMode]
+    [
+      activeGroupId,
+      canOpenWorkspaceFileBrowserForPath,
+      file.filePath,
+      file.id,
+      file.worktreeId,
+      isCommitMode
+    ]
   )
 
   const handleSectionSave = useCallback(
@@ -2060,7 +2071,10 @@ export default function CombinedDiffViewer({
                           canOpenDiffSectionPreviewToSide({
                             path: section.path,
                             status: section.status,
-                            isCommitSurface: isCommitMode
+                            isCommitSurface: isCommitMode,
+                            canOpenWorkspaceFileBrowser: canOpenWorkspaceFileBrowserForPath(
+                              joinPath(file.filePath, section.path)
+                            )
                           })
                             ? openSectionPreview
                             : undefined

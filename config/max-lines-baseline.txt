@@ -10,7 +10,6 @@ inline src/main/agent-hooks/server.test.ts
 inline src/main/agent-hooks/server.ts
 inline src/main/amp/hook-service.ts
 inline src/main/antigravity/hook-service.ts
-inline src/main/attribution/terminal-attribution.ts
 inline src/main/automations/external-manager.ts
 inline src/main/automations/hermes-cron-output.ts
 inline src/main/browser/agent-browser-bridge.test.ts

@@ -179,6 +179,55 @@ test('keeps two paired browser clients and the host on independent worktrees', a
   }
 })
 
+test('shows only provider-backed creation actions in paired web', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
+  const visibleWorktreeId = await orcaPage.evaluate(
+    () => window.__store?.getState().activeWorktreeId
+  )
+  if (!visibleWorktreeId) {
+    throw new Error('Host worktree was not active before paired web validation')
+  }
+
+  const offer = await createPairingOffer(orcaPage)
+  const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
+  try {
+    await selectWorktree(client, visibleWorktreeId)
+    await expect
+      .poll(() =>
+        client.evaluate(() => {
+          const state = window.__store?.getState()
+          const worktree = state
+            ?.allWorktrees()
+            .find((candidate) => candidate.id === state.activeWorktreeId)
+          const environmentId = worktree?.runtimeOwnerEnvironmentId
+          return environmentId
+            ? state.runtimeStatusByEnvironmentId
+                .get(environmentId)
+                ?.status.capabilities?.includes('browser.screencast.v1') === true
+            : false
+        })
+      )
+      .toBe(true)
+
+    await client.getByRole('button', { name: 'New tab' }).first().click()
+    await expect(client.getByRole('menuitem', { name: /New Terminal/i })).toBeVisible()
+    await expect(client.getByRole('menuitem', { name: /New Browser Tab/i })).toBeVisible()
+    await expect(client.getByRole('menuitem', { name: /New Markdown/i })).toBeVisible()
+    await expect(client.getByRole('menuitem', { name: /Mobile Emulator/i })).toHaveCount(0)
+
+    const screenshotPath = testInfo.outputPath('paired-web-provider-backed-create-menu.png')
+    await client.screenshot({ path: screenshotPath })
+    await testInfo.attach('paired-web-provider-backed-create-menu', {
+      path: screenshotPath,
+      contentType: 'image/png'
+    })
+  } finally {
+    await client.close()
+  }
+})
+
 test('routes Add Project folder browsing through the paired host', async ({
   electronApp,
   orcaPage,
