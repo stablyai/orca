@@ -60,7 +60,11 @@ export function appendFederationSetupEffect(
 }
 
 export function isFederationResidualEffect(effect: FederationEffect): boolean {
-  return Boolean(effect.action?.startsWith('created') || effect.action === 'reused_agent_terminal')
+  return Boolean(
+    effect.action?.startsWith('created') ||
+    effect.action === 'reused_agent_terminal' ||
+    effect.action === 'resumed'
+  )
 }
 
 export function isFederationEffectUnknown(error: unknown, stage: string): boolean {

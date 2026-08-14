@@ -26,6 +26,7 @@ import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { captureRemoteWorkerResumeCheckpoint } from '../../orchestration/worker-session-resume'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
@@ -492,6 +493,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             'worker_done was queued, but the Run-home runtime did not confirm settlement. Verify the Task and Dispatch before retrying.'
           )
         }
+        const resumeCheckpoint = outcome
+          ? captureRemoteWorkerResumeCheckpoint({
+              runtime,
+              db,
+              dispatchId: remoteAttachment.dispatch_id
+            })
+          : undefined
         return {
           relay: {
             messageId: relay.message_id,
@@ -500,7 +508,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             destination: 'run_home',
             accepted: true
           },
-          ...(lifecycle ? { lifecycle } : {})
+          ...(lifecycle ? { lifecycle } : {}),
+          ...(resumeCheckpoint ? { resumeCheckpoint } : {})
         }
       }
       const routing = resolveMessageRun(runtime, {

@@ -18,6 +18,7 @@ import {
 import { FederationAttachStartParams } from './orchestration-federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './orchestration-federation-start-receipt'
 import { prepareFederationAttachmentWorkerStart } from './orchestration-worker-start-validation'
+import { startResumedFederationAttachment } from './orchestration-federation-session-resume'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
   defineMethod({
@@ -29,6 +30,15 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           'invalid_argument',
           'Federated worker attachment requires a durable retry request.'
         )
+      }
+      const db = runtime.getOrchestrationDb()
+      if (params.resumeDispatch) {
+        return startResumedFederationAttachment({
+          params,
+          runtime,
+          db,
+          orchestrationMutation
+        })
       }
       if (params.worktree === 'current' || params.worktree === 'new-child') {
         throw new OrchestrationError(
@@ -50,7 +60,6 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         })
       }
 
-      const db = runtime.getOrchestrationDb()
       db.createRemoteDispatchAttachment({
         dispatchId: params.dispatchId,
         taskId: params.taskId,

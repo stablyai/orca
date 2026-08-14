@@ -166,6 +166,19 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('refactor the auth module')
   })
 
+  it('supersedes every stale orchestration identity after a native resume', () => {
+    const result = buildDispatchPreamble(baseParams({ resumedFromDispatchId: 'ctx_closed_worker' }))
+
+    expect(result).toContain('NATIVE SESSION RESUME BOUNDARY')
+    expect(result).toContain('ctx_closed_worker')
+    expect(result).toContain('task_abc123')
+    expect(result).toContain('ctx_def456')
+    expect(result).toMatch(/supersede[\s\S]*task IDs[\s\S]*Dispatch IDs[\s\S]*coordinator routing/i)
+    expect(result).toContain(
+      'Never send lifecycle messages with an identity from the resumed history'
+    )
+  })
+
   it('uses orca CLI by default when devMode is not set', () => {
     const result = buildDispatchPreamble(baseParams())
     expect(result).toContain('orca orchestration send')

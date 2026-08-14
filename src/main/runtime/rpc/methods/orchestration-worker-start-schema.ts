@@ -21,6 +21,7 @@ export const WorkerStartParams = z.object({
   comment: OptionalString,
   setup: z.enum(['run', 'skip', 'inherit']).optional(),
   terminal: OptionalString,
+  resumeDispatch: OptionalString,
   agent: OptionalString,
   model: OptionalWorkerLaunchPreference,
   effort: OptionalWorkerLaunchPreference,

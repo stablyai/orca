@@ -8,6 +8,7 @@ export type PreambleParams = {
   // prevents stale messages from a previously-failed dispatch from completing
   // or refreshing the retry.
   dispatchId: string
+  resumedFromDispatchId?: string
   dispatchCapability?: string
   taskSpec: string
   coordinatorHandle: string
@@ -57,9 +58,20 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
 
+  const resumeBoundary = params.resumedFromDispatchId
+    ? `
+=== NATIVE SESSION RESUME BOUNDARY ===
+This provider session was resumed from worker Dispatch ${params.resumedFromDispatchId}.
+The current task ID is ${params.taskId} and the current Dispatch ID is ${params.dispatchId}.
+These current values supersede all prior task IDs, Dispatch IDs, coordinator routing addresses,
+completion expectations, and worker lifecycle instructions in the resumed history.
+Never send lifecycle messages with an identity from the resumed history.
+`
+    : ''
+
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
-Your task ID is: ${params.taskId}
+Your task ID is: ${params.taskId}${resumeBoundary}
 
 You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.

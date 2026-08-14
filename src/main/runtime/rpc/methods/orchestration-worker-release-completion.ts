@@ -9,6 +9,7 @@ import {
   captureWorkerOutputArchive,
   type WorkerTerminalTailArchive
 } from '../../orchestration/worker-output-archive'
+import { captureWorkerResumeCheckpoint } from '../../orchestration/worker-session-resume'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { inspectWorkerTerminal } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
@@ -21,6 +22,7 @@ export type WorkerReleaseReceipt = {
   archive: { source: string | null; status: string | null } | null
   recovery?: string
   lastError?: string
+  resumeCheckpoint?: 'captured' | 'unavailable'
 }
 
 type WorkerTerminalReleaseArgs = {
@@ -165,6 +167,15 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
 
+  const resumeCheckpoint = captureWorkerResumeCheckpoint({
+    runtime,
+    db,
+    dispatchId,
+    terminalHandle: resource.terminal_handle,
+    worktreeId: resource.worktree_id as string,
+    observedAfterMs: orchestrationTimestampToMs(worker.created_at)
+  })
+
   const archive = db.getWorkerTerminalArchive(dispatchId)
   let archiveSource = resource.archive_source as 'transcript' | 'terminal' | null
   let archiveStatus: WorkerTerminalArchiveStatus | null = resource.archive_status
@@ -244,7 +255,8 @@ async function completeWorkerTerminalReleaseOnce(
     state: 'released',
     processAction:
       observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
-    archive: archiveSummary(released)
+    archive: archiveSummary(released),
+    resumeCheckpoint
   }
 }
 

@@ -7,7 +7,10 @@ import {
 
 function residualWorkerEffects(effects: WorkerEffect[]): WorkerEffect[] {
   return effects.filter(
-    (effect) => effect.action?.startsWith('created') || effect.action === 'reused_agent_terminal'
+    (effect) =>
+      effect.action?.startsWith('created') ||
+      effect.action === 'reused_agent_terminal' ||
+      effect.action === 'resumed'
   )
 }
 

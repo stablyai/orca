@@ -20,6 +20,7 @@ import {
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
+import { startLocalResumedWorker } from './orchestration-worker-session-resume'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -41,6 +42,27 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           'task_not_found',
           `Task ${params.task} was not found in Run ${run.id}.`
         )
+      }
+
+      if (params.resumeDispatch) {
+        if (db.getFederatedDispatch(params.resumeDispatch)) {
+          return startFederatedWorker({
+            params,
+            runtime,
+            db,
+            runId: run.id,
+            task,
+            orchestrationMutation
+          })
+        }
+        return startLocalResumedWorker({
+          params,
+          runtime,
+          db,
+          runId: run.id,
+          task,
+          orchestrationMutation
+        })
       }
 
       if (params.on) {

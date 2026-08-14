@@ -224,6 +224,16 @@ orca orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body
 
 Remote `current` and `new-child` are intentionally invalid because those words are ambiguous across servers. Use an exact discovered remote worktree selector or `new-top-level` with an explicit remote repo selector.
 
+To continue a settled, closed worker in its native provider conversation, create the follow-up Task and name the old Orca Dispatch. Never supply a raw provider session ID:
+
+```bash
+orca orchestration worker-start --task <new_task_id> --resume-dispatch <closed_dispatch_id> --json
+```
+
+Orca derives the provider family, owning server, and exact worktree from a private durable checkpoint. `--resume-dispatch` cannot combine with `--on`, worktree/creation flags, `--terminal`, `--agent`, `--model`, or `--effort`; it never falls back to a fresh session. The source must have settled and its terminal must be closed. Local checkpoints are finalized by `worker-release`; connected worker servers checkpoint an accepted `worker_done`, but resume still refuses while that old terminal remains live. Missing legacy metadata, unsupported or mismatched providers, changed host/worktree ownership, inaccessible provider state, a prior claim, and older peers all fail closed.
+
+Native resume keeps the same provider conversation and injects a new Dispatch preamble whose current Task ID, Dispatch ID, coordinator route, completion contract, and lifecycle rules supersede stale history. The UI action to continue in a new session is a fresh context handoff and remains the right choice for cross-provider continuation or whenever native resume is unavailable.
+
 The follow-up is structured inbox mail, not prompt injection. The worker's next
 `orchestration check` receives it even when the Dispatch is on another connected Orca server.
 
