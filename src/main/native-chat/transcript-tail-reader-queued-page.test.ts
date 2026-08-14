@@ -11,7 +11,8 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-const AT = (seconds: number): string => `2026-06-01T10:00:${String(seconds).padStart(2, '0')}.000Z`
+// Why: built through Date so a value past 59 rolls into the next minute.
+const AT = (seconds: number): string => new Date(Date.UTC(2026, 5, 1, 10, 0, seconds)).toISOString()
 
 function turn(uuid: string, role: 'user' | 'assistant', text: string, seconds: number): string {
   return `${JSON.stringify({
