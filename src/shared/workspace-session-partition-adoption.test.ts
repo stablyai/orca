@@ -560,7 +560,7 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
         'kept-dormant': {
           root: { type: 'leaf', leafId: keptLeaf },
           activeLeafId: keptLeaf,
-          expandedLeafId: null,
+          expandedLeafId: keptLeaf,
           ptyIdsByLeafId: { [keptLeaf]: 'ssh:one@@pty-50' }
         },
         'tab-1': layout('ssh:one@@pty-51')
@@ -575,7 +575,9 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
     ])
     const keptLayout = adoption.session.terminalLayoutsByTabId['kept-dormant']
     expect(keptLayout?.ptyIdsByLeafId?.[keptLeaf]).toBe('ssh:one@@pty-50')
-    expect(keptLayout?.root).toEqual({ type: 'leaf', leafId: keptLeaf })
+    // Base's top-level layout fields win the per-pane merge; a wholesale replace
+    // would take the source copy's expandedLeafId instead.
+    expect(keptLayout?.expandedLeafId).toBeNull()
     expect(
       adoption.session.tabsByWorktree[WORKTREE_ID]?.find((entry) => entry.id === 'kept-dormant')
         ?.ptyId
@@ -593,6 +595,7 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
     const base = session({
       tabsByWorktree: { [WORKTREE_ID]: [tab('kept-dormant')] },
       terminalLayoutsByTabId: { 'kept-dormant': baseLayout },
+      remoteSessionIdsByTabId: { 'kept-dormant': 'base-session' },
       terminalTopologyRevisionByRepoId: { 'repo-1': 162 }
     })
     const source = session({
@@ -607,7 +610,8 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
           titlesByLeafId: { [keptLeaf]: 'source-title-should-not-win' }
         },
         'tab-1': layout('ssh:one@@pty-52')
-      }
+      },
+      remoteSessionIdsByTabId: { 'kept-dormant': 'source-session-should-not-win' }
     })
 
     const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
@@ -615,6 +619,7 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
     expect(
       adoption.session.terminalLayoutsByTabId['kept-dormant']?.titlesByLeafId?.[keptLeaf]
     ).toBe('base-title')
+    expect(adoption.session.remoteSessionIdsByTabId?.['kept-dormant']).toBe('base-session')
   })
 
   it('keeps a close-emptied worktree closed against a stale pty-bound partition copy', () => {
