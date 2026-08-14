@@ -342,12 +342,43 @@ describe('createMainWindow', () => {
     }
   })
 
-  it('never requests macOS vibrancy or transparency when window blur is enabled (#8482)', () => {
-    for (const [platform, expected] of [
-      ['darwin', { backgroundMaterial: undefined }],
-      ['win32', { backgroundMaterial: 'acrylic' }],
-      ['linux', { backgroundMaterial: undefined }]
-    ] satisfies [NodeJS.Platform, { backgroundMaterial: string | undefined }][]) {
+  it('gives window blur a real material without transparency, and stays opaque when off (#8482, #8797)', () => {
+    for (const [platform, blur, expected] of [
+      [
+        'darwin',
+        false,
+        { vibrancy: undefined, backgroundMaterial: undefined, background: '#ffffff' }
+      ],
+      [
+        'win32',
+        false,
+        { vibrancy: undefined, backgroundMaterial: undefined, background: '#ffffff' }
+      ],
+      [
+        'linux',
+        false,
+        { vibrancy: undefined, backgroundMaterial: undefined, background: '#ffffff' }
+      ],
+      [
+        'darwin',
+        true,
+        { vibrancy: 'under-window', backgroundMaterial: undefined, background: undefined }
+      ],
+      [
+        'win32',
+        true,
+        { vibrancy: undefined, backgroundMaterial: 'acrylic', background: undefined }
+      ],
+      ['linux', true, { vibrancy: undefined, backgroundMaterial: undefined, background: '#ffffff' }]
+    ] satisfies [
+      NodeJS.Platform,
+      boolean,
+      {
+        vibrancy: string | undefined
+        backgroundMaterial: string | undefined
+        background: string | undefined
+      }
+    ][]) {
       browserWindowMock.mockReset()
       const webContents = {
         on: vi.fn(),
@@ -382,16 +413,19 @@ describe('createMainWindow', () => {
       withPlatform(platform, () =>
         createMainWindow({
           getUI: () => ({}),
-          getSettings: () => ({ windowBackgroundBlur: true }),
+          getSettings: () => ({ windowBackgroundBlur: blur }),
           updateUI: vi.fn()
         } as never)
       )
 
       const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
-      expect(browserWindowOptions.vibrancy).toBeUndefined()
+      // Why: `transparent` is what suppressed vibrancy and forced per-frame alpha compositing (#8482).
       expect(browserWindowOptions.transparent).toBeUndefined()
+      expect(browserWindowOptions.vibrancy).toBe(expected.vibrancy)
+      expect(browserWindowOptions.visualEffectState).toBe(expected.vibrancy ? 'active' : undefined)
       expect(browserWindowOptions.backgroundMaterial).toBe(expected.backgroundMaterial)
-      expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
+      // Why: an opaque fill would paint over the material, which is the #8797 no-op.
+      expect(browserWindowOptions.backgroundColor).toBe(expected.background)
     }
   })
 

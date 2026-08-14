@@ -708,6 +708,16 @@ html.native-shell .app-layout {
   height: 100%;
 }
 
+/* Why: macOS vibrancy / Windows acrylic render behind the web contents, so the app root must not
+   paint an opaque fill over them (#8797). Native-shell only — a browser tab has no material behind
+   it, so clearing the fill there would just leak the page background. Chrome keeps its own tokens. */
+html.native-shell.window-blur,
+html.native-shell.window-blur body,
+html.native-shell.window-blur #root,
+html.native-shell.window-blur .app-layout {
+  background: transparent;
+}
+
 /* Tab-group split resize handle — wide hit area, visible center line. */
 .tab-group-split-resize-handle {
   flex-shrink: 0;

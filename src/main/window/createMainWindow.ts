@@ -58,6 +58,7 @@ import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
+import { resolveMainWindowBlurSurface } from './main-window-blur-surface'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
@@ -259,11 +260,13 @@ export function createMainWindow(
     // Why: webview guests expose no safe transcript insertion target; let Cmd/Ctrl+E reach the page instead of dropping dictation text.
     return false
   })
-  const blur = settings?.windowBackgroundBlur ?? false
-  // Why: only Windows acrylic is ever visible; macOS vibrancy+transparent sat behind our opaque background yet
-  // forced per-frame WindowServer alpha compositing (#8482). Applies at creation only, so it needs a restart.
-  const platformBlurOptions =
-    blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
+  // Why: the blur material is the window backdrop, so an opaque fill has to be dropped alongside it (#8797).
+  // Applies at creation only, so it needs a restart.
+  const { backgroundColor, blurOptions } = resolveMainWindowBlurSurface({
+    platform: process.platform,
+    blur: settings?.windowBackgroundBlur ?? false,
+    dark: nativeTheme.shouldUseDarkColors
+  })
 
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
@@ -277,7 +280,7 @@ export function createMainWindow(
     acceptFirstMouse: true,
     // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    ...(backgroundColor ? { backgroundColor } : {}),
     // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
     titleBarStyle:
       process.platform === 'darwin'
@@ -297,7 +300,7 @@ export function createMainWindow(
         }
       : {}),
     icon: getAppIconPath(settings?.appIcon),
-    ...platformBlurOptions,
+    ...blurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,

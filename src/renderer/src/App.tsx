@@ -32,6 +32,7 @@ import {
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import { applyWindowBlurRootClass } from '@/lib/window-blur-root-class'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -1517,6 +1518,11 @@ function App(): React.JSX.Element {
       buildAppFontFamily(settings?.appFontFamily)
     )
   }, [settings?.appFontFamily])
+
+  // Why: vibrancy/acrylic sit behind the web contents; an opaque app root hides them (#8797).
+  useEffect(() => {
+    applyWindowBlurRootClass(document.documentElement, settings?.windowBackgroundBlur ?? false)
+  }, [settings?.windowBackgroundBlur])
 
   // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {
