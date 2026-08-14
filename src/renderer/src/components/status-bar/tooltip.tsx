@@ -49,10 +49,14 @@ export function formatRateLimitResetLabel(window: RateLimitWindow): string | nul
   if (window.resetsAt) {
     return formatResetCountdown(window.resetsAt - Date.now())
   }
-  if (window.resetDescription && /^\d{4}-\d{2}-\d{2}$/.test(window.resetDescription)) {
-    return translate('auto.components.status.bar.tooltip.resetOnDate', 'Resets on {{value0}}', {
-      value0: window.resetDescription
-    })
+  if (window.resetDescription) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(window.resetDescription)) {
+      return translate('auto.components.status.bar.tooltip.resetOnDate', 'Resets on {{value0}}', {
+        value0: window.resetDescription
+      })
+    }
+    // Producers may already send human-readable values ("Thu", "2:30 PM").
+    return window.resetDescription
   }
   return null
 }
