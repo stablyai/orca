@@ -456,7 +456,6 @@ export class Coordinator {
       // Why (§3.4): strippedSpec drops the allow-stale-base line so the worker doesn't read the infra flag as an instruction.
       taskSpec: strippedSpec,
       coordinatorHandle: this.opts.coordinatorHandle,
-      workerHandle: targetHandle,
       devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
       ...(this.runtime.getTerminalOrchestrationCliCommand
         ? { cliCommand: this.runtime.getTerminalOrchestrationCliCommand(targetHandle) }

@@ -11,7 +11,6 @@ export type PreambleParams = {
   dispatchCapability?: string
   taskSpec: string
   coordinatorHandle: string
-  workerHandle: string
   devMode?: boolean
   // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
   // other execution hosts keep their existing bare `orca` bridge.
@@ -57,6 +56,8 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
 
+  // Why: the CLI binds lifecycle authority from the current pane; rendering a
+  // terminal UUID makes model transcription errors an unnecessary input.
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
 Your task ID is: ${params.taskId}
@@ -79,7 +80,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
+  ${cli} orchestration send${capabilityFlag} \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
     --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded \\
@@ -96,7 +97,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # attributes the heartbeat to the specific dispatch context, not just
   # the task, so a straggler heartbeat from a previously-failed dispatch
   # cannot mask a hung retry.
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
+  ${cli} orchestration send${capabilityFlag} \\
     --type heartbeat --subject "alive" \\
     --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
     --phase "<short: investigating|implementing|reviewing|waiting>"
@@ -113,20 +114,20 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # blocks until the coordinator replies, then prints the reply body. If the
   # call times out or disconnects, resume with the returned message ID instead
   # of creating a duplicate question.
-  ${cli} orchestration ask --from ${params.workerHandle}${capabilityFlag} \\
+  ${cli} orchestration ask${capabilityFlag} \\
     --question "<your question>" \\
     --options "<optional,comma,separated>" \\
     --timeout-ms 600000
 
   # Escalate a blocker or failure (pre-completion, when you need the
   # coordinator to do something before you can continue):
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
+  ${cli} orchestration send${capabilityFlag} \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
     --task-id ${params.taskId}
 
   # Check for messages from the coordinator:
-  ${cli} orchestration check --terminal ${params.workerHandle}
+  ${cli} orchestration check
 
 ${postDoneInstructions}`
 
