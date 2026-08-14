@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanNestedRepos } from './nested-repo-discovery'
@@ -302,6 +302,186 @@ describe('scanNestedRepos', () => {
     expect(result.repos.map((repo) => repo.path)).toEqual(['/workspace/active/repo'])
   })
 
+  it('discovers gitignored nested repos when repos-inside-repos is on', async () => {
+    const directories = new Map([
+      ['/workspace', ['.gitignore', 'api', 'poc', 'node_modules']],
+      ['/workspace/api', ['nested']],
+      // Why: the real shape — an ignored plain folder holding an ignored clone.
+      ['/workspace/poc', ['experiment']],
+      ['/workspace/node_modules', ['dep-clone']]
+    ])
+    const files = new Map([['/workspace/.gitignore', 'api/\npoc/\n']])
+    const gitRepos = new Set([
+      '/workspace',
+      '/workspace/api',
+      '/workspace/api/nested',
+      '/workspace/poc/experiment',
+      '/workspace/node_modules/dep-clone'
+    ])
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { includeReposInsideGitRepos: true },
+      filesystem: posixTestFilesystem({ directories, gitRepos, files })
+    })
+
+    // node_modules stays pruned: SKIPPED_DIRS is independent of gitignore.
+    expect(result.repos.map((repo) => repo.path)).toEqual([
+      '/workspace',
+      '/workspace/api',
+      '/workspace/api/nested',
+      '/workspace/poc/experiment'
+    ])
+  })
+
+  it('marks candidates registered in an enclosing .gitmodules', async () => {
+    const directories = new Map([
+      ['/workspace', ['api', 'web']],
+      // Why: the real shape — the submodule is declared by the child repo that
+      // owns it, not by the folder the user selected.
+      ['/workspace/api', ['.gitmodules', 'design', 'clone']],
+      ['/workspace/web', []]
+    ])
+    const files = new Map([
+      [
+        '/workspace/api/.gitmodules',
+        '[submodule "design"]\n\tpath = design\n\turl = git@host:design\n'
+      ]
+    ])
+    const gitRepos = new Set([
+      '/workspace',
+      '/workspace/api',
+      '/workspace/web',
+      '/workspace/api/design',
+      '/workspace/api/clone'
+    ])
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { includeReposInsideGitRepos: true },
+      filesystem: posixTestFilesystem({ directories, gitRepos, files })
+    })
+
+    expect(result.repos).toEqual([
+      { path: '/workspace', displayName: 'workspace', depth: 0 },
+      { path: '/workspace/api', displayName: 'api', depth: 1 },
+      { path: '/workspace/web', displayName: 'web', depth: 1 },
+      // Only the declared path is a submodule; its sibling clone is not.
+      { path: '/workspace/api/clone', displayName: 'clone', depth: 2 },
+      { path: '/workspace/api/design', displayName: 'design', depth: 2, isSubmodule: true }
+    ])
+  })
+
+  it('resolves nested .gitmodules paths against the declaring repo', async () => {
+    const directories = new Map([
+      ['/workspace', ['.gitmodules', 'third-party']],
+      ['/workspace/third-party', ['lib']],
+      ['/workspace/third-party/lib', []]
+    ])
+    const files = new Map([
+      ['/workspace/.gitmodules', '[submodule "lib"]\n\tpath = third-party/lib\n']
+    ])
+    const gitRepos = new Set(['/workspace', '/workspace/third-party/lib'])
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { includeReposInsideGitRepos: true },
+      filesystem: posixTestFilesystem({ directories, gitRepos, files })
+    })
+
+    // Why no parent entry: a submodule is not an importable discovery, so a repo
+    // whose only nested repos are its own submodules stays a plain repo.
+    expect(result.repos).toEqual([
+      { path: '/workspace/third-party/lib', displayName: 'lib', depth: 2, isSubmodule: true }
+    ])
+  })
+
+  it('lists a submodule alongside a real nested clone without letting it stand alone', async () => {
+    const directories = new Map([
+      ['/workspace', ['.gitmodules', 'clone', 'design']],
+      ['/workspace/clone', []],
+      ['/workspace/design', []]
+    ])
+    const files = new Map([['/workspace/.gitmodules', '[submodule "design"]\n\tpath = design\n']])
+    const gitRepos = new Set(['/workspace', '/workspace/clone', '/workspace/design'])
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { includeReposInsideGitRepos: true },
+      filesystem: posixTestFilesystem({ directories, gitRepos, files })
+    })
+
+    // The clone justifies the review, so the parent joins and the submodule is
+    // listed for the user to opt into.
+    expect(result.repos).toEqual([
+      { path: '/workspace', displayName: 'workspace', depth: 0 },
+      { path: '/workspace/clone', displayName: 'clone', depth: 1 },
+      { path: '/workspace/design', displayName: 'design', depth: 1, isSubmodule: true }
+    ])
+  })
+
+  it('reads path only inside a submodule section', async () => {
+    const directories = new Map([
+      ['/workspace', ['.gitmodules', 'clone', 'design']],
+      ['/workspace/clone', []],
+      ['/workspace/design', []]
+    ])
+    // Why: a `path` outside [submodule "…"], or one commented out, is not a
+    // submodule declaration — treating it as one would drop an independent repo
+    // from the default import selection.
+    const files = new Map([
+      [
+        '/workspace/.gitmodules',
+        '[core]\n\tpath = clone\n[submodule "design"]\n\t# path = stale\n\tpath = design\n'
+      ]
+    ])
+    const gitRepos = new Set(['/workspace', '/workspace/clone', '/workspace/design'])
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { includeReposInsideGitRepos: true },
+      filesystem: posixTestFilesystem({ directories, gitRepos, files })
+    })
+
+    expect(result.repos).toEqual([
+      { path: '/workspace', displayName: 'workspace', depth: 0 },
+      { path: '/workspace/clone', displayName: 'clone', depth: 1 },
+      { path: '/workspace/design', displayName: 'design', depth: 1, isSubmodule: true }
+    ])
+  })
+
+  it('excludes repos an agent CLI minted under its own scratch roots', async () => {
+    // Why: a repo registered at such a root is agent-internal, not a user
+    // project (#9388), and it would otherwise arrive pre-ticked for import.
+    const directories = new Map([
+      ['/workspace', ['.codex-tmp', 'api']],
+      ['/workspace/.codex-tmp', ['scratch']],
+      ['/workspace/api', []]
+    ])
+    const gitRepos = new Set(['/workspace', '/workspace/api', '/workspace/.codex-tmp/scratch'])
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { includeReposInsideGitRepos: true },
+      filesystem: posixTestFilesystem({ directories, gitRepos })
+    })
+
+    expect(result.repos.map((repo) => repo.path)).toEqual(['/workspace', '/workspace/api'])
+  })
+
+  it('bounds a repos-inside-repos scan with a default timeout', async () => {
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { includeReposInsideGitRepos: true },
+      filesystem: posixTestFilesystem({
+        directories: new Map([['/workspace', []]]),
+        gitRepos: new Set(['/workspace'])
+      })
+    })
+
+    expect(result.timeoutMs).toBe(10_000)
+  })
+
   it('keeps root-anchored gitignore rules scoped to their base directory', async () => {
     const directories = new Map([
       ['/workspace', ['.gitignore', 'active', 'ignored']],
@@ -380,6 +560,87 @@ describe('scanNestedRepos', () => {
 
     expect(result.selectedPathKind).toBe('git_repo')
     expect(result.repos).toEqual([])
+  })
+
+  it('finds repos nested inside the selected repo when asked', async () => {
+    const root = await tempRoot()
+    await makeGitRepo(root)
+    await mkdir(join(root, 'packages', 'api'), { recursive: true })
+    await mkdir(join(root, 'packages', 'web'), { recursive: true })
+    await makeGitRepo(join(root, 'packages', 'api'))
+    await makeGitRepo(join(root, 'packages', 'web'))
+
+    const result = await scanNestedRepos({
+      path: root,
+      options: { includeReposInsideGitRepos: true }
+    })
+
+    expect(result.selectedPathKind).toBe('git_repo')
+    expect(result.repos.map((repo) => repo.displayName)).toEqual([basename(root), 'api', 'web'])
+    expect(result.repos[0]).toEqual({ path: root, displayName: basename(root), depth: 0 })
+  })
+
+  it('leaves a selected repo with no nested repos out of the candidate list', async () => {
+    const root = await tempRoot()
+    await makeGitRepo(root)
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(join(root, 'README.md'), '')
+
+    const result = await scanNestedRepos({
+      path: root,
+      options: { includeReposInsideGitRepos: true }
+    })
+
+    expect(result.selectedPathKind).toBe('git_repo')
+    expect(result.repos).toEqual([])
+  })
+
+  it('descends into discovered repos when asked', async () => {
+    const root = await tempRoot()
+    await mkdir(join(root, 'service', 'libs', 'sdk'), { recursive: true })
+    await makeGitRepo(join(root, 'service'))
+    await makeGitRepo(join(root, 'service', 'libs', 'sdk'))
+
+    const result = await scanNestedRepos({
+      path: root,
+      options: { includeReposInsideGitRepos: true }
+    })
+
+    expect(result.selectedPathKind).toBe('non_git_folder')
+    expect(result.repos.map((repo) => repo.displayName)).toEqual(['service', 'sdk'])
+  })
+
+  it('does not count the selected repo against the result cap', async () => {
+    const root = await tempRoot()
+    await makeGitRepo(root)
+    await mkdir(join(root, 'one'), { recursive: true })
+    await mkdir(join(root, 'two'), { recursive: true })
+    await makeGitRepo(join(root, 'one'))
+    await makeGitRepo(join(root, 'two'))
+
+    const result = await scanNestedRepos({
+      path: root,
+      options: { includeReposInsideGitRepos: true, maxRepos: 1 }
+    })
+
+    expect(result.truncated).toBe(true)
+    expect(result.repos.map((repo) => repo.displayName)).toEqual([basename(root), 'one'])
+  })
+
+  it('includes the selected repo in progress snapshots', async () => {
+    const root = await tempRoot()
+    await makeGitRepo(root)
+    await mkdir(join(root, 'child'), { recursive: true })
+    await makeGitRepo(join(root, 'child'))
+    const snapshots: string[][] = []
+
+    await scanNestedRepos({
+      path: root,
+      options: { includeReposInsideGitRepos: true },
+      onProgress: (scan) => snapshots.push(scan.repos.map((repo) => repo.displayName))
+    })
+
+    expect(snapshots).toEqual([[basename(root), 'child']])
   })
 
   it.skipIf(process.platform === 'win32')(

@@ -498,6 +498,39 @@ describe('projectGroups IPC validation', () => {
     )
   })
 
+  it('imports the nested repos of a parent that is itself a git repo', async () => {
+    // Why: the import re-scan must opt into repos-inside-repos. Without it the
+    // re-scan stops at the parent, returns no candidates, and rejects every path
+    // the user just reviewed -- silently undoing the whole point of the feature.
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path.endsWith('/.git')) {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
+    )
+    mockStore.addRepo.mockImplementation((repo: { path: string }) => ({
+      id: `repo-${repo.path}`,
+      ...repo
+    }))
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: ['/srv/platform', '/srv/platform/api'],
+      connectionId: 'conn-1',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({ importedCount: 2, failedCount: 0 })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/srv/platform/api' })
+    )
+  })
+
   it('does not reuse a completed nested scan id for a different SSH parent path', async () => {
     const group = {
       id: 'group-1',

@@ -78,7 +78,8 @@ const ProjectGroupMoveProject = z.object({
 })
 
 const ProjectGroupScanNested = z.object({
-  path: requiredString('Missing folder path')
+  path: requiredString('Missing folder path'),
+  includeReposInsideGitRepos: z.boolean().optional()
 })
 
 const ProjectGroupImportNested = z.discriminatedUnion('mode', [
@@ -160,7 +161,10 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'projectGroup.scanNested',
     params: ProjectGroupScanNested,
-    handler: async (params, { runtime }) => runtime.scanNestedRepos(params.path)
+    handler: async (params, { runtime }) =>
+      runtime.scanNestedRepos(params.path, {
+        includeReposInsideGitRepos: params.includeReposInsideGitRepos
+      })
   }),
   defineMethod({
     name: 'projectGroup.importNested',

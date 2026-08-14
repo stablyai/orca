@@ -10,6 +10,8 @@ import {
   WorktreeCardMetaBadges
 } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
+import { WorktreeCardChangeCountBadge } from './WorktreeCardChangeCountBadge'
+import { WorktreeCardChangeCountDetails } from './WorktreeCardChangeCountDetails'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 export function buildWorktreeCardPresentation(card: WorktreeCardController) {
@@ -35,6 +37,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     cacheStartedAt,
     hasDetails,
     hasPorts,
+    changeCount,
+    hasTrailingRowContent,
     showStatus,
     showInlineAgentList,
     showLineageChildChip,
@@ -90,8 +94,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
   const showCombinedStatusSlot = showStatus
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
-  const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
-  const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
+  const showMetaRowDetails = !newCardStyle && !compactCards && hasTrailingRowContent
+  const showTitleRowIndicators = (newCardStyle || compactCards) && hasTrailingRowContent
   // Why: grouped views can hide the repo badge; don't reserve a blank metadata lane unless there's real content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
@@ -125,6 +129,16 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       ? trimmedVisibleCardTitle
       : undefined
   const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
+  // Why: undefined, not an empty fragment — the hover's "nothing to show" guard
+  // tests this prop, and a truthy wrapper would defeat it. Each caller keeps its
+  // own ports condition, which is not the same across the three hovers.
+  const renderIndicatorDetails = (showPortsSection: boolean): React.ReactNode =>
+    changeCount > 0 || showPortsSection ? (
+      <>
+        <WorktreeCardChangeCountDetails worktreeId={worktree.id} />
+        {showPortsSection ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+      </>
+    ) : undefined
   const hasHoverDetails =
     newCardStyle &&
     (hasWorktreeCardDetails({
@@ -137,13 +151,14 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       cliProvenance: metaCliProvenance
     }) ||
       workspacePorts.length > 0 ||
+      changeCount > 0 ||
       hasHoverIdentity)
   // Why: the parent row owns metadata hover; don't stack the title's truncation tooltip on the details popover.
   const titleWrapper = newCardStyle
     ? hasHoverDetails
       ? (title: React.ReactElement): React.ReactElement => title
       : undefined
-    : compactCards && (showBranchIdentityHover || hasDetails || hasPorts)
+    : compactCards && (showBranchIdentityHover || hasTrailingRowContent)
       ? (title: React.ReactElement): React.ReactElement => (
           <WorktreeCardDetailsHover
             issue={metaIssue}
@@ -157,7 +172,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
             branchName={showBranchIdentityHover ? branch : undefined}
             workspaceTitle={worktree.displayName}
             identityOrder="branch-first"
-            detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+            indicatorDetails={renderIndicatorDetails(hasPorts)}
             openDelay={100}
             // Why: compact mode also renders the plug/badge hover root; sharing one open-state made hovering the
             // plug force-open the wider title card and race it closed (#9304), so let this title hover own its state.
@@ -197,26 +212,28 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       ? getNewCardStyleParentContentMarginLeft(contentIndent)
       : 0
   const cardStyle = cardPaddingLeft ? { paddingLeft: cardPaddingLeft } : undefined
-  const detailsAndPortsContent =
-    hasDetails || hasPorts ? (
-      <div className="flex shrink-0 items-center gap-1">
-        {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} />}
-        {hasDetails && (
-          <WorktreeCardMetaBadges
-            issue={metaIssue}
-            linearIssue={metaLinearIssue}
-            jiraIssue={metaJiraIssue}
-            review={newCardStyle ? null : metaReview}
-            comment={metaComment}
-            automationProvenance={metaAutomationProvenance}
-            cliProvenance={metaCliProvenance}
-            className="ml-0 pr-0"
-          />
-        )}
-      </div>
-    ) : null
+  const detailsAndPortsContent = hasTrailingRowContent ? (
+    <div className="flex shrink-0 items-center gap-1">
+      <WorktreeCardChangeCountBadge worktreeId={worktree.id} />
+      {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} />}
+      {hasDetails && (
+        <WorktreeCardMetaBadges
+          issue={metaIssue}
+          linearIssue={metaLinearIssue}
+          jiraIssue={metaJiraIssue}
+          review={newCardStyle ? null : metaReview}
+          comment={metaComment}
+          automationProvenance={metaAutomationProvenance}
+          cliProvenance={metaCliProvenance}
+          className="ml-0 pr-0"
+        />
+      )}
+    </div>
+  ) : null
   const detailsAndPorts =
-    detailsAndPortsContent && !newCardStyle ? (
+    // Why: the hover now explains the change count too, so a row carrying only a
+    // count still has something to show.
+    detailsAndPortsContent && !newCardStyle && hasTrailingRowContent ? (
       <WorktreeCardDetailsHover
         issue={metaIssue}
         linearIssue={metaLinearIssue}
@@ -226,7 +243,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}
         automationHostId={worktree.hostId}
-        detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+        indicatorDetails={renderIndicatorDetails(hasPorts)}
         hoverControl={detailsHoverControl}
         onEditIssue={affiliateListMode ? undefined : handleEditIssue}
         onEditComment={affiliateListMode ? undefined : handleEditComment}
@@ -276,6 +293,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     hoverBranchName,
     hoverWorkspaceTitle,
     hasHoverDetails,
+    renderIndicatorDetails,
     titleWrapper,
     parentContentMarginLeft,
     cardStyle,

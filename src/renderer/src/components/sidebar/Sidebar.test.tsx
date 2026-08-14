@@ -23,6 +23,13 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector(mocks.state)
 }))
 
+// Why: Sidebar mounts the change-count sweep, which asks this module what the
+// list rendered. The real one reads the whole store via getState(), which the
+// selector-only mock above does not provide.
+vi.mock('./visible-worktrees', () => ({
+  getVisibleWorktreeIds: () => []
+}))
+
 vi.mock('@/hooks/useSidebarResize', () => ({
   useSidebarResize: () => ({
     containerRef: { current: null },

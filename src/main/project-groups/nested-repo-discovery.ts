@@ -7,6 +7,8 @@ import type {
   NestedRepoScanOptions,
   NestedRepoScanResult
 } from '../../shared/project-group-types'
+import { isAgentScratchRepoRootPath } from '../../shared/agent-scratch-worktrees'
+import { hasImportableNestedRepo } from '../../shared/nested-repo-candidates'
 import { isGitRepo } from '../git/repo'
 
 type NestedRepoDirectoryEntry = {
@@ -31,17 +33,25 @@ type IgnoreRule = {
   baseSegments: string[]
 }
 
+// A .gitmodules entry, resolved against the repo root that declared it.
+type SubmoduleRule = {
+  segments: string[]
+  baseSegments: string[]
+}
+
 type TraversalFolder = {
   path: string
   depth: number
   segments: string[]
   ignoreRules: IgnoreRule[]
+  submoduleRules: SubmoduleRule[]
 }
 
 type NormalizedNestedRepoScanOptions = {
   maxDepth: number
   maxRepos: number
   timeoutMs: number | null
+  includeReposInsideGitRepos: boolean
 }
 
 const DEFAULT_MAX_DEPTH = 3
@@ -61,8 +71,15 @@ const SKIPPED_DIRS = new Set([
 
 const VCS_METADATA_DIRS = new Set(['.git', '.svn', '.hg', '.jj', '.sl', '.repo', 'CVS'])
 
+// Why: repos-inside-repos drops gitignore pruning and the local add path sends no
+// timeout, so without a wall clock of its own that scan is unbounded.
+const REPOS_INSIDE_REPOS_TIMEOUT_MS = 10_000
+
 function normalizeScanOptions(options: unknown): NormalizedNestedRepoScanOptions {
   const raw = options && typeof options === 'object' ? (options as NestedRepoScanOptions) : {}
+  if (raw.includeReposInsideGitRepos === true && raw.timeoutMs === undefined) {
+    return normalizeScanOptions({ ...raw, timeoutMs: REPOS_INSIDE_REPOS_TIMEOUT_MS })
+  }
   return {
     maxDepth:
       typeof raw.maxDepth === 'number' && Number.isFinite(raw.maxDepth)
@@ -77,7 +94,8 @@ function normalizeScanOptions(options: unknown): NormalizedNestedRepoScanOptions
         ? null
         : typeof raw.timeoutMs === 'number' && Number.isFinite(raw.timeoutMs)
           ? Math.max(500, Math.min(30_000, Math.floor(raw.timeoutMs)))
-          : null
+          : null,
+    includeReposInsideGitRepos: raw.includeReposInsideGitRepos === true
   }
 }
 
@@ -141,7 +159,7 @@ function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRul
     .filter((rule) => rule.pattern.length > 0)
 }
 
-function isIgnoredByRules(name: string, segments: string[], rules: IgnoreRule[]): boolean {
+function matchesIgnoreRules(segments: string[], rules: IgnoreRule[]): boolean {
   let ignored = false
   for (const rule of rules) {
     if (segments.length <= rule.baseSegments.length) {
@@ -156,7 +174,74 @@ function isIgnoredByRules(name: string, segments: string[], rules: IgnoreRule[])
       ignored = !rule.negate
     }
   }
-  return ignored || shouldSkipDirectory(name, segments.length - 1)
+  return ignored
+}
+
+const GITMODULES_SECTION_PATTERN = /^\s*\[\s*([A-Za-z0-9.-]+)(?:\s+"[^"]*")?\s*\]/
+const GITMODULES_PATH_PATTERN = /^\s*path\s*=\s*(.+?)\s*$/
+
+function parseGitmodulesRules(content: string, baseSegments: string[]): SubmoduleRule[] {
+  const rules: SubmoduleRule[] = []
+  // Why scoped: `path` only declares a submodule under [submodule "…"]; accepted
+  // anywhere, a hand-edited [core] path drops an independent repo from the import.
+  let inSubmoduleSection = false
+  for (const rawLine of content.split(/\r?\n/)) {
+    if (/^\s*[#;]/.test(rawLine)) {
+      continue
+    }
+    const section = GITMODULES_SECTION_PATTERN.exec(rawLine)
+    if (section) {
+      // Section names are case-insensitive in git config.
+      inSubmoduleSection = section[1].toLowerCase() === 'submodule'
+    }
+    if (!inSubmoduleSection) {
+      continue
+    }
+    // Git config allows the variable on the header's own line, so parse past it.
+    const value = GITMODULES_PATH_PATTERN.exec(
+      section ? rawLine.slice(section[0].length) : rawLine
+    )?.[1]
+    if (value === undefined) {
+      continue
+    }
+    const segments = value.replace(/\\/g, '/').split('/').filter(Boolean)
+    if (segments.length > 0) {
+      rules.push({ segments, baseSegments })
+    }
+  }
+  return rules
+}
+
+function isSubmodulePath(segments: string[], rules: SubmoduleRule[]): boolean {
+  return rules.some(
+    (rule) =>
+      segments.length === rule.baseSegments.length + rule.segments.length &&
+      rule.segments.every(
+        (segment, index) => segment === segments[rule.baseSegments.length + index]
+      )
+  )
+}
+
+async function readGitmodulesRules(args: {
+  folderPath: string
+  entries: NestedRepoDirectoryEntry[]
+  filesystem: NestedRepoScanFilesystem
+  baseSegments: string[]
+}): Promise<SubmoduleRule[]> {
+  if (
+    !args.filesystem.readTextFile ||
+    !args.entries.some((entry) => entry.name === '.gitmodules')
+  ) {
+    return []
+  }
+  try {
+    return parseGitmodulesRules(
+      await args.filesystem.readTextFile(args.filesystem.joinPath(args.folderPath, '.gitmodules')),
+      args.baseSegments
+    )
+  } catch {
+    return []
+  }
 }
 
 async function readGitignoreRules(args: {
@@ -246,19 +331,41 @@ export async function scanNestedRepos(args: {
     stopped = true
     return true
   }
+  const selectedPathIsGitRepo = await filesystem.isSelectedPathGitRepo(args.path)
+  const selectedPathKind: NestedRepoScanResult['selectedPathKind'] = selectedPathIsGitRepo
+    ? 'git_repo'
+    : 'non_git_folder'
+  // Why: the picked repo is not a discovery, so it never spends the maxRepos
+  // budget and joins only once a nested repo turns up — otherwise the plain
+  // "add this repo" path would open a review with nothing to review.
+  const withSelectedRepoCandidate = (): NestedRepoScanResult => {
+    const result = buildResult(selectedPathKind)
+    // Why importable and not merely present: a repo whose only nested repos are
+    // its own submodules is a plain repo, and must not be turned into a review.
+    if (!selectedPathIsGitRepo || !hasImportableNestedRepo(result.repos)) {
+      return result
+    }
+    return {
+      ...result,
+      repos: [
+        { path: args.path, displayName: filesystem.basename(args.path), depth: 0 },
+        ...result.repos
+      ]
+    }
+  }
   const emitProgress = (): void => {
-    args.onProgress?.(buildResult('non_git_folder'))
+    args.onProgress?.(withSelectedRepoCandidate())
   }
 
-  if (await filesystem.isSelectedPathGitRepo(args.path)) {
+  if (selectedPathIsGitRepo && !options.includeReposInsideGitRepos) {
     return buildResult('git_repo')
   }
   if (noteAbort()) {
-    return buildResult('non_git_folder')
+    return withSelectedRepoCandidate()
   }
 
   const foldersToTraverse: TraversalFolder[] = [
-    { path: args.path, depth: 0, segments: [], ignoreRules: [] }
+    { path: args.path, depth: 0, segments: [], ignoreRules: [], submoduleRules: [] }
   ]
   let nextFolderIndex = 0
 
@@ -288,9 +395,22 @@ export async function scanNestedRepos(args: {
     if (noteAbort()) {
       break
     }
-    const currentIgnoreRules = [
-      ...currentFolder.ignoreRules,
-      ...(await readGitignoreRules({
+    // Why: a parent gitignores exactly the independent clones it holds, so here the
+    // ignore file hides the repos being looked for. The other bounds cap the cost.
+    const currentIgnoreRules = options.includeReposInsideGitRepos
+      ? []
+      : [
+          ...currentFolder.ignoreRules,
+          ...(await readGitignoreRules({
+            folderPath: currentFolder.path,
+            entries,
+            filesystem,
+            baseSegments: currentFolder.segments
+          }))
+        ]
+    const currentSubmoduleRules = [
+      ...currentFolder.submoduleRules,
+      ...(await readGitmodulesRules({
         folderPath: currentFolder.path,
         entries,
         filesystem,
@@ -315,7 +435,10 @@ export async function scanNestedRepos(args: {
         break
       }
       const childSegments = [...currentFolder.segments, name]
-      if (isIgnoredByRules(name, childSegments, currentIgnoreRules)) {
+      if (shouldSkipDirectory(name, childSegments.length - 1)) {
+        continue
+      }
+      if (matchesIgnoreRules(childSegments, currentIgnoreRules)) {
         continue
       }
       const childPath = filesystem.joinPath(currentFolder.path, name)
@@ -325,16 +448,25 @@ export async function scanNestedRepos(args: {
       if (noteAbort()) {
         break
       }
+      // Why excluded rather than listed: a repo minted by an agent CLI under one
+      // of these roots is agent-internal, not a user project (#9388).
+      if (childHasGitMarker && isAgentScratchRepoRootPath(childPath)) {
+        continue
+      }
       if (childHasGitMarker) {
         repos.push({
           path: childPath,
           displayName: filesystem.basename(childPath),
-          depth: currentFolder.depth + 1
+          depth: currentFolder.depth + 1,
+          // Spread so a plain repo's candidate shape stays untouched.
+          ...(isSubmodulePath(childSegments, currentSubmoduleRules) ? { isSubmodule: true } : {})
         })
         emitProgress()
-        // Project Groups organize sibling repos; nested repos stay hidden until a
-        // later UI can explain and select submodule-style layouts explicitly.
-        continue
+        // Project Groups organize sibling repos, so a discovered repo ends the
+        // branch unless the caller asked for repos inside repos.
+        if (!options.includeReposInsideGitRepos) {
+          continue
+        }
       }
       // Why: group import should prefer nearby sibling repos over spending the
       // bounded scan inside an alphabetically early, deeply nested folder.
@@ -343,11 +475,12 @@ export async function scanNestedRepos(args: {
           path: childPath,
           depth: currentFolder.depth + 1,
           segments: childSegments,
-          ignoreRules: currentIgnoreRules
+          ignoreRules: currentIgnoreRules,
+          submoduleRules: currentSubmoduleRules
         })
       }
     }
   }
 
-  return buildResult('non_git_folder')
+  return withSelectedRepoCandidate()
 }

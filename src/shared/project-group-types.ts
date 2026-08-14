@@ -21,12 +21,19 @@ export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number
   timeoutMs?: number | null
+  /** Keep scanning when the selected path is itself a repo, and descend into
+   *  discovered repos. Off by default: the plain "add this repo" path must not
+   *  pay for a traversal it has no use for. */
+  includeReposInsideGitRepos?: boolean
 }
 
 export type NestedRepoCandidate = {
   path: string
   displayName: string
   depth: number
+  // Set when an enclosing repo's .gitmodules registers this path, so the import
+  // review can say the parent owns the checked-out commit.
+  isSubmodule?: boolean
 }
 
 export type NestedRepoScanResult = {

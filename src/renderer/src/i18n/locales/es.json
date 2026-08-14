@@ -5140,6 +5140,21 @@
           "3b7ea51793": "Borrar búsqueda",
           "7f1c2e94a5": "El texto de búsqueda es demasiado largo: el tablero no está filtrado",
           "9a4d0f6b21": "Demasiado largo"
+        },
+        "WorktreeCardChangeCountBadge": {
+          "oneUncommittedChange": "1 cambio sin confirmar",
+          "uncommittedChanges": "{{value0}} cambios sin confirmar",
+          "atLeastUncommittedChanges": "Al menos {{value0}} cambios sin confirmar"
+        },
+        "WorktreeCardChangeCountDetails": {
+          "heading": "Cambios sin confirmar",
+          "oneStaged": "1 preparado",
+          "staged": "{{value0}} preparados",
+          "unstaged": "{{value0}} sin preparar",
+          "untracked": "{{value0}} sin seguimiento",
+          "oneSubmodule": "1 submódulo",
+          "submodules": "{{value0}} submódulos",
+          "cappedNotice": "Solo se cuentan los primeros {{value0}} cambios."
         }
       },
       "shared": {
@@ -11469,7 +11484,8 @@
           "f7e1170567": "seleccionado",
           "ea54c7bf8f": "de",
           "91b5bcadb6": "Seleccionar todo",
-          "929734aea5": "Deseleccionar todo"
+          "929734aea5": "Deseleccionar todo",
+          "3f906671a9": "Submódulo"
         },
         "NestedRepoScanLimitNotice": {
           "642a43c139": "Límites de escaneo de repositorios anidados",

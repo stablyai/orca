@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
-import { WorktreeCardPortsDetails } from './WorktreeCardPorts'
 import { WorktreeCardParentContent } from './worktree-card-parent-content'
 import { buildWorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
@@ -61,8 +60,14 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     showRenameErrorDialog,
     setShowRenameErrorDialog
   } = card
-  const { titleOnlyCard, hasHoverDetails, hoverBranchName, hoverWorkspaceTitle, cardStyle } =
-    presentation
+  const {
+    titleOnlyCard,
+    hasHoverDetails,
+    hoverBranchName,
+    hoverWorkspaceTitle,
+    cardStyle,
+    renderIndicatorDetails
+  } = presentation
 
   const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />
 
@@ -86,9 +91,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         branchName={hoverBranchName}
         workspaceTitle={hoverWorkspaceTitle}
         workspaceTitleRenameDisabled={isDeleting || affiliateListMode}
-        detailsAfter={
-          workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
-        }
+        indicatorDetails={renderIndicatorDetails(workspacePorts.length > 0)}
         openDelay={100}
         hoverControl={detailsHoverControl}
         onRenameWorkspaceTitle={affiliateListMode ? undefined : handleRenameTitle}

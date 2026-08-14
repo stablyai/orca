@@ -4,6 +4,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
+import { useWorktreeChangeCount } from './use-worktree-change-count'
 import type { WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-details'
@@ -190,6 +191,12 @@ export function useWorktreeCardSecondaryDetails({
     cliProvenance: metaCliProvenance
   })
   const hasPorts = showPorts && workspacePorts.length > 0
+  // Why: the change count shares the row's trailing cluster instead of the
+  // leading status lane, which activity, review, branch and unread already share.
+  const changeCount = useWorktreeChangeCount(worktree.id)
+  // Why: a dirty workspace with no issue, review or port still needs the trailing
+  // cluster rendered, or its count has nowhere to go.
+  const hasTrailingRowContent = hasDetails || hasPorts || changeCount > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
   // Why: derived from the settings the card already subscribes to — a third store
   // subscription for this one field costs a listener per card on every store write.
@@ -219,6 +226,8 @@ export function useWorktreeCardSecondaryDetails({
     handleOpenLinearIssueInOrca,
     hasDetails,
     hasPorts,
+    changeCount,
+    hasTrailingRowContent,
     cacheStartedAt,
     cacheTtlMs
   }

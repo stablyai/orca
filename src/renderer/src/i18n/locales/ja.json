@@ -5140,6 +5140,21 @@
           "3b7ea51793": "検索をクリア",
           "7f1c2e94a5": "検索テキストが長すぎます — ボードは絞り込まれていません",
           "9a4d0f6b21": "長すぎます"
+        },
+        "WorktreeCardChangeCountBadge": {
+          "oneUncommittedChange": "未コミットの変更 1 件",
+          "uncommittedChanges": "未コミットの変更 {{value0}} 件",
+          "atLeastUncommittedChanges": "未コミットの変更 {{value0}} 件以上"
+        },
+        "WorktreeCardChangeCountDetails": {
+          "heading": "未コミットの変更",
+          "oneStaged": "ステージ済み 1 件",
+          "staged": "ステージ済み {{value0}} 件",
+          "unstaged": "未ステージ {{value0}} 件",
+          "untracked": "未追跡 {{value0}} 件",
+          "oneSubmodule": "サブモジュール 1 件",
+          "submodules": "サブモジュール {{value0}} 件",
+          "cappedNotice": "最初の {{value0}} 件の変更のみを集計しています。"
         }
       },
       "shared": {
@@ -11469,7 +11484,8 @@
           "f7e1170567": "選択中",
           "ea54c7bf8f": "の",
           "91b5bcadb6": "すべて選択",
-          "929734aea5": "すべての選択を解除します"
+          "929734aea5": "すべての選択を解除します",
+          "3f906671a9": "サブモジュール"
         },
         "NestedRepoScanLimitNotice": {
           "642a43c139": "ネストされたリポジトリのスキャン制限",

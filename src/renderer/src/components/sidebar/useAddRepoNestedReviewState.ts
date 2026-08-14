@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { isImportableNestedRepoCandidate } from '../../../../shared/nested-repo-candidates'
 import type { NestedRepoTelemetryRuntimeKind } from '../../../../shared/nested-repo-telemetry'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import { defaultProjectGroupNameForPath, type AddRepoDialogStep } from './add-repo-dialog-types'
@@ -75,7 +76,12 @@ export function useAddRepoNestedReviewState({
   const showNestedRepoReview = useCallback(
     (args: ShowNestedRepoReviewArgs): void => {
       setNestedScan(args.scan)
-      setNestedSelectedPaths(new Set(args.scan.repos.map((repo) => repo.path)))
+      // Why filtered: a submodule is opt-in. Pre-ticking it would register it as a
+      // top-level project on one click, while its enclosing repo still owns its
+      // checked-out commit.
+      setNestedSelectedPaths(
+        new Set(args.scan.repos.filter(isImportableNestedRepoCandidate).map((repo) => repo.path))
+      )
       setNestedGroupName(
         defaultProjectGroupNameForPath(args.scan.selectedPath || args.selectedPath)
       )

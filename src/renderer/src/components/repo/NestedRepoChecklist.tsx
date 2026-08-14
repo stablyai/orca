@@ -1,9 +1,19 @@
 import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { GitBranch } from 'lucide-react'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
+import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
+
+// Why: a nested repo's name alone doesn't say where it came from — a submodule or
+// a stray clone reads as an unfamiliar project until its location is visible.
+function repoLocationLabel(rootPath: string, repoPath: string): string {
+  const relative = relativePathInsideRoot(rootPath, repoPath)
+  // The selected folder is its own root, so it shows the absolute path instead.
+  return relative === '' || relative === null ? repoPath : `./${relative}`
+}
 
 function NestedRepoSelectAllRow({
   total,
@@ -93,10 +103,10 @@ export function NestedRepoChecklist({
       <ul className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {scan.repos.map((repo) => (
           <li key={repo.path}>
-            <label className="flex min-w-0 max-w-full cursor-pointer items-center gap-2.5 overflow-hidden border-t border-border px-3 py-2 text-sm hover:bg-accent">
+            <label className="flex min-w-0 max-w-full cursor-pointer items-start gap-2.5 overflow-hidden border-t border-border px-3 py-2 text-sm hover:bg-accent">
               <input
                 type="checkbox"
-                className="size-3.5"
+                className="mt-0.5 size-3.5"
                 checked={selectedPaths.has(repo.path)}
                 disabled={disabled}
                 onChange={(event) => {
@@ -111,14 +121,32 @@ export function NestedRepoChecklist({
                   })
                 }}
               />
-              <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
-              <span
-                className={cn(
-                  'min-w-0 flex-1 truncate text-[13px] font-medium',
-                  selectedPaths.has(repo.path) ? 'text-foreground' : 'text-muted-foreground'
-                )}
-              >
-                {displayLabelsByPath.get(getRepoDisplayLabelKey(repo)) ?? repo.displayName}
+              <GitBranch className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    className={cn(
+                      'min-w-0 truncate text-[13px] font-medium',
+                      selectedPaths.has(repo.path) ? 'text-foreground' : 'text-muted-foreground'
+                    )}
+                  >
+                    {displayLabelsByPath.get(getRepoDisplayLabelKey(repo)) ?? repo.displayName}
+                  </span>
+                  {repo.isSubmodule ? (
+                    <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-normal">
+                      {translate(
+                        'auto.components.repo.NestedRepoChecklist.3f906671a9',
+                        'Submodule'
+                      )}
+                    </Badge>
+                  ) : null}
+                </span>
+                <span
+                  className="min-w-0 truncate font-mono text-xs text-muted-foreground"
+                  title={repo.path}
+                >
+                  {repoLocationLabel(scan.selectedPath, repo.path)}
+                </span>
               </span>
             </label>
           </li>

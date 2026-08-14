@@ -5152,6 +5152,21 @@
           "3b7ea51793": "清除搜索",
           "7f1c2e94a5": "搜索文本过长 — 看板未被筛选",
           "9a4d0f6b21": "过长"
+        },
+        "WorktreeCardChangeCountBadge": {
+          "oneUncommittedChange": "1 个未提交的更改",
+          "uncommittedChanges": "{{value0}} 个未提交的更改",
+          "atLeastUncommittedChanges": "至少 {{value0}} 个未提交的更改"
+        },
+        "WorktreeCardChangeCountDetails": {
+          "heading": "未提交的更改",
+          "oneStaged": "已暂存 1 个",
+          "staged": "已暂存 {{value0}} 个",
+          "unstaged": "未暂存 {{value0}} 个",
+          "untracked": "未跟踪 {{value0}} 个",
+          "oneSubmodule": "1 个子模块",
+          "submodules": "{{value0}} 个子模块",
+          "cappedNotice": "仅统计前 {{value0}} 个更改。"
         }
       },
       "shared": {
@@ -11489,7 +11504,8 @@
           "f7e1170567": "已选择",
           "ea54c7bf8f": "的",
           "91b5bcadb6": "选择全部",
-          "929734aea5": "取消全选"
+          "929734aea5": "取消全选",
+          "3f906671a9": "子模块"
         },
         "NestedRepoScanLimitNotice": {
           "642a43c139": "嵌套存储库扫描限制",

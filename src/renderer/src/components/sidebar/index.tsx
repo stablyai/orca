@@ -12,6 +12,7 @@ import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
+import { useSidebarChangeCountSync } from './use-sidebar-change-count-sync'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
@@ -56,6 +57,9 @@ function Sidebar({
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
+  // Why: gated on the sidebar being open, since a collapsed sidebar has no row
+  // to show a count on and the sweep costs one `git status` per workspace.
+  useSidebarChangeCountSync({ enabled: sidebarOpen && startupWorktreeRefreshCompleted })
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,

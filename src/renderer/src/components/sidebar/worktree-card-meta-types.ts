@@ -51,7 +51,12 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   identityOrder?: 'workspace-first' | 'branch-first'
   workspaceTitleRenameDisabled?: boolean
   automationHostId?: ExecutionHostId
-  detailsAfter?: React.ReactNode
+  /**
+   * Sections explaining the row's indicator icons (changes, ports). Rendered
+   * right after the identity header so the popover reads in the same order the
+   * icons sit in, left to right.
+   */
+  indicatorDetails?: React.ReactNode
   openDelay?: number
   closeDelay?: number
   onRenameWorkspaceTitle?: (displayName: string) => Promise<void> | void

@@ -4768,6 +4768,21 @@
           "d1113f4660": "Failed to open browser",
           "fed49903c9": "{{value0}} live {{value1}}"
         },
+        "WorktreeCardChangeCountBadge": {
+          "oneUncommittedChange": "1 uncommitted change",
+          "uncommittedChanges": "{{value0}} uncommitted changes",
+          "atLeastUncommittedChanges": "At least {{value0}} uncommitted changes"
+        },
+        "WorktreeCardChangeCountDetails": {
+          "heading": "Uncommitted Changes",
+          "oneStaged": "1 staged",
+          "staged": "{{value0}} staged",
+          "unstaged": "{{value0}} unstaged",
+          "untracked": "{{value0}} untracked",
+          "oneSubmodule": "1 submodule",
+          "submodules": "{{value0}} submodules",
+          "cappedNotice": "Only the first {{value0}} changes are counted."
+        },
         "WorktreeContextMenu": {
           "c39c37676a": "Create a group and move this project into it.",
           "6664418e98": "New Project Group",
@@ -12164,7 +12179,8 @@
           "f7e1170567": "selected",
           "ea54c7bf8f": "of",
           "91b5bcadb6": "Select all",
-          "929734aea5": "Deselect all"
+          "929734aea5": "Deselect all",
+          "3f906671a9": "Submodule"
         },
         "NestedRepoScanLimitNotice": {
           "642a43c139": "Nested repository scan limits",

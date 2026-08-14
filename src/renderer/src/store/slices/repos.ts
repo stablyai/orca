@@ -204,6 +204,9 @@ type NestedRepoScanControls = {
   scanId?: string
   onProgress?: (scan: NestedRepoScanResult) => void
   runtimeEnvironmentId?: string | null
+  /** Look for repos inside the selected folder even when that folder is itself
+   *  a repo. Callers that only need "is this one repo?" leave it off. */
+  includeReposInsideGitRepos?: boolean
 }
 
 type NestedRepoScanCancelOptions = {
@@ -2692,7 +2695,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             await window.api.projectGroups.scanNested({
               path,
               connectionId,
-              scanId: controls?.scanId
+              scanId: controls?.scanId,
+              options: { includeReposInsideGitRepos: controls?.includeReposInsideGitRepos === true }
             })
           )
         } finally {
@@ -2703,7 +2707,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         await callRuntimeRpc<NestedRepoScanResult>(
           target,
           'projectGroup.scanNested',
-          { path },
+          { path, includeReposInsideGitRepos: controls?.includeReposInsideGitRepos === true },
           // Why: older runtime servers can't stream or cancel scans; keep a bounded failure path for large folders.
           { timeoutMs: 20_000 }
         )

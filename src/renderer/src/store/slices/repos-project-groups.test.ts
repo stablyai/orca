@@ -746,9 +746,26 @@ describe('project group store routing', () => {
     expect(projectGroupsScanNested).toHaveBeenCalledWith({
       path: '/platform',
       connectionId: undefined,
-      scanId: 'scan-1'
+      scanId: 'scan-1',
+      options: { includeReposInsideGitRepos: false }
     })
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('forwards the repos-inside-repos opt-in to the local scan', async () => {
+    // Why: every assertion on this flag used to check the `false` case, so
+    // hardcoding false here would have left the whole feature dead and green.
+    // The scan result is irrelevant here; only the forwarded options are.
+    projectGroupsScanNested.mockResolvedValue(null)
+    const store = createTestStore()
+
+    await store.getState().scanNestedRepos('/platform', undefined, {
+      includeReposInsideGitRepos: true
+    })
+
+    expect(projectGroupsScanNested).toHaveBeenCalledWith(
+      expect.objectContaining({ options: { includeReposInsideGitRepos: true } })
+    )
   })
 
   it('unsubscribes local nested scan progress when the scan rejects', async () => {
@@ -824,8 +841,9 @@ describe('project group store routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-selected',
       method: 'projectGroup.scanNested',
-      params: { path: '/platform' },
-      timeoutMs: 20_000
+      params: { path: '/platform', includeReposInsideGitRepos: false },
+      timeoutMs: 20_000,
+      expectedEnvironmentPairingRevision: undefined
     })
   })
 

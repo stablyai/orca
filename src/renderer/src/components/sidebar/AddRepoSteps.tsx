@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { hasImportableNestedRepo } from '../../../../shared/nested-repo-candidates'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
@@ -28,6 +29,7 @@ export function useRemoteRepo(
       scanId?: string
       onProgress?: (scan: NestedRepoScanResult) => void
       runtimeEnvironmentId?: string | null
+      includeReposInsideGitRepos?: boolean
     }
   ) => Promise<NestedRepoScanResult | null>,
   showNestedRepoReview?: (
@@ -153,12 +155,14 @@ export function useRemoteRepo(
       const scan = await scanNestedRepos?.(trimmedRemotePath, selectedTargetId, {
         scanId,
         runtimeEnvironmentId: null,
+        includeReposInsideGitRepos: true,
         onProgress: (progressScan) => {
           if (
             gen !== remoteGenRef.current ||
             !mountedRef.current ||
-            progressScan.selectedPathKind !== 'non_git_folder' ||
-            progressScan.repos.length === 0
+            // Why the same gate as the final result: a partial scan can hold only
+            // the selected root or a submodule, neither of which is importable.
+            !hasImportableNestedRepo(progressScan.repos, progressScan.selectedPath)
           ) {
             return
           }
@@ -176,7 +180,7 @@ export function useRemoteRepo(
         return
       }
       onNestedScanResult?.(scan ?? null, attemptId)
-      if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+      if (scan && hasImportableNestedRepo(scan.repos, scan.selectedPath)) {
         showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId, false, scanId)
         setRemoteNestedScanId(null)
         return

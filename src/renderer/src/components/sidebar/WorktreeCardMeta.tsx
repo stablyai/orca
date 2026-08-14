@@ -63,7 +63,7 @@ export function WorktreeCardDetailsHover({
   identityOrder = 'workspace-first',
   workspaceTitleRenameDisabled = false,
   automationHostId,
-  detailsAfter,
+  indicatorDetails,
   openDelay = 250,
   closeDelay = 120,
   onRenameWorkspaceTitle,
@@ -170,7 +170,7 @@ export function WorktreeCardDetailsHover({
       automationProvenance,
       cliProvenance
     }) &&
-    !detailsAfter
+    !indicatorDetails
   ) {
     return children
   }
@@ -203,6 +203,8 @@ export function WorktreeCardDetailsHover({
               onWorkspaceTitleEditingChange={handleWorkspaceTitleEditingChange}
             />
           )}
+
+          {indicatorDetails}
 
           <WorktreeCardIssueDetailSection
             issue={issue}
@@ -351,8 +353,6 @@ export function WorktreeCardDetailsHover({
               </WorktreeCardDetailSectionContent>
             </WorktreeCardDetailSection>
           )}
-
-          {detailsAfter}
         </SelectedTextCopyMenu>
       </HoverCardContent>
     </HoverCard>

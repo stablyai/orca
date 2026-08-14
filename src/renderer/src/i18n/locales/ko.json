@@ -5140,6 +5140,21 @@
           "3b7ea51793": "검색 지우기",
           "7f1c2e94a5": "검색어가 너무 깁니다 — 보드가 필터링되지 않았습니다",
           "9a4d0f6b21": "너무 김"
+        },
+        "WorktreeCardChangeCountBadge": {
+          "oneUncommittedChange": "커밋되지 않은 변경 사항 1개",
+          "uncommittedChanges": "커밋되지 않은 변경 사항 {{value0}}개",
+          "atLeastUncommittedChanges": "커밋되지 않은 변경 사항 {{value0}}개 이상"
+        },
+        "WorktreeCardChangeCountDetails": {
+          "heading": "커밋되지 않은 변경 사항",
+          "oneStaged": "스테이징됨 1개",
+          "staged": "스테이징됨 {{value0}}개",
+          "unstaged": "스테이징되지 않음 {{value0}}개",
+          "untracked": "추적되지 않음 {{value0}}개",
+          "oneSubmodule": "서브모듈 1개",
+          "submodules": "서브모듈 {{value0}}개",
+          "cappedNotice": "처음 {{value0}}개의 변경 사항만 집계합니다."
         }
       },
       "shared": {
@@ -11469,7 +11484,8 @@
           "f7e1170567": "선택됨",
           "ea54c7bf8f": "/",
           "91b5bcadb6": "모두 선택",
-          "929734aea5": "모두 선택 취소"
+          "929734aea5": "모두 선택 취소",
+          "3f906671a9": "서브모듈"
         },
         "NestedRepoScanLimitNotice": {
           "642a43c139": "중첩 repos 스캔 한도",

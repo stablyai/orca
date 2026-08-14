@@ -10,6 +10,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeCardSecondaryDetails } from './use-worktree-card-secondary-details'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
+import { useWorktreeChangeCount } from './use-worktree-change-count'
 
 const WORKTREE_ID = 'repo-1::/repo/worktrees/card'
 const originalState = useAppStore.getState()
@@ -110,11 +111,12 @@ describe('useWorktreeCardSecondaryDetails store subscriptions', () => {
   it('adds no store listener of its own beyond the hooks it composes', () => {
     const settings = makeSettings(300_000)
 
-    // Baseline: the two hooks it composes, mounted on their own.
+    // Baseline: the hooks it composes, mounted on their own.
     const composedBaseline = listenerCount()
     function ComposedProbe(): null {
       useWorktreeAgentRows(WORKTREE_ID, false)
       usePromptCacheCountdownStartedAt(WORKTREE_ID, true)
+      useWorktreeChangeCount(WORKTREE_ID)
       return null
     }
     mount(<ComposedProbe />)

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { track } from '@/lib/telemetry'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { hasImportableNestedRepo } from '../../../../shared/nested-repo-candidates'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
@@ -55,6 +56,7 @@ export function useAddRepoServerPathFlow({
       scanId?: string
       onProgress?: (scan: NestedRepoScanResult) => void
       runtimeEnvironmentId?: string | null
+      includeReposInsideGitRepos?: boolean
     }
   ) => Promise<NestedRepoScanResult | null>
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
@@ -104,14 +106,16 @@ export function useAddRepoServerPathFlow({
           }
           const scan = await scanNestedRepos(path, undefined, {
             runtimeEnvironmentId: activeRuntimeEnvironmentId,
+            includeReposInsideGitRepos: true,
             ...(scanId
               ? {
                   scanId,
                   onProgress: (progressScan: NestedRepoScanResult) => {
+                    // Why the same gate as the final result: a partial scan can hold
+                    // only the selected root or a submodule, neither importable.
                     if (
                       gen !== serverAddGenRef.current ||
-                      progressScan.selectedPathKind !== 'non_git_folder' ||
-                      progressScan.repos.length === 0
+                      !hasImportableNestedRepo(progressScan.repos, progressScan.selectedPath)
                     ) {
                       return
                     }
@@ -143,7 +147,7 @@ export function useAddRepoServerPathFlow({
               scan
             })
           )
-          if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+          if (scan && hasImportableNestedRepo(scan.repos, scan.selectedPath)) {
             showNestedRepoReview({
               scan,
               selectedPath: path,

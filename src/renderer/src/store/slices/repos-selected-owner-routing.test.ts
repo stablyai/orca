@@ -530,7 +530,8 @@ describe('selected Add Project owner routing', () => {
     expect(projectGroupsScanNested).toHaveBeenCalledWith({
       path: '/srv/platform',
       connectionId: 'ssh-1',
-      scanId: 'scan-ssh'
+      scanId: 'scan-ssh',
+      options: { includeReposInsideGitRepos: false }
     })
     expect(projectGroupsCancelNestedScan).toHaveBeenCalledWith({ scanId: 'scan-ssh' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
