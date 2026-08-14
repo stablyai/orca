@@ -74,6 +74,7 @@ describe('main.css mirrors the light token registry', () => {
 
   it.each([
     ['background', LIGHT_SURFACE_LADDER.background],
+    ['foreground', LIGHT_FOREGROUND_HEX],
     ['card', LIGHT_SURFACE_LADDER.card],
     ['popover', LIGHT_SURFACE_LADDER.card],
     ['sidebar', LIGHT_SURFACE_LADDER.sidebar],
