@@ -212,6 +212,36 @@ export function assignNativeChatPendingOccurrence<T extends NativeChatPendingOcc
   }
 }
 
+/**
+ * Drop the selected entries and pull each survivor down by the same-key slots
+ * those drops vacated. A dropped send consumes no transcript turn, but a pruned
+ * or capped-out predecessor still owns the slot it earned — so renumbering from
+ * 1, or across keys, would retire a survivor against an already-consumed turn.
+ * Returns `pending` untouched when nothing was dropped.
+ */
+export function dropNativeChatPendingOccurrences<T extends NativeChatPendingOccurrence>(
+  pending: T[],
+  shouldDrop: (entry: T) => boolean
+): T[] {
+  const vacatedByKey = new Map<string, number>()
+  const next: T[] = []
+  for (const entry of pending) {
+    const key = nativeChatPendingMatchKey(entry)
+    if (shouldDrop(entry)) {
+      vacatedByKey.set(key, (vacatedByKey.get(key) ?? 0) + 1)
+      continue
+    }
+    const vacated = vacatedByKey.get(key) ?? 0
+    const occurrence = entry.matchingOccurrence
+    next.push(
+      vacated > 0 && occurrence !== undefined
+        ? { ...entry, matchingOccurrence: Math.max(1, occurrence - vacated) }
+        : entry
+    )
+  }
+  return vacatedByKey.size === 0 ? pending : next
+}
+
 export function nativeChatPendingMatchingAfter(pending: NativeChatPendingOccurrence): number {
   return pending.matchingAfterTimestamp ?? pending.afterMessageTimestamp ?? pending.sentAt
 }

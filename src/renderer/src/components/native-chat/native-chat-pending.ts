@@ -34,6 +34,9 @@ export type NativeChatPendingSend = {
   afterMessageId?: string | null
   /** Timestamp of that boundary in the transcript host's clock domain. */
   afterMessageTimestamp?: number | null
+  /** Provider session this send was issued into, once known. An echo from a
+   * replaced conversation can never match the new transcript. */
+  sessionId?: string | null
   /** 1-based occurrence among identical sends sharing the same boundary. */
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
@@ -340,7 +343,7 @@ function isClearCommand(command: string): boolean {
   return command.trim().toLowerCase().split(/\s+/)[0] === '/clear'
 }
 
-function latestClearSentAt(markers: readonly NativeChatCommandMarker[]): number | null {
+export function latestClearSentAt(markers: readonly NativeChatCommandMarker[]): number | null {
   let latest: number | null = null
   for (const marker of markers) {
     if (isClearCommand(marker.command) && (latest === null || marker.sentAt > latest)) {
