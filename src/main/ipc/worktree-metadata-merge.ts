@@ -24,6 +24,9 @@ export function mergeWorktree(
     ...(meta?.projectHostSetupId !== undefined
       ? { projectHostSetupId: meta.projectHostSetupId }
       : {}),
+    ...(meta?.ephemeralVmCheckoutMode !== undefined
+      ? { ephemeralVmCheckoutMode: meta.ephemeralVmCheckoutMode }
+      : {}),
     ...(creatorProvenance ? { creatorProvenance } : {}),
     path: git.path,
     head: git.head,

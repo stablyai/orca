@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { selectVisibleAgentMapLabels } from './agent-map-label-declutter'
-import type {
-  AgentMapLayout,
-  AgentMapProjectRing,
-  AgentMapStatusCounts,
-  AgentMapWorktreeRing
-} from './agent-map-layout'
+import type { AgentMapLayout, AgentMapProjectRing, AgentMapWorktreeRing } from './agent-map-layout'
+import {
+  agentMapQuietCount,
+  emptyAgentMapStatusCounts,
+  type AgentMapStatusCounts
+} from './agent-map-node-metadata'
 
 function statusCounts(overrides: Partial<AgentMapStatusCounts> = {}): AgentMapStatusCounts {
-  return { working: 0, blocked: 0, waiting: 0, done: 0, idle: 0, ...overrides }
+  return { ...emptyAgentMapStatusCounts(), ...overrides }
 }
 
 function worktree(overrides: Partial<AgentMapWorktreeRing> = {}): AgentMapWorktreeRing {
@@ -26,7 +26,7 @@ function worktree(overrides: Partial<AgentMapWorktreeRing> = {}): AgentMapWorktr
     // Sparse placeholders keep tests that only care about label-to-label collisions concise.
     agents: Array.from({ length: total }) as AgentMapWorktreeRing['agents'],
     statusCounts: counts,
-    quiet: counts.idle === total,
+    quiet: agentMapQuietCount(counts) === total,
     ...overrides
   }
 }

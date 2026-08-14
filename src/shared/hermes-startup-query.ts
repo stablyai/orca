@@ -1,6 +1,7 @@
 import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
   buildShellCommandFromArgv,
+  isPosixStartupShell,
   quoteStartupArg,
   tokenizeStartupCommand,
   type AgentStartupShell
@@ -114,7 +115,7 @@ function normalizeHermesArgv(
     assignmentCount += 1
   }
   if (assignmentCount > 0) {
-    if (shell !== 'posix') {
+    if (!isPosixStartupShell(shell)) {
       return null
     }
     commandPrefix = ['env', ...commandPrefix]
@@ -139,7 +140,7 @@ function normalizeHermesArgv(
 }
 
 function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
-  if (shell !== 'posix') {
+  if (!isPosixStartupShell(shell)) {
     const invocation = buildShellCommandFromArgv(argv, 'powershell').replace(
       quoteStartupArg(QUERY_ARG_PLACEHOLDER, 'powershell'),
       `"--query=$${POWERSHELL_NATIVE_QUERY_VARIABLE}"`

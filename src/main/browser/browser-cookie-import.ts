@@ -80,11 +80,12 @@ import {
   NON_TRANSPLANTABLE_HOST_KEY_SQL,
   normalizeCookieDomain,
   normalizeCookieImportDomain,
-  removeAllCookiesExcept,
   replaceCookiesForImportedDomains,
   restoreImportedDomainCookies,
   type CookieImportMode
 } from './browser-cookie-import-policy'
+import { removeTransplantableCookies, withCookieClearLock } from './browser-cookie-import-clear'
+import { openCookieClearStore } from './browser-cookie-clear-store'
 import {
   createChromiumCookieSnapshot,
   type ChromiumCookieSnapshot
@@ -584,6 +585,7 @@ async function importValidatedCookies(
   )
   const integritySkipped = validDomainCookies.length - sourceBoundFiltered.length
   const nonTransplantableSkipped = sourceBoundFiltered.length - importableCookies.length
+  const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
   const invalidDomainSkipped = cookies.length - validDomainCookies.length
   diag(
     `importValidatedCookies: ${cookies.length} validated, ${invalidDomainSkipped} unsafe-domain skipped, ${integritySkipped} source-bound skipped, ${nonTransplantableSkipped} non-transplantable skipped of ${totalInput} total, partition="${targetPartition}"`
@@ -693,6 +695,7 @@ async function importValidatedCookies(
     totalCookies: totalInput,
     importedCookies: importedCount,
     skippedCookies: skipped,
+    ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
     domains: [...domainSet].sort()
   }
 
@@ -1590,7 +1593,12 @@ export async function importCookiesFromBrowser(
 
     const needsSourceKey = sourceRows.some((sourceRow) => {
       const encRaw = sourceRow.encrypted_value
-      return encRaw instanceof Uint8Array && encRaw.length > 0
+      if (!(encRaw instanceof Uint8Array) || encRaw.length === 0) {
+        return false
+      }
+      const domain = sourceRow.host_key as string
+      const name = sourceRow.name as string
+      return !(isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain))
     })
     const sourceKey = needsSourceKey
       ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
@@ -1653,6 +1661,20 @@ export async function importCookiesFromBrowser(
     }
 
     for (const sourceRow of sourceRows) {
+      const domain = sourceRow.host_key as string
+      const name = sourceRow.name as string
+
+      if (isGoogleSourceBoundCookie(name, domain)) {
+        integritySkipped++
+        continue
+      }
+
+      // Why: transplanting these replaces a working sign-in with a session the site rejects.
+      if (isNonTransplantableCookieDomain(domain)) {
+        nonTransplantableSkipped++
+        continue
+      }
+
       const encRaw = sourceRow.encrypted_value
       // Why: node:sqlite returns BLOBs as Uint8Array; treat any other type as missing, not an empty buffer that would silently blank the cookie value.
       const encBuf = encRaw instanceof Uint8Array ? Buffer.from(encRaw) : null
@@ -1672,20 +1694,6 @@ export async function importCookiesFromBrowser(
         decryptedValue = Buffer.from(plainRaw, 'latin1')
       } else {
         decryptedValue = Buffer.alloc(0)
-      }
-
-      const domain = sourceRow.host_key as string
-      const name = sourceRow.name as string
-
-      if (isGoogleSourceBoundCookie(name, domain)) {
-        integritySkipped++
-        continue
-      }
-
-      // Why: transplanting these replaces a working sign-in with a session the site rejects.
-      if (isNonTransplantableCookieDomain(domain)) {
-        nonTransplantableSkipped++
-        continue
       }
 
       let validDomain = sourceDomainValidity.get(domain)
@@ -1740,6 +1748,7 @@ export async function importCookiesFromBrowser(
     diag(
       `  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC) and ${nonTransplantableSkipped} non-transplantable-domain cookies`
     )
+    const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
 
     if (decryptedCookies.length === 0) {
       closeStagingDb()
@@ -1751,6 +1760,7 @@ export async function importCookiesFromBrowser(
           totalCookies: sourceRows.length,
           importedCookies: 0,
           skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
+          ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
           domains: []
         }
       }
@@ -1771,9 +1781,20 @@ export async function importCookiesFromBrowser(
     // Why: clear stale cookies first; mixing them with the imported set makes sites reject the
     // session. Non-transplantable families are exempt — nothing was imported for them, and their
     // live session is the only one that works.
-    await removeAllCookiesExcept(targetSession.cookies, (cookie) =>
-      isNonTransplantableCookieDomain(cookie.domain ?? '')
-    )
+    const cookieClearStore = openCookieClearStore(targetSession)
+    try {
+      await withCookieClearLock(targetSession, () =>
+        removeTransplantableCookies({
+          cookies: cookieClearStore,
+          clearData: (options) => targetSession.clearData(options),
+          snapshotClearIdentities: (cookies) => cookieClearStore.snapshotClearIdentities(cookies),
+          restoreClearIdentities: (identities) =>
+            cookieClearStore.restoreClearIdentities(identities)
+        })
+      )
+    } finally {
+      cookieClearStore.dispose()
+    }
     diag(
       `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
     )
@@ -1842,6 +1863,7 @@ export async function importCookiesFromBrowser(
       totalCookies: sourceRows.length,
       importedCookies: imported,
       skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
+      ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
       domains: [...domainSet].sort(),
       ...(warning ? { warning } : {})
     }

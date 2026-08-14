@@ -801,7 +801,7 @@ describe('shared agent-hook-listener', () => {
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('keeps OMP ask_user_question behavior on Pi-compatible events', () => {
+  it('maps OMP ask to blocked without publishing a native prompt', () => {
     const tool = normalizeHookPayload(
       state,
       'omp',
@@ -812,8 +812,8 @@ describe('shared agent-hook-listener', () => {
         env: 'production',
         version: '1',
         payload: {
-          hook_event_name: 'tool_call',
-          tool_name: 'ask_user_question',
+          hook_event_name: 'tool_execution_start',
+          tool_name: 'ask',
           tool_input: {
             questions: [
               {
@@ -827,9 +827,9 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(tool?.payload).toMatchObject({
-      state: 'working',
+      state: 'blocked',
       agentType: 'omp',
-      toolName: 'ask_user_question'
+      toolName: 'ask'
     })
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })

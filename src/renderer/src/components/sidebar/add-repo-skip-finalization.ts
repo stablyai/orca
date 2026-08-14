@@ -3,7 +3,7 @@ import { isDefaultBranchWorkspace } from './visible-worktrees'
 
 export type AddRepoSkipFinalizationState = {
   activeRepoId: string | null
-  filterRepoIds: string[]
+  filterRepoIds: readonly string[]
   showActiveOnly: boolean
   hideDefaultBranchWorkspace: boolean
   showSleepingWorkspaces: boolean

@@ -280,16 +280,17 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(existsSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'))).toBe(true)
     expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
 
-    // Why: typed agents need the host-managed status extension in WSL.
+    // Why: typed OMP keeps its existing shell integration, while typed Prime
+    // commands must reach the user's binary without Orca rewriting argv.
     const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
     const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     for (const wrapperFile of [bashRcfile, zshLogin]) {
       expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
       expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
-      expect(wrapperFile).toContain(
-        'command prime-agent --extension "${ORCA_PRIME_AGENT_STATUS_EXTENSION}" "$@"'
-      )
-      expect(wrapperFile).toContain('prime-agent() { __orca_prime_agent "$@"; }')
+      expect(wrapperFile).not.toContain('prime-agent()')
+      expect(wrapperFile).not.toContain('__orca_prime_agent')
+      expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+      expect(wrapperFile).not.toContain('command prime-agent --extension')
     }
   })
 

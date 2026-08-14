@@ -147,6 +147,7 @@ import type {
   ClaudeRateLimitAccountsState,
   ClassifiedError,
   CodexRateLimitAccountsState,
+  AdoptProvisionedRootArgs,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
@@ -1198,6 +1199,9 @@ export type PreloadApi = {
           | 'externalWorktreeVisibilityPromptDismissedAt'
           | 'externalWorktreeInboxBaselinePaths'
           | 'importedExternalWorktreePaths'
+          | 'agentWorktreeVisibility'
+          | 'customWorktreeVisibilitySources'
+          | 'worktreeVisibilitySourcePreferences'
           | 'projectGroupId'
           | 'projectGroupOrder'
           | 'forkSyncMode'
@@ -1334,6 +1338,7 @@ export type PreloadApi = {
           | 'pendingFirstAgentMessageRename'
           | 'firstAgentMessageRenameError'
           | 'lastActivityAt'
+          | 'diffComments'
         >
       >
     }) => Promise<FolderWorkspace | null>
@@ -1368,6 +1373,7 @@ export type PreloadApi = {
     cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
+    adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
     /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
      *  create path emits nothing, so the surface falls back to an indeterminate spinner. */
     onCreateProgress: (
@@ -1472,6 +1478,7 @@ export type PreloadApi = {
       env?: Record<string, string>
       envToDelete?: string[]
       command?: string
+      commandDelivery?: 'renderer' | 'provider'
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
@@ -1501,6 +1508,8 @@ export type PreloadApi = {
       snapshotPrefixAnsi?: string
       snapshotFrameAnsi?: string
       snapshotFrameRestoreAnsi?: string
+      snapshotKittyKeyboardFlags?: number
+      snapshotSeq?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
       replay?: string
@@ -1583,6 +1592,9 @@ export type PreloadApi = {
       /** Trailing incomplete escape the emulator ingested; the restorer must
        *  write it after its post-replay resets, last before live chunks. */
       pendingEscapeTailAnsi?: string
+      /** Effective kitty flags the snapshot owner proved at `seq`. Absent means
+       *  unknown; consumers must not turn that into a known `0`. */
+      kittyKeyboardFlags?: number
     } | null>
     getRendererDeliveryDebugSnapshot: () => Promise<{
       pendingPtyCount: number
@@ -1653,6 +1665,7 @@ export type PreloadApi = {
         rows: number
         seq?: number
         lastTitle?: string
+        kittyKeyboardFlags?: number
       } | null
     ) => void
     declarePendingPaneSerializer: (paneKey: string) => Promise<number>
@@ -2633,6 +2646,8 @@ export type PreloadApi = {
       workspaceName?: string
       projectId?: string
       workspaceId?: string
+      branch?: string
+      ref?: string
       provisionId?: string
     }) => Promise<
       | {

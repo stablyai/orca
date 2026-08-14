@@ -2,7 +2,7 @@ import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
-import { containsBrailleSpinner } from '../../../shared/agent-title-core'
+import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -106,7 +106,7 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
   // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
   // token, #9040); the tab's launch identity supplies it, mirroring the row builder's spinner
   // fallback (#9647) so the dot and the sidebar row agree.
-  return containsBrailleSpinner(title) && Boolean(launchAgent)
+  return containsAgentSpinnerGlyph(title) && Boolean(launchAgent)
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {

@@ -96,6 +96,24 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('threads provider command ownership through the spawn IPC', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      command: 'printf ready',
+      commandDelivery: 'provider'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(window.api.pty.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'printf ready',
+        commandDelivery: 'provider'
+      })
+    )
+    transport.disconnect()
+  })
+
   it('routes a rejected daemon write to the owning transport recovery callback', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const recovery = vi.fn()

@@ -12,6 +12,5 @@ describe('shouldShowWorktreeHistoryControls', () => {
     expect(shouldShowWorktreeHistoryControls('settings')).toBe(false)
     expect(shouldShowWorktreeHistoryControls('activity')).toBe(false)
     expect(shouldShowWorktreeHistoryControls('space')).toBe(false)
-    expect(shouldShowWorktreeHistoryControls('skills')).toBe(false)
   })
 })

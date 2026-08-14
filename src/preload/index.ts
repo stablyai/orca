@@ -799,6 +799,8 @@ const api = {
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
+    adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
+
     onCreateProgress: (
       callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
     ): (() => void) => {
@@ -948,6 +950,7 @@ const api = {
       env?: Record<string, string>
       envToDelete?: string[]
       command?: string
+      commandDelivery?: 'renderer' | 'provider'
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
@@ -975,6 +978,8 @@ const api = {
       snapshotPrefixAnsi?: string
       snapshotFrameAnsi?: string
       snapshotFrameRestoreAnsi?: string
+      snapshotKittyKeyboardFlags?: number
+      snapshotSeq?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
       replay?: string
@@ -1095,6 +1100,7 @@ const api = {
       alternateScreen?: boolean
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
+      kittyKeyboardFlags?: number
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -1257,6 +1263,7 @@ const api = {
         rows: number
         seq?: number
         lastTitle?: string
+        kittyKeyboardFlags?: number
       } | null
     ): void => {
       ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })

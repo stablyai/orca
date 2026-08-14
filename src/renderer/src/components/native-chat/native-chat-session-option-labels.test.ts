@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { nativeChatModelPillLabel } from './native-chat-session-option-labels'
+import { describe, expect, it, vi } from 'vitest'
+import { translate } from '@/i18n/i18n'
+import {
+  nativeChatModelPillLabel,
+  nativeChatSessionChoiceLabel
+} from './native-chat-session-option-labels'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: vi.fn((_key: string, fallback: string) => fallback)
+}))
 
 function modelDescriptor(
   valueSource: SessionOptionDescriptor['valueSource'],
@@ -39,5 +47,16 @@ describe('nativeChatModelPillLabel', () => {
     // A discovered list can drop an id the record still tracks; showing the id beats
     // showing "Model" while a real model is running.
     expect(nativeChatModelPillLabel(modelDescriptor('reported', 'grok-build'))).toBe('grok-build')
+  })
+})
+
+describe('nativeChatSessionChoiceLabel', () => {
+  it('routes ultra through the localized effort label', () => {
+    nativeChatSessionChoiceLabel({ value: 'ultra', label: 'Ultra' })
+
+    expect(translate).toHaveBeenCalledWith(
+      'components.native-chat.composer.optionValue.ultra',
+      'Ultra'
+    )
   })
 })

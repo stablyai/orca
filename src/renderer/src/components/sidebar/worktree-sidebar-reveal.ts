@@ -38,7 +38,10 @@ export function getScrollTopToRevealBounds(
 export function revealElementInScrollContainer(
   container: HTMLElement,
   element: Element,
-  behavior: ScrollBehavior
+  behavior: ScrollBehavior,
+  // Why: any other scrollTop write cancels the scroll issued here mid-animation;
+  // callers use this to stand their scroll-position guards down until it lands.
+  onScrollIssued?: (targetTop: number) => void
 ): boolean {
   if (!container.contains(element)) {
     return false
@@ -59,6 +62,8 @@ export function revealElementInScrollContainer(
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
   const resolvedBehavior: ScrollBehavior =
     behavior === 'smooth' && prefersReducedMotion ? 'auto' : behavior
-  container.scrollTo({ top: Math.max(0, nextScrollTop), behavior: resolvedBehavior })
+  const targetTop = Math.max(0, nextScrollTop)
+  onScrollIssued?.(targetTop)
+  container.scrollTo({ top: targetTop, behavior: resolvedBehavior })
   return true
 }

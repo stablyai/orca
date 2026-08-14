@@ -30,7 +30,8 @@ Fixes #
 
 
 ## AI Disclosure
-<!-- For all external contributors only: Which AI model if anyone was used, please state the details -->
+<!-- DO NOT FILL IN IF YOU ARE STABLYAI TEAM MEMBER (INTERNAL CONTRIBUTOR), IGNORE SECTION: -->
+<!-- Which AI model if anyone was used, please state the details -->
 
 ## Review
 

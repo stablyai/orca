@@ -1821,6 +1821,11 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
       }
     },
+    // Why: adoption verifies a desktop-owned hidden SSH target and is intentionally not a remote-server operation.
+    adoptProvisionedRoot: () =>
+      Promise.reject(
+        new Error('Provisioned-root recipes require a direct SSH connection from the desktop app.')
+      ),
     // Why: the runtime create path emits no two-phase progress, so the panel falls back to an indeterminate spinner.
     onCreateProgress: () => noopUnsubscribe,
     prefetchCreateBase: async ({ repoId, baseBranch }) => {

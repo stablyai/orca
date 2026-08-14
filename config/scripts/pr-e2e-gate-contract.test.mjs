@@ -6,6 +6,10 @@ import { parse } from 'yaml'
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
+const sshDockerRunner = readFileSync(
+  join(projectDir, 'config/scripts/run-ssh-docker-terminal-parking-e2e.mjs'),
+  'utf8'
+)
 
 const filterStep = prWorkflow.jobs['e2e-paths'].steps.find(
   (step) => step.name === 'Filter changed E2E specs'
@@ -64,12 +68,34 @@ describe('PR E2E gate contract', () => {
     expect(e2eWorkflow.jobs.e2e.if).toBe("inputs.test_files == ''")
     expect(e2eWorkflow.jobs['changed-e2e'].if).toBe("inputs.test_files != ''")
     expect(e2eWorkflow.jobs['changed-e2e'].strategy).toBeUndefined()
-    expect(e2eWorkflow.jobs['ssh-docker-watcher-isolation'].if).toBe("inputs.test_files == ''")
     const changedRun = e2eWorkflow.jobs['changed-e2e'].steps.find(
       (step) => step.name === 'Run changed E2E specs'
     )
     expect(changedRun.env.TEST_FILES_JSON).toBe('${{ inputs.test_files }}')
+    expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
+    expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
+    expect(changedRun.run).toContain('if [ "${#TEST_FILES[@]}" -eq 0 ]')
     expect(changedRun.run).toContain('pnpm run test:e2e "${TEST_FILES[@]}" --workers=1')
+  })
+
+  it('keeps startup-exec live parity in the isolated SSH lane', () => {
+    const sshLaneCondition = e2eWorkflow.jobs['ssh-docker-watcher-isolation'].if
+    expect(sshLaneCondition).toContain("inputs.test_files == ''")
+    expect(sshLaneCondition).toContain('tests/e2e/ssh-startup-exec-readiness.spec.ts')
+    expect(sshLaneCondition).toContain('tests/e2e/paired-startup-exec-readiness.spec.ts')
+    expect(sshDockerRunner).toContain('tests/e2e/ssh-startup-exec-readiness.spec.ts')
+    expect(sshDockerRunner).toContain('tests/e2e/paired-startup-exec-readiness.spec.ts')
+    expect(sshDockerRunner).toContain("'electron-headless'")
+    expect(sshDockerRunner).toContain("'electron-headful'")
+  })
+
+  it('installs zsh in every Linux lane that can run paired startup readiness', () => {
+    for (const jobName of ['e2e', 'changed-e2e', 'ssh-docker-watcher-isolation']) {
+      const installStep = e2eWorkflow.jobs[jobName].steps.find((step) =>
+        step.name.startsWith('Install native build')
+      )
+      expect(installStep.run, jobName).toMatch(/\bzsh\b/)
+    }
   })
 
   it('keeps dedicated E2E workflows out of pull request CI', () => {

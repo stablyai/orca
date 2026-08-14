@@ -89,7 +89,6 @@ beforeEach(() => {
 describe('resolveCommitMessageSettings', () => {
   it('falls back when a dynamic persisted model was not discovered', () => {
     const settings = getDefaultSettings('/tmp')
-    settings.enableGitHubAttribution = true
     settings.commitMessageAi = {
       enabled: true,
       agentId: 'codex',

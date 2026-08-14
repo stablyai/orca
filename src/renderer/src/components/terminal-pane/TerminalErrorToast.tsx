@@ -25,6 +25,19 @@ const TERMINAL_HOST_GONE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE)
 const TERMINAL_HOST_GONE_REPLACE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE, 'g')
 const LEGACY_TERMINAL_HOST_GONE_PATTERN =
   /(^|[^a-z])connect (?:ENOENT|ECONNREFUSED) [^\r\n]*orca-terminal-host-v[^\r\n]*/i
+// A reattach the host answered "no such session" for: the SSH provider's expiry token, or the relay's
+// raw not-found string when nothing mapped it. Both carry an internal PTY id, and neither is proof the
+// remote shell died — the copy says only that this pane lost its session. Same lastIndex hazard as above.
+const UNREATTACHABLE_SESSION_SOURCES = [
+  'SSH_SESSION_EXPIRED:[ \\t]*\\S*(?:[ \\t]+SSH_PTY_IDENTITY_MISMATCH)?',
+  'PTY "[^"\\r\\n]*" not found(?: \\(identity mismatch\\))?'
+]
+const UNREATTACHABLE_SESSION_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
+  (source) => new RegExp(source)
+)
+const UNREATTACHABLE_SESSION_REPLACE_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
+  (source) => new RegExp(source, 'g')
+)
 
 function isSshError(error: string): boolean {
   return isSshReconnectOwnedTerminalError(error)
@@ -60,8 +73,22 @@ export function isExplainedTerminalError(error: string): boolean {
     .split('\n')
     .some(
       (line) =>
-        TERMINAL_HOST_GONE_PATTERN.test(line) || LEGACY_TERMINAL_HOST_GONE_PATTERN.test(line)
+        TERMINAL_HOST_GONE_PATTERN.test(line) ||
+        LEGACY_TERMINAL_HOST_GONE_PATTERN.test(line) ||
+        UNREATTACHABLE_SESSION_PATTERNS.some((pattern) => pattern.test(line))
     )
+}
+
+function humanizeUnreattachableSession(error: string): string {
+  const explanation = translate(
+    'auto.components.terminal.pane.TerminalErrorToast.sessionUnavailable',
+    "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
+  )
+  // Why a replacer: a translation containing `$&` or `$1` would otherwise be read as a substitution.
+  return UNREATTACHABLE_SESSION_REPLACE_PATTERNS.reduce(
+    (message, pattern) => message.replace(pattern, () => explanation),
+    error
+  )
 }
 
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
@@ -76,6 +103,7 @@ export function humanizeTerminalError(error: string): string {
       )
     )
   }
+  humanized = humanizeUnreattachableSession(humanized)
   if (!isExplainedTerminalError(humanized)) {
     return humanized
   }

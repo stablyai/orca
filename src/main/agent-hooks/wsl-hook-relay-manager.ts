@@ -109,15 +109,6 @@ export class WslHookRelayManager {
     return this.stateFor(distro)?.opencodeOverlayDir ?? null
   }
 
-  getInstanceKey(): string | null {
-    const stableKey = sanitizeWslHookInstanceKey(this.deps.instanceKey() ?? undefined)
-    if (stableKey) {
-      return stableKey
-    }
-    const port = Number(this.deps.hookCoordsEnv().ORCA_AGENT_HOOK_PORT ?? '')
-    return Number.isInteger(port) && port > 0 ? `port${port}` : null
-  }
-
   /** Kills every live relay. Non-permanent (hooks switched off mid-session) leaves the
    *  manager reusable, so re-enabling hooks can start relays again without an app restart. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
@@ -181,7 +172,8 @@ export class WslHookRelayManager {
     }
     // Why: restart-stable instance identity keeps the guest endpoint file at
     // ONE path across restarts so daemon-surviving agents re-coordinate.
-    const instanceKey = this.getInstanceKey() ?? `port${port}`
+    const instanceKey =
+      sanitizeWslHookInstanceKey(this.deps.instanceKey() ?? undefined) ?? `port${port}`
     if (existing) {
       this.recovery.clearTimers(existing)
     }

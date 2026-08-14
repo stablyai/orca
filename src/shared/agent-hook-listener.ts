@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: canonical transport-agnostic listener; parser, normalizer, per-CLI extractors, and endpoint writer share invariants that must not drift between Orca's main process and the relay. */
 
-// Why: extracted from src/main/agent-hooks/server.ts so the relay can host the pipeline without Electron (Node builtins only). See docs/design/agent-status-over-ssh.md §3.
+// Why: extracted from src/main/agent-hooks/server.ts so the relay can host the same pipeline without Electron — this file must stay on Node builtins and other shared/ modules, or the relay bundle breaks.
 import type { IncomingMessage } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -323,7 +323,8 @@ export type AgentHookEventPayload = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
-  /** SSH connection the event arrived on, or null for local (only ingestRemote stamps it; the HTTP path can't know the mux). See docs/design/agent-status-over-ssh.md §5. */
+  /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
+   *  in-flight events from a superseded connection after an SSH reconnect. */
   connectionId: string | null
   /** True when the event carried prompt text directly, not the listener's cached prompt from an earlier event in the pane. */
   hasExplicitPrompt?: boolean
@@ -3846,13 +3847,14 @@ function normalizePiCompatibleEvent(
     return null
   }
 
-  // Why: gate on the event's own tool_name (not a merged snapshot) so a stale cached ask_user_question can't re-enter blocked.
-  const isPiAskUserQuestion =
-    agentType === 'pi' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
+  // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
+  const toolName = readString(hookPayload, 'tool_name')
+  const isPiCompatibleAsk =
+    ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
+      (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 
-  const stateName = isPiAskUserQuestion
+  const stateName = isPiCompatibleAsk
     ? 'blocked'
     : eventName === 'before_agent_start' ||
         eventName === 'agent_start' ||
@@ -4361,7 +4363,6 @@ export function normalizeHookPayload(
       break
   }
 
-  // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent') &&
     eventName === 'session_start' &&
@@ -4379,6 +4380,7 @@ export function normalizeHookPayload(
         launchToken,
         tabId,
         worktreeId,
+        // Why: normalization is transport-agnostic — only ingestRemote knows the mux identity to stamp here.
         connectionId: null,
         hasExplicitPrompt:
           source === 'amp'

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
+import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
 
 const {
   existsSyncMock,
@@ -15,7 +16,8 @@ const {
   readWindowsConptyProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
-  wslUncDirectoryExistsMock
+  wslUncDirectoryExistsMock,
+  createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -28,7 +30,8 @@ const {
   readWindowsConptyProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn()
+  wslUncDirectoryExistsMock: vi.fn(),
+  createShellPromptReadinessProbeMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -107,6 +110,10 @@ vi.mock('../wsl', () => ({
   wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
 }))
 
+vi.mock('../shell-prompt-readiness-probe', () => ({
+  createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
+}))
+
 import {
   _resetLocalPtyProviderStateForTest,
   LOCAL_PTY_FORCE_KILL_RETRY_MS,
@@ -174,6 +181,7 @@ describe('LocalPtyProvider', () => {
     isWslAvailableAsyncMock.mockResolvedValue(true)
     wslUncDirectoryExistsMock.mockReset()
     wslUncDirectoryExistsMock.mockReturnValue(true)
+    createShellPromptReadinessProbeMock.mockReset()
 
     exitCb = undefined
     mockProc = {
@@ -534,6 +542,24 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('verifies shell identity against the exact spawn PATH', async () => {
+      provider.configure({
+        buildSpawnEnv: (_id, env) => ({ ...env, PATH: '/post-hook/bin' })
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        command: 'printf ready',
+        env: { PATH: '/pre-hook/bin' }
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe('/post-hook/bin')
+      expect(createShellPromptReadinessProbeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ shellPathEnv: '/post-hook/bin' })
+      )
+    })
+
     it('does not inherit NODE_ENV from the Orca process env', async () => {
       // Why: NODE_ENV in Orca's process is Orca's build mode (electron-vite sets
       // `development` in dev runs); leaking it breaks `next build` and Vitest.
@@ -551,7 +577,9 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.NODE_ENV).toBeUndefined()
-      expect(spawnCall[2].env.PATH).toBe(process.env.PATH)
+      const expectedEnv = { PATH: process.env.PATH ?? '' }
+      stripLegacyTerminalShimEnv(expectedEnv, process.platform)
+      expect(spawnCall[2].env.PATH).toBe(expectedEnv.PATH)
     })
 
     it('keeps an explicitly requested NODE_ENV for spawned terminals', async () => {
@@ -633,6 +661,23 @@ describe('LocalPtyProvider', () => {
       }
     })
 
+    it.each([
+      ['after the ready marker', ['\x1b]777;orca-shell-ready\x07', '\x1b[?2004hfish> ']],
+      ['after the ESC introducer', ['\x1b]777;orca-shell-ready\x07\x1b', '[?2004hfish> ']]
+    ])('preserves Fish bracketed-paste output split %s', async (_boundary, chunks) => {
+      process.env.SHELL = '/usr/bin/fish'
+      const received: string[] = []
+      provider.configure({ onData: (_id, data) => received.push(data) })
+
+      await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+      const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+      for (const chunk of chunks) {
+        dataCallback(chunk)
+      }
+
+      expect(received.join('')).toBe('\x1b[?2004hfish> ')
+    })
+
     it('releases held marker-prefix bytes when local shell readiness times out', async () => {
       vi.useFakeTimers()
       const onData = vi.fn()
@@ -685,8 +730,8 @@ describe('LocalPtyProvider', () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {
           env.TERM_PROGRAM = 'Orca'
-          env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-attribution'
-          env.PATH = `/tmp/orca-attribution:${env.PATH ?? ''}`
+          env.ORCA_STALE_TEST_ENV = '/tmp/orca-stale'
+          env.PATH = `/tmp/orca-stale:${env.PATH ?? ''}`
           return env
         }
       })
@@ -699,7 +744,7 @@ describe('LocalPtyProvider', () => {
           PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
           ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
         },
-        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+        envToDelete: ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
       })
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
@@ -707,7 +752,20 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.TERM).toBe('screen-256color')
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
-      expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_STALE_TEST_ENV).toBeUndefined()
+    })
+
+    it('does not re-promote a legacy attribution path for Agent Teams', async () => {
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          PATH: '/tmp/orca-terminal-attribution/posix:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        }
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe('/usr/bin')
     })
 
     it('drops stale inherited Git config indices behind a smaller explicit count', async () => {
@@ -817,9 +875,9 @@ describe('LocalPtyProvider', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({
         buildSpawnEnv: (_id, env) => {
-          // Why: attribution collapses Windows PATH onto `Path` and prepends its own shim dir.
+          // Why: host env collapses Windows PATH onto `Path` and prepends its own shim dir.
           delete env.PATH
-          env.Path = `/tmp/orca-attribution:${env.Path ?? ''}`
+          env.Path = `/tmp/orca-stale:${env.Path ?? ''}`
           return env
         }
       })

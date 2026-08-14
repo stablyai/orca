@@ -26,6 +26,21 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+vi.mock('./browser-cookie-clear-store', () => ({
+  openCookieClearStore: (targetSession: {
+    cookies: {
+      get: (filter: object) => Promise<unknown>
+      remove: (url: string, name: string) => Promise<void>
+    }
+  }) => ({
+    get: (filter: object) => targetSession.cookies.get(filter),
+    remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
+    snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
+      items.map(({ cookie, url }) => ({ url, ...cookie })),
+    restoreClearIdentities: async () => undefined,
+    dispose: () => undefined
+  })
+}))
 
 import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
@@ -79,6 +94,7 @@ describe('validated cookie replacement', () => {
       totalCookies: 3,
       importedCookies: 1,
       skippedCookies: 2,
+      googleCookiesSkipped: 2,
       domains: ['example.com']
     })
     expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'old-example']])
@@ -99,6 +115,7 @@ describe('validated cookie replacement', () => {
       totalCookies: 1,
       importedCookies: 0,
       skippedCookies: 1,
+      googleCookiesSkipped: 1,
       domains: []
     })
     expect(cookiesGetMock).not.toHaveBeenCalled()
@@ -166,7 +183,7 @@ describe('validated cookie replacement', () => {
 })
 
 describe('native Chromium integrity-cookie accounting', () => {
-  let clearStorageDataMock: ReturnType<typeof vi.fn>
+  let clearDataMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
   let tmpDir: string
 
@@ -178,7 +195,7 @@ describe('native Chromium integrity-cookie accounting', () => {
     })
     clearPendingCookieImportMock.mockClear()
     setPendingCookieImportMock.mockClear()
-    clearStorageDataMock = vi.fn().mockResolvedValue(undefined)
+    clearDataMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset().mockReturnValue({
       cookies: {
@@ -187,7 +204,7 @@ describe('native Chromium integrity-cookie accounting', () => {
         remove: vi.fn().mockResolvedValue(undefined),
         set: cookiesSetMock
       },
-      clearStorageData: clearStorageDataMock
+      clearData: clearDataMock
     })
   })
 
@@ -215,6 +232,7 @@ describe('native Chromium integrity-cookie accounting', () => {
         totalCookies: 3,
         importedCookies: 1,
         skippedCookies: 2,
+        googleCookiesSkipped: 2,
         domains: ['example.com']
       })
       expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['AEC'])
@@ -246,9 +264,10 @@ describe('native Chromium integrity-cookie accounting', () => {
         totalCookies: 3,
         importedCookies: 0,
         skippedCookies: 3,
+        googleCookiesSkipped: 2,
         domains: []
       })
-      expect(clearStorageDataMock).not.toHaveBeenCalled()
+      expect(clearDataMock).not.toHaveBeenCalled()
       expect(cookiesSetMock).not.toHaveBeenCalled()
       expect(setPendingCookieImportMock).not.toHaveBeenCalled()
       expect(clearPendingCookieImportMock).not.toHaveBeenCalled()

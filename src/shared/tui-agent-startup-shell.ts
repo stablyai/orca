@@ -1,6 +1,27 @@
 import { tokenizeCustomCommandTemplate, type CommandTokenSpan } from './commit-message-prompt'
 
-export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
+// Why: fish shares POSIX word splitting, quoting and `;` chaining, so it is a
+// separate dialect only where its grammar actually diverges (env clearing).
+export type AgentStartupShell = 'posix' | 'fish' | 'powershell' | 'cmd'
+
+type WindowsStartupShell = Extract<AgentStartupShell, 'powershell' | 'cmd'>
+
+/** True for shells parsed with POSIX quoting/word rules (sh family + fish). */
+export function isPosixStartupShell(shell: AgentStartupShell): boolean {
+  return shell === 'posix' || shell === 'fish'
+}
+
+function isWindowsStartupShell(shell: AgentStartupShell): shell is WindowsStartupShell {
+  return shell === 'powershell' || shell === 'cmd'
+}
+
+/** Maps a POSIX login-shell path (`$SHELL`) to the dialect that parses queued commands. */
+export function resolveLoginShellStartupDialect(
+  loginShell: string | null | undefined
+): AgentStartupShell {
+  const basename = loginShell?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
+  return basename === 'fish' ? 'fish' : 'posix'
+}
 
 export type StartupCommandTokens =
   | { ok: true; tokens: string[]; spans: CommandTokenSpan[] }
@@ -19,7 +40,7 @@ function hasOddBackslashRun(value: string, quoteIndex: number): boolean {
 
 function tokenizeWindowsStartupCommand(
   value: string,
-  shell: Exclude<AgentStartupShell, 'posix'>
+  shell: WindowsStartupShell
 ): StartupCommandTokens {
   const tokens: string[] = []
   const spans: CommandTokenSpan[] = []
@@ -133,9 +154,9 @@ export function tokenizeStartupCommand(
   value: string,
   shell: AgentStartupShell
 ): StartupCommandTokens {
-  return shell === 'posix'
-    ? tokenizeCustomCommandTemplate(value)
-    : tokenizeWindowsStartupCommand(value, shell)
+  return isWindowsStartupShell(shell)
+    ? tokenizeWindowsStartupCommand(value, shell)
+    : tokenizeCustomCommandTemplate(value)
 }
 
 export function resolveStartupShell(
@@ -172,6 +193,11 @@ export function clearEnvCommand(name: string, shell: AgentStartupShell): string 
   }
   if (shell === 'cmd') {
     return `set "${name}="`
+  }
+  // Why: fish has no `unset`; the sh spelling errors out and silently leaves
+  // the variable exported (e.g. an account-routed CODEX_HOME survives).
+  if (shell === 'fish') {
+    return `set -e ${name}`
   }
   return `unset ${name}`
 }

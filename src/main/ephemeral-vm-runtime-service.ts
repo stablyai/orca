@@ -15,6 +15,8 @@ import {
   type EphemeralVmRecipeStartFailure,
   type EphemeralVmRecipeStartSuccess
 } from './ephemeral-vm-recipe-runner'
+import { cleanupFailedEphemeralVmStart } from './ephemeral-vm-failed-start-cleanup'
+import { provisionedRootChangedDuringResume } from './ephemeral-vm-resume-integrity'
 
 export type ProvisionEphemeralVmRuntimeArgs = {
   userDataPath: string
@@ -92,6 +94,8 @@ export type ResumeEphemeralVmRuntimeResult =
       error: string
     }
 
+const cleanupInFlight = new Map<string, Promise<CleanupEphemeralVmRuntimeResult>>()
+
 export async function provisionEphemeralVmRuntime(
   args: ProvisionEphemeralVmRuntimeArgs
 ): Promise<ProvisionEphemeralVmRuntimeResult> {
@@ -112,6 +116,12 @@ export async function provisionEphemeralVmRuntime(
     onStderr: args.onStderr
   })
   if (!start.ok) {
+    if (start.recipeResult) {
+      await cleanupFailedEphemeralVmStart(args, {
+        context: start.context,
+        recipeResult: start.recipeResult
+      })
+    }
     return { ok: false, start }
   }
 
@@ -137,7 +147,27 @@ export async function provisionEphemeralVmRuntime(
   return { ok: true, start, runtime }
 }
 
-export async function cleanupEphemeralVmRuntime(
+export function cleanupEphemeralVmRuntime(
+  args: CleanupEphemeralVmRuntimeArgs
+): Promise<CleanupEphemeralVmRuntimeResult> {
+  const key = `${args.userDataPath}\0${args.runtimeId}`
+  const existing = cleanupInFlight.get(key)
+  if (existing) {
+    return existing
+  }
+
+  const cleanup = cleanupEphemeralVmRuntimeOnce(args)
+  cleanupInFlight.set(key, cleanup)
+  const forget = (): void => {
+    if (cleanupInFlight.get(key) === cleanup) {
+      cleanupInFlight.delete(key)
+    }
+  }
+  void cleanup.then(forget, forget)
+  return cleanup
+}
+
+async function cleanupEphemeralVmRuntimeOnce(
   args: CleanupEphemeralVmRuntimeArgs
 ): Promise<CleanupEphemeralVmRuntimeResult> {
   const existing = listEphemeralVmRuntimes(args.userDataPath).find(
@@ -145,6 +175,13 @@ export async function cleanupEphemeralVmRuntime(
   )
   if (!existing) {
     throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
+  }
+  if (existing.status === 'cleaned') {
+    return {
+      ok: true,
+      runtime: existing,
+      skipped: existing.cleanupStatus === 'disabled'
+    }
   }
 
   const now = args.now ?? Date.now()
@@ -243,6 +280,15 @@ export async function resumeEphemeralVmRuntime(
       updatedAt: Date.now()
     })
     return { ok: false, runtime: failed, error: resume.error }
+  }
+
+  if (!resume.skipped && provisionedRootChangedDuringResume(existing.recipeResult, resume.result)) {
+    const error = 'The provisioned workspace root changed while the runtime was suspended.'
+    const failed = updateEphemeralVmRuntimeStatus(args.userDataPath, existing.id, {
+      status: 'resume_failed',
+      updatedAt: Date.now()
+    })
+    return { ok: false, runtime: failed, error }
   }
 
   const runtime = updateEphemeralVmRuntimeStatus(args.userDataPath, existing.id, {
