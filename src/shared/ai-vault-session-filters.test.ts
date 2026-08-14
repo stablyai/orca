@@ -197,4 +197,26 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
   it('builds preview search text from conversation turns', () => {
     expect(sessionPreviewSearchText(baseSession)).toContain('scope tabs')
   })
+
+  it('keeps Cursor sessions in Workspace scope via the project slug when cwd is missing', () => {
+    const cursorSession: AiVaultSession = {
+      ...baseSession,
+      id: 'cursor:legacy',
+      agent: 'cursor',
+      sessionId: 'sid',
+      cwd: null,
+      filePath:
+        'C:\\Users\\neil\\.cursor\\projects\\c-Users-neil-orca-workspaces-orca-pr-13935-internal-review\\agent-transcripts\\sid.jsonl'
+    }
+    expect(
+      filterAiVaultSessions([cursorSession], {
+        query: '',
+        agents: ['cursor'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: ['C:\\Users\\neil\\orca\\workspaces\\orca\\pr-13935-internal-review'],
+        hideEmptySessions: true
+      }).map((session) => session.id)
+    ).toEqual(['cursor:legacy'])
+  })
 })

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
+import { cursorWorkspaceSlug } from '../shared/cursor-workspace-slug'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
@@ -166,12 +167,4 @@ function canonicalize(p: string): string {
     // Fall through to the raw input.
   }
   return p
-}
-
-function cursorWorkspaceSlug(absPath: string): string {
-  const stripped = absPath.replace(/^[\\/]+/, '')
-  // Why: Windows absolute paths include characters such as ":" that cannot
-  // be used in the ~/.cursor/projects/<slug> directory name.
-  const slug = stripped.replace(/[\\/:*?"<>|]+/g, '-')
-  return slug
 }

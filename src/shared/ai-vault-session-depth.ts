@@ -1,5 +1,5 @@
-import { isPathInsideOrEqual } from './cross-platform-path'
 import type { AiVaultListArgs, AiVaultListResult } from './ai-vault-types'
+import { isAiVaultSessionInWorkspace } from './ai-vault-session-filters'
 
 export const DEFAULT_AI_VAULT_SCAN_LIMIT = 1000
 
@@ -42,8 +42,7 @@ export function truncateAiVaultListResult(
   if (scopePaths.length > 0) {
     let scopedCount = 0
     for (const session of result.sessions) {
-      const cwd = session.cwd
-      if (cwd && scopePaths.some((scopePath) => isPathInsideOrEqual(scopePath, cwd))) {
+      if (scopePaths.some((scopePath) => isAiVaultSessionInWorkspace(session, scopePath))) {
         selectedIds.add(session.id)
         if (++scopedCount >= depth) {
           break

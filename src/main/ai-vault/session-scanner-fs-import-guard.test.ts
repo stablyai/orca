@@ -28,7 +28,10 @@ const ALLOWLIST = new Set([
   'session-scanner-claude-subagents.ts',
   'session-scanner-omp-subagent-listing.ts',
   // Test-only fixture builder.
-  'session-scanner-test-fixtures.ts'
+  'session-scanner-test-fixtures.ts',
+  // Local ~/.cursor/projects/<slug>/.workspace-trusted only. WSL UNC
+  // transcripts skip this read in resolveCursorTranscriptCwd.
+  'session-scanner-cursor-project-cwd.ts'
 ])
 
 const FS_IMPORT = /import\s+([\s\S]*?)\s+from\s+['"]node:fs(?:\/promises)?['"]/g

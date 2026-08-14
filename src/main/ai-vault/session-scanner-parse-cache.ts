@@ -12,10 +12,9 @@ import { createClaudeSessionResumeState } from './session-scanner-primary-parser
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
-import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
-import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
-import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
+import { refreshCachedSessionSideChannels } from './session-scanner-parse-cache-refresh'
+import { maybeRefreshCachedCursorCwd } from './session-scanner-cursor-project-cwd'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
@@ -189,27 +188,8 @@ export async function parseAgentSessionFileCached(
     if (stats) {
       stats.reused++
     }
-    // A zero-turn transcript usually never changes again, but its sibling
-    // subagent dir (Claude `<session>/subagents/`, OMP's same-named artifact
-    // dir) can gain files after the parent's last write (a still-running
-    // subagent finishing). The mtime+size key can't see that, so refresh the
-    // cheap directory count on reuse.
-    if (entry.session && entry.session.messageCount === 0) {
-      const subagentTranscriptCount =
-        candidate.agent === 'claude'
-          ? await countSubagentTranscripts(file.path)
-          : candidate.agent === 'omp'
-            ? await countOmpSubagentTranscripts(file.path)
-            : null
-      if (
-        subagentTranscriptCount !== null &&
-        subagentTranscriptCount !== entry.session.subagentTranscriptCount
-      ) {
-        entry.session = { ...entry.session, subagentTranscriptCount }
-      }
-    }
-    if (entry.session && candidate.agent === 'codex') {
-      entry.session = await refreshCachedCodexTitle(candidate, entry.session)
+    if (entry.session) {
+      entry.session = await refreshCachedSessionSideChannels(candidate, entry.session)
     }
     storeEntry(file.path, entry)
     return entry.session
@@ -296,7 +276,10 @@ async function parseResumableCandidate(args: {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform: args.platform,
-    session: await displayState.finalize(args.platform),
+    session: maybeRefreshCachedCursorCwd(
+      args.candidate.agent,
+      await displayState.finalize(args.platform)
+    ),
     resume: { state, byteOffset: readResult.consumedThrough }
   }
 }

@@ -82,4 +82,21 @@ describe('Agent Session History depth', () => {
     ])
     expect(truncateAiVaultListResult(loaded, 'unlimited')).toBe(loaded)
   })
+
+  it('keeps cwd-less Cursor sessions whose project slug matches the workspace', () => {
+    const cursor = {
+      ...session('cursor-legacy', '', 1),
+      agent: 'cursor' as const,
+      cwd: null,
+      filePath: '/home/ada/.cursor/projects/home-ada-repo/agent-transcripts/sid.jsonl'
+    }
+    const loaded = result([
+      session('global-1', '/other', 3),
+      session('global-2', '/other', 2),
+      cursor
+    ])
+    expect(
+      truncateAiVaultListResult(loaded, 1, ['/home/ada/repo']).sessions.map(({ id }) => id)
+    ).toEqual(['global-1', 'cursor-legacy'])
+  })
 })

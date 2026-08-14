@@ -3,7 +3,7 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../shared/ai-vault-types'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { isAiVaultSessionInWorkspace } from '../../shared/ai-vault-session-filters'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
@@ -269,8 +269,7 @@ function mergeRemoteSessions(
 }
 
 function isRemoteSessionInScope(session: AiVaultSession, scopePaths: readonly string[]): boolean {
-  const cwd = session.cwd
-  return Boolean(cwd && scopePaths.some((scopePath) => isPathInsideOrEqual(scopePath, cwd)))
+  return scopePaths.some((scopePath) => isAiVaultSessionInWorkspace(session, scopePath))
 }
 
 function normalizeRemoteScopePaths(scopePaths: readonly string[]): string[] {

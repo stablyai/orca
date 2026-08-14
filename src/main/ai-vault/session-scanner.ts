@@ -42,6 +42,7 @@ import type {
 import { clampPositiveInteger, errorMessage } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
+import { resetCursorTrustedCwdCache } from './session-scanner-cursor-project-cwd'
 
 const SESSION_PARSE_CONCURRENCY = 8
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
@@ -78,6 +79,7 @@ export async function scanAiVaultSessions(
     // Why: persisted entries must be seeded before any candidate is parsed, or
     // the cold scan gains nothing from the cache file (#9210).
     throwIfAiVaultScanCancelled(options.signal)
+    resetCursorTrustedCwdCache()
     await ensureSessionParseCacheLoaded()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
     throwIfAiVaultScanCancelled(options.signal)

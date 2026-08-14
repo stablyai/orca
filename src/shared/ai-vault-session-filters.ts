@@ -8,6 +8,7 @@ import {
   normalizeRuntimePathSeparators
 } from './cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
+import { isCursorTranscriptInWorkspace } from './cursor-workspace-slug'
 import { parseWslUncPath } from './wsl-paths'
 import type {
   AiVaultAgent,
@@ -96,16 +97,11 @@ export function filterAiVaultSessions(
       ) {
         return false
       }
-      if (filters.scope === 'workspace') {
-        const cwd = session.cwd
-        if (
-          !cwd ||
-          !filters.activeWorktreePaths.some((pathValue) =>
-            isAiVaultSessionInWorkspacePath(pathValue, cwd)
-          )
-        ) {
-          return false
-        }
+      if (
+        filters.scope === 'workspace' &&
+        !isAiVaultSessionInActiveWorkspace(session, filters.activeWorktreePaths)
+      ) {
+        return false
       }
       if (filters.scope === 'project') {
         if (!filters.activeProjectKey) {
@@ -274,6 +270,27 @@ function getGroupIdentity(
     }
   }
   return { key: folderGroupKey(session.cwd), label: folderLabel(session.cwd) }
+}
+
+export function isAiVaultSessionInWorkspace(
+  session: Pick<AiVaultSession, 'agent' | 'cwd' | 'filePath'>,
+  workspacePath: string
+): boolean {
+  if (session.cwd && isAiVaultSessionInWorkspacePath(workspacePath, session.cwd)) {
+    return true
+  }
+  // Why: Cursor JSONL has no cwd and slug decode is lossy for hyphenated
+  // folder workspaces. Matching the encoded project bucket is lossless.
+  return (
+    session.agent === 'cursor' && isCursorTranscriptInWorkspace(workspacePath, session.filePath)
+  )
+}
+
+function isAiVaultSessionInActiveWorkspace(
+  session: AiVaultSession,
+  activeWorktreePaths: readonly string[]
+): boolean {
+  return activeWorktreePaths.some((pathValue) => isAiVaultSessionInWorkspace(session, pathValue))
 }
 
 function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
