@@ -480,6 +480,57 @@ describe('orchestration RPC methods', () => {
       expect(fencedTerminal.count).toBe(1)
     })
 
+    // Why these two: the reachability warning describes the address, not the outcome, so a
+    // lifecycle receipt that returns early owes the sender the same warning the ordinary
+    // receipt carries. Both of these returned a bare receipt and swallowed it.
+    it('keeps the reachability warning on a suppressed lifecycle receipt', async () => {
+      // Why no bound Run: a heartbeat naming a dispatchId is readdressed to the sender's Run
+      // when it has one, and a `run:` address carries no bare-handle warning to lose.
+      setup(false)
+      const task = db.createTask({ spec: 'work with no resolvable pane' })
+      db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_sender',
+        to: 'term_worker',
+        subject: 'still alive',
+        type: 'heartbeat',
+        // Why an unknown dispatch: reconcile suppresses a heartbeat for one that is not
+        // dispatched, which is the early return under test.
+        payload: JSON.stringify({ dispatchId: 'dispatch_gone' })
+      })) as { warnings?: { code: string; recipient: string }[] }
+
+      expect(result.warnings).toEqual([
+        expect.objectContaining({ code: 'no_live_terminal', recipient: 'term_worker' })
+      ])
+    })
+
+    it('keeps the reachability warning on a rejected lifecycle receipt', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work with no resolvable pane' })
+      db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_coord',
+        to: 'term_worker',
+        subject: 'done',
+        type: 'worker_done',
+        // Why no dispatchId: reconcile rejects the report, which is the early return under
+        // test. The outcome is required earlier, by the send-path guard.
+        payload: JSON.stringify({ taskId: task.id, outcome: 'succeeded' })
+      })) as {
+        lifecycle: { action: string; code: string }
+        warnings?: { code: string; recipient: string }[]
+      }
+
+      expect(result.lifecycle).toMatchObject({ action: 'rejected', code: 'missing_dispatch_id' })
+      expect(result.warnings).toEqual([
+        expect.objectContaining({ code: 'no_live_terminal', recipient: 'term_worker' })
+      ])
+    })
+
     it('reports no warnings for a live terminal outside any Run', async () => {
       setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>

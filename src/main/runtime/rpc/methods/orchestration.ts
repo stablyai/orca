@@ -525,6 +525,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new OrchestrationError('terminal_not_found', `Terminal ${to} was not found.`)
       }
       const sendWarnings = bareHandleReach?.warning ? [bareHandleReach.warning] : []
+      // Why a helper and not a spread at each return: the warning describes the address, so
+      // every direct receipt owes it to the sender, including the lifecycle ones that return
+      // early. Three of them used to drop it, and a bare `no_live_terminal` is exactly the
+      // case a sender cannot see any other way.
+      const withSendWarnings = <T extends object>(receipt: T): T =>
+        sendWarnings.length > 0 ? { ...receipt, warnings: sendWarnings } : receipt
 
       if (!isGroupAddress(to)) {
         const federatedDispatchId = routing.dispatchId
@@ -621,14 +627,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
                 authority.reason
               ) ?? msg
             runtime.notifyMessageArrived(to, rejection.type)
-            return {
+            return withSendWarnings({
               message: rejection,
               lifecycle: {
                 action: 'rejected',
                 code: 'dispatch_capability_invalid',
                 reason: authority.reason
               }
-            }
+            })
           }
         }
         // Why: reconcile releases the dispatch lock before waking recipients, else a woken coordinator re-dispatches while the lock is still held.
@@ -636,16 +642,16 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           const reconciled = reconcileLifecycleMessage(db, msg)
           // Why: a suppressed message is already read, so skip the notify that would wake a check --wait waiter to an empty result.
           if (reconciled.action === 'suppressed') {
-            return { message: msg }
+            return withSendWarnings({ message: msg })
           }
           if (reconciled.action === 'rejected') {
             const rejection = db.getMessageById(msg.id) ?? msg
             runtime.notifyMessageArrived(to, rejection.type)
-            return { message: rejection, lifecycle: reconciled }
+            return withSendWarnings({ message: rejection, lifecycle: reconciled })
           }
         }
         runtime.notifyMessageArrived(to, msg.type)
-        return { message: msg, ...(sendWarnings.length > 0 ? { warnings: sendWarnings } : {}) }
+        return withSendWarnings({ message: msg })
       }
 
       // Why: fan out one message per recipient (independent read-tracking) but share a thread_id for correlation (Section 4.5).
