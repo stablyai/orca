@@ -2,8 +2,26 @@
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type * as ReactModule from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type {
+  PersistedNativeChatSessionOptions,
+  SessionOptionDescriptor
+} from '../../../../shared/native-chat-session-options'
+
+const mocks = vi.hoisted(() => ({
+  storeState: {
+    settings: {} as { nativeChatSessionOptions?: PersistedNativeChatSessionOptions }
+  },
+  clearPersistedNativeChatModel: vi.fn()
+}))
+
+vi.mock('../../store', () => ({
+  useAppStore: (selector: (state: typeof mocks.storeState) => unknown) => selector(mocks.storeState)
+}))
+
+vi.mock('./use-native-chat-session-options', () => ({
+  clearPersistedNativeChatModel: mocks.clearPersistedNativeChatModel
+}))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) => {
@@ -135,6 +153,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 
 const surface = {
+  agent: 'claude',
   getSnapshot: vi.fn(() => []),
   setOption: vi.fn(),
   invokeAction: vi.fn(),
@@ -186,6 +205,11 @@ const fast: SessionOptionDescriptor = {
 }
 
 afterEach(() => cleanup())
+
+beforeEach(() => {
+  mocks.storeState.settings = {}
+  mocks.clearPersistedNativeChatModel.mockReset().mockResolvedValue(undefined)
+})
 
 describe('NativeChatSessionOptionPickers', () => {
   it('prefers collision-aware upward placement for model and option menus', () => {
@@ -456,5 +480,41 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
     expect(screen.getByText('Sent to the agent — not confirmed')).not.toBeNull()
+  })
+
+  it('offers a Use CLI default action only while a launch override is persisted', () => {
+    mocks.storeState.settings = { nativeChatSessionOptions: { claude: { model: 'haiku' } } }
+    const { rerender } = render(
+      <NativeChatSessionOptionPickers surface={surface} snapshot={[model()]} isWorking={false} />
+    )
+    // An action row, not a radio — the radios state the session's tracked model.
+    const row = screen.getByRole('button', { name: /Use CLI default/ })
+    expect(row.getAttribute('role')).not.toBe('radio')
+    expect(
+      screen.getByText('New sessions use the model configured in the agent CLI')
+    ).not.toBeNull()
+
+    mocks.storeState.settings = { nativeChatSessionOptions: { claude: {} } }
+    rerender(
+      <NativeChatSessionOptionPickers surface={surface} snapshot={[model()]} isWorking={false} />
+    )
+    expect(screen.queryByText('Use CLI default')).toBeNull()
+  })
+
+  it('clears the persisted override for the surface agent without touching the surface', async () => {
+    mocks.storeState.settings = { nativeChatSessionOptions: { claude: { model: 'haiku' } } }
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption, invokeAction }}
+        snapshot={[model()]}
+        isWorking={false}
+      />
+    )
+    screen.getByRole('button', { name: /Use CLI default/ }).click()
+    await waitFor(() => expect(mocks.clearPersistedNativeChatModel).toHaveBeenCalledWith('claude'))
+    expect(setOption).not.toHaveBeenCalled()
+    expect(invokeAction).not.toHaveBeenCalled()
   })
 })

@@ -1,3 +1,5 @@
+import type { AgentType } from './agent-status-types'
+
 export type SessionOptionValue = string | boolean
 
 export type SessionOptionSelectChoice = {
@@ -56,6 +58,9 @@ export type PersistedNativeChatSessionOptions = Partial<
 >
 
 export type SessionOptionsSurface = {
+  /** The agent this surface scopes options for — lets consumers resolve
+   *  agent-keyed state (e.g. the persisted launch default) without prop drilling. */
+  agent: AgentType
   getSnapshot(): SessionOptionDescriptor[]
   /** Apply an absolute target; known flip-only options use their tracked baseline. */
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>
