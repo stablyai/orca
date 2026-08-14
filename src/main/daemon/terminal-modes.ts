@@ -8,4 +8,6 @@ export type TerminalModes = {
   alternateScreen: boolean
   /** Kitty keyboard protocol flags used only to reseed a warm daemon emulator. */
   kittyKeyboardFlags?: number
+  /** DECTCEM visibility tracked by the headless emulator for the life of the pty. */
+  showCursor?: boolean
 }

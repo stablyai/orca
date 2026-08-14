@@ -90,5 +90,22 @@ describe('terminal mode reset profiles', () => {
       expect(buildPostReplayLiveAgentReattachReset('x\x1b[?25l')).not.toContain('\x1b[?25h')
       expect(buildPostReplayLiveAgentReattachReset('x\x1b[?25h')).toContain('\x1b[?25h')
     })
+
+    // Why: hide-once TUIs emit ?25l at startup; a bounded replay no longer
+    // contains it. Tracked showCursor=false must win so reattach does not
+    // append POST_REPLAY_LIVE_AGENT_REATTACH_RESET's ?25h.
+    it('omits the cursor-show when tracked showCursor is false even if the payload has no DECTCEM', () => {
+      expect(buildPostReplayLiveAgentReattachReset('no modes here', false)).not.toContain(
+        '\x1b[?25h'
+      )
+    })
+
+    it('re-shows the cursor when tracked showCursor is true', () => {
+      expect(buildPostReplayLiveAgentReattachReset('no modes here', true)).toContain('\x1b[?25h')
+    })
+
+    it('re-shows the cursor when no tracked state exists and the payload has no DECTCEM', () => {
+      expect(buildPostReplayLiveAgentReattachReset('no modes here')).toContain('\x1b[?25h')
+    })
   })
 })

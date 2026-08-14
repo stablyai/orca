@@ -60,6 +60,7 @@ export type PtyApi = {
     snapshotSeq?: number
     isReattach?: boolean
     isAlternateScreen?: boolean
+    showCursor?: boolean
     replay?: string
     sessionExpired?: boolean
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }

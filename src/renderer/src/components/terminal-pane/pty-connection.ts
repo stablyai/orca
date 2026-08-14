@@ -5517,7 +5517,8 @@ export function connectPanePty(
     const reattachReplayResetSequence = (
       payload: string,
       ownerProcessEnded = false,
-      isAlternateScreen?: boolean
+      isAlternateScreen?: boolean,
+      showCursor?: boolean
     ): string => {
       // Why a cold restore overrides the agent signal: liveness is read from the
       // pane's status and title, both of which are persisted, so after a cold
@@ -5528,7 +5529,7 @@ export function connectPanePty(
         return POST_REPLAY_MODE_RESET
       }
       if (shouldPreserveAgentReattachModes()) {
-        return buildPostReplayLiveAgentReattachReset(payload)
+        return buildPostReplayLiveAgentReattachReset(payload, showCursor)
       }
       // Why: an alt-screen pane is a live TUI Orca just does not recognise as an agent, and the
       // replay already re-armed its mouse modes — keep them instead of wiping them (#8291).
@@ -8297,7 +8298,8 @@ export function connectPanePty(
             reattachReplayResetSequence(
               daemonSnapshotReplay,
               Boolean(connectResult.coldRestore),
-              connectResult.isAlternateScreen
+              connectResult.isAlternateScreen,
+              connectResult.showCursor
             )
           )
           if (connectResult.pendingEscapeTailAnsi) {
@@ -8365,7 +8367,8 @@ export function connectPanePty(
               reattachReplayResetSequence(
                 modelData,
                 Boolean(connectResult?.coldRestore),
-                modelSnapshot.alternateScreen ?? connectResult?.isAlternateScreen
+                modelSnapshot.alternateScreen ?? connectResult?.isAlternateScreen,
+                connectResult?.showCursor
               )
             )
             if (modelSnapshot.pendingEscapeTailAnsi) {
@@ -8395,7 +8398,8 @@ export function connectPanePty(
               reattachReplayResetSequence(
                 connectResult.replay,
                 Boolean(connectResult.coldRestore),
-                connectResult.isAlternateScreen
+                connectResult.isAlternateScreen,
+                connectResult.showCursor
               )
             )
             sendFocusedReattachFocusInAfterReplay(ptyId, attemptGeneration)

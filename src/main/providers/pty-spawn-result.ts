@@ -61,6 +61,8 @@ export type PtySpawnResult = {
   /** True when the reattached session uses the alternate screen buffer
    *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
   isAlternateScreen?: boolean
+  /** Headless-emulator DECTCEM visibility at attach. Absent when unknown. */
+  showCursor?: boolean
   /** Buffered output returned by relay pty.attach. Unlike snapshot, this is
    *  incremental scrollback and must not clear the terminal before replay. */
   replay?: string

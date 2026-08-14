@@ -88,6 +88,8 @@ export type PtyConnectResult = {
   snapshotKittyKeyboardFlags?: number
   snapshotSeq?: number
   isAlternateScreen?: boolean
+  /** Headless-emulator DECTCEM visibility at attach. Absent when unknown. */
+  showCursor?: boolean
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
