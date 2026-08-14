@@ -35,7 +35,7 @@ import WorktreeVisibilitySourceList, {
   type WorktreeVisibilitySourceAddResult,
   type WorktreeVisibilitySourceRow
 } from './WorktreeVisibilitySourceList'
-import type { CustomWorktreeVisibilitySource, Repo } from '../../../../shared/types'
+import type { CustomWorktreeVisibilitySource, Repo } from '../../../../shared/repo-types'
 import {
   MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES,
   buildWorktreeSourcePreferenceUpdate,
@@ -44,7 +44,7 @@ import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences,
   removeCustomWorktreeSourcePreference
-} from '../../../../shared/worktree-visibility-sources'
+} from '../../../../shared/worktree/visibility-sources'
 import HiddenWorktreeRecoveryList from './HiddenWorktreeRecoveryList'
 import { worktreeVisibilityUpdateError } from './worktree-visibility-update-error'
 

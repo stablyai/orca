@@ -21,7 +21,8 @@ import type {
   FileUploadSession,
   TerminalArtifactAccessOptions
 } from './types'
-import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'

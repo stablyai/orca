@@ -9,7 +9,8 @@ import {
   parseGitLabIssueOrMRLink,
   type ProjectSlug
 } from '../../../shared/new-workspace/gitlab-links'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 export type GitLabIssueOrMRLink = NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
 

@@ -1,4 +1,5 @@
-import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { SearchableBrowserPage } from './browser-palette-search'
 
 type BrowserPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'

@@ -39,27 +39,28 @@ import {
   normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
+import type { GitHubRepositoryIdentity } from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { JiraIssue } from '../../../shared/jira-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type {
-  GitHubRepositoryIdentity,
-  GitHubWorkItem,
-  GitHubPrStartPoint,
-  GitPushTarget,
-  GitLabWorkItem,
-  JiraIssue,
-  LinearIssue,
   OrcaHooks,
   RepoHookSettings,
   SetupAgentStartupPolicy,
-  SetupDecision,
-  SetupRunPolicy,
-  SparsePreset,
-  TuiAgent,
-  WorktreeMeta,
-  WorkspaceStatus,
-  WorkspaceCreateTelemetrySource,
-  ProjectGroup
-} from '../../../shared/types'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+  SetupRunPolicy
+} from '../../../shared/orca-yaml-hook-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
+import type { SetupDecision, SparsePreset } from '../../../shared/worktree/create-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import type {
+  GitHubPrStartPoint,
+  GitPushTarget,
+  WorkspaceStatus
+} from '../../../shared/worktree/types'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
   CLIENT_PLATFORM,

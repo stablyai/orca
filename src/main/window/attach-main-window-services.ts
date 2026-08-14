@@ -4,12 +4,9 @@ import { randomUUID } from 'node:crypto'
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  CreateWorktreeResult,
-  ReleaseBuildListResult,
-  UpdateCheckOptions,
-  WorktreeStartupLaunch
-} from '../../shared/types'
+import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/update-status-types'
+import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import {
   acknowledgePendingTccPromptNotice,

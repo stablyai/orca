@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  CheckStatus,
-  PRInfo,
-  Repo,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { CheckStatus, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 

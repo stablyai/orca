@@ -88,16 +88,14 @@ import {
   type PRCommentPresentationClasses
 } from './pr-comment-presentation'
 import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { GitHubReactionContent, PRComment } from '../../../../shared/github/comment-types'
 import type {
-  PRInfo,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment,
-  GitHubReactionContent,
   GitHubRepositoryIdentity,
   PRConflictSummary,
+  PRInfo,
   PRMergeableState
-} from '../../../../shared/types'
+} from '../../../../shared/github/pull-request-types'
 import { useCheckDetailsResize } from './check-details-resize'
 import {
   RightPanelCommentComposer,

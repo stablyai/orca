@@ -1,11 +1,9 @@
-import type {
-  BaseRefSearchResult,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  JiraIssue,
-  LinearCollectionResult,
-  LinearIssue
-} from '../types'
+import type { GitHubWorkItem } from '../github/work-item-types'
+import type { GitLabWorkItem } from '../gitlab-types'
+import type { JiraIssue } from '../jira-types'
+import type { LinearIssue } from '../linear/issue-types'
+import type { LinearCollectionResult } from '../linear/workspace-types'
+import type { BaseRefSearchResult } from '../repo-types'
 import { JIRA_ISSUE_KEY_PATTERN, parseJiraIssueUrl } from '../jira-issue-url'
 import {
   isSmartWorkspaceLinearIssueIntentMatch,

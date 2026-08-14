@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { PersistedUIState } from '../../../../shared/types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { UiUpdateFieldsSchema } from './client-ui-schemas'
 import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-schema-parity'
 

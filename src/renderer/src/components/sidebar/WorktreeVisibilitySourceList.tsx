@@ -9,16 +9,16 @@ import { translate } from '@/i18n/i18n'
 import type {
   BuiltInWorktreeVisibilitySourceId,
   CustomWorktreeVisibilitySource,
-  DetectedWorktree,
   Repo
-} from '../../../../shared/types'
+} from '../../../../shared/repo-types'
+import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import {
   createWorktreeVisibilitySourceMatcher,
   effectiveBuiltInWorktreeSourceVisibility,
   effectiveCustomWorktreeSourceVisibility,
   normalizeCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatch
-} from '../../../../shared/worktree-visibility-sources'
+} from '../../../../shared/worktree/visibility-sources'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility

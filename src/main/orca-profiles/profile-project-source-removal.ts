@@ -1,4 +1,4 @@
-import type { WorkspaceKey } from '../../shared/types'
+import type { WorkspaceKey } from '../../shared/folder-workspace-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
   rebuildRepoBackedProjectState,

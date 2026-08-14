@@ -1,22 +1,23 @@
 /* eslint-disable max-lines */
 import type { StateCreator, StoreApi } from 'zustand'
 import type { AppState } from '../types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { LocalBaseRefRefreshResult } from '../../../../shared/worktree/base-ref-drift-types'
+import type {
+  ForceDeleteWorktreeBranchResult,
+  RemoveWorktreeResult
+} from '../../../../shared/worktree/create-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type {
   DetectedWorktreeListResult,
-  LocalBaseRefRefreshResult,
-  ForceDeleteWorktreeBranchResult,
-  FolderWorkspace,
   GitHubPrStartPoint,
-  Worktree,
-  WorkspaceVisibleTabType,
   GitPushTarget,
-  RemoveWorktreeResult,
-  WorktreeLineage,
-  WorkspaceLineage,
-  ProjectHostSetup,
-  Repo,
-  WorktreeMeta
-} from '../../../../shared/types'
+  Worktree
+} from '../../../../shared/worktree/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
 import {
   findWorktreeById,
@@ -28,7 +29,7 @@ import {
   type WorktreeSlice
 } from './worktree-helpers'
 import { projectWorktreeTabModelReconciliation } from './tabs'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
@@ -113,7 +114,7 @@ import {
   classifyWorktreeForceDeleteReason,
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
-} from '../../../../shared/worktree-removal'
+} from '../../../../shared/worktree/removal'
 import { FolderWorkspaceActivityPersistence } from './folder-workspace-activity-persistence'
 import {
   createDetectedWorktreeRefreshLeaseRegistry,

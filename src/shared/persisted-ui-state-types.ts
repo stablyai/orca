@@ -21,7 +21,7 @@ import type {
   WorkspaceHostScope,
   WorktreeCardProperty
 } from './ui-chrome-types'
-import type { WorkspaceStatusDefinition } from './worktree-types'
+import type { WorkspaceStatusDefinition } from './worktree/types'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null

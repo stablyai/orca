@@ -1,5 +1,5 @@
 import type { GitUpstreamStatus } from './git-status-types'
-import type { GitPushTarget } from './types'
+import type { GitPushTarget } from './worktree/types'
 import { parseGitRevListAheadBehindCounts } from './git-rev-list-output'
 
 export type GitCommandRunner = (args: string[]) => Promise<{ stdout: string }>

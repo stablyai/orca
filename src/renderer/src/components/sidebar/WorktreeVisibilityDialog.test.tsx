@@ -4,7 +4,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DetectedWorktree, DetectedWorktreeListResult, Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type {
+  DetectedWorktree,
+  DetectedWorktreeListResult
+} from '../../../../shared/worktree/types'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 

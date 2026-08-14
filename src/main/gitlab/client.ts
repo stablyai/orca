@@ -1,26 +1,26 @@
 /* eslint-disable max-lines -- co-locates GitLab MR/issue/work-item operations sharing one acquire/release pattern. */
+import type { ClassifiedError } from '../../shared/classified-error'
 import type {
-  ClassifiedError,
+  GetGitLabRateLimitResult,
   GitLabAssignableUser,
   GitLabAuthDiagnostic,
   GitLabDiscussionResolveResult,
   GitLabJobTraceResult,
+  GitLabMRInlineCommentInput,
+  GitLabMRReviewersUpdateResult,
   GitLabPagedResult,
   GitLabPipelineJob,
   GitLabRateLimitSnapshot,
-  GitLabMRInlineCommentInput,
-  GitLabMRReviewersUpdateResult,
   GitLabRetryJobResult,
   GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
-  GetGitLabRateLimitResult,
-  IssueSourcePreference,
   ListMergeRequestsResult,
   MRComment,
   MRInfo,
   MRListState
-} from '../../shared/types'
+} from '../../shared/gitlab-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { derivePipelineStatus, mapIssueToWorkItem, mapMRInfo, mapMRToWorkItem } from './mappers'
 import {
   acquire,

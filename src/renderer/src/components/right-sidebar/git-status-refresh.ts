@@ -6,12 +6,9 @@ import {
   invalidateAutomaticPushTargetUpstreamStatusCache,
   storeCachedAutomaticPushTargetUpstreamStatus
 } from './push-target-upstream-refresh-cache'
-import type {
-  GitPushTarget,
-  GitStatusResult,
-  GitUpstreamStatus,
-  GlobalSettings
-} from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 import {
   beginAutomaticUpstreamRefresh,
   beginStrictUpstreamRefresh,

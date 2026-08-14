@@ -1,4 +1,5 @@
-import type { DetectedWorktreeListResult, Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { getNewExternalWorktreeInboxWorktrees } from '../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { NewExternalWorktreesInboxCandidate } from './worktree-list-groups'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carryProjectStateThroughIdentityChange } from './project-identity-succession'
-import type { Project } from './types'
+import type { Project } from './project-types'
 
 const makeProject = (overrides: Partial<Project> = {}): Project => ({
   id: 'project-1',

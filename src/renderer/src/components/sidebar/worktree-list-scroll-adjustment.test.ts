@@ -12,7 +12,7 @@ import {
   GROUP_HEADER_ROW_HEIGHT,
   getActiveStickyHeaderIndexForScroll
 } from './worktree-list-virtual-rows'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { Row } from './worktree-list-groups'
 
 const repo: Repo = {

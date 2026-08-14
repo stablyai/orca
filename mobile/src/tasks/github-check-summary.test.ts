@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildGitHubCheckSummary, type GitHubCheckLike } from './github-check-summary'
 import { buildGitLabCheckSummary } from './gitlab-check-summary'
 import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
-import type { ProviderCheckSummary } from '../../../src/shared/types'
+import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 
 describe('buildGitHubCheckSummary', () => {
   it('returns none for empty check lists', () => {

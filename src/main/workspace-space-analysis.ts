@@ -7,7 +7,9 @@ import { platform } from 'node:process'
 import type { Dirent } from 'node:fs'
 import type { Store } from './persistence'
 import { isFolderRepo } from '../shared/repo-kind'
-import type { DirEntry, GitWorktreeInfo, Repo, Worktree } from '../shared/types'
+import type { DirEntry } from '../shared/filesystem-entry-types'
+import type { Repo } from '../shared/repo-types'
+import type { GitWorktreeInfo, Worktree } from '../shared/worktree/types'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceDirectoryScanResult,

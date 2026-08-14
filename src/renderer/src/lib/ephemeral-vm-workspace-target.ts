@@ -2,7 +2,7 @@ import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
-} from '../../../shared/types'
+} from '../../../shared/project-types'
 import {
   getEphemeralVmRecipeResultCheckoutMode,
   getEphemeralVmRecipeResultProjectRoot

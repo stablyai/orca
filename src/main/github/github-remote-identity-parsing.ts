@@ -1,5 +1,5 @@
 import { normalizeGitHubRemoteHost } from '../../shared/git-remote-host-alias'
-import type { GitHubOwnerRepo } from '../../shared/types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 
 export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 import { getEditorCmdSaveFileId } from './editor-cmd-save-target'
 
 function makeTab(contentType: Tab['contentType'], entityId: string): Tab {

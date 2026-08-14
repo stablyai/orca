@@ -24,7 +24,6 @@ import {
   TabCurrent,
   TabSetProfile,
   TabClose,
-  TabCreate,
   TabList,
   TabProfileClone,
   TabShow,
@@ -32,6 +31,7 @@ import {
   Upload,
   Wait
 } from './browser-schemas'
+import { BrowserTabCreateParams } from './browser-tab-create-schema'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 
 const CertificateProceed = BrowserTarget.extend({
@@ -112,7 +112,7 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'browser.tabCreate',
-    params: TabCreate,
+    params: BrowserTabCreateParams,
     handler: async (params, { runtime }) => runtime.browserTabCreate(params)
   }),
   defineMethod({

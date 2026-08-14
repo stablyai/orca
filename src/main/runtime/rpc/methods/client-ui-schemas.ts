@@ -16,9 +16,9 @@ import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-
 import {
   normalizeWorktreeCardProperties,
   WORKTREE_CARD_PROPERTIES
-} from '../../../../shared/worktree-card-properties'
+} from '../../../../shared/worktree/card-properties'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields'
 import { TaskResumeState } from './task-resume-state-schema'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'

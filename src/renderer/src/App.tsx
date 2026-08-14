@@ -176,7 +176,8 @@ import { selectFloatingVisibleTabCount } from './store/selectors'
 import { selectActiveTerminalChromeState } from './store/active-terminal-chrome-selector'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
-import type { OnboardingState, UpdateStatus } from '../../shared/types'
+import type { OnboardingState } from '../../shared/onboarding-state-types'
+import type { UpdateStatus } from '../../shared/update-status-types'
 import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted

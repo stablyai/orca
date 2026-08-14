@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { Store } from './persistence'
+import type { Repo } from '../shared/repo-types'
 import type {
   AdoptProvisionedRootArgs,
-  AutomationWorkspaceProvenance,
-  CreateWorktreeResult,
-  Repo,
-  WorktreeMeta
-} from '../shared/types'
+  CreateWorktreeResult
+} from '../shared/worktree/create-types'
+import type { WorktreeMeta } from '../shared/worktree/meta-types'
+import type { AutomationWorkspaceProvenance } from '../shared/worktree/types'
 import { isRuntimeOwnedSshTargetId, toSshExecutionHostId } from '../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import {

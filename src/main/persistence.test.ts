@@ -13,19 +13,14 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type {
-  PersistedState,
-  Project,
-  ProjectGroup,
-  ProjectHostSetup,
-  Repo,
-  GlobalSettings,
-  TerminalPaneLayoutNode,
-  TerminalTab,
-  WorktreeLineage,
-  WorkspaceLineage,
-  WorkspaceSessionState
-} from '../shared/types'
+import type { GlobalSettings } from '../shared/global-settings-types'
+import type { PersistedState } from '../shared/persisted-state-types'
+import type { ProjectGroup } from '../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../shared/project-types'
+import type { Repo } from '../shared/repo-types'
+import type { TerminalPaneLayoutNode, TerminalTab } from '../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'

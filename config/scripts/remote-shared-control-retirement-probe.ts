@@ -5,7 +5,7 @@ import {
   resolveEnvironment,
   resolveEnvironmentPairingOffer
 } from '../../src/shared/runtime-environment-store'
-import type { MemorySnapshot } from '../../src/shared/types'
+import type { MemorySnapshot } from '../../src/shared/process-stats-types'
 import type { RuntimeStatus } from '../../src/shared/runtime-types'
 
 async function main(): Promise<void> {

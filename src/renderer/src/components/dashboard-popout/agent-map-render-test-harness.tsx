@@ -6,7 +6,7 @@ import type {
   DashboardSleepWorkspaceArgs,
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentMap } from './AgentMap'
 import type { AgentMapState } from './agent-map-filter'
 

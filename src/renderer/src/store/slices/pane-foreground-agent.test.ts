@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 function terminalTab(id: string, worktreeId: string): TerminalTab {
   return {

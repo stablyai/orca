@@ -8,12 +8,12 @@ import React, {
   useState
 } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
 import { extractWorkspaceKanbanLaneRange } from './workspace-kanban-lane-range'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'

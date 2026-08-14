@@ -1,7 +1,9 @@
 import { getStatus } from '../git/status'
 import { gitExecFileAsync } from '../git/runner'
 import type { IGitProvider } from '../providers/types'
-import type { GitStatusResult, Repo, Worktree } from '../../shared/types'
+import type { GitStatusResult } from '../../shared/git-status-types'
+import type { Repo } from '../../shared/repo-types'
+import type { Worktree } from '../../shared/worktree/types'
 import type { WorkspaceCleanupBlocker } from '../../shared/workspace-cleanup'
 import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,

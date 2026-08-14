@@ -20,16 +20,12 @@ import {
   REPO_HEADER_ACTION_REVEAL_CLASS
 } from './repo-header-action-button-class'
 import { getWorktreeLineageAncestors } from './worktree-lineage-projection'
-import type {
-  DetectedWorktree,
-  Project,
-  ProjectHostSetup,
-  FolderWorkspace,
-  Repo,
-  ProjectGroup,
-  Worktree,
-  WorktreeLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 

@@ -130,4 +130,48 @@ describe('Codex WSL scan gate', () => {
       })
     ).rejects.toBe(refusal)
   })
+
+  it('reports the abort, not a refusal, when the hook-path probe races a caller abort', async () => {
+    const controller = new AbortController()
+    const abortReason = new Error('caller went away')
+    mocks.gate.mockImplementation(async (options: { operation?: string; path: string }) => {
+      if (options.operation === 'access') {
+        controller.abort(abortReason)
+        throw new WslTranscriptFsError('timeout', 'slow share')
+      }
+      return []
+    })
+
+    await expect(
+      resolveSessionFilePath(
+        'codex',
+        'session-id',
+        {
+          transcriptPath: `${WSL_SESSIONS_DIR}\\2026\\rollout-1-session-id.jsonl`,
+          codexSessionsDirs: [LOCAL_SESSIONS_DIR]
+        },
+        controller.signal
+      )
+    ).rejects.toBe(abortReason)
+  })
+
+  // The scan layer's own waiter already wins this race; the resolver's post-catch
+  // signal check is the backstop if that ever stops holding.
+  it('reports the abort, not a refusal, when a scanned root is aborted mid-scan', async () => {
+    const controller = new AbortController()
+    const abortReason = new Error('caller went away')
+    mocks.gate.mockImplementation(async () => {
+      controller.abort(abortReason)
+      throw new WslTranscriptFsError('timeout', 'slow share')
+    })
+
+    await expect(
+      resolveSessionFilePath(
+        'codex',
+        'session-id',
+        { codexSessionsDirs: [WSL_SESSIONS_DIR] },
+        controller.signal
+      )
+    ).rejects.toBe(abortReason)
+  })
 })

@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 const MISSING = Symbol('missing')
 type RollbackValue = unknown

@@ -6,7 +6,8 @@ import {
   getWorktreeDragIndexes,
   renderRowContainsWorktree
 } from './WorktreeList'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { Row } from './worktree-list-groups'
 
 const repo: Repo = {

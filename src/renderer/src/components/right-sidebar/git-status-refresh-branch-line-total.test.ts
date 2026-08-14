@@ -9,7 +9,7 @@ import {
   refreshGitStatusForWorktreeStrict,
   type GitStatusRefreshDeps
 } from './git-status-refresh'
-import type { GitStatusResult } from '../../../../shared/types'
+import type { GitStatusResult } from '../../../../shared/git-status-types'
 
 const MERGE_BASE = '1f3c0d9a5b6e7f8091a2b3c4d5e6f708192a3b4c'
 

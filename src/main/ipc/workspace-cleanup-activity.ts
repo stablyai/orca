@@ -1,6 +1,7 @@
 import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { Repo, Worktree } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
+import type { Worktree } from '../../shared/worktree/types'
 import { getPersistedWorkspaceCleanupActivityAt } from '../../shared/workspace-cleanup'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'

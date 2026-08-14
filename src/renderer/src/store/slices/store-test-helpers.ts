@@ -1,12 +1,8 @@
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  Worktree,
-  TerminalTab,
-  TerminalLayoutSnapshot,
-  Tab,
-  TabGroup
-} from '../../../../shared/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { OpenFile } from './editor'
 import { createRepoSlice } from './repos'
 import { createSparsePresetsSlice } from './sparse-presets'

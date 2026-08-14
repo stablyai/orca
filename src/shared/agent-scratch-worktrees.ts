@@ -2,7 +2,7 @@ import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import {
   createWorktreeVisibilitySourceMatcher,
   type WorktreeVisibilitySourceMatcher
-} from './worktree-visibility-sources'
+} from './worktree/visibility-sources'
 
 /** Why: agent CLIs reserve these repo-root paths for scratch; broader matches
  *  can hide legitimate user worktrees (#9388). */

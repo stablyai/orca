@@ -5,7 +5,7 @@ import {
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import type { OpenFile } from '@/store/slices/editor'
-import type { Tab } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
 
 export type MirroredEditorCloseState = WorktreeRuntimeOwnerState & {
   openFiles: readonly OpenFile[]

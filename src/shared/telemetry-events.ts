@@ -56,13 +56,9 @@ import {
 } from './nested-repo-telemetry'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
-import type {
-  DiscoveryStatusEmitted,
-  GlobalSettings,
-  OnboardingChecklistState,
-  PathSource,
-  ShellHydrationFailureReason
-} from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { DiscoveryStatusEmitted, OnboardingChecklistState } from './onboarding-state-types'
+import type { PathSource, ShellHydrationFailureReason } from './shell-path-hydration-types'
 
 // ── Shared property enums ───────────────────────────────────────────────
 

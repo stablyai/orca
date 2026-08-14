@@ -1,6 +1,6 @@
 import { defaultFilter } from 'cmdk'
 import { branchDisplayName } from './WorktreeCardHelpers'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export function getWorktreeParentPickerItemValue(candidate: Worktree): string {
   return `${candidate.displayName} ${branchDisplayName(candidate.branch)} ${candidate.path}`

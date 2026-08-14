@@ -1,4 +1,4 @@
-import type { WorkspaceCreatorProvenance } from './types'
+import type { WorkspaceCreatorProvenance } from './worktree/types'
 
 export function normalizeWorkspaceCreatorProvenance(
   value: unknown

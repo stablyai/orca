@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import {

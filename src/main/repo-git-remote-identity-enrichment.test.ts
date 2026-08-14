@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import { type GitRemoteIdentityProbe, probeGitRemoteIdentity } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,

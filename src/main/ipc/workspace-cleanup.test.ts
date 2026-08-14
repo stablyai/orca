@@ -2,13 +2,11 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  DiffComment,
-  GitStatusResult,
-  GitWorktreeInfo,
-  Repo,
-  WorktreeMeta
-} from '../../shared/types'
+import type { DiffComment } from '../../shared/diff-comment-types'
+import type { GitStatusResult } from '../../shared/git-status-types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { WorkspaceCleanupScanProgress } from '../../shared/workspace-cleanup'
 
 const {

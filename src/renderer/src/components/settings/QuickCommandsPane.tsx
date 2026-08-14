@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GlobalSettings, TerminalQuickCommand } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
 import {
   createTerminalQuickCommandDraft,

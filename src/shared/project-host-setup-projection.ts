@@ -1,13 +1,9 @@
 import { getRepoExecutionHostId } from './execution-host'
 import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
-import { githubRepoIdentityKey, isDefaultGitHubHost } from './github-repository-identity-key'
-import type {
-  Project,
-  ProjectHostSetup,
-  ProjectProviderIdentity,
-  Repo,
-  WorktreeMeta
-} from './types'
+import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
+import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
+import type { Repo } from './repo-types'
+import type { WorktreeMeta } from './worktree/meta-types'
 
 type ProjectAccumulator = {
   project: Project

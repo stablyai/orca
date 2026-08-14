@@ -4,7 +4,7 @@ import {
   parseLoopbackUrlWithPort,
   type LocalhostWorktreeLabelRoute
 } from '../../../shared/localhost-worktree-labels'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import { toast } from 'sonner'
 

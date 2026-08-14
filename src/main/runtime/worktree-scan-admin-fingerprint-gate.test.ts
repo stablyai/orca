@@ -39,6 +39,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 
 import {
   OrcaRuntimeService,
+  RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from './orca-runtime'
@@ -49,6 +50,10 @@ const WORKTREE_PATH = '/Users/me/dev/app-feature'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 const MAIN_WORKTREE_ID = `${REPO_ID}::${REPO_PATH}`
 const SCAN_TTL_MS = 30_000
+// A busy host (100+ linked worktrees, Defender, cold dentry cache, cloud placeholders) can spend
+// seconds in pure stat time. Reuse has to survive that, or trimming the probe's deadline to fit the
+// caller budget just trades a repeating stall for a repeating `git worktree list`.
+const SLOW_BUT_HEALTHY_PROBE_MS = 3_000
 
 function makeMeta(overrides: Record<string, unknown> = {}) {
   return {
@@ -116,16 +121,24 @@ function makeRuntime(
 ): {
   runtime: OrcaRuntimeService
   list: () => Promise<unknown>
+  store: ReturnType<typeof makeStore>
 } {
-  const runtime = new OrcaRuntimeService(makeStore(options) as never)
+  const store = makeStore(options)
+  const runtime = new OrcaRuntimeService(store as never)
   return {
     runtime,
-    list: () => (runtime as unknown as RuntimeInternals).listResolvedWorktrees()
+    list: () => (runtime as unknown as RuntimeInternals).listResolvedWorktrees(),
+    store
   }
 }
 
 function scanCount(): number {
   return listWorktreesStrictMock.mock.calls.length
+}
+
+/** Scanned rows carry the mocked tips; the persisted-row fallback publishes empty ones. */
+function heads(worktrees: unknown): string[] {
+  return (worktrees as { git: { head: string } }[]).map((worktree) => worktree.git.head).sort()
 }
 
 /** Let every already-settled promise chain run without advancing the clock, so a stall stays a stall. */
@@ -450,6 +463,80 @@ describe('worktree scan admin-fingerprint gate', () => {
       await drainMicrotasks()
       expect(scanCount()).toBe(2)
       await second
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds the awaited probe by the caller per-repo budget', () => {
+    // The wait runs inside that budget, so outlasting it can only strand the caller on persisted rows.
+    expect(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS).toBeLessThan(
+      RESOLVED_WORKTREE_REPO_TIMEOUT_MS
+    )
+  })
+
+  it('still reuses the scan when a slow probe answers inside its deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+      await list()
+      expect(scanCount()).toBe(1)
+
+      const releaseSlowProbe = stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const second = list()
+
+      // Deliberately an absolute figure, not one derived from the deadline: this is the lower end of
+      // the band, and a self-referential advance would still pass however far the deadline is cut.
+      await vi.advanceTimersByTimeAsync(SLOW_BUT_HEALTHY_PROBE_MS)
+      releaseSlowProbe('fp-1')
+      await second
+      expect(scanCount()).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still returns scanned rows within the per-repo budget when the probe stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+      await list()
+
+      stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const second = list()
+      const secondSettled = trackSettled(second)
+
+      // The probe's own deadline has to end the wait; if the caller's fallback gets there first the
+      // repo answers with persisted rows on every TTL expiry.
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      await drainMicrotasks()
+      expect(secondSettled()).toBe(true)
+      expect(scanCount()).toBe(2)
+      expect(heads(await second)).toEqual(['abc', 'def'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not publish an already-expired snapshot after a slow compute', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list, store } = makeRuntime()
+      await list()
+
+      stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const second = list()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      await second
+
+      // The probe deadline outlasts the snapshot TTL, so a start-stamped entry is born expired and
+      // the next poll repeats the whole wait instead of reading the answer that just landed.
+      const getRepos = vi.spyOn(store, 'getRepos')
+      await list()
+      expect(getRepos).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }

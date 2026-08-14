@@ -1,5 +1,6 @@
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control-group-order'
-import type { GitStatusEntry, SourceControlGroupOrder } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { SourceControlGroupOrder } from '../../../../shared/ui-chrome-types'
 
 export const SOURCE_CONTROL_AREAS = ['unstaged', 'staged', 'untracked'] as const
 export type SourceControlSectionArea = (typeof SOURCE_CONTROL_AREAS)[number]

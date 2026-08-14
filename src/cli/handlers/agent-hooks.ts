@@ -13,7 +13,8 @@ import {
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
-import type { GlobalSettings, PersistedState } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { PersistedState } from '../../shared/persisted-state-types'
 import {
   applyAgentStatusHooksEnabled,
   getManagedAgentHookStatuses,

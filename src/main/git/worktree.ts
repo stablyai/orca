@@ -5,7 +5,7 @@ import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   getBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { withSpan } from '../observability/tracer'
 import { withWorktreeRemoveStageSpan } from '../observability/instrumentation'
 import {
@@ -15,13 +15,13 @@ import {
 } from '../worktree-trash'
 import { parseWslPath } from '../wsl'
 import type {
-  GitWorktreeInfo,
   LocalBaseRefRefreshResult,
-  LocalBaseRefUpdateSuggestion,
-  RemoveWorktreeResult
-} from '../../shared/types'
-import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
-import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree-submodule-removal'
+  LocalBaseRefUpdateSuggestion
+} from '../../shared/worktree/base-ref-drift-types'
+import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
+import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree/submodule-removal'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { parseWslUncPath } from '../../shared/wsl-paths'

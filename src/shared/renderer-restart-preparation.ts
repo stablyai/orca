@@ -3,7 +3,7 @@ import {
   type EditorPrepareHotExitDetail
 } from './editor-save-events'
 import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT } from './renderer-shutdown-events'
-import type { UpdateStatus } from './types'
+import type { UpdateStatus } from './update-status-types'
 
 export type AppRestartPrepOptions = {
   startedEventName: string

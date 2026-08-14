@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethod } from '../../shared/types'
+import type { GitHubPRMergeMethod } from '../../shared/github/pull-request-types'
 import { ghExecFileAsync } from '../git/runner'
 import { acquire, release } from './gh-utils'
 import {

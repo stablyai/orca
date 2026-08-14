@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { BrowserCookieImportSummary } from '../../../shared/types'
+import type { BrowserCookieImportSummary } from '../../../shared/browser-workspace-types'
 import { translate } from '@/i18n/i18n'
 
 type CookieImportWarning = NonNullable<BrowserCookieImportSummary['warning']>

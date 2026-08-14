@@ -1,4 +1,4 @@
-import type { MarkdownDocument } from './types'
+import type { MarkdownDocument } from './filesystem-entry-types'
 import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 export const MARKDOWN_DOCUMENT_LISTING_MAX_DOCUMENTS = 20_000

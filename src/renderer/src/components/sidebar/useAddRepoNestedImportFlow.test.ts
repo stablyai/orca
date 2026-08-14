@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { NestedRepoScanResult, ProjectGroupImportResult, Repo } from '../../../../shared/types'
+import type {
+  NestedRepoScanResult,
+  ProjectGroupImportResult
+} from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()

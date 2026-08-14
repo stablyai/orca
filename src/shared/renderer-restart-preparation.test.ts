@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { UpdateStatus } from './types'
+import type { UpdateStatus } from './update-status-types'
 import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT } from './renderer-shutdown-events'
 import {
   createUpdaterQuitAbortRelay,

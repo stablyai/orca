@@ -8,7 +8,7 @@
  * consumers can use it.
  */
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 /** Delay before BEL/completion OS notifications so the richer
  *  agent-task-complete notification can win a same-burst BEL race. */

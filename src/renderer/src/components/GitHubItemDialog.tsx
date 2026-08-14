@@ -177,8 +177,8 @@ import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
-} from '../../../shared/github-pr-merge-methods'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+} from '../../../shared/github/pull-request-merge-methods'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import {
   findGithubIssueWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
@@ -186,22 +186,22 @@ import {
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
+import type { GitBranchChangeEntry, GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
 import type {
+  GitHubIssueTimelineItem,
+  GitHubIssueTimelineTarget,
+  PRComment
+} from '../../../shared/github/comment-types'
+import type {
+  GitHubAssignableUser,
   GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubPRFileViewedState,
-  GitHubWorkItem,
-  GitHubWorkItemDetails,
-  GitHubIssueTimelineItem,
-  GitHubIssueTimelineTarget,
-  GitHubAssignableUser,
-  GitHubPRMergeMethod,
-  GitBranchChangeEntry,
-  GitDiffResult,
-  PRCheckDetail,
-  PRComment
-} from '../../../shared/types'
+  GitHubPRMergeMethod
+} from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,

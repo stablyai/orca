@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react'
 import { Dialog } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AddRepoDialogStepContent } from './AddRepoDialogStepContent'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 
 const nestedScan: NestedRepoScanResult = {
   selectedPath: '/workspace/platform',

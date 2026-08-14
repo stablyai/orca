@@ -2,32 +2,33 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
-import { githubProjectIdentityKey } from '../../../../shared/github-project-identity'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { githubProjectIdentityKey } from '../../../../shared/github/project-identity'
+import type { ClassifiedError } from '../../../../shared/classified-error'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type {
-  ClassifiedError,
-  GitHubOwnerRepo,
+  GitHubCommentResult,
+  GitHubReactionContent,
+  PRComment
+} from '../../../../shared/github/comment-types'
+import type {
   GitHubPRRefreshAlias,
-  IssueSourcePreference,
-  PRInfo,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
   GitHubPRRefreshSkippedReason,
   PRRefreshErrorType,
-  PRRefreshOutcome,
-  GitHubCommentResult,
-  GitHubReactionContent,
+  PRRefreshOutcome
+} from '../../../../shared/github/pull-request-refresh-types'
+import type {
+  GitHubOwnerRepo,
   IssueInfo,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment,
-  Repo,
-  Worktree,
-  GitHubWorkItem,
-  ListWorkItemsResult,
-  GlobalSettings
-} from '../../../../shared/types'
+  PRInfo
+} from '../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { IssueSourcePreference, Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   GetProjectViewTableArgs,
   GetProjectViewTableResult,
@@ -36,7 +37,7 @@ import type {
   GitHubProjectRow,
   GitHubProjectTable,
   GitHubProjectViewError
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import {
   isGitHubWorkItemsSshRemoteRequiredError,
   sortWorkItemsByNumber,
@@ -58,7 +59,7 @@ import {
   GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN,
   isGitHubWorkItemsQueryTooLarge
 } from './github-work-items-query-bounds'
-import { classifyGitHubUnavailable } from '../../../../shared/github-api-availability'
+import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { translate } from '@/i18n/i18n'
 import {
@@ -74,11 +75,12 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
-import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github-pr-for-branch-outcome'
+import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github/pull-request-for-branch-outcome'
 import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
 import { withGitHubCheckDetailsTimeout } from '@/runtime/github-check-details-timeout'
 import { getGitHubRepoLookupIndex } from './github-repo-lookup-index'
-import { areValuesEqual, reconcileCatalogRows } from './repo-identity-reconcile'
+import { reconcileCatalogRows } from './repo-identity-reconcile'
+import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: separate from CacheEntry<T> — project-view has a single GraphQL source (no issue/PR fallback) and a distinct error union.
@@ -2759,8 +2761,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             (row) => `${row.repoId}\0${row.id}`
           )
           const nextFellBack = envelope.issueSourceFellBack ? true : undefined
-          const sourcesUnchanged = areValuesEqual(previousEntry?.sources, envelope.sources)
-          const errorUnchanged = areValuesEqual(previousEntry?.error, errorForCache)
+          const sourcesUnchanged = structuralValuesEqual(previousEntry?.sources, envelope.sources)
+          const errorUnchanged = structuralValuesEqual(previousEntry?.error, errorForCache)
           const fellBackUnchanged = previousEntry?.issueSourceFellBack === nextFellBack
           if (
             previousEntry &&
@@ -2787,9 +2789,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               ...(errorForCache
                 ? {
                     error:
-                      errorUnchanged && previousError !== undefined
-                        ? previousError
-                        : errorForCache
+                      errorUnchanged && previousError !== undefined ? previousError : errorForCache
                   }
                 : {}),
               ...(nextFellBack ? { issueSourceFellBack: true } : {})

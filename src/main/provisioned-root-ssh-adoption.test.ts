@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from './persistence'
-import type { AdoptProvisionedRootArgs, GitWorktreeInfo, Repo, WorktreeMeta } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
+import type { AdoptProvisionedRootArgs } from '../shared/worktree/create-types'
+import type { WorktreeMeta } from '../shared/worktree/meta-types'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
 import {
   listEphemeralVmRuntimes,
   upsertEphemeralVmRuntime

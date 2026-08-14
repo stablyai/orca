@@ -1,4 +1,4 @@
-import type { PRConflictSummary } from '../../shared/types'
+import type { PRConflictSummary } from '../../shared/github/pull-request-types'
 import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
