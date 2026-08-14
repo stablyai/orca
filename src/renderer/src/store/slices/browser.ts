@@ -68,6 +68,7 @@ import {
 
 type CreateBrowserTabOptions = {
   activate?: boolean
+  browserPageId?: string
   title?: string
   sessionProfileId?: string | null
   sessionPartition?: string | null
@@ -390,11 +391,12 @@ function buildBrowserPage(
   worktreeId: string,
   url: string,
   title?: string,
-  browserRuntimeEnvironmentId?: string | null
+  browserRuntimeEnvironmentId?: string | null,
+  browserPageId?: string
 ): BrowserPage {
   const normalizedUrl = normalizeUrl(url)
   return {
-    id: createBrowserUuid(),
+    id: browserPageId ?? createBrowserUuid(),
     workspaceId,
     worktreeId,
     url: normalizedUrl,
@@ -599,12 +601,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   createBrowserTab: (worktreeId, url, options) => {
     assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
     const workspaceId = createBrowserUuid()
+    const browserPageId = options?.browserPageId
+    if (
+      browserPageId &&
+      (findWorkspace(get().browserTabsByWorktree, browserPageId) ||
+        findPage(get().browserPagesByWorkspace, browserPageId))
+    ) {
+      throw new Error(`Browser page ${browserPageId} already exists`)
+    }
     const page = buildBrowserPage(
       workspaceId,
       worktreeId,
       url,
       options?.title,
-      options?.browserRuntimeEnvironmentId
+      options?.browserRuntimeEnvironmentId,
+      browserPageId
     )
     // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
     const sessionProfileId =

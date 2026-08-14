@@ -29448,7 +29448,6 @@ export class OrcaRuntimeService {
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
-    const now = Date.now()
     const metaById = this.store.getAllWorktreeMeta() ?? {}
     const repos = this.store.getRepos()
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
@@ -29529,11 +29528,13 @@ export class OrcaRuntimeService {
       this.store?.getAllWorktreeLineage?.() ?? {}
     )
     // Why: short TTL avoids shelling out on every frequent poll while still catching worktree changes made outside Orca.
+    // Why stamped on completion, not entry: a compute that spent longer than the TTL would otherwise publish an
+    // already-expired entry, so the very next poll recomputes and every caller repeats the same slow path.
     if (generation === this.resolvedWorktreeGeneration) {
       this.resolvedWorktreeCache = {
         worktrees,
         platformByRepoId,
-        expiresAt: now + RESOLVED_WORKTREE_CACHE_TTL_MS
+        expiresAt: Date.now() + RESOLVED_WORKTREE_CACHE_TTL_MS
       }
     }
     return { worktrees, platformByRepoId }
@@ -35540,7 +35541,9 @@ export class OrcaRuntimeService {
     getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
     getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
     // Why: bind directly, not a wrapper arrow — a hand-listed wrapper dropped targetGroupId, so a right-split browser landed in the left.
-    markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this)
+    markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
+    notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
+      this.notifyMobileSessionTabsChanged(worktreeId)
   })
 
   private readonly emulatorCommands = new RuntimeEmulatorCommands({
@@ -36055,13 +36058,20 @@ const WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS = 5 * 60_000
 // edits are invisible to it and a tip living in packed-refs or reftable only gets an mtime + size
 // stamp, so a real scan still runs on this interval even while the probe reports "unchanged".
 export const WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS = 5 * 60_000
-// Why so generous: a healthy but slow host (100+ linked worktrees, Windows Defender, cold dentry
-// cache, cloud placeholders) must still get to reuse its scan. Well under WORKTREE_LIST_TIMEOUT_MS,
-// and expiring yields `null` — the existing "cannot prove unchanged" sentinel, so a real scan runs.
-// Exceeding RESOLVED_WORKTREE_REPO_TIMEOUT_MS is deliberate, not a bug: the payoff is skipping a
-// `git worktree list` subprocess, not cutting this caller's latency — that caller is already capped.
-export const WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS = 10_000
-const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
+export const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
+// Why reserved rather than spent on the probe: when the probe expires the caller still has to run
+// `git worktree list` and answer inside the same budget, so the fallback needs its own room. Sized
+// for a healthy Git on a busy host, well above the tens of milliseconds a warm list costs.
+const WORKTREE_SCAN_FALLBACK_ALLOWANCE_MS = 1500
+// Why derived from the caller's budget instead of a generous absolute: this wait runs *inside*
+// RESOLVED_WORKTREE_REPO_TIMEOUT_MS, so outlasting it buys nothing — the caller has already given up
+// and restored persisted rows — while turning a reusable scan into a full-budget stall that repeats
+// on every TTL expiry. Subtracting keeps that invariant true by construction if either side moves.
+// Why not smaller: the probe reads a subset of what the fallback scan reads, so a probe too slow to
+// fit is a scan that will not fit either — waiting is strictly better right up to the budget.
+// Expiring yields `null`, the existing "cannot prove unchanged" sentinel, so a real scan runs.
+export const WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS =
+  RESOLVED_WORKTREE_REPO_TIMEOUT_MS - WORKTREE_SCAN_FALLBACK_ALLOWANCE_MS
 
 export function resolveWorktreeScanCacheTtlMs(repo: Pick<Repo, 'path' | 'connectionId'>): number {
   return !repo.connectionId && isAgentScratchRepoRootPath(repo.path)

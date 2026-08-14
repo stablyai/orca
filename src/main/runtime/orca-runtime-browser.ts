@@ -157,6 +157,7 @@ export type RuntimeBrowserCommandHost = {
     browserPageId: string,
     targetGroupId?: string
   ): void
+  notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
 }
 
 export class RuntimeBrowserCommands {
@@ -382,6 +383,9 @@ export class RuntimeBrowserCommands {
       const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
       if (pageId) {
         this.notifyRendererNavigation(pageId, result.url, result.title)
+      }
+      if (!this.host.getAvailableAuthoritativeWindow() && target.worktreeId) {
+        this.host.notifyHeadlessBrowserSessionTabsChanged?.(target.worktreeId)
       }
       return result
     })
@@ -1362,6 +1366,7 @@ export class RuntimeBrowserCommands {
   async browserTabCreate(params: {
     url?: string
     worktree?: string
+    page?: string
     profileId?: string
     waitForRegistration?: boolean
     activate?: boolean
@@ -1390,7 +1395,8 @@ export class RuntimeBrowserCommands {
         worktreeId,
         params.profileId,
         params.activate,
-        params.targetGroupId
+        params.targetGroupId,
+        params.page
       )
     }
     const { browserPageId } = await this.createBrowserTabInRenderer(
@@ -1398,7 +1404,8 @@ export class RuntimeBrowserCommands {
       worktreeId,
       params.profileId,
       params.profileId ? sessionPartition : undefined,
-      params.activate
+      params.activate,
+      params.page
     )
 
     // Why: the webview must mount and register before the tab is operable, so wait here (returning the ID anyway on timeout).
@@ -1419,9 +1426,19 @@ export class RuntimeBrowserCommands {
 
     // Why: the webview loads about:blank first; route navigation through the bridge so its registered owner remains authoritative.
     if (url && url !== 'about:blank') {
-      try {
+      const navigate = async (): Promise<void> => {
         const result = await bridge.goto(url, worktreeId, browserPageId)
         this.notifyRendererNavigation(browserPageId, result.url, result.title)
+        if (!this.host.getAvailableAuthoritativeWindow() && worktreeId) {
+          this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
+        }
+      }
+      if (params.waitForRegistration === true) {
+        void navigate().catch(() => {})
+        return { browserPageId }
+      }
+      try {
+        await navigate()
       } catch {
         // Tab exists but navigation failed — caller can retry with explicit goto
       }
@@ -1655,22 +1672,15 @@ export class RuntimeBrowserCommands {
     worktree?: string
   }): Promise<{ closed: boolean }> {
     const bridge = this.requireAgentBrowserBridge()
-    const pageTarget =
-      typeof params.page === 'string' && params.page.length > 0
-        ? await this.resolveBrowserCommandTarget({ worktree: params.worktree, page: params.page })
-        : null
-    const worktreeId =
-      pageTarget?.worktreeId ?? (await this.resolveBrowserWorktreeId(params.worktree))
+    const explicitPage = typeof params.page === 'string' && params.page.length > 0
+    const worktreeId = explicitPage
+      ? params.worktree
+        ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+        : undefined
+      : await this.resolveBrowserWorktreeId(params.worktree)
 
     let tabId: string | null = null
     if (typeof params.page === 'string' && params.page.length > 0) {
-      if (!bridge.getRegisteredTabs(worktreeId).has(params.page)) {
-        const scope = worktreeId ? ' in this worktree' : ''
-        throw new BrowserError(
-          'browser_tab_not_found',
-          `Browser page ${params.page} was not found${scope}`
-        )
-      }
       tabId = params.page
     } else if (params.index !== undefined) {
       const tabs = bridge.getRegisteredTabs(worktreeId)
@@ -1690,20 +1700,31 @@ export class RuntimeBrowserCommands {
     }
 
     // Why: headless serve has no renderer to ask, so destroy the offscreen page directly.
-    const offscreen = this.host.getAvailableAuthoritativeWindow()
-      ? null
-      : this.host.getOffscreenBrowserBackend()
+    const authoritativeWindow = this.host.getAvailableAuthoritativeWindow()
+    const offscreen = authoritativeWindow ? null : this.host.getOffscreenBrowserBackend()
     if (offscreen) {
       // Why: resolve the active page for implicit close so we don't report success while closing nothing.
       const resolvedTabId = tabId ?? bridge.getActivePageId(worktreeId)
       if (!resolvedTabId) {
         return { closed: false }
       }
+      if (explicitPage && !bridge.getRegisteredTabs(worktreeId).has(resolvedTabId)) {
+        const scope = worktreeId ? ' in this worktree' : ''
+        throw new BrowserError(
+          'browser_tab_not_found',
+          `Browser page ${resolvedTabId} was not found${scope}`
+        )
+      }
       await offscreen.closeTab(resolvedTabId)
       return { closed: true }
     }
 
-    const win = this.host.getAuthoritativeWindow()
+    if (!authoritativeWindow && tabId && !bridge.getRegisteredTabs(worktreeId).has(tabId)) {
+      const scope = worktreeId ? ' in this worktree' : ''
+      throw new BrowserError('browser_tab_not_found', `Browser page ${tabId} was not found${scope}`)
+    }
+
+    const win = authoritativeWindow ?? this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -1713,7 +1734,7 @@ export class RuntimeBrowserCommands {
 
       const handler = (
         _event: Electron.IpcMainEvent,
-        reply: { requestId: string; error?: string }
+        reply: { requestId: string; error?: string; code?: 'browser_tab_not_found' }
       ): void => {
         if (reply.requestId !== requestId) {
           return
@@ -1721,7 +1742,11 @@ export class RuntimeBrowserCommands {
         clearTimeout(timer)
         ipcMain.removeListener('browser:tabCloseReply', handler)
         if (reply.error) {
-          reject(new Error(reply.error))
+          reject(
+            reply.code === 'browser_tab_not_found'
+              ? new BrowserError('browser_tab_not_found', reply.error)
+              : new Error(reply.error)
+          )
         } else {
           resolve()
         }
@@ -1774,9 +1799,15 @@ export class RuntimeBrowserCommands {
     worktreeId?: string,
     profileId?: string,
     activate?: boolean,
-    targetGroupId?: string
+    targetGroupId?: string,
+    requestedPageId?: string
   ): Promise<{ browserPageId: string }> {
-    const { browserPageId } = await offscreen.createTab({ url, worktreeId, profileId })
+    const { browserPageId } = await offscreen.createTab({
+      url,
+      worktreeId,
+      profileId,
+      ...(requestedPageId ? { browserPageId: requestedPageId } : {})
+    })
     const bridge = this.host.getAgentBrowserBridge()
     const wcId = bridge?.getRegisteredTabs(worktreeId).get(browserPageId)
     if (bridge && wcId != null) {
@@ -1794,7 +1825,8 @@ export class RuntimeBrowserCommands {
     worktreeId: string | undefined,
     profileId: string | undefined,
     sessionPartition: string | undefined,
-    activate?: boolean
+    activate?: boolean,
+    requestedPageId?: string
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
@@ -1825,6 +1857,7 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
+        ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
         // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
         sessionProfileId: profileId,
         sessionPartition,

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-12",
+  "updatedAt": "2026-08-13",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -1817,19 +1817,24 @@
       "providers": ["remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "A headed macOS desktop host and separate paired client exercise the Explorer eye-button path with a real remote file URL, host browser DOM, renderer split layout, background preview creation, explicit browser activation, browser close, forced capability rejection after caller preflight, and a forced post-create reconciliation timeout. The same fault oracles pass against a live headless server. Unit contracts cover absent, unknown, and mixed-version capabilities, visible rejection, empty-split cleanup, owning-runtime routing, exact client materialization, confirmed rollback, ambiguous cleanup, and teardown. Linux and Windows live journeys remain gaps.",
+      "coverageNotes": "A headed macOS desktop host and separate paired client exercise the Explorer eye-button path with a real remote file URL, host browser DOM, renderer split layout, background preview creation, explicit browser activation, browser close, forced capability rejection after caller preflight, a forced post-create reconciliation timeout, and navigation held beyond the client create deadline. The same reconciliation fault oracles pass against a live headless server. Unit contracts cover absent, unknown, and mixed-version capabilities, visible rejection, empty-split cleanup, owning-runtime routing, canonical preallocated page identity, navigation-independent acknowledgement, exact client materialization, confirmed rollback, ambiguous cleanup, and teardown. Linux and Windows live journeys remain gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-3872/unable-to-open-html-files-in-remote-server",
         "https://linear.app/stably/issue/STA-4025/p1-browser-create-reports-success-when-tab-reconcile-fails-after-pr",
         "https://linear.app/stably/issue/STA-4063/p1-paired-html-preview-rejects-outside-cleanup-after-pr-13909",
+        "https://linear.app/stably/issue/STA-4231/p1-owner-pinned-paired-browser-create-can-time-out-after-host-tab",
+        "https://github.com/stablyai/orca/pull/14363",
         "https://github.com/stablyai/orca/pull/13876"
       ],
-      "invariant": "Opening one HTML preview from a paired client succeeds only after exactly one browser page on the worktree-owning runtime materializes as exactly one client browser workspace and unified tab in the requested group. Capability rejection before host mutation must preserve the original error, issue no RPC, surface a failure toast, and remove only a caller-declared newly-created empty split. Post-create reconciliation failure requires exact rollback; ambiguous rollback rejects without local fallback. Preview focus and close preserve the source editor and terminal.",
-      "oracle": "Run one unchanged contract oracle for direct create and side-preview callers with absent status, unknown capabilities, and a mixed-version host. Require the original unsupported error or visible toast, zero RPCs, and no retained new split. Run it on the scan target, latest main, candidate, and candidate with the cleanup boundary disabled. In headed paired Electron, arm capability rejection after the caller preflight, invoke the visible HTML side-preview action, require the failure toast, and compare exact host/client browser, editor, terminal, and group inventories to baseline. Repeat against headless serve. Retain the separate exact-page reconciliation rollback oracle.",
+      "invariant": "Opening one HTML preview from a paired client succeeds only after exactly one browser page on the worktree-owning runtime materializes as exactly one client browser workspace and unified tab in the requested group. Owner-pinned creation returns the canonical host page identity before navigation readiness; delayed navigation cannot turn a created page into an unidentifiable failure or a duplicate retry. Capability rejection before host mutation must preserve the original error, issue no RPC, surface a failure toast, and remove only a caller-declared newly-created empty split. Post-create reconciliation failure requires exact rollback; ambiguous rollback rejects without local fallback. Preview focus and close preserve the source editor and terminal.",
+      "oracle": "Run one unchanged contract oracle for direct create and side-preview callers with absent status, unknown capabilities, and a mixed-version host. Require the original unsupported error or visible toast, zero RPCs, and no retained new split. Run it on the scan target, latest main, candidate, and candidate with the cleanup boundary disabled. In headed paired Electron, arm capability rejection after the caller preflight, invoke the visible HTML side-preview action, require the failure toast, and compare exact host/client browser, editor, terminal, and group inventories to baseline. Hold a real navigation response beyond the 15-second client deadline after host creation; require the first RPC to return the exact host inventory page ID, one host page, and no retry. Repeat reconciliation faults against headless serve. Retain the separate exact-page reconciliation rollback oracle.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-browser-create-navigation-deadline.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -1848,7 +1853,10 @@
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
         "src/renderer/src/runtime/remote-server-parity.test.ts",
+        "src/renderer/src/hooks/useIpcEvents.test.ts",
+        "src/renderer/src/store/slices/browser.test.ts",
         "tests/e2e/paired-remote-html-browser-focus.spec.ts",
+        "tests/e2e/paired-browser-create-navigation-deadline.spec.ts",
         "tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts"
       ],
       "assertionRefs": [
@@ -1884,10 +1892,34 @@
           "file": "src/renderer/src/runtime/web-runtime-session.test.ts",
           "assertions": [
             "a post-create timeout returns false only after exact host close and a confirming snapshot",
+            "owner-pinned creation launches navigation separately and materializes without awaiting it",
+            "a lost create acknowledgement cleans the capability-gated canonical page ID",
             "unconfirmed cleanup rejects so callers cannot create a competing local fallback",
             "the canonical placement and a newly-created empty split are released on rollback",
             "one failed preview cannot remove a shared split still reserved after an environment ownership change",
             "if every overlapping creation fails, the last reservation closes the caller-created empty split"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-browser.test.ts",
+          "assertions": [
+            "explicit renderer cleanup bypasses guest registration while retaining typed missing-page behavior",
+            "offscreen cleanup rejects a page outside the requested worktree"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/useIpcEvents.test.ts",
+          "assertions": [
+            "renderer-backed creation preserves the requested canonical page ID while keeping its workspace identity independent",
+            "closing an absent renderer page returns browser_tab_not_found instead of an untyped failure",
+            "explicit cleanup cannot close a page owned by another worktree"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/browser.test.ts",
+          "assertions": [
+            "a requested canonical page ID is stored on the page rather than reused as its workspace ID",
+            "duplicate canonical page IDs are rejected before a second tab can materialize"
           ]
         },
         {
@@ -1919,6 +1951,13 @@
             "one HTML open produces one client workspace, one client unified tab, and one host page",
             "the source editor and remote frame remain visible in separate groups",
             "preview creation leaves the editor active, an explicit browser click is authoritative, and close preserves the editor and terminal"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-browser-create-navigation-deadline.spec.ts",
+          "assertions": [
+            "a held navigation exceeds the former create deadline while the first RPC returns the exact authoritative host page ID",
+            "host inventory contains exactly one new page and the user retry branch is never entered"
           ]
         },
         {
@@ -2075,6 +2114,24 @@
           "result": "failed",
           "durationSeconds": 12.3,
           "summary": "Candidate d05217c40d with only the side-preview focusOnCreate:false call disabled failed the byte-identical 2ec1dcf1 oracle because preview creation activated the browser instead of preserving editor focus."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
+          "result": "passed",
+          "durationSeconds": 10.83,
+          "summary": "Five post-review host, IPC, store, and client lifecycle files passed 1,356 tests with one pre-existing skip, including both shards that failed before the canonical page/workspace identity and typed missing-page cleanup corrections."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-browser-create-navigation-deadline.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 18.1,
+          "summary": "Two isolated headed Electron/CDP journeys passed: the direct owner-pinned call returned one canonical host ID before held navigation, and the real remote-pane context-menu route materialized that one page without retry or duplicate."
         }
       ],
       "runtimeBudget": {
@@ -2087,11 +2144,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The unchanged STA-4063 five-assertion oracle is red 5/5 on scan e4c278eb52 and latest main bc2e30000b, partially green 2/5 on pre-fix PR #14100, green 5/5 on candidate 14b5877a75, and red 3/5 when only the new transaction cleanup boundary is disabled on final candidate a9e6fb7716. The earlier STA-4025 transaction oracle remains red on the post-#13909 base and green on this candidate. The byte-identical 2ec1dcf1 Electron oracle remains red on latest main 346e59c879, green on candidate d05217c40d, and red with only side-preview focus disabled; historical 5806b23f evidence separately proves owning-runtime routing."
+        "evidence": "The unchanged STA-4063 five-assertion oracle is red 5/5 on scan e4c278eb52 and latest main bc2e30000b, partially green 2/5 on pre-fix PR #14100, green 5/5 on candidate 14b5877a75, and red 3/5 when only the new transaction cleanup boundary is disabled on final candidate a9e6fb7716. The earlier STA-4025 transaction oracle remains red on the post-#13909 base and green on this candidate. The byte-identical STA-4231 headed oracle is red on latest-main b19d99bd00: both 15-second creates return runtime_timeout without a page ID while the host retains two distinct pages after retry. The relevant behavior is unchanged through 0a0ae974d4. The candidate is green with one returned canonical ID, one host/client page, and no retry; disabling only the navigation-independent acknowledgement is red with the same two orphaned pages. The byte-identical 2ec1dcf1 Electron oracle remains red on latest main 346e59c879, green on candidate d05217c40d, and red with only side-preview focus disabled; historical 5806b23f evidence separately proves owning-runtime routing."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The transaction adds no timer, polling, retry, subprocess, RPC method, stream opcode, or host publication. Capability rejection performs zero RPCs and one bounded empty-group close. Successful creation adds one post-operation list; known-page failure adds one exact close and one confirming list. The E2E-only one-shot faults are build-gated, retain one promise/flag and a bounded page-id set, and reset after each run. Pending client placements remain capped at 128 and clear on adoption, failure, or teardown."
+        "evidence": "The transaction adds no timer, polling, retry, subprocess, RPC method, stream opcode, or global host publication. Owner-pinned success performs one create RPC followed by one asynchronous goto, retains one page, and performs zero retry or cleanup calls. A lost create acknowledgement performs one exact close by the preallocated canonical ID and at most one confirming snapshot. Headless goto publishes one worktree-scoped session snapshot after navigation. Capability rejection performs zero RPCs and one bounded empty-group close. The E2E-only one-shot faults are build-gated, retain one promise/flag and a bounded page-id set, and reset after each run. Pending client placements remain capped at 128 and clear on adoption, failure, or teardown."
       },
       "promotionCriteria": [
         "Collect Linux and physical Windows paired-server evidence.",

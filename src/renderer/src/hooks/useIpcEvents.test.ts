@@ -900,6 +900,7 @@ describe('useIpcEvents browser tab create routing', () => {
         | ((data: {
             requestId: string
             worktreeId?: string | null
+            browserPageId?: string
             url: string
             sessionProfileId?: string
           }) => void)
@@ -961,10 +962,15 @@ describe('useIpcEvents browser tab create routing', () => {
         ]
       },
       createBrowserTab: vi.fn(
-        (_worktreeId: string, _url: string, options: { activate?: boolean }) => {
-          const workspace = { id: 'workspace-new', activePageId: 'page-new', pageIds: ['page-new'] }
+        (
+          _worktreeId: string,
+          _url: string,
+          options: { activate?: boolean; browserPageId?: string }
+        ) => {
+          const pageId = options.browserPageId ?? 'page-new'
+          const workspace = { id: 'workspace-new', activePageId: pageId, pageIds: [pageId] }
           state.browserTabsByWorktree['wt-1'].push(workspace)
-          state.browserPagesByWorkspace['workspace-new'] = [{ id: 'page-new', worktreeId: 'wt-1' }]
+          state.browserPagesByWorkspace['workspace-new'] = [{ id: pageId, worktreeId: 'wt-1' }]
           expect(options.activate).toBe(false)
           return workspace
         }
@@ -1128,20 +1134,21 @@ describe('useIpcEvents browser tab create routing', () => {
     requestTabCreateListenerRef.current?.({
       requestId: 'req-create',
       worktreeId: 'wt-1',
+      browserPageId: 'page-canonical',
       url: 'https://example.com'
     })
 
-    expect(acquireBrowserAutomationVisibility).toHaveBeenCalledWith('page-new')
+    expect(acquireBrowserAutomationVisibility).toHaveBeenCalledWith('page-canonical')
     expect(acquireBrowserAutomationVisibility).not.toHaveBeenCalledWith('page-active')
     expect(state.createBrowserTab).toHaveBeenCalledWith(
       'wt-1',
       'https://example.com',
-      expect.objectContaining({ activate: false })
+      expect.objectContaining({ activate: false, browserPageId: 'page-canonical' })
     )
     expect(state.createBrowserTab.mock.calls[0]?.[2]).not.toHaveProperty('allowWindowClose')
     expect(replyTabCreate).toHaveBeenCalledWith({
       requestId: 'req-create',
-      browserPageId: 'page-new'
+      browserPageId: 'page-canonical'
     })
     expect(dispatchEvent).toHaveBeenCalled()
     expect(releaseBrowserAutomationVisibility).not.toHaveBeenCalled()
@@ -3707,6 +3714,46 @@ describe('useIpcEvents browser tab close routing', () => {
     )
   })
 
+  it('refuses to close a browser page outside the requested worktree', async () => {
+    const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
+      current: null
+    }
+    const closeBrowserTab = vi.fn()
+    const closeBrowserPage = vi.fn()
+    const replyTabClose = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      requestTabCloseListenerRef,
+      replyTabClose,
+      getState: () => ({
+        closeBrowserTab,
+        closeBrowserPage,
+        browserTabsByWorktree: {
+          'wt-1': [{ id: 'workspace-1' }],
+          'wt-2': [{ id: 'workspace-2' }]
+        },
+        browserPagesByWorkspace: {
+          'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1' }],
+          'workspace-2': [{ id: 'page-2', workspaceId: 'workspace-2' }]
+        }
+      })
+    })
+
+    requestTabCloseListenerRef.current?.({
+      requestId: 'req-wrong-worktree',
+      tabId: 'page-2',
+      worktreeId: 'wt-1'
+    })
+
+    expect(closeBrowserPage).not.toHaveBeenCalled()
+    expect(closeBrowserTab).not.toHaveBeenCalled()
+    expect(replyTabClose).toHaveBeenCalledWith({
+      requestId: 'req-wrong-worktree',
+      code: 'browser_tab_not_found',
+      error: 'Browser tab page-2 not found'
+    })
+  })
+
   it('closes the active browser tab for the requested worktree when main does not provide a tab id', async () => {
     const closeBrowserTab = vi.fn()
     const closeBrowserPage = vi.fn()
@@ -4361,6 +4408,7 @@ describe('useIpcEvents browser tab close routing', () => {
     expect(closeBrowserTab).not.toHaveBeenCalled()
     expect(replyTabClose).toHaveBeenCalledWith({
       requestId: 'req-3',
+      code: 'browser_tab_not_found',
       error: 'Browser tab missing-page not found'
     })
   })
