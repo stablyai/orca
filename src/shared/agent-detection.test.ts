@@ -234,6 +234,27 @@ describe('Pi-compatible title detection', () => {
     expect(resolveCompatibleAgentTypeForOwner('codex', 'omp')).toBe('codex')
   })
 
+  it('keeps a live OMP identity from being downgraded by a generic Pi owner', () => {
+    const status = normalizeCompatibleAgentStatusEntryForOwner(
+      {
+        state: 'working',
+        prompt: '',
+        updatedAt: 1,
+        stateStartedAt: 1,
+        agentType: 'omp',
+        paneKey: 'tab-1:leaf-1',
+        terminalTitle: '\u280b OMP',
+        stateHistory: []
+      },
+      'pi'
+    )
+
+    expect(status.agentType).toBe('omp')
+    expect(status.terminalTitle).toBe('\u280b OMP')
+    expect(resolveCompatibleAgentTypeForOwner('omp', 'pi')).toBe('omp')
+    expect(resolveCompatibleAgentTypeForOwner('pi', 'omp')).toBe('omp')
+  })
+
   it.each(['~/omp/working', 'omp-harness ready', '~/pi/working', 'pi-scratch ready'])(
     'does not classify path or hyphen false positive %s',
     (title) => {

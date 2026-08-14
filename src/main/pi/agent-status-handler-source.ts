@@ -30,6 +30,34 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       : []
   const ownerEnv = kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
 
+  // Why: OMP suppresses its approval lifecycle unless an extension listens for it,
+  // and it is the only signal that the run is parked on a permission prompt rather
+  // than still working. Prime has no OMP runtime, so the handlers would be dead there.
+  const approvalHandlers =
+    kind === 'prime-agent'
+      ? []
+      : [
+          `  pi.on('tool_approval_requested', (event${ctxParam}) => {`,
+          ...captureSessionMetadata,
+          '    if (!isOmpRuntime()) return',
+          "    post('tool_approval_requested', {",
+          '      tool_name: event.toolName,',
+          '      reason: event.reason,',
+          '      approval_mode: event.approvalMode,',
+          '    })',
+          '  })',
+          '',
+          `  pi.on('tool_approval_resolved', (event${ctxParam}) => {`,
+          ...captureSessionMetadata,
+          '    if (!isOmpRuntime()) return',
+          "    post('tool_approval_resolved', {",
+          '      tool_name: event.toolName,',
+          '      approved: event.approved,',
+          '    })',
+          '  })',
+          ''
+        ]
+
   return [
     '// Why: pi assistant messages carry content as an array of parts',
     "// ({ type: 'text', text } / tool_use / tool_result / reasoning). We only",
@@ -102,6 +130,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    })',
     '  })',
     '',
+    ...approvalHandlers,
     "  // Why: capture the assistant's final text on each completed message",
     '  // so the dashboard preview reflects the most recent reply even before',
     '  // agent_end fires. message_end is the right hook because pi guarantees',
@@ -115,7 +144,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  })',
     '',
     '  // Why: modern Pi stays non-idle across retry/compaction/follow-up work,',
-    '  // while legacy Pi/OMP becomes idle after its final agent_end handlers.',
+    '  // while legacy Pi becomes idle after its final agent_end handlers. OMP has',
+    '  // neither signal — it never emits agent_settled and its ctx.isIdle can stay',
+    '  // false through completion — so it settles on its own agent_end contract below.',
     '  const AGENT_END_IDLE_RECHECK_MS = 25',
     '  const AGENT_END_IDLE_RECHECK_MAX_MS = 250',
     '  let agentSettledSupported = false',
@@ -167,8 +198,16 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    postAgentEndOnce()',
     '  })',
     '',
-    "  pi.on('agent_end', (_event, ctx) => {",
+    "  pi.on('agent_end', (event, ctx) => {",
     ...captureSessionMetadata,
+    '    // Why: OMP marks a scheduled automatic continuation on the event itself;',
+    '    // any other value is terminal. Builds predating the flag settle as terminal',
+    '    // rather than sticking at "working".',
+    '    if (isOmpRuntime()) {',
+    '      clearPendingAgentEndCheck()',
+    '      if (event?.willContinue !== true) postAgentEndOnce()',
+    '      return',
+    '    }',
     '    if (agentSettledSupported) return',
     "    if (!ctx || typeof ctx.isIdle !== 'function') {",
     '      postAgentEndOnce()',

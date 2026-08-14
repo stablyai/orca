@@ -902,6 +902,19 @@ function summarizeApprovalInput(toolInput: unknown): string {
   }
 }
 
+/** The question tool's own input, verbatim, as the `{ questions }` envelope every client parses. */
+function serializeQuestionPrompt(toolInput: unknown): string | undefined {
+  if (toolInput === undefined || toolInput === null) {
+    return undefined
+  }
+  try {
+    return JSON.stringify(toolInput)
+  } catch {
+    // Why: circular/unserializable input from a buggy agent — a missing live card beats throwing in the hook hot path.
+    return undefined
+  }
+}
+
 /** Normalized JSON envelope for a pending prompt: AskUserQuestion → `{ questions }` (shape kept stable for back-compat); other tool on PermissionRequest → `{ approval }`; else undefined. */
 function deriveInteractivePrompt(
   toolName: string | undefined,
@@ -918,12 +931,7 @@ function deriveInteractivePrompt(
     toolInput !== undefined &&
     toolInput !== null
   ) {
-    try {
-      return JSON.stringify(toolInput)
-    } catch {
-      // Why: circular/unserializable input from a buggy agent — a missing live card beats throwing in the hook hot path.
-      return undefined
-    }
+    return serializeQuestionPrompt(toolInput)
   }
   if (eventName === 'PermissionRequest' && typeof toolName === 'string' && toolName.length > 0) {
     try {
@@ -2053,6 +2061,18 @@ function extractCopilotToolFields(
   return update
 }
 
+/** The structured question tool: Pi names it `AskUserQuestion`, OMP names it `ask`, Prime has none.
+ *  One predicate so the blocked state and the published prompt payload can't disagree. */
+function isPiCompatibleAskTool(
+  agentKind: 'pi' | 'omp' | 'prime-agent',
+  toolName: string | undefined
+): boolean {
+  if (agentKind === 'omp') {
+    return toolName === 'ask'
+  }
+  return agentKind === 'pi' && isAskUserQuestionTool(toolName)
+}
+
 function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
@@ -2066,14 +2086,32 @@ function extractPiToolFields(
     const toolName = readString(hookPayload, 'tool_name')
     const rawToolInput = hookPayload.tool_input
     const toolInput = deriveToolInputPreview(toolName, rawToolInput)
-    // Why: OMP shares this extractor; only derive interactivePrompt for Pi so OMP ask_user_question metadata stays unchanged.
+    // Why: OMP's `ask` input is the same questions/options shape, so the live card can render
+    // it directly instead of waiting for the transcript read to settle.
     const interactivePrompt =
-      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
-        ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
+      isPiCompatibleAskTool(agentKind, toolName) &&
+      (eventName === 'tool_call' || eventName === 'tool_execution_start')
+        ? serializeQuestionPrompt(rawToolInput)
         : undefined
     return toolUpdate(
       { toolName, toolInput, interactivePrompt },
       { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+    )
+  }
+  if (
+    agentKind === 'omp' &&
+    (eventName === 'tool_approval_requested' || eventName === 'tool_approval_resolved')
+  ) {
+    // Why: the approval is the pane's whole state right now, so name the awaited tool and show
+    // the policy reason that triggered it; resolving clears both back to the running tool call.
+    return toolUpdate(
+      {
+        toolName: readString(hookPayload, 'tool_name'),
+        toolInput:
+          eventName === 'tool_approval_requested' ? readString(hookPayload, 'reason') : undefined,
+        interactivePrompt: undefined
+      },
+      { hasToolInputField: true }
     )
   }
   if (eventName === 'message_end' && hookPayload.role === 'assistant') {
@@ -3942,22 +3980,27 @@ function normalizePiCompatibleEvent(
   // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
   const toolName = readString(hookPayload, 'tool_name')
   const isPiCompatibleAsk =
-    ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
-      (agentType === 'omp' && toolName === 'ask')) &&
+    isPiCompatibleAskTool(agentType, toolName) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
+  // Why: OMP parks on an approval selector without any further tool event, so the pane
+  // reads as working until this arrives — and stays blocked until its resolution.
+  const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
+  const isOmpApprovalResolution = agentType === 'omp' && eventName === 'tool_approval_resolved'
 
-  const stateName = isPiCompatibleAsk
-    ? 'blocked'
-    : eventName === 'before_agent_start' ||
-        eventName === 'agent_start' ||
-        eventName === 'tool_call' ||
-        eventName === 'tool_execution_start' ||
-        eventName === 'tool_execution_end' ||
-        eventName === 'message_end'
-      ? 'working'
-      : eventName === 'agent_end'
-        ? 'done'
-        : null
+  const stateName =
+    isPiCompatibleAsk || isOmpApprovalRequest
+      ? 'blocked'
+      : isOmpApprovalResolution ||
+          eventName === 'before_agent_start' ||
+          eventName === 'agent_start' ||
+          eventName === 'tool_call' ||
+          eventName === 'tool_execution_start' ||
+          eventName === 'tool_execution_end' ||
+          eventName === 'message_end'
+        ? 'working'
+        : eventName === 'agent_end'
+          ? 'done'
+          : null
 
   if (!stateName) {
     return null

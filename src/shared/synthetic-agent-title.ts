@@ -5,6 +5,9 @@ export type SyntheticAgentTitleProfile = {
   permissionLabel: string
   idleLabel: string
   titleIdentityGroup?: string
+  /** The group's generic member, whose frames every other member also emits. A specific
+   *  sibling identity outranks it so the pane label can't oscillate between the two. */
+  titleIdentityFallback?: boolean
   synthesizeTerminalTitle?: boolean
   synthesizeWorkingTitle?: boolean
 }
@@ -34,7 +37,8 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Pi',
     permissionLabel: 'Pi - action required',
     idleLabel: 'Pi ready',
-    titleIdentityGroup: 'pi-compatible'
+    titleIdentityGroup: 'pi-compatible',
+    titleIdentityFallback: true
   },
   omp: {
     workingLabel: 'OMP',
