@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import type { Repo } from '../../../../shared/types'
-import { reconcileFetchedRepos } from './repo-identity-reconcile'
+import { reconcileFetchedRepos, reuseEqualRecordMap } from './repo-identity-reconcile'
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
   return { id, path: `/${id}`, displayName: id, badgeColor: '#000', addedAt: 1, ...overrides }
@@ -121,5 +121,56 @@ describe('reconcileFetchedRepos', () => {
     expect(result.every((repo, index) => repo === previous[index])).toBe(true)
     const source = fs.readFileSync(new URL('./repo-identity-reconcile.ts', import.meta.url), 'utf8')
     expect(source).not.toMatch(/previous\.find|next\.find|findIndex/)
+  })
+})
+
+describe('reuseEqualRecordMap', () => {
+  const row = (value: string): { value: string; nested: { tags: string[] } } => ({
+    value,
+    nested: { tags: [value, 'shared'] }
+  })
+
+  it('returns the previous map when every key holds an equal value', () => {
+    const previous = { a: row('a'), b: row('b') }
+    expect(reuseEqualRecordMap(previous, { a: row('a'), b: row('b') })).toBe(previous)
+  })
+
+  it('reuses the previous entry for structurally equal nested values', () => {
+    const previous = { a: row('a'), b: row('b') }
+    const result = reuseEqualRecordMap(previous, { a: row('a'), b: row('changed') })
+    expect(result).not.toBe(previous)
+    expect(result.a).toBe(previous.a)
+    expect(result.b).toEqual(row('changed'))
+  })
+
+  it('returns a new map when a value changed', () => {
+    const previous = { a: row('a') }
+    const result = reuseEqualRecordMap(previous, { a: row('changed') })
+    expect(result).not.toBe(previous)
+    expect(result.a).toEqual(row('changed'))
+  })
+
+  it('returns a new map when a key is added', () => {
+    const previous = { a: row('a') }
+    const result = reuseEqualRecordMap(previous, { a: row('a'), b: row('b') })
+    expect(result).not.toBe(previous)
+    expect(result.a).toBe(previous.a)
+    expect(Object.keys(result)).toEqual(['a', 'b'])
+  })
+
+  it('returns a new map when a key is removed', () => {
+    const previous = { a: row('a'), b: row('b') }
+    const result = reuseEqualRecordMap(previous, { a: row('a') })
+    expect(result).not.toBe(previous)
+    expect(Object.keys(result)).toEqual(['a'])
+  })
+
+  it('returns a new map when a key is swapped for a same-count replacement', () => {
+    // Why: equal key counts alone must not read as unchanged — the replacement key misses the
+    // previous lookup, which is why no second pass over the previous keys is needed.
+    const previous = { a: row('a'), b: row('b') }
+    const result = reuseEqualRecordMap(previous, { a: row('a'), c: row('b') })
+    expect(result).not.toBe(previous)
+    expect(Object.keys(result)).toEqual(['a', 'c'])
   })
 })

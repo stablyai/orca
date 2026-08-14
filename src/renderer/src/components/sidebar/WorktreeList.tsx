@@ -104,6 +104,7 @@ import {
   getVirtualRowTransform,
   pruneStaleVirtualRowElementCache,
   shouldUseHeaderTopSpacing,
+  WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP,
   type RenderRow
 } from './worktree-list-virtual-rows'
 import {
@@ -251,6 +252,7 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   effectiveExternalWorktreeVisibility,
@@ -268,8 +270,6 @@ import {
   type ImportedWorktreeCardActionState
 } from './imported-worktrees-card-actions'
 import {
-  importNewExternalWorktreeInboxPaths,
-  keepNewExternalWorktreeInboxHidden,
   suppressNewExternalWorktreeInbox,
   type NewExternalWorktreesInboxActionState
 } from './new-external-worktrees-inbox-actions'
@@ -278,10 +278,7 @@ import {
   buildImportedWorktreesCardCandidates,
   getHiddenImportedWorktrees
 } from './imported-worktrees-card-candidates'
-import {
-  buildNewExternalWorktreesInboxCandidates,
-  toNewExternalWorktreeInboxPreview
-} from './new-external-worktrees-inbox-candidates'
+import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
 import {
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
   LINEAGE_CHILDREN_INLINE_OFFSET,
@@ -662,13 +659,10 @@ type VirtualizedWorktreeViewportProps = {
   collapsedGroups: Set<string>
   handleCreateForRepo: (projectId: string) => void
   handleOpenRepoSettings: (projectId: string, sectionId?: string) => void
-  handleOpenWorktreeVisibility: (projectId: string) => void
+  handleOpenWorktreeVisibility: (repo: Repo) => void
   handleShowImportedWorktrees: (projectId: string) => void
   handleKeepImportedWorktreesHidden: (projectId: string) => void
   importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
-  handleImportNewExternalWorktree: (projectId: string, worktreeId: string) => void
-  handleImportAllNewExternalWorktrees: (projectId: string) => void
-  handleKeepNewExternalWorktreeInboxHidden: (projectId: string) => void
   handleOpenSuppressExternalWorktreeInbox: (projectId: string) => void
   newExternalWorktreeInboxActionState: ReadonlyMap<string, NewExternalWorktreesInboxActionState>
   handleRemoveProject: (repo: Repo) => void
@@ -1333,9 +1327,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleShowImportedWorktrees,
   handleKeepImportedWorktreesHidden,
   importedWorktreeCardActionState,
-  handleImportNewExternalWorktree,
-  handleImportAllNewExternalWorktrees,
-  handleKeepNewExternalWorktreeInboxHidden,
   handleOpenSuppressExternalWorktreeInbox,
   newExternalWorktreeInboxActionState,
   handleRemoveProject,
@@ -1624,6 +1615,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         groupIds: group.worktreeIds,
         draggedIds: args.draggedIds,
         draggingWorktreeId: args.draggingWorktreeId,
+        fallbackGap: WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP,
         grab: args.grab,
         anchor: args.anchor
       })
@@ -2108,7 +2100,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       [stickyHeaderIndexes]
     ),
     overscan: 10,
-    gap: 6,
+    gap: WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP,
     // Why: the sticky group header lives inside the virtual list, so scroll math needs the same top inset as the DOM reveal.
     scrollPaddingStart: WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
     isScrollingResetDelay: USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS,
@@ -4630,7 +4622,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               <DropdownMenuItem
                                 onSelect={() => {
                                   if (row.repo) {
-                                    handleOpenWorktreeVisibility(row.repo.id)
+                                    handleOpenWorktreeVisibility(row.repo)
                                   }
                                 }}
                               >
@@ -5055,14 +5047,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 >
                   <NewExternalWorktreesInboxLine
                     repoDisplayName={row.repo.displayName}
-                    inboxWorktrees={row.inboxWorktrees.map(toNewExternalWorktreeInboxPreview)}
+                    inboxCount={row.inboxWorktrees.length}
                     pending={actionState?.pending ?? false}
                     error={actionState?.error ?? null}
-                    onImportWorktree={(worktreeId) =>
-                      handleImportNewExternalWorktree(row.repo.id, worktreeId)
-                    }
-                    onKeepHidden={() => handleKeepNewExternalWorktreeInboxHidden(row.repo.id)}
-                    onImportAll={() => handleImportAllNewExternalWorktrees(row.repo.id)}
+                    onReview={() => handleOpenWorktreeVisibility(row.repo)}
                     onSuppress={() => handleOpenSuppressExternalWorktreeInbox(row.repo.id)}
                   />
                 </div>
@@ -6051,8 +6039,11 @@ const WorktreeList = React.memo(function WorktreeList({
   )
 
   const handleOpenWorktreeVisibility = useCallback(
-    (projectId: string) => {
-      openModal('worktree-visibility', { repoId: projectId })
+    (repo: Repo) => {
+      openModal('worktree-visibility', {
+        repoId: repo.id,
+        hostId: getRepoExecutionHostId(repo)
+      })
     },
     [openModal]
   )
@@ -6153,52 +6144,6 @@ const WorktreeList = React.memo(function WorktreeList({
     [fetchWorktrees, repos, setNewExternalWorktreeInboxState, updateRepo]
   )
 
-  const handleImportNewExternalWorktree = useCallback(
-    async (projectId: string, worktreeId: string) => {
-      const inboxWorktrees = newExternalWorktreesInboxByRepo.get(projectId)?.inboxWorktrees ?? []
-      const worktree = inboxWorktrees.find((candidate) => candidate.id === worktreeId)
-      if (!worktree) {
-        return
-      }
-      const args = getNewExternalWorktreeInboxActionArgs(projectId, [worktree.path])
-      if (!args) {
-        return
-      }
-      await importNewExternalWorktreeInboxPaths(args)
-    },
-    [getNewExternalWorktreeInboxActionArgs, newExternalWorktreesInboxByRepo]
-  )
-
-  const handleImportAllNewExternalWorktrees = useCallback(
-    async (projectId: string) => {
-      const inboxWorktrees = newExternalWorktreesInboxByRepo.get(projectId)?.inboxWorktrees ?? []
-      const args = getNewExternalWorktreeInboxActionArgs(
-        projectId,
-        inboxWorktrees.map((worktree) => worktree.path)
-      )
-      if (!args) {
-        return
-      }
-      await importNewExternalWorktreeInboxPaths(args)
-    },
-    [getNewExternalWorktreeInboxActionArgs, newExternalWorktreesInboxByRepo]
-  )
-
-  const handleKeepNewExternalWorktreeInboxHidden = useCallback(
-    async (projectId: string) => {
-      const inboxWorktrees = newExternalWorktreesInboxByRepo.get(projectId)?.inboxWorktrees ?? []
-      const args = getNewExternalWorktreeInboxActionArgs(
-        projectId,
-        inboxWorktrees.map((worktree) => worktree.path)
-      )
-      if (!args) {
-        return
-      }
-      await keepNewExternalWorktreeInboxHidden(args)
-    },
-    [getNewExternalWorktreeInboxActionArgs, newExternalWorktreesInboxByRepo]
-  )
-
   const handleOpenSuppressExternalWorktreeInbox = useCallback((projectId: string) => {
     setSuppressExternalWorktreeInboxRepoId(projectId)
   }, [])
@@ -6231,7 +6176,8 @@ const WorktreeList = React.memo(function WorktreeList({
     (repo: Repo) => {
       openModal('confirm-remove-folder', {
         repoId: repo.id,
-        displayName: repo.displayName
+        displayName: repo.displayName,
+        hostId: getRepoExecutionHostId(repo)
       })
     },
     [openModal]
@@ -6819,9 +6765,11 @@ const WorktreeList = React.memo(function WorktreeList({
           if (!suppressExternalWorktreeInboxRepoId) {
             return
           }
-          const projectId = suppressExternalWorktreeInboxRepoId
+          const repo = findRepoForHost(repos, suppressExternalWorktreeInboxRepoId, { settings })
           setSuppressExternalWorktreeInboxRepoId(null)
-          handleOpenWorktreeVisibility(projectId)
+          if (repo) {
+            handleOpenWorktreeVisibility(repo)
+          }
         }}
       />
       <ProjectGroupDeleteDialog
@@ -6858,9 +6806,6 @@ const WorktreeList = React.memo(function WorktreeList({
         handleShowImportedWorktrees={handleShowImportedWorktrees}
         handleKeepImportedWorktreesHidden={handleKeepImportedWorktreesHidden}
         importedWorktreeCardActionState={importedWorktreeCardActionState}
-        handleImportNewExternalWorktree={handleImportNewExternalWorktree}
-        handleImportAllNewExternalWorktrees={handleImportAllNewExternalWorktrees}
-        handleKeepNewExternalWorktreeInboxHidden={handleKeepNewExternalWorktreeInboxHidden}
         handleOpenSuppressExternalWorktreeInbox={handleOpenSuppressExternalWorktreeInbox}
         newExternalWorktreeInboxActionState={newExternalWorktreeInboxActionState}
         handleRemoveProject={handleRemoveProject}

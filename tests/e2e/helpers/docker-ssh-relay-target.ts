@@ -45,6 +45,21 @@ export function execDockerSshRelayTargetCommand(
   })
 }
 
+export function execDockerSshRelayTargetControlCommand(
+  target: DockerSshRelayTarget,
+  command: string
+): string {
+  return run('docker', [
+    'exec',
+    target.containerName,
+    'bash',
+    '--noprofile',
+    '--norc',
+    '-c',
+    command
+  ])
+}
+
 function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
   return [
     '-i',

@@ -17,7 +17,7 @@ export type UseDetectedAgentsResult = {
 }
 
 export type AgentDetectionTarget =
-  | { kind: 'local' }
+  | { kind: 'local'; worktreeId?: string | null; contextKey?: string }
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'runtime'; environmentId: string }
 
@@ -65,6 +65,8 @@ export function useDetectedAgents(
       : target?.kind === 'runtime'
         ? target.environmentId
         : null
+  const localWorktreeId = target?.kind === 'local' ? target.worktreeId : undefined
+  const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
@@ -82,7 +84,9 @@ export function useDetectedAgents(
     if (targetKind === 'runtime' && targetId) {
       return s.runtimeDetectedAgentIds[targetId] ?? null
     }
-    return s.detectedAgentIds
+    return localContextKey
+      ? (s.localDetectedAgentIdsByContext[localContextKey] ?? null)
+      : s.detectedAgentIds
   })
   const isLoading = useAppStore((s) => {
     if (isUnknown) {
@@ -94,7 +98,9 @@ export function useDetectedAgents(
     if (targetKind === 'runtime' && targetId) {
       return s.isDetectingRuntimeAgents[targetId] ?? false
     }
-    return s.isDetectingAgents
+    return localContextKey
+      ? (s.isDetectingLocalAgentsByContext[localContextKey] ?? false)
+      : s.isDetectingAgents
   })
   const isRefreshing = useAppStore((s) => {
     if (targetKind === 'runtime' && targetId) {
@@ -103,7 +109,12 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
     }
-    return targetKind === 'local' ? s.isRefreshingAgents : false
+    if (targetKind !== 'local') {
+      return false
+    }
+    return localContextKey
+      ? (s.isRefreshingLocalAgentsByContext[localContextKey] ?? false)
+      : s.isRefreshingAgents
   })
   const detectionFailed =
     detectedIds === null &&
@@ -126,8 +137,8 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
-    return state.refreshDetectedAgents()
-  }, [isUnknown, targetKind, targetId])
+    return state.refreshDetectedAgents(localWorktreeId)
+  }, [isUnknown, localWorktreeId, targetKind, targetId])
 
   useEffect(() => {
     if (isUnknown) {
@@ -159,10 +170,18 @@ export function useDetectedAgents(
       }
     } else {
       if (detectedIds === null) {
-        void state.ensureDetectedAgents()
+        void state.ensureDetectedAgents(localWorktreeId)
       }
     }
-  }, [isUnknown, targetKind, targetId, remoteTargetKey, detectedIds])
+  }, [
+    isUnknown,
+    targetKind,
+    targetId,
+    remoteTargetKey,
+    detectedIds,
+    localWorktreeId,
+    localContextKey
+  ])
 
   return { detectedIds, isLoading, detectionFailed, isRefreshing, refresh }
 }

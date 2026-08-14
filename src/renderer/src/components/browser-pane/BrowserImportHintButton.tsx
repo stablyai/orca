@@ -102,7 +102,7 @@ export function BrowserImportHintButton({
               value2: browserProfile ? ` (${browserProfile})` : ''
             }
           ),
-          result.profileId
+          result.executionHostLabel
         )
         return
       }
@@ -123,7 +123,7 @@ export function BrowserImportHintButton({
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
         ),
-        result.profileId
+        result.executionHostLabel
       )
       return
     }

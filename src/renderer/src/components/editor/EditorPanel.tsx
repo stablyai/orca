@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
-import { openFilePreviewToSide } from '@/lib/file-preview'
+import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -45,6 +45,11 @@ function EditorPanelInner({
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
   const activeWorktreeId = activeFile?.worktreeId
+  const canOpenWorkspaceFileBrowser = useAppStore((s) =>
+    activeWorktreeId && activeFile
+      ? canShowWorkspaceFileBrowserAction(s, activeWorktreeId, activeFile.filePath)
+      : false
+  )
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
   // Why: background Git refreshes for other worktrees must not wake every
@@ -229,7 +234,8 @@ function EditorPanelInner({
     gitStatusEntries,
     gitBranchEntries,
     markdownViewMode,
-    isChangesMode
+    isChangesMode,
+    canOpenWorkspaceFileBrowser
   })
 
   const handleOpenPreviewToSide = (): void => {

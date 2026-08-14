@@ -41,6 +41,7 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
+import { DiffCommentSchema } from '../../shared/diff-comment-schema'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
@@ -117,6 +118,10 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import {
+  normalizeCustomWorktreeVisibilitySources,
+  normalizeWorktreeVisibilitySourcePreferences
+} from '../../shared/worktree-visibility-sources'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import { isCurrentSshProviderAuthority } from '../ssh/ssh-provider-authority'
@@ -951,7 +956,8 @@ const FolderWorkspaceUpdateArgs = z.object({
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),
-      lastActivityAt: z.number().finite().optional()
+      lastActivityAt: z.number().finite().optional(),
+      diffComments: z.array(DiffCommentSchema).optional()
     })
     .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 })
@@ -2124,6 +2130,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'externalWorktreeInboxBaselinePaths'
             | 'importedExternalWorktreePaths'
+            | 'agentWorktreeVisibility'
+            | 'customWorktreeVisibilitySources'
+            | 'worktreeVisibilitySourcePreferences'
             | 'projectGroupId'
             | 'projectGroupOrder'
           >
@@ -2193,6 +2202,34 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.externalWorktreeVisibility !== 'show'
       ) {
         delete updates.externalWorktreeVisibility
+      }
+      if (
+        'agentWorktreeVisibility' in updates &&
+        updates.agentWorktreeVisibility !== undefined &&
+        updates.agentWorktreeVisibility !== 'hide' &&
+        updates.agentWorktreeVisibility !== 'show'
+      ) {
+        delete updates.agentWorktreeVisibility
+      }
+      if ('customWorktreeVisibilitySources' in updates) {
+        const normalized = normalizeCustomWorktreeVisibilitySources(
+          updates.customWorktreeVisibilitySources
+        )
+        if (!normalized) {
+          delete updates.customWorktreeVisibilitySources
+        } else {
+          updates.customWorktreeVisibilitySources = normalized
+        }
+      }
+      if ('worktreeVisibilitySourcePreferences' in updates) {
+        const normalized = normalizeWorktreeVisibilitySourcePreferences(
+          updates.worktreeVisibilitySourcePreferences
+        )
+        if (!normalized) {
+          delete updates.worktreeVisibilitySourcePreferences
+        } else {
+          updates.worktreeVisibilitySourcePreferences = normalized
+        }
       }
       if (
         'externalWorktreeVisibilityPromptDismissedAt' in updates &&

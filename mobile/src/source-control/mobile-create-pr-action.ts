@@ -72,7 +72,7 @@ export function buildMobileCreatePrAction({
   }
   // Why: mirror desktop's structural provider gate (supportsHostedReviewCreation)
   // instead of relying on the host always emitting a hidden blockedReason for
-  // non-creatable providers like bitbucket.
+  // non-creatable providers.
   if (!supportsHostedReviewCreation(eligibility.provider)) {
     return {
       visible: true,

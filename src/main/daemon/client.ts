@@ -114,12 +114,24 @@ export class DaemonClient {
     }
   }
 
+  // Why: a missing token must not preempt the connect that proves whether the endpoint is gone.
+  private readToken(): string {
+    try {
+      return readFileSync(this.tokenPath, 'utf-8').trim()
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+        return ''
+      }
+      throw error
+    }
+  }
+
   private async doConnect(
     timeoutMs: number,
     attemptGeneration: number,
     sharedBudget: boolean
   ): Promise<void> {
-    const token = readFileSync(this.tokenPath, 'utf-8').trim()
+    const token = this.readToken()
     const deadlineMs = Date.now() + timeoutMs
     const remainingMs = (): number =>
       sharedBudget ? Math.max(1, deadlineMs - Date.now()) : timeoutMs

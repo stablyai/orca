@@ -43,7 +43,7 @@ export async function saveNewSshHostFromForm({
 }: {
   form: EditingTarget
   ssh: SshApi
-  recordSshRepoReadoptions: (readoptions: SshRepoReadoption[]) => void
+  recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
   setSshTargetsMetadata: (targets: SshTarget[]) => void
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<'saved' | 'validation-failed' | 'failed'> {
@@ -170,7 +170,7 @@ export async function addAllSshConfigHostsToOrca({
   recordFeatureInteraction
 }: {
   ssh: SshApi
-  recordSshRepoReadoptions: (readoptions: SshRepoReadoption[]) => void
+  recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
   setSshTargetsMetadata: (targets: SshTarget[]) => void
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<{ kind: 'added'; count: number } | { kind: 'already-synced' } | { kind: 'failed' }> {

@@ -380,10 +380,10 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps attribution-only fish spawns unwrapped', async () => {
-    const { getAttributionShellLaunchConfig } = await importFreshLocalPtyShellReady()
+  it('keeps markerless fish spawns unwrapped', async () => {
+    const { getMarkerlessShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
-    const config = getAttributionShellLaunchConfig('/opt/homebrew/bin/fish')
+    const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
     expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
   })
@@ -485,6 +485,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
     const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
     expectZdotdirSourceContext(zprofile, '.zprofile')
@@ -815,8 +816,6 @@ path=(/custom/bin $path)
       }
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
-      // Why: this test isolates zsh top-level path scoping, not attribution shim ordering.
-      delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
 
       const result = spawnSync(
@@ -855,7 +854,6 @@ path=(/custom/bin $path)
         }
         delete cleanEnv.ZDOTDIR
         delete cleanEnv.ORCA_ORIG_ZDOTDIR
-        delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
         delete cleanEnv.USER_ZSHRC_LOADED
         cleanEnv.ZDOTDIR = join(movedUserData, 'shell-ready', 'zsh')
 
@@ -903,7 +901,6 @@ path=(/custom/bin $path)
         }
         delete cleanEnv.ZDOTDIR
         delete cleanEnv.ORCA_ORIG_ZDOTDIR
-        delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
         delete cleanEnv.USER_ZSHRC_LOADED
         cleanEnv.ZDOTDIR = join(nonAsciiUserData, 'shell-ready', 'zsh')
 

@@ -103,8 +103,9 @@ function hasLifecycleVerdict(result: unknown): boolean {
   }
   const action = (lifecycle as { action?: unknown }).action
   if ('relay' in result) {
+    const authority = (lifecycle as { authority?: unknown }).authority
     return (
-      (lifecycle as { authority?: unknown }).authority === 'run_home' &&
+      (authority === 'run_home' || authority === 'worker_server_legacy') &&
       (action === 'completed' || action === 'failed' || action === 'rejected')
     )
   }

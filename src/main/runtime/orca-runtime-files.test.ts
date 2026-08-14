@@ -157,6 +157,7 @@ function createRuntimeFileCommands(options?: {
   resolveTerminalContext?: ReturnType<typeof vi.fn>
   resolveTerminalFileUriHostname?: ReturnType<typeof vi.fn>
   hasRecentTerminalOutputPath?: ReturnType<typeof vi.fn>
+  hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
@@ -192,6 +193,9 @@ function createRuntimeFileCommands(options?: {
       ? { resolveTerminalFileUriHostname: options.resolveTerminalFileUriHostname }
       : {}),
     hasRecentTerminalOutputPath: options?.hasRecentTerminalOutputPath ?? vi.fn(() => true),
+    ...(options?.hasRecentNativeChatOutputPath
+      ? { hasRecentNativeChatOutputPath: options.hasRecentNativeChatOutputPath }
+      : {}),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
@@ -945,11 +949,18 @@ describe('RuntimeFileCommands', () => {
       )
     }
 
-    function createRemoteTerminalArtifactGrantFixture(artifactPath = '/tmp/result.json') {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+    function createRemoteTerminalArtifactGrantFixture(
+      artifactPath = '/tmp/result.json',
+      nativeChat = false
+    ) {
+      const { commands, store } = createRuntimeFileCommands({
+        path: '/repo',
+        ...(nativeChat ? { hasRecentNativeChatOutputPath: vi.fn(() => true) } : {})
+      })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       let realArtifactPath = artifactPath
-      const stat = vi.fn().mockResolvedValue({ type: 'file', size: 11, mtime: 3 })
+      let artifactStat = { type: 'file', size: 11, mtime: 3 }
+      const stat = vi.fn(async () => artifactStat)
       const readTerminalArtifact = vi
         .fn()
         .mockResolvedValue({ content: '{"ok":true}', isBinary: false })
@@ -967,8 +978,18 @@ describe('RuntimeFileCommands', () => {
         writeTerminalArtifact,
         moveArtifactTarget: (nextPath: string) => {
           realArtifactPath = nextPath
+        },
+        replaceArtifact: () => {
+          artifactStat = { type: 'file', size: 12, mtime: 4 }
         }
       }
+    }
+
+    function resolveRemoteNativeChatArtifact(commands: RuntimeFileCommands, artifactPath: string) {
+      return commands.resolveTerminalPath('id:wt-1', artifactPath, null, 'client-a', null, true, {
+        tabId: 'tab-1',
+        sessionId: 'session-1'
+      })
     }
 
     it('resolves an absolute path inside the worktree to a relative path', async () => {
@@ -990,6 +1011,28 @@ describe('RuntimeFileCommands', () => {
           absolutePath: '/repo/src/index.ts'
         }
       })
+    })
+
+    it('keeps in-worktree resolution unchanged when chat provenance is present', async () => {
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '/repo/src/index.ts',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: 'src/index.ts', exists: true })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('resolves an absolute path through a known sibling workspace', async () => {
@@ -1367,9 +1410,13 @@ describe('RuntimeFileCommands', () => {
       expect(statMock).not.toHaveBeenCalled()
     })
 
-    it('does not mint an absolute terminal artifact grant without a source terminal', async () => {
+    it('keeps old-client behavior without native-chat provenance', async () => {
       const artifactPath = await tempFile('result.json', '{}')
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
 
       const result = await commands.resolveTerminalPath('id:wt-1', artifactPath, null, 'client-a')
 
@@ -1380,6 +1427,139 @@ describe('RuntimeFileCommands', () => {
         isDirectory: false
       })
       expect(result.openTarget).toBeUndefined()
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
+    })
+
+    it('mints an exact-path grant for an out-of-worktree path cited by native chat', async () => {
+      const artifactPath = await tempFile('chat-result.html', '<h1>Result</h1>')
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        artifactPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
+        'wt-1',
+        { tabId: 'tab-1', sessionId: 'session-1' },
+        artifactPath,
+        artifactPath
+      )
+      expect(result).toMatchObject({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: await realpath(artifactPath),
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          provider: 'local',
+          absolutePath: await realpath(artifactPath),
+          readOnly: true
+        }
+      })
+      const target = absoluteFileTarget(result)
+      await expect(
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          '<h1>Changed</h1>',
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_read_only')
+      await expect(readFile(artifactPath, 'utf8')).resolves.toBe('<h1>Result</h1>')
+    })
+
+    it('binds a cited symlink alias to its canonical read-only target', async () => {
+      const artifactPath = await tempFile('chat-target.html', '<h1>Result</h1>')
+      const citedPath = join(artifactPath, '..', 'chat-citation.html')
+      await symlink(artifactPath, citedPath)
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        citedPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
+        'wt-1',
+        { tabId: 'tab-1', sessionId: 'session-1' },
+        citedPath,
+        citedPath
+      )
+      expect(result).toMatchObject({
+        absolutePath: await realpath(artifactPath),
+        exists: true,
+        openTarget: {
+          kind: 'absolute-file',
+          absolutePath: await realpath(artifactPath),
+          readOnly: true
+        }
+      })
+    })
+
+    it('refuses an out-of-worktree chat path without transcript provenance', async () => {
+      const artifactPath = await tempFile('uncited-result.html', '<h1>Secret</h1>')
+      const hasRecentNativeChatOutputPath = vi.fn(() => false)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        artifactPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(result.openTarget).toBeUndefined()
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses native-chat tilde paths when the workspace runs in WSL', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: String.raw`\\wsl.localhost\Ubuntu\work\repo`,
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '~/.ssh/config',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, absolutePath: null, exists: false })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('does not mint an absolute terminal artifact grant for an unobserved path', async () => {
@@ -2213,6 +2393,69 @@ describe('RuntimeFileCommands', () => {
       expect(writeTerminalArtifact).toHaveBeenCalled()
     })
 
+    it('reads a remote non-temp artifact cited by native chat', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact } = createRemoteTerminalArtifactGrantFixture(
+        artifactPath,
+        true
+      )
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toMatchObject({ content: '{"ok":true}' })
+      expect(readTerminalArtifact).toHaveBeenCalledWith(
+        artifactPath,
+        expect.objectContaining({ expectedRealPath: artifactPath })
+      )
+    })
+
+    it('rejects a retargeted remote native-chat artifact grant', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact, moveArtifactTarget } =
+        createRemoteTerminalArtifactGrantFixture(artifactPath, true)
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      moveArtifactTarget('/home/me/private.json')
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_stale')
+      expect(readTerminalArtifact).not.toHaveBeenCalled()
+    })
+
+    it('rejects a replaced remote native-chat artifact grant', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact, replaceArtifact } =
+        createRemoteTerminalArtifactGrantFixture(artifactPath, true)
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      replaceArtifact()
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_stale')
+      expect(readTerminalArtifact).not.toHaveBeenCalled()
+    })
+
     it('rejects remote terminal artifact reads when a grant no longer resolves to the granted path', async () => {
       const { commands, readTerminalArtifact, moveArtifactTarget } =
         createRemoteTerminalArtifactGrantFixture()
@@ -2292,6 +2535,28 @@ describe('RuntimeFileCommands', () => {
 
       expect(result).toMatchObject({ relativePath: null, exists: false })
       expect(stat).not.toHaveBeenCalled()
+    })
+
+    it('still refuses a native-chat ~/ path on a remote worktree', async () => {
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands, store } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '~/notes.md',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('reports a missing remote file as not existing', async () => {

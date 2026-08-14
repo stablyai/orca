@@ -53,7 +53,10 @@ import {
   type WorkerTerminalRetainedReason
 } from './worker-terminal-ownership'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import {
+  ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+} from '../../../shared/protocol-version'
 import {
   releaseContextOnlyDispatch,
   type ContextOnlyDispatchReleaseResult
@@ -294,8 +297,8 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity.
-const SCHEMA_VERSION = 26
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments.
+const SCHEMA_VERSION = 27
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -477,6 +480,7 @@ export class OrchestrationDb {
         remote_worktree_id      TEXT,
         remote_terminal_handle  TEXT,
         to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
+        to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
         created_at              TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -880,6 +884,7 @@ export class OrchestrationDb {
             remote_worktree_id      TEXT,
             remote_terminal_handle  TEXT,
             to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
+            to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
             created_at              TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
           );
@@ -998,6 +1003,14 @@ export class OrchestrationDb {
       }
       if (current < 26) {
         migrateMutationReceiptCapacity(this.db)
+      }
+      if (
+        current < 27 &&
+        !this.hasColumn('federated_dispatches', 'to_home_acknowledged_sequence')
+      ) {
+        this.db.exec(
+          'ALTER TABLE federated_dispatches ADD COLUMN to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0'
+        )
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -3507,6 +3520,18 @@ export class OrchestrationDb {
     )
   }
 
+  getUndeliveredUnreadMailboxHandles(): string[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT DISTINCT to_handle FROM messages
+           WHERE read = 0 AND delivered_at IS NULL
+             AND delivery_contract = 'current_delivery'`
+        )
+        .all() as { to_handle: string }[]
+    ).map((row) => row.to_handle)
+  }
+
   getAllMessages(toHandle: string, limit = 20): MessageRow[] {
     return exposeMessageListTimestamps(
       this.db
@@ -3781,8 +3806,6 @@ export class OrchestrationDb {
     }
     const id = generateId('task')
     const depsJson = JSON.stringify(task.deps ?? [])
-    const hasDeps = (task.deps ?? []).length > 0
-    const status: TaskStatus = hasDeps ? 'pending' : 'ready'
     const display = buildOrchestrationTaskDisplayMetadata({
       spec: task.spec,
       taskTitle: task.taskTitle,
@@ -3794,7 +3817,18 @@ export class OrchestrationDb {
            id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
            created_by_process_incarnation, created_by_run_generation,
            task_title, display_name, spec, status, deps
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         ) VALUES (
+           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           CASE WHEN EXISTS (
+             SELECT 1
+             FROM json_each(?) requested
+             LEFT JOIN tasks dependency ON dependency.id = requested.value
+             WHERE dependency.id IS NULL
+                OR dependency.run_id <> ?
+                OR dependency.status <> 'completed'
+           ) THEN 'pending' ELSE 'ready' END,
+           ?
+         )`
       )
       .run(
         id,
@@ -3807,7 +3841,8 @@ export class OrchestrationDb {
         display.taskTitle || null,
         display.displayName || null,
         task.spec,
-        status,
+        depsJson,
+        runId,
         depsJson
       )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
@@ -4560,6 +4595,42 @@ export class OrchestrationDb {
       .all(runId ?? null, runId ?? null) as FederatedDispatchRow[]
   }
 
+  findNextTerminalFederatedDispatchPendingAcknowledgment(
+    afterRowId: number
+  ): { dispatchId: string; rowId: number } | undefined {
+    return this.db
+      .prepare(
+        `SELECT fd.dispatch_id AS dispatchId, fd.rowid AS rowId
+         FROM federated_dispatches fd
+         INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
+         WHERE wd.state NOT IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
+           AND fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
+           AND fd.rowid > ?
+         ORDER BY fd.rowid
+         LIMIT 1`
+      )
+      .get(afterRowId) as { dispatchId: string; rowId: number } | undefined
+  }
+
+  isFederatedDispatchRelayEligible(dispatchId: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1
+           FROM federated_dispatches fd
+           INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
+           WHERE fd.dispatch_id = ?
+             AND (
+               wd.state IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
+               OR (
+                 fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
+               )
+             )`
+        )
+        .get(dispatchId)
+    )
+  }
+
   updateFederatedDispatchResources(params: {
     dispatchId: string
     remoteRuntimeEpoch: string
@@ -4974,6 +5045,26 @@ export class OrchestrationDb {
           ) as FederationRelayItemRow
         }
       }
+      if (params.kind === 'worker_done') {
+        const identicalReport = this.db
+          .prepare(
+            `SELECT * FROM federation_relay_items
+             WHERE dispatch_id = ? AND direction = ? AND kind = 'worker_done'
+               AND payload = ? AND acked_at IS NULL
+             ORDER BY sequence DESC LIMIT 1`
+          )
+          .get(params.dispatchId, params.direction, params.payload) as
+          | FederationRelayItemRow
+          | undefined
+        if (identicalReport) {
+          this.settleRemoteAttachmentInRelayTransaction(
+            params.dispatchId,
+            params.settleRemoteOutcome
+          )
+          this.db.exec('COMMIT')
+          return identicalReport
+        }
+      }
       const quota = this.db
         .prepare(
           `SELECT COUNT(*) AS count, COALESCE(SUM(byte_count), 0) AS bytes
@@ -5106,30 +5197,66 @@ export class OrchestrationDb {
     dispatchId: string
     direction: FederationRelayDirection
     throughSequence: number
-    settleRemoteReport?: { sequence: number; outcome: WorkerReportOutcome }
+    settleRemoteReports?: { sequence: number; outcome?: WorkerReportOutcome }[]
   }): void {
     this.db.exec('BEGIN IMMEDIATE')
     try {
-      if (params.settleRemoteReport) {
+      const settledReports = params.settleRemoteReports ?? []
+      for (const settledReport of settledReports) {
         const report = this.getFederationRelayItem(
           params.dispatchId,
           params.direction,
-          params.settleRemoteReport.sequence
+          settledReport.sequence
         )
         if (
           params.direction !== 'to_home' ||
-          params.settleRemoteReport.sequence > params.throughSequence ||
+          settledReport.sequence > params.throughSequence ||
           report?.kind !== 'worker_done' ||
-          parseFederatedWorkerReportOutcome(report.payload) !== params.settleRemoteReport.outcome
+          (settledReport.outcome !== undefined &&
+            parseFederatedWorkerReportOutcome(report.payload) !== settledReport.outcome)
         ) {
           throw new OrchestrationError(
             'request_mismatch',
             `Federation acknowledgment for ${params.dispatchId} does not match its queued worker_done.`
           )
         }
+      }
+      const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
+      if (
+        params.direction === 'to_home' &&
+        attachment !== undefined &&
+        attachment.protocol_version >=
+          ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+      ) {
+        const acknowledgedReports = this.db
+          .prepare(
+            `SELECT sequence FROM federation_relay_items
+             WHERE dispatch_id = ? AND direction = 'to_home' AND kind = 'worker_done'
+               AND acked_at IS NULL AND sequence <= ?`
+          )
+          .all(params.dispatchId, params.throughSequence) as { sequence: number }[]
+        const settledSequences = new Set(settledReports.map((report) => report.sequence))
+        if (acknowledgedReports.some((report) => !settledSequences.has(report.sequence))) {
+          throw new OrchestrationError(
+            'request_mismatch',
+            `Federation acknowledgment for ${params.dispatchId} omits a worker_done settlement.`
+          )
+        }
+      }
+      const terminalOutcomes = new Set(
+        settledReports.flatMap((report) => (report.outcome ? [report.outcome] : []))
+      )
+      if (terminalOutcomes.size > 1) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `Federation acknowledgment for ${params.dispatchId} contains conflicting settlements.`
+        )
+      }
+      const terminalOutcome = settledReports.find((report) => report.outcome)?.outcome
+      if (terminalOutcome) {
         this.settleRemoteAttachmentInRelayTransaction(
           params.dispatchId,
-          params.settleRemoteReport.outcome,
+          terminalOutcome,
           'worker_report_settled'
         )
       }
@@ -5154,6 +5281,44 @@ export class OrchestrationDb {
          WHERE dispatch_id = ? AND to_home_imported_sequence < ?`
       )
       .run(sequence, dispatchId, sequence)
+  }
+
+  recordFederatedHomeAcknowledgment(params: {
+    dispatchId: string
+    remoteRuntimeEpoch: string
+    sequence: number
+  }): void {
+    const federated = this.getFederatedDispatch(params.dispatchId)
+    if (
+      !federated ||
+      !Number.isInteger(params.sequence) ||
+      params.sequence < 0 ||
+      params.sequence > federated.to_home_imported_sequence
+    ) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `Federation acknowledgment for ${params.dispatchId} exceeds imported relay state.`
+      )
+    }
+    this.db
+      .prepare(
+        `UPDATE federated_dispatches
+         SET remote_runtime_epoch = ?,
+             to_home_acknowledged_sequence = CASE
+               WHEN remote_runtime_epoch = ?
+                 THEN MAX(to_home_acknowledged_sequence, ?)
+               ELSE ?
+             END,
+             updated_at = datetime('now')
+         WHERE dispatch_id = ?`
+      )
+      .run(
+        params.remoteRuntimeEpoch,
+        params.remoteRuntimeEpoch,
+        params.sequence,
+        params.sequence,
+        params.dispatchId
+      )
   }
 
   importFederatedRelayItem(params: {

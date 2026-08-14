@@ -104,6 +104,7 @@ docs/**
 !docs/reference/remote-wire-compatibility.md
 !docs/reference/renderer-agent-status-performance.md
 !docs/reference/windows-setup-shell.md
+!docs/reference/worktree-scan-fingerprint.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
@@ -125,6 +126,10 @@ playwright-report/
 /.claude/skills/
 /.agents/skills/
 /skills-lock.json
+
+# Generated Clawpatch state includes machine-local paths and review records.
+/.clawpatch/
+/mobile/.clawpatch/
 
 # Agent hook runtime endpoints (machine-local secrets)
 /agent-hooks/

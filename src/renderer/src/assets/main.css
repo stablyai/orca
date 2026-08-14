@@ -60,6 +60,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-agent-question: var(--agent-question);
+  --color-agent-question-text: var(--agent-question-text);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -169,6 +171,12 @@
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
+  /* "An agent is asking you something" — one hue for every surface that shows
+     it (sidebar, tabs, dashboard, agent map). Orange, not amber: on the map it
+     has to stay separable from working-yellow at a glance. */
+  --agent-question: var(--color-orange-600);
+  /* Legible weight for text/glyphs on a tinted --agent-question surface. */
+  --agent-question-text: var(--color-orange-700);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
@@ -272,6 +280,8 @@
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
+  --agent-question: var(--color-orange-500);
+  --agent-question-text: var(--color-orange-300);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);

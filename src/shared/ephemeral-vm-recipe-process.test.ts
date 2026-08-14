@@ -38,6 +38,7 @@ describe('runRecipeCommand', () => {
         command: nodeCommand(scriptPath),
         repoPath,
         mode: 'create',
+        resultSchemaVersion: 1,
         context: {
           recipeId: 'cloud-sandbox',
           repoPath
@@ -71,6 +72,7 @@ describe('runRecipeCommand', () => {
           command: nodeCommand(scriptPath),
           repoPath,
           mode: 'create',
+          resultSchemaVersion: 1,
           context: {
             recipeId: 'cloud-sandbox',
             repoPath

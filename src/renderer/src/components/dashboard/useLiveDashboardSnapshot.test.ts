@@ -161,4 +161,17 @@ describe('useLiveDashboardSnapshot', () => {
     rerender()
     expect(result.current.cards[0].terminalInput?.hostPlatform).toBe('win32')
   })
+
+  it('re-derives saved SSH labels when the target catalog changes', () => {
+    seed({ tabAutoGenerateTitle: false })
+    useAppStore.setState({
+      repos: [{ ...repo(), connectionId: 'target-1', executionHostId: 'ssh:target-1' }]
+    })
+    const { result, rerender } = renderHook(() => useLiveDashboardSnapshot())
+    expect(result.current.cards[0].hostLabel).toBe('target-1')
+
+    useAppStore.setState({ sshTargetLabels: new Map([['target-1', 'Builder']]) })
+    rerender()
+    expect(result.current.cards[0].hostLabel).toBe('Builder')
+  })
 })

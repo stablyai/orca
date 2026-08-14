@@ -316,8 +316,8 @@ describe('useMobileNativeChatDrafts', () => {
     })
     expect(state?.pending).toHaveLength(1)
 
-    // Claude echoes a captioned image send as two turns: the source marker and
-    // the caption prefixed with `[Image #1] ` — the pending must still match.
+    // Claude echoes a captioned image send as a source turn plus a caption
+    // carrying `[Image #1]`; the pending must still match.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
@@ -326,6 +326,37 @@ describe('useMobileNativeChatDrafts', () => {
             assistantTextMessage('a1', 'hi'),
             userTextMessage('u1', '[Image: source: /tmp/a.png]'),
             userTextMessage('u2', '[Image #1] look at this')
+          ]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual({ u2: ['file:///a.jpg'] })
+  })
+
+  it('reconciles a captioned image echo with a trailing [Image #N] marker', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
+      )
+    )
+    const origin = state?.captureSendOrigin('look at this')
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, 'look at this', ['file:///a.jpg'])
+      }
+    })
+    expect(state?.pending).toHaveLength(1)
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [
+            assistantTextMessage('a1', 'hi'),
+            userTextMessage('u1', '[Image: source: /tmp/a.png]'),
+            userTextMessage('u2', 'look at this[Image #1]')
           ]
         })
       )

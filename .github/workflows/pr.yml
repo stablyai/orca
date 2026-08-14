@@ -74,14 +74,14 @@ jobs:
       # actually checks them. TypeScript's skipLibCheck: true (inherited
       # from @electron-toolkit/tsconfig) silently widens unresolved names
       # in .d.ts to `any`, which is how #1186 shipped a broken IPC signature
-      # past typecheck. See docs/preload-typecheck-hole.md.
+      # past typecheck. See .github/CONTRIBUTING.md#type-declarations-prefer-ts-over-dts.
       - name: Guard against project-owned .d.ts in preload/shared
         run: |
           matches=$(find src/preload src/shared -name '*.d.ts' 2>/dev/null || true)
           if [ -n "$matches" ]; then
             echo "::error::Project-owned .d.ts files are not allowed under src/preload or src/shared."
             echo "Move type declarations into a .ts file so skipLibCheck does not hide errors."
-            echo "See docs/preload-typecheck-hole.md."
+            echo "See .github/CONTRIBUTING.md#type-declarations-prefer-ts-over-dts."
             echo "Found:"
             echo "$matches"
             exit 1
@@ -239,7 +239,8 @@ jobs:
 
       - name: Test real shell contracts
         run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+            src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty-shell-ready.test.ts \
@@ -275,6 +276,7 @@ jobs:
       - name: Test shard
         run: |
           pnpm exec vitest run --config config/vitest.config.ts \
+            --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             --exclude=src/main/daemon/shell-ready.test.ts \
             --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
             --exclude=src/main/providers/local-pty-shell-ready.test.ts \
@@ -381,7 +383,10 @@ jobs:
       - name: Package unpacked app
         env:
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
-        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage --x64 --publish never
+
+      - name: Verify headless serve signal shutdown
+        run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
@@ -424,8 +429,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test Windows PowerShell CLI boundary
-        run: pnpm exec vitest run --config config/vitest.config.ts src/main/cli/wsl-cli-powershell-boundary.test.ts
+      - name: Test Windows-specific boundaries
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          src/main/cli/wsl-cli-powershell-boundary.test.ts
+          src/main/orca-profiles/profile-index-store.test.ts
+          src/main/runtime/repo-worktree-admin-fingerprint.test.ts
+          src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
+          src/shared/secure-file-fsync-flags.test.ts
 
       - name: Build package inputs
         run: pnpm run build:release

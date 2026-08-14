@@ -560,6 +560,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     env,
     envToDelete,
     command,
+    commandDelivery,
     launchConfig,
     resumeProviderSession,
     launchToken,
@@ -819,6 +820,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             ? { envToDelete: options.envToDelete ?? envToDelete }
             : {}),
           command: options.command ?? command,
+          ...((options.commandDelivery ?? commandDelivery)
+            ? { commandDelivery: options.commandDelivery ?? commandDelivery }
+            : {}),
           ...((options.launchConfig ?? launchConfig)
             ? { launchConfig: options.launchConfig ?? launchConfig }
             : {}),

@@ -247,21 +247,26 @@ export function useInstalledAgentSkillNames(
     if (!enabled) {
       return
     }
-    const refreshFromExternalChange = (): void => {
+    // Why: skill install commands run outside React state, often in a terminal, so
+    // an install event is authoritative and forces past every cache.
+    const refreshFromInstall = (): void => {
       void refresh(true)
     }
-    const refreshFromCompletedScan = (): void => {
+    // Why: focus fires on every app and window switch, and a forced refresh
+    // bypasses every cache down to the host's disk walk — that is what turned an
+    // alt-tab into a multi-root filesystem scan per window and per client. Focus,
+    // and another surface finishing its own scan, are both only hints that
+    // something may have changed, so they read through the freshness window.
+    const refreshQuietly = (): void => {
       void refresh(false, false)
     }
-    // Why: skill install commands run outside React state, often in a terminal.
-    // Refresh on focus and explicit install events so completion is detected.
-    window.addEventListener('focus', refreshFromExternalChange)
-    window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
-    window.addEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshFromCompletedScan)
+    window.addEventListener('focus', refreshQuietly)
+    window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromInstall)
+    window.addEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshQuietly)
     return () => {
-      window.removeEventListener('focus', refreshFromExternalChange)
-      window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
-      window.removeEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshFromCompletedScan)
+      window.removeEventListener('focus', refreshQuietly)
+      window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromInstall)
+      window.removeEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshQuietly)
     }
   }, [enabled, refresh])
 

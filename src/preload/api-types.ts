@@ -147,6 +147,7 @@ import type {
   ClaudeRateLimitAccountsState,
   ClassifiedError,
   CodexRateLimitAccountsState,
+  AdoptProvisionedRootArgs,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
@@ -1196,6 +1197,9 @@ export type PreloadApi = {
           | 'externalWorktreeVisibilityPromptDismissedAt'
           | 'externalWorktreeInboxBaselinePaths'
           | 'importedExternalWorktreePaths'
+          | 'agentWorktreeVisibility'
+          | 'customWorktreeVisibilitySources'
+          | 'worktreeVisibilitySourcePreferences'
           | 'projectGroupId'
           | 'projectGroupOrder'
           | 'forkSyncMode'
@@ -1332,6 +1336,7 @@ export type PreloadApi = {
           | 'pendingFirstAgentMessageRename'
           | 'firstAgentMessageRenameError'
           | 'lastActivityAt'
+          | 'diffComments'
         >
       >
     }) => Promise<FolderWorkspace | null>
@@ -1366,6 +1371,7 @@ export type PreloadApi = {
     cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
+    adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
     /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
      *  create path emits nothing, so the surface falls back to an indeterminate spinner. */
     onCreateProgress: (
@@ -1470,6 +1476,7 @@ export type PreloadApi = {
       env?: Record<string, string>
       envToDelete?: string[]
       command?: string
+      commandDelivery?: 'renderer' | 'provider'
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
@@ -2633,6 +2640,8 @@ export type PreloadApi = {
       workspaceName?: string
       projectId?: string
       workspaceId?: string
+      branch?: string
+      ref?: string
       provisionId?: string
     }) => Promise<
       | {

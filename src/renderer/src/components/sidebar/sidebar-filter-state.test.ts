@@ -64,6 +64,13 @@ describe('isDefaultBranchWorkspace', () => {
     const feature = makeWorktree('feature')
     expect(isDefaultBranchWorkspace(feature)).toBe(false)
   })
+
+  it('keeps a provisioned root visible as the recipe-created workspace', () => {
+    const provisionedRoot = makeWorktree('provisioned-root')
+    provisionedRoot.isMainWorktree = true
+    provisionedRoot.ephemeralVmCheckoutMode = 'provisioned-root'
+    expect(isDefaultBranchWorkspace(provisionedRoot)).toBe(false)
+  })
 })
 
 describe('sidebarHasActiveFilters', () => {

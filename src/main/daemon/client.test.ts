@@ -335,6 +335,30 @@ describe('DaemonClient', () => {
       client = new DaemonClient({ socketPath, tokenPath })
       await expect(client.ensureConnected()).rejects.toThrow()
     })
+
+    it('fails a retired endpoint at the connect, not at the token read', async () => {
+      rmSync(tokenPath)
+      client = new DaemonClient({ socketPath, tokenPath })
+
+      const error = (await client
+        .ensureConnected()
+        .catch((err: unknown) => err)) as NodeJS.ErrnoException
+
+      expect(error.syscall).toBe('connect')
+      expect(['ENOENT', 'ECONNREFUSED']).toContain(error.code)
+    })
+
+    it('still attempts the handshake when the token is gone but a daemon is listening', async () => {
+      const hellos: HelloMessage[] = []
+      await startMockDaemon({ onHello: (msg) => hellos.push(msg) })
+      rmSync(tokenPath)
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+
+      expect(hellos.length).toBeGreaterThan(0)
+      expect(hellos[0]?.token).toBe('')
+    })
   })
 
   describe('RPC', () => {
