@@ -32,7 +32,7 @@ This is an Electron-framework crash, not an Orca logic crash. Stock Electron
 43.1.0 dies the same way:
 
 ```bash
-# Repro (macOS). Exit 134 == SIGABRT. ELECTRON_RUN_AS_NODE=1 does not abort.
+# Repro (macOS). GUI launch aborts; ELECTRON_RUN_AS_NODE=1 does not.
 cat > /tmp/deny-ls.sb << 'EOF'
 (version 1)
 (deny default)
@@ -50,19 +50,29 @@ EOF
 
 sandbox-exec -f /tmp/deny-ls.sb \
   node_modules/electron/dist/Electron.app/Contents/MacOS/Electron
+# exit 134 == SIGABRT
+
+sandbox-exec -f /tmp/deny-ls.sb \
+  env ELECTRON_RUN_AS_NODE=1 \
+  node_modules/electron/dist/Electron.app/Contents/MacOS/Electron -e 'console.log("ok")'
+# prints ok, exit 0
 ```
 
 `open -a Orca` from the same sandbox fails with `_LSOpenURLsWithCompletionHandler
-error -54` instead of aborting — still no GUI, but no crash loop.
+error -54` instead of aborting — still no GUI, but no crash loop. It is not a
+sandbox workaround.
 
 **What Orca does.**
 
 - `orca open` reopens the packaged `Orca.app` via Launch Services (`open`), and
   does not exec `Contents/MacOS/Orca` when that path is the packaged binary.
-- `orca serve` does not spawn a second GUI process when this `userData` profile
-  is already running (exit code `3`, same contract as the single-instance lock).
-  A second exec is what produced the crash loop: each child died in
-  `_RegisterApplication` before JS could take the lock.
+- `orca serve` (without `--serve-recipe-json`) does not spawn a second GUI
+  process when this `userData` profile is already running (exit code `3`, same
+  contract as the single-instance lock). A second exec is what produced the
+  crash loop: each child died in `_RegisterApplication` before JS could take
+  the lock.
+- `orca serve --serve-recipe-json` still detaches an ephemeral pairing helper
+  and skips that already-running check.
 - If a spawn still SIGABRTs, the CLI names this abort and points at
   `~/Library/Logs/DiagnosticReports/Orca-*.ips`.
 
@@ -71,7 +81,9 @@ error -54` instead of aborting — still no GUI, but no crash loop.
 1. If the desktop app is already up, use `orca status` / the regular `orca`
    commands. Do not keep retrying `orca serve` from an agent sandbox.
 2. Do not exec `/Applications/Orca.app/Contents/MacOS/Orca` from a sandbox.
-   Use `open -a Orca` or start the app from Finder.
+   Leave the sandbox and start the app from a normal macOS desktop login.
+   `open -a Orca` and Finder are not sandbox workarounds (`open` fails with
+   error `-54` there).
 3. Confirm the crashing frame is `_RegisterApplication`, not `node::Utf8Value`.
 
 Related: stablyai/orca#9282 (environment-induced), #10461 / #10464 (CLI

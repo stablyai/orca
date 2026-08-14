@@ -1,5 +1,5 @@
 import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
@@ -288,7 +288,7 @@ function packagedOrcaAppBundlePath(executable: string): string | null {
   if (!appBundlePath) {
     return null
   }
-  return appBundlePath === 'Orca.app' || appBundlePath.endsWith('/Orca.app') ? appBundlePath : null
+  return basename(appBundlePath) === 'Orca.app' ? appBundlePath : null
 }
 
 function getExecutableAppArgs(): string[] {
