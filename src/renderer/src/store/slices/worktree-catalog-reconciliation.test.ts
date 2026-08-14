@@ -114,6 +114,23 @@ describe('reuseEqualCatalogRows', () => {
     expect(reconciled[0]).not.toBe(reconciled[1])
   })
 
+  // JSON collapses distinctions the equality walk keeps, so a fingerprint group
+  // can hold rows that are not actually equal. Rejecting one must not consume it.
+  it('keeps a rejected same-fingerprint candidate available to later rows', () => {
+    const instants = Array.from({ length: 16 }, () => new Date(0))
+    const current = instants.map((at) => ({ id: 'dup', at }))
+
+    const reconciled = reuseEqualCatalogRows(current, [
+      { id: 'dup', at: instants[1] as Date },
+      { id: 'dup', at: instants[0] as Date }
+    ])
+
+    // Distinct Date objects share a fingerprint but are not structurally equal,
+    // so resolving the first row must leave the second row's match in place.
+    expect(reconciled[0]).toBe(current[1])
+    expect(reconciled[1]).toBe(current[0])
+  })
+
   it('still matches when a large bucket cannot be fingerprinted', () => {
     // JSON.stringify throws on BigInt, so the index cannot be built and this
     // falls back to the capped scan rather than crashing or losing the match.

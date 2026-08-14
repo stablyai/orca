@@ -50,15 +50,17 @@ export function reuseEqualCatalogRows<T extends CatalogRow>(
       // (BigInt); those fall back to a capped scan so O(k^2) cannot return here.
       return spliceEqualRow(candidates, row, DUPLICATE_ID_INDEX_THRESHOLD) ?? row
     }
-    // Consumes at most one previous row, so two duplicates cannot both reuse it.
+    // Confirm inside the fingerprint group WITHOUT discarding non-matches: JSON
+    // collapses distinctions the walk keeps (two Dates at one instant, -0 vs 0,
+    // undefined vs null inside an array), and a rejected candidate
+    // dropped here would be invisible to every later row. Bounded so an
+    // all-colliding group cannot bring O(k^2) back.
     const matches = index.get(catalogRowFingerprint(row) ?? '')
-    while (matches !== undefined && matches.length > 0) {
-      const candidate = matches.shift()
-      if (candidate !== undefined && structuralValuesEqualIgnoringUndefined(candidate, row)) {
-        return candidate
-      }
-    }
-    return row
+    // Consumes at most one previous row, so two duplicates cannot both reuse it.
+    return (
+      (matches === undefined ? null : spliceEqualRow(matches, row, DUPLICATE_ID_INDEX_THRESHOLD)) ??
+      row
+    )
   })
   return current.length === reconciled.length &&
     current.every((row, index) => row === reconciled[index])
