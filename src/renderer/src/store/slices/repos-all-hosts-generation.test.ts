@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -144,6 +144,86 @@ describe('fetchReposForAllHosts generation', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     await remoteRefresh
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo', 'remote-repo'])
+  })
+
+  it('keeps an in-flight all-host remote result across a newer local refresh', async () => {
+    let resolveRemote!: (value: unknown) => void
+    let markRemoteStarted!: () => void
+    const remote = new Promise((resolve) => {
+      resolveRemote = resolve
+    })
+    const remoteStarted = new Promise<void>((resolve) => {
+      markRemoteStarted = resolve
+    })
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        markRemoteStarted()
+        return remote
+      }
+      return {
+        id: 'rpc-other',
+        ok: true,
+        result: { projects: [], setups: [] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+    const store = createTestStore()
+
+    const allHosts = store.getState().fetchReposForAllHosts()
+    await remoteStarted
+    await store.getState().fetchRepos({ runtimeEnvironmentId: null })
+    resolveRemote({
+      id: 'rpc-repo-list',
+      ok: true,
+      result: { repos: [remoteRepo] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await allHosts
+
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo', 'remote-repo'])
+  })
+
+  it('starts all-host remote loads after a newer local refresh replaces its local result', async () => {
+    let resolveOlderLocal!: (repos: Repo[]) => void
+    let resolveRemote!: (value: unknown) => void
+    let markRemoteStarted!: () => void
+    const olderLocal = new Promise<Repo[]>((resolve) => {
+      resolveOlderLocal = resolve
+    })
+    const remote = new Promise((resolve) => {
+      resolveRemote = resolve
+    })
+    const remoteStarted = new Promise<void>((resolve) => {
+      markRemoteStarted = resolve
+    })
+    reposList.mockReturnValueOnce(olderLocal)
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        markRemoteStarted()
+        return remote
+      }
+      return {
+        id: 'rpc-other',
+        ok: true,
+        result: { projects: [], setups: [] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+    const store = createTestStore()
+
+    const allHosts = store.getState().fetchReposForAllHosts()
+    await store.getState().fetchRepos({ runtimeEnvironmentId: null })
+    resolveOlderLocal([localRepo])
+    await remoteStarted
+    resolveRemote({
+      id: 'rpc-repo-list',
+      ok: true,
+      result: { repos: [remoteRepo] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await allHosts
+
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo', 'remote-repo'])
   })
 

@@ -2,12 +2,19 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { SourceControlBranchContextRow } from './source-control-branch-context-row'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
+import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+}))
+
+vi.mock('@/components/ui/hover-card', () => ({
+  HoverCard: ({ children }: { children: ReactNode }) => <>{children}</>,
+  HoverCardContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  HoverCardTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
 const readySummary: GitBranchCompareSummary = {
@@ -213,5 +220,327 @@ describe('SourceControlBranchContextRow', () => {
     )
 
     expect(markup).toContain('aria-label="Open review page in browser"')
+  })
+})
+
+function renderWithLineTotal(
+  branchLineTotal: GitBranchLineTotal | null | undefined,
+  summary: GitBranchCompareSummary | null = readySummary
+): string {
+  return renderToStaticMarkup(
+    <SourceControlBranchContextRow
+      summary={summary}
+      compareBaseRef={null}
+      headDisplay={{ kind: 'branch', branchName: 'feature/line-total' }}
+      manualReviewUrl="https://example.test/review"
+      branchLineTotal={branchLineTotal}
+      onChangeBaseRef={vi.fn()}
+      onRetry={vi.fn()}
+    />
+  )
+}
+
+describe('SourceControlBranchContextRow branch line total', () => {
+  it('renders both halves with grouped digits and a spoken label', () => {
+    const markup = renderWithLineTotal({ added: 8259, removed: 670, mergeBase: 'base' })
+
+    expect(markup).toContain('+8,259')
+    expect(markup).toContain('-670')
+    // Label reads raw digits; the grouped spans are decoration.
+    expect(markup).toContain('aria-label="8259 lines added, 670 lines deleted"')
+    expect(markup).toContain('tabular-nums')
+    expect(markup).toContain('text-[color:var(--git-decoration-added)]')
+    expect(markup).toContain('text-[color:var(--git-decoration-deleted)]')
+    // Not clickable in v1 — the chip's scope differs from openBranchAllDiffs.
+    expect(markup).not.toContain('<button type="button" data-testid="source-control-branch')
+  })
+
+  // `truncate` clips nothing on an inline box, so an inline head identity let a
+  // long branch name overflow its flex item and run under the chip.
+  it('gives the head identity a block box so long names ellipsize instead of overlapping', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={readySummary}
+        compareBaseRef={null}
+        headDisplay={{
+          kind: 'branch',
+          branchName: 'refactor-remove-legacy-gemini-cli-current-model-plumbing'
+        }}
+        branchLineTotal={{ added: 16, removed: 1541, mergeBase: 'base' }}
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    const identityClasses =
+      /class="([^"]*)"[^>]*data-testid="source-control-head-identity"/.exec(markup)?.[1] ?? ''
+
+    expect(identityClasses).toContain('block')
+    expect(identityClasses).toContain('truncate')
+    expect(identityClasses).toContain('min-w-0')
+  })
+
+  it('keeps full precision instead of a compact 8.3k form', () => {
+    const markup = renderWithLineTotal({ added: 123456, removed: 0, mergeBase: 'base' })
+
+    expect(markup).toContain(`+${(123456).toLocaleString()}`)
+    expect(markup).not.toContain('123k')
+    expect(markup).not.toContain('123.5')
+  })
+
+  it('omits the zero half rather than printing +42 -0', () => {
+    const addedOnly = renderWithLineTotal({ added: 42, removed: 0, mergeBase: 'base' })
+    expect(addedOnly).toContain('>+42<')
+    expect(addedOnly).not.toContain('>-0<')
+    expect(addedOnly).toContain('aria-label="42 lines added"')
+
+    const removedOnly = renderWithLineTotal({ added: 0, removed: 7, mergeBase: 'base' })
+    expect(removedOnly).toContain('>-7<')
+    expect(removedOnly).not.toContain('>+0<')
+    expect(removedOnly).toContain('aria-label="7 lines deleted"')
+  })
+
+  it('hides the chip when both counts are zero', () => {
+    const markup = renderWithLineTotal({ added: 0, removed: 0, mergeBase: 'base' })
+
+    expect(markup).not.toContain('data-testid="source-control-branch-line-total"')
+    expect(markup).not.toContain('>+0<')
+    expect(markup).not.toContain('>-0<')
+  })
+
+  it('renders nothing at all when the total is absent', () => {
+    // Why: a null total is equally "still computing" and "this host will never
+    // send one", so there is no placeholder to show — the slot stays empty.
+    for (const total of [null, undefined]) {
+      const markup = renderWithLineTotal(total)
+      expect(markup).not.toContain('data-testid="source-control-branch-line-total"')
+      expect(markup).not.toContain('animate-pulse')
+      expect(markup).not.toContain('NaN')
+    }
+  })
+
+  // Lines measure the branch's work, commits measure the comparison, so each sits
+  // on the line that names its subject. Adjacency is what made them read as one
+  // number in the first place.
+  it('puts the chip on the head line, ahead of the base line and its commit count', () => {
+    const markup = renderWithLineTotal(
+      { added: 8259, removed: 670, mergeBase: 'base' },
+      {
+        ...readySummary,
+        commitsAhead: 2
+      }
+    )
+    const headIndex = markup.indexOf('data-testid="source-control-head-identity"')
+    const chipIndex = markup.indexOf('data-testid="source-control-branch-line-total"')
+    const aheadIndex = markup.indexOf('↑2')
+    const reviewIndex = markup.indexOf('aria-label="Open review page in browser"')
+
+    expect(headIndex).toBeGreaterThan(-1)
+    expect(chipIndex).toBeGreaterThan(headIndex)
+    expect(aheadIndex).toBeGreaterThan(chipIndex)
+    expect(reviewIndex).toBeGreaterThan(aheadIndex)
+  })
+
+  it('keeps the ahead count out of the line-total colors', () => {
+    const markup = renderWithLineTotal(
+      { added: 8259, removed: 670, mergeBase: 'base' },
+      { ...readySummary, commitsAhead: 2 }
+    )
+    // The `↑2` span must carry the muted class, not added-green — two adjacent
+    // green numbers counting different units is the bug this guards.
+    const aheadSpan = markup.slice(
+      markup.lastIndexOf('<span', markup.indexOf('↑2')),
+      markup.indexOf('↑2')
+    )
+
+    expect(aheadSpan).toContain('text-muted-foreground/70')
+    expect(aheadSpan).not.toContain('--git-decoration-added')
+  })
+
+  it('folds the chip onto the base line when there is no head identity', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={readySummary}
+        compareBaseRef={null}
+        headDisplay={null}
+        branchLineTotal={{ added: 8259, removed: 670, mergeBase: 'base' }}
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('data-testid="source-control-branch-line-total"')
+    expect(markup).toContain('+8,259')
+  })
+
+  it('stays hidden while compare is loading or failed', () => {
+    const total: GitBranchLineTotal = { added: 8259, removed: 670, mergeBase: 'base' }
+
+    for (const summary of [
+      null,
+      { ...readySummary, status: 'loading' } as GitBranchCompareSummary,
+      {
+        ...readySummary,
+        status: 'error',
+        errorMessage: 'Could not compare against base'
+      } as GitBranchCompareSummary
+    ]) {
+      const markup = renderWithLineTotal(total, summary)
+      expect(markup).not.toContain('data-testid="source-control-branch-line-total"')
+      expect(markup).not.toContain('+8,259')
+    }
+  })
+})
+
+// The hover-card mock at the top renders content inline, so these assert the
+// breakdown copy without driving a real hover.
+describe('SourceControlBranchContextRow line total test split', () => {
+  it('breaks the panel down into test and non-test halves', () => {
+    const markup = renderWithLineTotal({
+      added: 243,
+      removed: 149,
+      mergeBase: 'base',
+      test: { added: 120, removed: 40 }
+    })
+
+    expect(markup).toContain('Code breakdown')
+    expect(markup).toContain('Lines of code')
+    expect(markup).toContain('data-testid="source-control-branch-line-total-breakdown"')
+    expect(markup).toContain('Non-test')
+    expect(markup).toContain('>+123<')
+    expect(markup).toContain('>-109<')
+    expect(markup).toContain('Tests')
+    expect(markup).toContain('>+120<')
+    expect(markup).toContain('>-40<')
+    // Non-test first so the primary share leads the panel.
+    expect(markup.indexOf('Non-test')).toBeLessThan(markup.indexOf('Tests'))
+  })
+
+  it('spells the split into the label so the summary is announced closed', () => {
+    const markup = renderWithLineTotal({
+      added: 243,
+      removed: 149,
+      mergeBase: 'base',
+      test: { added: 120, removed: 40 }
+    })
+
+    expect(markup).toContain(
+      'aria-label="243 lines added, 149 lines deleted — test code: 120 lines added, 40 lines deleted"'
+    )
+  })
+
+  it('keeps a zero test share visible rather than hiding the row', () => {
+    const markup = renderWithLineTotal({
+      added: 243,
+      removed: 149,
+      mergeBase: 'base',
+      test: { added: 0, removed: 0 }
+    })
+
+    expect(markup).toContain('>+0<')
+    expect(markup).toContain('>-0<')
+    expect(markup).toContain('>+243<')
+    expect(markup).toContain('>-149<')
+    // Panel keeps the zero row; the spoken label stays the main totals only.
+    expect(markup).toContain('aria-label="243 lines added, 149 lines deleted"')
+    expect(markup).not.toContain('test code:')
+  })
+
+  // A host predating the split omits the field; inventing a 0% test share there
+  // would be a confidently wrong claim.
+  it('renders exactly as before when the host reported no split', () => {
+    const withoutSplit = renderWithLineTotal({ added: 243, removed: 149, mergeBase: 'base' })
+
+    expect(withoutSplit).not.toContain('Non-test')
+    expect(withoutSplit).not.toContain('Code breakdown')
+    expect(withoutSplit).toContain('aria-label="243 lines added, 149 lines deleted"')
+  })
+
+  it('labels the remainder Source once generated is known, and shows that row', () => {
+    const markup = renderWithLineTotal({
+      added: 243,
+      removed: 149,
+      mergeBase: 'base',
+      test: { added: 20, removed: 10 },
+      generated: { added: 100, removed: 50 }
+    })
+
+    expect(markup).toContain('Source')
+    expect(markup).not.toContain('Non-test')
+    expect(markup).toContain('Generated')
+    expect(markup).toContain('>+123<') // 243-20-100
+    expect(markup).toContain('>-89<') // 149-10-50
+    expect(markup).toContain('>+100<')
+    expect(markup).toContain('>-50<')
+    expect(markup).toContain(
+      'aria-label="243 lines added, 149 lines deleted — test code: 20 lines added, 10 lines deleted — generated: 100 lines added, 50 lines deleted"'
+    )
+  })
+
+  // The remainder here still contains tests, so calling it "Source" would claim
+  // a split the host never sent.
+  it('labels the remainder Non-generated when the host omitted the test field', () => {
+    const markup = renderWithLineTotal({
+      added: 243,
+      removed: 149,
+      mergeBase: 'base',
+      generated: { added: 100, removed: 50 }
+    })
+
+    expect(markup).toContain('Non-generated')
+    expect(markup).toContain('>Generated<')
+    expect(markup).not.toContain('>Source<')
+    expect(markup).not.toContain('Tests')
+    expect(markup).toContain('>+143<') // 243-100
+    expect(markup).toContain('>-99<') // 149-50
+  })
+
+  // "No tests in this branch" is worth stating; "nothing was generated" is the
+  // normal case, so that row is dropped rather than shown as +0 -0.
+  it('drops the generated row and its announcement when nothing was generated', () => {
+    const markup = renderWithLineTotal({
+      added: 243,
+      removed: 149,
+      mergeBase: 'base',
+      test: { added: 120, removed: 40 },
+      generated: { added: 0, removed: 0 }
+    })
+
+    expect(markup).not.toContain('Generated')
+    expect(markup).not.toContain('generated:')
+    // The host did classify and found nothing, so the remainder is still Source.
+    expect(markup).toContain('Source')
+    expect(markup).toContain('Tests')
+    expect(markup).toContain('>+123<')
+  })
+
+  it('orders the rows source, tests, generated', () => {
+    const markup = renderWithLineTotal({
+      added: 1243,
+      removed: 149,
+      mergeBase: 'base',
+      test: { added: 120, removed: 40 },
+      generated: { added: 1000, removed: 0 }
+    })
+
+    expect(markup.indexOf('Source')).toBeLessThan(markup.indexOf('Tests'))
+    expect(markup.indexOf('Tests')).toBeLessThan(markup.indexOf('Generated'))
+    expect(markup).toContain('>+1,000<')
+  })
+
+  // The three rows must account for every line, or the panel contradicts the chip.
+  it('keeps the three rows summing back to the chip total', () => {
+    const markup = renderWithLineTotal({
+      added: 500,
+      removed: 200,
+      mergeBase: 'base',
+      test: { added: 150, removed: 60 },
+      generated: { added: 300, removed: 100 }
+    })
+
+    expect(markup).toContain('>+50<') // 500-150-300
+    expect(markup).toContain('>-40<') // 200-60-100
+    expect(markup).toContain('>+150<')
+    expect(markup).toContain('>+300<')
   })
 })

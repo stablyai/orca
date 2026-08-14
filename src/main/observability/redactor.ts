@@ -123,7 +123,7 @@ export function redactString(input: string): string {
 export function redactValue(
   value: unknown,
   mode: RedactorMode = 'client',
-  seen: WeakSet<object> = new WeakSet()
+  seen = new WeakSet<object>()
 ): unknown {
   if (value === null || value === undefined) {
     return value

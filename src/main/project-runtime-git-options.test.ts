@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Store } from './persistence'
-import type { Project, Repo } from '../shared/types'
+import type { Project } from '../shared/project-types'
+import type { Repo } from '../shared/repo-types'
 import {
   getLocalProjectGitExecOptions,
   resolveLocalProjectRuntimeForRepo

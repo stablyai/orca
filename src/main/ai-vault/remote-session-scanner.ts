@@ -24,7 +24,7 @@ import { createAntigravityWorkspaceResolver } from './session-scanner-antigravit
 import { errorMessage } from './session-scanner-values'
 import { mapRemoteScanBatches } from './remote-session-scan-batching'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import { recordRemoteSessionScanIssue } from './remote-session-scan-issues'
+import { recordSessionScanIssue } from './session-scan-issues'
 import { limitRemoteScanFilesystemConcurrency } from './remote-session-scan-concurrency'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
 
@@ -205,7 +205,7 @@ async function scanRemoteInScopeSessions(args: {
   }
 
   if (index < candidates.length && sessions.length < args.limit) {
-    recordRemoteSessionScanIssue(args.issues, {
+    recordSessionScanIssue(args.issues, {
       executionHostId: args.context.executionHostId,
       agent: 'codex',
       kind: 'scope',
@@ -241,7 +241,7 @@ async function parseRemoteSessionCandidate(
     return session
   } catch (err) {
     throwIfAiVaultScanCancelled(context.signal)
-    recordRemoteSessionScanIssue(issues, {
+    recordSessionScanIssue(issues, {
       executionHostId: context.executionHostId,
       agent: candidate.source.agent,
       path: candidate.file.path,

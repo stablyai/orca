@@ -1,12 +1,15 @@
 import type { Terminal } from '@xterm/xterm'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
+import { isTerminalOwnedLinkGesture } from './terminal-link-activation'
 import { handleOscLink } from './terminal-osc-link-routing'
 import {
-  openHttpLinkAtTerminalMouseEvent,
+  findHttpLinkAtTerminalMouseEvent,
+  handleTerminalHttpLink,
+  type TerminalHttpLinkActionDestinations,
   type TerminalLinkRoutingPreferenceRequester
 } from './terminal-url-link-hit-testing'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
 type TerminalWebLinkClickDeps = Pick<
   LinkHandlerDeps,
@@ -15,6 +18,8 @@ type TerminalWebLinkClickDeps = Pick<
   terminal: Terminal | null
   sourceOwner?: HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  linkActionContext?: TerminalLinkActionContext | null
+  actionDestinations?: TerminalHttpLinkActionDestinations
 }
 
 export function handleTerminalWebLinkClick(
@@ -22,28 +27,27 @@ export function handleTerminalWebLinkClick(
   event: MouseEvent | undefined,
   deps: TerminalWebLinkClickDeps
 ): boolean {
-  if (!event || !isTerminalHttpLinkActivation(event)) {
+  if (!event || !isTerminalOwnedLinkGesture(event)) {
     return false
   }
 
   let handled: boolean
-  if (
-    deps.terminal &&
-    openHttpLinkAtTerminalMouseEvent(deps.terminal, event, {
+  const completeUrl = deps.terminal ? findHttpLinkAtTerminalMouseEvent(deps.terminal, event) : null
+  if (completeUrl) {
+    handled = handleTerminalHttpLink(completeUrl, event, {
       worktreeId: deps.worktreeId,
       sourceOwner:
         deps.sourceOwner ??
         (deps.runtimeEnvironmentId
           ? { kind: 'runtime', runtimeEnvironmentId: deps.runtimeEnvironmentId }
           : { kind: 'local' }),
-      modifierHeld: Boolean(event.shiftKey),
-      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
+      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
+      linkActionContext: deps.linkActionContext,
+      actionDestinations: deps.actionDestinations
     })
-  ) {
     // Why: WebLinksAddon only knows the physical row; Orca's logical hit-test
     // preserves the complete URL rendered across hard-wrapped TUI rows.
     event.preventDefault()
-    handled = true
   } else {
     handled = handleOscLink(url, event, deps)
   }

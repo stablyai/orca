@@ -6,31 +6,30 @@ import {
   findPrevLiveNonTaskStackHistoryIndex,
   findPrevLiveWorktreeHistoryIndex
 } from './worktree-nav-history'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { JiraIssue } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { CustomPet } from '../../../../shared/pet-types'
+import type { TaskProvider } from '../../../../shared/task-providers'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
-  ChangelogData,
-  CustomPet,
-  GitHubWorkItem,
-  JiraIssue,
-  LinearIssue,
+  AgentActivityDisplayMode,
   ManualRepoOrderEntry,
-  PersistedTrustedOrcaHooks,
-  PersistedUIState,
+  ProjectOrderBy,
   StatusBarItem,
-  TaskProvider,
   TaskResumeState,
   TaskViewPresetId,
-  TuiAgent,
-  UpdateStatus,
-  WorkspaceStatusDefinition,
-  AgentActivityDisplayMode,
-  ProjectOrderBy,
-  WorktreeCardProperty,
-  WorktreeCardMode,
+  TopLevelView,
+  VisibleWorkspaceHostIds,
   WorkspaceHostOrder,
   WorkspaceHostScope,
-  VisibleWorkspaceHostIds,
-  TopLevelView
-} from '../../../../shared/types'
+  WorktreeCardMode,
+  WorktreeCardProperty
+} from '../../../../shared/ui-chrome-types'
+import type { ChangelogData, UpdateStatus } from '../../../../shared/update-status-types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -50,11 +49,12 @@ import {
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal
 } from '../../../../shared/workspace-cleanup'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
 import { normalizeFeatureTipIds, type FeatureTipId } from '../../../../shared/feature-tips'
 import {
   hasFeatureInteraction,
@@ -616,7 +616,7 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'space'
-    | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSettings:
     | 'terminal'
@@ -624,7 +624,7 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'space'
-    | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeActivity:
     | 'terminal'
@@ -632,7 +632,7 @@ export type UISlice = {
     | 'tasks'
     | 'automations'
     | 'space'
-    | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeAutomations:
     | 'terminal'
@@ -640,7 +640,7 @@ export type UISlice = {
     | 'tasks'
     | 'activity'
     | 'space'
-    | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSpace:
     | 'terminal'
@@ -648,15 +648,7 @@ export type UISlice = {
     | 'tasks'
     | 'activity'
     | 'automations'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSkills:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeMobile:
     | 'terminal'
@@ -665,7 +657,15 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'space'
-    | 'skills'
+    | 'artifacts'
+  previousViewBeforeArtifacts:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'mobile'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -683,6 +683,8 @@ export type UISlice = {
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  taskListPosition: { contextKey: string; page: number; scrollTop: number } | null
+  setTaskListPosition: (position: UISlice['taskListPosition']) => void
   githubTaskDrawerWorkItem: GitHubWorkItem | null
   setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
@@ -742,8 +744,8 @@ export type UISlice = {
   closeAutomationsPage: () => void
   openSpacePage: () => void
   closeSpacePage: () => void
-  openSkillsPage: () => void
-  closeSkillsPage: () => void
+  openArtifactsPage: () => void
+  closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
@@ -772,6 +774,7 @@ export type UISlice = {
     | 'create-worktree'
     | 'edit-meta'
     | 'delete-worktree'
+    | 'preserved-branch-review'
     | 'forget-ssh-workspace'
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
@@ -832,7 +835,7 @@ export type UISlice = {
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
   clearOrcaHookTrustForRepo: (repoId: string) => void
-  setupScriptPromptDismissedRepoIds: string[]
+  setupScriptPromptDismissedRepoIds: readonly string[]
   dismissSetupScriptPrompt: (repoHostIdentity: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
@@ -876,13 +879,15 @@ export type UISlice = {
   setHideCliCreatedWorkspaces: (v: boolean) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
+  hideWorkspacesFromOtherDevices: boolean
+  setHideWorkspacesFromOtherDevices: (v: boolean) => void
   alwaysShowDefaultBranchWorkspace: boolean
   setAlwaysShowDefaultBranchWorkspace: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
-  filterRepoIds: string[]
-  setFilterRepoIds: (ids: string[]) => void
+  filterRepoIds: readonly string[]
+  setFilterRepoIds: (ids: readonly string[]) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
@@ -1234,11 +1239,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeActivity: 'terminal',
   previousViewBeforeAutomations: 'terminal',
   previousViewBeforeSpace: 'terminal',
-  previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforeArtifacts: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  taskListPosition: null,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}, options = {}) => {
@@ -1393,6 +1399,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
     }),
+  setTaskListPosition: (taskListPosition) => set({ taskListPosition }),
   setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
   closeTaskPage: () =>
     set((state) => {
@@ -1471,15 +1478,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeSpace
     })),
-  openSkillsPage: () =>
+  openArtifactsPage: () =>
     set((state) => ({
-      activeView: 'skills',
-      previousViewBeforeSkills:
-        state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView
+      activeView: 'artifacts',
+      previousViewBeforeArtifacts:
+        state.activeView === 'artifacts' ? state.previousViewBeforeArtifacts : state.activeView
     })),
-  closeSkillsPage: () =>
+  closeArtifactsPage: () =>
     set((state) => ({
-      activeView: state.previousViewBeforeSkills
+      activeView: state.previousViewBeforeArtifacts
     })),
   openMobilePage: () =>
     set((state) => ({
@@ -2056,6 +2063,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
   hideDetachedHeadWorkspaces: false,
   setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
+  hideWorkspacesFromOtherDevices: false,
+  setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
   alwaysShowDefaultBranchWorkspace: true,
   setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
 
@@ -2464,6 +2473,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
         hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
+        hideWorkspacesFromOtherDevices: ui.hideWorkspacesFromOtherDevices === true,
         // Why !== false: profiles written before #8873 have no key, and they are
         // precisely the ones showing the bug, so absence must mean "exempt".
         alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
@@ -2555,6 +2565,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        // Why the normalizer rather than a cast: this blob is hand-editable and
+        // may come from an older or newer build; it degrades field by field
+        // instead of bricking the cleanup dialog.
+        workspaceCleanupBrowse: normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse),
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'

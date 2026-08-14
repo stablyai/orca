@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 
 function makeWorktree(id: string, path: string): Worktree {

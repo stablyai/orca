@@ -1,5 +1,4 @@
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
@@ -20,6 +19,7 @@ import {
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
+import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -57,54 +57,24 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const requestedWorktree = params.worktree ?? 'current'
       const createsWorktree =
         requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-      if (params.terminal && params.agent) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          '--terminal reuses an existing agent and cannot combine with --agent.'
-        )
-      }
-      if (createsWorktree && params.terminal) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          '--terminal cannot combine with new-worktree creation.'
-        )
-      }
-      if (createsWorktree && !params.name) {
-        throw new OrchestrationError('invalid_argument', 'New worktrees require --name.')
-      }
-      if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          'Creation and setup options apply only to new-child or new-top-level worktrees.'
-        )
-      }
-      const agent = params.agent
-      if (!params.terminal && (!agent || !isTuiAgent(agent))) {
-        throw new OrchestrationError(
-          'agent_unconfigured',
-          'A configured --agent is required when worker-start creates a terminal.'
-        )
-      }
-      if (agent) {
-        runtime.validateOrchestrationAgentLauncher(agent as TuiAgent)
-      }
+      const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
       const coordinatorTerminal = await runtime.showTerminal(params.from)
-      const coordinatorWorktree = await runtime.showManagedWorktree(
-        `id:${coordinatorTerminal.worktreeId}`
-      )
-      if (createsWorktree) {
+      const creationWorktree = createsWorktree
+        ? await runtime.showManagedWorktree(`id:${coordinatorTerminal.worktreeId}`)
+        : undefined
+      if (creationWorktree) {
         await assertOrchestrationWorktreeCreationSupported({
           runtime,
-          repoSelector: params.repo ?? coordinatorWorktree.repoId,
+          repoSelector: params.repo ?? creationWorktree.repoId,
           existingPlacement: 'current or an exact existing folder workspace'
         })
       }
-      let resolvedWorktree = createsWorktree
+      let resolvedWorktree = creationWorktree
         ? undefined
         : requestedWorktree === 'current'
-          ? coordinatorWorktree
-          : await runtime.showManagedWorktree(requestedWorktree)
+          ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
+          : await runtime.showManagedTerminalWorkspace(requestedWorktree)
       let explicitTerminal
       if (params.terminal) {
         explicitTerminal = await runtime.showTerminal(params.terminal)
@@ -126,10 +96,11 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         worktree: requestedWorktree,
         resolvedWorktreeId: resolvedWorktree?.id ?? null,
         name: params.name ?? null,
-        repo: params.repo ?? (createsWorktree ? coordinatorWorktree.repoId : null),
+        repo: params.repo ?? creationWorktree?.repoId ?? null,
         baseBranch: params.baseBranch ?? null,
         terminal: params.terminal ?? null,
         agent: agent ?? null,
+        launch: launch.receipt,
         timeoutMs: params.timeoutMs ?? 60_000,
         setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         setupSource: createsWorktree
@@ -164,16 +135,17 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         state: 'not_applicable'
       }
       try {
-        if (createsWorktree) {
+        if (creationWorktree) {
           failedStage = 'worktree_create'
           const created = await createWorkerWorktree({
             runtime,
             db,
             dispatchId: started.dispatch.id,
             requestedWorktree,
-            coordinatorWorktree,
+            coordinatorWorktree: creationWorktree,
             params,
             agent: agent as TuiAgent,
+            launchPreferences: launch.preferences,
             effects
           })
           resolvedWorktree = created.worktree
@@ -190,6 +162,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             runtime,
             worktreeId: resolvedWorktree!.id,
             agent: agent as TuiAgent,
+            launchPreferences: launch.preferences,
             taskId: task.id,
             effects
           })
@@ -281,6 +254,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           state: worker.state,
           stage: worker.stage,
           setup: setupReceipt,
+          launch: launch.receipt,
           timeoutMs: params.timeoutMs ?? 60_000,
           effects,
           residualResources: [],
@@ -294,7 +268,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           dispatchId: started.dispatch.id,
           failedStage,
           error,
-          setup: setupReceipt
+          setup: setupReceipt,
+          launch: launch.receipt
         })
       }
     }

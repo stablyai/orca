@@ -17,7 +17,7 @@ import type {
   JiraTransition,
   JiraUser,
   JiraViewer
-} from '../../../shared/types'
+} from '../../../shared/jira-types'
 import { searchLocalJiraIssues } from './local-jira-search-cancellation'
 import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
 import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'

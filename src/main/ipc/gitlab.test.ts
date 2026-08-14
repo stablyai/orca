@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 
 const ORIGINAL_PLATFORM = process.platform

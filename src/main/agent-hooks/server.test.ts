@@ -1070,6 +1070,74 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('does not let late Codex tool hooks with explicit prompt resurrect an inferred interrupt', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'UserPromptSubmit',
+          payload: {
+            state: 'working',
+            prompt: 'Run sleep 30, then reply done.',
+            agentType: 'codex'
+          }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'Run sleep 30, then reply done.',
+          baselineAgentType: 'codex',
+          intent: 'plain-escape'
+        })
+      ).toBe(true)
+
+      vi.setSystemTime(6_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'PostToolUse',
+          payload: {
+            state: 'working',
+            prompt: 'Run sleep 30, then reply done.',
+            agentType: 'codex',
+            toolName: 'Bash',
+            toolInput: 'sleep 30'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'Run sleep 30, then reply done.',
+          agentType: 'codex',
+          interrupted: true,
+          receivedAt: 1_500,
+          stateStartedAt: 1_500
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('allows a new prompt after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -2252,6 +2320,36 @@ describe('AgentHookServer listener replay', () => {
           terminalProvenance: 'current_runtime'
         })
       ).toBeNull()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('accepts a resumed-session SessionStart after launch authority retires in a reusable pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload, { launchToken: 'retired-launch-token' }))
+        })
+
+      await postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'first launch' })
+      server.retirePaneAuthority(PANE)
+
+      // Why: `claude --resume` in the reused shell pane emits only SessionStart while idle;
+      // without the un-retire the resumed session stays rowless until a prompt (STA-3386).
+      await postHook({ hook_event_name: 'SessionStart', source: 'resume' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, state: 'done', sessionBoundary: true })
+      ])
     } finally {
       server.stop()
     }
@@ -7079,6 +7177,303 @@ describe('Last-status persistence', () => {
         agentType: 'codex'
       })
       expect(confirmed?.restoredUnconfirmed).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps an unknown post-restart child stop from confirming a stale working row', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'may finish offline' })
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const restored = server.getStatusSnapshot()[0]
+      expect(restored).toMatchObject({ state: 'working', restoredUnconfirmed: true })
+
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'a0000000000000001' })
+      )
+
+      expect(server.getStatusSnapshot()[0]).toEqual(restored)
+      expect(server._getStateForTests().claudeSubagentRosterByPaneKey.size).toBe(0)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('waits for a lead boundary after a post-restart stop matches a restored child', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a0000000000000002',
+        agent_type: 'reviewer'
+      })
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const statusListener = vi.fn()
+      server.subscribeEnrichedStatus(statusListener)
+      const restored = server.getStatusSnapshot()[0]
+      expect(restored).toMatchObject({
+        state: 'working',
+        restoredUnconfirmed: true,
+        subagents: [expect.objectContaining({ id: 'a0000000000000002' })]
+      })
+
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'a0000000000000002' })
+      )
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        restoredUnconfirmed: true,
+        subagents: undefined
+      })
+      expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
+      expect(server._getStateForTests().claudeSubagentRosterByPaneKey.size).toBe(0)
+      expect(statusListener).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ restoredUnconfirmed: true })
+      )
+
+      await postHookEvent(server, buildBody({ hook_event_name: 'Stop', background_tasks: [] }))
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+      expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
+      expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+      expect(statusListener).toHaveBeenCalledTimes(2)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not resurrect a matched restored child across a second restart', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a0000000000000012',
+        agent_type: 'reviewer'
+      })
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const secondServer = new AgentHookServer()
+    await secondServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      secondServer,
+      buildBody({ hook_event_name: 'SubagentStop', agent_id: 'a0000000000000012' })
+    )
+    expect(secondServer.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      restoredUnconfirmed: true,
+      subagents: undefined
+    })
+    secondServer.flushStatusPersistSync()
+    secondServer.stop()
+
+    const thirdServer = new AgentHookServer()
+    await thirdServer.start({ env: 'production', userDataPath })
+    try {
+      expect(thirdServer._getStateForTests().claudeSubagentRosterByPaneKey.size).toBe(0)
+
+      await postHookEvent(thirdServer, buildBody({ hook_event_name: 'Stop' }))
+
+      expect(thirdServer.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+      expect(thirdServer.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
+    } finally {
+      thirdServer.stop()
+    }
+  })
+
+  it('keeps a legacy Stop unconfirmed when only a restored child gates it', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a0000000000000013',
+        agent_type: 'reviewer'
+      })
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await postHookEvent(server, buildBody({ hook_event_name: 'Stop' }))
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        restoredUnconfirmed: true,
+        subagents: [expect.objectContaining({ id: 'a0000000000000013' })]
+      })
+      expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not confirm restored child work from an unrelated stop', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a0000000000000003',
+        agent_type: 'reviewer'
+      })
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const restored = server.getStatusSnapshot()[0]
+      expect(restored).toMatchObject({ state: 'working', restoredUnconfirmed: true })
+
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'a0000000000000004' })
+      )
+
+      expect(server.getStatusSnapshot()[0]).toEqual(restored)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps an unmatched restored child unconfirmed after current-runtime work drains', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a0000000000000005',
+        agent_type: 'reviewer'
+      })
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'SubagentStart',
+          agent_id: 'a0000000000000006',
+          agent_type: 'reviewer'
+        })
+      )
+      expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
+
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'a0000000000000006' })
+      )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        restoredUnconfirmed: true,
+        subagents: [expect.objectContaining({ id: 'a0000000000000005' })]
+      })
+      expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
+
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'a0000000000000005' })
+      )
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        restoredUnconfirmed: true
+      })
+      expect(server._getStateForTests().claudeSubagentRosterByPaneKey.size).toBe(0)
+
+      await postHookEvent(server, buildBody({ hook_event_name: 'Stop', background_tasks: [] }))
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+      expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
+      expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('waits for a lead boundary after a post-restart idle matches a restored teammate', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'areviewer-6d3cb5b5',
+        agent_type: 'reviewer'
+      })
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const restored = server.getStatusSnapshot()[0]
+      expect(restored).toMatchObject({
+        state: 'working',
+        restoredUnconfirmed: true,
+        subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5' })]
+      })
+
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+      )
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        restoredUnconfirmed: true,
+        subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'idle' })]
+      })
+      expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
+
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'Stop',
+          background_tasks: [{ id: 'treviewer', type: 'teammate', status: 'running' }]
+        })
+      )
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'idle' })]
+      })
+      expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
     } finally {
       server.stop()
     }

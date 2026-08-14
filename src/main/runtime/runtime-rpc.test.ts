@@ -13,6 +13,7 @@ import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
+import { remoteRpcContentBudget } from '../../shared/remote-rpc-content-budget'
 import { parsePairingCode } from '../../shared/pairing'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import {
@@ -29,8 +30,8 @@ import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
+vi.mock('../git/worktree', () => {
+  const worktrees = [
     {
       path: '/tmp/worktree-a',
       head: 'abc',
@@ -38,9 +39,12 @@ vi.mock('../git/worktree', () => ({
       isBare: false,
       isMainWorktree: false
     }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+  ]
+  return {
+    listWorktrees: vi.fn().mockResolvedValue(worktrees),
+    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+  }
+})
 
 async function sendRequest(
   endpoint: string,
@@ -3296,7 +3300,14 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(abortRuntimeGitRebase).toHaveBeenCalledWith('id:wt-1')
     expect(bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
     expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
-    expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)
+    // A mobile WebSocket client is transport-capped; a local caller gets undefined here.
+    expect(getRuntimeGitDiff).toHaveBeenCalledWith(
+      'id:wt-1',
+      'docs/readme.md',
+      false,
+      undefined,
+      remoteRpcContentBudget('req_git_diff')
+    )
     expect(browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
     expect(browserSetViewport).toHaveBeenCalledWith({
       worktree: 'id:wt-1',
@@ -6023,7 +6034,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     const wideStartGate = new Promise<void>((resolve) => {
       releaseWideStart = resolve
     })
-    let wideStopSpy: ReturnType<typeof vi.spyOn> | null = null
+    let wideStopSpy: ReturnType<typeof vi.spyOn> = null
     vi.spyOn(target, 'startWebSocketTransport').mockImplementation(async (opts) => {
       if (opts.host === '0.0.0.0') {
         // Why: hold the widen mid-flight (loopback already stopped) so stop() must race the rebind.

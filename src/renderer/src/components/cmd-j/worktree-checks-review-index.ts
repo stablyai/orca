@@ -5,7 +5,8 @@ import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 import type { AppState } from '@/store/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { selectChecksPanelReview } from '../right-sidebar/checks-panel-review'
 
 type WorktreeChecksReviewIndexArgs = {

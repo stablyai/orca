@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeClearFilterActions,
-  isDefaultBranchWorkspace,
   isSleepingSweepExemptionNarrowingList,
   sidebarHasActiveFilters
 } from './visible-worktrees'
-import type { Worktree } from '../../../../shared/types'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 function makeWorktree(id: string, repoId = 'repo1'): Worktree {
   return {
@@ -39,6 +39,7 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: true,
     workspaceHostScope: 'all',
     ...overrides
@@ -62,6 +63,13 @@ describe('isDefaultBranchWorkspace', () => {
   it('returns false for non-main worktrees even on the default branch', () => {
     const feature = makeWorktree('feature')
     expect(isDefaultBranchWorkspace(feature)).toBe(false)
+  })
+
+  it('keeps a provisioned root visible as the recipe-created workspace', () => {
+    const provisionedRoot = makeWorktree('provisioned-root')
+    provisionedRoot.isMainWorktree = true
+    provisionedRoot.ephemeralVmCheckoutMode = 'provisioned-root'
+    expect(isDefaultBranchWorkspace(provisionedRoot)).toBe(false)
   })
 })
 
@@ -89,6 +97,12 @@ describe('sidebarHasActiveFilters', () => {
 
   it('returns true when only detached-HEAD workspaces are hidden', () => {
     expect(sidebarHasActiveFilters(filterState({ hideDetachedHeadWorkspaces: true }))).toBe(true)
+  })
+
+  it('returns true when workspaces from other devices are hidden', () => {
+    expect(sidebarHasActiveFilters(filterState({ hideWorkspacesFromOtherDevices: true }))).toBe(
+      true
+    )
   })
 
   it('returns true when sleeping workspaces are hidden', () => {
@@ -139,6 +153,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
@@ -155,6 +170,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
@@ -170,6 +186,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: true,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
@@ -183,6 +200,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: true,
       resetHideDetachedHeadWorkspaces: false,
+      resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
@@ -196,6 +214,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: true,
+      resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
@@ -222,6 +241,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: true
     })
@@ -237,6 +257,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: true,
       resetVisibleWorkspaceHostIds: false
     })
@@ -260,6 +281,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: true,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: true
     })

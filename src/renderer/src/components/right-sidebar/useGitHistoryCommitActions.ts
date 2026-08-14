@@ -12,12 +12,16 @@ import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../shared/git-history'
-import type { GitBranchChangeEntry, GitCommitCompareResult } from '../../../../shared/types'
+import type {
+  GitBranchChangeEntry,
+  GitCommitCompareResult
+} from '../../../../shared/git-diff-compare-types'
 import {
   shouldOpenSourceControlRowAsPreview,
   type SourceControlRowOpenEvent
 } from './source-control-split-open'
 import type { GitHistoryCommitAction } from './GitHistoryCommitContextMenu'
+import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
@@ -47,7 +51,6 @@ export function useGitHistoryCommitActions({
 }): GitHistoryCommitActions {
   const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
   const openCommitDiff = useAppStore((s) => s.openCommitDiff)
-  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
 
   // Caches each commit's compare result so expanding a commit fetches its files
   // once, and opening a single file (or the combined diff) reuses that same
@@ -202,16 +205,20 @@ export function useGitHistoryCommitActions({
           { sha: item.id }
         )
           .then((url) => {
-            if (url) {
-              createBrowserTab(activeWorktreeId, url, { activate: true })
-            } else {
+            if (!url) {
               toast.error(
                 translate(
                   'auto.components.right.sidebar.SourceControl.04a5d7239b',
                   'This repository has no supported web remote'
                 )
               )
+              return
             }
+            return openWorkspaceBrowserTab({
+              workspaceId: activeWorktreeId,
+              url,
+              intent: { kind: 'url' }
+            })
           })
           .catch(() => {
             toast.error(
@@ -279,7 +286,7 @@ export function useGitHistoryCommitActions({
         promptDelivery: 'submit-after-ready'
       })
     },
-    [activeRepoSettings, activeWorktreeId, copyCommitText, createBrowserTab, worktreePath]
+    [activeRepoSettings, activeWorktreeId, copyCommitText, worktreePath]
   )
 
   return { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction }

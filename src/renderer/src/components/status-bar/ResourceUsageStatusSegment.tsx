@@ -31,10 +31,11 @@ import { useAppStore } from '../../store'
 import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
-import type { AppMemory, BrowserWorkspace, UsageValues, Worktree } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { AppMemory, UsageValues } from '../../../../shared/process-stats-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { countEstimatedInactiveWorkspaces } from '../workspace-cleanup/inactive-workspace-estimate'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type {
   Metric,
@@ -907,15 +908,9 @@ export function ResourceUsageStatusSegment({
     return map
   }, [repos])
 
-  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const worktreeById = useMemo(
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
-  )
-
-  const oldWorkspaceCount = useMemo(
-    () => countEstimatedInactiveWorkspaces(allWorktrees, repoById, Date.now()),
-    [allWorktrees, repoById]
   )
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
@@ -1184,12 +1179,9 @@ export function ResourceUsageStatusSegment({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
           <div className="space-y-0.5">
-            {resourceManagerTooltipLines.map((line, index) => (
-              <div
-                key={`${index}:${line}`}
-                className={line === 'Space scan ready' ? 'text-primary' : ''}
-              >
-                {line}
+            {resourceManagerTooltipLines.map((line) => (
+              <div key={line.id} className={line.emphasized ? 'text-primary' : ''}>
+                {line.text}
               </div>
             ))}
           </div>
@@ -1483,8 +1475,7 @@ export function ResourceUsageStatusSegment({
             <span className="min-w-0 truncate px-4 text-center">
               {translate(
                 'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
-                'Review inactive workspaces ({{value0}})',
-                { value0: oldWorkspaceCount }
+                'Clean up workspaces'
               )}
             </span>
             <ChevronRight

@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  getPlatform: vi.fn(),
+  getVersion: vi.fn(),
   readFeedbackImageFiles: vi.fn(),
   submit: vi.fn(),
   toastWarning: vi.fn()
@@ -57,20 +59,134 @@ beforeEach(() => {
   mocks.readFeedbackImageFiles.mockReset()
   mocks.submit.mockReset()
   mocks.toastWarning.mockReset()
+  mocks.getPlatform.mockReset()
+  mocks.getVersion.mockReset()
   mocks.submit.mockResolvedValue({ ok: true })
+  mocks.getPlatform.mockReturnValue({
+    platform: 'darwin',
+    osRelease: '25.0.0',
+    arch: 'arm64',
+    shell: '/bin/zsh',
+    displayServer: null
+  })
+  mocks.getVersion.mockResolvedValue('1.4.178-rc.2')
   URL.revokeObjectURL = vi.fn()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
       feedback: { submit: mocks.submit },
       gh: { viewer: vi.fn().mockResolvedValue(null) },
-      shell: { openUrl: vi.fn() }
+      shell: { openUrl: vi.fn() },
+      platform: {
+        get: mocks.getPlatform
+      },
+      updater: { getVersion: mocks.getVersion }
     }
   })
 })
 
 afterEach(() => {
   cleanup()
+})
+
+describe('SidebarFeedbackDialog environment prefill', () => {
+  it('pre-inserts Orca version and OS info when the dialog opens', async () => {
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const textarea = screen.getByPlaceholderText('What could we improve?') as HTMLTextAreaElement
+
+    await waitFor(() => {
+      expect(textarea.value).toContain('Orca: 1.4.178-rc.2')
+      expect(textarea.value).toContain('OS: darwin 25.0.0 (arm64)')
+      expect(textarea.value).toContain('Shell: /bin/zsh')
+    })
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('keeps version info when the user types above the prefilled block', async () => {
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const textarea = screen.getByPlaceholderText('What could we improve?') as HTMLTextAreaElement
+    await waitFor(() => expect(textarea.value).toContain('Orca: 1.4.178-rc.2'))
+
+    fireEvent.change(textarea, {
+      target: { value: `Tabs feel slow\n\n${textarea.value.trim()}` }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => expect(mocks.submit).toHaveBeenCalledTimes(1))
+    const submitted = mocks.submit.mock.calls[0]?.[0].feedback as string
+    expect(submitted).toContain('Tabs feel slow')
+    expect(submitted).toContain('Orca: 1.4.178-rc.2')
+  })
+
+  it('preserves early typing and appends the footer after version loading finishes', async () => {
+    let finishVersion: ((version: string) => void) | undefined
+    mocks.getVersion.mockReturnValue(
+      new Promise((resolve) => {
+        finishVersion = resolve
+      })
+    )
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const textarea = screen.getByPlaceholderText('What could we improve?') as HTMLTextAreaElement
+
+    fireEvent.change(textarea, { target: { value: 'Typed before loading' } })
+    textarea.focus()
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+    await act(async () => finishVersion?.('1.4.178-rc.2'))
+
+    await waitFor(() => expect(textarea.value).toContain('Orca: 1.4.178-rc.2'))
+    expect(textarea.value).toContain('Typed before loading')
+    expect(textarea.selectionStart).toBe('Typed before loading'.length)
+  })
+
+  it('enables Send when the user types below the prefilled footer', async () => {
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const textarea = screen.getByPlaceholderText('What could we improve?') as HTMLTextAreaElement
+    await waitFor(() => expect(textarea.value).toContain('Orca: 1.4.178-rc.2'))
+
+    fireEvent.change(textarea, {
+      target: { value: `${textarea.value.trim()}\nText below footer` }
+    })
+
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('keeps Send disabled for an edited footer with no user text', async () => {
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const textarea = screen.getByPlaceholderText('What could we improve?') as HTMLTextAreaElement
+    await waitFor(() => expect(textarea.value).toContain('Orca: 1.4.178-rc.2'))
+
+    fireEvent.change(textarea, {
+      target: { value: '---\nOrca: custom build\nOS: edited' }
+    })
+
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('allows a real report after the prefilled footer is deleted', async () => {
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const textarea = screen.getByPlaceholderText('What could we improve?') as HTMLTextAreaElement
+    await waitFor(() => expect(textarea.value).toContain('Orca: 1.4.178-rc.2'))
+    const send = screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement
+
+    fireEvent.change(textarea, { target: { value: '' } })
+    expect(send.disabled).toBe(true)
+    fireEvent.change(textarea, { target: { value: 'Tabs hang after waking the laptop.' } })
+    expect(send.disabled).toBe(false)
+  })
+
+  it('still prefills best-effort details when preload lookups fail', async () => {
+    mocks.getPlatform.mockImplementation(() => {
+      throw new Error('platform unavailable')
+    })
+    mocks.getVersion.mockRejectedValue(new Error('version unavailable'))
+
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+
+    await waitFor(() => {
+      const textarea = screen.getByPlaceholderText('What could we improve?') as HTMLTextAreaElement
+      expect(textarea.value).toContain('Orca: unknown')
+    })
+  })
 })
 
 describe('SidebarFeedbackDialog image submission', () => {

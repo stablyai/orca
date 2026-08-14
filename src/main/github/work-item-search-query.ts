@@ -1,9 +1,9 @@
-import type { GitHubOwnerRepo } from '../../shared/types'
-import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 import type { ParsedTaskQuery } from '../../shared/task-query'
 
 /** Repository qualifier used by one Search API query. */
-export type WorkItemSearchRepository = Pick<GitHubOwnerRepo, 'owner' | 'repo' | 'host'>
+export type WorkItemSearchRepository = Pick<GitHubOwnerRepo, 'owner' | 'repo'> & { host?: string }
 
 export type WorkItemSearchScope = 'all' | 'issue' | 'pr'
 

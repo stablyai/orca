@@ -27,7 +27,6 @@ describe('useMissingWorktreeBounce', () => {
   const bounce = vi.fn()
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     bounce.mockReset()
     renderer = null
   })

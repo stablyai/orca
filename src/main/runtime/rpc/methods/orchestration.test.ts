@@ -9,6 +9,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
@@ -298,6 +299,8 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.send', () => {
     it('sends a message', async () => {
       setup()
+      // Why: send notifies arrival so already-idle recipients get push-on-idle
+      // delivery without waiting for a status transition (#12536).
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const result = (await call('orchestration.send', {
         from: 'term_coord',
@@ -308,7 +311,7 @@ describe('orchestration RPC methods', () => {
       expect(result.message.id).toMatch(/^msg_/)
       expect(result.message.from_handle).toBe('term_coord')
       expect(result.message.run_id).toBe(activeRunId)
-      expect(runtime.deliverPendingMessagesForHandle).not.toHaveBeenCalled()
+      expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalled()
     })
 
     it('routes exact Dispatch mail independently of terminal handles', async () => {
@@ -413,7 +416,7 @@ describe('orchestration RPC methods', () => {
       )
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
-      await call('orchestration.send', {
+      const result = await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'Done',
@@ -427,6 +430,7 @@ describe('orchestration RPC methods', () => {
 
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+      expect(result).toMatchObject({ lifecycle: { action: 'completed' } })
     })
 
     it('rejects an identity-less lifecycle send resolved through the coordinator handle', async () => {
@@ -480,7 +484,7 @@ describe('orchestration RPC methods', () => {
       }
 
       expect(db.getTask(task.id)?.status).toBe('completed')
-      expect(result.lifecycle).toBeUndefined()
+      expect(result.lifecycle).toMatchObject({ action: 'completed' })
       expect(result.message).toMatchObject({
         type: 'worker_done',
         subject: 'Done'
@@ -1786,10 +1790,13 @@ describe('orchestration RPC methods', () => {
       })
     })
 
-    it('rejects invalid deps JSON', async () => {
+    it('rejects non-JSON deps', async () => {
       setup()
       await expect(
         call('orchestration.taskCreate', { spec: 'bad', deps: 'not-json' })
+      ).rejects.toThrow('Invalid --deps')
+      await expect(
+        call('orchestration.taskCreate', { spec: 'bad', deps: '[task_example]' })
       ).rejects.toThrow('Invalid --deps')
     })
   })
@@ -2174,6 +2181,9 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
         id: 'repo::worktree'
       } as never)
+      vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
+        id: 'repo::worktree'
+      } as never)
       vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
         handle: 'term_worker',
         worktreeId: 'repo::worktree',
@@ -2233,6 +2243,61 @@ describe('orchestration RPC methods', () => {
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_')
       )
+    })
+
+    it('applies and reports opaque per-invocation model preferences', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'launch a custom model' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'claude',
+        model: 'aws-bedrock-opus-5',
+        effort: 'high'
+      })) as {
+        dispatchId: string
+        state: string
+        launch: {
+          requested: { agent: string; model: string; effort: string }
+          effective: { agent: string; model: string; effort: string }
+        }
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        launch: {
+          requested: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' },
+          effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
+        }
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({
+          startupAgent: 'claude',
+          launchPreferences: { model: 'aws-bedrock-opus-5', effort: 'high' }
+        })
+      )
+      expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
+        launch: result.launch
+      })
+    })
+
+    it('rejects launch preferences for an existing terminal before creating a Dispatch', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'reuse exact worker' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: 'term_worker',
+          model: 'gpt-5.6-sol'
+        })
+      ).rejects.toMatchObject({ code: 'invalid_argument' })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
     // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
@@ -2320,17 +2385,25 @@ describe('orchestration RPC methods', () => {
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalled()
     })
 
-    it('starts a fresh agent in an exact existing worktree without replaying setup', async () => {
+    it('starts in an exact existing worktree from a floating coordinator', async () => {
       setup()
       mockCurrentWorkerStart()
       const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
-      vi.mocked(runtime.showManagedWorktree).mockImplementation(
-        async (selector) =>
-          ({
-            id: selector === 'id:repo::other' ? 'repo::other' : 'repo::worktree',
-            repoId: 'repo'
-          }) as never
-      )
+      vi.mocked(runtime.showTerminal).mockResolvedValue({
+        handle: 'term_coord',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        status: 'running'
+      } as never)
+      vi.mocked(runtime.showManagedWorktree).mockImplementation(async (selector) => {
+        if (selector === `id:${FLOATING_TERMINAL_WORKTREE_ID}`) {
+          throw new Error('selector_not_found')
+        }
+        return { id: 'repo::other', repoId: 'repo' } as never
+      })
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'repo::other',
+        repoId: 'repo'
+      } as never)
       const task = db.createTask({ spec: 'existing worktree worker' })
 
       const result = (await call('orchestration.workerStart', {
@@ -2354,6 +2427,41 @@ describe('orchestration RPC methods', () => {
         expect.objectContaining({ startupAgent: 'codex', surfaceOwner: false })
       )
       expect(createWorktree).not.toHaveBeenCalled()
+      expect(runtime.showTerminal).toHaveBeenCalledWith('term_coord')
+      expect(runtime.showManagedWorktree).not.toHaveBeenCalledWith(
+        `id:${FLOATING_TERMINAL_WORKTREE_ID}`
+      )
+      expect(runtime.showManagedTerminalWorkspace).toHaveBeenCalledOnce()
+      expect(runtime.showManagedTerminalWorkspace).toHaveBeenCalledWith('id:repo::other')
+    })
+
+    it('starts in an exact existing folder workspace from a floating coordinator', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.showTerminal).mockResolvedValue({
+        handle: 'term_coord',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        status: 'running'
+      } as never)
+      vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'folder:workspace-1',
+        repoId: 'folder-workspace:group-1'
+      } as never)
+      const task = db.createTask({ spec: 'folder workspace worker' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          worktree: 'folder:workspace-1',
+          agent: 'codex'
+        })
+      ).resolves.toMatchObject({ state: 'ready' })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:folder:workspace-1',
+        expect.objectContaining({ startupAgent: 'codex', surfaceOwner: false })
+      )
     })
 
     it('reuses only an explicitly selected existing agent terminal', async () => {
@@ -3018,9 +3126,11 @@ describe('orchestration RPC methods', () => {
     it('resets all state', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       const result = (await call('orchestration.reset', { all: true })) as { reset: string }
       expect(result.reset).toBe('all')
+      expect(stopRelay).toHaveBeenCalledOnce()
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(0)
     })
@@ -3028,8 +3138,10 @@ describe('orchestration RPC methods', () => {
     it('resets tasks only', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       await call('orchestration.reset', { tasks: true })
+      expect(stopRelay).toHaveBeenCalledOnce()
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(0)
     })
@@ -3037,8 +3149,10 @@ describe('orchestration RPC methods', () => {
     it('resets messages only', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       await call('orchestration.reset', { messages: true })
+      expect(stopRelay).not.toHaveBeenCalled()
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(1)
     })

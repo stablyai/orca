@@ -2,14 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type {
-  GlobalSettings,
-  PRInfo,
-  Repo,
-  Worktree,
-  WorktreeCardProperty
-} from '../../../../shared/types'
-import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -60,7 +58,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
-  useWorktreeActivityStatus: () => 'inactive'
+  useWorktreeActivityStatus: () => 'active'
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -171,8 +169,8 @@ describe('WorktreeCard linked PR display', () => {
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )
 
-    expect(markup).toContain('Inactive')
-    expect(markup).toContain('bg-neutral-500/40')
+    expect(markup).toContain('Active')
+    expect(markup).toContain('bg-emerald-500')
     expect(markup).not.toContain('PR: Open')
     expect(markup).not.toContain('Linked PR #456')
   }, 20_000)

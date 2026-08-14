@@ -22,9 +22,9 @@ import { cn } from '@/lib/utils'
 import type {
   LinearCustomViewSummary,
   LinearProjectDetail,
-  LinearProjectSummary,
-  LinearWorkspaceError
-} from '../../../shared/types'
+  LinearProjectSummary
+} from '../../../shared/linear/project-types'
+import type { LinearWorkspaceError } from '../../../shared/linear/workspace-types'
 import { translate } from '@/i18n/i18n'
 
 type LinearProjectLike = LinearProjectSummary & {

@@ -3,7 +3,8 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 

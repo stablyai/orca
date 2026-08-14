@@ -1,5 +1,5 @@
 import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
-import type { ProviderCheckSummary } from '../../../src/shared/types'
+import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 
 export type GitHubCheckLike = {
   status: string

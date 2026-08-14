@@ -10,6 +10,7 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
   hostId: string
   worktreeId: string
   worktreeName?: string
+  nativeChatSessionId: string | null
   activeHandleRef: MutableRefObject<string | null>
   terminalCwdRef: MutableRefObject<Map<string, string>>
   openBrowser: (url: string) => void
@@ -48,6 +49,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getActiveSessionTabType,
     getSessionTabs,
     hostId,
+    nativeChatSessionId,
     openBrowser,
     scheduleDelayedAction,
     reportChatTapFailure,
@@ -71,6 +73,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       getActiveSessionTabType,
       getSessionTabs,
       hostId,
+      nativeChatSessionId,
       openBrowser,
       scheduleDelayedAction,
       reportChatTapFailure,
@@ -87,6 +90,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getActiveSessionTabType,
     getSessionTabs,
     hostId,
+    nativeChatSessionId,
     openBrowser,
     router,
     scheduleDelayedAction,
@@ -144,12 +148,18 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       return
     }
     const activationSeq = ++activationSeqRef.current
+    const nativeChatSessionId = current.nativeChatSessionId
+    const nativeChatTabId = current.getActiveSessionTabId()
     openMobileNativeChatFileTap<T>({
       client: current.client,
       hostId: current.hostId,
       worktreeId: current.worktreeId,
       worktreeName: current.worktreeName,
       pathText,
+      nativeChatContext:
+        nativeChatSessionId && nativeChatTabId
+          ? { tabId: nativeChatTabId, sessionId: nativeChatSessionId }
+          : null,
       pushPreviewRoute: (href) => routerRef.current.push(href),
       openBrowser: current.openBrowser,
       triggerOpenFeedback: triggerSelection,

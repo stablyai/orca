@@ -1,36 +1,58 @@
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
 
 export function isMacPlatform(): boolean {
   return navigator.userAgent.includes('Mac')
 }
 
-export function getTerminalFileOpenHint(): string {
-  return isMacPlatform()
-    ? '⌘+click to open or ⇧⌘+click for default app'
-    : 'Ctrl+click to open or Shift+Ctrl+click for default app'
+function terminalLinkActionHintPrefix(showActions: boolean): string {
+  return showActions ? 'Click for actions, ' : ''
 }
 
-export function getTerminalOrcaFileOpenHint(): string {
-  return isMacPlatform() ? '⌘+click to open in Orca' : 'Ctrl+click to open in Orca'
+export function getTerminalFileOpenHint(showActions = true): string {
+  const prefix = terminalLinkActionHintPrefix(showActions)
+  return isMacPlatform()
+    ? `${prefix}⌘+click to open, or ⇧⌘+click for default app`
+    : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default app`
 }
 
-// Why: detected local .html/.htm file paths keep the same modifier gate as
-// other file-path links, with Shift+modifier as the system-browser escape hatch.
-export function getTerminalHtmlFileOpenHint(): string {
+export function getTerminalOrcaFileOpenHint(showActions = true): string {
+  const prefix = showActions ? 'Click for actions or ' : ''
   return isMacPlatform()
-    ? '⌘+click to open or ⇧⌘+click for default browser'
-    : 'Ctrl+click to open or Shift+Ctrl+click for default browser'
+    ? `${prefix}⌘+click to open in Orca`
+    : `${prefix}Ctrl+click to open in Orca`
+}
+
+// Why: local HTML paths keep Shift+modifier as the system-browser shortcut.
+export function getTerminalHtmlFileOpenHint(showActions = true): string {
+  const prefix = terminalLinkActionHintPrefix(showActions)
+  return isMacPlatform()
+    ? `${prefix}⌘+click to open, or ⇧⌘+click for default browser`
+    : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default browser`
 }
 
 export type TerminalUrlOpenHintOptions = {
   openLinksInApp?: boolean
   modifierInverts?: boolean
+  showActions?: boolean
 }
 
-// Why: openHttpLink only routes to Orca when the source is local, so a remote pane
-// pins every link to the system browser and inverting cannot reach Orca there. The
-// clicked pane's owner decides that, not the global active runtime — a workspace-bound
-// remote pane is remote even when no runtime is globally active.
+export function terminalHttpLinkActionDestinationsFor(
+  settings: { openLinksInApp?: boolean } | null | undefined,
+  sourceOwner: HttpLinkSourceOwner,
+  canOpenRuntimeBrowser: boolean
+): TerminalHttpLinkActionDestinations {
+  const canOpenInOrca =
+    sourceOwner.kind === 'local' || (sourceOwner.kind === 'runtime' && canOpenRuntimeBrowser)
+  if (!canOpenInOrca) {
+    return { primary: 'system' }
+  }
+  return settings?.openLinksInApp === true
+    ? { primary: 'orca', alternate: 'system' }
+    : { primary: 'system', alternate: 'orca' }
+}
+
+// Why: only a capability-verified runtime can advertise the in-app destination.
 export function terminalUrlOpenHintOptionsFor(
   settings:
     | {
@@ -40,14 +62,15 @@ export function terminalUrlOpenHintOptionsFor(
       }
     | null
     | undefined,
-  sourceOwner?: HttpLinkSourceOwner
+  sourceOwner?: HttpLinkSourceOwner,
+  canOpenRuntimeBrowser = false
 ): TerminalUrlOpenHintOptions {
-  const sourceIsLocal = sourceOwner
-    ? sourceOwner.kind === 'local'
+  const sourceCanOpenInOrca = sourceOwner
+    ? sourceOwner.kind === 'local' || (sourceOwner.kind === 'runtime' && canOpenRuntimeBrowser)
     : !settings?.activeRuntimeEnvironmentId?.trim()
   return {
     openLinksInApp: settings?.openLinksInApp === true,
-    modifierInverts: settings?.openLinksInAppModifierInverts === true && sourceIsLocal
+    modifierInverts: settings?.openLinksInAppModifierInverts === true && sourceCanOpenInOrca
   }
 }
 
@@ -55,14 +78,15 @@ export function terminalUrlOpenHintOptionsFor(
 // it means "the other one" — so the hint has to name the actual destination.
 export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {}): string {
   const invertsToOrca = options.modifierInverts === true && options.openLinksInApp !== true
+  const prefix = terminalLinkActionHintPrefix(options.showActions !== false)
   if (invertsToOrca) {
     return isMacPlatform()
-      ? '⌘+click to open or ⇧⌘+click to open in Orca'
-      : 'Ctrl+click to open or Shift+Ctrl+click to open in Orca'
+      ? `${prefix}⌘+click to open, or ⇧⌘+click to open in Orca`
+      : `${prefix}Ctrl+click to open, or Shift+Ctrl+click to open in Orca`
   }
   return isMacPlatform()
-    ? '⌘+click to open or ⇧⌘+click for system browser'
-    : 'Ctrl+click to open or Shift+Ctrl+click for system browser'
+    ? `${prefix}⌘+click to open, or ⇧⌘+click for system browser`
+    : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for system browser`
 }
 
 export function getTerminalUrlSystemBrowserHint(): string {
@@ -75,12 +99,19 @@ export function getTerminalUrlOrcaBrowserHint(): string {
   return isMacPlatform() ? '⇧⌘+click to open in Orca' : 'Shift+Ctrl+click to open in Orca'
 }
 
-export function getTerminalWorktreePathOpenHint(canOpenWithSystemDefault: boolean): string {
+export function getTerminalWorktreePathOpenHint(
+  canOpenWithSystemDefault: boolean,
+  showActions = true
+): string {
+  const prefix = terminalLinkActionHintPrefix(showActions)
   if (!canOpenWithSystemDefault) {
-    return isMacPlatform() ? '⌘+click to switch workspace' : 'Ctrl+click to switch workspace'
+    const directPrefix = showActions ? 'Click for actions or ' : ''
+    return isMacPlatform()
+      ? `${directPrefix}⌘+click to switch workspace`
+      : `${directPrefix}Ctrl+click to switch workspace`
   }
 
   return isMacPlatform()
-    ? '⌘+click to switch workspace or ⇧⌘+click to open in Finder'
-    : 'Ctrl+click to switch workspace or Shift+Ctrl+click to open folder'
+    ? `${prefix}⌘+click to switch workspace, or ⇧⌘+click to open in Finder`
+    : `${prefix}Ctrl+click to switch workspace, or Shift+Ctrl+click to open folder`
 }

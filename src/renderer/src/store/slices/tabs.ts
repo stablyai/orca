@@ -6,11 +6,11 @@ import type {
   TabContentType,
   TabGroup,
   TabGroupLayoutNode,
-  TerminalTab,
-  TuiAgent,
-  WorkspaceSessionState,
   WorkspaceVisibleTabType
-} from '../../../../shared/types'
+} from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import {
   dedupeTabOrder,
@@ -666,6 +666,7 @@ export function projectWorktreeTabModelReconciliation(
               ? { quickCommandLabel: tab.quickCommandLabel.trim() }
               : {}),
             ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
+            ...(tab.aiVaultTitle ? { aiVaultTitle: tab.aiVaultTitle } : {}),
             customLabel: tab.customTitle,
             color: tab.color,
             sortOrder: tab.sortOrder,

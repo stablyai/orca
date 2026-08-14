@@ -1,6 +1,6 @@
 import { branchName } from '@/lib/git-utils'
 import { basename } from '@/lib/path'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 type WorktreeDisplayNameSource = Pick<Worktree, 'displayName' | 'branch' | 'path'>
 

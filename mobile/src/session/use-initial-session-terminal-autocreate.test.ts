@@ -52,7 +52,6 @@ describe('useInitialSessionTerminalAutoCreate', () => {
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     stateRef = {
       current: { autoCreatedForWorktree: null, sawSessionTabs: false }
     }

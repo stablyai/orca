@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { normalizeSettingsSearchQuery } from './settings-search'
 
 export function matchesRepositoryIdentitySearch(query: string, repo: Repo): boolean {

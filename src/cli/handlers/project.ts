@@ -8,9 +8,9 @@ import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
-  ProjectHostSetupUpdateResult,
-  RepoKind
-} from '../../shared/types'
+  ProjectHostSetupUpdateResult
+} from '../../shared/project-types'
+import type { RepoKind } from '../../shared/repo-types'
 import type { CommandHandler } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,

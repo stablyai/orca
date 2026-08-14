@@ -61,7 +61,9 @@ import {
   type ActivityPortalReadinessLatch,
   type ActivityPortalReadinessStatus
 } from './activity-portal-readiness-oscillation'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -590,7 +592,8 @@ function appendActivityEventsForEntry(args: {
     })
   }
 
-  if (!isActivityEventState(args.entry.state)) {
+  // Why: SessionStart creates an idle row, not an "Agent finished" activity event (STA-3386).
+  if (!isActivityEventState(args.entry.state) || args.entry.sessionBoundary === true) {
     return
   }
   appendActivityEvent({

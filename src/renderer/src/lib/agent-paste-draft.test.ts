@@ -17,15 +17,17 @@ import {
 const testState = vi.hoisted(() => ({
   appState: {
     settings: {},
-    ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+    ptyIdsByTabId: { 'tab-1': ['pty-1'] } as Record<string, string[]>,
     runtimePaneTitlesByTabId: {},
     tabsByWorktree: {} as Record<string, { id: string; title?: string }[]>,
     repos: [] as { id: string; connectionId: string | null; executionHostId?: string | null }[],
     worktreesByRepo: {} as Record<string, { id: string; repoId: string }[]>
   },
+  storeSubscribers: new Set<(state: { ptyIdsByTabId: Record<string, string[]> }) => void>(),
   ptyObserver: null as ((data: string) => void) | null,
   unsubscribe: vi.fn(),
   subscribeToPtyData: vi.fn(),
+  replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
@@ -34,12 +36,22 @@ const testState = vi.hoisted(() => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => testState.appState
+    getState: () => testState.appState,
+    subscribe: (
+      subscriber: (state: { ptyIdsByTabId: Record<string, string[]> }) => void
+    ): (() => void) => {
+      testState.storeSubscribers.add(subscriber)
+      return () => testState.storeSubscribers.delete(subscriber)
+    }
   }
 }))
 
 vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: testState.subscribeToPtyData
+}))
+
+vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
+  replayPreHandlerPtyData: testState.replayPreHandlerPtyData
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
@@ -55,6 +67,7 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const SHOW_CURSOR = '\x1b[?25h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
+const CODEX_DYNAMIC_COMPOSER_PROMPT_RENDER = '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}'
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
 
@@ -71,6 +84,7 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.appState.tabsByWorktree = {}
     testState.appState.repos = []
     testState.appState.worktreesByRepo = {}
+    testState.storeSubscribers.clear()
     testState.ptyObserver = null
     testState.unsubscribe.mockReset()
     testState.subscribeToPtyData.mockReset()
@@ -80,6 +94,7 @@ describe('pasteDraftWhenAgentReady', () => {
         return testState.unsubscribe
       }
     )
+    testState.replayPreHandlerPtyData.mockReset()
     testState.isRemoteRuntimePtyId.mockReset()
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
     testState.sendRuntimePtyInputVerified.mockReset()
@@ -121,6 +136,43 @@ describe('pasteDraftWhenAgentReady', () => {
       'pty-1',
       PASTED_ISSUE_URL
     )
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('replays buffered Codex output during PTY binding before the primary drain', async () => {
+    testState.appState.ptyIdsByTabId = {}
+    testState.replayPreHandlerPtyData.mockImplementation(
+      (_ptyId: string, observer: (data: string) => void) => {
+        observer(CODEX_DYNAMIC_COMPOSER_PROMPT_RENDER)
+        observer(DECSET_BRACKETED_PASTE)
+      }
+    )
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'codex',
+      submit: true
+    })
+
+    expect(testState.storeSubscribers.size).toBe(1)
+    testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+    for (const subscriber of testState.storeSubscribers) {
+      subscriber(testState.appState)
+    }
+    expect(testState.storeSubscribers.size).toBe(0)
+    expect(testState.ptyObserver).not.toBeNull()
+    expect(testState.replayPreHandlerPtyData).toHaveBeenCalledWith('pty-1', testState.ptyObserver)
+    await flushMicrotasks()
+
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, {}, 'pty-1', '\r')
+    expect(testState.unsubscribe).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -319,6 +371,32 @@ describe('pasteDraftWhenAgentReady', () => {
     )
   })
 
+  it('keeps the existing fallback budget for unrelated markerless agents', async () => {
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'claude',
+      hasChildProcesses: false
+    })
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'claude',
+      forcePaste: true
+    })
+    await flushMicrotasks()
+
+    await vi.advanceTimersByTimeAsync(7999)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await flushMicrotasks(5)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+  })
+
   it('does not paste for agents that already use native draft prefill', async () => {
     await expect(
       pasteDraftWhenAgentReady({
@@ -419,7 +497,93 @@ describe('pasteDraftWhenAgentReady', () => {
     })
     await flushMicrotasks()
 
+    await vi.advanceTimersByTimeAsync(20000)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+  })
+
+  it('waits past the default budget for a cold-boot Codex composer glyph (STA-3367)', async () => {
+    // Why: first-run/cold codex can take >8s to mount its composer. The '›' glyph
+    // is a positive readiness proof, so the marker-gated budget waits for it
+    // instead of giving up at 8s and dropping the handoff prompt. Process
+    // inspection stays 'bash' so only the real marker — not the fallback — delivers.
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    // Old 8s budget would have already timed out and dropped the prompt here.
     await vi.advanceTimersByTimeAsync(8000)
+    await flushMicrotasks()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+
+    testState.ptyObserver?.(CODEX_COMPOSER_PROMPT_RENDER)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('gives up on a never-spawned PTY at the spawn budget, not the composer budget (STA-3367)', async () => {
+    // Why: the two waits must not each spend the marker budget. A tab whose PTY
+    // never appears is a failed launch, and must not also burn the 20s cold-boot
+    // composer window before the caller is told.
+    testState.appState.ptyIdsByTabId = {}
+    const onTimeout = vi.fn()
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'codex',
+      onTimeout
+    })
+
+    await vi.advanceTimersByTimeAsync(8000)
+    await flushMicrotasks(5)
+
+    await expect(promise).resolves.toBe(false)
+    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('starts the composer budget once the PTY exists, so a slow spawn does not shorten it', async () => {
+    // Why: "tab has a PTY" and "composer accepts input" are separate states. A
+    // spawn that eats most of a shared budget would leave a cold codex too little
+    // room and re-drop the prompt — the exact STA-3367 failure.
+    testState.appState.ptyIdsByTabId = {}
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+
+    // PTY takes 4s to appear — most of the old shared 8s budget.
+    await vi.advanceTimersByTimeAsync(4000)
+    testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+    for (const subscriber of testState.storeSubscribers) {
+      subscriber(testState.appState)
+    }
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    // 19s of cold boot after the PTY appeared: past a shared budget, inside the
+    // composer's own window.
+    await vi.advanceTimersByTimeAsync(19000)
+    await flushMicrotasks()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+
+    testState.ptyObserver?.(CODEX_COMPOSER_PROMPT_RENDER)
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(

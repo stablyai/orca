@@ -16,6 +16,11 @@ import { tmpdir } from 'node:os'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithRg } from './fs-handler-list-files'
 import { searchWithRg } from './fs-handler-utils'
+import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
+import {
+  ListFilesScanCoordinator,
+  LIST_FILES_SUPERSEDED_MESSAGE
+} from './fs-list-files-scan-coordinator'
 
 const tempDirs: string[] = []
 const SHA1 = '0123456789abcdef0123456789abcdef01234567'
@@ -36,6 +41,7 @@ function createMockProcess(): ChildProcess {
   ;(p as unknown as Record<string, unknown>).kill = vi.fn()
   ;(p as unknown as Record<string, unknown>).exitCode = null
   ;(p as unknown as Record<string, unknown>).signalCode = null
+  Object.defineProperty(p, 'pid', { configurable: true, value: 1 })
   return p
 }
 
@@ -72,6 +78,7 @@ describe('relay quick open ignored file listing', () => {
     })
 
     const promise = listFilesWithRg('/remote/root', ['packages/other'])
+    expect(spawnMock).toHaveBeenCalledTimes(2)
 
     setTimeout(() => {
       ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
@@ -113,6 +120,82 @@ describe('relay quick open ignored file listing', () => {
     expect(primaryProc.kill).toHaveBeenCalled()
     expect(ignoredProc.kill).not.toHaveBeenCalled()
     expect(callIndex).toBe(1)
+  })
+
+  it.each(['error-first', 'close-first'] as const)(
+    'tags a %s pre-spawn listing failure without starting the ignored pass',
+    async (order) => {
+      const root = await makeTempRoot()
+      const missing = createMockProcess()
+      Object.defineProperty(missing, 'pid', { value: undefined })
+      spawnMock.mockReturnValue(missing)
+      const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+
+      const promise = listFilesWithRg(root)
+      if (order === 'error-first') {
+        expect(() => missing.emit('error', error)).not.toThrow()
+      } else {
+        missing.emit('close', -2, null)
+      }
+
+      await expect(promise).rejects.toBeInstanceOf(RipgrepUnavailableError)
+      if (order === 'error-first') {
+        missing.emit('close', -2, null)
+      } else {
+        expect(() => missing.emit('error', error)).not.toThrow()
+      }
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(missing.listenerCount('error')).toBe(0)
+      expect(missing.listenerCount('close')).toBe(0)
+    }
+  )
+
+  it('kills only the admitted pass when ignored rg fails before spawn', async () => {
+    const root = await makeTempRoot()
+    const primary = createMockProcess()
+    const missingIgnored = createMockProcess()
+    Object.defineProperty(missingIgnored, 'pid', { value: undefined })
+    spawnMock.mockImplementation((_cmd: string, args: string[]) =>
+      args.includes('--no-ignore-vcs') ? missingIgnored : primary
+    )
+
+    const promise = listFilesWithRg(root)
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+    missingIgnored.emit('close', -2, null)
+
+    await expect(promise).rejects.toBeInstanceOf(RipgrepUnavailableError)
+    expect(primary.kill).toHaveBeenCalled()
+    expect(missingIgnored.kill).not.toHaveBeenCalled()
+    const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+    expect(() => missingIgnored.emit('error', error)).not.toThrow()
+    expect(missingIgnored.listenerCount('error')).toBe(0)
+  })
+
+  it('does not signal failed-spawn passes when a same-client scan is superseded', async () => {
+    const root = await makeTempRoot()
+    const firstChild = createMockProcess()
+    Object.defineProperty(firstChild, 'pid', { value: undefined })
+    spawnMock.mockReturnValue(firstChild)
+    const coordinator = new ListFilesScanCoordinator()
+    const first = coordinator.run({
+      clientId: 1,
+      key: 'first',
+      start: (signal) => listFilesWithRg(root, [], { signal })
+    })
+    const firstOutcome = first.catch((error: unknown) => error)
+
+    const second = coordinator.run({
+      clientId: 1,
+      key: 'second',
+      start: async () => ['second.ts']
+    })
+
+    await expect(firstOutcome).resolves.toMatchObject({ message: LIST_FILES_SUPERSEDED_MESSAGE })
+    await expect(second).resolves.toEqual(['second.ts'])
+    expect(firstChild.kill).not.toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+    expect(() => firstChild.emit('error', error)).not.toThrow()
   })
 
   it('git fallback ignored pass includes ignored non-env files', async () => {
@@ -429,5 +512,102 @@ describe('relay quick open ignored file listing', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it.each(['error-first', 'close-first'] as const)(
+    'tags only a %s pre-spawn rg search failure as unavailable',
+    async (order) => {
+      const root = await makeTempRoot()
+      const missing = createMockProcess()
+      Object.defineProperty(missing, 'pid', { value: undefined })
+      spawnMock.mockReturnValueOnce(missing)
+      const unavailable = searchWithRg(root, 'ok', { maxResults: 100 })
+      const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+      if (order === 'error-first') {
+        expect(() => missing.emit('error', error)).not.toThrow()
+        missing.emit('close', -2, null)
+      } else {
+        missing.emit('close', -2, null)
+        expect(() => missing.emit('error', error)).not.toThrow()
+      }
+
+      await expect(unavailable).rejects.toBeInstanceOf(RipgrepUnavailableError)
+      expect(missing.listenerCount('error')).toBe(0)
+      expect(missing.listenerCount('close')).toBe(0)
+    }
+  )
+
+  it('tags unsupported native launcher exits as unavailable', async () => {
+    const root = await makeTempRoot()
+    const child = createMockProcess()
+    Object.defineProperty(child, 'pid', { value: 1 })
+    spawnMock.mockReturnValueOnce(child)
+    const unavailable = searchWithRg(root, 'ok', { maxResults: 100 })
+
+    child.emit('close', 127, null)
+
+    await expect(unavailable).rejects.toBeInstanceOf(RipgrepUnavailableError)
+  })
+
+  it('keeps missing-root launch errors on their prior non-fallback paths', async () => {
+    const missingRoot = await makeTempRoot()
+    await rm(missingRoot, { recursive: true, force: true })
+    const listFirst = createMockProcess()
+    const listProbe = createMockProcess()
+    Object.defineProperty(listFirst, 'pid', { value: undefined })
+    Object.defineProperty(listProbe, 'pid', { value: 1 })
+    let callIndex = 0
+    spawnMock.mockImplementation(() => [listFirst, listProbe][callIndex++])
+    const listError = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+    const listing = listFilesWithRg(missingRoot)
+    listFirst.emit('error', listError)
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    expect(spawnMock.mock.calls[1]).toEqual(['rg', ['--version'], { stdio: 'ignore' }])
+    listProbe.emit('close', 0, null)
+    await expect(listing).rejects.toBe(listError)
+
+    spawnMock.mockReset()
+    const searchChild = createMockProcess()
+    const searchProbe = createMockProcess()
+    Object.defineProperty(searchChild, 'pid', { value: undefined })
+    Object.defineProperty(searchProbe, 'pid', { value: 1 })
+    spawnMock.mockReturnValueOnce(searchChild).mockReturnValueOnce(searchProbe)
+    const search = searchWithRg(missingRoot, 'ok', { maxResults: 100 })
+    searchChild.emit('error', listError)
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    searchProbe.emit('close', 0, null)
+    await expect(search).resolves.toMatchObject({ files: [], totalMatches: 0 })
+  })
+
+  it('keeps missing-rg precedence when the root also disappeared', async () => {
+    const missingRoot = await makeTempRoot()
+    await rm(missingRoot, { recursive: true, force: true })
+    const first = createMockProcess()
+    const probe = createMockProcess()
+    for (const child of [first, probe]) {
+      Object.defineProperty(child, 'pid', { value: undefined })
+    }
+    let callIndex = 0
+    spawnMock.mockImplementation(() => [first, probe][callIndex++])
+    const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+    const listing = listFilesWithRg(missingRoot)
+    first.emit('error', error)
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    probe.emit('close', -2, null)
+
+    await expect(listing).rejects.toBeInstanceOf(RipgrepUnavailableError)
+    expect(() => probe.emit('error', error)).not.toThrow()
+  })
+
+  it('keeps post-spawn rg search errors on the existing empty-result path', async () => {
+    const started = createMockProcess()
+    Object.defineProperty(started, 'pid', { value: 1 })
+    spawnMock.mockReturnValueOnce(started)
+    const ordinaryFailure = searchWithRg('/remote/root', 'ok', { maxResults: 100 })
+    started.emit('error', new Error('post-spawn failure'))
+    await expect(ordinaryFailure).resolves.toMatchObject({ files: [], totalMatches: 0 })
   })
 })

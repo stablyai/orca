@@ -833,15 +833,13 @@ describe('terminal subscribe buffering', () => {
       const decodedFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
-      const snapshotStarts = decodedFrames.filter(
+      const snapshotStart = decodedFrames.find(
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
-      // Why seq 1 (layout seq): a no-output-seq snapshot falls back to the
-      // layout seq on the wire; the recovered data still ships as the first
-      // and only scrollback snapshot.
-      expect(snapshotStarts.map((frame) => decodeTerminalStreamJson(frame.payload))).toEqual([
-        expect.objectContaining({ kind: 'scrollback', seq: 1 })
-      ])
+      // Why: layout versions and output offsets are different sequence domains.
+      const snapshotInfo = decodeTerminalStreamJson(snapshotStart!.payload)
+      expect(snapshotInfo).toMatchObject({ kind: 'scrollback' })
+      expect(snapshotInfo).not.toHaveProperty('seq')
       const snapshotText = decodedFrames
         .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame.payload))

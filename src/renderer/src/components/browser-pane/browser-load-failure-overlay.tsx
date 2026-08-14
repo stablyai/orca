@@ -8,7 +8,7 @@ import type {
   BrowserCertificateProceedFailureReason,
   BrowserCertificateProceedResult,
   BrowserLoadError
-} from '../../../../shared/types'
+} from '../../../../shared/browser-workspace-types'
 import { isEligibleLocalCertificateHost } from '../../../../shared/browser-url'
 import { normalizeCertificateError } from '../../../../shared/browser-certificate-errors'
 import {

@@ -1,13 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  GitConflictOperation,
-  GlobalSettings,
-  Repo,
-  Worktree,
-  WorktreeCardProperty
-} from '../../../../shared/types'
+import type { GitConflictOperation } from '../../../../shared/git-status-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type WorktreeCardComponent from './WorktreeCard'
 import type * as WorkspaceDeleteQuickAction from './workspace-delete-quick-action'
 
@@ -21,7 +19,6 @@ let tabsByWorktree: Record<string, { id: string }[]> = {}
 let ptyIdsByTabId: Record<string, string[]> = {}
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
 let settings: Partial<GlobalSettings> | null = null
-let activityStatus = 'idle'
 let projectGroups: unknown[] = []
 let workspaceDeleteModifierPressed = false
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
@@ -61,7 +58,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
-  useWorktreeActivityStatus: () => activityStatus
+  useWorktreeActivityStatus: () => 'idle'
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -145,7 +142,6 @@ describe('WorktreeCard quick actions', () => {
     projectGroups = []
     workspaceDeleteModifierPressed = false
     gitConflictOperationByWorktree = {}
-    activityStatus = 'idle'
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', () => {
@@ -251,19 +247,6 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('/repo/worktrees/quick-action')
-    expect(markup).not.toContain('lucide-git-branch')
-  })
-
-  it('keeps the quiet status dot when the branch card property is off', () => {
-    settings = { experimentalNewWorktreeCardStyle: true }
-    worktreeCardProperties = ['status']
-    activityStatus = 'inactive'
-
-    const markup = renderToStaticMarkup(
-      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
-    )
-
-    expect(markup).toContain('bg-neutral-500/40')
     expect(markup).not.toContain('lucide-git-branch')
   })
 

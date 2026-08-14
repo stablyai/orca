@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
-import { MAX_GITHUB_WORK_ITEMS_BATCH_REPOS } from '../../../../shared/github-work-items-query-bounds'
+import { MAX_GITHUB_WORK_ITEMS_BATCH_REPOS } from '../../../../shared/github/work-items-query-bounds'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -87,6 +87,13 @@ const Issue = RepoSelector.extend({
 const PullRequest = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   noCache: z.boolean().optional(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
+const PRCommentReaction = RepoSelector.extend({
+  reactionSubjectId: requiredString('Missing reaction subject ID'),
+  content: z.enum(['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes']),
+  reacted: z.boolean(),
   prRepo: SlugRepo.nullable().optional()
 })
 
@@ -461,14 +468,18 @@ export const GITHUB_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'github.prCheckDetails',
     params: PullRequestCheckDetails,
-    handler: async (params, { runtime }) =>
-      runtime.getRepoPRCheckDetails(params.repo, {
-        checkRunId: params.checkRunId,
-        workflowRunId: params.workflowRunId,
-        checkName: params.checkName,
-        url: params.url,
-        prRepo: params.prRepo ?? null
-      })
+    handler: async (params, { runtime, signal }) =>
+      runtime.getRepoPRCheckDetails(
+        params.repo,
+        {
+          checkRunId: params.checkRunId,
+          workflowRunId: params.workflowRunId,
+          checkName: params.checkName,
+          url: params.url,
+          prRepo: params.prRepo ?? null
+        },
+        signal
+      )
   }),
   defineMethod({
     name: 'github.rerunPRChecks',
@@ -487,6 +498,18 @@ export const GITHUB_METHODS: RpcMethod[] = [
       runtime.getRepoPRComments(params.repo, params.prNumber, params.prRepo ?? null, {
         noCache: params.noCache
       })
+  }),
+  defineMethod({
+    name: 'github.setPRCommentReaction',
+    params: PRCommentReaction,
+    handler: async (params, { runtime }) =>
+      runtime.setRepoPRCommentReaction(
+        params.repo,
+        params.reactionSubjectId,
+        params.content,
+        params.reacted,
+        params.prRepo ?? null
+      )
   }),
   defineMethod({
     name: 'github.prFileContents',
