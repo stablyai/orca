@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { constants } from 'node:fs'
 import { lstat, open, readFile, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { normalizeCodexFileChangeKind } from './codex-structured-change-metadata'
 
 export type CodexStructuredFileChange = { path: string; diff: string; kind: unknown }
 
@@ -20,6 +21,7 @@ export type CodexStructuredWorktreeSnapshot = {
 const MAX_FILE_CHANGE_COUNT = 128
 const MAX_FILE_CHANGE_PATH_BYTES = 4_096
 const MAX_CHANGE_PLAN_DIFF_BYTES = 1024 * 1024
+const MAX_CHANGE_PLAN_ENCODED_BYTES = 2 * 1024 * 1024
 const MAX_MANIFEST_FILE_BYTES = 16 * 1024 * 1024
 const MAX_MANIFEST_TOTAL_BYTES = 32 * 1024 * 1024
 
@@ -108,29 +110,68 @@ export async function snapshotChanges(
 }
 
 export function parseFileChanges(value: unknown): CodexStructuredFileChange[] | null {
-  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_FILE_CHANGE_COUNT) {
+  try {
+    if (!Array.isArray(value) || value.length === 0 || value.length > MAX_FILE_CHANGE_COUNT) {
+      return null
+    }
+    const changes: CodexStructuredFileChange[] = []
+    let diffBytes = 0
+    let encodedBytes = 2
+    for (const entry of value) {
+      const record = readChangeRecord(entry)
+      if (!record) {
+        return null
+      }
+      const path = record.path
+      const diff = record.diff
+      if (
+        typeof path !== 'string' ||
+        path.length === 0 ||
+        path.includes('\0') ||
+        Buffer.byteLength(path) > MAX_FILE_CHANGE_PATH_BYTES ||
+        typeof diff !== 'string'
+      ) {
+        return null
+      }
+      const normalizedKind = normalizeCodexFileChangeKind(record.kind)
+      if (!normalizedKind) {
+        return null
+      }
+      const diffByteLength = Buffer.byteLength(diff)
+      diffBytes += diffByteLength
+      encodedBytes +=
+        Buffer.byteLength(JSON.stringify(path)) +
+        Buffer.byteLength(JSON.stringify(diff)) +
+        normalizedKind.encodedBytes +
+        32
+      if (diffBytes > MAX_CHANGE_PLAN_DIFF_BYTES || encodedBytes > MAX_CHANGE_PLAN_ENCODED_BYTES) {
+        return null
+      }
+      changes.push({ path, diff, kind: normalizedKind.value })
+    }
+    return changes
+  } catch {
     return null
   }
-  const changes: CodexStructuredFileChange[] = []
-  let diffBytes = 0
-  for (const entry of value) {
-    const record = asRecord(entry)
-    if (
-      typeof record.path !== 'string' ||
-      record.path.length === 0 ||
-      record.path.includes('\0') ||
-      Buffer.byteLength(record.path) > MAX_FILE_CHANGE_PATH_BYTES ||
-      typeof record.diff !== 'string'
-    ) {
-      return null
-    }
-    diffBytes += Buffer.byteLength(record.diff)
-    if (diffBytes > MAX_CHANGE_PLAN_DIFF_BYTES) {
-      return null
-    }
-    changes.push({ path: record.path, diff: record.diff, kind: record.kind })
+}
+
+function readChangeRecord(value: unknown): { path: unknown; diff: unknown; kind: unknown } | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null
   }
-  return changes
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    return null
+  }
+  const record: Record<string, unknown> = {}
+  for (const key of ['path', 'diff', 'kind']) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (!descriptor || !('value' in descriptor) || !descriptor.enumerable) {
+      return null
+    }
+    record[key] = descriptor.value
+  }
+  return { path: record.path, diff: record.diff, kind: record.kind }
 }
 
 async function readBoundedRegularFile(
@@ -223,10 +264,6 @@ async function validateChangePath(root: string, input: string): Promise<string> 
     throw new Error('structured writer cannot mutate Git metadata')
   }
   return canonicalTarget
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 }
 
 function sha256(value: Buffer): string {

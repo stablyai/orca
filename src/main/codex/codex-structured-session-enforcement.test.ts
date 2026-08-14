@@ -13,6 +13,7 @@ import { CodexStructuredSessionAdapter } from './codex-structured-session-adapte
 import {
   CodexStructuredWriteAuthority,
   digestRequest,
+  type CodexStructuredWriteAuthorization,
   type CodexStructuredWriteReceipt
 } from './codex-structured-write-authority'
 
@@ -111,6 +112,67 @@ function nextTask(): Promise<void> {
 }
 
 describe('Codex structured local-writer enforcement', () => {
+  it('preserves host request authority through dispatch admission', async () => {
+    const root = linkedWorktree()
+    const codex = fakeCodex()
+    const authorizeTurn = vi.fn(
+      (input: Parameters<CodexStructuredWriteAuthorization['authorizeTurn']>[0]) => ({
+        requestReceiptId: input.requestAuthority?.requestReceiptId ?? '',
+        writableRoot: input.writableRoot,
+        capabilityHandle: 'host-handle-1'
+      })
+    )
+    const gate = new CodexStructuredWriteAuthority({
+      authorizeTurn,
+      consumeLease: () => {},
+      onReceipt: () => {}
+    })
+    const adapter = new CodexStructuredSessionAdapter({
+      resolveLaunch: async () => ({
+        command: 'codex',
+        args: ['app-server'],
+        cwd: root,
+        codexHome: root,
+        resumeThreadId: null,
+        effectIsolation: 'local-structured-write',
+        isolatedHomePath: root
+      }),
+      openConnection: codex.openConnection,
+      readProcessStartTime: async () => 1_700_000_000_000,
+      writeAuthority: gate,
+      releaseStructuredWriteHome: async () => {}
+    })
+    await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-1' })
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'change source.txt only' }]
+    }
+    const requestAuthority = {
+      effectAuthority: 'local_structured_write' as const,
+      requestReceiptId: 'a'.repeat(64)
+    }
+
+    await adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId: 'client-1',
+      body,
+      fence: 7,
+      requestAuthority
+    })
+
+    expect(authorizeTurn).toHaveBeenCalledWith({
+      sessionId: SESSION,
+      turnEpoch: 2,
+      fence: 7,
+      clientMessageId: 'client-1',
+      requestDigest: digestRequest(body),
+      writableRoot: root,
+      requestAuthority
+    })
+    await adapter.closeAll()
+  })
+
   it('admits one file-change item while declining command, permission, and replay effects', async () => {
     const root = linkedWorktree()
     const receipts: CodexStructuredWriteReceipt[] = []

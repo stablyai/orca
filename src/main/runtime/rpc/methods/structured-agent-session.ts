@@ -214,12 +214,15 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     handler: async (params, ctx) => {
       const host = requireHost(ctx)
       assertLocalEffectAuthority(ctx, params.effectAuthority)
-      if (isTrustedLocalUserTurn(ctx)) {
-        await host.invalidateEffectAuthorityForTrustedUserTurn(params.envelope.sessionId)
-      }
+      const trustedLocalUserTurn = isTrustedLocalUserTurn(ctx)
       return host.send(callerFor(ctx), {
         ...params,
-        beforeRun: () => assertMobileImageProvenance(ctx, params.body)
+        beforeRun: async () => {
+          assertMobileImageProvenance(ctx, params.body)
+          if (trustedLocalUserTurn) {
+            await host.invalidateEffectAuthorityForTrustedUserTurn(params.envelope.sessionId)
+          }
+        }
       })
     }
   }),

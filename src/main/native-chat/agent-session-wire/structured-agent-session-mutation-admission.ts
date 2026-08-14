@@ -107,7 +107,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     }
   }
 
-  plan.beforeRun?.()
+  await plan.beforeRun?.()
   const outcome = await runSettledAgentSessionMutation({
     store: request.store,
     callerKey: request.callerKey,

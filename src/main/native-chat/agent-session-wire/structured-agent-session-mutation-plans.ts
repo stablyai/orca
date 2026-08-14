@@ -28,7 +28,7 @@ import {
 export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
-  beforeRun?: () => void
+  beforeRun?: () => void | Promise<void>
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
@@ -39,7 +39,7 @@ export function sendPlan(params: {
   body: AgentJournalMessageItem
   retryUnknown?: true
   effectAuthority?: AgentSessionEffectAuthority
-  beforeRun?: () => void
+  beforeRun?: () => void | Promise<void>
 }): MutationPlan<AgentSessionSendResult> {
   // The operation id IS the client message id: one send, one durable row, one
   // key the client reconciles its optimistic bubble against.

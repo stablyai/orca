@@ -31,11 +31,95 @@ describe('Codex structured write manifest bounds', () => {
         }))
       )
     ).toBeNull()
-    expect(parseFileChanges([{ path: 'x'.repeat(4_097), diff: '+x' }])).toBeNull()
     expect(
-      parseFileChanges([{ path: 'source/x.ts', diff: 'x'.repeat(1024 * 1024 + 1) }])
+      parseFileChanges([{ path: 'x'.repeat(4_097), diff: '+x', kind: { type: 'update' } }])
     ).toBeNull()
-    expect(parseFileChanges([{ path: 'source/\0x.ts', diff: '+x' }])).toBeNull()
+    expect(
+      parseFileChanges([
+        {
+          path: 'source/x.ts',
+          diff: 'x'.repeat(1024 * 1024 + 1),
+          kind: { type: 'update' }
+        }
+      ])
+    ).toBeNull()
+    expect(
+      parseFileChanges([
+        { path: 'source/x.ts', diff: '\u0001'.repeat(400_000), kind: { type: 'update' } }
+      ])
+    ).toBeNull()
+    expect(
+      parseFileChanges([{ path: 'source/\0x.ts', diff: '+x', kind: { type: 'update' } }])
+    ).toBeNull()
+  })
+
+  it('rejects cyclic, deep, accessor, exotic, and oversized change metadata before digesting', () => {
+    const cyclic: Record<string, unknown> = { type: 'update' }
+    cyclic.self = cyclic
+    let deep: Record<string, unknown> = { type: 'update' }
+    for (let index = 0; index < 33; index += 1) {
+      deep = { child: deep }
+    }
+    const accessor = Object.defineProperty({}, 'type', {
+      enumerable: true,
+      get: () => 'update'
+    })
+    const sparse: unknown[] = []
+    sparse.length = 16_385
+    const tooManyNodes = Array.from({ length: 16_384 }, () => null)
+
+    for (const kind of [
+      cyclic,
+      deep,
+      accessor,
+      new Date(),
+      sparse,
+      tooManyNodes,
+      { payload: 'x'.repeat(2 * 1024 * 1024) },
+      undefined,
+      BigInt(1),
+      Number.NaN,
+      Number.POSITIVE_INFINITY
+    ]) {
+      expect(parseFileChanges([{ path: 'source/x.ts', diff: '+x', kind }])).toBeNull()
+    }
+  })
+
+  it('clones bounded forward-compatible metadata without retaining mutable input identity', () => {
+    const kind = {
+      type: 'future-kind',
+      metadata: { flags: [true, 2, 'three', null] },
+      ['__proto__']: { retainedAsData: true }
+    }
+    const parsed = parseFileChanges([{ path: 'source/x.ts', diff: '+x', kind }])
+
+    expect(parsed).toEqual([{ path: 'source/x.ts', diff: '+x', kind }])
+    expect(parsed?.[0]?.kind).not.toBe(kind)
+    kind.metadata.flags[0] = false
+    expect(parsed?.[0]?.kind).toEqual({
+      type: 'future-kind',
+      metadata: { flags: [true, 2, 'three', null] },
+      ['__proto__']: { retainedAsData: true }
+    })
+  })
+
+  it('reserves queued sibling nodes before traversing another wide nested container', () => {
+    const wide = (child: unknown): unknown[] => [
+      child,
+      ...Array.from({ length: 5_800 }, () => null)
+    ]
+    let traversedOverBudgetContainer = false
+    const guarded = new Proxy(wide(null), {
+      ownKeys: (target) => {
+        traversedOverBudgetContainer = true
+        return Reflect.ownKeys(target)
+      }
+    })
+
+    expect(
+      parseFileChanges([{ path: 'source/x.ts', diff: '+x', kind: wide(wide(guarded)) }])
+    ).toBeNull()
+    expect(traversedOverBudgetContainer).toBe(false)
   })
 
   it('refuses to read an oversized existing file into an enforcement receipt', async () => {

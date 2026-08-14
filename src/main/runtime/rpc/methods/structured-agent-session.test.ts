@@ -87,7 +87,7 @@ function hostStub(): StructuredAgentSessionHost {
       }
     })),
     send: vi.fn(async (_caller, params) => {
-      params.beforeRun?.()
+      await params.beforeRun?.()
       return { ok: true, replayed: false }
     }),
     invalidateEffectAuthorityForTrustedUserTurn: vi.fn(async () => undefined),
@@ -258,13 +258,13 @@ describe('capability gating', () => {
     expect(response).toMatchObject({ ok: true })
   })
 
-  it('invalidates writer authority only for a trusted local desktop user turn', async () => {
+  it('defers writer invalidation to the trusted local desktop send execution seam', async () => {
     await call('agentSession.send', sendParams(), DESKTOP_CLIENT)
 
     expect(hostCalls.invalidateEffectAuthorityForTrustedUserTurn).toHaveBeenCalledWith(SESSION)
-    expect(
+    expect(hostCalls.send.mock.invocationCallOrder[0]).toBeLessThan(
       hostCalls.invalidateEffectAuthorityForTrustedUserTurn.mock.invocationCallOrder[0]
-    ).toBeLessThan(hostCalls.send.mock.invocationCallOrder[0])
+    )
 
     await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
     await call('agentSession.send', sendParams())
