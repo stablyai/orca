@@ -847,4 +847,41 @@ describe('mobile endpoint supervisor', () => {
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })
+
+  it('refreshes current LAN while on Relay without skipping hysteresis', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const advertised = {
+      v: 1 as const,
+      selected: { kind: 'lan' as const, url: 'ws://192.168.1.50:6768' },
+      endpoints: [{ kind: 'lan' as const, url: 'ws://192.168.1.50:6768' }]
+    }
+    const relaySession = new FakeRelaySession('connected')
+    relaySession.sendRequest.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: advertised,
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    logical.sendRequest.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: advertised,
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const deps = dependencies({ openRelay: vi.fn(() => relaySession) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    await vi.waitFor(() =>
+      expect(deps.saveHost).toHaveBeenCalledWith(
+        expect.objectContaining({ endpoint: 'ws://192.168.1.50:6768' })
+      )
+    )
+    expect(logical.getActivePath()).toBe('relay')
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(logical.getActivePath()).toBe('relay')
+    expect(logical.migrateTo.mock.calls.some(([, path]) => path !== 'relay')).toBe(false)
+    supervisor.stop()
+  })
 })

@@ -52,6 +52,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -112,6 +113,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -160,6 +162,7 @@ describe('OrcaRuntimeRpcServer', () => {
       createPairingRelay: vi.fn().mockRejectedValue(new Error('relay offline')),
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -241,6 +244,7 @@ describe('OrcaRuntimeRpcServer', () => {
       createPairingRelay,
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -296,6 +300,7 @@ describe('OrcaRuntimeRpcServer', () => {
       createPairingRelay,
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -358,6 +363,7 @@ describe('OrcaRuntimeRpcServer', () => {
       createPairingRelay,
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -429,6 +435,7 @@ describe('OrcaRuntimeRpcServer', () => {
       createPairingRelay,
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -490,6 +497,7 @@ describe('OrcaRuntimeRpcServer', () => {
       },
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -549,6 +557,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -605,6 +614,7 @@ describe('OrcaRuntimeRpcServer', () => {
       },
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -619,6 +629,7 @@ describe('OrcaRuntimeRpcServer', () => {
         createPairingRelay: vi.fn(),
         onDeviceRevokeQueued,
         getEndpoints: vi.fn(),
+        getDirectEndpoints: vi.fn(),
         provisionRelay: vi.fn()
       })
       resolveRelay?.()
@@ -665,6 +676,7 @@ describe('OrcaRuntimeRpcServer', () => {
       },
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -685,6 +697,7 @@ describe('OrcaRuntimeRpcServer', () => {
         createPairingRelay: vi.fn(),
         onDeviceRevokeQueued: vi.fn(),
         getEndpoints: vi.fn(),
+        getDirectEndpoints: vi.fn(),
         provisionRelay: vi.fn()
       })
       resolveRelay?.()
@@ -727,6 +740,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 

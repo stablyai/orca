@@ -3142,6 +3142,7 @@ void app.whenReady().then(async () => {
         onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
         onDemandStateChanged: () => relayService.demandStateChanged(),
         getEndpoints: (context, params) => relayService.getEndpoints(context, params),
+        getDirectEndpoints: (context, params) => relayService.getDirectEndpoints(context, params),
         provisionRelay: (context, params) => relayService.provisionRelay(context, params)
       })
       relayService.start()

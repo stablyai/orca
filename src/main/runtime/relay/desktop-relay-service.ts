@@ -2,10 +2,13 @@ import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth
 import type { MobilePairingConnectionContext, OrcaRuntimeRpcServer } from '../runtime-rpc'
 import type {
   DeviceCredentialInstalled,
+  PairingGetDirectEndpointsParams,
+  PairingGetDirectEndpointsResult,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import { resolveDesktopDirectEndpoints } from '../pairing-direct-endpoints'
 import { readRelayAuthContext } from './relay-auth-context'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
@@ -187,6 +190,23 @@ export class DesktopRelayService {
         )
       }
       return result
+    })
+  }
+
+  async getDirectEndpoints(
+    context: MobilePairingConnectionContext,
+    _params: PairingGetDirectEndpointsParams
+  ): Promise<PairingGetDirectEndpointsResult> {
+    this.requireMobileDevice(context.deviceId)
+    const connectionMode = this.runtimeRpc
+      .getDeviceRegistry()
+      ?.getMobilePairingConnectionMode(context.deviceId)
+    if (connectionMode === 'local-only') {
+      return { v: 1, selected: null, endpoints: [] }
+    }
+    return resolveDesktopDirectEndpoints({
+      connectionMode,
+      boundEndpoint: this.runtimeRpc.getWebSocketEndpoint()
     })
   }
 

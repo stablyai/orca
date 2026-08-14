@@ -84,8 +84,30 @@ export const PairingGetEndpointsResultSchema = z
   })
   .strict()
 
+// Why: a new RPC, not extra getEndpoints v1 keys — that schema is .strict() and
+// old phones parse resume-confirm with it.
+export const PairingGetDirectEndpointsParamsSchema = z.object({}).strict()
+
+export const PairingDirectEndpointSchema = z
+  .object({
+    kind: z.enum(['lan', 'tailscale']),
+    url: z.string().min(1).max(2048)
+  })
+  .strict()
+
+export const PairingGetDirectEndpointsResultSchema = z
+  .object({
+    v: z.literal(1),
+    selected: PairingDirectEndpointSchema.nullable(),
+    endpoints: z.array(PairingDirectEndpointSchema).max(16)
+  })
+  .strict()
+
 export type PairingProvisionRelayParams = z.infer<typeof PairingProvisionRelayParamsSchema>
 export type PairingGetEndpointsParams = z.infer<typeof PairingGetEndpointsParamsSchema>
+export type PairingGetDirectEndpointsParams = z.infer<typeof PairingGetDirectEndpointsParamsSchema>
+export type PairingDirectEndpoint = z.infer<typeof PairingDirectEndpointSchema>
+export type PairingGetDirectEndpointsResult = z.infer<typeof PairingGetDirectEndpointsResultSchema>
 export type DeviceCredentialInstalled = z.infer<typeof DeviceCredentialInstalledSchema>
 export type DeviceCredentialInstallStatusResult = z.infer<
   typeof DeviceCredentialInstallStatusResultSchema

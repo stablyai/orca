@@ -43,6 +43,8 @@ import {
 } from './relay/relay-revoke-outbox'
 import type {
   DeviceCredentialInstalled,
+  PairingGetDirectEndpointsParams,
+  PairingGetDirectEndpointsResult,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
@@ -135,6 +137,10 @@ type MobileRelayPairingProvider = {
     context: MobilePairingConnectionContext,
     params: PairingGetEndpointsParams
   ): Promise<PairingGetEndpointsResult>
+  getDirectEndpoints(
+    context: MobilePairingConnectionContext,
+    params: PairingGetDirectEndpointsParams
+  ): Promise<PairingGetDirectEndpointsResult>
   provisionRelay(
     context: MobilePairingConnectionContext,
     params: PairingProvisionRelayParams
@@ -352,6 +358,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'notifications.subscribe',
   'notifications.unsubscribe',
   'pairing.getEndpoints',
+  'pairing.getDirectEndpoints',
   'pairing.provisionRelay',
   'preflight.check',
   'preflight.detectAgents',
@@ -1693,6 +1700,15 @@ export class OrcaRuntimeRpcServer {
         ? {
             getEndpoints: (params: PairingGetEndpointsParams) =>
               pairingProvider.getEndpoints(
+                {
+                  deviceId: authenticatedSocket.device.deviceId,
+                  connectionId: authenticatedSocket.connectionId,
+                  transport: authenticatedSocket.transport
+                },
+                params
+              ),
+            getDirectEndpoints: (params: PairingGetDirectEndpointsParams) =>
+              pairingProvider.getDirectEndpoints(
                 {
                   deviceId: authenticatedSocket.device.deviceId,
                   connectionId: authenticatedSocket.connectionId,

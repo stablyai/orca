@@ -10,6 +10,7 @@ import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bund
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { RpcClient } from './rpc-client'
 import type { HostProfile } from './types'
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }
@@ -42,6 +43,7 @@ export class MobileRelaySessionEstablisher {
       // Owns the stopped/background null-out so a late resolve never re-arms a stale timer.
       scheduleLease: (expiry: number | null) => void
       scheduleDirectProbe: () => void
+      refreshDirectEndpoints: (client: RpcClient) => Promise<void>
       onBookkeepingError: (error: Error) => void
       onDialFailure: (error: Error) => void
     }
@@ -129,6 +131,11 @@ export class MobileRelaySessionEstablisher {
     } catch (error) {
       // Why: the session is live and registered — reporting bookkeeping as a dial
       // failure would book backoff against it and can suspend the healthy session.
+      args.onBookkeepingError(toError(error))
+    }
+    try {
+      await args.refreshDirectEndpoints(session)
+    } catch (error) {
       args.onBookkeepingError(toError(error))
     }
     args.scheduleDirectProbe()
