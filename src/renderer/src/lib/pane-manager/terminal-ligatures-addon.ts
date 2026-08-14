@@ -1,6 +1,4 @@
-// Upstream packaging bug: @xterm/addon-ligatures declares a missing module
-// entry. config/patches/@xterm__addon-ligatures* keeps the runtime import valid.
-import { LigaturesAddon } from '@xterm/addon-ligatures'
+import { LigaturesAddon } from './terminal-ligatures-package-shim'
 import type { Terminal } from '@xterm/xterm'
 
 type LigatureRange = [number, number]

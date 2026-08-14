@@ -6,7 +6,9 @@ export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
   'openclaude',
   'codex',
   'grok',
-  'omp'
+  'omp',
+  'codebuddy',
+  'ccb'
 ])
 
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
@@ -37,7 +39,7 @@ export function resolveNativeChatTranscriptAgent(
 ): NativeChatTranscriptAgent | null {
   // Why: OpenClaude writes the Claude transcript format and layout even though
   // Orca preserves its distinct agent identity for launch and UI behavior.
-  if (agent === 'claude' || agent === 'openclaude') {
+  if (agent === 'claude' || agent === 'openclaude' || agent === 'codebuddy' || agent === 'ccb') {
     return 'claude'
   }
   if (agent === 'codex' || agent === 'grok' || agent === 'omp') {

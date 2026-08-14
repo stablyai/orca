@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 export function isolatedScanRoots(root: string) {
   return {
     claudeProjectsDir: join(root, 'claude-projects'),
+    codebuddyProjectsDir: join(root, 'codebuddy-projects'),
     codexSessionsDir: join(root, 'codex-sessions'),
     geminiSessionsDir: join(root, 'gemini-sessions'),
     antigravityBrainDir: join(root, 'antigravity-brain'),

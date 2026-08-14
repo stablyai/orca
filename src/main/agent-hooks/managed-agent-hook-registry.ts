@@ -3,6 +3,7 @@ import type { HookInstallAgent } from '../../shared/telemetry-events'
 import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { claudeHookService } from '../claude/hook-service'
+import { codebuddyHookService } from '../codebuddy/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
@@ -22,6 +23,7 @@ export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => Age
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
   ['claude', () => claudeHookService.install()],
+  ['codebuddy', () => codebuddyHookService.install()],
   ['openclaude', () => openClaudeHookService.install()],
   ['codex', () => codexHookService.install()],
   ['gemini', () => geminiHookService.install()],
@@ -60,6 +62,7 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['claude', () => claudeHookService.remove()],
+  ['codebuddy', () => codebuddyHookService.remove()],
   ['openclaude', () => openClaudeHookService.remove()],
   ['codex', () => codexHookService.remove()],
   ['gemini', () => geminiHookService.remove()],
@@ -77,6 +80,7 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [
   ['claude', () => claudeHookService.getStatus()],
+  ['codebuddy', () => codebuddyHookService.getStatus()],
   ['openclaude', () => openClaudeHookService.getStatus()],
   ['codex', () => codexHookService.getStatus()],
   ['gemini', () => geminiHookService.getStatus()],

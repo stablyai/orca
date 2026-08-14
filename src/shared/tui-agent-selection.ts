@@ -6,6 +6,8 @@ import { isTuiAgent } from './tui-agent-config'
 export const TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
   'claude-agent-teams',
+  'ccb',
+  'codebuddy',
   'openclaude',
   'codex',
   'grok',

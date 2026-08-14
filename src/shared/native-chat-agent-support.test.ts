@@ -27,6 +27,8 @@ describe('isNativeChatSupportedAgent', () => {
     expect(isNativeChatSupportedAgent('claude')).toBe(true)
     expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
     expect(isNativeChatSupportedAgent('omp')).toBe(true)
+    expect(isNativeChatSupportedAgent('codebuddy')).toBe(true)
+    expect(isNativeChatSupportedAgent('ccb')).toBe(true)
     expect(isNativeChatSupportedAgent('cursor')).toBe(false)
     expect(isNativeChatSupportedAgent(null)).toBe(false)
     expect(isNativeChatSupportedAgent(undefined)).toBe(false)

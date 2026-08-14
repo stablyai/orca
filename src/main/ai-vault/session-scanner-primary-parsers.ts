@@ -42,10 +42,13 @@ export type ClaudeSessionParseState = {
   firstUserTitle: string | null
 }
 
-export function createClaudeSessionParseState(file: FileWithMtime): ClaudeSessionParseState {
+export function createClaudeSessionParseState(
+  file: FileWithMtime,
+  agent: 'claude' | 'codebuddy' = 'claude'
+): ClaudeSessionParseState {
   return {
     accumulator: createAccumulator({
-      agent: 'claude',
+      agent,
       file,
       sessionId: sessionIdFromFileName(file.path)
     }),
@@ -188,8 +191,11 @@ export async function finalizeClaudeSessionParseState(
   return finalizeSession(snapshot.accumulator, platform, options)
 }
 
-export function createClaudeSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
-  return claudeResumeStateFromParseState(createClaudeSessionParseState(file))
+export function createClaudeSessionResumeState(
+  file: FileWithMtime,
+  agent: 'claude' | 'codebuddy' = 'claude'
+): ResumableSessionParseState {
+  return claudeResumeStateFromParseState(createClaudeSessionParseState(file, agent))
 }
 
 function claudeResumeStateFromParseState(
@@ -207,13 +213,14 @@ function claudeResumeStateFromParseState(
 
 export async function parseClaudeSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  agent: 'claude' | 'codebuddy' = 'claude'
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
-  return parseClaudeSessionLines({ file, lines, platform })
+  return parseClaudeSessionLines({ file, lines, platform, agent })
 }
 
 export async function parseClaudeSessionContent(
@@ -236,8 +243,9 @@ async function parseClaudeSessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  agent?: 'claude' | 'codebuddy'
 }): Promise<AiVaultSession | null> {
-  const state = createClaudeSessionParseState(args.file)
+  const state = createClaudeSessionParseState(args.file, args.agent)
   for await (const line of args.lines) {
     consumeClaudeSessionLine(state, line)
   }

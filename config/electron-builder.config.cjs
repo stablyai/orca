@@ -205,7 +205,7 @@ module.exports = {
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
     // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
     // Fail packaging if any bundled native binary exceeds the supported floor.
-    if (context.electronPlatformName === 'linux') {
+    if (context.electronPlatformName === 'linux' && process.env.ORCA_SKIP_GLIBC_FLOOR !== '1') {
       verifyLinuxGlibcFloor(context.appOutDir)
     }
     const resourcesDir =

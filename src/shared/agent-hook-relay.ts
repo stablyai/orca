@@ -36,6 +36,7 @@ import type { AgentHookTarget } from './agent-hook-types'
 // that consumes it from the relay side).
 const AGENT_HOOK_SOURCES = [
   'claude',
+  'codebuddy',
   'codex',
   'gemini',
   'antigravity',

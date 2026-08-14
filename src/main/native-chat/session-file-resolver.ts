@@ -27,6 +27,12 @@ function claudeProjectsDir(): string {
   return join(homedir(), '.claude', 'projects')
 }
 
+// Why: CodeBuddy is built on the Claude Agent SDK, so its transcripts live under
+// `~/.codebuddy/projects` with the same `<cwd-hash>/<sessionId>.jsonl` layout.
+function codebuddyProjectsDir(): string {
+  return join(homedir(), '.codebuddy', 'projects')
+}
+
 // Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
 // runtime home, so Orca-started Codex rollout files land under
 // `<managed home>/sessions`, NOT `~/.codex/sessions`. Search the managed home
@@ -133,11 +139,11 @@ async function resolveSessionFileById(
   }
 
   if (transcriptAgent === 'claude') {
-    return resolveClaudeSessionFile(
-      trimmedId,
-      options.claudeProjectsDir ?? claudeProjectsDir(),
-      signal
-    )
+    const projectsDir =
+      agent === 'codebuddy'
+        ? codebuddyProjectsDir()
+        : (options.claudeProjectsDir ?? claudeProjectsDir())
+    return resolveClaudeSessionFile(trimmedId, projectsDir, signal)
   }
   if (transcriptAgent === 'codex') {
     const overrideDirs = options.codexSessionsDirs

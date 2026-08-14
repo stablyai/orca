@@ -6,6 +6,8 @@ import type { TuiAgent } from '../../../src/shared/types'
 export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
   'claude-agent-teams',
+  'ccb',
+  'codebuddy',
   'openclaude',
   'codex',
   'grok',
@@ -45,6 +47,8 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
 export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   claude: 'Claude',
   'claude-agent-teams': 'Claude Agent Teams',
+  ccb: 'Claude Code Best',
+  codebuddy: 'CodeBuddy',
   openclaude: 'OpenClaude',
   codex: 'Codex',
   grok: 'Grok',
@@ -83,6 +87,7 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
   openclaude: 'openclaude.gitlawb.com',
+  codebuddy: 'codebuddy.ai',
   grok: 'x.ai',
   copilot: 'github.com',
   opencode: 'opencode.ai',
@@ -113,6 +118,47 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   hermes: 'nousresearch.com',
   devin: 'devin.ai',
   openclaw: 'openclaw.ai'
+}
+
+export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
+  claude: 'claude',
+  'claude-agent-teams': 'orca claude-teams',
+  ccb: 'ccb',
+  codebuddy: 'codebuddy',
+  openclaude: 'openclaude',
+  codex: 'codex',
+  grok: 'grok',
+  copilot: 'copilot',
+  opencode: 'opencode',
+  'mimo-code': 'mimo',
+  ante: 'ante',
+  trae: 'traecli',
+  pi: 'pi',
+  omp: 'omp',
+  gemini: 'gemini',
+  antigravity: 'agy',
+  aider: 'aider',
+  goose: 'goose',
+  amp: 'amp',
+  kilo: 'kilo',
+  kiro: 'kiro-cli',
+  crush: 'crush',
+  aug: 'auggie',
+  autohand: 'autohand',
+  cline: 'cline',
+  codebuff: 'codebuff',
+  'command-code': 'command-code',
+  continue: 'continue',
+  cursor: 'cursor-agent',
+  droid: 'droid',
+  kimi: 'kimi',
+  'mistral-vibe': 'mistral-vibe',
+  // Why: QwenLM/qwen-code installs its CLI executable as `qwen`, not `qwen-code`.
+  'qwen-code': 'qwen',
+  rovo: 'rovo',
+  hermes: 'hermes',
+  devin: 'devin',
+  openclaw: 'openclaw'
 }
 
 export function isMobileTuiAgent(value: unknown): value is TuiAgent {
