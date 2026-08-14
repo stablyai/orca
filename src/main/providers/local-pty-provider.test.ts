@@ -70,6 +70,7 @@ vi.mock('../pty-descendant-termination', () => ({
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -1371,7 +1372,13 @@ describe('LocalPtyProvider', () => {
       const originalProgramFiles = process.env.ProgramFiles
       Object.defineProperty(process, 'platform', { value: 'win32' })
       process.env.ProgramFiles = 'C:\\Program Files'
-      provider.configure({ getWindowsShell: () => 'git-bash' })
+      provider.configure({
+        getWindowsShell: () => 'git-bash',
+        buildSpawnEnv: (_id, env) => ({
+          ...env,
+          ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
+        })
+      })
 
       try {
         await provider.spawn({
@@ -1392,12 +1399,52 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
-        ['-c', 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'],
+        [
+          '-c',
+          expect.stringMatching(
+            /^chcp\.com 65001 >\/dev\/null 2>&1; exec "\$BASH" --rcfile '.*shell-ready\/bash\/rcfile' -i$/
+          )
+        ],
         expect.objectContaining({
           cwd: 'C:\\Users\\jin\\repo',
           env: expect.objectContaining({
             CHERE_INVOKING: '1',
-            PYTHONUTF8: '1'
+            PYTHONUTF8: '1',
+            ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
+          })
+        })
+      )
+    })
+
+    it('runs the Codex preflight once in the cmd.exe startup chain', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      provider.configure({
+        getWindowsShell: () => 'cmd.exe',
+        buildSpawnEnv: (_id, env) => ({
+          ...env,
+          ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
+        })
+      })
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24, cwd: 'C:\\Users\\jin\\repo' })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'cmd.exe',
+        [
+          '/K',
+          'chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+        ],
+        expect.objectContaining({
+          env: expect.objectContaining({
+            ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT,
+            ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE: '"'
           })
         })
       )

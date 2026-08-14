@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, isAbsolute, join } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -198,21 +198,112 @@ describe('PowerShell Codex shell launch preflight', () => {
 })
 
 describe('Codex shell launch preflight command', () => {
-  it('uses the packaged or development CLI only for native managed homes', () => {
+  function makeCliRoot(): { root: string; userDataPath: string; resourcesPath: string } {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-preflight-cli-'))
+    roots.push(root)
+    const userDataPath = join(root, 'user-data')
+    const resourcesPath = join(root, 'resources')
+    mkdirSync(join(userDataPath, 'cli', 'bin'), { recursive: true })
+    mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
+    return { root, userDataPath, resourcesPath }
+  }
+
+  it.each([
+    { platform: 'darwin' as const, bundled: 'orca' },
+    { platform: 'linux' as const, bundled: 'orca-ide' },
+    { platform: 'win32' as const, bundled: 'orca.exe' }
+  ])('carries the verified bundled $platform launcher as an absolute path', (config) => {
+    const { userDataPath, resourcesPath } = makeCliRoot()
+    const launcherPath = join(resourcesPath, 'bin', config.bundled)
+    writeExecutable(launcherPath, '#!/bin/sh\nexit 0\n')
+
     expect(
       resolveCodexShellLaunchPreflightCommand({
         hooksEnabled: true,
         isPackaged: true,
-        managedHomePath: '/managed/home'
+        managedHomePath: '/managed/home',
+        userDataPath,
+        resourcesPath,
+        platform: config.platform
       })
-    ).toBe('orca')
+    ).toBe(launcherPath)
+  })
+
+  it('carries the verified dev launcher as an absolute path', () => {
+    const { userDataPath, resourcesPath } = makeCliRoot()
+    const launcherPath = join(userDataPath, 'cli', 'bin', 'orca-dev')
+    writeExecutable(launcherPath, '#!/bin/sh\nexit 0\n')
+
     expect(
       resolveCodexShellLaunchPreflightCommand({
         hooksEnabled: true,
         isPackaged: false,
-        managedHomePath: '/managed/home'
+        managedHomePath: '/managed/home',
+        userDataPath,
+        resourcesPath,
+        platform: 'darwin'
       })
-    ).toBe('orca-dev')
+    ).toBe(launcherPath)
+  })
+
+  it('never returns an unqualified command name that a profile-rewritten PATH could hijack', () => {
+    const { userDataPath, resourcesPath } = makeCliRoot()
+    writeExecutable(join(resourcesPath, 'bin', 'orca'), '#!/bin/sh\nexit 0\n')
+    writeExecutable(join(userDataPath, 'cli', 'bin', 'orca-dev'), '#!/bin/sh\nexit 0\n')
+
+    for (const isPackaged of [true, false]) {
+      const command = resolveCodexShellLaunchPreflightCommand({
+        hooksEnabled: true,
+        isPackaged,
+        managedHomePath: '/managed/home',
+        userDataPath,
+        resourcesPath,
+        platform: 'darwin'
+      })
+      expect(command).not.toBeNull()
+      expect(isAbsolute(command as string)).toBe(true)
+    }
+  })
+
+  it.each([
+    { label: 'the launcher file is missing', create: null },
+    { label: 'the launcher is not executable', create: 0o644 },
+    { label: 'the launcher path is a directory', create: 'directory' as const }
+  ])('skips the preflight when $label', (config) => {
+    const { userDataPath, resourcesPath } = makeCliRoot()
+    const launcherPath = join(resourcesPath, 'bin', 'orca')
+    if (config.create === 'directory') {
+      mkdirSync(launcherPath)
+    } else if (config.create !== null) {
+      writeFileSync(launcherPath, '#!/bin/sh\nexit 0\n')
+      chmodSync(launcherPath, config.create)
+    }
+
+    expect(
+      resolveCodexShellLaunchPreflightCommand({
+        hooksEnabled: true,
+        isPackaged: true,
+        managedHomePath: '/managed/home',
+        userDataPath,
+        resourcesPath,
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
+  it('skips the preflight when the packaged build exposes no resources root', () => {
+    const { userDataPath } = makeCliRoot()
+
+    expect(
+      resolveCodexShellLaunchPreflightCommand({
+        hooksEnabled: true,
+        isPackaged: true,
+        managedHomePath: '/managed/home',
+        userDataPath,
+        resourcesPath: null,
+        platform: 'darwin'
+      })
+    ).toBeNull()
   })
 
   it.each([
@@ -220,6 +311,103 @@ describe('Codex shell launch preflight command', () => {
     { hooksEnabled: true, isWsl: true, managedHomePath: '/managed/home' },
     { hooksEnabled: true, isWsl: false, managedHomePath: null }
   ])('does not enable an unsupported preflight for %o', (options) => {
-    expect(resolveCodexShellLaunchPreflightCommand({ ...options, isPackaged: true })).toBeNull()
+    const { userDataPath, resourcesPath } = makeCliRoot()
+    writeExecutable(join(resourcesPath, 'bin', 'orca'), '#!/bin/sh\nexit 0\n')
+
+    expect(
+      resolveCodexShellLaunchPreflightCommand({
+        ...options,
+        isPackaged: true,
+        userDataPath,
+        resourcesPath,
+        platform: 'darwin'
+      })
+    ).toBeNull()
   })
+})
+
+// Why: the resolved value is now an absolute path, and app bundles (macOS) and
+// Program Files (Windows) both put spaces in it.
+describe.skipIf(process.platform === 'win32')('Codex preflight paths containing spaces', () => {
+  function writeSpacedPreflight(root: string): { preflightPath: string; markerPath: string } {
+    const dir = join(root, 'Orca Dev.app', 'Contents', 'Resources', 'bin')
+    mkdirSync(dir, { recursive: true })
+    const markerPath = join(root, 'preflight-ran')
+    const preflightPath = join(dir, 'orca')
+    writeExecutable(
+      preflightPath,
+      `#!/bin/sh\n[ "$1 $2 $3" = "agent hooks prepare-codex" ] || exit 2\nprintf ran > ${JSON.stringify(markerPath)}\n`
+    )
+    return { preflightPath, markerPath }
+  }
+
+  it('invokes a POSIX preflight whose absolute path contains spaces', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-spaced-posix-'))
+    roots.push(root)
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    writeExecutable(join(bin, 'codex'), '#!/bin/sh\nexit 0\n')
+    const { preflightPath, markerPath } = writeSpacedPreflight(root)
+
+    execFileSync(
+      '/bin/bash',
+      ['--noprofile', '--norc', '-c', `${getPosixCodexShellLaunchPreflight()}\ncodex`],
+      {
+        env: {
+          ...process.env,
+          PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+          ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+        }
+      }
+    )
+
+    expect(existsSync(markerPath)).toBe(true)
+  })
+
+  it.skipIf(!fishAvailable)('invokes a fish preflight whose absolute path contains spaces', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-spaced-fish-'))
+    roots.push(root)
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    writeExecutable(join(bin, 'codex'), '#!/bin/sh\nexit 0\n')
+    const { preflightPath, markerPath } = writeSpacedPreflight(root)
+
+    execFileSync('fish', ['--no-config', '-c', `${getFishCodexShellLaunchPreflight()}\ncodex`], {
+      env: {
+        ...process.env,
+        PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+        ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+      }
+    })
+
+    expect(existsSync(markerPath)).toBe(true)
+  })
+
+  it.skipIf(!pwshAvailable)(
+    'invokes a PowerShell preflight whose absolute path contains spaces',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-codex-spaced-pwsh-'))
+      roots.push(root)
+      const bin = join(root, 'bin')
+      mkdirSync(bin)
+      writeExecutable(join(bin, 'codex'), '#!/bin/sh\nprintf launched\n')
+      const { preflightPath, markerPath } = writeSpacedPreflight(root)
+
+      const result = spawnSync(
+        'pwsh',
+        ['-NoLogo', '-NoProfile', '-Command', `${getPowerShellCodexShellLaunchPreflight()}\ncodex`],
+        {
+          encoding: 'utf-8',
+          env: {
+            ...process.env,
+            PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+            ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+          }
+        }
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(existsSync(markerPath)).toBe(true)
+    }
+  )
 })

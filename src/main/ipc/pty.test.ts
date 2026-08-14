@@ -17,9 +17,13 @@ import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-h
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
 import type * as Wsl from '../wsl'
+import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
+const BUNDLED_RESOURCES_PATH = join('/tmp', 'orca-bundled-resources')
+// Why: this suite forces darwin before every test, including on Linux CI.
+const BUNDLED_CLI_PATH = getBundledLauncherPath('darwin', BUNDLED_RESOURCES_PATH) as string
 // Why: bare shells no longer mkdir ~/.omp; OMP status lives under userData (#10196).
 const expectedOmpStatusExtension = posix.join(
   '/tmp/orca-user-data',
@@ -133,7 +137,8 @@ vi.mock('fs', () => ({
   writeFileSync: writeFileSyncMock,
   chmodSync: chmodSyncMock,
   constants: {
-    X_OK: 1
+    X_OK: 1,
+    R_OK: 4
   }
 }))
 
@@ -1939,6 +1944,42 @@ describe('registerPtyHandlers', () => {
     ]
   }
 
+  // Why: the Codex launch preflight now carries the bundled CLI's verified absolute
+  // path, so these cases need a resources root whose launcher passes the exec check.
+  async function withBundledCli<T>(
+    run: () => Promise<T>,
+    options?: { launcherExecutable?: boolean }
+  ): Promise<T> {
+    const launcherExecutable = options?.launcherExecutable ?? true
+    const previousResourcesPath = process.resourcesPath
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: BUNDLED_RESOURCES_PATH
+    })
+    // Why: only teach the launcher path to look like an executable file; every other
+    // stat/access keeps the permissive default the rest of the harness relies on.
+    statSyncMock.mockImplementation((target: string) => ({
+      isDirectory: () => target !== BUNDLED_CLI_PATH,
+      isFile: () => target === BUNDLED_CLI_PATH,
+      mode: 0o755
+    }))
+    if (!launcherExecutable) {
+      accessSyncMock.mockImplementation((target: string) => {
+        if (target === BUNDLED_CLI_PATH) {
+          throw new Error(`EACCES: ${target}`)
+        }
+      })
+    }
+    try {
+      return await run()
+    } finally {
+      Object.defineProperty(process, 'resourcesPath', {
+        configurable: true,
+        value: previousResourcesPath
+      })
+    }
+  }
+
   describe('spawn environment', () => {
     it('refreshes the outer Windows PATH for a WSL spawn without forwarding it', async () => {
       const originalPlatform = process.platform
@@ -2133,10 +2174,40 @@ describe('registerPtyHandlers', () => {
     })
 
     it('injects the selected Codex home into Orca terminal PTYs', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
+      const env = await withBundledCli(() =>
+        spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
+      )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe('orca')
+      // Why (STA-4270): a bare name would be resolved by the post-profile PATH the codex()
+      // wrapper inherits, so the preflight must carry the CLI's verified absolute path.
+      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
+    })
+
+    it('skips the Codex launch preflight when the bundled CLI is not executable', async () => {
+      const env = await withBundledCli(
+        () => spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME),
+        { launcherExecutable: false }
+      )
+
+      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
+    })
+
+    // Why (STA-4270): profile scripts run before the codex() wrapper and routinely prepend
+    // directories to PATH, so a scratch `orca` there must never become the preflight.
+    it('pins the Codex launch preflight to the bundled CLI even when PATH leads elsewhere', async () => {
+      const env = await withBundledCli(() =>
+        spawnAndGetEnv(
+          { PATH: `/tmp/hijack-scratch${delimiter}/usr/bin` },
+          undefined,
+          () => TEST_CODEX_HOME
+        )
+      )
+
+      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
+      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).not.toBe('orca')
+      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT.startsWith('/tmp/hijack-scratch')).toBe(false)
     })
 
     it('does not install the Codex launch preflight when Codex hooks are disabled', async () => {

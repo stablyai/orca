@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { AGENT_MAP_TIME_MAX_INDEX } from './agent-map-time-filter'
+import { AGENT_MAP_TIME_FIELDS, AGENT_MAP_TIME_MAX_INDEX } from './agent-map-time-filter'
 import { useAgentMapFilters } from './useAgentMapFilters'
 
 describe('useAgentMapFilters', () => {
@@ -46,5 +46,24 @@ describe('useAgentMapFilters', () => {
     hook.rerender()
 
     expect([...hook.result.current.agentTypes]).toEqual(['claude', 'grok'])
+  })
+
+  it('preserves each time-range identity across unrelated facet updates', () => {
+    let agentTypes = ['claude', 'codex']
+    const hook = renderHook(() => useAgentMapFilters(agentTypes))
+    const ranges = hook.result.current.timeRanges
+    const fields = AGENT_MAP_TIME_FIELDS.map((field) => ranges[field])
+
+    act(() => hook.result.current.toggleState('done'))
+    act(() => hook.result.current.toggleAgentType('claude'))
+    act(() => hook.result.current.setUnreadOnly(true))
+    act(() => hook.result.current.setOrchestrationOnly(true))
+    agentTypes = ['claude', 'codex', 'grok']
+    hook.rerender()
+
+    expect(hook.result.current.timeRanges).toBe(ranges)
+    AGENT_MAP_TIME_FIELDS.forEach((field, index) => {
+      expect(hook.result.current.timeRanges[field]).toBe(fields[index])
+    })
   })
 })

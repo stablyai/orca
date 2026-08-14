@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
 import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import {
+  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
+  resolveWindowsShellLaunchArgs
+} from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -776,6 +779,30 @@ export class LocalPtyProvider implements IPtyProvider {
         // Why: WSL Codex homes are Linux paths Windows can't use; also drop ORCA_CODEX_HOME (shell-ready restores CODEX_HOME from it).
         delete finalEnv.CODEX_HOME
         delete finalEnv.ORCA_CODEX_HOME
+      }
+
+      const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+      const codexLaunchPreflightCommand = finalEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+      if (
+        codexLaunchPreflightCommand &&
+        (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(shellPath))
+      ) {
+        if (shellBasename === 'cmd.exe') {
+          // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
+          finalEnv[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
+        }
+        const resolved = resolveWindowsShellLaunchArgs(
+          shellPath,
+          cwd,
+          defaultCwd,
+          launchWslContext,
+          args.command,
+          codexLaunchPreflightCommand
+        )
+        shellArgs = resolved.shellArgs
+        effectiveCwd = resolved.effectiveCwd
+        validationCwd = resolved.validationCwd
+        startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
       }
     }
     seedPowerlevel10kWizardEnv(finalEnv, { envToDelete: args.envToDelete })

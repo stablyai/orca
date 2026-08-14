@@ -39,6 +39,7 @@ vi.mock('../pwsh', () => ({
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -2457,7 +2458,8 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         shellOverride: 'cmd.exe',
-        terminalWindowsPowerShellImplementation: 'pwsh.exe'
+        terminalWindowsPowerShellImplementation: 'pwsh.exe',
+        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -2467,8 +2469,13 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'cmd.exe',
-      ['/K', 'chcp 65001 > nul'],
-      expect.any(Object)
+      [
+        '/K',
+        'chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+      ],
+      expect.objectContaining({
+        env: expect.objectContaining({ ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE: '"' })
+      })
     )
   })
 
@@ -2517,7 +2524,8 @@ describe('createPtySubprocess', () => {
         rows: 24,
         cwd: 'C:\\repo\\orca',
         shellOverride: 'cmd.exe',
-        command: `codex ${'x'.repeat(7000)}`
+        command: `codex ${'x'.repeat(7000)}`,
+        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -2527,7 +2535,10 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'cmd.exe',
-      ['/K', 'chcp 65001 > nul'],
+      [
+        '/K',
+        'chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+      ],
       expect.any(Object)
     )
     expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
@@ -2546,7 +2557,8 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         cwd: 'C:\\Users\\jin\\repo',
-        shellOverride: 'C:\\PortableGit\\bin\\bash.exe'
+        shellOverride: 'C:\\PortableGit\\bin\\bash.exe',
+        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -2556,10 +2568,18 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'C:\\PortableGit\\bin\\bash.exe',
-      ['-c', 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'],
+      [
+        '-c',
+        expect.stringMatching(
+          /^chcp\.com 65001 >\/dev\/null 2>&1; exec "\$BASH" --rcfile '.*shell-ready\/bash\/rcfile' -i$/
+        )
+      ],
       expect.objectContaining({
         cwd: 'C:\\Users\\jin\\repo',
-        env: expect.objectContaining({ CHERE_INVOKING: '1' })
+        env: expect.objectContaining({
+          CHERE_INVOKING: '1',
+          ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
+        })
       })
     )
   })

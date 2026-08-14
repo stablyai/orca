@@ -35,10 +35,7 @@ function setState(overrides: Record<string, unknown> = {}): void {
     setHideDetachedHeadWorkspaces: vi.fn(),
     hideWorkspacesFromOtherDevices: false,
     setHideWorkspacesFromOtherDevices: vi.fn(),
-    worktreesByRepo: {},
-    folderWorkspaces: [],
     runtimeEnvironments: [],
-    runtimeStatusByEnvironmentId: new Map(),
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: vi.fn(),
     ...overrides
@@ -90,37 +87,17 @@ describe('SidebarWorkspaceFilterSection', () => {
     expect(rowLabels()).not.toContain(EXEMPTION_LABEL)
   })
 
-  it('shows the other-client filter only when it can hide a known workspace', () => {
+  it('shows the other-client filter when a remote server is configured', () => {
     setState({
-      worktreesByRepo: {
-        repo: [
-          {
-            id: 'other',
-            runtimeOwnerEnvironmentId: 'server',
-            creatorProvenance: { kind: 'paired-device', deviceId: 'other-client' }
-          }
-        ]
-      },
-      runtimeEnvironments: [{ id: 'server', pairedDeviceId: 'this-client' }]
+      runtimeEnvironments: [{ id: 'server' }]
     })
     render()
 
     expect(rowLabels()).toContain('Hide other-client workspaces')
   })
 
-  it('hides the other-client filter when every known workspace belongs to this client', () => {
-    setState({
-      worktreesByRepo: {
-        repo: [
-          {
-            id: 'own',
-            runtimeOwnerEnvironmentId: 'server',
-            creatorProvenance: { kind: 'paired-device', deviceId: 'this-client' }
-          }
-        ]
-      },
-      runtimeEnvironments: [{ id: 'server', pairedDeviceId: 'this-client' }]
-    })
+  it('hides the other-client filter for local-only clients', () => {
+    setState()
     render()
 
     expect(rowLabels()).not.toContain('Hide other-client workspaces')
