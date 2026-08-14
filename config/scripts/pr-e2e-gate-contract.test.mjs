@@ -75,7 +75,11 @@ describe('PR E2E gate contract', () => {
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('if [ "${#TEST_FILES[@]}" -eq 0 ]')
-    expect(changedRun.run).toContain('pnpm run test:e2e "${TEST_FILES[@]}" --workers=1')
+    expect(changedRun.run).toContain('grep -l \'@headful\' "${TEST_FILES[@]}"')
+    expect(changedRun.run).toContain('E2E_PROJECT_ARGS+=(--project=electron-headful)')
+    expect(changedRun.run).toContain(
+      'pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"'
+    )
   })
 
   it('keeps startup-exec live parity in the isolated SSH lane', () => {
