@@ -77,6 +77,7 @@ import {
 } from './grok-session-paths'
 import { sweepStaleAgentHookEndpointTemps } from './agent-hook-endpoint-temp-cleanup'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { BoundedMap } from './bounded-map'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -113,6 +114,25 @@ function capOpenCodeHookText(text: string): string {
 /** Bound paneKey size (real keys are well under 200); caps per-pane caches against pathological input. Exported so non-HTTP ingest (`ingestRemote`) applies the same cap as defense-in-depth. */
 export const MAX_PANE_KEY_LEN = 200
 const CLAUDE_PROMPT_ID_RE = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
+const CURSOR_HOOK_DELIVERY_CACHE_MAX_ENTRIES = 256
+const CURSOR_HOOK_DELIVERY_DEDUPE_MS = 5_000
+const CURSOR_HOOK_EVENT_NAMES: ReadonlySet<string> = new Set([
+  'beforeSubmitPrompt',
+  'stop',
+  'preToolUse',
+  'postToolUse',
+  'postToolUseFailure',
+  'beforeShellExecution',
+  'beforeMCPExecution',
+  'afterAgentResponse',
+  'sessionStart',
+  'sessionEnd'
+])
+
+type CursorHookDelivery = {
+  source: 'claude' | 'cursor'
+  receivedAt: number
+}
 
 export function normalizeClaudePromptId(value: unknown): string | undefined {
   if (typeof value !== 'string') {
@@ -129,6 +149,7 @@ export type HookListenerState = {
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
   lastStatusByPaneKey: Map<string, AgentHookEventPayload>
+  cursorHookDeliveryByFingerprint: BoundedMap<string, CursorHookDelivery>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
   ampCompletedCacheKeys: Set<string>
   /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
@@ -172,6 +193,9 @@ export function createHookListenerState(): HookListenerState {
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
     lastStatusByPaneKey: new Map(),
+    cursorHookDeliveryByFingerprint: new BoundedMap({
+      maxEntries: CURSOR_HOOK_DELIVERY_CACHE_MAX_ENTRIES
+    }),
     antigravityCompletedTranscriptByPaneKey: new Map(),
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
@@ -189,6 +213,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastStatusByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.cursorHookDeliveryByFingerprint, paneKey)
   deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
@@ -201,12 +226,19 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.codexLeadStateByPaneKey.delete(paneKey)
 }
 
+type PaneScopedMap<T> = {
+  entries: () => Iterable<[string, T]>
+  keys: () => Iterable<string>
+  delete: (key: string) => boolean
+  set: (key: string, value: T) => unknown
+}
+
 function movePaneScopedMapEntries<T>(
-  map: Map<string, T>,
+  map: PaneScopedMap<T>,
   fromPaneKey: string,
   toPaneKey: string
 ): void {
-  for (const [key, value] of Array.from(map.entries())) {
+  for (const [key, value] of map.entries()) {
     if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
       continue
     }
@@ -236,6 +268,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastStatusByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.cursorHookDeliveryByFingerprint, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
@@ -255,7 +288,7 @@ function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): voi
   state.ampCompletedCacheKeys.delete(paneKey)
 }
 
-function deletePaneScopedCacheEntry(map: Map<string, unknown>, paneKey: string): void {
+function deletePaneScopedCacheEntry<T>(map: PaneScopedMap<T>, paneKey: string): void {
   map.delete(paneKey)
   const scopedPrefix = `${paneKey}\0`
   for (const key of map.keys()) {
@@ -279,6 +312,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
   state.lastStatusByPaneKey.clear()
+  state.cursorHookDeliveryByFingerprint.clear()
   state.antigravityCompletedTranscriptByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()
   state.warnedVersions.clear()
@@ -4225,6 +4259,73 @@ function readStringField(record: Record<string, unknown>, key: string): string |
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+function isCursorHookEventName(eventName: unknown): eventName is string {
+  return typeof eventName === 'string' && CURSOR_HOOK_EVENT_NAMES.has(eventName)
+}
+
+function canonicalizeJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeJsonValue)
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+        .map(([key, nestedValue]) => [key, canonicalizeJsonValue(nestedValue)])
+    )
+  }
+  return value
+}
+
+function isCursorCompatibilityHookPayload(
+  source: AgentHookSource,
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): boolean {
+  return (
+    source === 'claude' &&
+    isCursorHookEventName(eventName) &&
+    readStringField(hookPayload, 'cursor_version') !== undefined
+  )
+}
+
+function shouldSuppressDuplicateCursorHookDelivery(
+  state: HookListenerState,
+  source: AgentHookSource,
+  paneKey: string,
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): boolean {
+  if (
+    (source !== 'claude' && source !== 'cursor') ||
+    !isCursorHookEventName(eventName) ||
+    readStringField(hookPayload, 'cursor_version') === undefined
+  ) {
+    return false
+  }
+
+  const fingerprint = createHash('sha256')
+    .update(eventName)
+    .update('\0')
+    .update(JSON.stringify(canonicalizeJsonValue(hookPayload)))
+    .digest('base64url')
+  const cacheKey = `${paneKey}\0${fingerprint}`
+  const receivedAt = Date.now()
+  const previous = state.cursorHookDeliveryByFingerprint.peek(cacheKey)
+  if (
+    previous &&
+    previous.source !== source &&
+    receivedAt >= previous.receivedAt &&
+    receivedAt - previous.receivedAt <= CURSOR_HOOK_DELIVERY_DEDUPE_MS
+  ) {
+    state.cursorHookDeliveryByFingerprint.delete(cacheKey)
+    return true
+  }
+
+  state.cursorHookDeliveryByFingerprint.set(cacheKey, { source, receivedAt })
+  return false
+}
+
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
@@ -4274,23 +4375,38 @@ export function normalizeHookPayload(
   const launchToken = readStringField(record, 'launchToken')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
-  if (source === 'claude') {
-    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
-  }
   let promptInteractionKey: string | undefined
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
     hookPayloadRecord.hookEventName
+  const isCursorCompatibilityPayload = isCursorCompatibilityHookPayload(
+    source,
+    eventName,
+    hookPayloadRecord
+  )
+  // Why: Cursor's compatibility sessionStart proves process startup, not active work.
+  if (isCursorCompatibilityPayload && eventName === 'sessionStart') {
+    return null
+  }
+  if (
+    shouldSuppressDuplicateCursorHookDelivery(state, source, paneKey, eventName, hookPayloadRecord)
+  ) {
+    return null
+  }
+  const payloadSource = isCursorCompatibilityPayload ? 'cursor' : source
+  if (payloadSource === 'claude') {
+    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+  }
   // Why: Codex child hooks expose the child's session_id on the parent's pane.
   const providerSession =
-    source === 'codex' && readString(hookPayloadRecord, 'agent_id')
+    payloadSource === 'codex' && readString(hookPayloadRecord, 'agent_id')
       ? null
-      : extractAgentProviderSession(source, hookPayloadRecord)
+      : extractAgentProviderSession(payloadSource, hookPayloadRecord)
   const providerPromptId =
-    source === 'claude' ? normalizeClaudePromptId(hookPayloadRecord.prompt_id) : undefined
+    payloadSource === 'claude' ? normalizeClaudePromptId(hookPayloadRecord.prompt_id) : undefined
   const compactTrigger =
-    source === 'claude' &&
+    payloadSource === 'claude' &&
     (eventName === 'PreCompact' || eventName === 'PostCompact') &&
     (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
       ? hookPayloadRecord.trigger
@@ -4305,7 +4421,7 @@ export function normalizeHookPayload(
     !canAcceptClaudeCompactTransition(
       previousStatus,
       {
-        source,
+        source: payloadSource,
         connectionId: null,
         hookEventName: typeof eventName === 'string' ? eventName : undefined,
         providerPromptId,
@@ -4334,7 +4450,7 @@ export function normalizeHookPayload(
   let hasTranscriptPromptEvidence = false
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently misrouting.
   let payload: ParsedAgentStatusPayload | null
-  switch (source) {
+  switch (payloadSource) {
     case 'claude':
       payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -4366,11 +4482,11 @@ export function normalizeHookPayload(
           'messageId',
           'message_id'
         ])
-        const prefix = source === 'mimo-code' ? 'mimo-code-message' : 'opencode-message'
+        const prefix = payloadSource === 'mimo-code' ? 'mimo-code-message' : 'opencode-message'
         promptInteractionKey = messageId ? `${prefix}-${messageId}` : undefined
       }
       payload = normalizeOpenCodeFamilyEvent(
-        source,
+        payloadSource,
         state,
         eventName,
         promptText,
@@ -4459,17 +4575,17 @@ export function normalizeHookPayload(
   }
 
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent') &&
+    (payloadSource === 'pi' || payloadSource === 'prime-agent') &&
     eventName === 'session_start' &&
     providerSession !== null
   // Why: transcript session_start carries resume identity while idle; receivers discard the placeholder row.
   const transportPayload =
     payload ??
     (providerSessionOnly
-      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
+      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: payloadSource })
       : null)
   const restoredUnconfirmed =
-    source === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+    payloadSource === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   return transportPayload
     ? {
         paneKey,
@@ -4481,12 +4597,12 @@ export function normalizeHookPayload(
         connectionId: null,
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         hasExplicitPrompt:
-          source === 'amp'
-            ? hasExplicitPromptForSource(source, eventName, promptText, hookPayloadRecord)
+          payloadSource === 'amp'
+            ? hasExplicitPromptForSource(payloadSource, eventName, promptText, hookPayloadRecord)
               ? true
               : undefined
             : hasExplicitUserPrompt(
-                source,
+                payloadSource,
                 eventName,
                 extractedPrompt,
                 resolvedPromptText,
@@ -4499,7 +4615,7 @@ export function normalizeHookPayload(
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
-        ...(source === 'claude'
+        ...(payloadSource === 'claude'
           ? {
               claudeRunningNonAgentTask:
                 state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
