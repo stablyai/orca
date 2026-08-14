@@ -29,7 +29,7 @@ import {
   type RepoSlugMatches,
   type SlugIndex
 } from './repo-slug-cache'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'
 

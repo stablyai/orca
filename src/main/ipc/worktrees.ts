@@ -8,7 +8,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
-import { planWorktreeSortOrderUpdates } from '../../shared/worktree-sort-order-update'
+import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
@@ -37,7 +37,7 @@ import type {
   WorkspaceLineage,
   WorktreeMeta
 } from '../../shared/types'
-import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -66,11 +66,11 @@ import {
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
-} from '../../shared/worktree-ownership'
+} from '../../shared/worktree/ownership'
 import {
   createWorktreeVisibilitySourceMatcher,
   normalizeCustomWorktreeVisibilitySources
-} from '../../shared/worktree-visibility-sources'
+} from '../../shared/worktree/visibility-sources'
 import {
   assertWorktreeCleanForRemoval,
   forceDeleteLocalBranch,
@@ -239,7 +239,7 @@ import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
-} from '../../shared/worktree-id'
+} from '../../shared/worktree/id'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import {
   getLocalProjectGitExecOptions,

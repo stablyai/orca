@@ -2,7 +2,7 @@ import type { LinearIssue, Worktree } from '../../../shared/types'
 import {
   getLinearOrganizationUrlKeyFromIssueUrl,
   parseLinearIssueInput
-} from '../../../shared/linear-links'
+} from '../../../shared/linear/links'
 import { getWorktreeAttachmentLabel } from './worktree-attachment-label'
 
 export type LinearIssueAttachmentRef = Pick<LinearIssue, 'identifier'> &

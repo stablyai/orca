@@ -59,7 +59,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   ProjectGroup
 } from '../../../shared/types'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
   CLIENT_PLATFORM,

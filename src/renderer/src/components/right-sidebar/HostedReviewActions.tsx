@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
-import { resolveGitHubPRMergeMethods } from '../../../../shared/github-pr-merge-methods'
+import { resolveGitHubPRMergeMethods } from '../../../../shared/github/pull-request-merge-methods'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
 import {

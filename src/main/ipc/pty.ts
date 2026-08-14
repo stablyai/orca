@@ -148,7 +148,7 @@ import {
   type TerminalStartupCwdMissingDirFallback
 } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import {
   agentSessionOwnerBindingsEqual,

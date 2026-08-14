@@ -22,7 +22,7 @@ import type {
   WorkspaceKey
 } from '../../../../shared/types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
+import type { WorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -34,9 +34,9 @@ import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { AppState } from '../types'
-export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+export { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean

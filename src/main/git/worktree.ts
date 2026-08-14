@@ -5,7 +5,7 @@ import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   getBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { withSpan } from '../observability/tracer'
 import { withWorktreeRemoveStageSpan } from '../observability/instrumentation'
 import {
@@ -20,8 +20,8 @@ import type {
   LocalBaseRefUpdateSuggestion,
   RemoveWorktreeResult
 } from '../../shared/types'
-import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
-import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree-submodule-removal'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
+import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree/submodule-removal'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { parseWslUncPath } from '../../shared/wsl-paths'

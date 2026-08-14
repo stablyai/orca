@@ -1,6 +1,6 @@
 import { getRepoExecutionHostId } from './execution-host'
 import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
-import { githubRepoIdentityKey, isDefaultGitHubHost } from './github-repository-identity-key'
+import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
 import type {
   Project,
   ProjectHostSetup,

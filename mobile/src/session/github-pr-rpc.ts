@@ -9,7 +9,7 @@ import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import {
   normalizeGitHubPRForBranchOutcome,
   type GitHubPRForBranchResponse
-} from '../../../src/shared/github-pr-for-branch-outcome'
+} from '../../../src/shared/github/pull-request-for-branch-outcome'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'

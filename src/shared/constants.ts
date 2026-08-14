@@ -17,7 +17,7 @@ import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
@@ -44,7 +44,7 @@ export {
   getWorktreeCardModeUpdates,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
-} from './worktree-card-properties'
+} from './worktree/card-properties'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'

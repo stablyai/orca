@@ -2,7 +2,7 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo, WorkspaceKey } from '../../shared/types'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 
 export function repoPhysicalKey(
   repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>

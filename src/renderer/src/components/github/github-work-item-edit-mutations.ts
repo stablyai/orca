@@ -8,7 +8,7 @@ import {
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import type { GitHubWorkItemProjectOrigin } from '@/components/github/github-work-item-identity'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
-import { githubProjectHost } from '../../../../shared/github-project-identity'
+import { githubProjectHost } from '../../../../shared/github/project-identity'
 import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext

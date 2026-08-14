@@ -44,7 +44,7 @@ import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences,
   removeCustomWorktreeSourcePreference
-} from '../../../../shared/worktree-visibility-sources'
+} from '../../../../shared/worktree/visibility-sources'
 import HiddenWorktreeRecoveryList from './HiddenWorktreeRecoveryList'
 import { worktreeVisibilityUpdateError } from './worktree-visibility-update-error'
 

@@ -2236,7 +2236,7 @@ describe('connectPanePty', () => {
   it('swallows a worktree-removal fence error instead of surfacing it', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE } =
-      await import('../../../../shared/worktree-removal-fence-error')
+      await import('../../../../shared/worktree/removal-fence-error')
     const transport = createMockTransport()
     const capturedOnError: { current: ((message: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
