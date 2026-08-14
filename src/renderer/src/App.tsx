@@ -44,6 +44,11 @@ import {
 import { useAppStore } from './store'
 import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
+import { useBrowserMobileDriverForAny } from './lib/pane-manager/browser-mobile-driver-state'
+import {
+  TERMINAL_WORKBENCH_CLASS_NAMES,
+  resolveTerminalWorkbenchPaintMode
+} from './components/terminal-workbench-paintability'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
@@ -226,6 +231,7 @@ import { useRemoteRuntimeRecoveryTriggers } from './runtime/use-remote-runtime-r
 
 // Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
 const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
+const EMPTY_BROWSER_PAGE_IDS: string[] = []
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -577,6 +583,24 @@ function App(): React.JSX.Element {
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
   const terminalWorkbenchVisible =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+  // Why: only pay the cross-worktree scan while the workbench is hidden — that
+  // is the only time a mobile driver has to keep it painting.
+  const hiddenWorkbenchBrowserPageIds = useAppStore(
+    useShallow((state) =>
+      terminalWorkbenchVisible
+        ? EMPTY_BROWSER_PAGE_IDS
+        : Object.values(state.browserTabsByWorktree).flatMap((tabs) =>
+            (tabs ?? []).flatMap((tab) =>
+              tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
+            )
+          )
+    )
+  )
+  const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(hiddenWorkbenchBrowserPageIds)
+  const workbenchPaintMode = resolveTerminalWorkbenchPaintMode({
+    isWorkbenchVisible: terminalWorkbenchVisible,
+    hasMobileDrivenBrowser
+  })
   // Why: once the floating workspace owns tabs, keep it mounted while closed so hidden terminal/browser/editor panes retain local state.
   const shouldMountFloatingTerminalPanel =
     floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
@@ -2366,11 +2390,10 @@ function App(): React.JSX.Element {
                         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                           {shouldMountTerminalWorkbench ? (
                             <div
-                              className={
-                                !terminalWorkbenchVisible
-                                  ? 'hidden flex-1 min-w-0 min-h-0'
-                                  : 'flex flex-1 min-w-0 min-h-0'
-                              }
+                              className={TERMINAL_WORKBENCH_CLASS_NAMES[workbenchPaintMode]}
+                              // Why: a paintable-but-hidden workbench must stay unreachable by Tab / assistive tech.
+                              inert={!terminalWorkbenchVisible}
+                              aria-hidden={!terminalWorkbenchVisible}
                             >
                               <Suspense fallback={null}>
                                 <RecoverableRenderErrorBoundary
