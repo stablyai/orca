@@ -12,6 +12,8 @@ export const WEDGED_WORKER_SIGNAL_KIND = 'wedged_worker_signal'
 export type WedgedWorkerEscalationRecord = {
   escalationCount: number
   escalatedAtEpochMs: number
+  /** True when the instant came from the row stamp, which keeps whole seconds only. */
+  escalatedAtIsTruncated: boolean
 }
 
 export type WedgedWorkerEscalationPlan =
@@ -51,6 +53,8 @@ type WedgedWorkerSignalPayload = {
     // never cause an effect, so it stays outside that shape.
     taskId: string
     escalationCount: number
+    /** The exact instant the detector escalated, so a restart never reads a rounded one. */
+    escalatedAtEpochMs: number
     quietMs: number | null
     lastProgressAt: string | null
     observed: WorkerProgressEvidenceKind[]
@@ -62,10 +66,12 @@ type WedgedWorkerSignalPayload = {
   }
 }
 
-// Why a tolerance: a persisted escalation is stamped by SQLite's `datetime('now')`, which
-// truncates to whole seconds, while pane evidence carries millisecond precision. Without
-// this margin a truncated stamp reads as "progress happened after the escalation" and the
-// same unchanged wedge escalates twice.
+// Why a tolerance: an escalation read back off the row stamp carries SQLite's
+// `datetime('now')`, which truncates to whole seconds, while pane evidence carries
+// millisecond precision. Without this margin a truncated stamp reads as "progress
+// happened after the escalation" and the same unchanged wedge escalates twice. It
+// applies to that stamp alone — an exact instant needs no margin, and giving it one
+// would swallow real progress made inside the second after the escalation.
 const PERSISTED_ESCALATION_TRUNCATION_MS = 1_000
 
 /**
@@ -77,9 +83,9 @@ export function isEscalationSupersededByProgress(
   record: WedgedWorkerEscalationRecord,
   lastProgressAtEpochMs: number | null
 ): boolean {
+  const tolerance = record.escalatedAtIsTruncated ? PERSISTED_ESCALATION_TRUNCATION_MS : 0
   return (
-    lastProgressAtEpochMs !== null &&
-    lastProgressAtEpochMs > record.escalatedAtEpochMs + PERSISTED_ESCALATION_TRUNCATION_MS
+    lastProgressAtEpochMs !== null && lastProgressAtEpochMs > record.escalatedAtEpochMs + tolerance
   )
 }
 
@@ -101,10 +107,18 @@ export function readWedgedWorkerEscalationRecord(
   if (record?.kind !== WEDGED_WORKER_SIGNAL_KIND || typeof count !== 'number' || count < 1) {
     return undefined
   }
-  const escalatedAtEpochMs = parseOrchestrationTimestampMs(message.created_at)
-  return escalatedAtEpochMs === null
+  const escalationCount = Math.trunc(count)
+  // Why prefer the payload: it holds the exact instant the detector escalated. The row
+  // stamp is the fallback for records written before the field existed, and it keeps
+  // whole seconds only, so it is marked as such.
+  const exact = record.wedgedWorker?.escalatedAtEpochMs
+  if (typeof exact === 'number' && Number.isFinite(exact)) {
+    return { escalationCount, escalatedAtEpochMs: exact, escalatedAtIsTruncated: false }
+  }
+  const stampedAtEpochMs = parseOrchestrationTimestampMs(message.created_at)
+  return stampedAtEpochMs === null
     ? undefined
-    : { escalationCount: Math.trunc(count), escalatedAtEpochMs }
+    : { escalationCount, escalatedAtEpochMs: stampedAtEpochMs, escalatedAtIsTruncated: true }
 }
 
 function formatMinutes(ms: number | null): string {
@@ -124,9 +138,11 @@ export type WedgedWorkerEscalationMessage = {
 export function buildWedgedWorkerEscalation(args: {
   assessment: WorkerProgressAssessment
   escalationCount: number
+  /** The instant the detector escalated, recorded exactly so a restart reads it back unrounded. */
+  escalatedAtEpochMs: number
   thresholds: WorkerProgressThresholds
 }): WedgedWorkerEscalationMessage {
-  const { assessment, escalationCount, thresholds } = args
+  const { assessment, escalationCount, escalatedAtEpochMs, thresholds } = args
   const quiet = formatMinutes(assessment.quietMs)
   const lastProgressAt =
     assessment.lastProgressAtEpochMs === null
@@ -139,6 +155,7 @@ export function buildWedgedWorkerEscalation(args: {
       runId: assessment.runId,
       taskId: assessment.taskId,
       escalationCount,
+      escalatedAtEpochMs,
       quietMs: assessment.quietMs,
       lastProgressAt,
       observed: assessment.observed,

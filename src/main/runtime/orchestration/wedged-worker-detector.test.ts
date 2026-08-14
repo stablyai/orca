@@ -227,6 +227,11 @@ describe('WedgedWorkerDetector', () => {
     scan()
     expect(mailboxEscalationCounts(d, runId)).toEqual([1])
 
+    // Why the clock moves first: the output has to land strictly after the escalation to
+    // be progress at all. Before the payload carried the exact instant, this read back off
+    // the row stamp — real wall-clock time, minutes behind this fake clock — and any
+    // output looked later than the escalation whether it was or not.
+    clock.nowMs += MINUTE
     lastOutputAtEpochMs = clock.nowMs
     scan()
     expect(mailboxEscalationCounts(d, runId)).toEqual([1])
@@ -503,7 +508,14 @@ describe('WedgedWorkerDetector', () => {
     const payload = JSON.parse(mailbox[0].payload ?? '{}')
     expect(payload).toMatchObject({
       kind: WEDGED_WORKER_SIGNAL_KIND,
-      wedgedWorker: { dispatchId, escalationCount: 1, detectionOnly: true }
+      wedgedWorker: {
+        dispatchId,
+        escalationCount: 1,
+        detectionOnly: true,
+        // Why the payload and not the row stamp: `created_at` truncates to whole
+        // seconds, and a restart reads the cadence back off this record.
+        escalatedAtEpochMs: clock.nowMs
+      }
     })
     // Why: the retired coordinator loop fails a dispatch on a top-level payload.taskId,
     // so this signal must never expose one.

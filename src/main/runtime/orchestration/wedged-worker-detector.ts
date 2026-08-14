@@ -120,11 +120,14 @@ export class WedgedWorkerDetector {
     const message = buildWedgedWorkerEscalation({
       assessment,
       escalationCount: plan.escalationCount,
+      escalatedAtEpochMs: nowMs,
       thresholds: this.thresholds
     })
     this.escalations.set(assessment.dispatchId, {
       escalationCount: plan.escalationCount,
-      escalatedAtEpochMs: nowMs
+      escalatedAtEpochMs: nowMs,
+      // Why not truncated: this instant never went through the row stamp.
+      escalatedAtIsTruncated: false
     })
     this.options.emit({ assessment, escalationCount: plan.escalationCount, message })
     this.options.onLog?.(

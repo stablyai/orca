@@ -33,9 +33,9 @@ progress either. A dispatch classifies as **unknown** — not wedged, not workin
   this dispatch — an exact match is required whenever the dispatch recorded an identity;
 - no evidence of any kind has ever been recorded, so there is no baseline to measure.
 
-The identity checks run before the harness-state check. A pane Orca cannot tie to the
-dispatch stays unknown; it is not reported as blocked, working or wedged on the strength
-of a harness state that may belong to a different process.
+The identity checks run before the harness-state check. If Orca cannot tie a pane to the
+dispatch, the dispatch stays unknown. The detector must not classify it as blocked,
+working or wedged from harness state that may belong to a different process.
 
 ## What is not a wedge
 
