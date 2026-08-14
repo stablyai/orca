@@ -48,6 +48,7 @@ import {
   type StructuredAgentSessionHostHandoff
 } from './structured-agent-session-host-handoff'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import { refuseEffectIsolatedHandoff } from './structured-agent-session-effect-isolation'
 import { listStructuredAgentSessionTabs } from './structured-agent-session-host-tabs'
 import { pinnedAgentSessionLaunchEnv } from './structured-agent-session-launch-env'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
@@ -57,6 +58,8 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+
+type AttachResult = Promise<AgentSessionMutationResult<AgentSessionAttachResult>>
 
 export class StructuredAgentSessionHost {
   private readonly sessions = new Map<string, StructuredAgentSessionHostSession>()
@@ -113,17 +116,13 @@ export class StructuredAgentSessionHost {
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
 
-  supportsCreate(location: AgentSessionExecutionLocation, agent: string): boolean {
-    return agent === 'codex' && (this.deps.adapter.supportsLocation?.(location) ?? false)
-  }
+  supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
+    agent === 'codex' && (this.deps.adapter.supportsLocation?.(location) ?? false)
 
-  listSessionTabs() {
-    return listStructuredAgentSessionTabs(this.sessions)
-  }
+  listSessionTabs = () => listStructuredAgentSessionTabs(this.sessions)
 
-  restoreReadableSessions(): Promise<void> {
-    return this.restartRestore.run(() => this.readableRestorer.restore())
-  }
+  restoreReadableSessions = (): Promise<void> =>
+    this.restartRestore.run(() => this.readableRestorer.restore())
 
   private serialize<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
     return this.tasks.serialize(sessionId, task)
@@ -137,10 +136,7 @@ export class StructuredAgentSessionHost {
     })
   }
 
-  attach(
-    caller: StructuredAgentSessionCaller,
-    params: AgentSessionAttachParams
-  ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  attach(caller: StructuredAgentSessionCaller, params: AgentSessionAttachParams): AttachResult {
     const attaching = this.serialize(params.envelope.sessionId, async () => {
       const sessionId = params.envelope.sessionId
       const unreconciled = await this.reconcileLeases(sessionId)
@@ -212,11 +208,15 @@ export class StructuredAgentSessionHost {
       envelope: AgentSessionMutationEnvelope
       body: AgentJournalMessageItem
       retryUnknown?: true
-      beforeRun?: () => void
+      effectAuthority?: 'local_structured_write'
+      beforeRun?: () => void | Promise<void>
     }
   ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
     return this.mutate(caller, params.envelope, sendPlan(params))
   }
+
+  invalidateEffectAuthorityForTrustedUserTurn = async (sourceSessionId: string): Promise<void> =>
+    this.deps.adapter.invalidateEffectAuthorityForTrustedUserTurn?.({ sourceSessionId })
 
   cancel(
     caller: StructuredAgentSessionCaller,
@@ -279,6 +279,12 @@ export class StructuredAgentSessionHost {
     params: AgentSessionHandoffRequest
   ): Promise<AgentSessionMutationResult<AgentSessionHandoffResult>> {
     this.requireSession(params.envelope.sessionId)
+    const isolationRefusal = refuseEffectIsolatedHandoff(
+      this.deps.store.getRecord(params.envelope.sessionId)
+    )
+    if (isolationRefusal) {
+      return Promise.resolve(isolationRefusal)
+    }
     return this.serialize(params.envelope.sessionId, () =>
       this.handoffs.request(caller.callerKey, params)
     )

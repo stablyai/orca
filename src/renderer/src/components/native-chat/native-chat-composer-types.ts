@@ -1,5 +1,6 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
+import type { AgentSessionEffectAuthority } from '../../../../shared/agent-session-wire'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -7,7 +8,7 @@ import type {
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 
 export type NativeChatStructuredComposerTransport = {
-  send: (text: string) => boolean
+  send: (text: string, options?: { effectAuthority?: AgentSessionEffectAuthority }) => boolean
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]

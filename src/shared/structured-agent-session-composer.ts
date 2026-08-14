@@ -8,11 +8,24 @@ const EFFORT_COMMAND: SlashCommandSuggestion = {
   description: 'Choose reasoning effort'
 }
 
+const EDIT_COMMAND: SlashCommandSuggestion = {
+  name: 'edit',
+  description: 'Allow one bounded local source edit'
+}
+
 export const STRUCTURED_AGENT_SESSION_SLASH_COMMANDS: readonly SlashCommandSuggestion[] = [
+  EDIT_COMMAND,
   ...getVerifiedNativeChatCommands('codex').slice(0, 1),
   EFFORT_COMMAND,
   ...getVerifiedNativeChatCommands('codex').slice(1)
 ]
+
+/** `/edit` is a host-visible speech act, not prompt classification. The command
+ * itself is removed before the model sees the exact user request. */
+export function parseStructuredAgentSessionEditRequest(text: string): string | null {
+  const command = commandParts(text)
+  return command?.name === EDIT_COMMAND.name && command.argument ? command.argument : null
+}
 
 export type StructuredAgentSessionComposerOptions = {
   agent?: AgentType

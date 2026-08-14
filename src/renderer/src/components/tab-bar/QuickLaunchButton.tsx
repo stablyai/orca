@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { MessageSquare, Settings as SettingsIcon } from 'lucide-react'
+import { MessageSquare, SquarePen, Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
@@ -243,6 +243,35 @@ function QuickLaunchAgentMenuItemsInner({
                   {translate(
                     'auto.components.tab.bar.QuickLaunchButton.0ea6a78efb',
                     'Chat session'
+                  )}
+                </span>
+              </DropdownMenuItem>
+            ) : null}
+            {agent === 'codex' && structuredSession.writerSupported ? (
+              <DropdownMenuItem
+                disabled={structuredSession.creating}
+                onSelect={() => {
+                  void structuredSession.create('local_structured_write').catch((error) => {
+                    toast.error(
+                      translate(
+                        'auto.components.tab.bar.QuickLaunchButton.writerCreateFailed',
+                        'Could not create writer session'
+                      ),
+                      { description: error instanceof Error ? error.message : String(error) }
+                    )
+                  })
+                }}
+                className="gap-2 rounded-[7px] px-2 py-1.5 pl-6 text-[12px] leading-5 font-medium"
+                title={translate(
+                  'auto.components.tab.bar.QuickLaunchButton.writerTitle',
+                  'Start an isolated Codex writer for this worktree'
+                )}
+              >
+                <SquarePen className="size-3.5 text-muted-foreground" />
+                <span className="flex-1">
+                  {translate(
+                    'auto.components.tab.bar.QuickLaunchButton.writerLabel',
+                    'Writer session'
                   )}
                 </span>
               </DropdownMenuItem>

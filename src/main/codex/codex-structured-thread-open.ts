@@ -22,14 +22,25 @@ function nonEmptyString(value: unknown): string | null {
 
 export async function openCodexThread(
   connection: CodexAppServerConnection,
-  launch: { cwd: string; resumeThreadId: string | null },
+  launch: {
+    cwd: string
+    resumeThreadId: string | null
+    effectIsolation?: 'local-structured-write'
+  },
   timeoutMs: number | undefined
 ): Promise<CodexOpenedThread> {
   const opened = await connection.request(
     launch.resumeThreadId ? 'thread/resume' : 'thread/start',
     launch.resumeThreadId
-      ? { threadId: launch.resumeThreadId, cwd: launch.cwd }
-      : { cwd: launch.cwd },
+      ? {
+          threadId: launch.resumeThreadId,
+          cwd: launch.cwd,
+          ...(launch.effectIsolation ? { config: { web_search: 'disabled' } } : {})
+        }
+      : {
+          cwd: launch.cwd,
+          ...(launch.effectIsolation ? { config: { web_search: 'disabled' } } : {})
+        },
     { timeoutMs }
   )
   const threadId = readCodexThreadId(opened)

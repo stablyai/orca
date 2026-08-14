@@ -27,7 +27,6 @@ import {
   decodeOmpTranscriptLine
 } from '../transcript-line-decoders'
 import { decodeTranscriptStream } from '../transcript-stream-lines'
-import { putJournalBlob } from './journal-blob-store'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import {
   boundInlineText,
@@ -58,9 +57,6 @@ export async function appendLegacyTranscriptMessages(input: {
   let appended = 0
   for (const message of input.messages) {
     const mapped = legacyItemBody(message, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-    for (const blob of mapped.blobs) {
-      await putJournalBlob(input.journal.directory, blob.digest, blob.payload)
-    }
     await input.journal.appendItem(
       {
         provider: 'legacy',
@@ -69,7 +65,7 @@ export async function appendLegacyTranscriptMessages(input: {
         recordId: message.id
       },
       mapped.body,
-      { fence: input.fence, observedAt: message.timestamp ?? undefined }
+      { fence: input.fence, observedAt: message.timestamp ?? undefined, blobs: mapped.blobs }
     )
     appended += 1
   }
@@ -116,12 +112,10 @@ export async function importLegacyTranscriptIntoJournal(input: {
       continue
     }
     const mapped = legacyItemBody(message, limits)
-    for (const blob of mapped.blobs) {
-      await putJournalBlob(input.journal.directory, blob.digest, blob.payload)
-    }
     const appended = await input.journal.appendItem(identity, mapped.body, {
       fence: input.fence,
-      observedAt: message.timestamp ?? undefined
+      observedAt: message.timestamp ?? undefined,
+      blobs: mapped.blobs
     })
     cursor = appended.cursor
   }

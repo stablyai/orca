@@ -52,6 +52,7 @@ type Harness = {
   root: string
   store: AgentSessionRecordStore
   host: StructuredAgentSessionHost
+  dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
   setOption: Mock<StructuredAgentSessionAdapter['setOption']>
 }
 
@@ -86,6 +87,10 @@ async function createHarness(options: { attached?: boolean; transport?: boolean 
     hostId: 'local'
   })
   const setOption = vi.fn<StructuredAgentSessionAdapter['setOption']>(async () => undefined)
+  const dispatch = vi.fn<StructuredAgentSessionAdapter['dispatch']>(async () => ({
+    state: 'accepted',
+    providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
+  }))
   const adapter: StructuredAgentSessionAdapter = {
     acquire: async ({ fence }) => ({
       process: {
@@ -102,10 +107,7 @@ async function createHarness(options: { attached?: boolean; transport?: boolean 
         observedAt: NOW
       }
     }),
-    dispatch: async () => ({
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
-    }),
+    dispatch,
     cancelTurn: async () => ({ cancelled: true }),
     answerPrompt: async () => undefined,
     setOption
@@ -119,7 +121,7 @@ async function createHarness(options: { attached?: boolean; transport?: boolean 
     now: () => NOW,
     ...(options.transport ? { handoffTransport: handoffTransport() } : {})
   })
-  const harness = { root, store, host, setOption }
+  const harness = { root, store, host, dispatch, setOption }
   harnesses.push(harness)
   if (options.attached !== false) {
     expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
@@ -243,6 +245,137 @@ async function fillOperationLedger(harness: Harness): Promise<void> {
     })
   }
 }
+
+function sendEnvelope(
+  harness: Harness,
+  operation: string,
+  body: ReturnType<typeof hostTestMessage>,
+  options: { effectAuthority?: 'local_structured_write'; expectedRuntimeFence?: number } = {}
+): AgentSessionMutationEnvelope {
+  const fields = {
+    body,
+    ...(options.effectAuthority ? { effectAuthority: options.effectAuthority } : {})
+  }
+  return {
+    sessionId: SESSION,
+    clientOperationId: operation,
+    expectedRuntimeFence:
+      options.expectedRuntimeFence ?? harness.store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
+    payloadFingerprint: computeAgentSessionPayloadFingerprint({
+      method: 'agentSession.send',
+      sessionId: SESSION,
+      fields
+    })
+  }
+}
+
+describe('send admission side effects', () => {
+  it('does not run beforeRun for absent, conflicting, stale, or settled-replay sends', async () => {
+    const beforeRun = vi.fn()
+    const absent = await createHarness({ attached: false })
+    const absentBody = hostTestMessage('absent')
+    await absent.host.send(CALLER, {
+      envelope: sendEnvelope(absent, operationId(), absentBody),
+      body: absentBody,
+      beforeRun
+    })
+
+    const attached = await createHarness()
+    const conflictBody = hostTestMessage('conflict')
+    const conflictEnvelope = sendEnvelope(attached, operationId(), conflictBody)
+    await attached.host.send(CALLER, {
+      envelope: { ...conflictEnvelope, payloadFingerprint: 'wrong' },
+      body: conflictBody,
+      beforeRun
+    })
+
+    const staleBody = hostTestMessage('stale')
+    await attached.host.send(CALLER, {
+      envelope: sendEnvelope(attached, operationId(), staleBody, { expectedRuntimeFence: 99 }),
+      body: staleBody,
+      beforeRun
+    })
+
+    const replayBody = hostTestMessage('replay')
+    const replayParams = {
+      envelope: sendEnvelope(attached, operationId(), replayBody),
+      body: replayBody,
+      beforeRun
+    }
+    await attached.host.send(CALLER, replayParams)
+    await attached.host.send(CALLER, replayParams)
+
+    expect(beforeRun).toHaveBeenCalledOnce()
+    expect(attached.dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('awaits beforeRun after admission and once per real unknown redispatch', async () => {
+    const harness = await createHarness()
+    const order: string[] = []
+    let dispatchAttempt = 0
+    harness.dispatch.mockImplementation(async () => {
+      dispatchAttempt += 1
+      order.push(`dispatch-${dispatchAttempt}`)
+      if (dispatchAttempt === 1) {
+        throw new Error('socket closed')
+      }
+      return {
+        state: 'accepted',
+        providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-2', ordinal: 2 }
+      }
+    })
+    let beforeAttempt = 0
+    const beforeRun = vi.fn(async () => {
+      beforeAttempt += 1
+      expect(operationState(harness, params.envelope.clientOperationId)).toBeDefined()
+      order.push(`before-${beforeAttempt}`)
+      await Promise.resolve()
+    })
+    const body = hostTestMessage('retry unknown')
+    const params = {
+      envelope: sendEnvelope(harness, operationId(), body),
+      body,
+      beforeRun
+    }
+
+    await harness.host.send(CALLER, params)
+    await harness.host.send(CALLER, { ...params, retryUnknown: true })
+
+    expect(beforeRun).toHaveBeenCalledTimes(2)
+    expect(harness.dispatch).toHaveBeenCalledTimes(2)
+    expect(order).toEqual(['before-1', 'dispatch-1', 'before-2', 'dispatch-2'])
+  })
+
+  it('binds host write authority to the admitted caller, payload, message, and fence', async () => {
+    const harness = await createHarness()
+    const body = hostTestMessage('change source.txt only')
+    const effectAuthority = 'local_structured_write' as const
+    const clientMessageId = operationId()
+
+    await harness.host.send(CALLER, {
+      envelope: sendEnvelope(harness, clientMessageId, body, { effectAuthority }),
+      body,
+      effectAuthority
+    })
+
+    const dispatched = harness.dispatch.mock.calls[0]?.[0]
+    expect(dispatched?.clientMessageId).toBe(clientMessageId)
+    expect(dispatched?.requestAuthority).toEqual({
+      effectAuthority,
+      requestReceiptId: computeAgentSessionPayloadFingerprint({
+        method: 'host.agentSession.effectAuthority',
+        sessionId: SESSION,
+        fields: {
+          callerKey: CALLER.callerKey,
+          clientMessageId,
+          fence: 1,
+          body,
+          effectAuthority
+        }
+      })
+    })
+  })
+})
 
 // sendPlan and setOptionPlan have no unsupported branch; only handoff checks transport.
 const UNREACHABLE = new Set<Pair>([

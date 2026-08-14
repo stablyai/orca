@@ -18,6 +18,12 @@ export type AgentSessionHandoffDirection = 'to-tui' | 'to-native'
 export type AgentSessionHandoffMode = 'now' | 'after-turn' | 'stop-turn'
 export type AgentSessionHandoffAction = 'start' | 'cancel-queued' | 'retry' | 'recover'
 
+/** Optional user-granted effect class for one durable send. Older peers omit
+ * it; hosts that do not understand it reject the strict request instead of
+ * silently widening authority. */
+export const AGENT_SESSION_EFFECT_AUTHORITIES = ['local_structured_write'] as const
+export type AgentSessionEffectAuthority = (typeof AGENT_SESSION_EFFECT_AUTHORITIES)[number]
+
 export type AgentSessionHandoffStatus = {
   owner: AgentSessionOwnerRuntimeKind | 'none'
   direction: AgentSessionHandoffDirection | null

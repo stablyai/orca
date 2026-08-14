@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type {
+  AgentSessionEffectAuthority,
   AgentSessionMutationResult,
   AgentSessionSendResult
 } from '../../../../shared/agent-session-wire'
@@ -220,7 +221,7 @@ export function useStructuredAgentSessionOutbox(args: {
   }, [fence, outbox, sessionId, target])
 
   const send = useCallback(
-    (text: string): boolean => {
+    (text: string, options?: { effectAuthority?: AgentSessionEffectAuthority }): boolean => {
       if (!text.trim()) {
         return false
       }
@@ -229,7 +230,8 @@ export function useStructuredAgentSessionOutbox(args: {
         sessionId,
         text,
         attachments: [],
-        queuedAt: Date.now()
+        queuedAt: Date.now(),
+        ...(options?.effectAuthority ? { effectAuthority: options.effectAuthority } : {})
       })
       const next = [...outboxRef.current, entry]
       if (!writeOutbox(sessionId, next)) {

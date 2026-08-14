@@ -11,6 +11,9 @@ import { join } from 'node:path'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
+import { CodexStructuredHomeIsolation } from '../codex/codex-structured-home-isolation'
+import type { CodexStructuredWriteAuthority } from '../codex/codex-structured-write-authority'
+import { createCodexStructuredWriteAuthority } from '../codex/codex-structured-write-runtime'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredSessionAdapterDeps
@@ -41,6 +44,12 @@ export type StructuredAgentSessionRuntimeDeps = {
    *  against a scripted app-server; production spawns the real one. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
   resolveLaunchEnv?: () => Promise<NodeJS.ProcessEnv>
+  /** Host-owned, opt-in admission for one local structured writer. */
+  codexStructuredWriteAuthority?: CodexStructuredWriteAuthority
+  /** Canary switch. Authority is still minted only for an explicit `/edit` send. */
+  codexStructuredWriteEnabled?: boolean
+  /** Host registry lookup; never accept a client-provided credential path here. */
+  resolveCodexStructuredWriteSourceHome?: (sessionId: string) => Promise<string> | string
   onError?: (input: { scope: string; error: unknown }) => void
   handoffTransport?: StructuredAgentSessionHandoffTransport
 }
@@ -48,6 +57,8 @@ export type StructuredAgentSessionRuntimeDeps = {
 type InstalledRuntime = {
   host: StructuredAgentSessionHost
   adapter: CodexStructuredSessionAdapter
+  homeIsolation: CodexStructuredHomeIsolation | null
+  writeAuthority: CodexStructuredWriteAuthority | undefined
 }
 
 let installing: Promise<InstalledRuntime> | null = null
@@ -80,7 +91,15 @@ export async function stopStructuredAgentSessionRuntime(): Promise<void> {
   try {
     await installed.adapter.closeAll()
   } finally {
-    await installed.host.flushAllStreamedEvents()
+    try {
+      await installed.host.flushAllStreamedEvents()
+    } finally {
+      try {
+        await installed.writeAuthority?.flushReceipts()
+      } finally {
+        await installed.homeIsolation?.close()
+      }
+    }
   }
 }
 
@@ -90,14 +109,59 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     hostId: deps.hostId
   })
   agentSessionPtyWriteGate.attachRecordLookup((sessionId) => store.getRecord(sessionId))
+  const writeAuthority =
+    deps.codexStructuredWriteAuthority ??
+    (deps.codexStructuredWriteEnabled
+      ? await createCodexStructuredWriteAuthority({
+          stateDirectory: deps.stateDirectory,
+          onTraceError: (error) => deps.onError?.({ scope: 'codex-structured-write-trace', error })
+        })
+      : undefined)
+  let homeIsolation: CodexStructuredHomeIsolation | null = null
   try {
+    if (writeAuthority) {
+      homeIsolation = await CodexStructuredHomeIsolation.open(
+        join(deps.stateDirectory, 'codex-structured-homes')
+      )
+    }
+    const structuredHomeIsolation = homeIsolation
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: createCodexStructuredLaunchResolver({
         store,
         resolveWorkspacePath: deps.resolveWorkspacePath,
+        structuredWriteEnabled: writeAuthority !== undefined,
+        resolveStructuredWriteSourceHome:
+          deps.resolveCodexStructuredWriteSourceHome ??
+          ((sessionId) => {
+            const record = store.getRecord(sessionId)
+            if (!record || record.effectIsolation !== 'local-structured-write') {
+              throw new Error('structured writer has no host-pinned credential source')
+            }
+            return record.accountHome.path
+          }),
+        ...(structuredHomeIsolation
+          ? {
+              prepareStructuredWriteHome: (sessionId, sourceHome) =>
+                structuredHomeIsolation.prepare(sessionId, sourceHome)
+            }
+          : {}),
         ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
       }),
-      ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {})
+      ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
+      ...(writeAuthority
+        ? {
+            writeAuthority,
+            releaseStructuredWriteHome: (sessionId: string, isolatedHomePath: string) =>
+              structuredHomeIsolation!.release(sessionId, isolatedHomePath),
+            onStructuredWriteHomeError: ({
+              sessionId,
+              error
+            }: {
+              sessionId: string
+              error: unknown
+            }) => deps.onError?.({ scope: `codex-structured-home:${sessionId}`, error })
+          }
+        : {})
     })
     const host = new StructuredAgentSessionHost({
       store,
@@ -112,9 +176,15 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.handoffTransport ? { handoffTransport: deps.handoffTransport } : {})
     })
     setStructuredAgentSessionHost(host)
-    return { host, adapter }
+    return {
+      host,
+      adapter,
+      homeIsolation: structuredHomeIsolation,
+      writeAuthority
+    }
   } catch (error) {
     agentSessionPtyWriteGate.detachRecordLookup()
+    await homeIsolation?.close()
     throw error
   }
 }

@@ -1,6 +1,6 @@
 import type { AgentJournalMessageItem, AgentJournalSubmission } from './agent-session-journal-types'
 import { agentSessionRefusalOperationState } from './agent-session-refusal-retry'
-import type { AgentSessionWireRefusalCode } from './agent-session-wire'
+import type { AgentSessionEffectAuthority, AgentSessionWireRefusalCode } from './agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 
 export type StructuredAgentSessionOutboxState = 'queued' | 'dispatching' | 'unconfirmed'
@@ -14,6 +14,7 @@ export type StructuredAgentSessionOutboxEntry = {
   queuedAt: number
   lastAttemptAt: number | null
   retryAfterUnknownSubmittedAt: number | null
+  effectAuthority?: AgentSessionEffectAuthority
 }
 
 export type StructuredAgentSessionAttachment = {
@@ -41,6 +42,7 @@ export function createStructuredAgentSessionOutboxEntry(args: {
   text: string
   attachments: readonly StructuredAgentSessionAttachment[]
   queuedAt: number
+  effectAuthority?: AgentSessionEffectAuthority
 }): StructuredAgentSessionOutboxEntry {
   return {
     clientMessageId: args.clientMessageId,
@@ -50,7 +52,8 @@ export function createStructuredAgentSessionOutboxEntry(args: {
     state: 'queued',
     queuedAt: args.queuedAt,
     lastAttemptAt: null,
-    retryAfterUnknownSubmittedAt: null
+    retryAfterUnknownSubmittedAt: null,
+    ...(args.effectAuthority ? { effectAuthority: args.effectAuthority } : {})
   }
 }
 
@@ -139,7 +142,10 @@ export function parseStructuredAgentSessionOutboxEntry(
     retryAfterUnknownSubmittedAt:
       typeof entry.retryAfterUnknownSubmittedAt === 'number'
         ? entry.retryAfterUnknownSubmittedAt
-        : null
+        : null,
+    ...(entry.effectAuthority === 'local_structured_write'
+      ? { effectAuthority: entry.effectAuthority }
+      : {})
   }
 }
 
@@ -147,7 +153,10 @@ export function structuredAgentSessionSendRequest(
   entry: StructuredAgentSessionOutboxEntry,
   expectedRuntimeFence: number
 ): Record<string, unknown> {
-  const fields = { body: entry.body }
+  const fields = {
+    body: entry.body,
+    ...(entry.effectAuthority ? { effectAuthority: entry.effectAuthority } : {})
+  }
   return {
     envelope: {
       sessionId: entry.sessionId,

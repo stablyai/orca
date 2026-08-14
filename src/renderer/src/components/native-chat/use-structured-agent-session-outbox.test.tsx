@@ -13,6 +13,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -59,6 +60,39 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
   })
 
+  it('persists one edit authority and binds it into the durable fingerprint', async () => {
+    mocks.call.mockResolvedValue(acceptedResult(1))
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: []
+      })
+    )
+    act(() =>
+      expect(
+        result.current.send('change one file', {
+          effectAuthority: 'local_structured_write'
+        })
+      ).toBe(true)
+    )
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+    const request = mocks.call.mock.calls[0]?.[2] as {
+      body: unknown
+      effectAuthority: 'local_structured_write'
+      envelope: { sessionId: string; payloadFingerprint: string }
+    }
+    expect(request.effectAuthority).toBe('local_structured_write')
+    expect(request.envelope.payloadFingerprint).toBe(
+      structuredAgentSessionPayloadFingerprint({
+        method: 'agentSession.send',
+        sessionId: request.envelope.sessionId,
+        fields: { body: request.body, effectAuthority: request.effectAuthority }
+      })
+    )
+  })
+
   it('requeues across a fence change and ignores the stale settlement', async () => {
     const first = deferred<ReturnType<typeof acceptedResult>>()
     const second = deferred<ReturnType<typeof acceptedResult>>()
@@ -91,7 +125,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it.each(['agent_session_operation_conflict', 'agent_session_operation_expired'] as const)(
-    'rotates a send operation after %s',
+    'rotates a send operation after %s without dropping edit authority',
     async (code) => {
       vi.mocked(globalThis.crypto.randomUUID)
         .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
@@ -106,23 +140,30 @@ describe('useStructuredAgentSessionOutbox', () => {
         })
       )
 
-      act(() => expect(result.current.send('hello')).toBe(true))
+      act(() =>
+        expect(
+          result.current.send('change one file', {
+            effectAuthority: 'local_structured_write'
+          })
+        ).toBe(true)
+      )
       await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
       const firstId = (mocks.call.mock.calls[0]![2] as { envelope: { clientOperationId: string } })
         .envelope.clientOperationId
-      const retryId = result.current.outbox[0]!.clientMessageId
-      expect(retryId).not.toBe(firstId)
+      const retry = result.current.outbox[0]!
+      expect(retry.clientMessageId).not.toBe(firstId)
+      expect(retry.effectAuthority).toBe('local_structured_write')
 
-      act(() => result.current.retry(retryId))
+      act(() => result.current.retry(retry.clientMessageId))
       await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-      expect(
-        (mocks.call.mock.calls[1]![2] as { envelope: { clientOperationId: string } }).envelope
-          .clientOperationId
-      ).toBe(retryId)
+      expect(mocks.call.mock.calls[1]![2]).toMatchObject({
+        effectAuthority: 'local_structured_write',
+        envelope: { clientOperationId: retry.clientMessageId }
+      })
     }
   )
 
-  it('retains a send operation after a pending-admission refusal', async () => {
+  it('retains an operation after a pending-admission refusal', async () => {
     mocks.call
       .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
       .mockResolvedValueOnce(acceptedResult(1))
@@ -143,9 +184,8 @@ describe('useStructuredAgentSessionOutbox', () => {
 
     act(() => result.current.retry(firstId))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    expect(
-      (mocks.call.mock.calls[1]![2] as { envelope: { clientOperationId: string } }).envelope
-        .clientOperationId
-    ).toBe(firstId)
+    expect(mocks.call.mock.calls[1]![2]).toMatchObject({
+      envelope: { clientOperationId: firstId }
+    })
   })
 })

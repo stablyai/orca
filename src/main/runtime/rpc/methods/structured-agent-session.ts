@@ -77,6 +77,27 @@ function assertMobileImageProvenance(
   }
 }
 
+function assertLocalEffectAuthority(ctx: RpcContext, effectAuthority: unknown): void {
+  if (!effectAuthority) {
+    return
+  }
+  if (
+    ctx.clientKind !== 'runtime' ||
+    ctx.clientId !== 'desktop-renderer' ||
+    ctx.connectionId !== undefined
+  ) {
+    throw new Error('local_structured_write_requires_local_desktop_renderer')
+  }
+}
+
+function isTrustedLocalUserTurn(ctx: RpcContext): boolean {
+  return (
+    ctx.clientKind === 'runtime' &&
+    ctx.clientId === 'desktop-renderer' &&
+    ctx.connectionId === undefined
+  )
+}
+
 /** Attach is the only way a session comes into being, so it is the only call
  *  that builds the host. Every other method addresses a session that must
  *  already be attached, and correctly reports absent when none is. */
@@ -112,7 +133,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       if (!supportsStructuredSessions(ctx)) {
         throw new Error('structured_agent_session_unsupported')
       }
-      return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
+      assertLocalEffectAuthority(ctx, params.effectAuthority)
+      return ctx.runtime.getStructuredAgentSessionCreateSupport(
+        params.worktree,
+        params.agent,
+        params.effectAuthority
+      )
     }
   }),
   defineMethod({
@@ -124,10 +150,15 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
         throw new Error('agent_session_operation_invalid')
       }
       if ('worktree' in params) {
+        assertLocalEffectAuthority(ctx, params.effectAuthority)
         const intentFingerprint = computeAgentSessionPayloadFingerprint({
           method: 'agentSession.create',
           sessionId: params.envelope.sessionId,
-          fields: { worktree: params.worktree, agent: params.agent }
+          fields: {
+            worktree: params.worktree,
+            agent: params.agent,
+            effectAuthority: params.effectAuthority
+          }
         })
         const conflict = agentSessionFingerprintConflict(params.envelope, intentFingerprint)
         if (conflict) {
@@ -142,6 +173,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
             provider: resolved.provider,
             agent: resolved.agent,
             accountHome: resolved.accountHome,
+            effectIsolation: resolved.effectIsolation,
             runtimeKind: resolved.runtimeKind,
             expectedRuntimeFence: null
           }
@@ -181,9 +213,16 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     params: SendParams,
     handler: async (params, ctx) => {
       const host = requireHost(ctx)
+      assertLocalEffectAuthority(ctx, params.effectAuthority)
+      const trustedLocalUserTurn = isTrustedLocalUserTurn(ctx)
       return host.send(callerFor(ctx), {
         ...params,
-        beforeRun: () => assertMobileImageProvenance(ctx, params.body)
+        beforeRun: async () => {
+          assertMobileImageProvenance(ctx, params.body)
+          if (trustedLocalUserTurn) {
+            await host.invalidateEffectAuthorityForTrustedUserTurn(params.envelope.sessionId)
+          }
+        }
       })
     }
   }),

@@ -87,9 +87,10 @@ function hostStub(): StructuredAgentSessionHost {
       }
     })),
     send: vi.fn(async (_caller, params) => {
-      params.beforeRun?.()
+      await params.beforeRun?.()
       return { ok: true, replayed: false }
     }),
+    invalidateEffectAuthorityForTrustedUserTurn: vi.fn(async () => undefined),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
@@ -120,6 +121,7 @@ function dispatcher(): RpcDispatcher {
       provider: 'codex',
       agent: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+      ...(params.effectAuthority ? { effectIsolation: 'local-structured-write' as const } : {}),
       runtimeKind: 'native'
     })),
     publishStructuredAgentSessionTab: vi.fn()
@@ -163,6 +165,11 @@ async function call(
 
 const STRUCTURED_CLIENT = {
   clientKind: 'mobile' as const,
+  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+}
+const DESKTOP_CLIENT = {
+  clientId: 'desktop-renderer',
+  clientKind: 'runtime' as const,
   clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
 }
 
@@ -251,6 +258,19 @@ describe('capability gating', () => {
     expect(response).toMatchObject({ ok: true })
   })
 
+  it('defers writer invalidation to the trusted local desktop send execution seam', async () => {
+    await call('agentSession.send', sendParams(), DESKTOP_CLIENT)
+
+    expect(hostCalls.invalidateEffectAuthorityForTrustedUserTurn).toHaveBeenCalledWith(SESSION)
+    expect(hostCalls.send.mock.invocationCallOrder[0]).toBeLessThan(
+      hostCalls.invalidateEffectAuthorityForTrustedUserTurn.mock.invocationCallOrder[0]
+    )
+
+    await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
+    await call('agentSession.send', sendParams())
+    expect(hostCalls.invalidateEffectAuthorityForTrustedUserTurn).toHaveBeenCalledOnce()
+  })
+
   it('reports the surface as absent when no host is installed', async () => {
     setStructuredAgentSessionHost(null)
     const response = await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
@@ -286,6 +306,70 @@ describe('method routing', () => {
     expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION, activate: true })
     )
+  })
+
+  it('binds a local writer request to an effect-isolated session record', async () => {
+    const worktree = 'id:workspace-1'
+    const effectAuthority = 'local_structured_write' as const
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: { worktree, agent: 'codex', effectAuthority }
+        })
+      }),
+      worktree,
+      agent: 'codex',
+      effectAuthority
+    }
+
+    const created = await call('agentSession.create', params, DESKTOP_CLIENT)
+
+    expect(created).toMatchObject({ ok: true, result: { ok: true } })
+    expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith(params)
+    expect(hostCalls.attach).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ effectIsolation: 'local-structured-write' })
+    )
+  })
+
+  it('rejects writer creation and support checks from a remote client', async () => {
+    const effectAuthority = 'local_structured_write' as const
+    const worktree = 'id:workspace-1'
+    const support = await call(
+      'agentSession.createSupport',
+      { worktree, agent: 'codex', effectAuthority },
+      STRUCTURED_CLIENT
+    )
+    const create = await call(
+      'agentSession.create',
+      {
+        envelope: envelope({
+          expectedRuntimeFence: null,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.create',
+            sessionId: SESSION,
+            fields: { worktree, agent: 'codex', effectAuthority }
+          })
+        }),
+        worktree,
+        agent: 'codex',
+        effectAuthority
+      },
+      STRUCTURED_CLIENT
+    )
+
+    expect(support).toMatchObject({
+      ok: false,
+      error: { message: 'local_structured_write_requires_local_desktop_renderer' }
+    })
+    expect(create).toMatchObject({
+      ok: false,
+      error: { message: 'local_structured_write_requires_local_desktop_renderer' }
+    })
+    expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).not.toHaveBeenCalled()
   })
 
   it('separates create from ensure by the fence the client may declare', async () => {

@@ -333,7 +333,7 @@ describe('cross-version structured agent sessions', () => {
   describe('an old client against a structured-owned AI Vault row', () => {
     let root: string
     let store: AgentSessionRecordStore
-    let runtime: ReturnType<typeof runtimeStub> & Record<string, unknown>
+    let runtime: Record<string, unknown>
     let createMobileSessionTerminal: ReturnType<typeof vi.fn>
 
     beforeEach(async () => {

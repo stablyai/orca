@@ -13,7 +13,7 @@ import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-j
 export type JournalPayloadLimits = {
   /** Bytes of the payload kept inline on the row. */
   inlineHeadBytes: number
-  /** Total bytes of journal rows one session may hold before appends are refused. */
+  /** Total bytes of journal rows and blobs one session may hold before appends are refused. */
   maxSessionBytes: number
   /** Appends allowed inside `appendWindowMs`, bounding a runaway agent's rate. */
   maxAppendsPerWindow: number
@@ -40,7 +40,8 @@ export function digestPayload(payload: string): string {
 
 /**
  * Clip `payload` to the inline head. `truncated` means the remainder must be
- * written to the blob store under `digest` before the row is appended.
+ * admitted with the row and written to the blob store under `digest` before
+ * the row is appended.
  */
 export function boundPayload(
   payload: string,

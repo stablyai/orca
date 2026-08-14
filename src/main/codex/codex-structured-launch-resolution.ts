@@ -7,6 +7,7 @@
 // for, which is how a resume becomes a fork wearing a resume's name.
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import { realpath } from 'node:fs/promises'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { resolveCodexCommand } from '../codex-cli/command'
@@ -15,6 +16,65 @@ import { getSpawnArgsForWindows } from '../win32-utils'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 
 const CODEX_APP_SERVER_ARGS = ['app-server']
+export const CODEX_LOCAL_STRUCTURED_WRITE_ARGS = [
+  '--disable',
+  'apps',
+  '--disable',
+  'plugins',
+  '--disable',
+  'remote_plugin',
+  '--disable',
+  'plugin_sharing',
+  '--disable',
+  'computer_use',
+  '--disable',
+  'browser_use',
+  '--disable',
+  'browser_use_external',
+  '--disable',
+  'browser_use_full_cdp_access',
+  '--disable',
+  'in_app_browser',
+  '--disable',
+  'image_generation',
+  '--disable',
+  'artifact',
+  '--disable',
+  'multi_agent',
+  '--disable',
+  'skill_mcp_dependency_install',
+  '--disable',
+  'shell_tool',
+  '--disable',
+  'unified_exec',
+  '--disable',
+  'shell_snapshot',
+  '--disable',
+  'hooks',
+  '--disable',
+  'tool_suggest',
+  '--disable',
+  'skill_search',
+  '--disable',
+  'view_image',
+  '--disable',
+  'workspace_dependencies',
+  '--disable',
+  'auth_elicitation',
+  '--disable',
+  'tool_call_mcp_elicitation',
+  '--disable',
+  'standalone_web_search',
+  '--disable',
+  'web_search_request',
+  '--disable',
+  'web_search_cached',
+  '--disable',
+  'code_mode',
+  '--disable',
+  'code_mode_only',
+  'app-server'
+] as const
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
@@ -23,6 +83,11 @@ export type CodexStructuredLaunchResolverDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   /** Overridden in tests; production scans PATH and version-manager dirs. */
   resolveCommand?: () => string
+  canonicalizePath?: (path: string) => Promise<string>
+  /** Enables records explicitly pinned to the local structured-writer boundary. */
+  structuredWriteEnabled?: boolean
+  resolveStructuredWriteSourceHome?: (sessionId: string) => Promise<string> | string
+  prepareStructuredWriteHome?: (sessionId: string, sourceHome: string) => Promise<string>
 }
 
 export function createCodexStructuredLaunchResolver(
@@ -49,17 +114,47 @@ export function createCodexStructuredLaunchResolver(
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
     }
     const command = (deps.resolveCommand ?? resolveCodexCommand)()
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, CODEX_APP_SERVER_ARGS)
+    const localStructuredWriteOnly = record.effectIsolation === 'local-structured-write'
+    if (localStructuredWriteOnly && !deps.structuredWriteEnabled) {
+      throw new Error('structured writer is not enabled on this execution host')
+    }
+    const appServerArgs = localStructuredWriteOnly
+      ? [...CODEX_LOCAL_STRUCTURED_WRITE_ARGS]
+      : CODEX_APP_SERVER_ARGS
+    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, appServerArgs)
+    // Resolve the host-selected worktree before materialising credentials. A
+    // stale workspace must fail without leaving a secret-bearing temp home.
+    const cwd = await deps.resolveWorkspacePath(location.workspaceId)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+    let codexHome = accountHome.path
+    let isolatedHomePath: string | undefined
+    if (localStructuredWriteOnly) {
+      if (!deps.resolveStructuredWriteSourceHome) {
+        throw new Error('structured writer has no host-owned credential source provider')
+      }
+      if (!deps.prepareStructuredWriteHome) {
+        throw new Error('structured writer has no isolated Codex home provider')
+      }
+      const sourceHome = await deps.resolveStructuredWriteSourceHome(identity.sessionId)
+      const canonicalizePath = deps.canonicalizePath ?? realpath
+      if ((await canonicalizePath(sourceHome)) !== (await canonicalizePath(accountHome.path))) {
+        throw new Error('structured writer record does not match the host-owned credential source')
+      }
+      isolatedHomePath = await deps.prepareStructuredWriteHome(identity.sessionId, sourceHome)
+      codexHome = isolatedHomePath
+    }
     return {
       command: spawnCmd,
       args: spawnArgs,
-      cwd: await deps.resolveWorkspacePath(location.workspaceId),
-      codexHome: accountHome.path,
+      cwd,
+      codexHome,
       ...(record.launchEnv ? { env: { ...record.launchEnv } } : {}),
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
-      resumeThreadId: head?.handle.provider === 'codex' ? head.handle.threadId : null
+      resumeThreadId: head?.handle.provider === 'codex' ? head.handle.threadId : null,
+      ...(localStructuredWriteOnly
+        ? { effectIsolation: 'local-structured-write' as const, isolatedHomePath }
+        : {})
     }
   }
 }

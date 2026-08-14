@@ -52,15 +52,26 @@ export type JournalReadResult = {
   malformed: number
 }
 
+export type JournalUtf8Reader = (path: string, encoding: BufferEncoding) => Promise<string>
+
 export async function ensureJournalDir(journalDir: string): Promise<void> {
   await mkdir(journalDir, { recursive: true })
 }
 
 export async function readJournalSnapshotFile(
-  journalDir: string
+  journalDir: string,
+  readUtf8: JournalUtf8Reader = readFile
 ): Promise<JournalSnapshotFile | null> {
+  let raw: string
   try {
-    const raw = await readFile(join(journalDir, JOURNAL_SNAPSHOT_FILE), 'utf-8')
+    raw = await readUtf8(join(journalDir, JOURNAL_SNAPSHOT_FILE), 'utf-8')
+  } catch (error) {
+    if (isMissing(error)) {
+      return null
+    }
+    throw error
+  }
+  try {
     const parsed = JSON.parse(raw) as JournalSnapshotFile
     return typeof parsed?.epoch === 'string' ? parsed : null
   } catch {
@@ -76,12 +87,18 @@ export async function writeJournalSnapshotFile(
   await writeFileDurable(durableWriteTempPath(target), target, JSON.stringify(snapshot))
 }
 
-export async function readJournalLog(journalDir: string): Promise<JournalReadResult> {
+export async function readJournalLog(
+  journalDir: string,
+  readUtf8: JournalUtf8Reader = readFile
+): Promise<JournalReadResult> {
   let raw: string
   try {
-    raw = await readFile(join(journalDir, JOURNAL_LOG_FILE), 'utf-8')
-  } catch {
-    return { rows: [], unreadable: false, malformed: 0 }
+    raw = await readUtf8(join(journalDir, JOURNAL_LOG_FILE), 'utf-8')
+  } catch (error) {
+    if (isMissing(error)) {
+      return { rows: [], unreadable: false, malformed: 0 }
+    }
+    throw error
   }
   const rows: JournalRow[] = []
   let unreadable = false
@@ -136,4 +153,8 @@ export async function rewriteJournalLog(
   const target = join(journalDir, JOURNAL_LOG_FILE)
   const payload = rows.length ? `${rows.map(serializeJournalRow).join('\n')}\n` : ''
   await writeFileDurable(durableWriteTempPath(target), target, payload)
+}
+
+function isMissing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }

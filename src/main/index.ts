@@ -282,6 +282,7 @@ import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { stopStructuredAgentSessionRuntime } from './runtime/structured-agent-session-runtime'
+import { isCodexStructuredWriteEnabled } from './codex/codex-structured-write-runtime'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { beginSshShutdown } from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
@@ -2554,6 +2555,11 @@ void app.whenReady().then(async () => {
       }),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
+    // Production default after one-writer qualification. Operators retain a
+    // fail-closed rollback switch without changing ordinary chat sessions.
+    codexStructuredWriteEnabled: isCodexStructuredWriteEnabled(
+      process.env.ORCA_CODEX_LOCAL_STRUCTURED_WRITE
+    ),
     orchestrationEnvironmentTransport
   })
   runtime = runtimeService

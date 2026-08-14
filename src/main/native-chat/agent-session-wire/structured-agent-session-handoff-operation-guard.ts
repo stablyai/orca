@@ -1,5 +1,8 @@
 import type { AgentSessionHandoffStatus } from '../../../shared/agent-session-wire'
-import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
+import type {
+  AgentSessionOperationOutcome,
+  AgentSessionOperationRefusalCode
+} from '../../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 
 type ActiveOperation = { callerKey: string; operationId: string; fingerprint: string }
@@ -8,7 +11,7 @@ export type HandoffOperationDecision =
   | { decision: 'new' }
   | { decision: 'replay'; outcome: AgentSessionOperationOutcome }
   | { decision: 'retry' }
-  | { decision: 'refused'; code: 'agent_session_operation_conflict' | string }
+  | { decision: 'refused'; code: AgentSessionOperationRefusalCode }
 
 export class StructuredAgentSessionHandoffOperationGuard {
   private readonly activeBySession = new Map<string, ActiveOperation>()

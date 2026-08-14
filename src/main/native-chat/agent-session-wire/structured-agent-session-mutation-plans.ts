@@ -10,6 +10,7 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session-jour
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
+  AgentSessionEffectAuthority,
   AgentSessionMutationEnvelope,
   AgentSessionOptionResult,
   AgentSessionPromptResult,
@@ -27,7 +28,7 @@ import {
 export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
-  beforeRun?: () => void
+  beforeRun?: () => void | Promise<void>
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
@@ -37,7 +38,8 @@ export function sendPlan(params: {
   envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem
   retryUnknown?: true
-  beforeRun?: () => void
+  effectAuthority?: AgentSessionEffectAuthority
+  beforeRun?: () => void | Promise<void>
 }): MutationPlan<AgentSessionSendResult> {
   // The operation id IS the client message id: one send, one durable row, one
   // key the client reconciles its optimistic bubble against.
@@ -45,7 +47,10 @@ export function sendPlan(params: {
   return {
     method: 'agentSession.send',
     // A control signal is not payload; only the matching durable unknown unlocks redispatch.
-    fields: { body: params.body },
+    fields: {
+      body: params.body,
+      ...(params.effectAuthority ? { effectAuthority: params.effectAuthority } : {})
+    },
     ...(params.beforeRun ? { beforeRun: params.beforeRun } : {}),
     rerunWhenReplayMissing: (ctx) =>
       params.retryUnknown === true &&
@@ -59,6 +64,7 @@ export function sendPlan(params: {
         clientMessageId,
         payloadFingerprint: params.envelope.payloadFingerprint,
         body: params.body,
+        ...(params.effectAuthority ? { effectAuthority: params.effectAuthority } : {}),
         retryUnknown: params.retryUnknown
       }),
     replay: (ctx) => {
