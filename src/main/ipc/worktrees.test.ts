@@ -26,6 +26,7 @@ const {
   handleMock,
   removeHandlerMock,
   listWorktreesMock,
+  listWorktreesStrictMock,
   parseWorktreeListMock,
   assertWorktreeCleanForRemovalMock,
   addWorktreeMock,
@@ -66,6 +67,7 @@ const {
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   listWorktreesMock: vi.fn(),
+  listWorktreesStrictMock: vi.fn(),
   parseWorktreeListMock: vi.fn((output: string) =>
     output
       .trim()
@@ -124,7 +126,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
-  listWorktreesStrict: listWorktreesMock,
+  listWorktreesStrict: listWorktreesStrictMock,
   parseWorktreeList: parseWorktreeListMock,
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
@@ -381,6 +383,7 @@ describe('registerWorktreeHandlers', () => {
       handleMock,
       removeHandlerMock,
       listWorktreesMock,
+      listWorktreesStrictMock,
       assertWorktreeCleanForRemovalMock,
       addWorktreeMock,
       addSparseWorktreeMock,
@@ -569,6 +572,7 @@ describe('registerWorktreeHandlers', () => {
     )
     ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([])
+    listWorktreesStrictMock.mockImplementation((...args) => listWorktreesMock(...args))
     forceDeleteLocalBranchMock.mockResolvedValue(undefined)
 
     // Why: minimal stub keeps these tests on create-flow semantics; full fetchRemoteWithCache behavior is covered by fetch-remote-cache.test.ts.
@@ -3934,6 +3938,50 @@ describe('registerWorktreeHandlers', () => {
 
     expect(first).toEqual(second)
     expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats Documents permission failures as non-authoritative and retries the scan', async () => {
+    const permissionError = Object.assign(
+      new Error('Unable to read current working directory: Operation not permitted'),
+      { code: 'EPERM' }
+    )
+    listWorktreesStrictMock.mockRejectedValueOnce(permissionError).mockResolvedValueOnce([
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    const failed = await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+
+    expect(failed).toEqual({
+      repoId: 'repo-1',
+      authoritative: false,
+      source: 'metadata-fallback',
+      worktrees: []
+    })
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 0,
+      inFlightSize: 0
+    })
+
+    const recovered = await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+
+    expect(recovered).toMatchObject({
+      repoId: 'repo-1',
+      authoritative: true,
+      source: 'git',
+      worktrees: [expect.objectContaining({ path: '/workspace/repo' })]
+    })
+    expect(listWorktreesStrictMock).toHaveBeenCalledTimes(2)
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 1,
+      inFlightSize: 0
+    })
   })
 
   it('coalesces concurrent authoritative detected worktree scans', async () => {

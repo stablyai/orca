@@ -716,9 +716,12 @@ async function listDetectedGitWorktrees(
     return { gitWorktrees: await inFlight.promise, fresh: false }
   }
 
+  // Why: authoritative detection must preserve Git/filesystem errors; [] means Git proved no worktrees.
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listRepoWorktrees(repo, localWorktreeGitOptions)
+    promise: localWorktreeGitOptions.wslDistro
+      ? listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
+      : listGitWorktreesStrict(repo.path)
   }
   detectedWorktreeScanInFlight.set(cacheKey, scan)
   try {
