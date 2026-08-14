@@ -93,11 +93,13 @@ export type WorktreeApi = {
     // may waive the proof that every PTY stopped.
     allowUnverifiedPtyStop?: boolean
     skipArchive?: boolean
+    snapshotPruneBatchId?: string
   }) => Promise<RemoveWorktreeResult>
   // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.
   forgetLocal: (args: {
     worktreeId: string
     hostId?: ExecutionHostId
+    snapshotPruneBatchId?: string
   }) => Promise<RemoveWorktreeResult>
   forceDeletePreservedBranch: (args: {
     worktreeId: string

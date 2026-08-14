@@ -169,8 +169,9 @@ function createMainWindow(
 
 function createStore(): Store & { flushPendingAsync: MockFn } {
   return {
+    getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     flushPendingAsync: vi.fn(() => Promise.resolve())
-  } as Store & { flushPendingAsync: MockFn }
+  } as unknown as Store & { flushPendingAsync: MockFn }
 }
 
 function createRuntime(): RuntimeStub {

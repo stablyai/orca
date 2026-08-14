@@ -153,6 +153,7 @@ import {
   parseRuntimeNativeChatTurnLifecycle
 } from '@/components/native-chat/native-chat-runtime-contract'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
+import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -4014,6 +4015,10 @@ function mergeWebUIState(
   return {
     ...base,
     ...safeUpdates,
+    workspaceCleanup: mergeWorkspaceCleanupUIState(
+      base.workspaceCleanup,
+      safeUpdates.workspaceCleanup
+    ),
     worktreeCardProperties: normalizeWorktreeCardProperties(
       safeUpdates.worktreeCardProperties ?? base.worktreeCardProperties
     ),

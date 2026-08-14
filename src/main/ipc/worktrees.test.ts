@@ -237,6 +237,36 @@ vi.mock('../ports/advertised-url-watcher', () => ({
 }))
 
 const {
+  pruneCleanupScanSnapshotMock,
+  pruneCleanupScanSnapshotsMock,
+  pruneSpaceAnalysisSnapshotMock,
+  pruneSpaceAnalysisSnapshotsMock
+} = vi.hoisted(() => ({
+  pruneCleanupScanSnapshotMock: vi.fn().mockResolvedValue(undefined),
+  pruneCleanupScanSnapshotsMock: vi.fn().mockResolvedValue(undefined),
+  pruneSpaceAnalysisSnapshotMock: vi.fn().mockResolvedValue(undefined),
+  pruneSpaceAnalysisSnapshotsMock: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('../workspace-cleanup-scan-snapshot', () => ({
+  pruneWorkspaceCleanupScanSnapshot: pruneCleanupScanSnapshotMock,
+  pruneWorkspaceCleanupScanSnapshots: pruneCleanupScanSnapshotsMock
+}))
+
+vi.mock('../workspace-space-analysis-snapshot', () => ({
+  pruneWorkspaceSpaceAnalysisSnapshot: pruneSpaceAnalysisSnapshotMock,
+  pruneWorkspaceSpaceAnalysisSnapshots: pruneSpaceAnalysisSnapshotsMock
+}))
+
+const { recordRemovalSnapshotPruneMock } = vi.hoisted(() => ({
+  recordRemovalSnapshotPruneMock: vi.fn()
+}))
+
+vi.mock('../workspace-cleanup-removal-snapshot-prune', () => ({
+  recordWorkspaceCleanupRemovalSnapshotPrune: recordRemovalSnapshotPruneMock
+}))
+
+const {
   killAllProcessesForWorktreeMock,
   clearProviderPtyStateMock,
   getLocalPtyProviderMock,
@@ -303,6 +333,7 @@ describe('registerWorktreeHandlers', () => {
   }
   const ipcEvent = { sender: { id: 1 } }
   const store = {
+    getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     getRepos: vi.fn(),
     getRepo: vi.fn(),
     getProjects: vi.fn(),
@@ -408,6 +439,11 @@ describe('registerWorktreeHandlers', () => {
       getSshPtyProviderMock,
       deleteWorktreeHistoryDirMock,
       advertisedUrlWatcherForgetWorktreeMock,
+      pruneCleanupScanSnapshotMock,
+      pruneCleanupScanSnapshotsMock,
+      pruneSpaceAnalysisSnapshotMock,
+      pruneSpaceAnalysisSnapshotsMock,
+      recordRemovalSnapshotPruneMock,
       findExistingWorktreeSymlinkPathsMock,
       removeWorktreeLinkedPathsMock
     ]) {
@@ -2709,6 +2745,10 @@ describe('registerWorktreeHandlers', () => {
     const metaById: Record<string, Record<string, unknown>> = {
       'repo-1::/remote/repo': makeWorktreeMeta({ displayName: 'main', hostId: sshHostId }),
       'repo-1::/remote/deleted': makeWorktreeMeta({ displayName: 'deleted', hostId: sshHostId }),
+      'repo-1::/remote/deleted-too': makeWorktreeMeta({
+        displayName: 'deleted too',
+        hostId: sshHostId
+      }),
       'repo-1::/remote/other-host': makeWorktreeMeta({
         displayName: 'other host',
         hostId: toSshExecutionHostId('target-b')
@@ -2726,18 +2766,33 @@ describe('registerWorktreeHandlers', () => {
     const forgotten = await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
       repoId: sshRepo.id,
       executionHostId: sshHostId,
-      // Only the first is this host's row; the rest must survive an over-broad request.
+      // Only the first two are this host's rows; the rest must survive an over-broad request.
       worktreeIds: [
         'repo-1::/remote/deleted',
+        'repo-1::/remote/deleted-too',
         'repo-1::/remote/other-host',
         'repo-2::/remote/other-repo',
         'repo-1::/remote/never-persisted'
       ]
     })
 
-    expect(forgotten).toEqual({ forgottenWorktreeIds: ['repo-1::/remote/deleted'] })
-    expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(1)
+    expect(forgotten).toEqual({
+      forgottenWorktreeIds: ['repo-1::/remote/deleted', 'repo-1::/remote/deleted-too']
+    })
+    expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(2)
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/remote/deleted', sshHostId)
+    const pruneTargets = [
+      { worktreeId: 'repo-1::/remote/deleted', executionHostId: sshHostId },
+      { worktreeId: 'repo-1::/remote/deleted-too', executionHostId: sshHostId }
+    ]
+    expect(pruneCleanupScanSnapshotsMock).toHaveBeenCalledExactlyOnceWith(
+      '/profile-a',
+      pruneTargets
+    )
+    expect(pruneSpaceAnalysisSnapshotsMock).toHaveBeenCalledExactlyOnceWith(
+      '/profile-a',
+      pruneTargets
+    )
 
     // Why: the renderer's suppression memory is session-scoped, so the next launch must not re-list the row.
     const relisted = (await handlers['worktrees:listKnownForExecutionHost'](null, {
@@ -8293,6 +8348,45 @@ describe('registerWorktreeHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
     })
+  })
+
+  it('prunes the persisted cleanup and space snapshots on removal', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue(null)
+    removeWorktreeMock.mockResolvedValue({})
+
+    await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+
+    // A removed workspace must never resurrect from the cached scan snapshots.
+    expect(pruneCleanupScanSnapshotMock).toHaveBeenCalledWith(
+      '/profile-a',
+      'repo-1::/workspace/feature-wt',
+      'local'
+    )
+    expect(pruneSpaceAnalysisSnapshotMock).toHaveBeenCalledWith(
+      '/profile-a',
+      'repo-1::/workspace/feature-wt',
+      'local'
+    )
+  })
+
+  it('tombstones a cleanup-batch removal without scheduling singular sidecar writes', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue(null)
+    removeWorktreeMock.mockResolvedValue({})
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      snapshotPruneBatchId: 'cleanup-batch-1'
+    })
+
+    expect(recordRemovalSnapshotPruneMock).toHaveBeenCalledExactlyOnceWith('/profile-a', {
+      batchId: 'cleanup-batch-1',
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      executionHostId: 'local'
+    })
+    expect(pruneCleanupScanSnapshotMock).not.toHaveBeenCalled()
+    expect(pruneSpaceAnalysisSnapshotMock).not.toHaveBeenCalled()
   })
 
   it('traces the removal as worktree.remove with a stage sub-span tree', async () => {

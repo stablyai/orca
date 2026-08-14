@@ -234,7 +234,6 @@ inline src/renderer/src/components/sidebar/RemoteFileBrowser.tsx
 inline src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
 inline src/renderer/src/components/sidebar/WorktreeContextMenu.tsx
 inline src/renderer/src/components/sidebar/WorktreeList.lineage-child-card.test.ts
-inline src/renderer/src/components/sidebar/WorktreeList.tsx
 inline src/renderer/src/components/sidebar/use-workspace-kanban-area-selection.ts
 inline src/renderer/src/components/sidebar/worktree-list-groups.test.ts
 inline src/renderer/src/components/sidebar/worktree-list-groups.ts
@@ -259,7 +258,6 @@ inline src/renderer/src/components/terminal-pane/terminal-link-handlers.test.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-context-menu.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
-inline src/renderer/src/components/workspace-cleanup/WorkspaceCleanupDialog.tsx
 inline src/renderer/src/hooks/useAutomationDispatchEvents.ts
 inline src/renderer/src/hooks/useComposerState.ts
 inline src/renderer/src/hooks/useEditorExternalWatch.ts

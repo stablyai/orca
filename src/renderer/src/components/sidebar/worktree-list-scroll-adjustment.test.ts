@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   countRecordKeysByReference,
-  getScrollTopToRevealBounds,
   resolvePendingSidebarReveal,
-  WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
-} from './WorktreeList'
+} from './worktree-list/worktree-sidebar-scroll-tuning'
+import {
+  getScrollTopToRevealBounds,
+  WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+} from './worktree-sidebar-reveal'
 import {
   extractWorktreeVirtualRowIndexes,
   estimateRenderRowSize,

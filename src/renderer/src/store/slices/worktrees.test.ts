@@ -140,6 +140,9 @@ const mockApi = {
   hooks: {
     check: vi.fn().mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
   },
+  workspaceCleanup: {
+    recordRemovalSnapshotPrune: vi.fn().mockResolvedValue(undefined)
+  },
   runtimeEnvironments: {
     call: runtimeEnvironmentTransportCall
   },
@@ -6490,7 +6493,9 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [wt] }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(wt.id)
+    const result = await store.getState().removeWorktree(wt.id, false, {
+      snapshotPruneBatchId: 'batch-1'
+    })
 
     expect(result).toEqual({ ok: true })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -6499,14 +6504,20 @@ describe('worktree remote runtime mutations', () => {
       params: {
         worktree: `id:${wt.id}`,
         hostId: 'runtime:env-1',
-        force: undefined,
+        force: false,
         allowUnverifiedPtyStop: false,
         runHooks: true
       },
       timeoutMs: 60_000,
-      expectedEnvironmentPairingRevision: undefined
+      expectedEnvironmentPairingRevision: undefined,
+      expectedRuntimeId: undefined
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    expect(mockApi.workspaceCleanup.recordRemovalSnapshotPrune).toHaveBeenCalledExactlyOnceWith({
+      batchId: 'batch-1',
+      worktreeId: wt.id,
+      executionHostId: 'runtime:env-1'
+    })
     expect(store.getState().shutdownWorktreeTerminals).toHaveBeenCalledWith(wt.id, {
       shutdownReason: 'remove-worktree',
       backendOwnsPtyTeardown: true

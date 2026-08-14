@@ -908,14 +908,23 @@ const api = {
         .invoke('workspaceCleanup:scan', { ...args, scanId })
         .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
     },
+    cancelScan: (scanId) => ipcRenderer.invoke('workspaceCleanup:cancelScan', scanId),
+    getCachedScan: () => ipcRenderer.invoke('workspaceCleanup:getCachedScan'),
     dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
     clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
     hasKillableLocalProcesses: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args)
+      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args),
+    beginRemovalSnapshotPruneBatch: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:beginRemovalSnapshotPruneBatch', args),
+    recordRemovalSnapshotPrune: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
+    finishRemovalSnapshotPruneBatch: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
   } satisfies PreloadApi['workspaceCleanup'],
 
   workspaceSpace: {
     analyze: () => ipcRenderer.invoke('workspaceSpace:analyze'),
+    getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
     cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
     onProgress: (callback) => {
       const listener = (

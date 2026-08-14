@@ -37,6 +37,7 @@ import { SshConnectionStore } from './ssh/ssh-connection-store'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
+import { createDefaultWorkspaceCleanupBrowseState } from '../shared/workspace-cleanup-browse-state'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -7127,6 +7128,29 @@ describe('Store', () => {
       'agent-browser-use': { firstInteractedAt: 100, interactionCount: 1 },
       tasks: { firstInteractedAt: 200, interactionCount: 1 }
     })
+  })
+
+  it('updateUI preserves browse state when a legacy peer publishes dismissals only', async () => {
+    const store = await createStore()
+    const browse = createDefaultWorkspaceCleanupBrowseState()
+    browse.filters.query = 'stale'
+
+    store.updateUI({ workspaceCleanup: { dismissals: {}, browse } })
+    store.updateUI({
+      workspaceCleanup: {
+        dismissals: {
+          'wt-1': {
+            worktreeId: 'wt-1',
+            dismissedAt: 1700000000000,
+            fingerprint: 'fp-1',
+            classifierVersion: 2
+          }
+        }
+      }
+    })
+
+    expect(store.getUI().workspaceCleanup?.browse).toEqual(browse)
+    expect(store.getUI().workspaceCleanup?.dismissals).toHaveProperty('wt-1')
   })
 
   it('updateUI merges contextual tour seen ids instead of replacing stale snapshots', async () => {

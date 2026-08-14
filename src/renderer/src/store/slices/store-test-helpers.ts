@@ -38,6 +38,7 @@ import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createWorkspaceCleanupBrowseSlice } from './workspace-cleanup-browse'
 import { createRuntimeStatusSlice } from './runtime-status'
 import { createPullRequestGenerationSlice } from './pull-request-generation'
 import { createCommitMessageGenerationSlice } from './commit-message-generation'
@@ -92,6 +93,7 @@ export function createTestStore() {
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),
+    ...createWorkspaceCleanupBrowseSlice(...a),
     ...createRuntimeStatusSlice(...a),
     ...createPullRequestGenerationSlice(...a),
     ...createCommitMessageGenerationSlice(...a),

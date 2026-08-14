@@ -3136,7 +3136,7 @@
             "67c4ecda49": "Fuerza el cierre de este terminal. Cualquier trabajo sin guardar en el panel se perderá. Esto no se puede deshacer.",
             "4bb076fa89": "Terminar",
             "996295bff2": "terminal huérfano",
-            "92924a14e3": "Revisar espacios de trabajo inactivos ({{value0}})",
+            "92924a14e3": "Limpiar espacios de trabajo",
             "27a74f91f0": "No hay nada ejecutándose ahora mismo",
             "1b24a32d3a": "Memoria",
             "298f4be7f2": "CPU",

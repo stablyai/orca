@@ -63,6 +63,13 @@ function readWorktreeListSource(): string {
   return readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
 }
 
+function readSectionHeaderRowSource(): string {
+  return readFileSync(
+    fileURLToPath(new URL('./worktree-list/worktree-section-header-row.tsx', import.meta.url)),
+    'utf8'
+  )
+}
+
 const remoteRepo: Repo = {
   id: 'repo-remote',
   path: '/home/alice/orca',
@@ -3985,7 +3992,7 @@ describe('buildRows workspace lineage nesting', () => {
 
 describe('WorktreeList header styles', () => {
   it('does not title-case workspace group labels', () => {
-    const source = readWorktreeListSource()
+    const source = readSectionHeaderRowSource()
 
     expect(source).not.toContain('leading-none capitalize')
   })
@@ -4005,7 +4012,7 @@ describe('WorktreeList header styles', () => {
   })
 
   it('resolves repo header color from project group headers only', () => {
-    const source = readWorktreeListSource()
+    const source = readSectionHeaderRowSource()
 
     expect(source).toContain('resolveProjectGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')

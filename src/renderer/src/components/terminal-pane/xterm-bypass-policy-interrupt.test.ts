@@ -148,10 +148,13 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
   // And a non-Latin key on some other physical key must not become an interrupt.
   it('does not handle a non-Latin logical key on a physical key other than KeyC', () => {
     expect(
-      shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'ㅁ', code: 'KeyA', ctrlKey: true }), {
-        isMac: true,
-        hasSelection: false
-      })
+      shouldHandleTerminalInterruptKeyboardEvent(
+        event({ key: 'ㅁ', code: 'KeyA', ctrlKey: true }),
+        {
+          isMac: true,
+          hasSelection: false
+        }
+      )
     ).toBe(false)
   })
 
@@ -160,10 +163,13 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
   it('uses the layout map when an IME is layered over a Latin layout', () => {
     _setLayoutMapForTests(new Map([['KeyC', 'c']]))
     expect(
-      shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'ㅊ', code: 'KeyC', ctrlKey: true }), {
-        isMac: true,
-        hasSelection: false
-      })
+      shouldHandleTerminalInterruptKeyboardEvent(
+        event({ key: 'ㅊ', code: 'KeyC', ctrlKey: true }),
+        {
+          isMac: true,
+          hasSelection: false
+        }
+      )
     ).toBe(true)
   })
 
@@ -172,10 +178,13 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
   it('declines when the layout map shows the physical key is not C', () => {
     _setLayoutMapForTests(new Map([['KeyC', 'j']]))
     expect(
-      shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'ㅊ', code: 'KeyC', ctrlKey: true }), {
-        isMac: true,
-        hasSelection: false
-      })
+      shouldHandleTerminalInterruptKeyboardEvent(
+        event({ key: 'ㅊ', code: 'KeyC', ctrlKey: true }),
+        {
+          isMac: true,
+          hasSelection: false
+        }
+      )
     ).toBe(false)
   })
 
