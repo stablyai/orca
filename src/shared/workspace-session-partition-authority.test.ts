@@ -62,15 +62,45 @@ describe('workspaceTerminalAuthority', () => {
     expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('base')
   })
 
+  it('yields a higher two-sided revision to the side holding pty-bound panes', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('ghost-1'), tab('ghost-2')] },
+      terminalLayoutsByTabId: { 'ghost-1': layout(null), 'ghost-2': layout(null) },
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 162 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('live-1', 'ssh:target@@pty-34')] },
+      terminalLayoutsByTabId: { 'live-1': layout('ssh:target@@pty-34') },
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 5 }
+    })
+
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('source')
+  })
+
+  it('keeps two-sided revision precedence when both sides hold pty-bound panes', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('a', 'ssh:target@@pty-1')] },
+      terminalLayoutsByTabId: { a: layout('ssh:target@@pty-1') },
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 9 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('b', 'ssh:target@@pty-2')] },
+      terminalLayoutsByTabId: { b: layout('ssh:target@@pty-2') },
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 4 }
+    })
+
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('base')
+  })
+
   it('keeps revision precedence when both partitions record a revision', () => {
     const base = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('live-1', 'ssh:target@@pty-1')] },
-      terminalLayoutsByTabId: { 'live-1': layout('ssh:target@@pty-1') },
+      tabsByWorktree: { [WORKTREE_ID]: [tab('stale-1')] },
+      terminalLayoutsByTabId: { 'stale-1': layout(null) },
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 3 }
     })
     const source = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('stale-1')] },
-      terminalLayoutsByTabId: { 'stale-1': layout(null) },
+      tabsByWorktree: { [WORKTREE_ID]: [tab('live-1', 'ssh:target@@pty-1')] },
+      terminalLayoutsByTabId: { 'live-1': layout('ssh:target@@pty-1') },
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 9 }
     })
 

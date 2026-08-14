@@ -1,8 +1,9 @@
-import type { TerminalTab, WorkspaceSessionState } from './types'
+import type { WorkspaceSessionState } from './types'
 import { parseWorkspaceKey } from './workspace-scope'
 import { getRepoIdFromWorktreeId } from './worktree-id'
 import {
   collectWorkspaceKeys,
+  hasPtyBoundPane,
   paneTabId,
   WORKTREE_RECORD_FIELDS
 } from './workspace-session-partition-provenance'
@@ -186,31 +187,34 @@ export function workspaceTerminalAuthority(
   const repoId = repoIdForWorkspaceKey(workspaceKey)
   const baseRevision = repoId ? base.terminalTopologyRevisionByRepoId?.[repoId] : undefined
   const sourceRevision = repoId ? source.terminalTopologyRevisionByRepoId?.[repoId] : undefined
-  if (
-    baseRevision !== undefined &&
-    sourceRevision !== undefined &&
-    sourceRevision !== baseRevision
-  ) {
-    return sourceRevision > baseRevision ? 'source' : 'base'
-  }
-  if ((baseRevision !== undefined) !== (sourceRevision !== undefined)) {
-    // Why the pty-bound veto: a revision is only recorded by the process that runs the
-    // topology-authority code path, and a partition can accumulate terminal state
-    // without any bump ever landing in it. When exactly one side records a revision,
-    // that side is presumed newer — except when it holds no pane bound to a pty while
-    // the unrecorded side does. In that shape the recorded side describes dormant tab
-    // rows and the unrecorded side the running terminals; preferring the counter drops
-    // the live panes from the adopted view, strands their agent sessions, and
-    // duplicates them through cold restore.
-    const recordedIsBase = baseRevision !== undefined
-    const recorded = recordedIsBase ? base : source
-    const unrecorded = recordedIsBase ? source : base
-    const recordedTabs = recorded.tabsByWorktree[workspaceKey] ?? []
-    const unrecordedTabs = unrecorded.tabsByWorktree[workspaceKey] ?? []
-    if (!hasPtyBoundPane(recorded, recordedTabs) && hasPtyBoundPane(unrecorded, unrecordedTabs)) {
-      return recordedIsBase ? 'source' : 'base'
+  const revisionAuthority =
+    baseRevision !== undefined && sourceRevision !== undefined
+      ? sourceRevision !== baseRevision
+        ? sourceRevision > baseRevision
+          ? ('source' as const)
+          : ('base' as const)
+        : null
+      : baseRevision !== undefined
+        ? ('base' as const)
+        : sourceRevision !== undefined
+          ? ('source' as const)
+          : null
+  if (revisionAuthority) {
+    // Why the pty-bound veto: the counter is keyed per repo and bumped only by the
+    // process that runs the topology-authority code path, so it can outrank the other
+    // side — or exist where the other has none — without describing this workspace's
+    // terminals at all. A winner with no pty-bound pane yields to a loser holding one:
+    // preferring the counter there drops the running terminals from the adopted view
+    // and duplicates their agent sessions through cold restore. Deliberately closed
+    // panes stay closed either way — tombstones fence resurrection, not the counter.
+    const winner = revisionAuthority === 'base' ? base : source
+    const loser = revisionAuthority === 'base' ? source : base
+    const winnerTabs = winner.tabsByWorktree[workspaceKey] ?? []
+    const loserTabs = loser.tabsByWorktree[workspaceKey] ?? []
+    if (!hasPtyBoundPane(winner, winnerTabs) && hasPtyBoundPane(loser, loserTabs)) {
+      return revisionAuthority === 'base' ? 'source' : 'base'
     }
-    return recordedIsBase ? 'base' : 'source'
+    return revisionAuthority
   }
   const baseIndex = indexes?.base ?? createWorkspaceSessionAuthorityIndex(base)
   const sourceIndex = indexes?.source ?? createWorkspaceSessionAuthorityIndex(source)
@@ -230,12 +234,10 @@ export function workspaceTerminalAuthority(
   if (baseTabs.length > 0 && sourceTabs.length === 0) {
     return 'base'
   }
-  // Why pty-bound wins: a pane holding a persisted pty binding is the partition's
-  // proof that it tracked a running terminal; a copy of the same worktree with no
-  // pty-bound pane describes only dormant surfaces (imported or left-over tab rows).
-  // When exactly one side holds pty-bound panes, treating the sides as ambiguous
-  // keeps the dormant copy and drops the running terminals from the adopted view —
-  // which strands their agent sessions and duplicates them through cold restore.
+  // Why pty-bound wins: a persisted pty binding is the partition's proof that it
+  // tracked a running terminal; a copy with none describes only dormant surfaces.
+  // Treating the sides as ambiguous here would keep the dormant copy and duplicate
+  // the running terminals' agent sessions through cold restore.
   const basePtyBound = hasPtyBoundPane(base, baseTabs)
   const sourcePtyBound = hasPtyBoundPane(source, sourceTabs)
   if (sourcePtyBound !== basePtyBound) {
@@ -244,14 +246,6 @@ export function workspaceTerminalAuthority(
   return indexedWorkspaceSessionBundlesEquivalent(baseIndex, sourceIndex, workspaceKey)
     ? 'equivalent'
     : 'ambiguous'
-}
-
-function hasPtyBoundPane(state: WorkspaceSessionState, tabs: readonly TerminalTab[]): boolean {
-  return tabs.some(
-    (tab) =>
-      Boolean(tab.ptyId) ||
-      Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).some(Boolean)
-  )
 }
 
 export function findAmbiguousWorkspaceSessionKeys(

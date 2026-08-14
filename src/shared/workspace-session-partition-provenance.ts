@@ -1,4 +1,9 @@
-import type { BrowserHistoryEntry, TerminalLayoutSnapshot, WorkspaceSessionState } from './types'
+import type {
+  BrowserHistoryEntry,
+  TerminalLayoutSnapshot,
+  TerminalTab,
+  WorkspaceSessionState
+} from './types'
 
 export const WORKTREE_RECORD_FIELDS = [
   'tabsByWorktree',
@@ -51,6 +56,17 @@ export function collectWorkspaceKeys(session: WorkspaceSessionState): Set<string
     keys.add(tombstone.worktreeId)
   }
   return keys
+}
+
+export function hasPtyBoundPane(
+  state: WorkspaceSessionState,
+  tabs: readonly TerminalTab[]
+): boolean {
+  return tabs.some(
+    (tab) =>
+      Boolean(tab.ptyId) ||
+      Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).some(Boolean)
+  )
 }
 
 export function collectTerminalProvenance(
