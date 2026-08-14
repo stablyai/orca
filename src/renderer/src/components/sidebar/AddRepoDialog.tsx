@@ -18,7 +18,7 @@ import {
   useAddRepoHostedController,
   type AddRepoDialogHostedController
 } from './use-add-repo-hosted-controller'
-import { routeAddRepoBrowse } from './add-repo-browse-authority'
+import { routeAddRepoBrowse, runAddRepoHostAction } from './add-repo-browse-authority'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -26,8 +26,7 @@ export default React.memo(function AddRepoDialog({
   hosted?: AddRepoDialogHostedController
 }) {
   const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
-  // Why: hosted mode never receives dropped paths through modalData — that
-  // channel belongs to the store-modal instance.
+  // Why: modalData belongs to the store-modal instance, not hosted mode.
   const droppedLocalPath = useAppStore((s) =>
     !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
   )
@@ -50,9 +49,10 @@ export default React.memo(function AddRepoDialog({
     finishProjectAdd
   })
   const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
+  const effectiveStep = hostSelection.actionableHostId || step === 'add' ? step : 'add'
   const selectedRuntimeEnvironmentId =
-    hostSelection.selectedParsedHost?.kind === 'runtime'
-      ? hostSelection.selectedParsedHost.environmentId
+    hostSelection.actionableParsedHost?.kind === 'runtime'
+      ? hostSelection.actionableParsedHost.environmentId
       : null
   const {
     nestedScan,
@@ -126,7 +126,7 @@ export default React.memo(function AddRepoDialog({
     closeForFolderHandoff,
     (repoId, executionHostId) => completeGitRepoAdd(repoId, 'create_project', executionHostId),
     {
-      hostId: hostSelection.selectedHostId,
+      hostId: hostSelection.actionableHostId,
       runtimeEnvironmentId: selectedRuntimeEnvironmentId,
       sshTargetId: hostSelection.selectedSshTargetId
     }
@@ -169,7 +169,7 @@ export default React.memo(function AddRepoDialog({
   })
 
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
-  const selectedHostKind = hostSelection.selectedParsedHost?.kind
+  const selectedHostKind = hostSelection.actionableParsedHost?.kind
   const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath,
@@ -208,8 +208,7 @@ export default React.memo(function AddRepoDialog({
   })
 
   const resetState = useCallback(() => {
-    // Why: kill the git clone process if one is running, so backing out
-    // or closing the dialog doesn't leave a clone running on disk.
+    // Why: backing out must not leave a clone running on disk.
     void window.api.repos.cloneAbort()
     resetLocalFolderFlow()
     setStep('add')
@@ -234,11 +233,14 @@ export default React.memo(function AddRepoDialog({
   ])
 
   const resetHostScopedState = useCallback(() => {
+    setStep('add')
     setIsAdding(false)
     setAddProjectBusyLabel(null)
     resetLocalFolderFlow()
     resetServerPathFlow()
     resetCloneFlow()
+    resetNestedImportFlow()
+    resetNestedRepoReviewState()
     resetCreateDefaultState()
     resetCreateState()
     resetRemoteState()
@@ -246,6 +248,8 @@ export default React.memo(function AddRepoDialog({
     resetCloneFlow,
     resetCreateDefaultState,
     resetCreateState,
+    resetNestedImportFlow,
+    resetNestedRepoReviewState,
     resetRemoteState,
     resetLocalFolderFlow,
     resetServerPathFlow
@@ -253,7 +257,7 @@ export default React.memo(function AddRepoDialog({
 
   useAddRepoHostChangeReset({
     isOpen,
-    selectedHostId: hostSelection.selectedHostId,
+    selectedHostId: hostSelection.actionableHostId,
     onResetClosed: resetState,
     onResetHostScopedState: resetHostScopedState
   })
@@ -277,18 +281,22 @@ export default React.memo(function AddRepoDialog({
     },
     [closeModal, isAdding, resetState, step, trackNestedBackAction]
   )
+  const runAddRepoMutation = useCallback(
+    (mutation: () => void): void => runAddRepoHostAction(hostSelection.actionableHostId, mutation),
+    [hostSelection.actionableHostId]
+  )
 
   return (
     <AddRepoDialogChrome
       isOpen={isOpen}
-      step={step}
+      step={effectiveStep}
       isAdding={isAdding}
       onBack={handleBack}
       onCloseAutoFocus={hosted?.onCloseAutoFocus}
       onOpenChange={handleOpenChange}
     >
       <AddRepoDialogStepContent
-        step={step}
+        step={effectiveStep}
         isRuntimeEnvironmentActive={isRuntimeEnvironmentActive}
         activeRuntimeEnvironmentId={selectedRuntimeEnvironmentId}
         isSshLikely={false}
@@ -308,10 +316,10 @@ export default React.memo(function AddRepoDialog({
         selectedTargetId={selectedTargetId}
         selectedSshTargetId={hostSelection.selectedSshTargetId}
         selectedHostLabel={
-          hostSelection.hostOptions.find((host) => host.id === hostSelection.selectedHostId)
+          hostSelection.hostOptions.find((host) => host.id === hostSelection.actionableHostId)
             ?.label ?? null
         }
-        lockSshTargetSelection={hostSelection.selectedParsedHost?.kind === 'ssh'}
+        lockSshTargetSelection={hostSelection.actionableParsedHost?.kind === 'ssh'}
         remotePath={remotePath}
         remoteError={remoteError}
         isAddingRemote={isAddingRemote}
@@ -325,7 +333,7 @@ export default React.memo(function AddRepoDialog({
         isCreating={isCreating}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
         showRemoteAction={false}
-        actionsDisabled={!hostSelection.selectedHostId}
+        actionsDisabled={!hostSelection.actionableHostId}
         browseHostKind={selectedHostKind ?? 'runtime'}
         createDefaultParent={createDefaultParent}
         createGitAvailability={createGitAvailability}
@@ -333,30 +341,30 @@ export default React.memo(function AddRepoDialog({
         createParentDefaultPending={createParentDefaultPending}
         manualCreateParentEntry={isRuntimeEnvironmentActive || selectedHostKind === 'ssh'}
         onBrowse={() =>
-          routeAddRepoBrowse(hostSelection.selectedParsedHost, {
-            browseLocal: () => void handleBrowse(),
-            browseRuntime: () => setStep('server-path'),
-            browseSsh: (targetId) => void handleOpenRemoteStep(targetId)
+          runAddRepoMutation(() =>
+            routeAddRepoBrowse(hostSelection.actionableParsedHost, {
+              browseLocal: () => void handleBrowse(),
+              browseRuntime: () => setStep('server-path'),
+              browseSsh: (targetId) => void handleOpenRemoteStep(targetId)
+            })
+          )
+        }
+        onOpenCloneStep={() =>
+          runAddRepoMutation(() => {
+            setCloneError(null)
+            setStep('clone')
           })
         }
-        onOpenCloneStep={() => {
-          if (!hostSelection.selectedHostId) {
-            return
-          }
-          setCloneError(null)
-          setStep('clone')
-        }}
-        onOpenCreateStep={() => {
-          if (!hostSelection.selectedHostId) {
-            return
-          }
-          setCreateError(null)
-          setStep('create')
-        }}
+        onOpenCreateStep={() =>
+          runAddRepoMutation(() => {
+            setCreateError(null)
+            setStep('create')
+          })
+        }
         onOpenRemoteStep={handleOpenRemoteStep}
         onStopNestedScan={handleStopNestedScan}
         onServerPathChange={setServerPath}
-        onAddServerPath={(kind) => void handleAddServerPath(kind)}
+        onAddServerPath={(kind) => runAddRepoMutation(() => void handleAddServerPath(kind))}
         onSelectTarget={(id) => {
           setSelectedTargetId(id)
           setRemoteError(null)
@@ -365,7 +373,7 @@ export default React.memo(function AddRepoDialog({
           setRemotePath(value)
           setRemoteError(null)
         }}
-        onAddRemoteRepo={handleAddRemoteRepo}
+        onAddRemoteRepo={() => runAddRepoMutation(() => void handleAddRemoteRepo())}
         onOpenSshSettings={handleOpenSshSettings}
         onConnectTarget={handleConnectTarget}
         onStopRemoteNestedScan={stopRemoteNestedScan}
@@ -378,11 +386,11 @@ export default React.memo(function AddRepoDialog({
           setCloneError(null)
         }}
         onPickCloneDestination={handlePickDestination}
-        onClone={handleClone}
+        onClone={() => runAddRepoMutation(() => void handleClone())}
         onNestedGroupNameChange={setNestedGroupName}
         onNestedSelectedPathsChange={setNestedSelectedPaths}
-        onImportNestedRepos={(mode) => void handleImportNestedRepos(mode)}
-        onOpenNestedRootFolder={() => void handleOpenNestedRootFolder()}
+        onImportNestedRepos={(mode) => runAddRepoMutation(() => void handleImportNestedRepos(mode))}
+        onOpenNestedRootFolder={() => runAddRepoMutation(() => void handleOpenNestedRootFolder())}
         onCreateNameChange={(value) => {
           setCreateName(value)
           setCreateError(null)
@@ -399,7 +407,7 @@ export default React.memo(function AddRepoDialog({
             }
           })
         }}
-        onCreate={handleCreate}
+        onCreate={() => runAddRepoMutation(() => void handleCreate())}
       />
     </AddRepoDialogChrome>
   )

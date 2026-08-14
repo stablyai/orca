@@ -15,14 +15,23 @@ vi.mock('@/components/ui/command', () => ({
     children,
     disabled,
     className,
+    'data-host-id': hostId,
+    'data-host-actionable': hostActionable,
     'aria-disabled': ariaDisabled
   }: {
     children: React.ReactNode
     disabled?: boolean
     className?: string
+    'data-host-id'?: string
+    'data-host-actionable'?: boolean
     'aria-disabled'?: React.AriaAttributes['aria-disabled']
   }) => (
-    <div aria-disabled={ariaDisabled ?? disabled} className={className}>
+    <div
+      aria-disabled={ariaDisabled ?? disabled}
+      className={className}
+      data-host-id={hostId}
+      data-host-actionable={hostActionable}
+    >
       {children}
     </div>
   )
@@ -42,7 +51,8 @@ describe('AddRepoHostSelector', () => {
             presence: 'local'
           }
         ]}
-        selectedHostId="local"
+        displayedHostId="local"
+        actionableHostId="local"
         open
         onOpenChange={vi.fn()}
         onSelectHost={vi.fn()}
@@ -79,7 +89,8 @@ describe('AddRepoHostSelector', () => {
             presence: 'configured'
           }
         ]}
-        selectedHostId="ssh:ssh-1"
+        displayedHostId="ssh:ssh-1"
+        actionableHostId={null}
         open={false}
         onOpenChange={vi.fn()}
         onSelectHost={vi.fn()}
@@ -122,7 +133,8 @@ describe('AddRepoHostSelector', () => {
             }
           }
         ]}
-        selectedHostId="runtime:old-server"
+        displayedHostId="runtime:old-server"
+        actionableHostId={null}
         open
         onOpenChange={vi.fn()}
         onSelectHost={vi.fn()}
@@ -133,5 +145,42 @@ describe('AddRepoHostSelector', () => {
     expect(html).toContain('The selected Orca server is too old for this client.')
     expect(html).toContain('Update Orca on the server.')
     expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('data-host-id="runtime:old-server"')
+    expect(html).toContain('data-host-actionable="false"')
+  })
+
+  it('disables leaf hosts when the paired transport is unavailable', () => {
+    const html = renderToStaticMarkup(
+      <AddRepoHostSelector
+        hosts={[
+          {
+            id: 'ssh:ssh-1',
+            label: 'Builder',
+            detail: 'SSH',
+            kind: 'ssh',
+            health: 'available',
+            presence: 'configured'
+          },
+          {
+            id: 'runtime:server',
+            label: 'Server',
+            detail: 'Runtime',
+            kind: 'runtime',
+            health: 'disconnected',
+            presence: 'active'
+          }
+        ]}
+        displayedHostId="runtime:server"
+        actionableHostId={null}
+        hostSelectionAvailable={false}
+        open
+        onOpenChange={vi.fn()}
+        onSelectHost={vi.fn()}
+      />
+    )
+
+    expect(html).toMatch(/data-host-id="ssh:ssh-1"[^>]*data-host-actionable="false"/)
+    expect(html).toMatch(/data-host-id="runtime:server"[^>]*data-host-actionable="false"/)
+    expect(html.match(/aria-disabled="true"/g)).toHaveLength(2)
   })
 })

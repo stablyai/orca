@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { routeAddRepoBrowse } from './add-repo-browse-authority'
+import { routeAddRepoBrowse, runAddRepoHostAction } from './add-repo-browse-authority'
 
 describe('routeAddRepoBrowse', () => {
+  it('does not invoke a host action without actionable authority', () => {
+    const action = vi.fn()
+
+    runAddRepoHostAction(null, action)
+
+    expect(action).not.toHaveBeenCalled()
+  })
+
+  it('invokes a host action with actionable authority', () => {
+    const action = vi.fn()
+
+    runAddRepoHostAction('runtime:paired-host', action)
+
+    expect(action).toHaveBeenCalledOnce()
+  })
+
   it('opens paired host browsing without invoking native pickFolders', () => {
     const pickFolders = vi.fn()
     const browseRuntime = vi.fn()

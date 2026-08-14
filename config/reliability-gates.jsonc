@@ -4325,22 +4325,24 @@
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "remote-runtime", "ssh", "wsl"],
-      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project eligibility/owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove selected-runtime Add Project operations and disabled creation when the only listed host is blocked or unavailable; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected.",
+      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project displayed/actionable authority, owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove that blocked or unavailable paired authority stays displayed while creation, nested import, and mid-form mutations remain disabled and recover in place. A connected SSH decoy is excluded because paired web cannot preserve direct-SSH mutation authority; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/9687",
-        "https://linear.app/stably/issue/STA-4024/p1-paired-web-add-project-enables-unavailable-host-fallback-after-pr"
+        "https://linear.app/stably/issue/STA-4024/p1-paired-web-add-project-enables-unavailable-host-fallback-after-pr",
+        "https://linear.app/stably/issue/STA-4182/release-blocking-paired-web-add-project-picker-shows-local-linux",
+        "https://github.com/stablyai/orca/pull/14100"
       ],
-      "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project selected host must satisfy canSelectAddRepoHost; paired web has no local filesystem fallback, so no valid host means Browse, Clone, and Create remain disabled. Every operation stays on the host selected when it began, even if preference or catalog state changes. Generic settings mutation cannot bypass the dedicated preference IPC.",
-      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
+      "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Paired web preserves its configured runtime as displayed Add Project authority through unavailable, unknown, and blocked states, but only that runtime satisfying canSelectAddRepoHost becomes actionable; local and direct-SSH leaves are not paired-web filesystem authorities. Without actionable authority, Browse, Clone, Create, and all repo mutations remain disabled. Every operation stays on the host selected when it began, even if preference or catalog state changes. Generic settings mutation cannot bypass the dedicated preference IPC.",
+      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, seed a connected SSH decoy, then make its sole configured runtime compatibility-blocked and unavailable, including after entering server-path, clone, create, and nested-import forms. Require its runtime ID to remain displayed, actionable authority to be null, local and SSH leaves to be absent, the host option and Browse/Clone/Create actions to be disabled, and no picker, repo mutation, runtime mutation, or project-group import RPC. Recover without closing and require the clean Add step and actionability to return. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the displayed/actionable split reverted.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/web/web-preload-api.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/runtime/runtime-server-directory-browser.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/AddRepoHostSelector.test.tsx src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/runtime/runtime-server-directory-browser.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
-        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
-        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
+        "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
+        "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
       ],
       "testFiles": [
         "src/main/ipc/settings.test.ts",
@@ -4351,6 +4353,7 @@
         "src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts",
         "src/renderer/src/components/status-bar/SshStatusSegment.test.ts",
         "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
+        "src/renderer/src/components/sidebar/AddRepoHostSelector.test.tsx",
         "src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts",
         "src/renderer/src/hooks/useIpcEvents.test.ts",
         "src/renderer/src/web/web-preload-api.test.ts",
@@ -4359,6 +4362,7 @@
         "src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts",
         "src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx",
         "src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx",
+        "src/renderer/src/runtime/runtime-server-directory-browser.test.ts",
         "src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts",
         "src/renderer/src/components/sidebar/project-added-default-checkout.test.ts",
         "src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts",
@@ -4384,14 +4388,22 @@
         {
           "file": "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
           "assertions": [
-            "paired web hides the viewing computer as an Add Project filesystem authority and selects only an eligible paired runtime",
-            "a sole blocked or errored runtime remains listed but produces no selected Add Project host"
+            "uses the paired runtime as the only local filesystem authority in web clients",
+            "has no paired-web fallback when the only host is error, blocked, connecting, or disconnected",
+            "does not expose a paired-host SSH target as web filesystem authority",
+            "does not expose or accept a stale runtime after paired-web re-pairing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/sidebar/AddRepoHostSelector.test.tsx",
+          "assertions": [
+            "the displayed host is explicit and an unavailable displayed host cannot select or connect any host leaf"
           ]
         },
         {
           "file": "src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts",
           "assertions": [
-            "paired runtime browsing opens the host browser without invoking native pickFolders while desktop local and SSH routes remain intact"
+            "host-scoped callbacks no-op without actionable authority, while paired runtime browsing avoids native pickFolders and desktop local and SSH routes remain intact"
           ]
         },
         {
@@ -4521,30 +4533,42 @@
         {
           "file": "tests/e2e/paired-web-add-project-unavailable-host.spec.ts",
           "assertions": [
-            "a version-blocked sole host stays visible and non-selectable while Browse, Clone, and Create are disabled",
-            "an unavailable sole host has the same disabled action contract without a local fallback",
-            "the rendered contract passes against headed desktop and headless serve hosts"
+            "disables paired-web Add Project for a blocked or unavailable headed host @headful",
+            "keeps paired-web Add Project disabled for a headless unavailable host",
+            "seeds a connected SSH decoy and proves paired web exposes neither local nor SSH mutation authority",
+            "server-path, clone, create, and nested-import authority loss returns to Add and recovers in place",
+            "forced disabled-control clicks send zero picker, repo, runtime, or project-group mutation RPCs",
+            "independent client and host repo inventories remain unchanged"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-12",
+          "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
-          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/AddRepoHostSelector.test.tsx src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/runtime/runtime-server-directory-browser.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
           "result": "passed",
-          "durationSeconds": 12.3,
-          "summary": "A real paired web client against a visible desktop host kept the sole blocked and unavailable runtime listed but non-selectable, with Browse, Clone, and Create disabled and no local host fallback."
+          "durationSeconds": 4.57,
+          "summary": "Eight files and 62 tests passed, including paired-web rejection of a stale runtime leaf after re-pairing, callback-level no-authority guards, exact displayed/actionable authority, runtime browsing, and paired-runtime repo routing."
         },
         {
-          "date": "2026-08-12",
+          "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
-          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "command": "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
           "result": "passed",
-          "durationSeconds": 5.8,
-          "summary": "The same present-but-blocked and present-but-unavailable Add Project action oracle passed against isolated headless serve."
+          "durationSeconds": 12.9,
+          "summary": "Candidate 09c3b578709126972d6276a809300e99eb01b1e3 passed against a visible isolated desktop host: exact runtime identity, connected SSH decoy exclusion, mid-form loss and in-place recovery, zero mutation calls, and unchanged client/host inventories."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 8.7,
+          "summary": "Candidate 09c3b578709126972d6276a809300e99eb01b1e3 passed the identical authority, SSH-decoy, mutation, recovery, and independent-inventory oracle against isolated headless serve."
         },
         {
           "date": "2026-07-22",
@@ -4620,11 +4644,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The Add Project selector file from fix-disabled overlay 17a612c819 and candidate 8abf0f5d20 is byte-identical (SHA-256 f34c3c69c8adba23811c3a3b6a0efb669f787666c5ada086df8a167e785eea20): its blocked and unavailable sole-host cases fail with the production fix disabled on latest main ebe5125476 after PR #13909 and pass on the candidate. The focused combined selector/transaction invocation was 3 failed with 69 skipped on the red overlay and 3 passed with 75 skipped on the candidate; the different totals come from supplemental browser-transaction cases, not this selector file. The originating/latest affected main 1136503c6a and its fix-disabled overlay were also red before the provider-gating rebase. The byte-identical focused oracle (SHA-256 6de18c140a86801460e58f52287e27a58b97f1576f9f387fa82e1bd4eb378f7b) fails 2/3 on review baseline aa6f945001a5f78a07663c854fabb95c55d8b40b and on the r5-disabled parent e21f4ca58e: local-first lookup returns /local/repo and folder activation has no runtime host. It passes 3/3 on the candidate. Main later advanced to 94cf2f1422f30fc309cb47c5e864a831d516fa8b without changing any of the candidate's 68 files or the focused oracle production boundary; the rebased disabled parent f247d961cab15237bc7fcf0598fe76007f78ec7c has the same stable patch ID as e21f4ca58e. The final paired spec and fixture have SHA-256 bd6d9014d1bed2715397bcd2121d5d7e01792347b13ff14778ccf608bf98789c and d1d78a82f868e2f3152777550825c0ca2d4dc3cba5c6de548e066d2931751fc7. With the final runtime-session owner fix disabled, the focused session test fails 3/43 and the byte-identical hidden paired oracle deterministically creates the host terminal but reports null active client owner while same-ID local/runtime worktrees remain. The integrated candidate passes the same focused test and both headed/hidden paired oracles with exact runtime ownership, server inventory, local exclusion, preserved catalogs, visible rows, and zero direct SSH fallback. Earlier Active Server preference paths retain deterministic coverage but do not yet have a saved intentional-break artifact."
+        "evidence": "The paired spec SHA-256 9e5e123f4522355a3250c73530197eede64947b6374badc1e9e178a6071bcc1f is red on latest affected main e06cdbb4ee0442599eaa7ecef759b8a600bb2cf5 and when the displayed/actionable separation is reverted: the unavailable runtime has no semantic displayed selection. It is green on product candidate 09c3b578709126972d6276a809300e99eb01b1e3 in both headed desktop-server and headless-serve topologies. The green oracle additionally proves a connected paired-host SSH leaf is excluded, every entered mutation form returns to Add and recovers in place, disabled-control DOM attempts emit no local/runtime/project-group mutation RPC, and independent client/host inventories remain unchanged."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Preference writes are explicit user actions; transient routing adds no polling or provider fanout and retains one authoritative worktree refresh per completed add. Host-qualified owner indexes are WeakMap-cached and do not add subprocesses or network calls. The final headed journey measured 43 ms for three preference switches, 1,513 ms for Git add, 3,841 ms for folder add, 1,200 ms for Clone, 790 ms for Create with controlled exact-ID completion gates, 202 ms for disconnect/reconnect with overlapping catalog refreshes, and 1,312 ms for nested import. The final session-activation fix adds one execution-host string conversion per explicit terminal/browser activation and no provider call, scan, timer, or retry. Existing Zustand selector fan-out evidence remained 0 render invalidations across 5,000,000 selector runs."
+        "evidence": "STA-4182 adds only bounded in-memory host filtering and identity selection during render plus existing reset callbacks when actionable authority changes. It adds no polling, timer, listener, provider call, subprocess, retry, persistence, wire field, or catalog scan. The full strengthened journey completed in 12.9 seconds headed and 8.7 seconds headless, including four mid-form loss/recovery cycles and independent before/after inventory reads."
       },
       "promotionCriteria": [
         "Run the focused gate in soak across macOS, Linux, and Windows.",

@@ -13,7 +13,9 @@ import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-ava
 
 type AddRepoHostSelectorProps = {
   hosts: SidebarHostOption[]
-  selectedHostId: ExecutionHostId | null
+  displayedHostId: ExecutionHostId | null
+  actionableHostId: ExecutionHostId | null
+  hostSelectionAvailable?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelectHost: (hostId: ExecutionHostId) => void
@@ -31,7 +33,9 @@ function getHostStatusDetail(host: SidebarHostOption): string {
 
 export function AddRepoHostSelector({
   hosts,
-  selectedHostId,
+  displayedHostId,
+  actionableHostId,
+  hostSelectionAvailable = true,
   open,
   onOpenChange,
   onSelectHost,
@@ -45,8 +49,8 @@ export function AddRepoHostSelector({
     return null
   }
 
-  const selectedHost = hosts.find((host) => host.id === selectedHostId) ?? hosts[0]
-  if (!selectedHost) {
+  const displayedHost = hosts.find((host) => host.id === displayedHostId)
+  if (!displayedHost) {
     return null
   }
   return (
@@ -61,15 +65,17 @@ export function AddRepoHostSelector({
             variant="ghost"
             role="combobox"
             aria-expanded={open}
+            data-host-id={displayedHost.id}
+            data-host-actionable={displayedHost.id === actionableHostId}
             className="h-7 min-w-0 max-w-[18rem] gap-1.5 rounded-md border border-border bg-muted/30 px-2 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
-            <span className="min-w-0 truncate">{selectedHost.label}</span>
-            {selectedHost.health !== 'local' ? (
+            <span className="min-w-0 truncate">{displayedHost.label}</span>
+            {displayedHost.health !== 'local' ? (
               <span
-                title={getHostStatusDetail(selectedHost)}
+                title={getHostStatusDetail(displayedHost)}
                 className="shrink-0 text-[11px] font-normal text-muted-foreground"
               >
-                {getSidebarHostHealthLabel(selectedHost.health)}
+                {getSidebarHostHealthLabel(displayedHost.health)}
               </span>
             ) : null}
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
@@ -162,14 +168,16 @@ export function AddRepoHostSelector({
                 </Popover>
               ) : null}
               {hosts.map((host) => {
-                const selected = host.id === selectedHostId
-                const disabled = !canSelectAddRepoHost(host)
-                const canConnect = canConnectAddRepoHost(host)
+                const selected = host.id === displayedHostId
+                const disabled = !hostSelectionAvailable || !canSelectAddRepoHost(host)
+                const canConnect = hostSelectionAvailable && canConnectAddRepoHost(host)
                 const isConnecting = host.health === 'connecting'
                 return (
                   <CommandItem
                     key={host.id}
                     value={`${host.label} ${host.detail}`}
+                    data-host-id={host.id}
+                    data-host-actionable={!disabled}
                     disabled={disabled && !canConnect}
                     aria-disabled={disabled}
                     onSelect={() => {

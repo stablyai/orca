@@ -14,7 +14,9 @@ export function AddRepoHostSelectorSlot({
     <>
       <AddRepoHostSelector
         hosts={hostSelection.hostOptions}
-        selectedHostId={hostSelection.selectedHostId}
+        displayedHostId={hostSelection.displayedHostId}
+        actionableHostId={hostSelection.actionableHostId}
+        hostSelectionAvailable={hostSelection.hostSelectionAvailable}
         open={hostSelection.hostSelectorOpen}
         onOpenChange={hostSelection.setHostSelectorOpen}
         onSelectHost={(hostId) => void hostSelection.handleSelectAddProjectHost(hostId)}

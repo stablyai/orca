@@ -1,9 +1,18 @@
-import type { ParsedExecutionHost } from '../../../../shared/execution-host'
+import type { ExecutionHostId, ParsedExecutionHost } from '../../../../shared/execution-host'
 
 export type AddRepoBrowseAuthorityActions = {
   browseLocal: () => void
   browseRuntime: () => void
   browseSsh: (targetId: string) => void
+}
+
+export function runAddRepoHostAction(
+  actionableHostId: ExecutionHostId | null,
+  action: () => void
+): void {
+  if (actionableHostId) {
+    action()
+  }
 }
 
 export function routeAddRepoBrowse(
