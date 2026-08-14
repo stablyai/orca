@@ -12,21 +12,27 @@ export function useAgentSubagentSessions({
   target,
   agent,
   parentFilePath,
+  structuredSessionId,
   liveSubagents = [],
   poll = false
 }: {
   target: RuntimeClientTarget
   agent: string
   parentFilePath: string | null
+  structuredSessionId?: string
   liveSubagents?: readonly AgentSubagentSnapshot[]
   poll?: boolean
 }): AgentSubagentSessionsState {
   const [state, setState] = useState<AgentSubagentSessionsState>({ loading: false, sessions: [] })
   const liveKey = liveSubagents.map((subagent) => `${subagent.id}:${subagent.state}`).join('|')
   const targetKey = target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
+  const shouldPoll =
+    poll ||
+    liveSubagents.length > 0 ||
+    state.sessions.some((session) => session.subagent?.status === 'running')
 
   useEffect(() => {
-    if (!parentFilePath || !supportsSubagentTranscripts(agent)) {
+    if ((!parentFilePath && !structuredSessionId) || !supportsSubagentTranscripts(agent)) {
       setState({ loading: false, sessions: [] })
       return
     }
@@ -37,8 +43,8 @@ export function useAgentSubagentSessions({
       try {
         const result = await callRuntimeRpc<unknown>(
           target,
-          'aiVault.listSubagentSessions',
-          { agent, parentFilePath },
+          structuredSessionId ? 'agentSession.subagents' : 'aiVault.listSubagentSessions',
+          structuredSessionId ? { sessionId: structuredSessionId } : { agent, parentFilePath },
           { timeoutMs: 15_000 }
         )
         if (!cancelled) {
@@ -51,7 +57,7 @@ export function useAgentSubagentSessions({
       }
     }
     void load()
-    if (poll || liveSubagents.length > 0) {
+    if (shouldPoll) {
       timer = setInterval(() => void load(), 2_000)
     }
     return () => {
@@ -60,7 +66,7 @@ export function useAgentSubagentSessions({
         clearInterval(timer)
       }
     }
-  }, [agent, liveKey, liveSubagents.length, parentFilePath, poll, target, targetKey])
+  }, [agent, liveKey, parentFilePath, structuredSessionId, shouldPoll, target, targetKey])
 
   return state
 }

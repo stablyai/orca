@@ -5,6 +5,7 @@ import type { RoomDatabase } from './database'
 import type { RoomHarnessAdapter, RoomHarnessBinding } from './harness-adapter'
 import {
   hideRoomParticipantRendererStatus,
+  roomParticipantFieldsFromBinding,
   roomParticipantHarnessBinding
 } from './participant-harness-binding'
 import type { RoomTranscriptBridge } from './transcript-bridge'
@@ -40,6 +41,9 @@ export class RoomParticipantSessionControls {
         throw new Error(result.refusedReason ?? 'room_compaction_refused')
       }
       const current = this.db.participants.get(id)
+      if (binding.transport === 'machine') {
+        return this.setCompaction(current, 'completed')
+      }
       return current.context.compaction === 'completed'
         ? current
         : this.setCompaction(current, 'running')
@@ -104,10 +108,7 @@ export class RoomParticipantSessionControls {
     try {
       const configured = await adapter.reconfigure(binding, preferences)
       participant = this.db.participants.update(id, {
-        worktreeId: configured.worktreeId,
-        paneKey: configured.paneKey,
-        terminalHandle: configured.terminalHandle,
-        providerSession: configured.providerSession,
+        ...roomParticipantFieldsFromBinding(configured),
         processIncarnation: adapter.incarnation(configured),
         context: {
           ...participant.context,

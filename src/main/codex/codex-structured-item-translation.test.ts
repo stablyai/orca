@@ -784,7 +784,7 @@ describe('codex item bodies', () => {
     }
   })
 
-  it('leaves subagent items on the generic row until a real renderer exists', () => {
+  it('models subagent lifecycle events as activity instead of raw provider frames', () => {
     expect(
       codexJournalItem({
         type: 'subAgentActivity',
@@ -794,8 +794,12 @@ describe('codex item bodies', () => {
         agentPath: '/root/list_directory'
       })
     ).toMatchObject({
-      handled: false,
-      body: { kind: 'status', providerFrame: { kind: 'item:subAgentActivity' } }
+      handled: true,
+      body: {
+        kind: 'tool-call',
+        name: 'subagent_activity',
+        input: { kind: 'started', agentThreadId: 'thread-child' }
+      }
     })
   })
 

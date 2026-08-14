@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { acquired, fakeClaude, PROVIDER_SESSION_ID } from './claude-structured-session-test-support'
 
 function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSession {
   return {
@@ -30,6 +31,37 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
 }
 
 describe('Claude structured option mutation fencing', () => {
+  it('exposes the same provider options and command availability to Rooms and native chat', async () => {
+    const claude = fakeClaude()
+    const adapter = await acquired(claude)
+    claude.connections[0]!.handlers.onMessage?.({
+      type: 'system',
+      subtype: 'commands_changed',
+      session_id: PROVIDER_SESSION_ID,
+      commands: [{ name: 'compact', description: 'Compact context', argumentHint: 'instructions' }]
+    })
+    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
+    expect(result).toMatchObject({
+      canCompact: true,
+      canSteer: true,
+      descriptors: expect.arrayContaining([
+        expect.objectContaining({ id: 'model', transport: 'agent-session', settable: true })
+      ])
+    })
+    expect(adapter.readConfiguration('session-1')).toMatchObject({
+      options: result.descriptors,
+      commands: [{ name: 'compact', description: 'Compact context', inputHint: 'instructions' }]
+    })
+    claude.connections[0]!.handlers.onMessage?.({
+      type: 'system',
+      subtype: 'commands_changed',
+      session_id: PROVIDER_SESSION_ID,
+      commands: []
+    })
+    expect(adapter.readConfiguration('session-1')?.canCompact).toBe(false)
+    await adapter.closeAll()
+  })
+
   it('does not let a delayed earlier apply overwrite a later option', async () => {
     let releaseFirst!: () => void
     const firstApply = new Promise<void>((resolve) => {

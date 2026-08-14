@@ -122,6 +122,7 @@ export type ClaudeStructuredLaunch = {
   claudeConfigDir: string
   providerSessionId: string
   resumeLeafUuid: string | null
+  /** Existing Orca identity, independent of whether the CLI has history to resume. */
   resumed: boolean
 }
 
@@ -144,6 +145,7 @@ export type ClaudeStructuredLaunchResolverDeps = {
   authSwitchSettleTimeoutMs?: number
   /** Account state for the managed-account gate; null when it cannot be read, which refuses. */
   readManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
+  canStartEmptySession?: (sessionId: string) => Promise<boolean>
 }
 
 /**
@@ -218,6 +220,8 @@ export function createClaudeStructuredLaunchResolver(
         ? head.handle.sessionId
         : claudeSessionIdForOrcaSession(identity.sessionId)
     const durable = claudeSdkOptionsForLaunchArgs(record.launchArgs ?? [])
+    const resumeHistory =
+      head?.handle.provider === 'claude' && !(await deps.canStartEmptySession?.(identity.sessionId))
     const command = (deps.resolveCommand ?? resolveClaudeCommand)()
     const auth = await deps.resolveAuthPolicy()
     const overlay = await deps.resolveEnv?.()
@@ -255,7 +259,7 @@ export function createClaudeStructuredLaunchResolver(
         ...durable,
         ...CLAUDE_STRUCTURED_BASE_OPTIONS,
         extraArgs: { ...durable.extraArgs, ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs },
-        ...(head?.handle.provider === 'claude'
+        ...(resumeHistory && head?.handle.provider === 'claude'
           ? {
               resume: providerSessionId,
               ...(head.handle.leafUuid === null ? {} : { resumeSessionAt: head.handle.leafUuid })

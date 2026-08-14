@@ -11,6 +11,11 @@ export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
 }
 
+type RuntimeClientEventReadySnapshot = Extract<
+  RuntimeClientEventStreamMessage,
+  { type: 'ready' }
+>['snapshot']
+
 export async function subscribeRuntimeClientEvents(
   environmentId: string,
   onEvent: (event: RuntimeClientEvent) => void,
@@ -19,7 +24,8 @@ export async function subscribeRuntimeClientEvents(
   // lost, not queued. The replay tag on the first post-reconnect response is
   // the renderer's only signal that mirrored event-derived state (e.g. the
   // per-environment SSH bucket) may have missed transitions and must resync.
-  onReplayedAfterReconnect?: () => void
+  onReplayedAfterReconnect?: () => void,
+  onReady?: (replayedAfterReconnect: boolean, snapshot?: RuntimeClientEventReadySnapshot) => void
 ): Promise<RuntimeClientEventSubscription> {
   const handle = await window.api.runtimeEnvironments.subscribe(
     {
@@ -30,7 +36,13 @@ export async function subscribeRuntimeClientEvents(
     },
     {
       onResponse: (response) => {
-        handleRuntimeClientEventResponse(response, onEvent, onError, onReplayedAfterReconnect)
+        handleRuntimeClientEventResponse(
+          response,
+          onEvent,
+          onError,
+          onReplayedAfterReconnect,
+          onReady
+        )
       },
       onError
     }
@@ -42,17 +54,20 @@ function handleRuntimeClientEventResponse(
   response: RuntimeRpcResponse<unknown>,
   onEvent: (event: RuntimeClientEvent) => void,
   onError: (error: unknown) => void,
-  onReplayedAfterReconnect?: () => void
+  onReplayedAfterReconnect?: () => void,
+  onReady?: (replayedAfterReconnect: boolean, snapshot?: RuntimeClientEventReadySnapshot) => void
 ): void {
   if (response.ok === false) {
     onError(response.error)
     return
   }
-  if (isRuntimeSubscriptionReplayResponse(response)) {
+  const replayedAfterReconnect = isRuntimeSubscriptionReplayResponse(response)
+  if (replayedAfterReconnect) {
     onReplayedAfterReconnect?.()
   }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
+    onReady?.(replayedAfterReconnect, message.snapshot)
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
       if (state) {

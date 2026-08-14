@@ -7,6 +7,32 @@ import {
 } from './room-activity-timeline'
 
 describe('room activity timeline', () => {
+  it('renders persisted Codex subagent events as tools, not raw provider diagnostics', () => {
+    const frame = {
+      provider: 'codex',
+      kind: 'item:subAgentActivity',
+      payload: {
+        head: JSON.stringify({
+          type: 'subAgentActivity',
+          kind: 'started',
+          agentThreadId: 'child-1',
+          agentPath: '/root/reviewer'
+        }),
+        truncated: false,
+        byteLength: 100,
+        digest: 'd'
+      }
+    }
+    const sections = buildRoomActivitySections([
+      message('child', 'assistant', 1, [
+        { type: 'text', text: 'codex item:subAgentActivity', providerFrame: frame }
+      ])
+    ])
+    expect(sections).toMatchObject([
+      { kind: 'tools', tools: [{ call: { name: 'subagent_activity' } }] }
+    ])
+  })
+
   it('keeps commentary order and pairs Claude-style tool results', () => {
     const messages: NativeChatMessage[] = [
       message('thinking', 'assistant', 10, [{ type: 'text', text: 'Inspecting the files.' }]),
@@ -36,6 +62,24 @@ describe('room activity timeline', () => {
         { kind: 'command', result: null },
         { kind: 'editing', result: null }
       ]
+    })
+  })
+
+  it('pairs parallel room tools by provider id', () => {
+    const sections = buildRoomActivitySections([
+      message('calls', 'assistant', 1, [
+        { type: 'tool-call', toolCallId: 'one', name: 'Read', input: {} },
+        { type: 'tool-call', toolCallId: 'two', name: 'Bash', input: {} }
+      ]),
+      message('results', 'tool', 2, [
+        { type: 'tool-result', toolCallId: 'two', output: 'second' },
+        { type: 'tool-result', toolCallId: 'one', output: 'first' }
+      ])
+    ])
+
+    expect(sections[0]).toMatchObject({
+      kind: 'tools',
+      tools: [{ result: { output: 'first' } }, { result: { output: 'second' } }]
     })
   })
 

@@ -94,6 +94,7 @@ function SourceLoader({
     target: source.target,
     agent: source.agent,
     parentFilePath: source.transcriptPath,
+    structuredSessionId: source.structuredSessionId,
     liveSubagents: source.liveSubagents,
     poll: source.working
   })

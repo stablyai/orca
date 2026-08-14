@@ -229,6 +229,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     params: HistoryParams,
     handler: async (params, ctx) => requireHost(ctx).history(params)
   }),
+  defineMethod({
+    name: 'agentSession.subagents',
+    params: OptionsParams,
+    handler: async (params, ctx) => {
+      await ensureHostInstalled(ctx)
+      return requireHost(ctx).listSubagentSessions(params.sessionId)
+    }
+  }),
   defineStreamingMethod({
     name: 'agentSession.subscribe',
     params: SubscribeParams,

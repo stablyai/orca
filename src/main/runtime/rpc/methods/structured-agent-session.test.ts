@@ -172,6 +172,7 @@ function hostStub(): StructuredAgentSessionHost {
       current: { model: 'gpt-live' }
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    listSubagentSessions: vi.fn(async () => ({ sessions: [], issues: [] })),
     subscribe: vi.fn(() => () => undefined),
     // A real feed, so the snapshot this method hands back is a genuine projection rather
     // than a shape the stub restated.
@@ -387,7 +388,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(19)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(20)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -758,6 +759,14 @@ describe('parameter validation', () => {
       STRUCTURED_CLIENT
     )
     expect(response).toMatchObject({ ok: true })
+  })
+
+  it('reads subagents without a provider mutation or a renderer-supplied file path', async () => {
+    expect(
+      await call('agentSession.subagents', { sessionId: SESSION }, STRUCTURED_CLIENT)
+    ).toMatchObject({ ok: true, result: { sessions: [], issues: [] } })
+    expect(hostCalls.listSubagentSessions).toHaveBeenCalledWith(SESSION)
+    await rejects('agentSession.subagents', { sessionId: '' })
   })
 })
 

@@ -55,6 +55,13 @@ const ProviderHandle = z.discriminatedUnion('kind', [
       sessionId: Identifier('Invalid provider session id'),
       leafUuid: Identifier('Invalid leaf uuid').nullable()
     })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('acp'),
+      agent: Identifier('Invalid agent'),
+      sessionId: Identifier('Invalid provider session id')
+    })
     .strict()
 ])
 
@@ -77,7 +84,7 @@ const ExecutionLocation = z
 
 const AccountHome = z
   .object({
-    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME']),
+    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HOME']),
     path: z.string().min(1).max(4096)
   })
   .strict()
@@ -86,7 +93,7 @@ export const AttachParams = z
   .object({
     envelope: MutationEnvelope,
     location: ExecutionLocation,
-    provider: z.enum(['codex', 'claude']),
+    provider: z.enum(['codex', 'claude', 'acp']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
     runtimeKind: z.enum(['native', 'tui']),

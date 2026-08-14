@@ -7,8 +7,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -16,31 +14,35 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { formatTokens } from '@/components/stats/usage-formatters'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
 import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionsSurface,
-  SessionOptionValue
+import {
+  sessionOptionDispatchUnconfirmed,
+  type SessionOptionDescriptor,
+  type SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import {
   nativeChatModelPillLabel,
   nativeChatOptionsPillLabel,
-  nativeChatSessionChoiceLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
 } from '../native-chat/native-chat-session-option-labels'
 import type { NativeChatOptionPickerRequest } from '../native-chat/native-chat-composer-types'
 import {
-  CustomModelInput,
   SynchronizedSpinner,
   contextForSelectedWindow,
   useExclusiveSessionControlMenu,
   waitForConfirmedModel
 } from './agent-session-controls-support'
+import {
+  compactionLabel,
+  ContextDonut,
+  contextSummary,
+  currentOptionLabel,
+  DescriptorMenuRows
+} from './agent-session-control-menu-content'
 
 export type AgentSessionControlsProps = {
   surface: SessionOptionsSurface | null
@@ -49,8 +51,11 @@ export type AgentSessionControlsProps = {
   context?: AgentSessionContextSnapshot
   canCompact?: boolean
   onCompact?: () => Promise<void>
+  onOpen?: () => void
   pickerRequest?: NativeChatOptionPickerRequest | null
   leading?: ReactNode
+  fallbackModelLabel?: string | null
+  fallbackOptionLabel?: string | null
   className?: string
 }
 
@@ -68,186 +73,6 @@ function sortedOptions(snapshot: readonly SessionOptionDescriptor[]): SessionOpt
   )
 }
 
-function ContextDonut({ percent }: { percent: number | null }): React.JSX.Element {
-  const value = Math.max(0, Math.min(100, percent ?? 0))
-  return (
-    <svg viewBox="0 0 20 20" className="size-4 shrink-0 -rotate-90" aria-hidden="true">
-      <circle
-        cx="10"
-        cy="10"
-        r="7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        className="text-muted-foreground/30"
-      />
-      <circle
-        cx="10"
-        cy="10"
-        r="7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        pathLength="100"
-        strokeDasharray="100"
-        strokeDashoffset={100 - value}
-        className="text-foreground"
-      />
-    </svg>
-  )
-}
-
-function contextSummary(context: AgentSessionContextSnapshot): string {
-  if (context.usedTokens === null) {
-    return translate('components.native-chat.context.unavailable', 'Context unavailable')
-  }
-  const used = `${context.estimated ? '~' : ''}${formatTokens(context.usedTokens)}`
-  if (context.maxTokens === null) {
-    return translate('components.native-chat.context.used', '{{value0}} tokens used', {
-      value0: used
-    })
-  }
-  const remaining = context.remainingTokens ?? Math.max(0, context.maxTokens - context.usedTokens)
-  return translate(
-    'components.native-chat.context.summary',
-    '{{value0}}% used · {{value1}} / {{value2}} tokens · {{value3}} free',
-    {
-      value0: Math.round(context.usedPercent ?? (context.usedTokens / context.maxTokens) * 100),
-      value1: used,
-      value2: formatTokens(context.maxTokens),
-      value3: formatTokens(remaining)
-    }
-  )
-}
-
-function compactionLabel(context: AgentSessionContextSnapshot): string | null {
-  if (context.compaction === 'idle') {
-    return null
-  }
-  if (context.compaction === 'requested') {
-    return 'Compaction queued'
-  }
-  if (context.compaction === 'running') {
-    return 'Compacting context'
-  }
-  if (context.compaction === 'completed') {
-    return 'Context compacted'
-  }
-  return 'Compaction failed'
-}
-
-function ChoiceBody(props: { label: string; description?: string }): React.JSX.Element {
-  return (
-    <div className="min-w-0 py-0.5">
-      <div>{props.label}</div>
-      {props.description ? (
-        <div className="text-xs font-normal text-muted-foreground">{props.description}</div>
-      ) : null}
-    </div>
-  )
-}
-
-function DescriptorMenuRows(props: {
-  descriptor: SessionOptionDescriptor
-  pending: boolean
-  setValue: (value: SessionOptionValue) => void
-  invokeAction: () => void
-  setCustomModel?: (modelId: string) => Promise<boolean>
-}): React.JSX.Element {
-  const { descriptor, pending, setValue, invokeAction, setCustomModel } = props
-  if (descriptor.action?.type === 'toggle-command') {
-    return (
-      <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={invokeAction}>
-        {translate('components.native-chat.composer.toggleOption', 'Toggle {{value0}}', {
-          value0: nativeChatSessionOptionLabel(descriptor).toLowerCase()
-        })}
-      </DropdownMenuItem>
-    )
-  }
-  if (descriptor.action?.type === 'agent-picker') {
-    return (
-      <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={invokeAction}>
-        {translate(
-          'components.native-chat.composer.chooseInAgentPicker',
-          'Choose in agent picker…'
-        )}
-      </DropdownMenuItem>
-    )
-  }
-  if (descriptor.kind.type === 'boolean') {
-    const selected =
-      descriptor.kind.currentValue === true
-        ? 'on'
-        : descriptor.kind.currentValue === false
-          ? 'off'
-          : undefined
-    return (
-      <>
-        {selected === undefined ? (
-          <DropdownMenuLabel className="font-normal text-muted-foreground">
-            {translate(
-              'components.native-chat.composer.valueUnknown',
-              'Current value unknown — pick On or Off'
-            )}
-          </DropdownMenuLabel>
-        ) : null}
-        <DropdownMenuRadioGroup value={selected} onValueChange={(next) => setValue(next === 'on')}>
-          <DropdownMenuRadioItem value="on" disabled={!descriptor.settable || pending}>
-            {translate('components.native-chat.composer.optionValue.on', 'On')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="off" disabled={!descriptor.settable || pending}>
-            {translate('components.native-chat.composer.optionValue.off', 'Off')}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </>
-    )
-  }
-  return (
-    <>
-      <DropdownMenuRadioGroup
-        value={descriptor.kind.currentValue}
-        onValueChange={(value) => setValue(value)}
-      >
-        {descriptor.kind.choices.map((choice) => (
-          <DropdownMenuRadioItem
-            key={choice.value}
-            value={choice.value}
-            disabled={!descriptor.settable || pending}
-          >
-            <ChoiceBody
-              label={nativeChatSessionChoiceLabel(choice)}
-              description={choice.description}
-            />
-          </DropdownMenuRadioItem>
-        ))}
-      </DropdownMenuRadioGroup>
-      {descriptor.category === 'model' && setCustomModel ? (
-        <>
-          <DropdownMenuSeparator />
-          <CustomModelInput pending={pending} onSubmit={setCustomModel} />
-        </>
-      ) : null}
-    </>
-  )
-}
-
-function currentOptionLabel(descriptor: SessionOptionDescriptor): string {
-  if (descriptor.kind.type === 'boolean') {
-    if (descriptor.kind.currentValue === true) {
-      return 'On'
-    }
-    if (descriptor.kind.currentValue === false) {
-      return 'Off'
-    }
-    return 'Unknown'
-  }
-  const value = descriptor.kind.currentValue
-  return (
-    descriptor.kind.choices.find((choice) => choice.value === value)?.label ?? value ?? 'Unknown'
-  )
-}
-
 function AgentSessionControlsInner({
   surface,
   snapshot,
@@ -255,22 +80,25 @@ function AgentSessionControlsInner({
   context = EMPTY_AGENT_SESSION_CONTEXT,
   canCompact = false,
   onCompact,
+  onOpen,
   pickerRequest,
   leading,
+  fallbackModelLabel,
+  fallbackOptionLabel,
   className
 }: AgentSessionControlsProps): React.JSX.Element | null {
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [tooltipOpen, setTooltipOpen] = useState(false)
-  const menu = useExclusiveSessionControlMenu()
+  const { open: menuOpen, setOpen: setMenuOpen } = useExclusiveSessionControlMenu()
   const descriptors = sortedOptions(snapshot)
   const model = descriptors.find((descriptor) => descriptor.category === 'model')
   const options = descriptors.filter((descriptor) => descriptor.category !== 'model')
   useEffect(() => {
     if (pickerRequest) {
-      menu.setOpen(true)
+      setMenuOpen(true)
     }
-  }, [pickerRequest?.sequence])
-  if (!surface && context.usedTokens === null && !canCompact) {
+  }, [pickerRequest, setMenuOpen])
+  if (!surface && context.usedTokens === null && !canCompact && !leading) {
     return null
   }
 
@@ -288,8 +116,20 @@ function AgentSessionControlsInner({
       setPendingId(null)
     }
   }
-  const modelLabel = model ? nativeChatModelPillLabel(model) : 'Session'
-  const optionLabel = options.length > 0 ? nativeChatOptionsPillLabel(options) : null
+  const modelLabel =
+    model?.kind.type === 'select' && model.kind.currentValue && model.valueSource !== 'unknown'
+      ? nativeChatModelPillLabel(model)
+      : (fallbackModelLabel ?? (model ? nativeChatModelPillLabel(model) : 'Session'))
+  const optionLabel = options.some((option) => option.valueSource !== 'unknown')
+    ? nativeChatOptionsPillLabel(
+        options,
+        model?.kind.type === 'select' &&
+          model.kind.currentValue &&
+          model.kind.currentValue === context.model
+          ? context.effort
+          : null
+      )
+    : (fallbackOptionLabel ?? null)
   const displayedContext = contextForSelectedWindow(context, options)
   const summary = contextSummary(displayedContext)
   const compacting =
@@ -312,15 +152,18 @@ function AgentSessionControlsInner({
 
   return (
     <DropdownMenu
-      open={menu.open}
+      open={menuOpen}
       onOpenChange={(open) => {
         setTooltipOpen(false)
-        menu.setOpen(open)
+        if (open) {
+          onOpen?.()
+        }
+        setMenuOpen(open)
       }}
     >
       <Tooltip
-        open={!menu.open && tooltipOpen}
-        onOpenChange={(open) => setTooltipOpen(open && !menu.open)}
+        open={!menuOpen && tooltipOpen}
+        onOpenChange={(open) => setTooltipOpen(open && !menuOpen)}
       >
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -387,10 +230,15 @@ function AgentSessionControlsInner({
                 </span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-64">
+                {descriptor.description ? (
+                  <DropdownMenuLabel className="font-normal">
+                    {descriptor.description}
+                  </DropdownMenuLabel>
+                ) : null}
                 {reason && !descriptor.settable ? (
                   <DropdownMenuLabel className="font-normal">{reason}</DropdownMenuLabel>
                 ) : null}
-                {descriptor.valueSource === 'dispatched' ? (
+                {sessionOptionDispatchUnconfirmed(descriptor) ? (
                   <DropdownMenuLabel className="font-normal text-muted-foreground">
                     {translate(
                       'components.native-chat.composer.sentNotConfirmed',

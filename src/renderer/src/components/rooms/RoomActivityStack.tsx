@@ -5,7 +5,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { RoomAgentActivity, RoomParticipant } from '../../../../shared/rooms'
-import { RoomActivityCard, RoomActivitySummary } from './RoomActivityCard'
+import { roomActivityFinalMessage, RoomActivityCard, RoomActivitySummary } from './RoomActivityCard'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 const SAFE_MARGIN_RATIO = 0.12
 const SAFE_MARGIN_MIN = 12
@@ -15,10 +16,12 @@ const OWNED_PORTAL_SELECTOR = '[data-room-activity-stack-portal]'
 
 export function RoomActivityStack({
   activities,
-  participants
+  participants,
+  target
 }: {
   activities: RoomAgentActivity[]
   participants: RoomParticipant[]
+  target?: RuntimeClientTarget
 }): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -28,10 +31,29 @@ export function RoomActivityStack({
     () => new Map(participants.map((participant) => [participant.id, participant])),
     [participants]
   )
-  useActivityStackDismiss(open, rootRef, setOpen, triggerRef)
+  const finalizing = activities.filter(roomActivityFinalMessage)
+  useActivityStackDismiss(open && finalizing.length === 0, rootRef, setOpen, triggerRef)
 
   if (activities.length === 0) {
     return null
+  }
+  if (finalizing.length > 0) {
+    const live = activities.filter((activity) => !roomActivityFinalMessage(activity))
+    return (
+      <div className="space-y-2">
+        {live.length > 0 ? (
+          <RoomActivityStack activities={live} participants={participants} target={target} />
+        ) : null}
+        {finalizing.map((activity) => (
+          <RoomActivityCard
+            key={`${activity.participantId}:${activity.startedAt}`}
+            activity={activity}
+            participant={participantById.get(activity.participantId)}
+            target={target}
+          />
+        ))}
+      </div>
+    )
   }
   if (activities.length === 1) {
     const activity = activities[0]!
@@ -39,6 +61,7 @@ export function RoomActivityStack({
       <RoomActivityCard
         activity={activity}
         participant={participantById.get(activity.participantId)}
+        target={target}
       />
     )
   }
@@ -112,6 +135,7 @@ export function RoomActivityStack({
                 key={`${activity.participantId}:${activity.startedAt}`}
                 activity={activity}
                 participant={participantById.get(activity.participantId)}
+                target={target}
               />
             ))}
             <div className="flex justify-end pt-0.5">

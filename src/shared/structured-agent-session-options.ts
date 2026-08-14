@@ -9,6 +9,7 @@ import {
 } from './native-chat-session-option-snapshot'
 import {
   applyNativeChatReportedSessionOptions,
+  clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
@@ -49,14 +50,14 @@ export function structuredAgentSessionOptionCatalog(
   result: AgentSessionOptionsResult
 ): AgentSessionOptionCatalog {
   const models: CatalogModel[] = result.models.map(discoveredModel)
-  if (!models.some((model) => model.id === result.current.model)) {
+  if (result.current.model && !models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
       label: result.current.model,
       options: seed.unknownModelOptions ?? []
     })
   }
-  return { ...seed, models, defaultModelIsCliDefault: true }
+  return { ...seed, models, defaultModelIsCliDefault: result.current.model ? true : undefined }
 }
 
 export type StructuredAgentSessionOptionState = {
@@ -76,6 +77,10 @@ export function applyStructuredAgentSessionOptions(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult
 ): StructuredAgentSessionOptionState {
+  if (!result.current.model) {
+    clearNativeChatSessionModel(state.record)
+    return { ...state, catalog: structuredAgentSessionOptionCatalog(seed, result) }
+  }
   applyNativeChatReportedSessionOptions(
     state.record,
     {
@@ -147,4 +152,19 @@ export function commitStructuredAgentSessionOptionValues(
     }
   }
   return next
+}
+
+export function patchStructuredAgentSessionOptionSnapshot(
+  snapshot: readonly SessionOptionDescriptor[],
+  values: Readonly<Record<string, string>>
+): SessionOptionDescriptor[] {
+  return snapshot.map((entry) => {
+    const value = values[entry.id]
+    if (value === undefined) {
+      return entry
+    }
+    return entry.kind.type === 'boolean'
+      ? { ...entry, kind: { ...entry.kind, currentValue: value === 'true' } }
+      : { ...entry, kind: { ...entry.kind, currentValue: value } }
+  })
 }

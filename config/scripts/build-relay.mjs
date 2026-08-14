@@ -130,7 +130,9 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     sourcemap: false,
     minify: true,
     define: {
-      'process.env.NODE_ENV': '"production"'
+      'process.env.NODE_ENV': '"production"',
+      // Claude SDK calls createRequire(import.meta.url), which CJS bundles otherwise erase.
+      'import.meta.url': '__filename'
     }
   })
 

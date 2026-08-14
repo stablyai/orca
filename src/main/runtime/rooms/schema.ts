@@ -2,10 +2,11 @@ import type SyncDatabase from '../../sqlite/sync-database'
 import { ensureRoomActivitySchema } from './activities'
 import { ensureRoomDeliveryConfigurationSchema } from './delivery-configuration'
 import {
+  ensureRoomParticipantAgentSchema,
   ensureRoomParticipantParticipationSchema,
   ensureRoomParticipantSleepingStateSchema,
   roomParticipantsTableSql
-} from './participants'
+} from './participant-schema'
 
 export function initializeRoomSchema(db: SyncDatabase.Database): void {
   db.pragma('foreign_keys = ON')
@@ -19,6 +20,7 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     ensureRoomParticipantIncarnationSchema(db)
     ensureRoomParticipantParticipationSchema(db)
     ensureRoomParticipantTerminalSurfaceSchema(db)
+    ensureRoomParticipantAgentSchema(db)
     ensureRoomParticipantSleepingStateSchema(db)
     ensureRoomActivitySchema(db)
     ensureRoomDeliveryConfigurationSchema(db)

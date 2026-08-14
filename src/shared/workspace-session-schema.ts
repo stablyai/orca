@@ -12,6 +12,7 @@
  * Only a payload that is not a session at all falls back to defaults.
  */
 import { z } from 'zod'
+import { STRUCTURED_MACHINE_AGENTS } from './structured-agent-provider'
 import { closedTerminalTabTombstoneSchema } from './closed-terminal-tab-tombstones'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
@@ -127,7 +128,7 @@ const tabSchema = z.object({
   worktreeId: z.string(),
   executionHostId: executionHostIdSchema.optional(),
   contentType: tabContentTypeSchema,
-  agentSessionAgent: z.enum(['codex', 'claude']).optional().catch(undefined),
+  agentSessionAgent: z.enum(STRUCTURED_MACHINE_AGENTS).optional().catch(undefined),
   // Why: a structured terminal tab must recover its durable host session after
   // restart; omitting this additive field silently routes it back through PTY.
   structuredSessionId: z.string().min(1).optional().catch(undefined),

@@ -25,14 +25,37 @@ import type {
 import type { NativeChatTranscriptSubscription } from '../../native-chat/transcript-watch'
 import type { RoomHarnessLifecycleEvent } from './harness-lifecycle'
 import type { RoomDeletionManifest } from './database'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
+import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
 
-export type RoomHarnessBinding = {
+export type RoomTerminalHarnessBinding = {
+  transport?: 'terminal'
   worktreeId: string
   terminalHandle: string
   paneKey: string
   providerSession: RoomProviderSession | null
   disposition?: 'created' | 'adopted'
   terminalSurfaceVisible?: boolean
+}
+
+export type RoomMachineHarnessBinding = {
+  transport: 'machine'
+  worktreeId: string
+  conversationId: string
+  providerSession: RoomProviderSession
+  disposition?: 'created' | 'adopted'
+  terminalHandle?: undefined
+  paneKey?: undefined
+  terminalSurfaceVisible?: false
+  handoffFrom?: RoomTerminalHarnessBinding
+}
+
+export type RoomHarnessBinding = RoomTerminalHarnessBinding | RoomMachineHarnessBinding
+
+export type RoomHarnessLaunchOptions = {
+  preferences?: AgentLaunchPreferences
+  machineStreaming?: boolean
+  trusted?: boolean
 }
 
 export type RoomHarnessRuntime = {
@@ -86,7 +109,8 @@ export type RoomHarnessRuntime = {
   listRoomRunningAgents(worktreeId: string): Promise<RoomRunningAgent[]>
   listRoomExistingAgents(
     worktreeId: string,
-    agent: RoomHarnessAgent
+    agent: RoomHarnessAgent,
+    machineStreaming?: boolean
   ): Promise<RoomExistingAgentCandidate[]>
   resolveRoomHistoricalSession(
     worktreeId: string,
@@ -95,10 +119,17 @@ export type RoomHarnessRuntime = {
   ): Promise<RoomProviderSession>
   stageRoomAttachment(
     worktreeId: string,
-    terminalHandle: string,
+    terminalHandle: string | undefined,
     attachment: Pick<RoomAttachment, 'id' | 'fileName' | 'localPath'>
   ): Promise<string>
   cleanupDeletedRoomResources?(manifest: RoomDeletionManifest): Promise<void>
+  ensureStructuredAgentSessionHost?(): Promise<void>
+  resolveStructuredAgentSessionCreateIntent?(input: {
+    envelope: { sessionId: string; clientOperationId: string }
+    worktree: string
+    agent: StructuredMachineAgent
+    providerSessionId?: string
+  }): Promise<AgentSessionAttachParams>
 }
 
 export type RoomHarnessReadResult =
@@ -113,13 +144,17 @@ export type RoomHarnessSubscriptionCallbacks = {
 
 export type RoomHarnessAdapter = {
   readonly agent: RoomHarnessAgent
-  launch(worktreeId: string): Promise<RoomHarnessBinding>
-  connectExisting(input: {
-    worktreeId: string
-    terminalHandle?: string
-    paneKey?: string
-    historyId?: string
-  }): Promise<RoomHarnessBinding>
+  launch(worktreeId: string, options?: RoomHarnessLaunchOptions): Promise<RoomHarnessBinding>
+  connectExisting(
+    input: {
+      worktreeId: string
+      terminalHandle?: string
+      paneKey?: string
+      historyId?: string
+      conversationId?: string
+    },
+    options?: RoomHarnessLaunchOptions
+  ): Promise<RoomHarnessBinding>
   locate(binding: RoomHarnessBinding): Promise<RoomHarnessBinding | null>
   read(binding: RoomHarnessBinding, limit?: number): Promise<RoomHarnessReadResult>
   send(

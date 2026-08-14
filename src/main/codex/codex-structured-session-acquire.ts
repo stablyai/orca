@@ -176,6 +176,7 @@ export async function acquireCodexStructuredSession(input: {
       link: codexProviderHandleLink({
         threadId: opened.threadId,
         resumed: launch.resumeThreadId !== null,
+        ...(launch.resumeOrigin === 'adopted' ? { origin: 'adopted' } : {}),
         fence: acquireInput.fence,
         linkId: deps.mintLinkId?.(),
         observedAt: deps.now?.() ?? Date.now()

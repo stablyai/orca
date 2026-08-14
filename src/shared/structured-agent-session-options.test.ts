@@ -9,6 +9,26 @@ import {
 } from './structured-agent-session-options'
 
 describe('structured agent session options', () => {
+  it('keeps an unknown model unselected even when the catalog recommends one', () => {
+    const result = {
+      models: [{ id: 'recommended', label: 'Recommended', isDefault: true, efforts: [] }],
+      current: { model: '' }
+    }
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CODEX_SESSION_OPTION_CATALOG,
+      { ...result, current: { model: 'previous-model', effort: 'high' } }
+    )
+    const next = applyStructuredAgentSessionOptions(state, CODEX_SESSION_OPTION_CATALOG, result)
+    const model = structuredAgentSessionOptionSnapshot(next)[0]
+    expect(model.valueSource).toBe('unknown')
+    expect(model.kind.currentValue).toBeUndefined()
+    expect(
+      model.kind.type === 'select' && model.kind.choices.map((choice) => choice.value)
+    ).toEqual(['recommended'])
+    expect(next.record.model).toBeUndefined()
+  })
+
   it('projects native Codex selects while bridge Codex keeps its agent picker', () => {
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex'),

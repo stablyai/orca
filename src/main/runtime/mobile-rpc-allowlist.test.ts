@@ -168,6 +168,7 @@ describe('mobile RPC allowlist', () => {
       'agentSession.handoffStatus',
       'agentSession.options',
       'agentSession.history',
+      'agentSession.subagents',
       'agentSession.subscribe',
       'agentSession.unsubscribe',
       'agentSession.hold',

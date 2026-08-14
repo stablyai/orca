@@ -1,10 +1,17 @@
 import { useState } from 'react'
 import { Pause } from 'lucide-react'
+import {
+  getAgentSessionOptionCatalog,
+  normalizeClaudeModelId
+} from '../../../../shared/agent-session-option-catalog'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
 import { AgentSessionControls } from '../agent-session-controls/AgentSessionControls'
+import { nativeChatSessionChoiceLabel } from '../native-chat/native-chat-session-option-labels'
 import type { RoomData } from './use-room-data'
 import { useRoomParticipantSessionOptions } from './use-room-participant-session-options'
+import { showRoomActionError } from './room-action-error'
 
 export function isRoomParticipantSessionControlBusy(
   state: NonNullable<RoomData['snapshot']>['participants'][number]['state'],
@@ -19,7 +26,36 @@ export function RoomParticipantSessionControl(props: {
 }): React.JSX.Element {
   const { participant, target } = props
   const [compacting, setCompacting] = useState(false)
-  const { surface, snapshot } = useRoomParticipantSessionOptions(participant, target)
+  const { surface, snapshot, canCompact, refreshMachineOptions } = useRoomParticipantSessionOptions(
+    participant,
+    target
+  )
+  const savedModel = participant.context.model?.trim()
+  const persistedModel =
+    savedModel && (participant.agent === 'claude' || participant.agent === 'openclaude')
+      ? normalizeClaudeModelId(savedModel)
+      : savedModel
+  const catalog = participant.agent
+    ? getAgentSessionOptionCatalog(
+        participant.agent === 'openclaude' ? 'claude' : participant.agent
+      )
+    : null
+  const fallbackModelLabel = persistedModel
+    ? (catalog?.models.find(({ id }) => id === persistedModel)?.label ?? savedModel)
+    : null
+  const fallbackOptionLabel = [
+    participant.context.effort
+      ? nativeChatSessionChoiceLabel({
+          value: participant.context.effort,
+          label: participant.context.effort
+        })
+      : null,
+    participant.context.fastMode === true
+      ? translate('components.native-chat.composer.optionValue.fast', 'Fast')
+      : null
+  ]
+    .filter((label): label is string => Boolean(label))
+    .join(' · ')
   const compact = async (): Promise<void> => {
     setCompacting(true)
     try {
@@ -35,8 +71,17 @@ export function RoomParticipantSessionControl(props: {
       snapshot={snapshot}
       isWorking={isRoomParticipantSessionControlBusy(participant.state, compacting)}
       context={participant.context}
-      canCompact
+      canCompact={canCompact}
       onCompact={compact}
+      onOpen={() => {
+        if (participant.providerSession?.transport === 'machine' && !surface) {
+          void roomRpc(target, 'rooms.participants.wake', { participantId: participant.id })
+            .then(refreshMachineOptions)
+            .catch(showRoomActionError)
+        }
+      }}
+      fallbackModelLabel={fallbackModelLabel}
+      fallbackOptionLabel={fallbackOptionLabel || null}
       className={cn(
         'h-9 max-w-80 rounded-md border border-border bg-card px-2',
         participant.participation === 'paused' && 'opacity-60'

@@ -1,4 +1,9 @@
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { ClaudeConversationActivity } from '../harness-conversation/claude-activity'
+import type { StructuredProviderConfiguration } from '../../shared/structured-agent-provider'
+import type {
+  AgentJournalTurn,
+  AgentSessionJournalIdentity
+} from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type {
   ClaudeStreamJsonConnection,
@@ -27,6 +32,7 @@ export type ClaudeStructuredSessionEvent =
       message: Record<string, unknown>
       /** Present only when this replay acknowledged Orca's in-flight dispatch. */
       startsTurn?: true
+      turn?: AgentJournalTurn
     }
   | { type: 'provider-frame'; sessionId: string; kind: string; payload: unknown }
   | { type: 'prompt'; sessionId: string; prompt: ClaudePendingPrompt }
@@ -85,7 +91,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
 
 export type ClaudeDispatchWaiter = {
   resolve: (uuid: string | null) => void
-  timer: ReturnType<typeof setTimeout>
+  timer?: ReturnType<typeof setTimeout>
   acceptsResult: boolean
   /** Client uuid echoed by Claude so a replay is tied to its own dispatch. */
   sentUuid: string
@@ -97,9 +103,13 @@ export type ClaudeDispatchWaiter = {
   retired?: boolean
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
   replayContentKey: string
+  steeredTurnId?: string
+  turn?: AgentJournalTurn
 }
 
 export type ClaudeSession = {
+  contextActivity?: ClaudeConversationActivity
+  configuration?: StructuredProviderConfiguration
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   /** Durable transcript files live under this account's `projects` directory. */
@@ -114,6 +124,8 @@ export type ClaudeSession = {
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
+  /** Explicit SDK launch option, used only until a write or provider report names the model. */
+  launchModel?: string
   reportedOptions: { model?: string; effort?: string }
   /** `optionMutationSequence` when `reportedOptions.model` was last observed, so a
    *  write still awaiting its first turn outranks the report it will replace. */

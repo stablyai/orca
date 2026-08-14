@@ -1,10 +1,10 @@
-import type { RoomHarnessBinding, RoomHarnessRuntime } from './harness-adapter-types'
+import type { RoomHarnessRuntime, RoomTerminalHarnessBinding } from './harness-adapter-types'
 
 const ROOM_INTERRUPT_TIMEOUT_MS = 8_000
 
 export async function interruptRoomHarness(
   runtime: RoomHarnessRuntime,
-  binding: RoomHarnessBinding
+  binding: RoomTerminalHarnessBinding
 ): Promise<void> {
   if (!runtime.sendTerminal) {
     throw new Error('room_agent_control_unsupported')

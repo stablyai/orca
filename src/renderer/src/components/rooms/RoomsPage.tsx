@@ -26,6 +26,9 @@ import {
   type AgentSubagentSource
 } from '../agent-subagents/AgentSubagentProvider'
 import { RoomInspectorPortalContext } from './room-inspector-portal'
+import { codexLiveSubagents } from '../../../../shared/codex-subagent-items'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { settledRoomActivity } from './room-activity-timeline'
 
 const EMPTY_SUBAGENTS = [] as const
 
@@ -91,6 +94,30 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
       )
     )
   )
+  const machineSubagentsByParticipant = useMemo(() => {
+    const history = new Map<string, NativeChatMessage[]>()
+    for (const message of data.messages) {
+      if (!message.senderId) {
+        continue
+      }
+      const activity = settledRoomActivity(message.metadata)
+      if (activity) {
+        const messages = history.get(message.senderId) ?? []
+        for (const item of activity.messages) {
+          messages.push(item)
+        }
+        history.set(message.senderId, messages)
+      }
+    }
+    for (const activity of Object.values(data.activities)) {
+      const messages = history.get(activity.participantId) ?? []
+      for (const item of activity.messages) {
+        messages.push(item)
+      }
+      history.set(activity.participantId, messages)
+    }
+    return new Map([...history].map(([id, messages]) => [id, codexLiveSubagents(messages)]))
+  }, [data.messages, data.activities])
   const subagentSources = useMemo<AgentSubagentSource[]>(
     () =>
       participants.flatMap((participant) =>
@@ -102,19 +129,32 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
                 agent: participant.agent,
                 paneKey: participant.paneKey ?? `room:${participant.id}`,
                 sessionId: participant.providerSession?.id ?? null,
+                ...(participant.providerSession?.transport === 'machine'
+                  ? { structuredSessionId: participant.providerSession.id }
+                  : {}),
                 transcriptPath: participant.providerSession?.transcriptPath ?? null,
                 runtimeEnvironmentId:
                   data.target.kind === 'environment' ? data.target.environmentId : null,
                 target: data.target,
-                liveSubagents: participant.paneKey
-                  ? (liveSubagentsByPaneKey[participant.paneKey] ?? [])
-                  : [],
+                liveSubagents:
+                  participant.providerSession?.transport === 'machine' &&
+                  participant.agent === 'codex'
+                    ? (machineSubagentsByParticipant.get(participant.id) ?? [])
+                    : participant.paneKey
+                      ? (liveSubagentsByPaneKey[participant.paneKey] ?? [])
+                      : [],
                 working: Boolean(data.activities[participant.id])
               }
             ]
           : []
       ),
-    [data.activities, data.target, liveSubagentsByPaneKey, participants]
+    [
+      data.activities,
+      data.target,
+      liveSubagentsByPaneKey,
+      machineSubagentsByParticipant,
+      participants
+    ]
   )
   const [addAgentOpen, setAddAgentOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -258,6 +298,7 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
           }
           worktrees={worktrees}
           target={target}
+          machineStreaming={settings?.experimentalStructuredNativeChat === true}
         />
         {settingsOpen ? (
           <RoomSettingsDialog

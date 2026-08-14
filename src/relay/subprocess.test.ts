@@ -34,7 +34,8 @@ beforeAll(async () => {
     format: 'cjs',
     outfile: relayEntry,
     external: ['node-pty', '@parcel/watcher', 'electron'],
-    sourcemap: false
+    sourcemap: false,
+    define: { 'import.meta.url': '__filename' }
   })
   await build({
     entryPoints: [WATCHER_TS_ENTRY],

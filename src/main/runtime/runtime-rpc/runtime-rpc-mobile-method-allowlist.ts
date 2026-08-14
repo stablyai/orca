@@ -216,6 +216,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'agentSession.handoffStatus',
   'agentSession.options',
   'agentSession.history',
+  'agentSession.subagents',
   'agentSession.subscribe',
   'agentSession.unsubscribe',
   'agentSession.hold',

@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalTurn
+} from '../../shared/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   claudeHasReplayContent,
@@ -16,8 +19,15 @@ const MAX_RETIRED_DISPATCH_WAITERS = 64
 
 export function resolveClaudeReplayWaiter(
   session: ClaudeSession,
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  onReplay?: (turn: AgentJournalTurn) => void
 ): boolean {
+  const replayed = (waiter: ClaudeDispatchWaiter, startsTurn: boolean): boolean => {
+    if (waiter.turn) {
+      onReplay?.(waiter.turn)
+    }
+    return startsTurn
+  }
   const envelope = readClaudeMessageEnvelope(message)
   const isUserReplay =
     envelope?.role === 'user' &&
@@ -45,14 +55,19 @@ export function resolveClaudeReplayWaiter(
     )
     if (exact) {
       settleWaiter(session, exact, uuid)
-      return isUserReplay && exact.dispatchSequence === session.dispatchSequence
+      return replayed(
+        exact,
+        isUserReplay &&
+          exact.dispatchSequence === session.dispatchSequence &&
+          exact.turn?.root === true
+      )
     }
     const retired = session.retiredDispatchWaiters.find(
       (candidate) => candidate.sentUuid === userMessageUuid
     )
     if (retired) {
       forgetRetiredWaiter(session, retired)
-      return recoverLateIdentity(session, retired, uuid, isUserReplay)
+      return replayed(retired, recoverLateIdentity(session, retired, uuid, isUserReplay))
     }
     return false
   }
@@ -60,12 +75,17 @@ export function resolveClaudeReplayWaiter(
   const exact = session.dispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (exact) {
     settleWaiter(session, exact, uuid)
-    return isUserReplay && exact.dispatchSequence === session.dispatchSequence
+    return replayed(
+      exact,
+      isUserReplay &&
+        exact.dispatchSequence === session.dispatchSequence &&
+        exact.turn?.root === true
+    )
   }
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (retired) {
     forgetRetiredWaiter(session, retired)
-    return recoverLateIdentity(session, retired, uuid, isUserReplay)
+    return replayed(retired, recoverLateIdentity(session, retired, uuid, isUserReplay))
   }
 
   if (isUserReplay) {
@@ -80,7 +100,11 @@ export function resolveClaudeReplayWaiter(
       )
       if (compatible.length === 1) {
         settleWaiter(session, compatible[0]!, uuid)
-        return compatible[0]!.dispatchSequence === session.dispatchSequence
+        return replayed(
+          compatible[0]!,
+          compatible[0]!.dispatchSequence === session.dispatchSequence &&
+            compatible[0]!.turn?.root === true
+        )
       }
     } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
       const lateCompatible = session.retiredDispatchWaiters.filter(
@@ -89,7 +113,7 @@ export function resolveClaudeReplayWaiter(
       if (lateCompatible.length === 1) {
         const [candidate] = lateCompatible
         forgetRetiredWaiter(session, candidate!)
-        return recoverLateIdentity(session, candidate!, uuid, true)
+        return replayed(candidate!, recoverLateIdentity(session, candidate!, uuid, true))
       }
     }
     return false
@@ -111,8 +135,9 @@ export function resolveClaudeReplayWaiter(
   if (waiter && uuid) {
     clearTimeout(waiter.timer)
     waiter.settledUuid = uuid
+    adoptTurn(session, waiter, uuid)
     waiter.resolve(uuid)
-    return isUserReplay
+    return replayed(waiter, isUserReplay)
   }
   return false
 }
@@ -124,7 +149,21 @@ function settleWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter, uuid
   }
   clearTimeout(waiter.timer)
   waiter.settledUuid = uuid
+  adoptTurn(session, waiter, uuid)
   waiter.resolve(uuid)
+}
+
+function adoptTurn(session: ClaudeSession, waiter: ClaudeDispatchWaiter, uuid: string): void {
+  waiter.turn =
+    waiter.steeredTurnId &&
+    waiter.dispatchSequence === session.dispatchSequence &&
+    session.translator?.currentTurnId
+      ? { turnId: session.translator.currentTurnId }
+      : { turnId: uuid, root: true }
+  if (waiter.dispatchSequence === session.dispatchSequence) {
+    session.activeTurnId = waiter.turn.turnId
+    session.activeTurnSequence = waiter.dispatchSequence
+  }
 }
 
 function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
@@ -143,11 +182,12 @@ function recoverLateIdentity(
   if (!isUserReplay && !waiter.acceptsResult) {
     return false
   }
-  if (waiter.dispatchSequence === session.dispatchSequence) {
-    session.activeTurnId = uuid
-    session.activeTurnSequence = waiter.dispatchSequence
-  }
-  return isUserReplay && waiter.dispatchSequence === session.dispatchSequence
+  adoptTurn(session, waiter, uuid)
+  return (
+    isUserReplay &&
+    waiter.dispatchSequence === session.dispatchSequence &&
+    waiter.turn?.root === true
+  )
 }
 
 function waitForReplay(
@@ -155,7 +195,8 @@ function waitForReplay(
   timeoutMs: number,
   acceptsResult: boolean,
   sentUuid: string,
-  replayContentKey: string
+  replayContentKey: string,
+  steeredTurnId?: string
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
@@ -164,17 +205,20 @@ function waitForReplay(
       sentUuid,
       dispatchSequence: session.dispatchSequence,
       replayContentKey,
+      ...(steeredTurnId ? { steeredTurnId } : {}),
       resolve,
-      timer: setTimeout(() => {
-        const index = session.dispatchWaiters.indexOf(waiter)
-        if (index !== -1) {
-          session.dispatchWaiters.splice(index, 1)
-        }
-        retireWaiter(session, waiter)
-        resolve(null)
-      }, timeoutMs)
+      timer: steeredTurnId
+        ? undefined
+        : setTimeout(() => {
+            const index = session.dispatchWaiters.indexOf(waiter)
+            if (index !== -1) {
+              session.dispatchWaiters.splice(index, 1)
+            }
+            retireWaiter(session, waiter)
+            resolve(null)
+          }, timeoutMs)
     }
-    waiter.timer.unref?.()
+    waiter.timer?.unref?.()
     session.dispatchWaiters.push(waiter)
   })
   return { waiter, promise }
@@ -199,9 +243,17 @@ function retireWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): voi
   }
 }
 
+export function cancelPendingClaudeSteers(session: ClaudeSession, turnId: string): void {
+  const pending = session.dispatchWaiters.filter((waiter) => waiter.steeredTurnId === turnId)
+  for (const waiter of pending) {
+    retireWaiter(session, waiter)
+    waiter.resolve(null)
+  }
+}
+
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId: string; body: AgentJournalMessageItem },
+  input: { clientMessageId: string; body: AgentJournalMessageItem; turnId?: string },
   timeoutMs: number
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
@@ -210,7 +262,12 @@ export async function dispatchClaudeTurn(
   } catch (error) {
     return { state: 'rejected', reason: (error as Error).message }
   }
-  const dispatchSequence = ++session.dispatchSequence
+  if (input.turnId && session.translator?.currentTurnId !== input.turnId) {
+    return { state: 'rejected', reason: 'conversation_turn_mismatch' }
+  }
+  if (!input.turnId) {
+    session.dispatchSequence += 1
+  }
   const acceptsResult = input.body.blocks.some(
     (block) => block.type === 'text' && block.text.trimStart().startsWith('/')
   )
@@ -220,12 +277,13 @@ export async function dispatchClaudeTurn(
     timeoutMs,
     acceptsResult,
     sentUuid,
-    claudeDispatchContentKey(content)
+    claudeDispatchContentKey(content),
+    input.turnId
   )
-  const replayed = replay.promise
   try {
     await session.connection.send({
       type: 'user',
+      ...(input.turnId ? { priority: 'next' } : {}),
       uuid: sentUuid,
       message: { role: 'user', content },
       parent_tool_use_id: null,
@@ -234,13 +292,13 @@ export async function dispatchClaudeTurn(
   } catch (error) {
     const waiter = replay.waiter
     if (waiter.settledUuid) {
-      const uuid = await replayed
-      if (uuid) {
-        session.activeTurnId = uuid
-        session.activeTurnSequence = dispatchSequence
-        return {
-          state: 'accepted',
-          providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+      return {
+        state: 'accepted',
+        providerIdentity: {
+          provider: 'claude',
+          sessionId: session.providerSessionId,
+          uuid: waiter.settledUuid,
+          turn: replay.waiter.turn
         }
       }
     }
@@ -250,15 +308,16 @@ export async function dispatchClaudeTurn(
     }
     return { state: 'unknown', reason: (error as Error).message }
   }
-  const uuid = await replayed
-  if (uuid) {
-    session.activeTurnId = uuid
-    session.activeTurnSequence = dispatchSequence
-  }
+  const uuid = await replay.promise
   return uuid
     ? {
         state: 'accepted',
-        providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+        providerIdentity: {
+          provider: 'claude',
+          sessionId: session.providerSessionId,
+          uuid,
+          turn: replay.waiter.turn
+        }
       }
     : { state: 'unknown', reason: 'claude accepted a message but did not replay its uuid in time' }
 }

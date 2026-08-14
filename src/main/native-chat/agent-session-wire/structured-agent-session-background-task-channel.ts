@@ -4,6 +4,7 @@ import type {
   AgentSessionHistoryResult
 } from '../../../shared/agent-session-wire'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
+import { scopeStructuredSessionTranscript } from './structured-agent-session-transcript-scope'
 import type {
   AgentSessionSubscribers,
   AgentSessionSubscribeInput
@@ -41,6 +42,30 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const backgroundTasks = this.state(input.sessionId)
     return this.subscribers.open({
       ...input,
+      emit: (event) => {
+        if (event.type === 'end') {
+          input.emit(event)
+          return
+        }
+        const record = this.deps.store.getRecord(input.sessionId)
+        input.emit(
+          event.type === 'batch'
+            ? {
+                ...event,
+                batch: {
+                  ...event.batch,
+                  items: scopeStructuredSessionTranscript(event.batch.items, record)
+                }
+              }
+            : {
+                ...event,
+                page: {
+                  ...event.page,
+                  items: scopeStructuredSessionTranscript(event.page.items, record)
+                }
+              }
+        )
+      },
       journal: session.journal,
       fence: this.deps.store.getRecord(input.sessionId)?.lease.runtimeFence ?? 0,
       handoff: this.handoffStatus(input.sessionId),

@@ -180,8 +180,13 @@ it('omits sessions already owned by a room from Existing', async () => {
       status: 'history' as const,
       model: null,
       updatedAt: null,
-      providerSession: { key: 'session_id' as const, id: 'session-owned' },
-      historyId: 'owned'
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'conversation-owned',
+        transport: 'machine' as const,
+        sourceSessionId: 'session-owned'
+      },
+      conversationId: '00000000-0000-4000-8000-000000000001'
     },
     {
       id: 'free',

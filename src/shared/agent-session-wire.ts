@@ -12,6 +12,7 @@ import type {
   AgentJournalResolution,
   AgentJournalSubmission
 } from './agent-session-journal-types'
+import type { SessionOptionDescriptor } from './native-chat-session-options'
 import type {
   AgentSessionHandoffStage,
   AgentSessionOwnerRuntimeKind,
@@ -310,6 +311,7 @@ export type AgentSessionModelOption = {
 export type AgentSessionOptionsResult = {
   models: AgentSessionModelOption[]
   current: {
+    /** Empty when neither the provider nor an explicit selection names the model. */
     model: string
     effort?: string
     /**
@@ -319,4 +321,7 @@ export type AgentSessionOptionsResult = {
      */
     confirmed?: readonly string[]
   }
+  descriptors?: SessionOptionDescriptor[]
+  canCompact?: boolean
+  canSteer?: boolean
 }

@@ -177,3 +177,26 @@ export function claudeToolIdentity(sessionId: string, toolUseId: string): AgentJ
 export function claudeThinkingIdentity(sessionId: string, uuid: string): AgentJournalItemIdentity {
   return { provider: 'orca', clientMessageId: `claude-thinking:${sessionId}:${uuid}` }
 }
+
+export function claudeLifecycleIdentity(
+  sessionId: string,
+  turnId: string
+): AgentJournalItemIdentity {
+  return { provider: 'legacy', agent: 'claude', sessionId, recordId: `turn-lifecycle:${turnId}` }
+}
+
+export function claudeLifecycleBody(
+  turnId: string,
+  running: boolean,
+  outcome: 'completed' | 'failed' | 'interrupted'
+): AgentJournalItemBody {
+  return {
+    kind: 'status',
+    text: running ? 'Claude is working…' : outcome,
+    turnLifecycle: {
+      turnId,
+      state: running ? 'running' : 'completed',
+      ...(running ? {} : { outcome })
+    }
+  }
+}

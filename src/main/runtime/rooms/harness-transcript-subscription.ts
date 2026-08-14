@@ -3,12 +3,15 @@ import {
   subscribeNativeChatTranscript,
   type NativeChatTranscriptSubscription
 } from '../../native-chat/transcript-watch'
-import type { RoomHarnessBinding, RoomHarnessSubscriptionCallbacks } from './harness-adapter-types'
+import type {
+  RoomHarnessSubscriptionCallbacks,
+  RoomTerminalHarnessBinding
+} from './harness-adapter-types'
 import { currentTurnMessages, transcriptLifecycleEvent, turnUserMessage } from './harness-lifecycle'
 
 export function subscribeRoomHarnessTranscript(
   agent: RoomHarnessAgent,
-  binding: RoomHarnessBinding,
+  binding: RoomTerminalHarnessBinding,
   callbacks: RoomHarnessSubscriptionCallbacks
 ): Promise<NativeChatTranscriptSubscription> {
   const session = binding.providerSession

@@ -51,11 +51,14 @@ import { StructuredAgentSessionStatusFeed } from './structured-agent-session-sta
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { listStructuredSessionSubagents } from './structured-agent-session-subagents'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 /** Quit must not wait indefinitely on an in-flight handoff; see the drain phase below. */
 const HANDOFF_DRAIN_TIMEOUT_MS = 5_000
 
 export class StructuredAgentSessionHost {
+  listSubagentSessions = (sessionId: string) =>
+    listStructuredSessionSubagents(this.deps.store.getRecord(sessionId))
   private readonly sessions = new Map<string, StructuredAgentSessionHostSession>()
   private readonly statusFeed = new StructuredAgentSessionStatusFeed({
     sessions: this.sessions,
@@ -316,6 +319,16 @@ export class StructuredAgentSessionHost {
 
   readOptions = (sessionId: string): Promise<SessionWire.AgentSessionOptionsResult> =>
     readStructuredAgentSessionOptions(this.mutationContext(), sessionId)
+
+  readContext = (sessionId: string) => {
+    this.requireSession(sessionId)
+    return this.deps.adapter.readContext?.(sessionId) ?? null
+  }
+
+  readConfiguration = (sessionId: string) => {
+    this.requireSession(sessionId)
+    return this.deps.adapter.readConfiguration?.(sessionId) ?? null
+  }
 
   async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
     this.requireSession(sessionId)

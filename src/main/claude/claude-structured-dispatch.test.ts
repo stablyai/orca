@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { dispatchClaudeTurn, resolveClaudeReplayWaiter } from './claude-structured-dispatch'
+import {
+  dispatchClaudeTurn,
+  resolveClaudeReplayWaiter,
+  cancelPendingClaudeSteers
+} from './claude-structured-dispatch'
 import { readClaudeImage } from './claude-structured-dispatch-content'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
@@ -49,6 +53,65 @@ function userReplayFrame(uuid: string, text: string): Record<string, unknown> {
 }
 
 describe('Claude structured dispatch image limits', () => {
+  it.each(['current', 'next'] as const)(
+    'preserves steer ownership at the %s turn boundary',
+    async (placement) => {
+      const session = sessionFor()
+      let currentTurnId: string | null = 'root-turn'
+      session.translator = {
+        get currentTurnId() {
+          return currentTurnId
+        }
+      } as ClaudeSession['translator']
+      session.activeTurnId = 'root-turn'
+      session.dispatchSequence = session.activeTurnSequence = 1
+      const pending = dispatchClaudeTurn(
+        session,
+        {
+          clientMessageId: 'steer',
+          turnId: 'root-turn',
+          body: userMessage([{ type: 'text', text: 'continue' }])
+        },
+        1
+      )
+      await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+      const waiter = session.dispatchWaiters[0]!
+      expect(waiter.timer).toBeUndefined()
+      if (placement === 'next') {
+        currentTurnId = null
+      }
+      expect(resolveClaudeReplayWaiter(session, userReplayFrame(waiter.sentUuid, 'continue'))).toBe(
+        placement === 'next'
+      )
+      const turn =
+        placement === 'current' ? { turnId: 'root-turn' } : { turnId: waiter.sentUuid, root: true }
+      await expect(pending).resolves.toMatchObject({
+        state: 'accepted',
+        providerIdentity: { turn }
+      })
+      expect(session.activeTurnId).toBe(turn.turnId)
+      expect(session.activeTurnSequence).toBe(session.dispatchSequence)
+    }
+  )
+
+  it('settles an unacknowledged steer when its turn is stopped', async () => {
+    const session = sessionFor()
+    session.translator = { currentTurnId: 'root-turn' } as ClaudeSession['translator']
+    const pending = dispatchClaudeTurn(
+      session,
+      {
+        clientMessageId: 'steer',
+        turnId: 'root-turn',
+        body: userMessage([{ type: 'text', text: 'continue' }])
+      },
+      1
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+    cancelPendingClaudeSteers(session, 'root-turn')
+    await expect(pending).resolves.toMatchObject({ state: 'unknown' })
+    expect(session.dispatchWaiters).toHaveLength(0)
+  })
+
   it('recovers the active identity when a timed-out replay arrives late', async () => {
     const session = sessionFor()
     const dispatched = dispatchClaudeTurn(
@@ -340,7 +403,8 @@ describe('Claude structured dispatch image limits', () => {
       providerIdentity: {
         provider: 'claude',
         sessionId: 'provider-session',
-        uuid: 'command-result-uuid'
+        uuid: 'command-result-uuid',
+        turn: { turnId: 'command-result-uuid', root: true }
       }
     })
   })
@@ -451,7 +515,8 @@ describe('Claude structured dispatch image limits', () => {
       providerIdentity: {
         provider: 'claude',
         sessionId: 'provider-session',
-        uuid: 'user-replay-uuid'
+        uuid: 'user-replay-uuid',
+        turn: { turnId: 'user-replay-uuid', root: true }
       }
     })
   })

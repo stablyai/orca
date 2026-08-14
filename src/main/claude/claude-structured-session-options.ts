@@ -1,3 +1,9 @@
+import type { AgentSessionContextSnapshot } from '../../shared/agent-session-context'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionSnapshot
+} from '../../shared/structured-agent-session-options'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice,
@@ -6,8 +12,12 @@ import type {
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../shared/agent-session-option-catalog-types'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { claudeFastModeDescriptor, readClaudeFastMode } from './claude-structured-fast-mode'
 
-type ListedModel = AgentSessionModelOption & { resolvedModel: string | null }
+type ListedModel = AgentSessionModelOption & {
+  resolvedModel: string | null
+  supportsFastMode?: boolean
+}
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -27,6 +37,10 @@ function text(value: unknown): string | null {
  */
 export function readClaudeSettingsEffort(settings: unknown): string | null {
   return text(record(record(settings)?.effective)?.effortLevel)
+}
+
+export function readClaudeSettingsModel(settings: unknown): string | null {
+  return text(record(record(settings)?.applied)?.model)
 }
 
 function effortLabel(value: string): string {
@@ -65,6 +79,9 @@ function listedModels(value: unknown): ListedModel[] {
         ...(description ? { description } : {}),
         isDefault: resolvedModel !== null && resolvedModel === defaultResolvedModel,
         efforts: listedEfforts(row),
+        ...(typeof row.supportsFastMode === 'boolean'
+          ? { supportsFastMode: row.supportsFastMode }
+          : {}),
         resolvedModel
       }
     ]
@@ -91,9 +108,7 @@ function currentModelId(models: ListedModel[], reportedModel: string | undefined
   const matched = reportedModel
     ? models.find((model) => model.id === reportedModel || model.resolvedModel === reportedModel)
     : undefined
-  return (
-    matched?.id ?? reportedModel ?? models.find((model) => model.isDefault)?.id ?? models[0]!.id
-  )
+  return matched?.id ?? reportedModel ?? ''
 }
 
 /**
@@ -116,7 +131,7 @@ export function readClaudeCurrentModel(session: ClaudeSession): {
   return {
     id: confirmed
       ? session.reportedOptions.model
-      : (session.options.get('model') ?? session.reportedOptions.model),
+      : (session.options.get('model') ?? session.reportedOptions.model ?? session.launchModel),
     confirmed
   }
 }
@@ -149,16 +164,43 @@ export async function readClaudeModelEffortLevels(
   }
 }
 
+export function updateClaudeStructuredCommands(session: ClaudeSession, value: unknown): void {
+  const advertised = record(value)?.commands
+  if (!Array.isArray(advertised)) {
+    return
+  }
+  const commands = advertised.flatMap((value) => {
+    const command = record(value)
+    const name = text(command?.name)
+    const description = text(command?.description)
+    const inputHint = text(command?.argumentHint)
+    return name
+      ? [{ name, ...(description ? { description } : {}), ...(inputHint ? { inputHint } : {}) }]
+      : []
+  })
+  session.configuration = {
+    options: session.configuration?.options ?? [],
+    commands,
+    canCompact: commands.some((command) => command.name === 'compact'),
+    canFork: true,
+    canSteer: true
+  }
+}
+
 export async function readClaudeStructuredSessionOptions(
   session: ClaudeSession,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  initialization?: unknown
 ): Promise<AgentSessionOptionsResult> {
+  updateClaudeStructuredCommands(session, initialization)
   const catalog = await session.connection.supportedModels({ timeoutMs }).catch(() => null)
+  const commands = session.configuration?.commands ?? []
+  const canCompact = commands.some((command) => command.name === 'compact')
   const discovered = listedModels(catalog ? { models: catalog } : null)
   const models = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
   const model = currentModelId(models, current.id)
-  if (!models.some((entry) => entry.id === model)) {
+  if (model && !models.some((entry) => entry.id === model)) {
     models.push({ id: model, label: model, isDefault: false, efforts: [], resolvedModel: null })
   }
   const effort = session.options.get('effort') ?? session.reportedOptions.effort
@@ -166,7 +208,7 @@ export async function readClaudeStructuredSessionOptions(
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : [])
   ]
-  return {
+  const result: AgentSessionOptionsResult = {
     models: models.map((entry) => ({
       id: entry.id,
       label: entry.label,
@@ -178,6 +220,40 @@ export async function readClaudeStructuredSessionOptions(
       model,
       ...(effort ? { effort } : {}),
       ...(confirmed.length > 0 ? { confirmed } : {})
-    }
+    },
+    canSteer: true,
+    canCompact
+  }
+  const options = structuredAgentSessionOptionSnapshot(
+    applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      result
+    )
+  )
+  const fast = claudeFastModeDescriptor(
+    await readClaudeFastMode(session, timeoutMs),
+    models.find((entry) => entry.id === model)?.supportsFastMode
+  )
+  if (fast) {
+    options.push(fast)
+  }
+  session.configuration = { commands, options, canCompact, canFork: true, canSteer: true }
+  return { ...result, descriptors: options }
+}
+
+export function readClaudeStructuredContext(
+  session: ClaudeSession | undefined
+): AgentSessionContextSnapshot | null {
+  if (!session?.contextActivity) {
+    return null
+  }
+  return {
+    ...session.contextActivity.context,
+    model: readClaudeCurrentModel(session).id ?? session.contextActivity.context.model,
+    effort:
+      session.options.get('effort') ??
+      session.reportedOptions.effort ??
+      session.contextActivity.context.effort
   }
 }

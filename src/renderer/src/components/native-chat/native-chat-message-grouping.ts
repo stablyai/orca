@@ -135,7 +135,12 @@ function buildAssistantTurn(
   working = false,
   id = `assistant-turn:${messages[0]?.id ?? 'empty'}`
 ): Extract<NativeChatConversationItem, { kind: 'assistant-turn' }> {
-  const finalIndex = messages.findLastIndex((message) => isFinalCandidate(message, working))
+  const hasExplicitPhase = messages.some(
+    (message) => message.role === 'assistant' && message.assistantPhase !== undefined
+  )
+  const finalIndex = messages.findLastIndex((message) =>
+    hasExplicitPhase ? message.assistantPhase === 'final' : isFinalCandidate(message, working)
+  )
   const finalMessage = finalIndex !== -1 ? messages[finalIndex]! : null
   const activityMessages = messages.filter((_, index) => index !== finalIndex)
   const timestamps = messages.flatMap((message) =>
@@ -147,7 +152,10 @@ function buildAssistantTurn(
     activityMessages,
     finalMessage,
     startedAt: anchorTimestamp ?? timestamps[0] ?? null,
-    completedAt: working ? null : (timestamps.at(-1) ?? anchorTimestamp),
+    completedAt:
+      working && finalMessage?.assistantPhase !== 'final'
+        ? null
+        : (finalMessage?.timestamp ?? timestamps.at(-1) ?? anchorTimestamp),
     working
   }
 }
@@ -156,7 +164,7 @@ function isFinalCandidate(message: NativeChatMessage, working: boolean): boolean
   if (message.role !== 'assistant') {
     return false
   }
-  if (working && message.id !== NATIVE_CHAT_STREAMING_ID) {
+  if (working && message.id !== NATIVE_CHAT_STREAMING_ID && message.source !== 'stream') {
     return false
   }
   return (
@@ -165,11 +173,7 @@ function isFinalCandidate(message: NativeChatMessage, working: boolean): boolean
   )
 }
 
-/** Collect every tool-result across the whole conversation in document order so
- *  a call can find its answer even when the result lands in a later message (the
- *  common transcript shape: assistant emits the call, a following tool message
- *  carries the result). Results carry no originating name in our model, so they
- *  are handed out FIFO to calls. */
+/** Collect results across messages; provider IDs match exact calls and legacy results stay FIFO. */
 function collectToolResults(messages: NativeChatMessage[]): NativeChatToolResultBlock[] {
   const results: NativeChatToolResultBlock[] = []
   for (const message of messages) {
@@ -182,16 +186,15 @@ function collectToolResults(messages: NativeChatMessage[]): NativeChatToolResult
   return results
 }
 
-/**
- * Flatten ordered messages into render items, pairing tool calls with results.
- * Result pairing is FIFO across the conversation: tool results in our model
- * carry no back-reference to a call id, so we match the Nth call to the Nth
- * result in document order — the order both providers emit them. A call with no
- * remaining result renders as in-flight (`result: null`).
- */
+/** Flatten messages into render items, pairing exact provider IDs before legacy FIFO results. */
 export function buildNativeChatRenderItems(messages: NativeChatMessage[]): NativeChatRenderItem[] {
   const ordered = orderNativeChatMessages(messages)
   const resultQueue = collectToolResults(ordered)
+  const resultsById = new Map(
+    resultQueue.flatMap((result) =>
+      result.toolCallId ? [[result.toolCallId, result] as const] : []
+    )
+  )
   let resultCursor = 0
 
   const items: NativeChatRenderItem[] = []
@@ -201,9 +204,15 @@ export function buildNativeChatRenderItems(messages: NativeChatMessage[]): Nativ
 
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
-        const result = resultQueue[resultCursor] ?? null
-        if (result) {
-          resultCursor += 1
+        let result = block.toolCallId ? (resultsById.get(block.toolCallId) ?? null) : null
+        if (!block.toolCallId) {
+          while (resultQueue[resultCursor]?.toolCallId) {
+            resultCursor += 1
+          }
+          result = resultQueue[resultCursor] ?? null
+          if (result) {
+            resultCursor += 1
+          }
         }
         steps.push({ call: block, result })
       } else if (isToolResultBlock(block)) {

@@ -1,5 +1,6 @@
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
+import { codexSubagentItem } from '../../shared/codex-subagent-items'
 import {
   boundInlineText,
   boundToolInput,
@@ -221,6 +222,13 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
  * rows so a provider release cannot make new activity invisible.
  */
 export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
+  const subagent = codexSubagentItem(item)
+  if (subagent) {
+    return {
+      body: { ...subagent, input: boundToolInput(subagent.input, DEFAULT_JOURNAL_PAYLOAD_LIMITS) },
+      handled: true
+    }
+  }
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
     const blocks = codexMessageBlocks(item)
     return {

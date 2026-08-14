@@ -82,7 +82,8 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       options: { model: 'opus', effort: 'high' }
     })
 
-    expect(claude.connections[0].calls.slice(-4)).toEqual([
+    const calls = claude.connections[0].calls.filter((call) => call.subtype !== 'reinitialize')
+    expect(calls.slice(-5, -1)).toEqual([
       { subtype: 'set_model', params: { model: 'opus' } },
       // The restored model's advertised levels gate the replay, so a stale effort
       // is dropped rather than re-applied to a model with no effort control.
@@ -368,18 +369,36 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     expect(claude.connections[0].closeCount).toBe(1)
   })
 
-  it('refuses an unauthenticated initialize response even when SessionStart runs', async () => {
-    const claude = fakeClaude({
-      initProof: 'session-start',
-      initAccount: { apiProvider: 'firstParty', tokenSource: 'none' }
-    })
-    const adapter = adapterFor(claude)
+  it.each(['ANTHROPIC_API_KEY', 'apiKeyHelper'])(
+    'accepts API-key authentication from %s without an OAuth token',
+    async (apiKeySource) => {
+      const claude = fakeClaude({
+        initAccount: { apiProvider: 'firstParty', tokenSource: 'none', apiKeySource }
+      })
+      const adapter = adapterFor(claude)
+      await expect(
+        adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+      ).resolves.toMatchObject({ link: { handle: { provider: 'claude' } } })
+      expect(claude.connections[0].closeCount).toBe(0)
+      await adapter.closeAll()
+    }
+  )
 
-    await expect(
-      adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
-    ).rejects.toThrow(/not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s)
-    expect(claude.connections[0].closeCount).toBe(1)
-  })
+  it.each([undefined, 'none', ''])(
+    'refuses an unauthenticated initialize response with API-key source %s even when SessionStart runs',
+    async (apiKeySource) => {
+      const claude = fakeClaude({
+        initProof: 'session-start',
+        initAccount: { apiProvider: 'firstParty', tokenSource: 'none', apiKeySource }
+      })
+      const adapter = adapterFor(claude)
+
+      await expect(
+        adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+      ).rejects.toThrow(/not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s)
+      expect(claude.connections[0].closeCount).toBe(1)
+    }
+  )
 })
 
 describe('ClaudeStructuredSessionAdapter turns and controls', () => {
@@ -399,7 +418,8 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       providerIdentity: {
         provider: 'claude',
         sessionId: PROVIDER_SESSION_ID,
-        uuid: 'user-provider-uuid'
+        uuid: 'user-provider-uuid',
+        turn: { turnId: 'user-provider-uuid', root: true }
       }
     })
     expect(claude.connections[0].sent[0]).toMatchObject({
@@ -563,7 +583,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     })
     const adapter = await acquired(claude)
 
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
       models: [
         {
           id: 'opus',

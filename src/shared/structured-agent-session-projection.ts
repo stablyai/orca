@@ -2,6 +2,7 @@ import { normalizePromptField } from './agent-status-field-normalization'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
+import { codexSubagentProviderFrame } from './codex-subagent-items'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
@@ -27,7 +28,10 @@ function itemBlocks(item: AgentJournalRenderItem): {
   role: NativeChatMessage['role']
   blocks: NativeChatBlock[]
 } | null {
-  const body = item.body
+  const body =
+    item.body.kind === 'status' && item.body.providerFrame
+      ? (codexSubagentProviderFrame(item.body.providerFrame) ?? item.body)
+      : item.body
   if (body.kind === 'message') {
     return { role: body.role, blocks: body.blocks }
   }

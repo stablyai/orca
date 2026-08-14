@@ -30,6 +30,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onUnexpectedExit: (event: StructuredAgentSessionLifecycleEvent) => void
+  canStartEmptySession?: (sessionId: string) => Promise<boolean>
   onBackgroundTasksChanged?: (
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
@@ -43,6 +44,7 @@ export function createStructuredClaudeRuntimeAdapter(
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
+      canStartEmptySession: deps.canStartEmptySession,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),

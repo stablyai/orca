@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -43,7 +46,10 @@ const WORKSPACE = 'workspace-claude'
 // which structured-agent-session.test.ts pins in both its satisfied and refused states.
 const CLIENT = {
   clientKind: 'runtime' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  ]
 }
 
 const { readClaudeTranscriptLeafUuid, resolveSessionFilePath } = vi.hoisted(() => ({
@@ -79,6 +85,7 @@ function fakeClaude() {
       sent: [],
       pid: 4321 + connections.length,
       closed: false,
+      reinitialize: async () => ({}),
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
         if (selfExit) {

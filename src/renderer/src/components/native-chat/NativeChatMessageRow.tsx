@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useRef } from 'react'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
+import type { StreamingMarkdownFade } from '@/components/sidebar/streaming-markdown-fade'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -33,7 +34,8 @@ export const MessageRow = memo(function MessageRow({
   activityExpandOverride,
   structuredActivityUi = true,
   runtimeContext,
-  imageLoadContext
+  imageLoadContext,
+  streamingFade
 }: {
   message: NativeChatMessage
   expandSignal: boolean
@@ -47,6 +49,7 @@ export const MessageRow = memo(function MessageRow({
   structuredActivityUi?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   imageLoadContext?: NativeChatImageLoadContext
+  streamingFade?: StreamingMarkdownFade
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set: a streaming turn re-renders this row on every frame, and these
@@ -171,6 +174,7 @@ export const MessageRow = memo(function MessageRow({
           className="text-sm"
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
+          streamingFade={streamingFade}
           linkifyFilePaths={onLinkClick !== undefined}
         />
         )

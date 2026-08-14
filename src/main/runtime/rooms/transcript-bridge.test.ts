@@ -199,7 +199,7 @@ describe('room transcript bridge lifecycle', () => {
       const delivery = trigger.deliveries[0]!
       service.db.messages.deliveries.claim(delivery.id)
       // The delivery was bound to the transcript's 'prompt-1' user turn.
-      service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1')
+      service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1', 1_799_999_999_995)
 
       await service.activateRoom(room.id)
       await vi.waitFor(() => {
@@ -226,6 +226,7 @@ describe('room transcript bridge lifecycle', () => {
               participantId: agent.id,
               state: 'working',
               kind: 'command',
+              startedAt: 1_799_999_999_995,
               anchorSequence: trigger.message.sequence
             })
           })
@@ -346,9 +347,29 @@ describe('room transcript bridge lifecycle', () => {
         })
       )
       expect(service.currentTurnDeliveryIdForPane(agent.paneKey!)).toBe(delivery.id)
+      expect(service.transcriptBridge.currentTurnDeliveryIdForConversation('session-1')).toBe(
+        delivery.id
+      )
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
       expect(service.db.messages.deliveries.get(queued.id).state).toBe('delivering')
       expect(service.db.participants.get(agent.id).state).toBe('online')
+      await appendFile(
+        transcriptPath,
+        line(
+          'event_msg',
+          {
+            type: 'user_message',
+            id: 'direct-literal',
+            message: 'Explain <orca-room-delivery id="example"> as XML.'
+          },
+          140
+        )
+      )
+      await vi.waitFor(() =>
+        expect(
+          service.transcriptBridge.currentTurnDeliveryIdForConversation('session-1')
+        ).toBeNull()
+      )
     } finally {
       service.close()
       await rm(root, { recursive: true, force: true })
@@ -475,6 +496,7 @@ describe('room transcript bridge lifecycle', () => {
         service.listMessages(room.id, null).messages.filter((item) => item.actorKind === 'agent')
       ).toEqual([])
       expect(service.currentTurnDeliveryIdForPane(agent.paneKey!)).toBeNull()
+      expect(service.transcriptBridge.currentTurnDeliveryIdForConversation('session-1')).toBeNull()
     } finally {
       service.close()
       await rm(root, { recursive: true, force: true })

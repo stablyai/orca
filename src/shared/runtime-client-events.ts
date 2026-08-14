@@ -54,6 +54,7 @@ export type RuntimeClientEventStreamMessage =
       snapshot?: {
         repos?: unknown[]
         sshStates?: { targetId: string; state: SshConnectionState }[]
+        roomNotificationSequence?: number
       }
     })
   | RuntimeClientEvent

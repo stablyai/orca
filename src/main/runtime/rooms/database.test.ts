@@ -139,6 +139,55 @@ describe('RoomDatabase', () => {
     expect(upgraded.messages.get(created.id).mentions).toEqual(['claude', 'codex'])
   })
 
+  it('atomically replaces agent activity with its final room reply', () => {
+    const database = memory()
+    const snapshot = createRoom(database)
+    const agent = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'codex',
+      displayName: 'Codex',
+      agent: 'codex'
+    })
+    const created = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: 'egor',
+      actorKind: 'user',
+      body: '@codex answer',
+      mentions: ['codex']
+    })
+    database.activities.upsert({
+      participantId: agent.id,
+      identity: agent.identity,
+      state: 'working',
+      kind: 'thinking',
+      detail: 'partial',
+      messages: [],
+      startedAt: 1,
+      updatedAt: 1,
+      anchorSequence: created.message.sequence
+    })
+    database.messages.deliveries.claim(created.deliveries[0].id)
+    database.messages.deliveries.complete(created.deliveries[0].id, 'delivered', null)
+
+    const reply = database.providerMessages.createReply({
+      participant: agent,
+      delivery: created.deliveries[0],
+      providerSessionId: 'session-1',
+      providerMessageId: 'message-1',
+      body: 'done',
+      mentions: [],
+      createdAt: 2
+    })
+
+    expect(reply?.body).toBe('done')
+    expect(database.activities.get(agent.id)).toBeNull()
+    expect(database.messages.deliveries.get(created.deliveries[0].id)).toMatchObject({
+      state: 'delivered',
+      responseMessageId: reply?.id
+    })
+  })
+
   it('extends the participant state constraint for hibernation on legacy databases', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-rooms-'))
     directories.push(directory)
@@ -203,7 +252,15 @@ describe('RoomDatabase', () => {
     expect(migrated.participation).toBe('active')
     expect(migrated.providerSession).toEqual({ key: 'session_id', id: 'session-1' })
     expect(migrated.terminalHandle).toBe('term-claude')
-    expect(second.snapshot(snapshot.room.id, 'user').participants).toHaveLength(2)
+    expect(
+      second.participants.add({
+        roomId: snapshot.room.id,
+        identity: 'omp',
+        displayName: 'OMP',
+        agent: 'omp'
+      }).agent
+    ).toBe('omp')
+    expect(second.snapshot(snapshot.room.id, 'user').participants).toHaveLength(3)
     second.close()
   })
 

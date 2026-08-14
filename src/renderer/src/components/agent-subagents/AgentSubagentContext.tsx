@@ -15,8 +15,9 @@ export type AgentSubagentSource = {
   key: string
   identity: string
   agent: AgentType
-  paneKey: string
+  paneKey?: string
   sessionId: string | null
+  structuredSessionId?: string
   transcriptPath: string | null
   runtimeEnvironmentId?: string | null
   target: RuntimeClientTarget

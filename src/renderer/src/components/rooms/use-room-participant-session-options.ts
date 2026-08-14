@@ -1,15 +1,24 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { patchStructuredAgentSessionOptionSnapshot } from '../../../../shared/structured-agent-session-options'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { RoomParticipant } from '../../../../shared/rooms'
 import type {
   SessionOptionDescriptor,
-  SessionOptionValue
+  SessionOptionValue,
+  SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
+import type {
+  AgentSessionHistoryResult,
+  AgentSessionMutationResult,
+  AgentSessionOptionResult,
+  AgentSessionOptionsResult
+} from '../../../../shared/agent-session-wire'
 import {
-  createNativeChatPtySessionOptions,
-  type NativeChatPtySessionOptionsSurface
-} from '../native-chat/native-chat-pty-session-options'
+  createStructuredAgentSessionOperationId,
+  structuredAgentSessionPayloadFingerprint
+} from '../../../../shared/structured-agent-session-mutation'
+import { createNativeChatPtySessionOptions } from '../native-chat/native-chat-pty-session-options'
 import {
   discoverNativeChatCatalogModels,
   resolveRoomModelDiscoveryContext
@@ -20,6 +29,8 @@ import {
   readNativeChatEnrichedReportedValues,
   subscribeNativeChatEnrichedModels
 } from '../native-chat/native-chat-session-option-enrichment'
+import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { reportRoomMachineContext } from './room-machine-session-option-reporting'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -29,9 +40,55 @@ export function useRoomParticipantSessionOptions(
   participant: RoomParticipant,
   target: RuntimeClientTarget
 ): {
-  surface: NativeChatPtySessionOptionsSurface | null
+  surface: SessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
+  canCompact: boolean
+  refreshMachineOptions: () => Promise<void>
 } {
+  const machineConversationId =
+    participant.providerSession?.transport === 'machine' ? participant.providerSession.id : null
+  const [machineOptions, setMachineOptions] = useState<SessionOptionDescriptor[]>(EMPTY_SNAPSHOT)
+  const [machineFence, setMachineFence] = useState<number | null>(null)
+  const [machineCanCompact, setMachineCanCompact] = useState(false)
+  const machineRequestRef = useRef(0)
+  const refreshMachineOptions = useCallback(async (): Promise<void> => {
+    if (!machineConversationId) {
+      return
+    }
+    const request = ++machineRequestRef.current
+    try {
+      const [options, history] = await Promise.all([
+        callStructuredAgentSession<AgentSessionOptionsResult>(target, 'agentSession.options', {
+          sessionId: machineConversationId
+        }),
+        callStructuredAgentSession<AgentSessionHistoryResult>(target, 'agentSession.history', {
+          sessionId: machineConversationId,
+          direction: 'tail',
+          limit: 1
+        })
+      ])
+      if (machineRequestRef.current !== request) {
+        return
+      }
+      setMachineOptions(options.descriptors ?? EMPTY_SNAPSHOT)
+      setMachineCanCompact(options.canCompact === true)
+      setMachineFence(history.page.fence ?? null)
+    } catch (error) {
+      if (machineRequestRef.current === request) {
+        console.warn('[rooms] failed to read structured session options', error)
+      }
+    }
+  }, [machineConversationId, target])
+  useEffect(() => {
+    machineRequestRef.current += 1
+    setMachineOptions(EMPTY_SNAPSHOT)
+    setMachineFence(null)
+    setMachineCanCompact(false)
+    void refreshMachineOptions()
+    return () => {
+      machineRequestRef.current += 1
+    }
+  }, [machineConversationId, participant.state, refreshMachineOptions])
   const agent = participant.agent
   const discoveryContext = useMemo(
     () =>
@@ -138,5 +195,76 @@ export function useRoomParticipantSessionOptions(
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
   )
-  return { surface, snapshot }
+  const reportedMachineOptions = useMemo(
+    () => reportRoomMachineContext(machineOptions, participant),
+    [machineOptions, participant]
+  )
+  const machineSurface = useMemo(
+    () =>
+      machineConversationId && machineFence !== null
+        ? createMachineSessionOptionsSurface({
+            target,
+            sessionId: machineConversationId,
+            fence: machineFence,
+            snapshot: reportedMachineOptions,
+            onSnapshot: setMachineOptions
+          })
+        : null,
+    [machineConversationId, machineFence, reportedMachineOptions, target]
+  )
+  return machineConversationId
+    ? {
+        surface: machineSurface,
+        snapshot: reportedMachineOptions,
+        canCompact: machineCanCompact,
+        refreshMachineOptions
+      }
+    : { surface, snapshot, canCompact: true, refreshMachineOptions }
+}
+
+function createMachineSessionOptionsSurface(input: {
+  target: RuntimeClientTarget
+  sessionId: string
+  fence: number
+  snapshot: SessionOptionDescriptor[]
+  onSnapshot: (snapshot: SessionOptionDescriptor[]) => void
+}): SessionOptionsSurface {
+  const setOption = async (id: string, value: SessionOptionValue) => {
+    const stringValue = String(value)
+    const fields = { key: id, value: stringValue }
+    const result = await callStructuredAgentSession<
+      AgentSessionMutationResult<AgentSessionOptionResult>
+    >(input.target, 'agentSession.setOption', {
+      envelope: {
+        sessionId: input.sessionId,
+        clientOperationId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+        expectedRuntimeFence: input.fence,
+        payloadFingerprint: structuredAgentSessionPayloadFingerprint({
+          method: 'agentSession.setOption',
+          sessionId: input.sessionId,
+          fields
+        })
+      },
+      ...fields
+    })
+    if (!result.ok) {
+      throw new Error(result.refusal.message)
+    }
+    const values = result.value.options ?? { [id]: stringValue }
+    const reported = await callStructuredAgentSession<AgentSessionOptionsResult>(
+      input.target,
+      'agentSession.options',
+      { sessionId: input.sessionId }
+    ).catch(() => null)
+    const snapshot =
+      reported?.descriptors ?? patchStructuredAgentSessionOptionSnapshot(input.snapshot, values)
+    input.onSnapshot(snapshot)
+    return { snapshot }
+  }
+  return {
+    getSnapshot: () => input.snapshot,
+    setOption,
+    invokeAction: async () => ({ snapshot: input.snapshot }),
+    subscribe: () => () => {}
+  }
 }

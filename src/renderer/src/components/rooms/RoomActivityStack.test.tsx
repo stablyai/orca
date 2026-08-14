@@ -85,4 +85,58 @@ describe('RoomActivityStack', () => {
     expect(isOutsideActivityStackSafeArea({ x: 111, y: 50 }, rect)).toBe(false)
     expect(isOutsideActivityStackSafeArea({ x: 113, y: 50 }, rect)).toBe(true)
   })
+
+  it('renders an explicit final outside the live activity card', () => {
+    const finalizing: RoomAgentActivity = {
+      ...activity('codex', 10),
+      messages: [
+        {
+          id: 'reasoning',
+          role: 'reasoning',
+          blocks: [{ type: 'text', text: 'Checking' }],
+          timestamp: 11,
+          source: 'stream'
+        },
+        {
+          id: 'final',
+          role: 'assistant',
+          assistantPhase: 'final',
+          blocks: [{ type: 'text', text: 'Visible answer' }],
+          timestamp: 20,
+          source: 'stream'
+        }
+      ],
+      updatedAt: 20
+    }
+
+    const { container } = render(
+      <RoomActivityStack activities={[finalizing]} participants={[participant('codex')]} />
+    )
+
+    expect(screen.getByText('Worked for 1s')).toBeTruthy()
+    expect(container.textContent).toContain('Visible answer')
+    expect(container.querySelector('[class~="border-border/70"]')).toBeNull()
+  })
+
+  it('does not render a silent control final as completed activity', () => {
+    const silent: RoomAgentActivity = {
+      ...activity('codex', 10),
+      messages: [
+        {
+          id: 'silent',
+          role: 'assistant',
+          assistantPhase: 'final',
+          blocks: [{ type: 'text', text: '<orca-room-silent />' }],
+          timestamp: 20,
+          source: 'stream'
+        }
+      ]
+    }
+
+    const { container } = render(
+      <RoomActivityStack activities={[silent]} participants={[participant('codex')]} />
+    )
+
+    expect(container.textContent).not.toContain('Worked for')
+  })
 })

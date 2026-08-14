@@ -58,18 +58,25 @@ export function createCodexStructuredLaunchResolver(
     })
     const args = [...(record.launchArgs ?? []), 'app-server']
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
+    const resumeOrigin = head?.handle.provider === 'codex' ? 'resumed' : 'adopted'
+    const resumeThreadId =
+      head?.handle.provider === 'codex'
+        ? head.handle.threadId
+        : identity.providerHandle.kind === 'codex'
+          ? identity.providerHandle.threadId
+          : null
     return {
       command,
       args,
       cwd: await deps.resolveWorkspacePath(location.workspaceId),
       codexHome: accountHome.path,
       ...(environment ? { env: { ...environment } as Record<string, string> } : {}),
-      // An empty chain is a session that has never proved a thread, so it
-      // starts one; anything else resumes the last link this session proved.
+      // The durable chain wins after first acquisition; the journal identity carries the
+      // adopted thread only until that first proof is committed to the chain.
       resumeThreadId,
       ...(resumeThreadId
         ? {
+            resumeOrigin,
             resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(
               accountHome.path,
               resumeThreadId

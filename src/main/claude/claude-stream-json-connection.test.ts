@@ -521,7 +521,7 @@ describe('Claude stream-json connection', () => {
         { value: 'high', label: 'High' }
       ]
     })
-    expect(options.current.model).toBe('opus')
+    expect(options.current.model).toBe('')
   })
 
   it('feeds the auth diagnostic from the settings the running child reports', async () => {
