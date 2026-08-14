@@ -76,7 +76,7 @@ const LEAF_4 = '44444444-4444-4444-8444-444444444444'
 // buildFontFamily
 // ---------------------------------------------------------------------------
 const FULL_FALLBACK =
-  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
 
 describe('buildFontFamily', () => {
   it('puts custom font first with full cross-platform fallback chain', () => {
@@ -87,7 +87,7 @@ describe('buildFontFamily', () => {
   it('does not duplicate SF Mono when it is the input', () => {
     const result = buildFontFamily('SF Mono')
     expect(result).toBe(
-      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
@@ -110,39 +110,51 @@ describe('buildFontFamily', () => {
   it('deduplicates case-insensitively', () => {
     const result = buildFontFamily('sf mono')
     expect(result).toBe(
-      '"sf mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+      '"sf mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
   it('does not duplicate Consolas when it is the input', () => {
     const result = buildFontFamily('Consolas')
     expect(result).toBe(
-      '"Consolas", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+      '"Consolas", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
   it('does not duplicate MesloLGS Nerd Font when it is the input', () => {
     const result = buildFontFamily('MesloLGS Nerd Font')
     expect(result).toBe(
-      '"MesloLGS Nerd Font", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+      '"MesloLGS Nerd Font", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
   it('does not duplicate the bundled Nerd Font symbol fallback', () => {
     const result = buildFontFamily('Orca Nerd Font Symbols')
     expect(result).toBe(
-      '"Orca Nerd Font Symbols", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+      '"Orca Nerd Font Symbols", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
   // Without one of these the browser substitutes a proportional face for Hangul,
   // whose advance is not two cells wide, and CJK output drifts out of the grid.
-  it.each(['D2Coding', 'Noto Sans Mono CJK KR', 'Malgun Gothic', 'Apple SD Gothic Neo'])(
-    'carries the CJK-capable fallback %s',
-    (font) => {
-      expect(buildFontFamily('')).toContain(`"${font}"`)
-    }
-  )
+  // The setting is offered for Chinese and Japanese too, so each language needs a
+  // platform default here or its speakers get the proportional face by default.
+  it.each([
+    'D2Coding',
+    'Noto Sans Mono CJK KR',
+    'Malgun Gothic',
+    'Apple SD Gothic Neo',
+    'Hiragino Sans',
+    'MS Gothic',
+    'Noto Sans Mono CJK SC',
+    'Noto Sans Mono CJK TC',
+    'PingFang SC',
+    'PingFang TC',
+    'Microsoft YaHei',
+    'Microsoft JhengHei'
+  ])('carries the CJK-capable fallback %s', (font) => {
+    expect(buildFontFamily('')).toContain(`"${font}"`)
+  })
 
   it('keeps every CJK fallback behind the Latin monospace fonts', () => {
     const chain = buildFontFamily('')
@@ -182,7 +194,11 @@ describe('buildFontFamily', () => {
   it.each([
     ['Apple SD Gothic Neo', 'Apple SD 산돌고딕 Neo'],
     ['Malgun Gothic', '맑은 고딕'],
-    ['Hiragino Sans', 'ヒラギノ角ゴシック']
+    ['Hiragino Sans', 'ヒラギノ角ゴシック'],
+    ['PingFang SC', '苹方-简'],
+    ['PingFang TC', '苹方-繁'],
+    ['Microsoft YaHei', '微软雅黑'],
+    ['Microsoft JhengHei', '微軟正黑體']
   ])('lists %s under its localized name too', (english, localized) => {
     const chain = buildFontFamily('')
     expect(chain).toContain(`"${english}"`)

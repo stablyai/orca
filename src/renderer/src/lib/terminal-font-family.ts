@@ -24,7 +24,11 @@ const CJK_FALLBACK_FONTS = [
   'NanumGothicCoding',
   '나눔고딕코딩',
   'Sarasa Mono K',
+  'Sarasa Mono SC',
+  'Sarasa Mono TC',
   'Noto Sans Mono CJK KR',
+  'Noto Sans Mono CJK SC',
+  'Noto Sans Mono CJK TC',
   // Then platform defaults, native before foreign — none has exact dual-width
   // metrics, so a font that merely happens to be installed must not outrank the
   // one the OS ships, or two Macs render Hangul differently.
@@ -39,7 +43,15 @@ const CJK_FALLBACK_FONTS = [
   'MS Gothic', // Windows; dual-width, but Japanese-first
   'ＭＳ ゴシック',
   'Hiragino Sans', // macOS Japanese
-  'ヒラギノ角ゴシック'
+  'ヒラギノ角ゴシック',
+  'PingFang SC', // macOS Simplified Chinese
+  '苹方-简',
+  'PingFang TC', // macOS Traditional Chinese
+  '苹方-繁',
+  'Microsoft YaHei', // Windows Simplified Chinese
+  '微软雅黑',
+  'Microsoft JhengHei', // Windows Traditional Chinese
+  '微軟正黑體'
 ] as const
 
 const GENERIC_FALLBACK = 'monospace'
