@@ -718,7 +718,11 @@ async function listDetectedGitWorktrees(
 
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listRepoWorktrees(repo, localWorktreeGitOptions)
+    // Why: the forgiving `listWorktrees` path converts Git/WSL failures into `[]`,
+    // which this cache then publishes as a fresh authoritative empty catalog.
+    promise: localWorktreeGitOptions.wslDistro
+      ? listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
+      : listGitWorktreesStrict(repo.path)
   }
   detectedWorktreeScanInFlight.set(cacheKey, scan)
   try {
