@@ -32,6 +32,18 @@ describe('serve desktop activation wiring', () => {
     )
   })
 
+  it('keeps headless system-default Codex auth independent from optional status-hook trust', () => {
+    const serveIndex = source.indexOf('if (serveOptions) {')
+    const headlessRegistrationIndex = source.indexOf('registerHeadlessPtyRuntime(', serveIndex)
+    const headlessRegistration = source.slice(
+      headlessRegistrationIndex,
+      source.indexOf(')', headlessRegistrationIndex) + 1
+    )
+
+    expect(headlessRegistration).toContain('prepareCodexRuntimeHomeForLaunch')
+    expect(source).not.toContain('codexRuntimeHome.setRealHomeLaneGate(')
+  })
+
   it('publishes the named headless sentinel and only enables promotion after RPC is ready', () => {
     const serveIndex = source.indexOf('if (serveOptions) {')
     const sentinelIndex = source.indexOf(

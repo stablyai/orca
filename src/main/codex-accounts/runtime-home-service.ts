@@ -580,15 +580,6 @@ export class CodexRuntimeHomeService {
     return [...homes.values()]
   }
 
-  // Why: the real-home hook installer flips this gate off when the trust-grant
-  // client reports the host incapable, keeping that host byte-identical to the
-  // managed lane instead of shipping status-blind panes.
-  private realHomeLaneGate: () => boolean = () => true
-
-  setRealHomeLaneGate(gate: () => boolean): void {
-    this.realHomeLaneGate = gate
-  }
-
   // Why: real-home routing applies only to the host system-default selection.
   // Managed accounts run in their own homes; Windows (no shell-startup probe)
   // and custom CODEX_HOMEs stay on the mirror until cleanup can be tracked
@@ -605,7 +596,7 @@ export class CodexRuntimeHomeService {
   }
 
   isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
+    return this.isHostSystemDefaultRealHomeSelected(launchEnv)
   }
 
   reconcileLegacySharedHomeForRetainedPanes(): void {

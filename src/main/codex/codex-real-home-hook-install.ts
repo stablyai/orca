@@ -34,8 +34,8 @@ import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-
  * - 'installed': entry appended LAST in ~/.codex/hooks.json and trusted by
  *   codex itself through the app-server grant client.
  * - 'unavailable': the grant lane could not trust the entry (old binary,
- *   unsupported RPC, verify failure). The entry is rolled back and the host
- *   stays on the managed-home lane.
+ *   unsupported RPC, verify failure). The entry is rolled back and native-home
+ *   launches continue without the optional Orca status hook.
  * - 'removed': hooks are opted out; Orca entries are swept from the real home.
  */
 export type RealHomeCodexHookLane = 'pending' | 'installed' | 'unavailable' | 'removed'
@@ -48,9 +48,9 @@ export function getRealHomeCodexHookLane(): RealHomeCodexHookLane {
 }
 
 /**
- * Routing gate consumed by CodexRuntimeHomeService. Both a failed install and
- * a failed opt-out cleanup use the managed lane so no half-mutated hook state
- * can diverge from PTY, rate-limit, or commit-message routing.
+ * Whether the real-home installer currently owns Orca's system-home hook
+ * entry. This controls hook cleanup only; authentication always stays on the
+ * native home for the host system-default account.
  */
 export function isRealHomeCodexHookLaneUsable(): boolean {
   return currentLane !== 'unavailable'
@@ -87,7 +87,7 @@ function assertHooksJsonGeneration(
  * the Orca status hook when enabled, sweeps it when opted out. Idempotent and
  * synchronous (launch prep); repeat calls are cheap — an unchanged hooks.json
  * write no-ops and a valid grant ledger skips the RPC session entirely.
- * Never throws: any failure logs and leaves the host on the managed lane.
+ * Never throws: any failure logs and leaves native-home authentication intact.
  */
 export function ensureRealHomeCodexHookState(args: {
   hooksEnabled: boolean
@@ -106,7 +106,7 @@ export function ensureRealHomeCodexHookState(args: {
       installRetryAfterMs = 0
     }
   } catch (error) {
-    console.warn('[codex-real-home-hooks] ensure failed; staying on managed lane:', error)
+    console.warn('[codex-real-home-hooks] ensure failed; status hook unavailable:', error)
     currentLane = 'unavailable'
     if (args.hooksEnabled) {
       installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
@@ -124,9 +124,9 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
   // snapshot and be silently overwritten by the stale parse.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
   if (!config) {
-    // Why: an unparseable user file must never be clobbered; without a hook
-    // entry the managed lane keeps status working for this host.
-    console.warn('[codex-real-home-hooks] could not parse', hooksJsonPath, '- managed lane kept')
+    // Why: an unparseable user file must never be clobbered. Authentication
+    // remains on the native home without Orca status.
+    console.warn('[codex-real-home-hooks] could not parse', hooksJsonPath, '- status hook skipped')
     installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
     return 'unavailable'
   }
@@ -205,8 +205,8 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
 
   // Why: never leave an untrusted Orca entry in the user's real home — it
   // would surface as "Hooks need review". Roll the file back to its prior
-  // bytes and keep this host on the managed-home lane; the grant client
-  // already logged the fallback reason.
+  // bytes. Native-home authentication remains authoritative; the grant client
+  // already logged why the optional status hook is unavailable.
   try {
     restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
   } finally {
@@ -218,7 +218,7 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
   }
   installRetryAfterMs = getInstallRetryAfterMs(grant.reason)
   console.warn(
-    `[codex-real-home-hooks] trust grant unavailable (${grant.reason}); entry rolled back, managed lane kept`
+    `[codex-real-home-hooks] trust grant unavailable (${grant.reason}); entry rolled back, status hook skipped`
   )
   return 'unavailable'
 }
@@ -351,7 +351,7 @@ function backupRealHomeHooksJsonOnce(userDataPath: string, previousRaw: string |
     return
   }
   // Why: this lane mutates the user's real Codex home. If the required
-  // pristine recovery copy cannot be created, keep the managed lane intact.
+  // pristine recovery copy cannot be created, leave the native home untouched.
   mkdirSync(backupDir, { recursive: true })
   writeFileAtomically(backupPath, previousRaw, { mode: 0o600 })
 }

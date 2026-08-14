@@ -1079,9 +1079,6 @@ describe('CodexRuntimeHomeService', () => {
       getRuntimeCodexHomePath(),
       getSystemCodexHomePath()
     ])
-    service.setRealHomeLaneGate(() => false)
-    expect(service.getSelectedHostCodexHomeRoute()).toBe('shared-home')
-    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     const markerPath = join(
       testState.userDataDir,
       'codex-session-backfill',
@@ -1089,13 +1086,10 @@ describe('CodexRuntimeHomeService', () => {
     )
     mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
     writeFileSync(markerPath, '{}\n', 'utf-8')
-    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(existsSync(markerPath)).toBe(false)
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
-      true
-    )
+    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(existsSync(markerPath)).toBe(true)
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null)).toBeNull()
     service.finishHostSystemDefaultSessionMigrationPass()
-    service.setRealHomeLaneGate(() => true)
     const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
     writeFileSync(markerPath, '{}\n', 'utf-8')
     expect(service.isHostSystemDefaultRealHome({ CODEX_HOME: perSpawnCustomHome })).toBe(false)
@@ -1148,6 +1142,81 @@ describe('CodexRuntimeHomeService', () => {
         process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
       }
     }
+  })
+
+  it.each(['file', 'keyring', 'auto'] as const)(
+    'keeps %s credential storage on the native system-default home',
+    async (credentialStore) => {
+      writePaneRegistry({
+        'native-home-pane': {
+          selectionKey: 'host',
+          accountId: null,
+          homeRoute: 'real-home'
+        }
+      })
+      const staleRuntimeAuth = createCodexAuthJson(
+        'account-b@example.test',
+        'account-b',
+        'runtime-b'
+      )
+      const systemConfig = `cli_auth_credentials_store = "${credentialStore}"\nmodel = "gpt-test"\n`
+      const runtimeConfig = 'model = "runtime-sentinel"\n'
+      writeFileSync(getRuntimeCodexAuthPath(), staleRuntimeAuth, 'utf-8')
+      writeFileSync(join(getSystemCodexHomePath(), 'config.toml'), systemConfig, 'utf-8')
+      writeFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), runtimeConfig, 'utf-8')
+      if (credentialStore === 'file') {
+        writeFileSync(
+          getSystemCodexAuthPath(),
+          createCodexAuthJson('account-a@example.test', 'account-a', 'host-a'),
+          'utf-8'
+        )
+      }
+      const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
+
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+
+      expect(service.prepareForCodexLaunch()).toBeNull()
+      expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+      expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(staleRuntimeAuth)
+      expect(readFileSync(join(getSystemCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
+        systemConfig
+      )
+      expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
+        runtimeConfig
+      )
+    }
+  )
+
+  it('uses the current native file credential after host account changes and logout', async () => {
+    writePaneRegistry({
+      'native-home-pane': {
+        selectionKey: 'host',
+        accountId: null,
+        homeRoute: 'real-home'
+      }
+    })
+    const hostAuthA = createCodexAuthJson('account-a@example.test', 'account-a', 'host-a')
+    const hostAuthB = createCodexAuthJson('account-b@example.test', 'account-b', 'host-b')
+    const staleRuntimeAuth = createCodexAuthJson(
+      'account-b@example.test',
+      'account-b',
+      'runtime-old-b'
+    )
+    writeFileSync(getSystemCodexAuthPath(), hostAuthA, 'utf-8')
+    writeFileSync(getRuntimeCodexAuthPath(), staleRuntimeAuth, 'utf-8')
+    const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.prepareForCodexLaunch()).toBeNull()
+    writeFileSync(getSystemCodexAuthPath(), hostAuthB, 'utf-8')
+    expect(service.prepareForCodexLaunch()).toBeNull()
+    rmSync(getSystemCodexAuthPath())
+    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(service.getSelectedHostCodexHomeRoute()).toBe('real-home')
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(staleRuntimeAuth)
   })
 
   it('seeds shared auth for a pane-local custom home on the real-home lane', async () => {
@@ -1273,7 +1342,6 @@ describe('CodexRuntimeHomeService', () => {
 
     const service = new CodexRuntimeHomeService(store as never)
 
-    service.setRealHomeLaneGate(() => true)
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(oldSystemAuth)
     expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toContain(
       'stale-provider'
@@ -1295,8 +1363,6 @@ describe('CodexRuntimeHomeService', () => {
 
     setShellStartupEnvProbeSupportedForTest(true)
     const restartedService = new CodexRuntimeHomeService(store as never)
-    restartedService.setRealHomeLaneGate(() => true)
-
     expect(restartedService.prepareForCodexLaunch()).toBeNull()
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(managedAuth)
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
@@ -1701,8 +1767,6 @@ describe('CodexRuntimeHomeService', () => {
         }
       )
       const restartedService = new CodexRuntimeHomeService(store as never)
-      restartedService.setRealHomeLaneGate(() => true)
-
       expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
       writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
       expect(restartedService.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
@@ -1749,7 +1813,6 @@ describe('CodexRuntimeHomeService', () => {
       }
     )
     const restartedService = new CodexRuntimeHomeService(store as never)
-    restartedService.setRealHomeLaneGate(() => true)
     restartedService.reconcileLegacySharedHomeForRetainedPanes()
 
     settings.activeCodexManagedAccountId = 'account-1'
@@ -1765,7 +1828,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(reloginAuth)
   })
 
-  it('preserves shared config changes when a pending real-home lane falls back', async () => {
+  it('preserves shared config changes while shell probing remains unavailable', async () => {
     const systemConfigPath = join(getSystemCodexHomePath(), 'config.toml')
     const runtimeConfigPath = join(getRuntimeCodexHomePath(), 'config.toml')
     writeFileSync(systemConfigPath, 'model = "baseline"\n', 'utf-8')
@@ -1776,8 +1839,6 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
     writeFileSync(runtimeConfigPath, 'model = "runtime-change"\n', 'utf-8')
 
-    setShellStartupEnvProbeSupportedForTest(true)
-    service.setRealHomeLaneGate(() => false)
     service.reconcileLegacySharedHomeForRetainedPanes()
     expect(readFileSync(systemConfigPath, 'utf-8')).toBe('model = "baseline"\n')
     expect(readFileSync(runtimeConfigPath, 'utf-8')).toBe('model = "runtime-change"\n')
@@ -4085,7 +4146,6 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
 
     setShellStartupEnvProbeSupportedForTest(true)
-    service.setRealHomeLaneGate(() => true)
     writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
     service.reconcileLegacySharedHomeForRetainedPanes()
 
