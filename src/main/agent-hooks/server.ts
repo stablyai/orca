@@ -63,6 +63,7 @@ import {
   type ParsedAgentStatusPayload,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
+import { buildLaunchStatusSeedPayload } from '../../shared/agent-launch-status-seed'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -1786,6 +1787,42 @@ export class AgentHookServer {
     } else {
       this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     }
+  }
+
+  /**
+   * Publish the spawn-window row for a runtime-spawned pane whose agent stays
+   * hook-silent until its first prompt (#6643). Renderer-mounted panes seed
+   * themselves from `paneStartup.initialAgentStatus`; a runtime-spawned PTY has
+   * no such pane, so main seeds it from the same launch metadata.
+   *
+   * Any existing row wins — a real hook or OSC status that already landed (a
+   * `PermissionRequest` waiting, say) is never overwritten, and later events
+   * replace the seed normally.
+   */
+  seedLaunchAgentStatus(seed: {
+    paneKey: string
+    tabId?: string
+    worktreeId?: string
+    agentType: AgentType
+    prompt: string
+  }): void {
+    const paneKey = this.resolvePaneKeyAlias(seed.paneKey.trim())
+    if (this.state.lastStatusByPaneKey.has(paneKey)) {
+      return
+    }
+    const payload = normalizeAgentStatusPayload(
+      buildLaunchStatusSeedPayload(seed.agentType, seed.prompt)
+    )
+    if (!payload) {
+      return
+    }
+    this.ingestTerminalStatus({
+      paneKey: seed.paneKey,
+      ...(seed.tabId ? { tabId: seed.tabId } : {}),
+      ...(seed.worktreeId ? { worktreeId: seed.worktreeId } : {}),
+      connectionId: null,
+      payload
+    })
   }
 
   ingestTerminalStatus(event: {

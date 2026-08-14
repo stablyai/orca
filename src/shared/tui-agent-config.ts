@@ -44,6 +44,10 @@ export type TuiAgentConfig = {
   windowsShiftEnterEncoding?: 'csi-u'
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
+  /** This agent publishes no hook until the user's first prompt, so a launched
+   *  pane has no status row during the spawn window. Orca seeds one from launch
+   *  metadata instead — see agent-launch-status-seed.ts (#6643). */
+  seedsLaunchStatus?: true
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -84,7 +88,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
     preflightTrust: 'codex',
-    draftPasteReadySignal: 'codex-composer-prompt'
+    draftPasteReadySignal: 'codex-composer-prompt',
+    // Why: measured on codex-cli 0.147 — an idle TUI (fresh or `resume`) posts zero
+    // hooks; SessionStart fires only alongside the first UserPromptSubmit.
+    seedsLaunchStatus: true
   },
   autohand: {
     detectCmd: 'autohand',
@@ -231,7 +238,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: `--trust` skips the first-run trust prompt so it doesn't consume the task text.
     launchCmd: 'command-code --trust',
     expectedProcess: 'command-code',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    seedsLaunchStatus: true
   },
   continue: {
     // Why: Continue's CLI binary is `cn`; `continue` is a bash/zsh builtin and would resolve to the shell keyword.

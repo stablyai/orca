@@ -4127,6 +4127,82 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('seeds a Codex spawn row over SSH before any hook arrives', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const sshPtyId = toAppSshPtyId('ssh-a', 'pty-codex-seed')
+    const transport = createMockTransport(sshPtyId)
+    transport.getConnectionId.mockReturnValue('ssh-a')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'ssh-a' }],
+      sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]])
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: "codex 'Fix the status'",
+        initialAgentStatus: { agent: 'codex', prompt: 'Fix the status' }
+      }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    onPtySpawn?.(sshPtyId)
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      { state: 'working', prompt: 'Fix the status', agentType: 'codex' },
+      undefined,
+      undefined,
+      { connectionId: 'ssh-a' }
+    )
+  })
+
+  it('seeds a promptless Codex spawn as an idle session-boundary row, not a spinner', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const sshPtyId = toAppSshPtyId('ssh-a', 'pty-codex-idle-seed')
+    const transport = createMockTransport(sshPtyId)
+    transport.getConnectionId.mockReturnValue('ssh-a')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'ssh-a' }],
+      sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]])
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: 'codex',
+        initialAgentStatus: { agent: 'codex', prompt: '' }
+      }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    onPtySpawn?.(sshPtyId)
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      { state: 'done', prompt: '', agentType: 'codex', sessionBoundary: true },
+      undefined,
+      undefined,
+      { connectionId: 'ssh-a' }
+    )
+  })
+
   it('seeds a working status from Command Code thinking output without a startup prompt', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }

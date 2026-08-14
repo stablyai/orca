@@ -22,6 +22,7 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { agentSeedsLaunchStatus } from '../../../shared/agent-launch-status-seed'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -195,8 +196,19 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
-    ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
-      ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
+    // Why: these agents publish no hook until their first prompt, so the tab
+    // status stays empty for the whole spawn window unless launch metadata
+    // seeds it. An unsent draft seeds the idle row, not `working`.
+    ...(agentSeedsLaunchStatus(agent)
+      ? {
+          initialAgentStatus: {
+            agent,
+            prompt:
+              hasPrompt && promptDelivery === 'auto-submit' && !startupPlan.draftPrompt
+                ? trimmedPrompt
+                : ''
+          }
+        }
       : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),

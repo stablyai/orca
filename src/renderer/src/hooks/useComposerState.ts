@@ -52,6 +52,7 @@ import type {
 } from '../../../shared/orca-yaml-hook-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { agentSeedsLaunchStatus } from '../../../shared/agent-launch-status-seed'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { SetupDecision, SparsePreset } from '../../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -3812,8 +3813,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote
       })
-      const shouldSeedInitialAgentStatus =
-        tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
+      // Why: these agents publish no hook until their first prompt, so the new
+      // workspace's tab status stays empty for the whole spawn window unless
+      // launch metadata seeds it. An unsent draft seeds the idle row, not `working`.
+      const shouldSeedInitialAgentStatus = agentSeedsLaunchStatus(tuiAgent)
+      const seededStartupPrompt = startupPlan?.draftPrompt ? '' : submitStartupPrompt.trim()
 
       // Why: backend startup is safe only for self-contained launch commands; agents needing post-ready paste stay on the renderer path.
       const composerTelemetry: AgentStartedTelemetry = {
@@ -3933,7 +3937,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                   ? {
                       initialAgentStatus: {
                         agent: tuiAgent,
-                        prompt: submitStartupPrompt.trim()
+                        prompt: seededStartupPrompt
                       }
                     }
                   : {}),

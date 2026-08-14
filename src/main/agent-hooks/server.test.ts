@@ -9173,3 +9173,171 @@ describe('AgentHookServer closed-tab suppression bound', () => {
     expect(internals.closedAgentStatusTabIds.has(`closed-tab-${total - 1}`)).toBe(true)
   })
 })
+
+describe('seedLaunchAgentStatus', () => {
+  const SEED = { paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', agentType: 'codex' as const }
+
+  it('publishes a working row at spawn, before any hook arrives', () => {
+    const server = new AgentHookServer()
+
+    server.seedLaunchAgentStatus({ ...SEED, prompt: 'say hi' })
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        state: 'working',
+        prompt: 'say hi',
+        agentType: 'codex'
+      })
+    ])
+  })
+
+  it('publishes an idle session-boundary row for a promptless spawn', () => {
+    const server = new AgentHookServer()
+
+    server.seedLaunchAgentStatus({ ...SEED, prompt: '' })
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        state: 'done',
+        prompt: '',
+        agentType: 'codex',
+        sessionBoundary: true
+      })
+    ])
+  })
+
+  it('stays one row under duplicate seeds and notifies once', () => {
+    const server = new AgentHookServer()
+    const changeListener = vi.fn()
+    server.subscribeStatusChanges(changeListener)
+
+    server.seedLaunchAgentStatus({ ...SEED, prompt: 'say hi' })
+    const afterFirst = server.getStatusSnapshot()
+    server.seedLaunchAgentStatus({ ...SEED, prompt: 'say hi' })
+
+    expect(server.getStatusSnapshot()).toEqual(afterFirst)
+    expect(changeListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('never overwrites a status the pane already reported', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(buildBody({ hook_event_name: 'PermissionRequest', tool_name: 'Bash' }))
+      })
+
+      server.seedLaunchAgentStatus({ ...SEED, prompt: 'say hi' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ state: 'waiting', agentType: 'codex' })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not resurrect a retired pane', () => {
+    const server = new AgentHookServer()
+    server.retirePaneAuthority(PANE)
+
+    server.seedLaunchAgentStatus({ ...SEED, prompt: 'say hi' })
+
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
+  it('lets the first real turn replace the seed and keeps its provider session', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postCodexHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+      server.seedLaunchAgentStatus({ ...SEED, prompt: '' })
+
+      // Measured on codex-cli 0.147: SessionStart never arrives while the TUI is
+      // idle — it fires alongside the first UserPromptSubmit, on the same turn.
+      await postCodexHook({ hook_event_name: 'SessionStart', session_id: 'codex-session-1' })
+      await postCodexHook({
+        hook_event_name: 'UserPromptSubmit',
+        session_id: 'codex-session-1',
+        prompt: 'say hi'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'say hi',
+          agentType: 'codex',
+          sessionBoundary: undefined,
+          providerSession: expect.objectContaining({ key: 'session_id', id: 'codex-session-1' })
+        })
+      ])
+
+      await postCodexHook({ hook_event_name: 'Stop', last_assistant_message: 'Hi!' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          agentType: 'codex',
+          lastAssistantMessage: 'Hi!',
+          sessionBoundary: undefined
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('stays a single row when the same hook event is delivered twice', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postCodexHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+      server.seedLaunchAgentStatus({ ...SEED, prompt: 'say hi' })
+
+      // Two managed hook installs (user home + per-account home) can both deliver.
+      await postCodexHook({ hook_event_name: 'UserPromptSubmit', prompt: 'say hi' })
+      await postCodexHook({ hook_event_name: 'UserPromptSubmit', prompt: 'say hi' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ state: 'working', prompt: 'say hi', agentType: 'codex' })
+      ])
+
+      await postCodexHook({ hook_event_name: 'Stop', last_assistant_message: 'Hi!' })
+      await postCodexHook({ hook_event_name: 'Stop', last_assistant_message: 'Hi!' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ state: 'done', agentType: 'codex' })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+})

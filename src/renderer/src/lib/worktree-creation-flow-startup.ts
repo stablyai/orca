@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { agentSeedsLaunchStatus } from '../../../shared/agent-launch-status-seed'
 import type { WorktreeStartupPayload } from '@/lib/worktree-activation'
 import type {
   WorktreeCreationPhase,
@@ -27,10 +28,16 @@ export function buildWorktreeCreationStartupOpt(
     // the sole signal that this launch starts with unsent context in the TUI.
     ...(request.launchDraftPrompt ? { launchDraftText: request.launchDraftPrompt } : {}),
     ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
-    // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
-    ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
-      ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
+    // Why: these agents publish no hook until their first prompt, so the tab
+    // status stays empty for the whole spawn window unless launch metadata
+    // seeds it. An unsent draft seeds the idle row, not `working`.
+    ...(agentSeedsLaunchStatus(request.agent)
+      ? {
+          initialAgentStatus: {
+            agent: request.agent,
+            prompt: plan.draftPrompt || request.launchDraftPrompt ? '' : request.quickPrompt.trim()
+          }
+        }
       : {}),
     ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
   }

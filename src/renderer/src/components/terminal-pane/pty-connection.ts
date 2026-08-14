@@ -304,6 +304,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
+import { buildLaunchStatusSeedPayload } from '../../../../shared/agent-launch-status-seed'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import {
@@ -1292,6 +1293,9 @@ export function connectPanePty(
   const launchToken = paneStartup?.launchConfig
     ? (paneStartup.launchToken ?? createBrowserUuid())
     : undefined
+  // Why: the seed's prompt is empty when the launch does not submit one; only a
+  // non-empty prompt means "this launch already started a turn".
+  const submittedInitialStatusPrompt = paneStartup?.initialAgentStatus?.prompt || undefined
   const startupDraftAgent = paneStartup?.launchAgent ?? paneStartup?.initialAgentStatus?.agent
   const startupDraftAgentConfig = startupDraftAgent ? TUI_AGENT_CONFIG[startupDraftAgent] : null
   const startupDraftPrompt =
@@ -2863,14 +2867,10 @@ export function connectPanePty(
     if (!initialStatus || !routing) {
       return
     }
-    const statusPayload = {
-      state: 'working' as const,
-      prompt: initialStatus.prompt,
-      agentType: resolveCompatibleAgentTypeForOwner(
-        initialStatus.agent,
-        getAuthoritativePaneAgent()
-      )
-    }
+    const statusPayload = buildLaunchStatusSeedPayload(
+      resolveCompatibleAgentTypeForOwner(initialStatus.agent, getAuthoritativePaneAgent()),
+      initialStatus.prompt
+    )
     if (paneStartup.launchConfig) {
       useAppStore
         .getState()
@@ -3835,10 +3835,12 @@ export function connectPanePty(
     ...(paneStartup?.resumeProviderSession
       ? { resumeProviderSession: paneStartup.resumeProviderSession }
       : {}),
-    ...((paneStartup?.initialAgentStatus?.prompt ?? paneStartup?.draftPrompt)
-      ? { agentPrompt: paneStartup?.initialAgentStatus?.prompt ?? paneStartup?.draftPrompt }
+    // Why: a promptless launch seed carries an empty prompt (it only asks for an
+    // idle presence row), so it must not shadow the pane's unsent draft here.
+    ...((submittedInitialStatusPrompt ?? paneStartup?.draftPrompt)
+      ? { agentPrompt: submittedInitialStatusPrompt ?? paneStartup?.draftPrompt }
       : {}),
-    ...(paneStartup?.initialAgentStatus?.prompt
+    ...(submittedInitialStatusPrompt
       ? { agentPromptDelivery: 'auto-submit' as const }
       : paneStartup?.draftPrompt
         ? { agentPromptDelivery: 'draft' as const }

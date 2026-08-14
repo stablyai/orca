@@ -52,7 +52,7 @@ import {
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
-import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import { agentHookServer, type AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -453,6 +453,7 @@ import {
   buildAgentStartupPlan
 } from '../../shared/tui-agent-startup'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
+import { agentSeedsLaunchStatus } from '../../shared/agent-launch-status-seed'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -22193,6 +22194,44 @@ export class OrcaRuntimeService {
     })
   }
 
+  /**
+   * Seed the spawn-window status row for a startup terminal the runtime spawned
+   * itself. Renderer-mounted panes seed from `paneStartup.initialAgentStatus`,
+   * but a runtime-spawned PTY (CLI create, automation, backend-spawned startup)
+   * mounts no such pane, so nothing else covers Codex's hook-silent spawn window
+   * (#6643). Best-effort: the terminal already spawned, so a seeding failure is
+   * logged rather than reported as a startup-terminal failure.
+   *
+   * Local repos only — a remote pane's rows arrive relay-stamped with a
+   * connectionId that this local-connection row would contradict.
+   */
+  private seedRuntimeLaunchAgentStatus(options: {
+    repo: { connectionId?: string | null }
+    agent: TuiAgent | undefined
+    paneKey: string | null | undefined
+    tabId: string | null | undefined
+    worktreeId: string
+    prompt: string
+  }): void {
+    if (!agentSeedsLaunchStatus(options.agent) || repoIsRemote(options.repo) || !options.paneKey) {
+      return
+    }
+    try {
+      agentHookServer.seedLaunchAgentStatus({
+        paneKey: options.paneKey,
+        ...(options.tabId ? { tabId: options.tabId } : {}),
+        worktreeId: options.worktreeId,
+        agentType: options.agent,
+        prompt: options.prompt
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn(
+        `[worktree-create] Failed to seed the launch status for ${options.worktreeId}: ${message}`
+      )
+    }
+  }
+
   async createManagedWorktree(args: {
     repoSelector: string
     name: string
@@ -22375,6 +22414,16 @@ export class OrcaRuntimeService {
             ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
             surface: 'background'
           }
+          this.seedRuntimeLaunchAgentStatus({
+            repo,
+            agent: effectiveCreatedWithAgent,
+            paneKey: terminal.paneKey,
+            tabId: terminal.tabId,
+            worktreeId: worktree.id,
+            // Why: a draft paste leaves the prompt unsent, so it seeds the idle
+            // presence row rather than claiming a turn is already running.
+            prompt: effectiveDraftPaste || !agentStartup ? '' : (args.startupPrompt ?? '')
+          })
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
@@ -23125,6 +23174,16 @@ export class OrcaRuntimeService {
         startupTerminalTabId = terminal.tabId ?? null
         startupTerminalPaneKey = terminal.paneKey ?? null
         startupTerminalPtyId = terminal.ptyId ?? null
+        this.seedRuntimeLaunchAgentStatus({
+          repo,
+          agent: effectiveCreatedWithAgent,
+          paneKey: terminal.paneKey,
+          tabId: terminal.tabId,
+          worktreeId: worktree.id,
+          // Why: a draft paste leaves the prompt unsent, so it seeds the idle
+          // presence row rather than claiming a turn is already running.
+          prompt: effectiveDraftPaste || !agentStartup ? '' : (args.startupPrompt ?? '')
+        })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning
