@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseTerminalOscColorQuery } from './terminal-osc-color-reply'
+import {
+  parseTerminalOscColorQuery,
+  parseTerminalOscColorQueryReplyColors
+} from './terminal-osc-color-reply'
 
 describe('parseTerminalOscColorQuery', () => {
   it('matches exact OSC color queries terminated by ST or BEL', () => {
@@ -41,6 +44,29 @@ describe('parseTerminalOscColorQuery', () => {
     expect(parseTerminalOscColorQuery('\x1b]10;?;#123456\x1b\\', 0)).toEqual({ kind: 'none' })
     expect(parseTerminalOscColorQuery('\x1b]10;?;?;?\x1b\\', 0)).toEqual({ kind: 'none' })
     expect(parseTerminalOscColorQuery('\x1b]11;?;?\x1b\\', 0)).toEqual({ kind: 'none' })
+  })
+
+  it('accepts theme colors that can produce OSC 10 and OSC 11 replies', () => {
+    expect(
+      parseTerminalOscColorQueryReplyColors({
+        foreground: '#2e3434',
+        background: '#ffffff'
+      })
+    ).toEqual({ foreground: '#2e3434', background: '#ffffff' })
+    expect(parseTerminalOscColorQueryReplyColors({ foreground: '#2e3434' })).toBeUndefined()
+    expect(parseTerminalOscColorQueryReplyColors(null)).toBeUndefined()
+    expect(
+      parseTerminalOscColorQueryReplyColors({
+        foreground: 'not-a-color',
+        background: '#ffffff'
+      })
+    ).toBeUndefined()
+    expect(
+      parseTerminalOscColorQueryReplyColors({
+        foreground: 42,
+        background: '#ffffff'
+      })
+    ).toBeUndefined()
   })
 
   it('rejects unsupported query-shaped bodies without waiting for a terminator', () => {

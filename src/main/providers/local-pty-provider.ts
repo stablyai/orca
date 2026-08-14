@@ -972,6 +972,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const startupEchoProbe = createPtySlaveEchoProbe(readPtySlavePath(proc))
     const startupIngress = new PtyStartupIngress({
       ...(args.startupIngress ? { intent: args.startupIngress } : {}),
+      ...(args.oscColorQueryReplies ? { liveOscColors: args.oscColorQueryReplies } : {}),
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath,

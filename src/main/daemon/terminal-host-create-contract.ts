@@ -2,6 +2,7 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -29,6 +30,7 @@ export type CreateOrAttachOptions = {
   shellReadyTimeoutMs?: number
   historySeedChunks?: readonly string[]
   startupIngress?: PtyStartupIngressIntent
+  oscColorQueryReplies?: TerminalOscColorQueryReplyColors
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding

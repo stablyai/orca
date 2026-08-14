@@ -39,6 +39,7 @@ export function buildSshPtySpawnRequest(args: {
           startupIngress: options.startupIngress
         }
       : {}),
+    ...(options.oscColorQueryReplies ? { oscColorQueryReplies: options.oscColorQueryReplies } : {}),
     ...(options.agentSessionEnsure ? { agentSessionEnsure: options.agentSessionEnsure } : {}),
     ...(args.supportsCreateOperation
       ? { agentSessionCreateOperationId: options.agentSessionCreateOperationId }

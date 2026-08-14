@@ -111,6 +111,7 @@ export async function createOrAttachTerminalSession(
     scrollback: resolveDaemonSessionScrollbackRows(),
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
+    ...(opts.oscColorQueryReplies ? { oscColorQueryReplies: opts.oscColorQueryReplies } : {}),
     wslDistro,
     onExit: () => deps.onSessionExit(opts.sessionId, opts.agentSessionGeneration),
     ...(opts.shellReadyTimeoutMs !== undefined

@@ -86,6 +86,10 @@ export type CreateOrAttachRequest = {
     shellReadySupported?: boolean
     shellReadyTimeoutMs?: number
     startupIngress?: PtyStartupIngressIntent
+    oscColorQueryReplies?: {
+      foreground?: string
+      background?: string
+    }
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim
       surface: AgentSessionSurfaceBinding

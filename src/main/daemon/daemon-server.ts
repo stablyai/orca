@@ -22,6 +22,7 @@ import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import { parseTerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import { unlinkOwnedDaemonPidFile, unlinkOwnedDaemonTokenFile } from './daemon-spawner'
 import {
   DAEMON_ENDPOINT_LOST_MESSAGE,
@@ -1071,6 +1072,7 @@ export class DaemonServer {
             shellReadySupported: p.shellReadySupported,
             historySeedChunks,
             startupIngress: parsePtyStartupIngressIntent(p.startupIngress),
+            oscColorQueryReplies: parseTerminalOscColorQueryReplyColors(p.oscColorQueryReplies),
             ...(p.shellReadyTimeoutMs !== undefined
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
               : {}),

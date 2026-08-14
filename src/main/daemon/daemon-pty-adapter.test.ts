@@ -204,6 +204,31 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
+    it('carries live OSC color replies through the daemon host', async () => {
+      const onData = vi.fn()
+      adapter.onData(onData)
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        oscColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' }
+      })
+      const query = '\x1b]11;?\x1b\\'
+      const cpr = '\x1b[6n'
+
+      lastSubprocess._simulateData(`${query}${cpr}`)
+      await waitFor(() => onData.mock.calls.length > 0)
+
+      expect(lastSubprocess.write).toHaveBeenCalledWith('\x1b]11;rgb:ffff/ffff/ffff\x1b\\')
+      expect(onData).toHaveBeenNthCalledWith(1, {
+        id,
+        data: '',
+        sequenceChars: query.length,
+        seq: query.length,
+        transformed: true
+      })
+      expect(onData).toHaveBeenNthCalledWith(2, { id, data: cpr })
+    })
+
     it('omits startup intent and close control for the preserved v23 protocol', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')

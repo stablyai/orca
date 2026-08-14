@@ -1,6 +1,7 @@
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import type { PtySlaveEchoProbe } from './pty-slave-line-discipline-echo'
+import type { TerminalOscColorQueryReplyColors } from './terminal-osc-color-reply'
 
 export type PtyIngressEmission = {
   data: string
@@ -11,6 +12,13 @@ export type PtyIngressEmission = {
 
 export type PtyStartupIngressOptions = {
   intent?: PtyStartupIngressIntent
+  /**
+   * Live OSC 10/11 answers for the whole PTY lifetime. Distinct from startup
+   * `intent`: that path is once-per-slot and expires. Survey-style readers
+   * (gh auth login) query after that window; a late renderer reply is `\x1b]`
+   * on stdin.
+   */
+  liveOscColors?: TerminalOscColorQueryReplyColors
   ownerBackend?: PtyOwnerBackend
   write: (data: string) => void
   onEmission: (emission: PtyIngressEmission) => void

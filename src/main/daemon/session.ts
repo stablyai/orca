@@ -28,6 +28,7 @@ import {
   type PtyStartupIngressIntent
 } from '../../shared/pty-startup-ingress'
 import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -103,6 +104,7 @@ export type SessionOptions = {
   // a reaper, dead sessions and their scrollback emulators accumulate for the daemon's lifetime.
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
+  oscColorQueryReplies?: TerminalOscColorQueryReplyColors
   ownerBackend?: PtyOwnerBackend
 }
 
@@ -198,6 +200,7 @@ export class Session {
     const echoProbe = createPtySlaveEchoProbe(this.subprocess.slavePath)
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
+      ...(opts.oscColorQueryReplies ? { liveOscColors: opts.oscColorQueryReplies } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.emitSubprocessOutput(emission),

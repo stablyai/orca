@@ -189,12 +189,17 @@ export class PtyStartupReplyDelivery {
   }
 
   /**
+   * Write now. Live OSC 10/11 answers cannot wait for the cooked-echo probe:
+   * gh auth starts its survey reader in the next syscall, and a deferred
+   * `\x1b]` is the same late stdin the renderer used to send.
+   */
+  answerImmediately(reply: string, onFailed?: () => void): boolean {
+    return this.writeReply(reply, onFailed)
+  }
+
+  /**
    * True once the reply has been written or accepted for a later write.
-   *
-   * `onFailed` fires only for the second case: a deferred write reports success
-   * before it happens, so the caller's bookkeeping for THIS reply is a lie if the
-   * write later throws. Scoped per reply because the replies to one query are
-   * written independently — one failing says nothing about the ones that landed.
+   * `onFailed` retracts only a deferred reply whose eventual write throws.
    */
   answer(reply: string, onFailed?: () => void): boolean {
     if (this.closed) {

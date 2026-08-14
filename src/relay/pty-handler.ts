@@ -54,6 +54,10 @@ import {
   parsePtyStartupIngressIntent,
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
+import {
+  parseTerminalOscColorQueryReplyColors,
+  type TerminalOscColorQueryReplyColors
+} from '../shared/terminal-osc-color-reply'
 import { extractOnlyCookedEchoSafeQueryReplies } from '../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
@@ -164,6 +168,7 @@ type ManagedPty = {
   gracefulKillSent?: boolean
   startupIngress?: PtyStartupIngress
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
+  liveOscColors?: TerminalOscColorQueryReplyColors
   ownerBackend: PtyOwnerBackend
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
@@ -733,6 +738,7 @@ export class PtyHandler {
     const echoProbe = createPtySlaveEchoProbe(readPtySlavePath(managed.pty))
     managed.startupIngress ??= new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
+      ...(managed.liveOscColors ? { liveOscColors: managed.liveOscColors } : {}),
       ownerBackend: managed.ownerBackend,
       write: (data) => managed.pty.write(data),
       onEmission: emitIngressData,
@@ -1596,6 +1602,7 @@ export class PtyHandler {
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
         ? parsePtyStartupIngressIntent(params.startupIngress)
         : undefined
+    const liveOscColors = parseTerminalOscColorQueryReplyColors(params.oscColorQueryReplies)
     const managed: ManagedPty = {
       id,
       incarnationId: randomUUID(),
@@ -1621,6 +1628,7 @@ export class PtyHandler {
         wslDistro: terminalWindowsWslDistro
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
+      ...(liveOscColors ? { liveOscColors } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(managedStartupCommand && (shouldProviderDeliverCommand || rendererShellReadySupported)
         ? {

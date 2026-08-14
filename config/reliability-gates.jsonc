@@ -9838,52 +9838,111 @@
     },
     {
       "id": "terminal-capability.startup-color-query",
-      "title": "Startup color capability queries do not leak into shell or terminal streams",
+      "title": "OSC color capability queries are answered without leaking into terminal streams",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-rendering",
-      "layer": "renderer-provider-contract",
+      "layer": "pty-owner-provider-contract",
       "surfaces": [
         "OSC 10/11",
         "startup capability query",
+        "runtime capability query",
         "shell stream",
         "renderer stream",
         "terminal colors"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/pull/6949"],
-      "invariant": "Startup OSC 10/11 color queries are answered out of band at startup only, never leak into shell/provider output streams, and ordinary runtime OSC color queries remain renderer-handled.",
-      "oracle": "A provider-contract fixture records startup query replies, shell-visible bytes, renderer-visible bytes, and later runtime OSC behavior to prove no query leakage or color deadlock.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["local", "daemon", "ssh"],
+      "coverageNotes": "Deterministic ingress, IPC, daemon-chain, SSH request, and relay tests prove immediate POSIX-host replies, torn-query retention, query stripping, and unchanged Windows fallbacks. A real throwaway Linux SSH gh-auth run covers the reported failure path; mixed old hosts safely retain renderer handling.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6949",
+        "https://github.com/stablyai/orca/issues/14020",
+        "https://github.com/stablyai/orca/pull/14170"
+      ],
+      "invariant": "Valid OSC 10/11 queries are answered immediately by a configured POSIX PTY owner for the session lifetime and stripped from forwarded output, including when split across startup handoff; Windows ConPTY remains consume-only while Windows WSL and peers without the optional host field retain renderer handling.",
+      "oracle": "Provider-contract fixtures record provider writes and forwarded bytes, proving the OSC reply lands before a following CPR, the query never reaches the renderer, torn queries survive startup handoff, ordinary output is unchanged, and old-host fallback remains decodable.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-startup-ingress.test.ts src/shared/pty-startup-ingress-live-osc.test.ts src/shared/terminal-osc-color-reply.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/providers/ssh-pty-spawn-request.test.ts src/relay/pty-handler.test.ts src/main/ipc/pty.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/pty-startup-ingress.test.ts",
+        "src/shared/pty-startup-ingress-live-osc.test.ts",
+        "src/shared/terminal-osc-color-reply.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/providers/ssh-pty-spawn-request.test.ts",
+        "src/relay/pty-handler.test.ts",
+        "src/main/ipc/pty.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/pty-startup-ingress-live-osc.test.ts",
+          "assertions": [
+            "a live OSC 11 reply is written before ingress accept returns and before a following CPR is forwarded",
+            "a torn live OSC 11 query remains held and is answered after startup query authority closes",
+            "OSC color sets and CSI-dense output remain unchanged"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": [
+            "daemon adapter, RPC server, terminal host, and Session preserve live reply colors and answer OSC 11 before forwarding CPR"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-pty-spawn-request.test.ts",
+          "assertions": [
+            "the SSH spawn request forwards configured live reply colors and omits the optional field when absent"
+          ]
+        },
+        {
+          "file": "src/relay/pty-handler.test.ts",
+          "assertions": [
+            "a POSIX SSH relay owner answers OSC 11 and strips the query",
+            "a relay without configured reply colors forwards the query unchanged"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-startup-ingress.test.ts src/shared/pty-startup-ingress-live-osc.test.ts src/shared/terminal-osc-color-reply.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/providers/ssh-pty-spawn-request.test.ts src/relay/pty-handler.test.ts src/main/ipc/pty.test.ts",
+          "result": "passed",
+          "durationSeconds": 14.51,
+          "summary": "7 test files and 858 tests passed on the latest-main PR integration branch."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 30,
-        "scope": "renderer provider-contract gate"
+        "scope": "PTY owner provider-contract gate"
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Gate is registered as a capability/startup gap; no command is wired."
+        "evidence": "Focused deterministic coverage is wired; soak history is not yet recorded."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs intentional-break proof for leaked startup OSC replies or disabled runtime OSC handling."
+        "status": "partial",
+        "evidence": "Focused tests fail when immediate live answering, query stripping, or torn-query retention is reverted; the real gh-auth failure was reproduced on origin/main and cleared by the host fix."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "Required if capability probing adds retry loops or startup polling."
+        "required": true,
+        "evidence": "Session-lived parsing adds no polling; scanning is bounded to OSC 10/11 candidates and reply/echo tracking remains capped at 64 entries."
       },
       "promotionCriteria": [
         "Assert shell/provider byte streams directly.",
         "Cover startup-only and runtime OSC paths separately.",
+        "Register physical Windows/ConPTY and mixed-version runs.",
         "Keep screenshot evidence diagnostic only."
       ],
-      "knownGaps": ["No manifest command yet.", "No startup color-query contract is wired."],
+      "knownGaps": [
+        "No physical Windows/ConPTY or WSL run is registered; WSL retains renderer handling because its host echo shape is unverified.",
+        "An old daemon or relay host ignores the optional field and retains the pre-fix renderer reply race.",
+        "Live host replies use the colors captured when the PTY is created; a later theme or TUI color change is not synchronized to the host.",
+        "No long-running terminal-output flood soak is registered."
+      ],
       "demotionRule": "Cannot promote if success is based only on absence of visible artifacts."
     },
     {

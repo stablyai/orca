@@ -1916,6 +1916,40 @@ describe('PtyHandler', () => {
     }
   })
 
+  it('answers live OSC 11 on a POSIX SSH relay and strips the query', async () => {
+    vi.useFakeTimers()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', {
+        shellOverride: '/bin/bash',
+        oscColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' }
+      })
+
+      dataCallback!('\x1b]11;?\x1b\\\x1b[6n')
+      await vi.advanceTimersByTimeAsync(8)
+
+      expect(term.write).toHaveBeenCalledWith('\x1b]11;rgb:ffff/ffff/ffff\x1b\\')
+      const dataNotifies = dispatcher.notify.mock.calls
+        .filter((call) => call[0] === 'pty.data')
+        .map((call) => call[1] as { data: string })
+      expect(dataNotifies.map((frame) => frame.data).join('')).toBe('\x1b[6n')
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
   it('forwards color queries from a POSIX SSH relay owner', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
