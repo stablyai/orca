@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 
 const CLAUDE_SERVICE_TEST_ROOT = '/tmp/orca-claude-reauth-for-target-test'
 

@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { getConnectionId, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '../../store'
 import { resolvePaneWslDistro } from '../terminal-pane/terminal-pane-wsl-distro'
+import { findTerminalTabWorktreeId } from './native-chat-file-link'
+import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import type { NativeChatAgentAccountReauthResult } from './NativeChatAgentNoticeBanner'
 
@@ -13,9 +15,14 @@ import type { NativeChatAgentAccountReauthResult } from './NativeChatAgentNotice
  *  plain notice with no CTA. */
 export function useNativeChatAccountReauth(
   agent: NativeChatSession['agent'],
-  worktreeId: string | undefined,
-  runtimeEnvironmentId: string | null
+  terminalTabId: string
 ): (() => Promise<NativeChatAgentAccountReauthResult>) | undefined {
+  const worktreeId = useAppStore(
+    (s) => findTerminalTabWorktreeId(s.tabsByWorktree, terminalTabId) ?? undefined
+  )
+  const runtimeEnvironmentId = useAppStore((s) =>
+    selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
+  )
   return useMemo(() => {
     if (
       agent !== 'claude' ||

@@ -20,9 +20,6 @@ export type NativeChatViewProps = {
   /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
-  /** Owning worktree, used to resolve the target for the "reauthenticate
-   *  account" notice action (see `useNativeChatAccountReauth`). */
-  worktreeId?: string
 }
 
 export type NativeChatResolvedViewProps = {
@@ -36,5 +33,4 @@ export type NativeChatResolvedViewProps = {
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
-  worktreeId?: string
 }

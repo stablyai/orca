@@ -65,8 +65,7 @@ export default function NativeChatView({
   resolvedAgent,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions,
-  worktreeId
+  contextMenuActions
 }: NativeChatViewProps): React.JSX.Element {
   // Select only this tab's status entry (shallow-compared) so an unrelated
   // pane's status tick doesn't re-render this view or re-run the resolution.
@@ -101,7 +100,6 @@ export default function NativeChatView({
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
-          worktreeId={worktreeId}
         />
       )}
     </NativeChatSessionGate>
@@ -118,8 +116,7 @@ function NativeChatResolvedView({
   terminalTabId,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions,
-  worktreeId
+  contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
@@ -361,11 +358,7 @@ function NativeChatResolvedView({
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
   const fontScale = useNativeChatFontScale(isConversation)
-  const onReauthenticateAccount = useNativeChatAccountReauth(
-    agent,
-    worktreeId,
-    runtimeEnvironmentId
-  )
+  const onReauthenticateAccount = useNativeChatAccountReauth(agent, terminalTabId)
 
   return (
     <div
