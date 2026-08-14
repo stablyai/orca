@@ -1,8 +1,9 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import { registerBrowserOverlaySlotViewport } from './browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
-import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import BrowserPane, { type BrowserFindShortcutScope } from './BrowserPane'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import { useBrowserAutomationVisibilityForAny } from './browser-automation-visibility'
@@ -192,6 +193,28 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       })}
     </>
   )
+})
+
+export const RetainedBrowserPaneOverlayLayer = memo(function RetainedBrowserPaneOverlayLayer({
+  worktreeId,
+  isWorktreeActive,
+  mountEligible
+}: {
+  worktreeId: string
+  isWorktreeActive: boolean
+  mountEligible: boolean
+}): React.JSX.Element | null {
+  const [hasCommittedMount, setHasCommittedMount] = useState(false)
+  // Why: commit the latch with the persistent slot DOM so discarded renders cannot retain a guest host.
+  useLayoutEffect(() => {
+    if (mountEligible && !hasCommittedMount) {
+      setHasCommittedMount(true)
+    }
+  }, [hasCommittedMount, mountEligible])
+  if (!mountEligible && !hasCommittedMount) {
+    return null
+  }
+  return <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
 })
 
 export default BrowserPaneOverlayLayer

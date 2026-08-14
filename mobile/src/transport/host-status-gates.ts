@@ -11,7 +11,8 @@ export type HostStatusGates = {
   statusPending: boolean
 }
 
-type LoadedHostStatusGates = HostStatusGates & {
+// statusPending is not stored: pending-ness belongs to the live connection, not to the answer.
+type LoadedHostStatusGates = Omit<HostStatusGates, 'statusPending'> & {
   hostId: string | undefined
   client: RpcClient
 }
@@ -27,15 +28,21 @@ export function useHostStatusGates(args: {
 }): HostStatusGates {
   const { hostId, client, connState } = args
   const [loaded, setLoaded] = useState<LoadedHostStatusGates | null>(null)
+  // Why (F10): a drop must not erase proven capabilities, but it does invalidate them — this keeps
+  // statusPending true across the reconnect refetch, so gates stay "unknown" while the data survives.
+  const [unverified, setUnverified] = useState(false)
 
   useEffect(() => {
     if (connState !== 'connected' || !client) {
-      // Why: reconnecting the same host/client must revalidate gates instead of reviving its prior status response.
-      setLoaded(null)
+      setUnverified(true)
       return
     }
     let cancelled = false
     const requestClient = client
+    const settle = (gates: Omit<HostStatusGates, 'statusPending'>) => {
+      setLoaded({ hostId, client: requestClient, ...gates })
+      setUnverified(false)
+    }
     void (async () => {
       try {
         const response = await requestClient.sendRequest('status.get')
@@ -43,13 +50,10 @@ export function useHostStatusGates(args: {
           return
         }
         if (!response.ok) {
-          setLoaded({
-            hostId,
-            client: requestClient,
+          settle({
             hostCapabilities: [],
             floatingWorkspaceEnabled: false,
-            compatVerdict: { kind: 'ok' },
-            statusPending: false
+            compatVerdict: { kind: 'ok' }
           })
           return
         }
@@ -60,13 +64,10 @@ export function useHostStatusGates(args: {
           desktopProtocolVersion: status.protocolVersion,
           desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
         })
-        setLoaded({
-          hostId,
-          client: requestClient,
+        settle({
           hostCapabilities: status.capabilities ?? [],
           floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
-          compatVerdict: verdict,
-          statusPending: false
+          compatVerdict: verdict
         })
         if (verdict.kind === 'blocked') {
           // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
@@ -80,13 +81,10 @@ export function useHostStatusGates(args: {
       } catch {
         // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
         if (!cancelled) {
-          setLoaded({
-            hostId,
-            client: requestClient,
+          settle({
             hostCapabilities: [],
             floatingWorkspaceEnabled: false,
-            compatVerdict: { kind: 'ok' },
-            statusPending: false
+            compatVerdict: { kind: 'ok' }
           })
         }
       }
@@ -97,13 +95,8 @@ export function useHostStatusGates(args: {
   }, [client, connState, hostId])
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
-  if (
-    connState !== 'connected' ||
-    !client ||
-    !loaded ||
-    loaded.hostId !== hostId ||
-    loaded.client !== client
-  ) {
+  const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
+  if (!proven) {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,
       floatingWorkspaceEnabled: false,
@@ -112,9 +105,11 @@ export function useHostStatusGates(args: {
     }
   }
   return {
-    hostCapabilities: loaded.hostCapabilities,
-    floatingWorkspaceEnabled: loaded.floatingWorkspaceEnabled,
-    compatVerdict: loaded.compatVerdict,
-    statusPending: false
+    hostCapabilities: proven.hostCapabilities,
+    floatingWorkspaceEnabled: proven.floatingWorkspaceEnabled,
+    compatVerdict: proven.compatVerdict,
+    // Why (F10): unchanged pending timing — the reconnect refetch is still "unknown", it just no
+    // longer blanks the capabilities this same host already proved.
+    statusPending: connState === 'connected' && unverified
   }
 }

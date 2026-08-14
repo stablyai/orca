@@ -14,20 +14,21 @@ import twoToneSoundPath from '../../../resources/notification-sounds/two-tone.mp
 import type { Store } from '../persistence'
 import type {
   NotificationDeliveryProbeResult,
+  NotificationDismissResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
-  NotificationDismissResult,
   NotificationPermissionStatusResult,
   NotificationSettings,
   NotificationSoundDataResult
-} from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+} from '../../shared/notification-settings-types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from './notification-options'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
+import { getTrustedUIRendererWindow } from './ui'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
@@ -512,8 +513,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           const repoId = getRepoIdFromWorktreeId(args.worktreeId)
           clickHandler = () => {
             release()
-            const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-            if (!win) {
+            const win = getTrustedUIRendererWindow()
+            if (!win || win.isDestroyed()) {
               return
             }
             if (process.platform === 'darwin') {
@@ -522,6 +523,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
             if (win.isMinimized()) {
               win.restore()
             }
+            win.show()
             win.focus()
             win.webContents.send('ui:activateWorktree', {
               repoId,

@@ -1,8 +1,9 @@
-import type { GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
-} from '../../shared/github-repository-identity-key'
+} from '../../shared/github/repository-identity-key'
 import {
   getOwnerRepoForRemote,
   ghRepoExecOptions,
@@ -63,11 +64,6 @@ function originRepoCacheKey(
 export function _resetOriginGitHubApiRepositoryCache(): void {
   originRepoCache.clear()
   originRepoInFlight.clear()
-}
-
-/** @internal - exposed for cache-bound tests only */
-export function _getOriginGitHubApiRepositoryCacheSize(): number {
-  return originRepoCache.size
 }
 
 function pruneOriginRepoCache(now: number): void {
@@ -294,10 +290,6 @@ export async function resolveGitHubApiRepository(
   // Why: a host-less identity can honor ambient GH_HOST even with a local cwd.
   // Only a resolved origin may supply the execution host for legacy clients.
   return null
-}
-
-export function isGitHubDotComRepository(repository: GitHubApiRepository): boolean {
-  return isDefaultGitHubHost(repository.host)
 }
 
 // Why: the gh runner host-qualifies argv from `options.host`, so every known

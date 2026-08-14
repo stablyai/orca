@@ -27,15 +27,12 @@ export type EphemeralVmCleanupStatus = z.infer<typeof EphemeralVmCleanupStatusSc
 
 export const EphemeralVmRuntimeConnectionModeSchema = z.enum(['orca-server', 'ssh'])
 
-export type EphemeralVmRuntimeConnectionMode = z.infer<
-  typeof EphemeralVmRuntimeConnectionModeSchema
->
-
 const EphemeralVmRuntimeRecipeSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),
     create: z.string().min(1),
+    checkoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
     description: z.string().min(1).optional(),
     suspend: z.string().min(1).optional(),
     resume: z.string().min(1).optional(),

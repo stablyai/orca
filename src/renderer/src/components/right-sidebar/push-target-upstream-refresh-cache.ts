@@ -1,9 +1,6 @@
-import type {
-  GitPushTarget,
-  GitStatusResult,
-  GitUpstreamStatus,
-  GlobalSettings
-} from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 const AUTOMATIC_PUSH_TARGET_UPSTREAM_REFRESH_TTL_MS = 60_000
 const MAX_AUTOMATIC_PUSH_TARGET_UPSTREAM_CACHE_ENTRIES = 1024

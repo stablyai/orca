@@ -7,7 +7,9 @@ import { platform } from 'node:process'
 import type { Dirent } from 'node:fs'
 import type { Store } from './persistence'
 import { isFolderRepo } from '../shared/repo-kind'
-import type { DirEntry, GitWorktreeInfo, Repo, Worktree } from '../shared/types'
+import type { DirEntry } from '../shared/filesystem-entry-types'
+import type { Repo } from '../shared/repo-types'
+import type { GitWorktreeInfo, Worktree } from '../shared/worktree/types'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceDirectoryScanResult,
@@ -34,6 +36,7 @@ import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
 import { mergeWorktree } from './ipc/worktree-logic'
 import { getLocalProjectWorktreeGitOptions } from './project-runtime-git-options'
+import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../shared/execution-host'
 
 const REPO_SCAN_CONCURRENCY = 2
 const WORKTREE_SCAN_CONCURRENCY = 3
@@ -309,6 +312,7 @@ function createBaseWorktreeRow(
   return {
     worktreeId: worktree.id,
     repoId: repo.id,
+    executionHostId: getWorktreeExecutionHostId(worktree, repo),
     repoDisplayName: repo.displayName,
     repoPath: repo.path,
     displayName: worktree.displayName,
@@ -701,8 +705,13 @@ function reportProgress(
   updates: Partial<WorkspaceSpaceProgressState>,
   onProgress: WorkspaceSpaceAnalyzeOptions['onProgress']
 ): void {
+  const completedMeasurements = updates.completedMeasurements
   Object.assign(progress, updates, { updatedAt: Date.now() })
-  onProgress?.({ ...progress })
+  delete progress.completedMeasurements
+  onProgress?.({
+    ...progress,
+    ...(completedMeasurements?.length ? { completedMeasurements } : {})
+  })
 }
 
 async function scanRepo(
@@ -733,6 +742,7 @@ async function scanRepo(
       worktrees: [],
       summary: {
         repoId: repo.id,
+        executionHostId: getRepoExecutionHostId(repo),
         displayName: repo.displayName,
         path: repo.path,
         isRemote: Boolean(repo.connectionId),
@@ -790,7 +800,17 @@ async function scanRepo(
         )
     reportProgress(
       progress,
-      { scannedWorktreeCount: progress.scannedWorktreeCount + 1 },
+      {
+        scannedWorktreeCount: progress.scannedWorktreeCount + 1,
+        completedMeasurements: [
+          {
+            worktreeId: row.worktreeId,
+            executionHostId: row.executionHostId,
+            status: row.status,
+            sizeBytes: row.sizeBytes
+          }
+        ]
+      },
       options.onProgress
     )
     return row
@@ -809,6 +829,7 @@ async function scanRepo(
     worktrees: rows,
     summary: {
       repoId: repo.id,
+      executionHostId: getRepoExecutionHostId(repo),
       displayName: repo.displayName,
       path: repo.path,
       isRemote: Boolean(repo.connectionId),

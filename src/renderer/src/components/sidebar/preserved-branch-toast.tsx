@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { RemoveWorktreeResult, Worktree } from '../../../../shared/types'
+import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 
@@ -63,7 +64,7 @@ function PreservedBranchToastBody({
         <div className="flex min-w-0 overflow-hidden">
           <Button
             type="button"
-            variant="default"
+            variant="destructive"
             size="sm"
             className="w-full min-w-0"
             onClick={onForceDelete}

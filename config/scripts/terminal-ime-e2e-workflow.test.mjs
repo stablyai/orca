@@ -10,24 +10,10 @@ describe('terminal IME e2e workflow', () => {
     readFileSync(join(projectDir, '.github/workflows/terminal-ime-e2e.yml'), 'utf8')
   )
 
-  it('runs for xterm patch and terminal IME regression changes', () => {
-    expect(workflow.on.pull_request.paths).toEqual(
-      expect.arrayContaining([
-        'config/patches/@xterm__xterm@6.1.0-beta.287.patch',
-        'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
-        'src/renderer/src/components/terminal-pane/keyboard-handlers.ts',
-        'src/renderer/src/components/terminal-pane/keyboard-handlers-ime.test.tsx',
-        'src/renderer/src/components/terminal-pane/pty-connection.ts',
-        'src/renderer/src/components/terminal-pane/pty-connection.test.ts',
-        'src/renderer/src/components/terminal-pane/terminal-ime-*',
-        'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts',
-        'src/renderer/src/components/terminal-pane/xterm-bypass-policy.ts',
-        'src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts',
-        'tests/e2e/korean-ime-terminal-shift-enter-commit.spec.ts',
-        'tests/e2e/terminal-ibus-hangul-native.spec.ts',
-        'tests/e2e/terminal-ime-*.ts'
-      ])
-    )
+  it('runs only on schedule or manual dispatch', () => {
+    expect(workflow.on.pull_request).toBeUndefined()
+    expect(workflow.on.workflow_dispatch).toBeNull()
+    expect(workflow.on.schedule).toEqual([{ cron: '30 9 * * *' }])
   })
 
   it('installs native IBus Hangul and X11 input tools', () => {

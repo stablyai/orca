@@ -10,6 +10,7 @@ import { useAppStore } from '@/store'
 import {
   buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
+  buildSkillSetupTerminalCommand,
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
@@ -35,64 +36,67 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
   const windowsNpxGuidance =
     'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
 
-  it('wraps WSL skill installs as a directly runnable selected-distro command', () => {
+  it('keeps copied WSL skill installs valid for the target POSIX shell', () => {
     const skillCommand = 'npx skills add orchestration --global'
-    const command = buildSkillInstallCommandForRuntime(skillCommand, {
+    const runtime = {
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
       label: 'WSL Ubuntu'
-    })
+    } as const
+    const command = buildSkillInstallCommandForRuntime(skillCommand, runtime)
+    const setupCommand = buildSkillSetupTerminalCommand(command, 'powershell.exe', runtime, 'win32')
     const encoded = Buffer.from(buildWslLoginShellCommand(skillCommand), 'utf8').toString('base64')
 
-    expect(command).toBe(
+    expect(command).toBe(skillCommand)
+    expect(setupCommand).toBe(
       `& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe -d 'Ubuntu' -- sh -c 'eval \\"\`printf %s ${encoded} | base64 -d\`\\"' } # Runs: ${skillCommand}`
     )
-    expect(decodeWslLoginShellScript(command)).toContain(
+    expect(decodeWslLoginShellScript(setupCommand)).toContain(
       'exec "$_orca_wsl_shell" -ilc \'npx skills add orchestration --global\''
     )
   })
 
   it('keeps a Windows-selected WSL install inside WSL without the host preflight', () => {
     const skillCommand = 'npx skills add orchestration --global'
-    const command = buildSkillCommandForRuntime(
-      skillCommand,
-      {
-        runtime: 'wsl',
-        wslDistro: 'Ubuntu',
-        label: 'WSL Ubuntu'
-      },
-      'win32'
-    )
+    const runtime = {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      label: 'WSL Ubuntu'
+    } as const
+    const command = buildSkillCommandForRuntime(skillCommand, runtime, 'win32')
+    const setupCommand = buildSkillSetupTerminalCommand(command, 'powershell.exe', runtime, 'win32')
 
-    expect(command).toContain("wsl.exe -d 'Ubuntu'")
-    expect(command).not.toContain('where.exe npx')
-    expect(decodeWslLoginShellScript(command)).toContain(
+    expect(command).toBe(skillCommand)
+    expect(setupCommand).toContain("wsl.exe -d 'Ubuntu'")
+    expect(setupCommand).not.toContain('where.exe npx')
+    expect(decodeWslLoginShellScript(setupCommand)).toContain(
       'exec "$_orca_wsl_shell" -ilc \'npx skills add orchestration --global\''
     )
   })
 
-  it('wraps WSL skill updates as a directly runnable selected-distro command', () => {
-    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
+  it('wraps WSL skill updates for the selected distro setup terminal', () => {
+    const runtime = {
       runtime: 'wsl',
       wslDistro: 'Fedora Remix',
       label: 'WSL Fedora Remix'
-    })
+    } as const
+    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', runtime)
+    const setupCommand = buildSkillSetupTerminalCommand(command, 'powershell.exe', runtime, 'win32')
 
-    expect(decodeWslLoginShellScript(command)).toContain(
+    expect(decodeWslLoginShellScript(setupCommand)).toContain(
       'exec "$_orca_wsl_shell" -ilc \'npx skills update orchestration --global\''
     )
   })
 
-  it('scopes the PS5-compatible argv mode when pasted into PowerShell 7', () => {
-    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
-      runtime: 'wsl',
-      label: 'WSL'
-    })
+  it('scopes the PS5-compatible argv mode in the PowerShell setup terminal', () => {
+    const runtime = { runtime: 'wsl', label: 'WSL' } as const
+    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', runtime)
+    const setupCommand = buildSkillSetupTerminalCommand(command, 'powershell.exe', runtime, 'win32')
 
-    expect(command).toMatch(
+    expect(setupCommand).toMatch(
       /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -- sh -c 'eval \\"`printf/
     )
-    expect(command).toContain('`\\"\' } # Runs: npx skills update orchestration --global')
+    expect(setupCommand).toContain('`\\"\' } # Runs: npx skills update orchestration --global')
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -121,10 +125,15 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
       chmodSync(join(npxBin, 'npx'), 0o755)
 
       try {
-        const wrapped = buildSkillCommandForRuntime('npx skills update orchestration --global', {
+        const runtime = {
           runtime: 'wsl',
           label: 'WSL'
-        })
+        } as const
+        const copied = buildSkillCommandForRuntime(
+          'npx skills update orchestration --global',
+          runtime
+        )
+        const wrapped = buildSkillSetupTerminalCommand(copied, 'powershell.exe', runtime, 'win32')
         expect(
           execFileSync('/bin/sh', ['-c', getWslOuterShellScript(wrapped)], {
             encoding: 'utf8',
@@ -270,6 +279,91 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     } finally {
       useAppStore.setState({ settings: previous.settings })
     }
+  })
+
+  it('keeps the npx preflight in the PowerShell-forced setup terminal', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const windowsHost = { runtime: 'host', label: 'Windows' } as const
+    const previous = useAppStore.getState()
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'git-bash' }
+    })
+
+    try {
+      const copied = buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')
+      expect(copied).toBe(installCommand)
+      // Orca forces its own setup terminal to powershell.exe, where cmd.exe works.
+      expect(buildSkillSetupTerminalCommand(copied, 'powershell.exe', undefined, 'win32')).toBe(
+        `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`
+      )
+    } finally {
+      useAppStore.setState({ settings: previous.settings })
+    }
+  })
+
+  it('does not re-wrap the setup terminal command when no shell override applies', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const previous = useAppStore.getState()
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'cmd.exe' }
+    })
+
+    try {
+      const copied = buildSkillCommandForRuntime(
+        installCommand,
+        { runtime: 'host', label: 'Windows' },
+        'win32'
+      )
+      expect(buildSkillSetupTerminalCommand(copied, undefined, undefined, 'win32')).toBe(copied)
+      // An already-wrapped command must not gain a second preflight.
+      expect(buildSkillSetupTerminalCommand(copied, 'powershell.exe', undefined, 'win32')).toBe(
+        copied
+      )
+    } finally {
+      useAppStore.setState({ settings: previous.settings })
+    }
+  })
+
+  it('adapts bare WSL setup commands to the shell that Orca created', () => {
+    const runtime = { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' } as const
+    const skillCommand = 'npx skills add orchestration --global'
+    const copiedCommand = buildSkillCommandForRuntime(skillCommand, runtime, 'win32')
+
+    expect(copiedCommand).toBe(skillCommand)
+    expect(
+      buildSkillSetupTerminalCommand(copiedCommand, 'powershell.exe', runtime, 'win32')
+    ).toContain("wsl.exe -d 'Ubuntu'")
+    expect(buildSkillSetupTerminalCommand(copiedCommand, 'wsl.exe', runtime, 'win32')).toBe(
+      skillCommand
+    )
+    expect(
+      buildSkillSetupTerminalCommand(
+        'npx skills add orchestration --global',
+        undefined,
+        undefined,
+        'linux'
+      )
+    ).toBe('npx skills add orchestration --global')
+  })
+
+  it('preserves the exact WSL script when adapting setup-terminal auto-paste', () => {
+    const skillCommand = "printf 'héllo\n# Runs: unchanged'"
+    const runtime = {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      label: 'WSL Ubuntu'
+    } as const
+    const copiedCommand = buildSkillCommandForRuntime(skillCommand, runtime)
+    const powershellCommand = buildSkillSetupTerminalCommand(
+      copiedCommand,
+      'powershell.exe',
+      runtime,
+      'win32'
+    )
+
+    expect(buildSkillSetupTerminalCommand(powershellCommand, 'wsl.exe', runtime, 'win32')).toBe(
+      buildWslLoginShellCommand(skillCommand)
+    )
   })
 
   it('keeps the bare reinstall rewrite for POSIX-family Windows skill updates', () => {

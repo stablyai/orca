@@ -3,7 +3,7 @@ import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control-fix-split-button'
 import { translate } from '@/i18n/i18n'
 import { useCheckRunDetailsFixWithAI } from './check-run-details-fix-with-ai'
@@ -27,8 +27,8 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
 }
 
 type CheckStatusLike = {
-  status: PRCheckDetail['status'] | string | null | undefined
-  conclusion: PRCheckDetail['conclusion'] | string | null | undefined
+  status: PRCheckDetail['status'] | (string & {}) | null | undefined
+  conclusion: PRCheckDetail['conclusion'] | (string & {}) | null | undefined
 }
 
 function getCheckStatusLabel(check: CheckStatusLike): string {
@@ -247,7 +247,11 @@ export function CheckRunDetailsPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 scrollbar-sleek">
         {loading ? (
-          <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-center gap-2 py-4 text-sm text-muted-foreground"
+          >
             <LoaderCircle className="size-4 animate-spin" />
             {translate(
               'auto.components.editor.CheckRunDetailsPanel.1f2b980522',
@@ -256,7 +260,11 @@ export function CheckRunDetailsPanel({
           </div>
         ) : (
           <div className="grid gap-4">
-            {error && <div className="text-sm text-muted-foreground">{error}</div>}
+            {error && (
+              <div role="alert" className="min-w-0 break-words text-sm text-destructive">
+                {error}
+              </div>
+            )}
 
             {hasOutput && (
               <section className="rounded-md border border-border bg-background">

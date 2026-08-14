@@ -14,7 +14,7 @@ import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-lig
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 // Why: pinned so PREVIEW_BUFFER never wraps; 36 cols fits the 32-char longest line + margin (larger fonts clip, not wrap).
@@ -117,7 +117,10 @@ export function TerminalSettingsPreview({
     if (!container) {
       return
     }
-    const weights = resolveTerminalFontWeights(settings.terminalFontWeight)
+    const weights = resolveTerminalFontWeights(
+      settings.terminalFontWeight,
+      settings.terminalFontWeightBold
+    )
     skipInitialOptionMutationRef.current = true
     skipInitialThemeRewriteRef.current = true
     // Why: DOM renderer only — WebGL contexts are scarce and multiple previews can mount at once.
@@ -171,7 +174,10 @@ export function TerminalSettingsPreview({
       skipInitialOptionMutationRef.current = false
       return
     }
-    const weights = resolveTerminalFontWeights(settings.terminalFontWeight)
+    const weights = resolveTerminalFontWeights(
+      settings.terminalFontWeight,
+      settings.terminalFontWeightBold
+    )
     terminal.options.fontSize = settings.terminalFontSize
     terminal.options.fontFamily = buildFontFamily(effectiveFontFamily)
     terminal.options.fontWeight = weights.fontWeight
@@ -183,6 +189,7 @@ export function TerminalSettingsPreview({
     terminal.options.cursorBlink = settings.terminalCursorBlink
   }, [
     settings.terminalFontSize,
+    settings.terminalFontWeightBold,
     effectiveFontFamily,
     settings.terminalFontWeight,
     terminalLineHeight,

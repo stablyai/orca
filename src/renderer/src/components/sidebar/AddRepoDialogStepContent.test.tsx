@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react'
 import { Dialog } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AddRepoDialogStepContent } from './AddRepoDialogStepContent'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 
 const nestedScan: NestedRepoScanResult = {
   selectedPath: '/workspace/platform',
@@ -280,5 +280,17 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).not.toContain('Browse host')
     expect(html).not.toContain('Create on host')
     expect(html).not.toContain('Want to import many repos at once?')
+  })
+
+  it('opens the in-app filesystem browser for a paired runtime', () => {
+    const html = renderStepContent({
+      step: 'server-path',
+      isRuntimeEnvironmentActive: true,
+      activeRuntimeEnvironmentId: 'paired-host'
+    })
+
+    expect(html).toContain('Browse host filesystem')
+    expect(html).toContain('Navigate to a directory and click Select to choose it.')
+    expect(html).toContain('Select folder')
   })
 })

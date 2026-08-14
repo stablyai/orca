@@ -96,6 +96,17 @@ export function drainPreHandlerPtyData(
   }
 }
 
+/** Replay buffered startup bytes without taking them from the future primary handler. */
+export function replayPreHandlerPtyData(ptyId: string, observer: (data: string) => void): void {
+  const state = preHandlerPtyData.get(ptyId)
+  if (!state) {
+    return
+  }
+  for (let index = state.head; index < state.chunks.length; index += 1) {
+    observer(state.chunks[index].data)
+  }
+}
+
 export function bufferPreHandlerPtyExit(ptyId: string, code: number): void {
   if (consumedPreHandlerPtyExits.has(ptyId) || discardedPreHandlerPtyStates.has(ptyId)) {
     return
@@ -174,11 +185,6 @@ export function drainPreHandlerPtyExit(ptyId: string, handler: (code: number) =>
     // a duplicate exit must not become a new pre-handler event.
     consumePreHandlerPtyState(ptyId)
   }
-}
-
-export function clearPreHandlerPtyData(ptyId: string): void {
-  preHandlerPtyData.delete(ptyId)
-  warnedLostHandlerPtyIds.delete(ptyId)
 }
 
 export function clearPreHandlerPtyState(ptyId: string): void {

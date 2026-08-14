@@ -45,7 +45,7 @@ function readRuntimeArg() {
   }
 
   const runtimeIndex = process.argv.indexOf('--runtime')
-  if (runtimeIndex >= 0) {
+  if (runtimeIndex !== -1) {
     return process.argv[runtimeIndex + 1]
   }
 

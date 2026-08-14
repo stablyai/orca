@@ -8,7 +8,8 @@ import {
   type SourceControlTextActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
-import type { GlobalSettings, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 
 type TextGenerationRecipeConfiguration = {
@@ -21,7 +22,7 @@ function textGenerationRecipeIsConfigured(
   actionId: SourceControlTextActionId,
   recipe: TextGenerationRecipeConfiguration | null | undefined
 ): boolean {
-  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'agentId')) {
+  if (Object.hasOwn(recipe ?? {}, 'agentId')) {
     return true
   }
   if (

@@ -1,9 +1,9 @@
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
-  Worktree,
-  WorktreeMeta
-} from '../../../../shared/types'
+  Worktree
+} from '../../../../shared/worktree/types'
 import {
   parseWorkspaceLaneFullIds,
   resolveFullLaneDropIndex

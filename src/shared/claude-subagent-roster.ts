@@ -1,4 +1,5 @@
 import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-status-types'
+import type { ClaudeBackgroundAgentTask } from './claude-background-task-inventory'
 
 /** Mirrors the wire-normalization id cap in agent-status-types. Enforced at
  *  upsert so an over-long id can't gate the pane 'working' while being
@@ -49,20 +50,6 @@ export type TrackedClaudeSubagent = {
    *  teammate-shaped. Never cleared: the listing mode of an id can't change
    *  mid-life. */
   listedAsSubagentTask?: true
-}
-
-/** One agent entry from the `background_tasks` array Claude attaches to Stop
- *  (and SubagentStop) hook payloads. Non-agent task types (background shells,
- *  crons) are filtered out at read time. */
-export type ClaudeBackgroundAgentTask = {
-  id: string
-  agentType?: string
-  description?: string
-  running: boolean
-  /** True for `type: "teammate"` entries. Their ids never match lifecycle
-   *  agent_ids and they report "running" permanently — even after the named
-   *  agent finished — so they carry no per-agent state at all. */
-  teammate: boolean
 }
 
 /** Agent-team/named-agent lifecycle ids are `a<name>-<hex>` while one-shot
@@ -139,49 +126,9 @@ export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): vo
     roster.delete(id)
     return
   }
+  tracked.backgroundTasksAuthoritative = undefined
+  tracked.restoredFromSnapshot = undefined
   tracked.state = 'idle'
-}
-
-/** Read the agent-typed entries of a hook payload's `background_tasks` field.
- *  `present: false` means the field was absent/malformed (older Claude builds),
- *  so callers must keep their tracked roster instead of clearing it. */
-export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unknown>): {
-  present: boolean
-  tasks: ClaudeBackgroundAgentTask[]
-  truncated: boolean
-} {
-  const raw = hookPayload['background_tasks']
-  if (!Array.isArray(raw)) {
-    return { present: false, tasks: [], truncated: false }
-  }
-  const tasks: ClaudeBackgroundAgentTask[] = []
-  let truncated = false
-  for (const item of raw) {
-    if (typeof item !== 'object' || item === null) {
-      continue
-    }
-    const obj = item as Record<string, unknown>
-    if (obj.type !== 'subagent' && obj.type !== 'teammate') {
-      continue
-    }
-    if (typeof obj.id !== 'string' || obj.id.trim().length === 0) {
-      continue
-    }
-    if (tasks.length >= AGENT_STATUS_MAX_SUBAGENTS) {
-      // Why: a capped inventory cannot prove a tracked id is absent; callers
-      // must retain unlisted rows rather than deleting live overflow tasks.
-      truncated = true
-      break
-    }
-    tasks.push({
-      id: obj.id,
-      agentType: typeof obj.agent_type === 'string' ? obj.agent_type : undefined,
-      description: typeof obj.description === 'string' ? obj.description : undefined,
-      running: obj.status === 'running',
-      teammate: obj.type === 'teammate'
-    })
-  }
-  return { present: true, tasks, truncated }
 }
 
 /** Fold a lead Stop's `background_tasks` into the lifecycle-tracked roster.
@@ -300,13 +247,8 @@ export function foldClaudeBackgroundTasksIntoRoster(
   }
 }
 
-/** Second reap path for restored rows, used when the agent process that wrote
- *  the snapshot is gone. The inventory reap needs the parent to emit a complete
- *  `background_tasks` list; a parent that went idle before Orca restarted never
- *  emits one, so an unconfirmed row would gate the pane 'working' forever and
- *  keep it out of hibernation. Rows confirmed by live activity are untouched.
- *  Returns whether anything was dropped. */
-export function reapRestoredClaudeSubagentsWithoutLiveAgent(roster: ClaudeSubagentRoster): boolean {
+/** Drop restored rows that no current-runtime child activity has confirmed. */
+export function reapUnconfirmedRestoredClaudeSubagents(roster: ClaudeSubagentRoster): boolean {
   let changed = false
   for (const [id, tracked] of roster) {
     if (tracked.restoredFromSnapshot === true) {
@@ -352,6 +294,8 @@ export function idleClaudeTeammateByName(roster: ClaudeSubagentRoster, name: str
   for (const [id, tracked] of roster) {
     if (claudeTeammateIdMatchesName(id, name)) {
       changed = changed || tracked.state !== 'idle' || tracked.confirmedTeammate !== true
+      tracked.backgroundTasksAuthoritative = undefined
+      tracked.restoredFromSnapshot = undefined
       tracked.state = 'idle'
       tracked.confirmedTeammate = true
     }
@@ -367,6 +311,21 @@ export function claudeRosterHasWorkingSubagent(roster: ClaudeSubagentRoster | un
   }
   for (const tracked of roster.values()) {
     if (tracked.state === 'working') {
+      return true
+    }
+  }
+  return false
+}
+
+/** A working child observed in this listener runtime, not merely restored from disk. */
+export function claudeRosterHasRuntimeWorkingSubagent(
+  roster: ClaudeSubagentRoster | undefined
+): boolean {
+  if (!roster) {
+    return false
+  }
+  for (const tracked of roster.values()) {
+    if (tracked.state === 'working' && tracked.restoredFromSnapshot !== true) {
       return true
     }
   }

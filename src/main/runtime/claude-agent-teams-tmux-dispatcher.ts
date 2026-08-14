@@ -117,7 +117,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
       direction: splitTarget.direction,
       command: parsed.positional.join(' ') || undefined,
       env: paneEnv(team, fakePaneId),
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'],
+      envToDelete: ['TERM_PROGRAM'],
       activate: false
     })
     const pane: TeamPane = {
@@ -168,7 +168,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
       direction: pane.splitDirection ?? 'horizontal',
       command,
       env: paneEnv(team, pane.fakePaneId),
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'],
+      envToDelete: ['TERM_PROGRAM'],
       activate: false
     })
     try {

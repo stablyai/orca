@@ -83,6 +83,13 @@ export type SkillFreshnessInstallation = {
   observedPackageDigest: string | null
   /** Git tree sha of the observed bytes; lets the post-run verdict match disk against the updater's lock. */
   observedGitTreeSha?: string | null
+  /**
+   * The same hash over only the files the current bundle lists. Carried beside the
+   * whole-folder hash, not in place of it, so a folder holding an agent CLI's sidecar
+   * can still match the lock without blinding the check to an upstream revision that
+   * added a file. Absent from hosts older than this field.
+   */
+  observedOfficialGitTreeSha?: string | null
   errorCategory: string | null
 }
 

@@ -99,7 +99,7 @@ function messagesAfterPendingBoundary(
     return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
   }
   const boundaryIndex = messages.findIndex((message) => message.id === pending.afterMessageId)
-  if (boundaryIndex >= 0) {
+  if (boundaryIndex !== -1) {
     return messages.slice(boundaryIndex + 1)
   }
   // A bounded authoritative read can page the boundary out. Fall back to the
@@ -164,7 +164,7 @@ export function prunePendingSends(
       return false
     }
     const openIndex = stillOpen.indexOf(entry)
-    return openIndex < 0 || !gluedRepresented.has(openIndex)
+    return openIndex === -1 || !gluedRepresented.has(openIndex)
   })
   return next.length === pending.length ? pending : next
 }
@@ -179,6 +179,9 @@ export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
   existingMessages: NativeChatMessage[] = []
 ): NativeChatMessage[] {
+  if (pending.length === 0) {
+    return []
+  }
   const consumed = new Map<string, number>()
   const exactVisible = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
@@ -205,7 +208,7 @@ export function pendingSendsAsMessages(
         return false
       }
       const openIndex = stillVisible.indexOf(entry)
-      return openIndex < 0 || !gluedRepresented.has(openIndex)
+      return openIndex === -1 || !gluedRepresented.has(openIndex)
     })
     .map((entry) => ({
       id: `pending:${entry.id}`,

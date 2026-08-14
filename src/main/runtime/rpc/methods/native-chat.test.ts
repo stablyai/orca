@@ -21,6 +21,7 @@ const cachedResult = vi.hoisted(() => ({
     }
   }
 }))
+const tailRead = vi.hoisted(() => ({ signal: undefined as AbortSignal | undefined }))
 const watcher = vi.hoisted(() => ({
   args: null as null | {
     onInitialSnapshot?: (
@@ -53,10 +54,17 @@ const watcher = vi.hoisted(() => ({
       }
     ) => void
   },
-  watching: true
+  watching: true,
+  setupSignal: undefined as AbortSignal | undefined,
+  setupPromise: null as Promise<{ unsubscribe: () => void; watching: boolean }> | null,
+  setupFactory: null as
+    | ((signal?: AbortSignal) => Promise<{ unsubscribe: () => void; watching: boolean }>)
+    | null,
+  unsubscribe: vi.fn()
 }))
 vi.mock('../../../native-chat/transcript-watch', () => ({
-  readNativeChatTranscriptTail: ({ limit }: { limit: number }) => {
+  readNativeChatTranscriptTail: ({ limit }: { limit: number }, signal?: AbortSignal) => {
+    tailRead.signal = signal
     const messages = cachedResult.value.messages
     return Promise.resolve({
       messages: messages.slice(-limit),
@@ -65,9 +73,17 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
       ...(cachedResult.value.lifecycle ? { lifecycle: cachedResult.value.lifecycle } : {})
     })
   },
-  subscribeNativeChatTranscript: (args: NonNullable<typeof watcher.args>) => {
+  subscribeNativeChatTranscript: (
+    args: NonNullable<typeof watcher.args>,
+    setupSignal?: AbortSignal
+  ) => {
     watcher.args = args
-    return Promise.resolve({ unsubscribe: vi.fn(), watching: watcher.watching })
+    watcher.setupSignal = setupSignal
+    return (
+      watcher.setupFactory?.(setupSignal) ??
+      watcher.setupPromise ??
+      Promise.resolve({ unsubscribe: watcher.unsubscribe, watching: watcher.watching })
+    )
   }
 }))
 
@@ -81,6 +97,10 @@ function makeMessage(text: string): NativeChatMessage {
     source: 'transcript',
     blocks: [{ type: 'tool-result', output: text, isError: false }]
   }
+}
+
+function makeTextMessage(text: string): NativeChatMessage {
+  return { ...makeMessage(''), blocks: [{ type: 'text', text }] }
 }
 
 function readSessionHandler(): (params: unknown, ctx: RpcContext) => Promise<unknown> {
@@ -137,6 +157,14 @@ function activeWatcherArgs(): NonNullable<typeof watcher.args> {
 }
 
 describe('nativeChat.readSession clientKind truncation gating', () => {
+  it('passes request cancellation to transcript resolution', async () => {
+    const controller = new AbortController()
+    const context = { ...ctxWith('runtime'), signal: controller.signal }
+    await readSessionHandler()({ agent: 'claude', sessionId: 's' }, context)
+
+    expect(tailRead.signal).toBe(controller.signal)
+  })
+
   it('clips oversized tool output for mobile clients', async () => {
     cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
     const result = await readSessionHandler()(
@@ -144,9 +172,73 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
       ctxWith('mobile')
     )
     const output = firstOutput(result)
-    expect(output.length).toBeLessThan(OVERSIZED.length)
-    expect(output).toContain('truncated')
+    expect(output).toBe(`${OVERSIZED.slice(0, 4000)}\n… (truncated)`)
   })
+
+  // STA-3230: a paired desktop or mobile client saw long assistant replies cut
+  // at the tool-preview cap with `… (truncated)` and no way to read the rest.
+  it('passes a long assistant text block through unclipped for mobile clients', async () => {
+    const text = 'prose '.repeat(1000)
+    cachedResult.value = { messages: [makeTextMessage(text)] }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
+      text: string
+    }
+    expect(block.text).toBe(text)
+  })
+
+  it('clips a pathological text block at the safety ceiling for mobile clients', async () => {
+    const text = 'y'.repeat(70_000)
+    cachedResult.value = { messages: [makeTextMessage(text)] }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
+      text: string
+    }
+    expect(block.text).toBe(`${text.slice(0, 64_000)}\n… (truncated)`)
+  })
+
+  it.each(['mobile', 'runtime', undefined] as const)(
+    'omits inline image bodies and oversized metadata for %s clients',
+    async (clientKind) => {
+      cachedResult.value = {
+        messages: [
+          {
+            ...makeMessage('ignored'),
+            blocks: [
+              {
+                type: 'image-ref',
+                url: `data:image/png;base64,${'a'.repeat(10_000)}`,
+                alt: 'Inline image'
+              },
+              { type: 'image-ref', url: ' \tdata:image/png;base64,abc' },
+              { type: 'image-ref', url: 'https://example.com/reference.png' },
+              { type: 'image-ref', path: '/'.repeat(600) }
+            ]
+          }
+        ]
+      }
+
+      const result = await readSessionHandler()(
+        { agent: 'codex', sessionId: 's' },
+        ctxWith(clientKind)
+      )
+      const messages = (result as { messages: NativeChatMessage[] }).messages
+
+      expect(messages[0].blocks).toEqual([
+        { type: 'image-ref', alt: 'Inline image' },
+        { type: 'image-ref' },
+        { type: 'image-ref', url: 'https://example.com/reference.png' },
+        { type: 'image-ref' }
+      ])
+      expect(JSON.stringify(messages).length).toBeLessThan(1_000)
+    }
+  )
 
   it('bounds raw tool-call inputs before sending them to mobile', async () => {
     cachedResult.value = {
@@ -324,6 +416,33 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 })
 
 describe('nativeChat.subscribe initial snapshot', () => {
+  it('preserves long assistant text across mobile stream frame types', async () => {
+    watcher.watching = true
+    watcher.args = null
+    const emitted: unknown[] = []
+    const text = 'prose '.repeat(1000)
+    const message = makeTextMessage(text)
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's' },
+      streamingContext('mobile'),
+      (value) => emitted.push(value)
+    )
+
+    const callbacks = activeWatcherArgs()
+    callbacks.onInitialSnapshot?.([message], false, 123)
+    callbacks.onReplace?.([message], false, 123)
+    callbacks.onAppend([message])
+
+    expect(emitted.map((frame) => (frame as { type: string }).type)).toEqual([
+      'snapshot',
+      'replacement',
+      'appended'
+    ])
+    for (const frame of emitted as { messages: NativeChatMessage[] }[]) {
+      expect(frame.messages[0].blocks[0]).toEqual({ type: 'text', text })
+    }
+  })
+
   it('emits one windowed snapshot with pagination state before live appends', async () => {
     watcher.watching = true
     watcher.args = null
@@ -464,6 +583,95 @@ describe('nativeChat.subscribe initial snapshot', () => {
         lifecycle: completed
       }
     ])
+  })
+
+  it('cancels pending setup when the stream is cleaned up', async () => {
+    const cleanups = new Map<string, () => void>()
+    const context = streamingContext('mobile')
+    vi.mocked(context.runtime.registerSubscriptionCleanup).mockImplementation((id, cleanup) => {
+      cleanups.set(id, cleanup)
+    })
+    const setupControl: {
+      finish?: (subscription: { unsubscribe: () => void; watching: boolean }) => void
+    } = {}
+    const lateUnsubscribe = vi.fn()
+    watcher.setupSignal = undefined
+    watcher.setupPromise = new Promise((resolve) => {
+      setupControl.finish = resolve
+    })
+    const emitted: unknown[] = []
+
+    try {
+      const handling = subscribeHandler()(
+        { agent: 'claude', sessionId: 'pending' },
+        context,
+        (value) => emitted.push(value)
+      )
+      await vi.waitFor(() => expect(watcher.setupSignal).toBeDefined())
+      const setupSignal = watcher.setupSignal as unknown as AbortSignal
+      const cleanup = [...cleanups.values()][0]
+      expect(cleanup).toBeDefined()
+
+      cleanup?.()
+      expect(setupSignal.aborted).toBe(true)
+      setupControl.finish?.({ unsubscribe: lateUnsubscribe, watching: true })
+      await handling
+
+      expect(lateUnsubscribe).toHaveBeenCalledOnce()
+      expect(emitted).toEqual([{ type: 'end' }])
+    } finally {
+      watcher.setupPromise = null
+    }
+  })
+
+  it('handles request cancellation while setup rejects', async () => {
+    const cleanups = new Map<string, () => void>()
+    const controller = new AbortController()
+    const context = { ...streamingContext('mobile'), signal: controller.signal }
+    vi.mocked(context.runtime.registerSubscriptionCleanup).mockImplementation((id, cleanup) => {
+      cleanups.set(id, cleanup)
+    })
+    vi.mocked(context.runtime.cleanupSubscription).mockImplementation((id) => {
+      cleanups.get(id)?.()
+    })
+    watcher.setupSignal = undefined
+    watcher.setupFactory = (signal) =>
+      new Promise((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    const emitted: unknown[] = []
+
+    try {
+      const handling = subscribeHandler()(
+        { agent: 'claude', sessionId: 'pending-abort' },
+        context,
+        (value) => emitted.push(value)
+      )
+      await vi.waitFor(() => expect(watcher.setupSignal).toBeDefined())
+      controller.abort(new Error('request closed'))
+      await handling
+
+      expect(context.runtime.cleanupSubscription).toHaveBeenCalledOnce()
+      expect(emitted).toEqual([{ type: 'end' }])
+    } finally {
+      watcher.setupFactory = null
+    }
+  })
+
+  it('skips setup for an already-cancelled request', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const context = { ...streamingContext('mobile'), signal: controller.signal }
+    watcher.args = null
+    const emitted: unknown[] = []
+
+    await subscribeHandler()({ agent: 'claude', sessionId: 'already-closed' }, context, (value) =>
+      emitted.push(value)
+    )
+
+    expect(context.runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
+    expect(watcher.args).toBeNull()
+    expect(emitted).toEqual([])
   })
 })
 

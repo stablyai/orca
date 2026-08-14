@@ -21,7 +21,11 @@ function fakeChild(): FakeChild {
       resume: ReturnType<typeof vi.fn>
     }
     stderr: EventEmitter
-    stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
+    stdin: EventEmitter & {
+      write: ReturnType<typeof vi.fn>
+      destroyed: boolean
+      writable: boolean
+    }
     kill: ReturnType<typeof vi.fn>
   }
   child.stdout = Object.assign(new EventEmitter(), {
@@ -29,7 +33,18 @@ function fakeChild(): FakeChild {
     resume: vi.fn()
   })
   child.stderr = new EventEmitter()
-  child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(() => true) })
+  const stdin = new EventEmitter() as EventEmitter & {
+    write: ReturnType<typeof vi.fn>
+    destroyed: boolean
+    writable: boolean
+  }
+  stdin.write = vi.fn((_data, onWritten?: (error?: Error | null) => void) => {
+    onWritten?.(null)
+    return true
+  })
+  stdin.destroyed = false
+  stdin.writable = true
+  child.stdin = stdin
   child.kill = vi.fn()
   return child as unknown as FakeChild
 }
@@ -166,7 +181,7 @@ describe('waitForWslRelaySentinel', () => {
     const drain = vi.fn()
     const writeMock = child.stdin.write as ReturnType<typeof vi.fn>
     writeMock.mockImplementation((_data, onWritten) => {
-      onWritten(null)
+      onWritten?.(null)
       return false
     })
     const promise = waitForWslRelaySentinel(child)
@@ -179,5 +194,17 @@ describe('waitForWslRelaySentinel', () => {
     child.stdin.emit('drain')
     expect(drain).toHaveBeenCalledOnce()
     expect(transport.supportsWriteSettlement).toBe(true)
+  })
+
+  it('swallows async stdin EPIPE after the guest dies so it is not uncaught', async () => {
+    const child = fakeChild()
+    const promise = waitForWslRelaySentinel(child)
+    emitStdout(child, RELAY_SENTINEL)
+    await promise
+    // Real pipes emit EPIPE on the stream after a failed write; without a
+    // listener Node surfaces that as an unhandled exception (CI flake).
+    expect(() => {
+      child.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+    }).not.toThrow()
   })
 })

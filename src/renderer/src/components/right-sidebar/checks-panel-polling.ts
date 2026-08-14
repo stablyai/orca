@@ -1,4 +1,4 @@
-import type { PRCheckDetail } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
 
 export const CHECKS_PANEL_BASE_POLL_INTERVAL_MS = 30_000
 export const CHECKS_PANEL_MAX_POLL_INTERVAL_MS = 120_000

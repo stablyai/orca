@@ -3,7 +3,8 @@ import { useMemo } from 'react'
 import { ArrowLeft, Search, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import type { GitHubRepositoryIdentity, GlobalSettings } from '../../../../shared/types'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
@@ -47,6 +48,7 @@ type SettingsSidebarProps = {
   hasRepos: boolean
   searchQuery: string
   searchInputRef?: RefObject<HTMLInputElement | null>
+  searchAutoFocus?: boolean
   onBack: () => void
   onSearchChange: (query: string) => void
   onSelectSection: (
@@ -134,6 +136,7 @@ export function SettingsSidebar({
   hasRepos,
   searchQuery,
   searchInputRef,
+  searchAutoFocus = false,
   onBack,
   onSearchChange,
   onSelectSection
@@ -196,6 +199,7 @@ export function SettingsSidebar({
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={searchInputRef}
+            autoFocus={searchAutoFocus}
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder={translate(

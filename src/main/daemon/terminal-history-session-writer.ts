@@ -59,7 +59,8 @@ export class TerminalHistorySessionWriter {
   }
 
   async checkpoint(
-    snapshot: TerminalSnapshot
+    snapshot: TerminalSnapshot,
+    opts?: { pendingOutputSeq?: number }
   ): Promise<{ result: 'committed' } | { result: 'retryable'; error: Error }> {
     // Why: snapshot.cwd is null until OSC-7; preserve meta.json's usable cwd for cold restore.
     const effectiveCwd = snapshot.cwd ?? this.readMeta()?.cwd ?? null
@@ -72,6 +73,9 @@ export class TerminalHistorySessionWriter {
         {
           cwd: effectiveCwd,
           generation,
+          ...(opts?.pendingOutputSeq !== undefined
+            ? { pendingOutputSeq: opts.pendingOutputSeq }
+            : {}),
           checkpointedAt: new Date().toISOString()
         },
         this.checkpointMaxBytes

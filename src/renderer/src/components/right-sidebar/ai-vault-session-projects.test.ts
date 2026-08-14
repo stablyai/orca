@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { Project, ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   buildAiVaultProjectContext,
   buildAiVaultSessionProjectById,
   toAiVaultProjectKey
 } from './ai-vault-session-projects'
+import { groupAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',
@@ -381,6 +384,31 @@ describe('buildAiVaultProjectContext', () => {
       key: 'folder:/srv/orca/src',
       label: 'orca/src'
     })
+  })
+
+  it('emits a folder project key the shared folder grouping falls back to', () => {
+    const repo = makeRepo({ id: 'repo-1', displayName: 'Repo', path: '/repo' })
+    const resolved = makeSession({ id: 'claude:resolved', cwd: '/outside/path' })
+    const unresolved = makeSession({ id: 'claude:unresolved', cwd: '/outside/path/' })
+
+    const context = buildAiVaultProjectContext({
+      repos: [repo],
+      worktrees: [],
+      projectHostSetupProjection: makeProjection({ projects: [], setups: [] }),
+      activeRepo: repo,
+      activeWorktree: null,
+      sessions: [resolved]
+    })
+
+    // Both key builders must agree, or one folder shows two identically labelled headers.
+    const groups = groupAiVaultSessions([resolved, unresolved], 'project', {
+      sessionProjectById: context.sessionProjectById
+    })
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions.map((session) => session.id)).toEqual([
+      'claude:resolved',
+      'claude:unresolved'
+    ])
   })
 
   it('ignores blank setup paths instead of treating them as catch-all candidates', () => {

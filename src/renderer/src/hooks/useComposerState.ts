@@ -15,12 +15,15 @@ import {
 } from '@/lib/github-links'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import {
+  findPendingLinkedWorkItemCreationId,
+  type WorktreeCreationRequest
+} from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import {
   resolveTuiAgentLaunchArgs,
@@ -36,27 +39,28 @@ import {
   normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
+import type { GitHubRepositoryIdentity } from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { JiraIssue } from '../../../shared/jira-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type {
-  GitHubRepositoryIdentity,
-  GitHubWorkItem,
-  GitHubPrStartPoint,
-  GitPushTarget,
-  GitLabWorkItem,
-  JiraIssue,
-  LinearIssue,
   OrcaHooks,
   RepoHookSettings,
   SetupAgentStartupPolicy,
-  SetupDecision,
-  SetupRunPolicy,
-  SparsePreset,
-  TuiAgent,
-  WorktreeMeta,
-  WorkspaceStatus,
-  WorkspaceCreateTelemetrySource,
-  ProjectGroup
-} from '../../../shared/types'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+  SetupRunPolicy
+} from '../../../shared/orca-yaml-hook-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
+import type { SetupDecision, SparsePreset } from '../../../shared/worktree/create-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import type {
+  GitHubPrStartPoint,
+  GitPushTarget,
+  WorkspaceStatus
+} from '../../../shared/worktree/types'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
   CLIENT_PLATFORM,
@@ -127,6 +131,7 @@ import {
 } from '@/lib/project-host-setup-options'
 import {
   buildNewWorkspaceCreateTargetOptions,
+  findActionableFolderProjectGroup,
   getProjectGroupIdFromNewWorkspaceOptionId,
   type NewWorkspaceProjectOption
 } from '@/lib/new-workspace-project-options'
@@ -142,7 +147,11 @@ import {
   toLinearLinkedWorkItem
 } from '@/components/sidebar/folder-workspace-composer-helpers'
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folder-workspace-composer-path-status'
-import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
+import {
+  resolveFolderWorkspaceLaunchDraft,
+  submitFolderWorkspaceCreate
+} from '@/components/sidebar/folder-workspace-composer-submit'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
 import {
   getRepoExecutionHostId,
@@ -167,14 +176,19 @@ import {
   shouldPreserveWorkspaceSourceOnRepoChange
 } from '../../../shared/new-workspace/workspace-source'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import {
+  confirmRuntimeIssueCommandRead,
+  ensureHooksConfirmed,
+  readAndConfirmRuntimeIssueCommand
+} from '@/lib/ensure-hooks-confirmed'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
 import { joinPath } from '@/lib/path'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import {
   checkRuntimeHooks,
   readRuntimeIssueCommand,
-  type HookCheckResult
+  type HookCheckResult,
+  type IssueCommandReadResult
 } from '@/runtime/runtime-hooks-client'
 import {
   formatWorkspaceCreateError,
@@ -197,6 +211,10 @@ import {
 import { translate } from '@/i18n/i18n'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { resolveJiraSourceHostId } from '@/lib/jira-source-host'
+import { buildTrustedComposerIssueCommand } from '@/lib/composer-issue-command'
+import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
+
+const NEVER_CANCEL_COMPOSER_SUBMIT = (): boolean => false
 
 export function canResolveFolderSmartGitHubSubmit({
   hasFolderSourceRepos
@@ -230,6 +248,7 @@ export type UseComposerStateOptions = {
   initialName?: string
   initialPrompt?: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
+  initialGitHubWorkItem?: GitHubWorkItem | null
   initialTaskSourceContext?: TaskSourceContext | null
   initialWorkspaceStatus?: WorkspaceStatus
   /** Seeds the Start-from selection on open; the Create-from → Quick fallback uses it so a PR pick lands with the resolved PR head as base. */
@@ -238,12 +257,13 @@ export type UseComposerStateOptions = {
   persistDraft: boolean
   /** Invoked after a successful createWorktree; the caller usually closes its surface (palette modal, full page, etc.). */
   onCreated?: () => void
+  isSubmissionCancelled?: () => boolean
   /** External repoId override — used by TaskPage's work-item list, which drives repo selection from the page header, not the card. */
   repoIdOverride?: string
   onRepoIdOverrideChange?: (value: string) => void
   /** Telemetry surface that opened this composer; threaded into createWorktree so workspace_created.source reflects the entry point. Defaults to unknown. */
   telemetrySource?: WorkspaceCreateTelemetrySource
-  /** Quick-create skips the issueCommand probe (no automation), which the full composer needs for linked-item prompt previews. */
+  /** Enables linked-item prompt and issue-command automation for this composer entry point. */
   enableIssueAutomation?: boolean
   createGateMode?: 'full' | 'quick'
 }
@@ -512,6 +532,40 @@ function normalizeGitHubLinkedWorkItem(
   return { ...item, type: identity.type, number: identity.number }
 }
 
+export function getInitialGitHubPrStartPointSelection({
+  item,
+  linkedWorkItem,
+  repoId
+}: {
+  item: GitHubWorkItem | null | undefined
+  linkedWorkItem: LinkedWorkItemSummary | null | undefined
+  repoId: string | null | undefined
+}): SmartGitHubPrStartPointSelection | null {
+  if (!item || !repoId) {
+    return null
+  }
+  const itemIdentity = resolveGitHubWorkItemIdentity(item)
+  const linkedIdentity = getGitHubLinkedWorkItemIdentity(linkedWorkItem)
+  if (
+    itemIdentity.type !== 'pr' ||
+    linkedIdentity?.type !== 'pr' ||
+    itemIdentity.number !== linkedIdentity.number
+  ) {
+    return null
+  }
+  return {
+    repoId,
+    item: { ...item, type: itemIdentity.type, number: itemIdentity.number }
+  }
+}
+
+export function retargetGitHubPrStartPointSelection(
+  selection: SmartGitHubPrStartPointSelection | null,
+  repoId: string
+): SmartGitHubPrStartPointSelection | null {
+  return selection ? { repoId, item: selection.item } : null
+}
+
 export function getMatchingLinkedTaskSourceContext(
   item: LinkedWorkItemSummary | null | undefined,
   context: TaskSourceContext | null | undefined
@@ -547,11 +601,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     initialName = '',
     initialPrompt = '',
     initialLinkedWorkItem = null,
+    initialGitHubWorkItem = null,
     initialTaskSourceContext = null,
     initialWorkspaceStatus,
     initialBaseBranch,
     persistDraft,
     onCreated,
+    isSubmissionCancelled = NEVER_CANCEL_COMPOSER_SUBMIT,
     repoIdOverride,
     onRepoIdOverrideChange,
     telemetrySource,
@@ -613,6 +669,31 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
+  const hostOptions = useMemo(
+    () =>
+      buildExecutionHostRegistry({
+        repos,
+        settings,
+        hostSource: 'configured-only',
+        sshTargetLabels,
+        sshConnectionStates,
+        runtimeEnvironments,
+        runtimeStatusByEnvironmentId,
+        hostLabelOverrides: getHostDisplayLabelOverrides(settings)
+      }),
+    [
+      repos,
+      settings,
+      sshConnectionStates,
+      sshTargetLabels,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId
+    ]
+  )
+  const actionableHostIds = useMemo(
+    () => new Set(hostOptions.map((host) => host.id)),
+    [hostOptions]
+  )
   // Why: a runtime-owned SSH repo (active right after creating a per-workspace-env) is ineligible; seed from its local same-project sibling, not another project.
   const seedActiveRepoId = useMemo(
     () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId),
@@ -640,7 +721,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [initialWorkspaceStatus, workspaceStatuses]
   )
 
-  const resolvedInitialRepoId = resolveWorkspaceCreationRepoId({
+  const resolvedInitialWorkspaceTarget = resolveWorkspaceCreationTarget({
     eligibleRepos,
     projects,
     projectHostSetups,
@@ -650,14 +731,28 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projectId: initialRunSeed.projectId,
     hostId: initialRunSeed.hostId,
     projectHostSetupId: initialRunSeed.projectHostSetupId,
-    focusedHostScope: workspaceHostScope
+    focusedHostScope: workspaceHostScope,
+    actionableHostIds
   })
+  const resolvedInitialRepoId =
+    resolvedInitialWorkspaceTarget.status === 'ready'
+      ? resolvedInitialWorkspaceTarget.target.repoId
+      : ''
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
-  const initialFolderProjectGroupId = initialProjectGroupId ?? draftProjectGroupId
-  const initialFolderProjectGroup = projectGroups.find(
-    (group) => group.id === initialFolderProjectGroupId && Boolean(group.parentPath?.trim())
+  const [selectedProjectHostSetupOverrideId, setSelectedProjectHostSetupOverrideId] = useState<
+    string | null
+  >(
+    resolvedInitialWorkspaceTarget.status === 'ready'
+      ? resolvedInitialWorkspaceTarget.target.projectHostSetupId
+      : null
   )
+  const initialFolderProjectGroupId = initialProjectGroupId ?? draftProjectGroupId
+  const initialFolderProjectGroup = findActionableFolderProjectGroup({
+    projectGroups,
+    groupId: initialFolderProjectGroupId,
+    actionableHostIds
+  })
   const [selectedProjectGroupId, setSelectedProjectGroupId] = useState<string | null>(
     initialFolderProjectGroup?.id ?? null
   )
@@ -666,12 +761,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const repoId = repoIdOverride ?? internalRepoId
   const selectedProjectGroup = useMemo<ProjectGroup | null>(
     () =>
-      selectedProjectGroupId
-        ? (projectGroups.find(
-            (group) => group.id === selectedProjectGroupId && Boolean(group.parentPath?.trim())
-          ) ?? null)
-        : null,
-    [projectGroups, selectedProjectGroupId]
+      findActionableFolderProjectGroup({
+        projectGroups,
+        groupId: selectedProjectGroupId,
+        actionableHostIds
+      }),
+    [actionableHostIds, projectGroups, selectedProjectGroupId]
   )
   useEffect(() => {
     if (selectedProjectGroupId && !selectedProjectGroup) {
@@ -686,14 +781,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     ) {
       return
     }
-    const nextGroup = projectGroups.find(
-      (group) => group.id === initialFolderProjectGroupId && Boolean(group.parentPath?.trim())
-    )
+    const nextGroup = findActionableFolderProjectGroup({
+      projectGroups,
+      groupId: initialFolderProjectGroupId,
+      actionableHostIds
+    })
     if (nextGroup) {
       initialProjectGroupAppliedRef.current = true
       setSelectedProjectGroupId(nextGroup.id)
     }
-  }, [initialFolderProjectGroupId, projectGroups, selectedProjectGroupId])
+  }, [actionableHostIds, initialFolderProjectGroupId, projectGroups, selectedProjectGroupId])
   const isProjectGroupTarget = selectedProjectGroup !== null
   const folderSourceRepos = useMemo(
     () => getFolderSourceRepos(repos, projectGroups, selectedProjectGroup),
@@ -742,12 +839,29 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         projects,
         projectHostSetups,
         draftRepoId: repoId,
-        focusedHostScope: workspaceHostScope
+        projectHostSetupId: selectedProjectHostSetupOverrideId,
+        focusedHostScope: workspaceHostScope,
+        actionableHostIds
       }),
-    [eligibleRepos, projectHostSetups, projects, repoId, workspaceHostScope]
+    [
+      actionableHostIds,
+      eligibleRepos,
+      projectHostSetups,
+      projects,
+      repoId,
+      selectedProjectHostSetupOverrideId,
+      workspaceHostScope
+    ]
   )
-  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const selectedRepo =
+    selectedWorkspaceTarget.status === 'ready' && selectedWorkspaceTarget.target.repoId === repoId
+      ? selectedWorkspaceTarget.target.repo
+      : eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
+  const selectedRepoExecutionHostId = selectedRepo ? getRepoExecutionHostId(selectedRepo) : null
+  const selectedRepoHookContextKey = selectedRepo
+    ? JSON.stringify([selectedRepoExecutionHostId ?? 'local', repoId])
+    : null
   const selectedRepoAgentLaunchPlatform = useMemo(() => {
     if (!selectedRepo) {
       return CLIENT_PLATFORM
@@ -784,26 +898,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     !selectedProjectGroup && selectedWorkspaceTarget.status === 'ready'
       ? selectedWorkspaceTarget.target.projectHostSetupId
       : null
-  const hostOptions = useMemo(
-    () =>
-      buildExecutionHostRegistry({
-        repos,
-        settings,
-        sshTargetLabels,
-        sshConnectionStates,
-        runtimeEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides: getHostDisplayLabelOverrides(settings)
-      }),
-    [
-      repos,
-      settings,
-      sshConnectionStates,
-      sshTargetLabels,
-      runtimeEnvironments,
-      runtimeStatusByEnvironmentId
-    ]
-  )
   const projectHostSetupOptions = useMemo(
     () =>
       buildProjectHostSetupOptions({
@@ -1118,9 +1212,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const [yamlHooks, setYamlHooks] = useState<OrcaHooks | null>(null)
-  const [checkedHooksRepoId, setCheckedHooksRepoId] = useState<string | null>(null)
-  const [issueCommandTemplate, setIssueCommandTemplate] = useState('')
-  const [hasLoadedIssueCommand, setHasLoadedIssueCommand] = useState(false)
+  const [checkedHooksContextKey, setCheckedHooksContextKey] = useState<string | null>(null)
+  const [loadedIssueCommand, setLoadedIssueCommand] = useState<{
+    contextKey: string
+    result: IssueCommandReadResult
+  } | null>(null)
+  const currentIssueCommand =
+    loadedIssueCommand?.contextKey === selectedRepoHookContextKey ? loadedIssueCommand.result : null
+  const issueCommandTemplate = currentIssueCommand?.effectiveContent ?? ''
+  const hasLoadedIssueCommand =
+    !selectedRepoIsGit || !enableIssueAutomation || currentIssueCommand !== null
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | null>(null)
   const [setupAgentStartupPolicy, setSetupAgentStartupPolicy] = useState<SetupAgentStartupPolicy>(
     () => getRepoSetupAgentStartupPolicy(selectedRepo)
@@ -1172,7 +1273,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const noteRef = useRef<string>(note)
   noteRef.current = note
   // Why: PR checkout refs resolve async, so submit can still see the linked PR as a checkout source if Create fires before the resolver settles.
-  const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(null)
+  const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(
+    getInitialGitHubPrStartPointSelection({
+      item: initialGitHubWorkItem,
+      linkedWorkItem: initialLinkedWorkItemSeed,
+      repoId: selectedRepo?.id ?? initialRepoId
+    })
+  )
   useEffect(() => {
     const clearAutoManagedName = (): void => {
       if (nameRef.current === lastAutoNameRef.current) {
@@ -1322,26 +1429,40 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     key: string
     promise: Promise<HookCheckResult>
   } | null>(null)
-  const loadHookCheckForRepo = useCallback((targetRepoId: string): Promise<HookCheckResult> => {
-    const key = `${selectedRepoSettingsRef.current?.activeRuntimeEnvironmentId ?? 'local'}:${targetRepoId}`
-    const existing = hookCheckRef.current
-    if (existing?.key === key) {
-      return existing.promise
-    }
-    const promise = checkRuntimeHooks(selectedRepoSettingsRef.current, targetRepoId)
-    hookCheckRef.current = { key, promise }
-    return promise
-  }, [])
+  const loadHookCheckForRepo = useCallback(
+    (targetRepoId: string): Promise<HookCheckResult> => {
+      const key = JSON.stringify([selectedRepoExecutionHostId ?? 'local', targetRepoId])
+      const existing = hookCheckRef.current
+      if (existing?.key === key) {
+        return existing.promise
+      }
+      // Why: drop the cache entry on failure so a transient IPC error doesn't pin every later
+      // check for this repo/host to the same rejection.
+      const promise: Promise<HookCheckResult> = checkRuntimeHooks(
+        selectedRepoSettingsRef.current,
+        targetRepoId,
+        selectedRepoExecutionHostId ?? undefined
+      ).catch((error: unknown) => {
+        if (hookCheckRef.current?.promise === promise) {
+          hookCheckRef.current = null
+        }
+        throw error
+      })
+      hookCheckRef.current = { key, promise }
+      return promise
+    },
+    [selectedRepoExecutionHostId]
+  )
   const commitHookCheckIfCurrent = useCallback(
-    (targetRepoId: string, hooks: OrcaHooks | null): boolean => {
-      if (repoIdRef.current !== targetRepoId) {
+    (targetContextKey: string, hooks: OrcaHooks | null): boolean => {
+      if (selectedRepoHookContextKey !== targetContextKey) {
         return false
       }
       setYamlHooks(hooks)
-      setCheckedHooksRepoId(targetRepoId)
+      setCheckedHooksContextKey(targetContextKey)
       return true
     },
-    []
+    [selectedRepoHookContextKey]
   )
   useEffect(() => {
     if (!selectedRepo || !selectedRepoPath || !selectedRepoIsGit) {
@@ -1439,9 +1560,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     return null
   }, [linkedPR, name, selectedRepoSlug])
+  const currentYamlHooks = checkedHooksContextKey === selectedRepoHookContextKey ? yamlHooks : null
   const setupConfig = useMemo(
-    () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, yamlHooks) : null),
-    [selectedRepo, selectedRepoIsGit, yamlHooks]
+    () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
+    [currentYamlHooks, selectedRepo, selectedRepoIsGit]
   )
   const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
   const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
@@ -1463,7 +1585,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       : setupPolicy === 'run-by-default'
         ? 'run'
         : 'skip')
-  const isSetupCheckPending = Boolean(repoId) && checkedHooksRepoId !== repoId
+  const isSetupCheckPending =
+    selectedRepoIsGit &&
+    Boolean(selectedRepoHookContextKey) &&
+    checkedHooksContextKey !== selectedRepoHookContextKey
   const shouldWaitForSetupCheck = Boolean(selectedRepo) && selectedRepoIsGit && isSetupCheckPending
 
   // Why: blank name with no other seed → globally-unique creature name so workspaces don't collide across repos or on a literal default.
@@ -1672,70 +1797,75 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {
-    if (!repoId) {
+    if (!repoId || !selectedRepoIsGit || !selectedRepoHookContextKey) {
       return
     }
 
     let cancelled = false
-    setHasLoadedIssueCommand(false)
-    setIssueCommandTemplate('')
-    setYamlHooks(null)
-    setCheckedHooksRepoId(null)
-
-    if (!selectedRepoIsGit) {
-      setHasLoadedIssueCommand(true)
-      setCheckedHooksRepoId(repoId)
-      return () => {
-        cancelled = true
-      }
-    }
 
     void loadHookCheckForRepo(repoId)
       .then((result) => {
         if (!cancelled) {
-          commitHookCheckIfCurrent(repoId, result.hooks)
+          commitHookCheckIfCurrent(selectedRepoHookContextKey, result.hooks)
         }
       })
       .catch(() => {
         if (!cancelled) {
-          commitHookCheckIfCurrent(repoId, null)
+          commitHookCheckIfCurrent(selectedRepoHookContextKey, null)
         }
       })
 
     if (!enableIssueAutomation) {
-      setHasLoadedIssueCommand(true)
       return () => {
         cancelled = true
       }
     }
 
-    void readRuntimeIssueCommand(selectedRepoSettingsRef.current, repoId)
+    if (createGateMode === 'quick') {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    void readRuntimeIssueCommand(
+      selectedRepoSettingsRef.current,
+      repoId,
+      selectedRepoExecutionHostId ?? undefined
+    )
       .then((result) => {
         if (!cancelled) {
-          setIssueCommandTemplate(result.effectiveContent ?? '')
-          setHasLoadedIssueCommand(true)
+          setLoadedIssueCommand({ contextKey: selectedRepoHookContextKey, result })
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setIssueCommandTemplate('')
-          setHasLoadedIssueCommand(true)
+          setLoadedIssueCommand({
+            contextKey: selectedRepoHookContextKey,
+            result: {
+              status: 'error',
+              localContent: null,
+              sharedContent: null,
+              effectiveContent: null,
+              localFilePath: '',
+              source: 'none'
+            }
+          })
         }
       })
 
     return () => {
       cancelled = true
     }
-    // Why: key on the stable runtime-env id, not the selectedRepoSettings object. `updateRepo`
-    // (e.g. saving the setup toggle from this very composer) replaces selectedRepo — and thus the
-    // memoized selectedRepoSettings — by reference; depending on the object would re-run this
-    // effect, blank yamlHooks to null, and make the whole setup section vanish for a frame.
+    // Why: repo identity fields stay stable when updateRepo replaces the repo object by reference.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     commitHookCheckIfCurrent,
+    createGateMode,
     enableIssueAutomation,
     loadHookCheckForRepo,
     repoId,
+    selectedRepoExecutionHostId,
+    selectedRepoHookContextKey,
     selectedRepoIsGit,
     runtimeEnvironmentId
   ])
@@ -2556,6 +2686,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     ): void => {
       setProjectError(null)
       if (value === repoId && !options.forceResetStartFrom) {
+        if (!options.preserveStartFrom) {
+          setSelectedProjectHostSetupOverrideId(null)
+        }
         setRepoId(value)
         return
       }
@@ -2576,6 +2709,22 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         ? getLinearLinkedWorkItemBranchName(linkedWorkItem)
         : undefined
       setRepoId(value)
+      if (!options.preserveStartFrom) {
+        setSelectedProjectHostSetupOverrideId(null)
+      }
+      if (options.preserveStartFrom && smartGitHubPrStartPointSelectionRef.current) {
+        smartGitHubPrStartPointSelectionRef.current = retargetGitHubPrStartPointSelection(
+          smartGitHubPrStartPointSelectionRef.current,
+          value
+        )
+        setBaseBranch(undefined)
+        setCompareBaseRef(undefined)
+        setPushTarget(undefined)
+        setBranchNameOverride(undefined)
+        setBranchNameOverridePreservesNameEdits(false)
+        branchAutoNameRef.current = ''
+        setForkPushWarning(null)
+      }
       if (!options.preserveStartFrom) {
         smartGitHubPrStartPointSelectionRef.current = null
         setLinkedIssue('')
@@ -2639,7 +2788,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
       // Why: switching run host for the same project must not erase the task/PR source the user is starting from.
-      handleRepoChange(option.repoId, { preserveStartFrom: true })
+      setSelectedProjectHostSetupOverrideId(option.id)
+      handleRepoChange(option.repoId, {
+        preserveStartFrom: true,
+        forceResetStartFrom: true
+      })
     },
     [handleRepoChange, projectHostSetupOptions]
   )
@@ -2648,9 +2801,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       initialProjectGroupAppliedRef.current = true
       const projectGroupId = getProjectGroupIdFromNewWorkspaceOptionId(projectId)
       if (projectGroupId) {
-        const nextProjectGroup = projectGroups.find(
-          (group) => group.id === projectGroupId && Boolean(group.parentPath?.trim())
-        )
+        const nextProjectGroup = findActionableFolderProjectGroup({
+          projectGroups,
+          groupId: projectGroupId,
+          actionableHostIds
+        })
         if (!nextProjectGroup) {
           setSelectedProjectGroupId(null)
           setProjectError(
@@ -2697,7 +2852,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         projects,
         projectHostSetups,
         projectId,
-        focusedHostScope: preferredHostId ?? workspaceHostScope
+        focusedHostScope: preferredHostId ?? workspaceHostScope,
+        actionableHostIds
       })
       if (!nextRepoId) {
         return
@@ -2706,6 +2862,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [
       eligibleRepos,
+      actionableHostIds,
       handleRepoChange,
       isProjectGroupTarget,
       linkedWorkItem,
@@ -3276,20 +3433,35 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const shouldResolveSmartGitHubSubmit = canResolveFolderSmartGitHubSubmit({
           hasFolderSourceRepos: folderSourceRepos.length > 0
         })
-        const smartGitHubResolution = shouldResolveSmartGitHubSubmit
-          ? await resolvePendingSmartGitHubSubmit()
-          : ({ kind: 'none' } as const)
+        const smartGitHubSettlement = await settleComposerSubmit(
+          shouldResolveSmartGitHubSubmit
+            ? resolvePendingSmartGitHubSubmit()
+            : Promise.resolve({ kind: 'none' } as const),
+          isSubmissionCancelled
+        )
+        if (smartGitHubSettlement.status === 'cancelled') {
+          return
+        }
+        const smartGitHubResolution = smartGitHubSettlement.value
         const smartGitHubMetadata =
           smartGitHubResolution.kind === 'none' ? null : smartGitHubResolution
+        const submitLinkedWorkItem = smartGitHubMetadata?.linkedWorkItem ?? linkedWorkItem
         const agent =
           requestedAgent && isTuiAgentEnabled(requestedAgent, disabledTuiAgents)
             ? requestedAgent
+            : null
+        if (isSubmissionCancelled()) {
+          return
+        }
+        const folderLaunchDraftText =
+          agent && submitLinkedWorkItem
+            ? resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note)
             : null
         const folderWorkspaceCreated = await submitFolderWorkspaceCreate({
           projectGroup: selectedProjectGroup,
           name: smartGitHubMetadata?.workspaceName ?? name,
           lastAutoName: lastAutoNameRef.current,
-          linkedWorkItem: smartGitHubMetadata?.linkedWorkItem ?? linkedWorkItem,
+          linkedWorkItem: submitLinkedWorkItem,
           linkedTaskSourceContext: taskSourceContext,
           note,
           quickAgent: agent,
@@ -3300,7 +3472,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : undefined,
           agentEnv: agent ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv) : undefined,
           sessionOptions: agent
-            ? resolveNativeChatSessionOptionDefaults(settings?.nativeChatSessionOptions, agent)
+            ? resolveInitialNativeChatSessionOptions(
+                {
+                  experimentalNativeChat: settings?.experimentalNativeChat,
+                  openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
+                  nativeChatSessionOptions: settings?.nativeChatSessionOptions
+                },
+                {
+                  agent,
+                  ...(folderLaunchDraftText
+                    ? { promptDelivery: 'draft' as const, launchDraftText: folderLaunchDraftText }
+                    : {}),
+                  nativeChatTranscriptIsLocalReadable:
+                    isNativeChatTranscriptLocalReadable(folderTargetConnectionId)
+                }
+              )
             : undefined,
           terminalWindowsShell: settings?.terminalWindowsShell,
           isRemote: folderTargetIsRemote,
@@ -3332,6 +3518,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           })
         }
       } catch (error) {
+        if (isSubmissionCancelled()) {
+          return
+        }
         const formattedError = formatWorkspaceCreateError(error)
         setCreateError(formattedError)
         toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
@@ -3344,9 +3533,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       createFolderWorkspace,
       disabledTuiAgents,
       folderCreateDisabled,
+      folderTargetConnectionId,
       folderTargetIsRemote,
       folderTargetRuntimeEnvironmentId,
       folderSourceRepos.length,
+      isSubmissionCancelled,
       linkedWorkItem,
       name,
       note,
@@ -3358,7 +3549,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      settings?.experimentalNativeChat,
       settings?.nativeChatSessionOptions,
+      settings?.openAgentTabsInChatByDefault,
       settings?.terminalWindowsShell,
       taskSourceContext,
       telemetrySource
@@ -3399,7 +3592,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCreateError(null)
     setCreating(true)
     try {
-      const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
+      const smartGitHubSettlement = await settleComposerSubmit(
+        resolvePendingSmartGitHubSubmit(),
+        isSubmissionCancelled
+      )
+      if (smartGitHubSettlement.status === 'cancelled') {
+        return
+      }
+      const smartGitHubResolution = smartGitHubSettlement.value
       const submitLinkedWorkItem =
         smartGitHubResolution.kind === 'none'
           ? linkedWorkItem
@@ -3502,20 +3702,56 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         issueCommandTemplate.length > 0 &&
         !submitShouldApplyLinkedOnlyTemplate
 
-      const setupTrustDecision = selectedRepoIsGit
-        ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
-        : 'skip'
+      const setupTrustSettlement = await settleComposerSubmit(
+        selectedRepoIsGit
+          ? ensureHooksConfirmed(
+              useAppStore.getState(),
+              repoId,
+              'setup',
+              selectedRepoExecutionHostId ?? undefined,
+              undefined,
+              isSubmissionCancelled
+            )
+          : Promise.resolve<'skip'>('skip'),
+        isSubmissionCancelled
+      )
+      if (setupTrustSettlement.status === 'cancelled') {
+        return
+      }
+      const setupTrustDecision = setupTrustSettlement.value
       const effectiveSetupDecision: SetupDecision =
         setupTrustDecision === 'skip'
           ? 'skip'
           : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
 
       let issueCommandTrustDecision: 'run' | 'skip' = 'run'
-      if (selectedRepoIsGit && submitShouldRunIssueAutomation) {
-        issueCommandTrustDecision =
-          setupTrustDecision === 'skip'
-            ? 'skip'
-            : await ensureHooksConfirmed(useAppStore.getState(), repoId, 'issueCommand')
+      let confirmedIssueCommandTemplate = issueCommandTemplate
+      if (
+        selectedRepoIsGit &&
+        submitShouldRunIssueAutomation &&
+        currentIssueCommand &&
+        selectedRepoExecutionHostId
+      ) {
+        if (setupTrustDecision === 'skip') {
+          issueCommandTrustDecision = 'skip'
+        } else {
+          const issueCommandSettlement = await settleComposerSubmit(
+            confirmRuntimeIssueCommandRead(
+              useAppStore.getState(),
+              repoId,
+              selectedRepoExecutionHostId,
+              currentIssueCommand,
+              isSubmissionCancelled
+            ),
+            isSubmissionCancelled
+          )
+          if (issueCommandSettlement.status === 'cancelled') {
+            return
+          }
+          const confirmed = issueCommandSettlement.value
+          issueCommandTrustDecision = confirmed.trustDecision
+          confirmedIssueCommandTemplate = confirmed.template
+        }
       }
 
       const linkedLinearIssue =
@@ -3559,9 +3795,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
-        sessionOptions: resolveNativeChatSessionOptionDefaults(
-          settings?.nativeChatSessionOptions,
-          tuiAgent
+        sessionOptions: resolveInitialNativeChatSessionOptions(
+          {
+            experimentalNativeChat: settings?.experimentalNativeChat,
+            openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
+            nativeChatSessionOptions: settings?.nativeChatSessionOptions
+          },
+          {
+            agent: tuiAgent,
+            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+              selectedRepo.connectionId
+            )
+          }
         ),
         platform: selectedRepoAgentLaunchPlatform,
         shell: selectedRepoStartupShell,
@@ -3589,13 +3834,23 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               telemetry: composerTelemetry
             }
           : undefined
-      if (!(await persistSetupAgentStartupPolicy())) {
+      const startupPolicySettlement = await settleComposerSubmit(
+        persistSetupAgentStartupPolicy(),
+        isSubmissionCancelled
+      )
+      if (startupPolicySettlement.status === 'cancelled') {
+        return
+      }
+      if (!startupPolicySettlement.value) {
         throw new Error(
           translate(
             'auto.hooks.useComposerState.setupAgentStartupPolicySaveFailed',
             'Failed to save setup startup behavior.'
           )
         )
+      }
+      if (isSubmissionCancelled()) {
+        return
       }
       const result = await createWorktree(
         repoId,
@@ -3630,7 +3885,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitCompareBaseRef,
         {
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
-          linkedTaskSourceContext: taskSourceContext
+          linkedTaskSourceContext: taskSourceContext,
+          ...(!backendStartup && startupPlan?.draftPrompt
+            ? { startupDraft: startupPlan.draftPrompt }
+            : {})
         }
       )
       const worktree = result.worktree
@@ -3642,7 +3900,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const issueCommand =
         submitShouldRunIssueAutomation && issueCommandTrustDecision === 'run'
           ? {
-              command: renderIssueCommandTemplate(issueCommandTemplate, {
+              command: renderIssueCommandTemplate(confirmedIssueCommandTemplate, {
                 issueNumber: submitLinkedIssueNumber,
                 artifactUrl: submitLinkedWorkItem?.url ?? null
               })
@@ -3658,6 +3916,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         issueCommand,
+        ...(backendSpawnedStartup ? { backendStartupTerminalSpawned: true } : {}),
         ...(startupPlan && !backendSpawnedStartup
           ? {
               startup: {
@@ -3704,6 +3963,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       onCreated?.()
       queueWorkspaceActivationTerminalFocus(worktree.id, activation)
     } catch (error) {
+      if (isSubmissionCancelled()) {
+        return
+      }
       const formattedError = formatWorkspaceCreateError(error)
       setCreateError(formattedError)
       toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
@@ -3719,9 +3981,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     clearNewWorkspaceDraft,
     compareBaseRef,
     createWorktree,
+    currentIssueCommand,
     applyWorktreeMeta,
     enableIssueAutomation,
     issueCommandTemplate,
+    isSubmissionCancelled,
     effectiveLinkedPR,
     hasLoadedIssueCommand,
     linkedGitLabIssue,
@@ -3742,6 +4006,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     resolvedInitialWorkspaceStatus,
     selectedRepo,
     selectedRepoAgentLaunchPlatform,
+    selectedRepoExecutionHostId,
     selectedRepoIsRemote,
     selectedRepoStartupShell,
     selectedRepoIsGit,
@@ -3751,7 +4016,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     settings?.agentDefaultArgs,
     settings?.agentDefaultEnv,
     settings?.autoRenameBranchFromWork,
+    settings?.experimentalNativeChat,
     settings?.nativeChatSessionOptions,
+    settings?.openAgentTabsInChatByDefault,
     smartNameMode,
     setSidebarOpen,
     setupDecision,
@@ -3823,10 +4090,46 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
 
+      const workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'] =
+        selectedWorkspaceTarget.status === 'ready'
+          ? {
+              kind: 'workspace-run',
+              projectId: selectedWorkspaceTarget.target.projectId,
+              hostId: selectedWorkspaceTarget.target.hostId,
+              projectHostSetupId: selectedWorkspaceTarget.target.projectHostSetupId,
+              repoId: selectedWorkspaceTarget.target.repoId,
+              path: selectedWorkspaceTarget.target.repo.path
+            }
+          : null
+      const liveStore = useAppStore.getState()
+      const pendingCreationId = findPendingLinkedWorkItemCreationId(
+        liveStore.pendingWorktreeCreations,
+        {
+          repoId,
+          ...(parsedLinkedIssueNumber != null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
+          ...(effectiveLinkedPR != null ? { linkedPR: effectiveLinkedPR } : {}),
+          workspaceRunContext
+        }
+      )
+      if (pendingCreationId) {
+        liveStore.setActivePendingWorktreeCreation(pendingCreationId)
+        liveStore.setActiveView('terminal')
+        liveStore.setSidebarOpen(true)
+        onCreated?.()
+        return
+      }
+
       setCreateError(null)
       setCreating(true)
       try {
-        const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
+        const smartGitHubSettlement = await settleComposerSubmit(
+          resolvePendingSmartGitHubSubmit(),
+          isSubmissionCancelled
+        )
+        if (smartGitHubSettlement.status === 'cancelled') {
+          return
+        }
+        const smartGitHubResolution = smartGitHubSettlement.value
         const submitLinkedWorkItem =
           smartGitHubResolution.kind === 'none'
             ? linkedWorkItem
@@ -3895,14 +4198,25 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
         let submitSetupConfig = setupConfig
         let submitResolvedSetupDecision = resolvedSetupDecision
-        if (selectedRepoIsGit && checkedHooksRepoId !== repoId) {
+        if (
+          selectedRepoIsGit &&
+          selectedRepoHookContextKey &&
+          checkedHooksContextKey !== selectedRepoHookContextKey
+        ) {
           let hookCheck: HookCheckResult
           try {
-            hookCheck = await loadHookCheckForRepo(repoId)
+            const hookCheckSettlement = await settleComposerSubmit(
+              loadHookCheckForRepo(repoId),
+              isSubmissionCancelled
+            )
+            if (hookCheckSettlement.status === 'cancelled') {
+              return
+            }
+            hookCheck = hookCheckSettlement.value
           } catch {
             hookCheck = { hasHooks: false, hooks: null, mayNeedUpdate: false }
           }
-          if (!commitHookCheckIfCurrent(repoId, hookCheck.hooks)) {
+          if (!commitHookCheckIfCurrent(selectedRepoHookContextKey, hookCheck.hooks)) {
             return
           }
           submitSetupConfig = getSetupConfig(selectedRepo, hookCheck.hooks)
@@ -3919,9 +4233,23 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           return
         }
 
-        const trustDecision = selectedRepoIsGit
-          ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
-          : 'skip'
+        const setupTrustSettlement = await settleComposerSubmit(
+          selectedRepoIsGit
+            ? ensureHooksConfirmed(
+                useAppStore.getState(),
+                repoId,
+                'setup',
+                selectedRepoExecutionHostId ?? undefined,
+                undefined,
+                isSubmissionCancelled
+              )
+            : Promise.resolve<'skip'>('skip'),
+          isSubmissionCancelled
+        )
+        if (setupTrustSettlement.status === 'cancelled') {
+          return
+        }
+        const trustDecision = setupTrustSettlement.value
         const effectiveSetupDecision: SetupDecision =
           trustDecision === 'skip'
             ? 'skip'
@@ -3930,6 +4258,50 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const submitLinkedWorkItemProvider = submitLinkedWorkItem
           ? getLinkedWorkItemProvider(submitLinkedWorkItem)
           : null
+        const shouldReadIssueCommand =
+          enableIssueAutomation &&
+          selectedRepoIsGit &&
+          submitLinkedIssueNumber !== null &&
+          canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider)
+        let submitIssueCommandTemplate = ''
+        let issueCommandTrustDecision: 'run' | 'skip' = 'skip'
+        if (
+          shouldReadIssueCommand &&
+          trustDecision !== 'skip' &&
+          selectedRepoExecutionHostId &&
+          selectedRepoHookContextKey
+        ) {
+          const issueCommandSettlement = await settleComposerSubmit(
+            readAndConfirmRuntimeIssueCommand(
+              useAppStore.getState(),
+              repoId,
+              selectedRepoExecutionHostId,
+              isSubmissionCancelled
+            ),
+            isSubmissionCancelled
+          )
+          if (issueCommandSettlement.status === 'cancelled') {
+            return
+          }
+          const confirmedIssueCommand = issueCommandSettlement.value
+          submitIssueCommandTemplate = confirmedIssueCommand.template
+          issueCommandTrustDecision = confirmedIssueCommand.trustDecision
+          setLoadedIssueCommand({
+            contextKey: selectedRepoHookContextKey,
+            result: confirmedIssueCommand.result
+          })
+        }
+        const issueCommandInput = {
+          enabled: enableIssueAutomation && selectedRepoIsGit,
+          provider: submitLinkedWorkItemProvider,
+          issueNumber: submitLinkedIssueNumber,
+          template: submitIssueCommandTemplate,
+          artifactUrl: submitLinkedWorkItem?.url ?? null
+        }
+        const issueCommand = buildTrustedComposerIssueCommand({
+          ...issueCommandInput,
+          trustDecision: issueCommandTrustDecision
+        })
         const linkedLinearIssue =
           submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
             ? submitLinkedWorkItem.linearIdentifier
@@ -3951,11 +4323,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           createBranchFromWorkspaceName:
             smartGitHubResolution.kind === 'none' && smartNameMode === 'branches'
         })
-        const submitBaseBranch = selectedRepoIsGit
-          ? await resolveWorktreeCreateBaseBranch({
-              explicitBaseBranch: smartSubmitBaseBranch
-            })
-          : undefined
+        const baseBranchSettlement = await settleComposerSubmit(
+          selectedRepoIsGit
+            ? resolveWorktreeCreateBaseBranch({ explicitBaseBranch: smartSubmitBaseBranch })
+            : Promise.resolve(undefined),
+          isSubmissionCancelled
+        )
+        if (baseBranchSettlement.status === 'cancelled') {
+          return
+        }
+        const submitBaseBranch = baseBranchSettlement.value
         const createDisplayName =
           smartGitHubResolution.kind === 'none'
             ? nameIsAutoManaged
@@ -3975,6 +4352,25 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
         const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
           resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+        const quickSessionOptions =
+          agent === null
+            ? undefined
+            : resolveInitialNativeChatSessionOptions(
+                {
+                  experimentalNativeChat: settings?.experimentalNativeChat,
+                  openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
+                  nativeChatSessionOptions: settings?.nativeChatSessionOptions
+                },
+                {
+                  agent,
+                  ...(quickDraftPrompt
+                    ? { promptDelivery: 'draft' as const, launchDraftText: quickDraftPrompt }
+                    : {}),
+                  nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                    selectedRepo.connectionId
+                  )
+                }
+              )
         const draftLaunchPlan =
           agent === null || !quickDraftPrompt
             ? null
@@ -3984,10 +4380,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
                 agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
                 agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
-                sessionOptions: resolveNativeChatSessionOptionDefaults(
-                  settings?.nativeChatSessionOptions,
-                  agent
-                ),
+                sessionOptions: quickSessionOptions,
                 platform: selectedRepoAgentLaunchPlatform,
                 shell: selectedRepoStartupShell,
                 isRemote: selectedRepoIsRemote
@@ -4016,10 +4409,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             cmdOverrides: settings?.agentCmdOverrides ?? {},
             agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
             agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
-            sessionOptions: resolveNativeChatSessionOptionDefaults(
-              settings?.nativeChatSessionOptions,
-              agent
-            ),
+            sessionOptions: quickSessionOptions,
             platform: selectedRepoAgentLaunchPlatform,
             shell: selectedRepoStartupShell,
             isRemote: selectedRepoIsRemote,
@@ -4052,7 +4442,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
               }
             : undefined
-        if (!(await persistSetupAgentStartupPolicy())) {
+        const startupPolicySettlement = await settleComposerSubmit(
+          persistSetupAgentStartupPolicy(),
+          isSubmissionCancelled
+        )
+        if (startupPolicySettlement.status === 'cancelled') {
+          return
+        }
+        if (!startupPolicySettlement.value) {
           throw new Error(
             translate(
               'auto.hooks.useComposerState.setupAgentStartupPolicySaveFailed',
@@ -4060,32 +4457,35 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             )
           )
         }
-        let creationWorkspaceRunContext: WorktreeCreationRequest['workspaceRunContext'] =
-          selectedWorkspaceTarget.status === 'ready'
-            ? {
-                kind: 'workspace-run',
-                projectId: selectedWorkspaceTarget.target.projectId,
-                hostId: selectedWorkspaceTarget.target.hostId,
-                projectHostSetupId: selectedWorkspaceTarget.target.projectHostSetupId,
-                repoId: selectedWorkspaceTarget.target.repoId,
-                path: selectedWorkspaceTarget.target.repo.path
-              }
-            : null
         let ephemeralVmRecipe: WorktreeCreationRequest['ephemeralVmRecipe']
         const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null
         if (activeEphemeralVmRecipeId && selectedWorkspaceTarget.status === 'ready') {
-          const vmRecipeTrustDecision = await ensureHooksConfirmed(
-            useAppStore.getState(),
-            repoId,
-            'vmRecipe'
+          const vmRecipeTrustSettlement = await settleComposerSubmit(
+            ensureHooksConfirmed(
+              useAppStore.getState(),
+              repoId,
+              'vmRecipe',
+              selectedRepoExecutionHostId ?? undefined,
+              undefined,
+              isSubmissionCancelled
+            ),
+            isSubmissionCancelled
           )
+          if (vmRecipeTrustSettlement.status === 'cancelled') {
+            return
+          }
+          const vmRecipeTrustDecision = vmRecipeTrustSettlement.value
           if (vmRecipeTrustDecision === 'skip') {
             return
           }
+          const selectedRecipe = ephemeralVmRecipes.find(
+            (recipe) => recipe.id === activeEphemeralVmRecipeId
+          )
           ephemeralVmRecipe = {
             sourceRepoId: repoId,
             recipeId: activeEphemeralVmRecipeId,
-            projectId: selectedWorkspaceTarget.target.projectId
+            projectId: selectedWorkspaceTarget.target.projectId,
+            ...(selectedRecipe?.checkoutMode ? { checkoutMode: selectedRecipe.checkoutMode } : {})
           }
         }
 
@@ -4100,9 +4500,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ...(taskSourceContext ? { taskSourceContext } : {}),
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
-          ...(creationWorkspaceRunContext
-            ? { workspaceRunContext: creationWorkspaceRunContext }
-            : {}),
+          ...(workspaceRunContext ? { workspaceRunContext } : {}),
           name: workspaceName,
           ...(createDisplayName ? { displayName: createDisplayName } : {}),
           ...(selectedRepoIsGit && submitBaseBranch ? { baseBranch: submitBaseBranch } : {}),
@@ -4141,6 +4539,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? { linkedGitLabIssue }
             : {}),
           ...(backendStartup ? { startup: backendStartup } : {}),
+          ...(issueCommand ? { issueCommand } : {}),
           pendingFirstAgentMessageRename,
           note: trimmedNote,
           startupPlan,
@@ -4151,6 +4550,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
 
         // Why: git fetch + `git worktree add` can take 10–15s; run in the background so the modal isn't frozen.
+        if (isSubmissionCancelled()) {
+          return
+        }
         if (persistDraft) {
           clearNewWorkspaceDraft()
         }
@@ -4162,6 +4564,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           onCreated?.()
         }
       } catch (error) {
+        if (isSubmissionCancelled()) {
+          return
+        }
         const formattedError = formatWorkspaceCreateError(error)
         setCreateError(formattedError)
         toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
@@ -4177,6 +4582,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       clearNewWorkspaceDraft,
       fallbackCreatureName,
       effectiveLinkedPR,
+      enableIssueAutomation,
+      isSubmissionCancelled,
       linkedGitLabIssue,
       linkedGitLabMR,
       linkedPR,
@@ -4196,6 +4603,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       resolvedInitialWorkspaceStatus,
       selectedRepo,
       selectedRepoAgentLaunchPlatform,
+      selectedRepoExecutionHostId,
       selectedRepoIsRemote,
       selectedRepoStartupShell,
       selectedRepoIsGit,
@@ -4209,7 +4617,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      settings?.experimentalNativeChat,
       settings?.nativeChatSessionOptions,
+      settings?.openAgentTabsInChatByDefault,
       smartNameMode,
       sourceIntentBlocksCreate,
       disabledTuiAgents,
@@ -4219,11 +4629,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       effectivePresetId,
       telemetrySource,
       taskSourceContext,
-      checkedHooksRepoId,
+      checkedHooksContextKey,
       commitHookCheckIfCurrent,
       loadHookCheckForRepo,
       setupConfig,
       setupPolicy,
+      selectedRepoHookContextKey,
+      ephemeralVmRecipes,
       isProjectGroupTarget,
       submitFolderTarget,
       createMultiple,

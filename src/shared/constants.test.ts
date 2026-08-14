@@ -27,6 +27,11 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
   })
 
+  it('defaults mobile pairing to discovered network addresses', () => {
+    expect(getDefaultSettings('/tmp').mobilePairingCustomAddress).toBeNull()
+    expect(getDefaultSettings('/tmp').mobilePairingCustomAddresses).toEqual([])
+  })
+
   it('keeps first-work branch auto-renaming on by default for new settings', () => {
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWork).toBe(true)
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWorkDefaultedOn).toBe(true)
@@ -62,6 +67,10 @@ describe('getDefaultSettings', () => {
 
   it('defaults the menu bar icon on so the value round-trips across platforms', () => {
     expect(getDefaultSettings('/tmp').showMenuBarIcon).toBe(true)
+  })
+
+  it('shows terminal link actions by default', () => {
+    expect(getDefaultSettings('/tmp').terminalLinkActionPopoverEnabled).toBe(true)
   })
 
   it('confirms before closing pinned tabs by default', () => {
@@ -103,8 +112,8 @@ describe('getDefaultSettings', () => {
   })
 
   it('keeps the agent dashboard popout disabled by default', () => {
-    expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBe(false)
-    expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBe(false)
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBeUndefined()
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBeUndefined()
   })
 
   it('routes fresh Codex profiles through the real-home rollout by default', () => {})

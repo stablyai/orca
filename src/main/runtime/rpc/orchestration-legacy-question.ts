@@ -17,7 +17,7 @@ export async function handleLegacyAsk(args: {
   request: RpcRequest
   params: LegacyAskParams
   signal?: AbortSignal
-}): Promise<unknown | undefined> {
+}): Promise<unknown> {
   const { runtime, authority, request, params, signal } = args
   const dispatch = authority.resolveAskDispatch(request, params)
   if (!dispatch || dispatch.contract_version !== LEGACY_CONTRACT_VERSION) {

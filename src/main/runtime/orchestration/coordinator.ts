@@ -4,11 +4,20 @@ import type { MessageRow, TaskRow, CoordinatorStatus } from './types'
 import { buildDispatchPreamble } from './preamble'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 
+type WorktreeDrift = {
+  base: string
+  behind: number
+  recentSubjects: string[]
+} | null
+
+type TaskDispatchResult = 'dispatched' | 'stale-base-refused'
+
 export type CoordinatorRuntime = {
   sendTerminalAgentPrompt(handle: string, prompt: string): Promise<unknown>
   listTerminals(
     worktreeSelector?: string,
-    limit?: number
+    limit?: number,
+    opts?: { includeVisualLayouts?: boolean }
   ): Promise<{
     terminals: { handle: string; worktreeId: string; connected: boolean; writable: boolean }[]
   }>
@@ -21,13 +30,15 @@ export type CoordinatorRuntime = {
     options?: { condition?: string; timeoutMs?: number }
   ): Promise<{ handle: string; condition: string }>
   // Why (§3.1): lives on the runtime because it must resolve a worktree, load the repo, and fetch — the coordinator only knows handles + specs.
-  probeWorktreeDrift(worktreeSelector: string): Promise<{
-    base: string
-    behind: number
-    recentSubjects: string[]
-  } | null>
-  // Why: optional so lightweight runtime fakes keep compiling; when present, dispatch records the assignee's remint-stable pane identity.
+  probeWorktreeDrift(worktreeSelector: string): Promise<WorktreeDrift>
+  // Why: pane-only fallback preserves reservation identity for lightweight runtime fakes.
   getTerminalPaneKey?(handle: string): string | null
+  // Why: automatic dispatch persists the same authenticated pane/process tuple as manual dispatch.
+  getOrchestrationDispatchAuthority?(handle: string): {
+    paneKey: string | null
+    processIncarnation: string | null
+    launchTokenHash: string | null
+  } | null
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
 }
@@ -372,6 +383,14 @@ export class Coordinator {
       }
     }
 
+    // Why: every task in one tick dispatches from the same fetched base snapshot.
+    const baseDrift = this.opts.worktree
+      ? await this.runtime.probeWorktreeDrift(this.opts.worktree).catch((err) => {
+          this.opts.onLog(`probeWorktreeDrift failed for ${this.opts.worktree}: ${err}`)
+          return null
+        })
+      : null
+
     for (const task of readyTasks) {
       if (slotsAvailable <= 0 || terminals.length === 0) {
         break
@@ -381,48 +400,53 @@ export class Coordinator {
       slotsAvailable--
 
       try {
-        await this.dispatchTask(task, targetHandle)
+        const result = await this.dispatchTask(task, targetHandle, baseDrift)
+        if (result === 'stale-base-refused') {
+          terminals.unshift(targetHandle)
+          slotsAvailable++
+        }
       } catch (err) {
         this.opts.onLog(`Failed to dispatch task ${task.id}: ${String(err)}`)
       }
     }
   }
 
-  private async dispatchTask(task: TaskRow, targetHandle: string): Promise<void> {
+  private async dispatchTask(
+    task: TaskRow,
+    targetHandle: string,
+    baseDrift: WorktreeDrift
+  ): Promise<TaskDispatchResult> {
     // Why (§3.1): drift check runs before createDispatchContext so a refusal doesn't bump failure_count (carried forward as MAX in db.ts:301-306) and burn the circuit-breaker budget; the task stays `ready` and retries next tick.
     const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(task.spec)
-    let baseDrift: {
-      base: string
-      behind: number
-      recentSubjects: string[]
-    } | null = null
 
     if (!this.opts.worktree) {
       // Why (§7.4): worktree is optional; with none we can't probe drift, so log that the guard is inert and proceed.
       this.opts.onLog(`stale-base guard inert for ${task.id}: coordinator has no worktree selector`)
-    } else {
-      baseDrift = await this.runtime.probeWorktreeDrift(this.opts.worktree).catch((err) => {
-        this.opts.onLog(`probeWorktreeDrift failed for ${this.opts.worktree}: ${err}`)
-        return null
-      })
-
-      if (baseDrift && baseDrift.behind > DISPATCH_STALE_THRESHOLD && !allowStale) {
-        // Why (§3.1): silent-return, not failDispatch — failing a recoverable stale-base here would burn the circuit-breaker budget.
-        this.opts.onLog(
-          `Skipping dispatch of ${task.id}: worktree is ${baseDrift.behind} commits ` +
-            `behind ${baseDrift.base}. Pull/rebase the worktree, recreate it with ` +
-            `--base-branch ${baseDrift.base}, or include 'allow-stale-base: true' ` +
-            `in the task spec to override. Task remains in 'ready'; coordinator ` +
-            `will retry on the next tick.`
-        )
-        return
-      }
+    } else if (baseDrift && baseDrift.behind > DISPATCH_STALE_THRESHOLD && !allowStale) {
+      // Why (§3.1): silent-return, not failDispatch — failing a recoverable stale-base here would burn the circuit-breaker budget.
+      this.opts.onLog(
+        `Skipping dispatch of ${task.id}: worktree is ${baseDrift.behind} commits ` +
+          `behind ${baseDrift.base}. Pull/rebase the worktree, recreate it with ` +
+          `--base-branch ${baseDrift.base}, or include 'allow-stale-base: true' ` +
+          `in the task spec to override. Task remains in 'ready'; coordinator ` +
+          `will retry on the next tick.`
+      )
+      return 'stale-base-refused'
     }
 
+    const dispatchAuthority = this.runtime.getOrchestrationDispatchAuthority?.(targetHandle)
+    const assigneePaneKey =
+      dispatchAuthority?.paneKey ?? this.runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
+    const processIncarnation =
+      dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
+        ? dispatchAuthority.processIncarnation
+        : undefined
     const dispatch = this.db.createDispatchContext(
       task.id,
       targetHandle,
-      this.runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
+      assigneePaneKey,
+      dispatchAuthority?.launchTokenHash ?? undefined,
+      processIncarnation
     )
 
     // Why: dispatched agents use orca-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).
@@ -464,11 +488,14 @@ export class Coordinator {
 
     this.opts.onLog(`Dispatched task ${task.id} to ${targetHandle}`)
     this.state.phase = 'monitoring'
+    return 'dispatched'
   }
 
   private async getAvailableTerminals(): Promise<string[]> {
     try {
-      const result = await this.runtime.listTerminals(this.opts.worktree)
+      const result = await this.runtime.listTerminals(this.opts.worktree, undefined, {
+        includeVisualLayouts: false
+      })
       const dispatched = this.db.listTasks({ status: 'dispatched' })
       const busyHandles = new Set<string>()
 

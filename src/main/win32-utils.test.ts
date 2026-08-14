@@ -82,6 +82,55 @@ describe('getSpawnArgsForWindows', () => {
     }
   })
 
+  it('routes GUI Open In .cmd launches through start /B with an inner cmd /c', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+        'C:\\Tools\\idea.cmd',
+        ['C:\\workspaces\\orca'],
+        { detachedGui: true }
+      )
+      expect(spawnCmd).toBe(getCmdExePath())
+      // Why: `start` runs a batch target under a nested `cmd /K` that never
+      // exits; the inner `cmd /d /c` is what keeps the hidden shell from leaking.
+      // Title is empty string so libuv emits `""` — not the two-char `'""'`.
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        'start',
+        '',
+        '/B',
+        getCmdExePath(),
+        '/d',
+        '/c',
+        'C:\\Tools\\idea.cmd',
+        'C:\\workspaces\\orca'
+      ])
+      expect(spawnArgs[3]).toBe('')
+      expect(spawnArgs).not.toContain('/K')
+      expect(spawnArgs).not.toContain('""')
+      expect(spawnArgs[spawnArgs.indexOf('/B') + 1]).not.toMatch(/\.(?:cmd|bat)$/i)
+    })
+  })
+
+  it('keeps the waiting form for batch launches without detachedGui', () => {
+    withPlatform('win32', () => {
+      const { spawnArgs } = getSpawnArgsForWindows('C:\\Tools\\idea.cmd', ['C:\\workspaces\\orca'])
+      expect(spawnArgs).toEqual(['/d', '/c', 'C:\\Tools\\idea.cmd', 'C:\\workspaces\\orca'])
+    })
+  })
+
+  it('leaves .exe GUI launches alone even when detachedGui is requested', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+        'C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin\\idea64.exe',
+        ['C:\\workspaces\\orca'],
+        { detachedGui: true }
+      )
+      expect(spawnCmd).toBe('C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin\\idea64.exe')
+      expect(spawnArgs).toEqual(['C:\\workspaces\\orca'])
+    })
+  })
+
   it('preserves VS Code WSL remote arguments with spaces through .cmd launchers', () => {
     withPlatform('win32', () => {
       const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('C:\\tools\\code.cmd', [

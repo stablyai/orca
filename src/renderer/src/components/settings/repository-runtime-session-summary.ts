@@ -1,5 +1,5 @@
 import type { AppState } from '../../store/types'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
 export type ProjectRuntimeSessionSummary = {
   liveTerminalCount: number

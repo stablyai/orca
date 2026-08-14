@@ -2,17 +2,15 @@
 comment operations keeps the shared acquire/release + error-classification
 pattern obvious. Each function is short; the file is long because the
 surface is broad. */
+import type { ClassifiedError } from '../../shared/classified-error'
+import type { GitHubCommentResult, PRComment } from '../../shared/github/comment-types'
+import type { GitHubAssignableUser, IssueInfo } from '../../shared/github/pull-request-types'
 import type {
-  ClassifiedError,
-  GitHubAssignableUser,
   GitHubCreateIssueFields,
   GitHubCreateIssueResult,
-  GitHubCommentResult,
-  GitHubIssueUpdate,
-  IssueInfo,
-  IssueSourcePreference,
-  PRComment
-} from '../../shared/types'
+  GitHubIssueUpdate
+} from '../../shared/issue-mutation-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapIssueInfo } from './mappers'
 import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
 import {
@@ -87,7 +85,7 @@ export async function getIssue(
     }
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
-      ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels'],
+      ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels,body'],
       ghOptions
     )
     const data = JSON.parse(stdout)
@@ -473,6 +471,7 @@ export async function addIssueComment(
     )
     const data = JSON.parse(stdout) as {
       id?: number
+      node_id?: string | null
       user: { login: string; avatar_url: string; type?: string } | null
       body?: string
       created_at?: string
@@ -483,6 +482,7 @@ export async function addIssueComment(
     }
     const comment: PRComment = {
       id: data.id,
+      reactionSubjectId: data.node_id?.trim() || undefined,
       author: data.user?.login ?? 'You',
       authorAvatarUrl: data.user?.avatar_url ?? '',
       body: data.body ?? body,

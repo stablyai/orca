@@ -3,7 +3,8 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 
 vi.mock('../../store', () => ({
@@ -13,6 +14,28 @@ vi.mock('../../store', () => ({
 
 vi.mock('./BaseRefPicker', () => ({
   BaseRefPicker: () => null
+}))
+
+vi.mock('../ui/select', () => ({
+  Select: ({
+    value,
+    onValueChange,
+    children
+  }: {
+    value: string
+    onValueChange: (value: string) => void
+    children: React.ReactNode
+  }) => (
+    <select value={value} onChange={(event) => onValueChange(event.currentTarget.value)}>
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => (
+    <option value={value}>{children}</option>
+  )
 }))
 
 const BASE_REPO: Repo = {
@@ -39,13 +62,21 @@ afterEach(() => {
   container.remove()
 })
 
-function render(repo: Repo, updateRepo: (repoId: string, updates: object) => void): void {
+function render(
+  repo: Repo,
+  updateRepo: (repoId: string, updates: object) => void | Promise<boolean>,
+  options: {
+    settings?: Pick<GlobalSettings, 'workspaceDir' | 'worktreeVisibilityDefaults'> | null
+    refreshRepo?: (repoId: string) => void | Promise<unknown>
+  } = {}
+): void {
   act(() => {
     root.render(
       React.createElement(RepositoryWorktreeDefaultsSection, {
         repo,
-        settings: null,
+        settings: options.settings ?? null,
         updateRepo,
+        refreshRepo: options.refreshRepo ?? (() => {}),
         forceVisible: true
       })
     )
@@ -139,5 +170,56 @@ describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
     blurInput(input)
 
     expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: undefined })
+  })
+})
+
+describe('RepositoryWorktreeDefaultsSection — external visibility', () => {
+  it('shows the inherited effective value without stamping the repo', () => {
+    render(BASE_REPO, vi.fn(), {
+      settings: {
+        workspaceDir: '/home/user/orca/workspaces',
+        worktreeVisibilityDefaults: { external: 'show' }
+      }
+    })
+
+    expect(container.textContent).toContain('Using global: Show')
+    expect(container.querySelector('select')?.value).toBe('global')
+  })
+
+  it('clears the override with the remote-safe null sentinel and refreshes classification', async () => {
+    const updateRepo = vi.fn().mockResolvedValue(true)
+    const refreshRepo = vi.fn().mockResolvedValue(true)
+    render({ ...BASE_REPO, externalWorktreeVisibility: 'show' }, updateRepo, { refreshRepo })
+
+    await act(async () => {
+      const select = container.querySelector('select')!
+      select.value = 'global'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(updateRepo).toHaveBeenCalledWith('repo-1', { externalWorktreeVisibility: null })
+    expect(refreshRepo).toHaveBeenCalledWith('repo-1')
+  })
+
+  it('falls back to the effective explicit value when an older host rejects inheritance', async () => {
+    const updateRepo = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    render(
+      {
+        ...BASE_REPO,
+        externalWorktreeVisibility: 'show',
+        externalWorktreeVisibilityLegacy: false
+      },
+      updateRepo
+    )
+
+    await act(async () => {
+      const select = container.querySelector('select')!
+      select.value = 'global'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(updateRepo).toHaveBeenNthCalledWith(2, 'repo-1', {
+      externalWorktreeVisibility: 'show'
+    })
   })
 })

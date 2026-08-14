@@ -8,7 +8,7 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from './project-groups'
-import type { Repo } from './types'
+import type { Repo } from './repo-types'
 
 function repo(overrides: Partial<Repo>): Repo {
   return {

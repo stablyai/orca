@@ -221,16 +221,97 @@ describe('orchestration skill guidance', () => {
     expect(skill).toContain('the named owner edits files and creates the PR')
   })
 
-  it('keeps worker_done post-completion guidance idle instead of polling', () => {
+  it('keeps post-completion workers idle without subordinating the user', () => {
     const skill = readSkill()
     const agentGuidance = getSection(skill, 'Agent Guidance')
 
-    expect(agentGuidance).toContain('After sending `worker_done`, end your turn')
+    expect(agentGuidance).toContain('After sending `worker_done`, end that dispatched turn')
     expect(agentGuidance).toContain('idle at the agent prompt')
-    expect(agentGuidance).toContain('Do not poll or keep calling `orca orchestration check`')
-    expect(agentGuidance).toContain('fresh preamble + TASK block delivered as new terminal input')
+    expect(agentGuidance).toContain('Do not autonomously start more work, poll')
+    expect(agentGuidance).toContain('A direct user instruction takes precedence')
+    expect(agentGuidance).toContain('follow it without coordinator approval or a fresh Dispatch')
+    expect(agentGuidance).toContain('never refuse it because of worker/coordinator roles')
+    expect(agentGuidance).toContain("do not reuse the settled Dispatch's lifecycle IDs")
+    expect(agentGuidance).toContain(
+      'A coordinator-supervised follow-up still arrives with a fresh preamble + TASK block'
+    )
     expect(skill).not.toContain('post-completion polling messages')
     expect(skill).not.toContain('every 2 minutes')
+  })
+
+  it('makes settled worker terminal release an explicit coordinator step', () => {
+    const skill = readSkill()
+    const workerLoop = getSection(skill, 'Preferred Supervised Worker Loop')
+    const agentGuidance = getSection(skill, 'Agent Guidance')
+    const nextAction = getSection(skill, 'Next Action')
+
+    expect(workerLoop).toContain(
+      '# Process every message. For each accepted worker_done that is not immediately reused:\n' +
+        'orca orchestration worker-release --dispatch <dispatch_id> --json'
+    )
+    expect(workerLoop).toContain(
+      'Acknowledge only after every message and required release decision is handled'
+    )
+    expect(workerLoop).toContain(
+      'read the `worker.agent_terminal_handle` field of `worker-show --dispatch <dispatch_id> --json`'
+    )
+    expect(workerLoop).toContain(
+      'orca orchestration worker-start --task <next_task_id> --terminal <handle> --json` so Orca ' +
+        'transfers cleanup ownership to the new Dispatch'
+    )
+    expect(workerLoop).toContain(
+      'Run `worker-release` after both succeeded and failed `worker_done` reports unless the user ' +
+        'explicitly asked to keep that worker live.'
+    )
+    expect(workerLoop).toContain('Release is post-completion cleanup, not cancellation')
+    expect(workerLoop).toContain('orca orchestration worker-retain --dispatch <dispatch_id> --json')
+    expect(workerLoop).toContain(
+      'the same Dispatch can be passed to `worker-release`, which clears the requested retention'
+    )
+    expect(agentGuidance).toContain(
+      'Coordinators must account for every settled worker terminal before waiting again or ending ' +
+        'the turn'
+    )
+    expect(agentGuidance).toContain('released workers remain readable through `worker-read`')
+    expect(nextAction).toContain(
+      'After every accepted `worker_done`, either transfer the exact terminal to an immediate ' +
+        'follow-up Dispatch or run `worker-release` before the next wait.'
+    )
+  })
+
+  it('documents per-invocation model and effort for supervised workers', () => {
+    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+
+    expect(workerLoop).toContain('opaque provider model id with `--model`')
+    expect(workerLoop).toContain('`--effort` requires `--model`')
+    expect(workerLoop).toContain('neither option can combine with `--terminal`')
+    expect(workerLoop).toContain('--agent claude --model opus --effort high --json')
+    expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
+  })
+
+  it('never authorizes release from idle, timeout, or worker-side triggers', () => {
+    const skill = readSkill()
+    const workerLoop = getSection(skill, 'Preferred Supervised Worker Loop')
+    const agentGuidance = getSection(skill, 'Agent Guidance')
+
+    // The prohibition sentence is the guard the negative patterns below rely on.
+    expect(workerLoop).toContain(
+      'Do not release a worker because of a timeout, TUI idle state, heartbeat, status, question, ' +
+        'escalation, or rejected/stale `worker_done`.'
+    )
+    expect(workerLoop).toContain(
+      'do not substitute `terminal close`; follow the exact recovery action in the receipt'
+    )
+    expect(skill).not.toMatch(
+      /release[^.]*\bon (?:a |the )?(?:tui-?idle|idle|timeout|heartbeat|question|escalation)\b/iu
+    )
+    expect(skill).not.toMatch(
+      /\b(?:after|on|upon) (?:a |the )?(?:tui-?idle|idle state|timeout|heartbeat)\b[^.]*\brelease/iu
+    )
+    expect(agentGuidance).toContain(
+      'Do not autonomously start more work, poll, or attempt to close the terminal yourself'
+    )
+    expect(agentGuidance).not.toMatch(/worker-release[^.]*\byourself\b/iu)
   })
 
   it('documents @grok in the Messaging group address list', () => {

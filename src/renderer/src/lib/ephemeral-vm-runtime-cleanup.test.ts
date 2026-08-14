@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const listRuntimes = vi.fn()
-const cleanup = vi.fn().mockResolvedValue({})
+const cleanup = vi.fn().mockResolvedValue({ status: 'cleaned' })
 
 // @ts-expect-error -- test shim for the preload bridge
 globalThis.window = { api: { ephemeralVm: { listRuntimes, cleanup } } }
@@ -15,7 +15,7 @@ function runtime(overrides: Record<string, unknown>): Record<string, unknown> {
 describe('cleanupEphemeralVmRuntimesForDeleted', () => {
   beforeEach(() => {
     listRuntimes.mockReset()
-    cleanup.mockClear()
+    cleanup.mockReset().mockResolvedValue({ status: 'cleaned' })
   })
 
   it('cleans runtimes matched by workspace id and returns destroyed SSH target ids', async () => {
@@ -59,6 +59,39 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
 
     expect(cleanup).not.toHaveBeenCalled()
     expect(destroyed).toEqual([])
+  })
+
+  it('retries a completed provider cleanup while its SSH target remains', async () => {
+    listRuntimes.mockResolvedValue([
+      runtime({
+        id: 'rt-1',
+        workspaceId: 'wt-1',
+        status: 'cleanup_failed',
+        cleanupStatus: 'succeeded',
+        sshTargetId: 'runtime-ssh-a'
+      })
+    ])
+    cleanup.mockResolvedValue({ status: 'cleaned', cleanupStatus: 'succeeded' })
+
+    await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
+      ['runtime-ssh-a']
+    )
+    expect(cleanup).toHaveBeenCalledWith({ runtimeId: 'rt-1' })
+  })
+
+  it('does not report a retained SSH target as destroyed', async () => {
+    listRuntimes.mockResolvedValue([
+      runtime({ id: 'rt-1', workspaceId: 'wt-1', sshTargetId: 'runtime-ssh-a' })
+    ])
+    cleanup.mockResolvedValue({
+      status: 'cleanup_failed',
+      cleanupStatus: 'failed',
+      sshTargetId: 'runtime-ssh-a'
+    })
+
+    await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
+      []
+    )
   })
 
   it('swallows listRuntimes failures', async () => {

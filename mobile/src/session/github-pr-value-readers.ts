@@ -1,16 +1,16 @@
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type {
   CheckStatus,
   GitHubAssignableUser,
-  ProviderCheckSummary,
   GitHubPRMergeMethod,
   GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
   GitHubRepositoryIdentity,
-  PRCheckDetail,
   PRMergeableState,
   PRReviewDecision,
-  PRState
-} from '../../../src/shared/types'
+  PRState,
+  ProviderCheckSummary
+} from '../../../src/shared/github/pull-request-types'
 import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
 
 // Primitive + enum value readers shared by the github.* PR parsers. Each narrows
@@ -82,11 +82,14 @@ export function readCheckRunStatus(value: unknown): PRCheckDetail['status'] | nu
   return value === 'queued' || value === 'in_progress' || value === 'completed' ? value : null
 }
 
+// Why: dropping `action_required` here rendered a merge-blocking approval gate as a pending
+// check; the shared classifier counts it as a failure, so it must survive parsing.
 export function readCheckRunConclusion(value: unknown): PRCheckDetail['conclusion'] {
   return value === 'success' ||
     value === 'failure' ||
     value === 'cancelled' ||
     value === 'timed_out' ||
+    value === 'action_required' ||
     value === 'neutral' ||
     value === 'skipped' ||
     value === 'pending'

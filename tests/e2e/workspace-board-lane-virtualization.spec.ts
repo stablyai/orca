@@ -307,9 +307,11 @@ test.describe('Workspace board lane virtualization', () => {
   })
 
   test('selects the full lane across a single large marquee scroll jump', async ({ orcaPage }) => {
+    test.skip(true, 'Quarantined by https://github.com/stablyai/orca/issues/12415')
     const statusId = 'virtual-marquee'
+    const emptyStatusId = 'virtual-marquee-start'
     await orcaPage.evaluate(
-      ({ count, status }) => {
+      ({ count, emptyStatus, status }) => {
         const store = window.__store
         if (!store) {
           throw new Error('window.__store is not available')
@@ -353,10 +355,13 @@ test.describe('Workspace board lane virtualization', () => {
         })
         state.setWorkspaceStatuses([
           { id: status, label: 'Virtual marquee' },
-          ...state.workspaceStatuses.filter((entry) => entry.id !== status)
+          { id: emptyStatus, label: 'Marquee start' },
+          ...state.workspaceStatuses.filter(
+            (entry) => entry.id !== status && entry.id !== emptyStatus
+          )
         ])
       },
-      { count: MARQUEE_WORKSPACE_COUNT, status: statusId }
+      { count: MARQUEE_WORKSPACE_COUNT, emptyStatus: emptyStatusId, status: statusId }
     )
 
     await orcaPage.getByRole('button', { name: 'Workspace board' }).click()
@@ -366,28 +371,95 @@ test.describe('Workspace board lane virtualization', () => {
     const laneCards = lane.locator('[data-workspace-board-card-id]')
     await expect.poll(() => laneCards.count(), { timeout: 15_000 }).toBeGreaterThan(3)
     const laneScroll = lane.locator('[data-workspace-board-lane-scroll]')
+    const emptyLaneScroll = orcaPage.locator(
+      `[data-workspace-status="${emptyStatusId}"] [data-workspace-board-lane-scroll]`
+    )
     const box = await laneScroll.boundingBox()
     if (!box) {
       throw new Error('Expected the marquee lane to have a bounding box')
     }
 
-    await orcaPage.mouse.move(box.x + 2, box.y + 12)
+    // Why: CI can overlay individual lane pixels, so choose a live board-owned point.
+    const startPoint = await emptyLaneScroll.evaluate((element) => {
+      const ignored = [
+        '[data-workspace-board-card-id]',
+        'a',
+        'button',
+        'input',
+        'select',
+        'textarea',
+        '[role="button"]',
+        '[role="menu"]',
+        '[role="menuitem"]'
+      ].join(',')
+      const rect = element.getBoundingClientRect()
+      for (let y = Math.ceil(rect.top) + 6; y <= Math.floor(rect.top) + 40; y += 6) {
+        for (let x = Math.ceil(rect.left) + 8; x <= Math.floor(rect.right) - 8; x += 8) {
+          const target = document.elementFromPoint(x, y)
+          if (
+            target?.closest('[data-workspace-board-selection-surface]') &&
+            !target.closest(ignored)
+          ) {
+            return { x, y }
+          }
+        }
+      }
+      return null
+    })
+    expect(startPoint, 'the empty start lane must expose board-owned space').not.toBeNull()
+    if (!startPoint) {
+      throw new Error('Expected empty board space for the marquee start')
+    }
+
+    await orcaPage.mouse.move(startPoint.x, startPoint.y)
     await orcaPage.mouse.down()
-    await orcaPage.mouse.move(box.x + box.width - 18, box.y + 80)
-    await laneScroll.evaluate(async (element) => {
-      for (let pass = 0; pass < 4; pass++) {
+    await orcaPage.mouse.move(box.x + box.width - 18, box.y + 80, { steps: 4 })
+
+    // Why: proves the board accepted the gesture. Without it a rejected
+    // pointerdown only shows up 15s later as "0 cards previewed", which reads as
+    // a virtualization bug rather than a marquee that never started.
+    await expect(orcaPage.locator('[data-workspace-board-selection-rect]')).toBeVisible()
+    await expect
+      .poll(() => lane.locator('[data-workspace-board-card-area-selected="true"]').count(), {
+        timeout: 15_000
+      })
+      .toBeGreaterThan(0)
+    // Why: a measured card is much taller than the lane's row estimate, so each
+    // jump to the bottom re-measures the window and grows the spacer past the
+    // scrollTop the jump just landed on. A fixed pass budget commits the marquee
+    // mid-growth on a loaded machine — short of the last cards — so jump until
+    // the virtualizer stops moving the bottom instead.
+    const laneScrollSettle = await laneScroll.evaluate(async (element) => {
+      let settledPasses = 0
+      let passes = 0
+      while (settledPasses < 2 && passes < 40) {
+        passes += 1
         element.scrollTop = element.scrollHeight
         element.dispatchEvent(new Event('scroll', { bubbles: true }))
         await new Promise<void>((resolve) => {
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
         })
+        const maxScrollTop = element.scrollHeight - element.clientHeight
+        settledPasses = element.scrollTop >= maxScrollTop - 1 ? settledPasses + 1 : 0
+      }
+      return {
+        passes,
+        scrollTop: element.scrollTop,
+        maxScrollTop: element.scrollHeight - element.clientHeight
       }
     })
+    expect(
+      laneScrollSettle.scrollTop,
+      `lane scroll never settled at its bottom: ${JSON.stringify(laneScrollSettle)}`
+    ).toBeGreaterThanOrEqual(laneScrollSettle.maxScrollTop - 1)
+
     await orcaPage.mouse.move(box.x + box.width - 18, box.y + box.height - 12)
     await orcaPage.mouse.up()
 
-    await expect(
-      orcaPage.getByText(`${MARQUEE_WORKSPACE_COUNT} selected`, { exact: true })
-    ).toBeVisible()
+    // Why: assert the badge's text, not its presence — a marquee that stopped
+    // short reports the count it did commit instead of a bare locator timeout.
+    await expect(orcaPage.getByText(/^\d+ selected$/)).toHaveText(
+      `${MARQUEE_WORKSPACE_COUNT} selected`
+    )
   })
 })

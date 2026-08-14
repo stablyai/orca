@@ -3,7 +3,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
-import { buildSkillCommandForRuntime } from '@/components/settings/CliSkillRuntimeSetup'
+import {
+  buildSkillCommandForRuntime,
+  buildSkillSetupTerminalCommand
+} from '@/components/settings/CliSkillRuntimeSetup'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
@@ -18,7 +21,11 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
     ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
     activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
   )
-
+  const terminalRuntime = activeSkillRuntime.installDisabledReason
+    ? undefined
+    : activeSkillRuntime.agentRuntime
+  const prepareCommandForShell = (command: string, effectiveShell: string | undefined): string =>
+    buildSkillSetupTerminalCommand(command, effectiveShell, terminalRuntime)
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(skillCommand)
@@ -71,6 +78,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
       </div>
       <OnboardingInlineCommandTerminal
         command={skillCommand}
+        prepareCommandForShell={prepareCommandForShell}
         title={translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
           'Skill setup'
@@ -89,6 +97,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
         autoScrollIntoView={false}
         worktreeId="feature-tip-cli-skills-terminal"
         shellOverride={activeSkillRuntime.terminalShellOverride}
+        forceHostRuntime={Boolean(activeSkillRuntime.installDisabledReason)}
       />
     </div>
   )

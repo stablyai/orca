@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { compareGitStatusEntries } from './source-control-status-sort'
 
 function entry(path: string, conflictStatus?: GitStatusEntry['conflictStatus']): GitStatusEntry {
@@ -22,7 +22,9 @@ function referenceCompare(a: GitStatusEntry, b: GitStatusEntry): number {
     }
     return 2
   }
-  return rank(a) - rank(b) || a.path.localeCompare(b.path, undefined, { numeric: true })
+  // 'en' pinned to match the shared collator — an undefined locale would make
+  // this oracle environment-dependent (sv/cs/da collate differently).
+  return rank(a) - rank(b) || a.path.localeCompare(b.path, 'en', { numeric: true })
 }
 
 describe('compareGitStatusEntries', () => {

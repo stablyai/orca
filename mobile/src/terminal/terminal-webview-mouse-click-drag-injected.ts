@@ -179,9 +179,8 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
       // Why: a dismissing tap only clears the selection (touch parity); it must
       // not also open a link or focus the keyboard underneath.
       if (gesture.dismissedSelection) return;
-      // Plain click == touch tap: links and file paths win, then tracking-mode
-      // click reports, then keyboard focus.
-      notifyTerminalSurfaceTap(e.clientX, e.clientY);
+      // Pointer clicks keep their current link, file, TUI mouse, and focus priority.
+      notifyTerminalSurfaceTap(e.clientX, e.clientY, false);
     }, true);
 
     targetSurface.addEventListener('pointercancel', function(e) {

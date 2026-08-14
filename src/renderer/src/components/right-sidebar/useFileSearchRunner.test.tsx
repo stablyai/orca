@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SearchResult } from '../../../../shared/types'
+import type { SearchResult } from '../../../../shared/code-search-types'
 import { useFileSearchRunner } from './useFileSearchRunner'
 
 const mocks = vi.hoisted(() => ({

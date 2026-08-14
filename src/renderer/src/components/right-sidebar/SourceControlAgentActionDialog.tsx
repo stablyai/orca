@@ -10,7 +10,7 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
@@ -39,6 +39,13 @@ export type SourceControlAgentActionDialogProps = {
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
   onOpenSettings?: () => void
+  /**
+   * Fires when the agent tab is created, before deferred prompt delivery finishes.
+   * Reversible bookkeeping only; irreversible host writes belong in onLaunched.
+   */
+  onLaunchAccepted?: () => void
+  /** Fires when an accepted launch later failed to deliver its prompt. */
+  onLaunchAborted?: () => void
   onLaunched?: () => void
   startLabel?: string
   onStart?: (args: {

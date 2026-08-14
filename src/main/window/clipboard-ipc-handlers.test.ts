@@ -12,8 +12,10 @@ const {
   spawnMock,
   childStdinEndMock,
   resolveAuthorizedPathMock,
+  fsAccessMock,
+  fsLstatMock,
   fsMkdirMock,
-  fsReaddirMock,
+  fsOpendirMock,
   fsRmMock,
   fsWriteFileMock,
   fsOpenMock,
@@ -45,8 +47,10 @@ const {
     return child
   }),
   resolveAuthorizedPathMock: vi.fn(),
+  fsAccessMock: vi.fn(),
+  fsLstatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
-  fsReaddirMock: vi.fn(),
+  fsOpendirMock: vi.fn(),
   fsRmMock: vi.fn(),
   fsWriteFileMock: vi.fn(),
   fsOpenMock: vi.fn(),
@@ -68,11 +72,14 @@ vi.mock('node:child_process', () => ({
 }))
 
 vi.mock('node:fs/promises', () => ({
+  access: fsAccessMock,
+  lstat: fsLstatMock,
   mkdir: fsMkdirMock,
-  readdir: fsReaddirMock,
+  opendir: fsOpendirMock,
   rm: fsRmMock,
   open: fsOpenMock,
   stat: fsStatMock,
+  writeFile: fsWriteFileMock,
   default: {
     writeFile: fsWriteFileMock
   }
@@ -133,7 +140,11 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from './clipboard-ipc-handlers'
-import { cleanupExpiredRemoteClipboardFiles } from './clipboard-remote-file-copy'
+
+const REMOTE_CLIPBOARD_STAGING_ROOT = join(
+  '/tmp',
+  `orca-clipboard-files${typeof process.getuid === 'function' ? `-${process.getuid()}` : ''}`
+)
 
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -173,10 +184,6 @@ function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
   return () => settled
 }
 
-function dirent(name: string, directory = true): { name: string; isDirectory: () => boolean } {
-  return { name, isDirectory: () => directory }
-}
-
 function shellIdListArray(childCount: number): Buffer {
   const value = Buffer.alloc(4 + 4 * (childCount + 1))
   value.writeUInt32LE(childCount)
@@ -192,10 +199,21 @@ describe('registerClipboardHandlers', () => {
     childStdinEndMock.mockClear()
     resolveAuthorizedPathMock.mockReset()
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
+    fsLstatMock.mockReset()
+    fsLstatMock.mockResolvedValue({
+      isDirectory: () => true,
+      isSymbolicLink: () => false,
+      mode: 0o700,
+      uid: typeof process.getuid === 'function' ? process.getuid() : 0
+    })
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
-    fsReaddirMock.mockReset()
-    fsReaddirMock.mockResolvedValue([])
+    fsOpendirMock.mockReset()
+    // Why: handler registration kicks off the expired-staging sweep; an empty temp root keeps it inert.
+    fsOpendirMock.mockImplementation(async () => ({
+      async *[Symbol.asyncIterator]() {},
+      close: vi.fn().mockResolvedValue(undefined)
+    }))
     fsRmMock.mockReset()
     fsRmMock.mockResolvedValue(undefined)
     fsWriteFileMock.mockReset()
@@ -307,33 +325,6 @@ describe('registerClipboardHandlers', () => {
     }
   })
 
-  it('sweeps expired remote clipboard staging directories', async () => {
-    const nowMs = 1760000000000
-    fsReaddirMock.mockResolvedValue([
-      dirent('orca-clipboard-file-expired'),
-      dirent('orca-clipboard-file-fresh'),
-      dirent('orca-clipboard-file-plain-file', false),
-      dirent('unrelated-temp')
-    ])
-    fsStatMock.mockImplementation(async (targetPath: string) => {
-      if (targetPath.endsWith('expired')) {
-        return { mtimeMs: nowMs - 60 * 60 * 1000 - 1 }
-      }
-      if (targetPath.endsWith('fresh')) {
-        return { mtimeMs: nowMs - 1000 }
-      }
-      throw new Error(`unexpected stat: ${targetPath}`)
-    })
-
-    await cleanupExpiredRemoteClipboardFiles(nowMs)
-
-    expect(fsRmMock).toHaveBeenCalledTimes(1)
-    expect(fsRmMock).toHaveBeenCalledWith(join('/tmp', 'orca-clipboard-file-expired'), {
-      recursive: true,
-      force: true
-    })
-  })
-
   it('materializes remote files before writing them to the OS clipboard', async () => {
     const provider = {
       stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
@@ -344,8 +335,8 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     const tempDir = join(
-      '/tmp',
-      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
+      REMOTE_CLIPBOARD_STAGING_ROOT,
+      '1760000000000-00000000-0000-4000-8000-000000000000'
     )
     const tempPath = join(tempDir, 'report.pdf')
 
@@ -357,6 +348,10 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toEqual({ ok: true })
 
     expect(provider.stat).toHaveBeenCalledWith('/remote/report.pdf')
+    expect(fsMkdirMock).toHaveBeenCalledWith(REMOTE_CLIPBOARD_STAGING_ROOT, {
+      recursive: true,
+      mode: 0o700
+    })
     expect(fsMkdirMock).toHaveBeenCalledWith(tempDir, { mode: 0o700 })
     expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
     expect(fsStatMock).toHaveBeenCalledWith(tempPath)
@@ -381,7 +376,6 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toEqual({ ok: false, reason: 'is-directory' })
 
     expect(provider.downloadFile).not.toHaveBeenCalled()
-    expect(fsMkdirMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
@@ -395,8 +389,8 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     const tempDir = join(
-      '/tmp',
-      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
+      REMOTE_CLIPBOARD_STAGING_ROOT,
+      '1760000000000-00000000-0000-4000-8000-000000000000'
     )
     const tempPath = join(tempDir, 'report.pdf')
 
@@ -408,7 +402,12 @@ describe('registerClipboardHandlers', () => {
     ).rejects.toThrow('transfer failed')
 
     expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
-    expect(fsRmMock).toHaveBeenCalledWith(tempDir, { recursive: true, force: true })
+    expect(fsRmMock).toHaveBeenCalledWith(tempDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100
+    })
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 

@@ -124,8 +124,8 @@ import {
   buildActiveOpenRowKeys
 } from './source-control-active-open-file-keys'
 import {
+  filterAndSortSourceControlPathEntries,
   filterSourceControlGroupedPathEntries,
-  filterSourceControlPathEntries,
   getSourceControlFileFilterState
 } from './source-control-file-filter'
 import { getCommitMessageTextareaRows } from './source-control-commit-message-rows'
@@ -149,7 +149,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
@@ -201,17 +201,19 @@ import {
   isBehindOnlyUpstream,
   shouldForcePushWithLeaseForUpstream
 } from '../../../../shared/git-upstream-status'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type {
-  DiffComment,
   GitBranchChangeEntry,
-  GitBranchCompareSummary,
+  GitBranchCompareSummary
+} from '../../../../shared/git-diff-compare-types'
+import type {
   GitConflictOperation,
-  GitPushTarget,
   GitStatusEntry,
-  GitUpstreamStatus,
-  SourceControlViewMode,
-  TuiAgent
-} from '../../../../shared/types'
+  GitUpstreamStatus
+} from '../../../../shared/git-status-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SourceControlViewMode } from '../../../../shared/ui-chrome-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewInfo,
@@ -246,6 +248,8 @@ import {
 } from './source-control-pull-policy-error-notice'
 import { SourceControlTextGenerationDialog } from './SourceControlTextGenerationDialog'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
+import { useHostedReviewStackParent } from './useHostedReviewStackParent'
+import { resolveCreatedHostedReviewLink } from './source-control-created-review-link'
 import {
   hasConfiguredCommitMessageGenerationDefaults,
   hasConfiguredSourceControlTextGenerationDefaults
@@ -264,6 +268,7 @@ import {
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
+  resolveCreatePrIntentGeneratedReviewFields,
   resolveCreatePrIntentRemoteStep,
   shouldAttemptCreateHostedReviewForIntent,
   shouldGenerateHostedReviewDetailsForIntent,
@@ -295,6 +300,7 @@ import {
 } from './source-control-hosted-review-push-target'
 import { buildSourceControlManualReviewUrlFromContext } from './source-control-manual-review-url'
 import { parseRemoteRepo } from './source-control-remote-repo'
+import { setBranchLineTotalMergeBase } from './branch-line-total-request-gate'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -834,6 +840,15 @@ function SourceControlInner(): React.JSX.Element {
   const branchSummary = useAppStore((s) =>
     activeWorktreeId ? (s.gitBranchCompareSummaryByWorktree[activeWorktreeId] ?? null) : null
   )
+  const publishedBranchLineTotal = useAppStore((s) =>
+    activeWorktreeId ? (s.gitBranchLineTotalByWorktree?.[activeWorktreeId] ?? null) : null
+  )
+  // Why: status and branch compare refresh on different cadences, so a total can
+  // outlive the fork point it measured. Drop it rather than render a stale number.
+  const branchLineTotal =
+    publishedBranchLineTotal && publishedBranchLineTotal.mergeBase === branchSummary?.mergeBase
+      ? publishedBranchLineTotal
+      : null
   const conflictOperation = useAppStore((s) =>
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
@@ -899,6 +914,7 @@ function SourceControlInner(): React.JSX.Element {
     (s) => s.getHostedReviewCreationEligibility
   )
   const createHostedReview = useAppStore((s) => s.createHostedReview)
+  const createStackedHostedReview = useAppStore((s) => s.createStackedHostedReview)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
@@ -1250,6 +1266,22 @@ function SourceControlInner(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: the sidebar stays mounted when closed, so gate polling on tab AND open or branchCompare/PR fetch would run with no visible consumer.
   const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
+
+  // Why: the merge base IS the request gate — no OID on the status request means
+  // the host runs no ranged diff, so a hidden chip costs a background worktree nothing.
+  const requestedBranchLineTotalMergeBase =
+    isBranchVisible && !isFolder && branchSummary?.status === 'ready'
+      ? branchSummary.mergeBase
+      : null
+  useEffect(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    setBranchLineTotalMergeBase(activeWorktreeId, requestedBranchLineTotalMergeBase)
+    return () => {
+      setBranchLineTotalMergeBase(activeWorktreeId, null)
+    }
+  }, [activeWorktreeId, requestedBranchLineTotalMergeBase])
 
   const refreshActiveGitStatus = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
@@ -1721,7 +1753,10 @@ function SourceControlInner(): React.JSX.Element {
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
       linkedGiteaPR,
-      staleWhileRevalidate: true
+      staleWhileRevalidate: true,
+      // Why: scoped to the active worktree, so it earns the host's fast
+      // re-check tier instead of the O(N) card pacing (#11532).
+      active: true
     })
     // Why: keep the GitHub cache refresh behind the coordinator so Source Control doesn't bypass pacing.
     enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
@@ -1780,7 +1815,7 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const filteredBranchEntries = useMemo(
-    () => filterSourceControlPathEntries(branchEntries, fileFilterState),
+    () => filterAndSortSourceControlPathEntries(branchEntries, fileFilterState),
     [branchEntries, fileFilterState]
   )
 
@@ -2723,26 +2758,18 @@ function SourceControlInner(): React.JSX.Element {
         setRightSidebarTab('checks')
       }
       try {
-        if (worktreeId && result.provider === 'github') {
-          await updateWorktreeMeta(worktreeId, { linkedPR: result.number })
-        }
-        if (worktreeId && result.provider === 'gitlab') {
-          await updateWorktreeMeta(worktreeId, { linkedGitLabMR: result.number })
-        }
-        if (worktreeId && result.provider === 'azure-devops') {
-          await updateWorktreeMeta(worktreeId, { linkedAzureDevOpsPR: result.number })
-        }
-        if (worktreeId && result.provider === 'gitea') {
-          await updateWorktreeMeta(worktreeId, { linkedGiteaPR: result.number })
+        const createdLink = resolveCreatedHostedReviewLink(result.provider, result.number)
+        if (worktreeId && result.provider !== 'unsupported') {
+          await updateWorktreeMeta(worktreeId, createdLink.worktree)
         }
         const linkedReviewNumbers = {
-          linkedGitHubPR: result.provider === 'github' ? result.number : linkedGitHubPR,
+          linkedGitHubPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR: result.provider === 'gitlab' ? result.number : linkedGitLabMR,
+          linkedGitLabMR,
           linkedBitbucketPR,
-          linkedAzureDevOpsPR:
-            result.provider === 'azure-devops' ? result.number : linkedAzureDevOpsPR,
-          linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
+          linkedAzureDevOpsPR,
+          linkedGiteaPR,
+          ...createdLink.lookup
         }
         if (result.provider === 'gitlab') {
           await fetchHostedReviewForBranch(repoPath, branch, {
@@ -2990,10 +3017,13 @@ function SourceControlInner(): React.JSX.Element {
     setBody: setPrBody,
     draft: prDraft,
     setDraft: setPrDraft,
+    stackedCreationSupported: prStackedCreationSupported,
+    repoDefaultBaseRef: prRepoDefaultBaseRef,
     baseQuery: prBaseQuery,
     setBaseQuery: setPrBaseQuery,
     baseResults: prBaseResults,
     setBaseResults: setPrBaseResults,
+    baseSearchPending: prBaseSearchPending,
     baseSearchError: prBaseSearchError,
     generating: prGenerating,
     generateError: prGenerateError,
@@ -3029,6 +3059,17 @@ function SourceControlInner(): React.JSX.Element {
       },
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
+  })
+  const stackParentReview = useHostedReviewStackParent({
+    enabled: hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
+    repoPath: activeRepo?.path ?? '',
+    repoId: activeRepo?.id ?? null,
+    base: prBase,
+    // Why: the repo default, not eligibility's defaultBaseRef — that one resolves to
+    // the worktree's own base, which is exactly the branch a stacked PR targets.
+    repoDefaultBase: prRepoDefaultBaseRef,
+    head: branchName,
+    fetchHostedReviewForBranch
   })
 
   const handleGeneratePullRequestFieldsClick = useCallback((): void => {
@@ -3250,163 +3291,184 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
-  const handleCreatePullRequest = useCallback(async (): Promise<void> => {
-    if (
-      !activeRepo ||
-      !activeWorktreeId ||
-      !worktreePath ||
-      !hostedReviewCreation ||
-      prGenerating ||
-      createPrInFlightRef.current[activeWorktreeId]
-    ) {
-      return
-    }
-
-    if (!hostedReviewCreation.canCreate) {
-      // Why: blocked Create Review clicks are intentional; the inline notice tells the user which prerequisite to clear.
-      const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
-      if (message) {
-        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-          tone: 'destructive',
-          message
-        })
+  const handleCreatePullRequest = useCallback(
+    async (stacked = false): Promise<void> => {
+      if (
+        !activeRepo ||
+        !activeWorktreeId ||
+        !worktreePath ||
+        !hostedReviewCreation ||
+        prGenerating ||
+        createPrInFlightRef.current[activeWorktreeId]
+      ) {
+        return
       }
-      return
-    }
 
-    const base = stripBaseRef(prBase).trim()
-    const title = prTitle.trim()
-
-    if (!title) {
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-        tone: 'destructive',
-        message: translate(
-          'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
-          'Enter a {{value0}} title.',
-          { value0: hostedReviewCreateCopy.reviewLabel }
-        )
-      })
-      return
-    }
-
-    if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branchName).toLowerCase()) {
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-        tone: 'destructive',
-        message: translate(
-          'auto.components.right.sidebar.SourceControl.ae743199cd',
-          'Choose a different base branch before creating a {{value0}}.',
-          { value0: hostedReviewCreateCopy.reviewLabel }
-        )
-      })
-      return
-    }
-
-    createPrInFlightRef.current[activeWorktreeId] = true
-    setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
-    setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
-    try {
-      const result = await createHostedReview(activeRepo.path, {
-        repoId: activeRepo.id,
-        provider: hostedReviewCreateProvider,
-        base,
-        head: normalizeHostedReviewHeadRef(branchName),
-        title,
-        body: prBody,
-        draft: prDraft,
-        worktreePath,
-        useTemplate: resolvedPrCreationDefaults.useTemplate
-      })
-
-      if (result.ok) {
-        setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
-        await handlePullRequestCreated({
-          provider: hostedReviewCreateProvider,
-          number: result.number,
-          url: result.url
-        })
-        if (resolvedPrCreationDefaults.openAfterCreate) {
-          window.api.shell.openUrl(result.url)
+      if (!hostedReviewCreation.canCreate) {
+        // Why: blocked Create Review clicks are intentional; the inline notice tells the user which prerequisite to clear.
+        const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
+        if (message) {
+          setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+            tone: 'destructive',
+            message
+          })
         }
         return
       }
 
-      if (result.existingReview?.url) {
-        const number = result.existingReview.number
-        toast.success(
-          number
-            ? translate(
-                'auto.components.right.sidebar.SourceControl.eef5446523',
-                '{{value0}} #{{value1}} is already open',
-                { value0: hostedReviewCreateCopy.titleLabel, value1: number }
-              )
-            : translate(
-                'auto.components.right.sidebar.SourceControl.d6fb1df5fe',
-                '{{value0}} is already open',
-                { value0: hostedReviewCreateCopy.titleLabel }
-              ),
-          {
-            action: {
-              label: translate(
-                'auto.components.right.sidebar.SourceControl.812cb992ee',
-                'Open on {{value0}}',
-                { value0: hostedReviewCreateCopy.providerName }
-              ),
-              onClick: () => window.api.shell.openUrl(result.existingReview!.url)
-            }
-          }
-        )
-        if (number) {
+      const base = stripBaseRef(prBase).trim()
+      const title = prTitle.trim()
+
+      if (!title) {
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
+            'Enter a {{value0}} title.',
+            { value0: hostedReviewCreateCopy.reviewLabel }
+          )
+        })
+        return
+      }
+
+      if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branchName).toLowerCase()) {
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.ae743199cd',
+            'Choose a different base branch before creating a {{value0}}.',
+            { value0: hostedReviewCreateCopy.reviewLabel }
+          )
+        })
+        return
+      }
+
+      createPrInFlightRef.current[activeWorktreeId] = true
+      setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+      setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+      try {
+        const createInput = {
+          repoId: activeRepo.id,
+          provider: hostedReviewCreateProvider,
+          base,
+          head: normalizeHostedReviewHeadRef(branchName),
+          title,
+          body: prBody,
+          draft: prDraft,
+          worktreePath,
+          useTemplate: resolvedPrCreationDefaults.useTemplate
+        }
+        const result = stacked
+          ? await createStackedHostedReview(activeRepo.path, createInput)
+          : await createHostedReview(activeRepo.path, createInput)
+
+        if (result.ok) {
           setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
           await handlePullRequestCreated({
             provider: hostedReviewCreateProvider,
-            number,
-            url: result.existingReview.url
+            number: result.number,
+            url: result.url
           })
+          if (resolvedPrCreationDefaults.openAfterCreate) {
+            window.api.shell.openUrl(result.url)
+          }
           return
         }
-      }
 
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-        tone: 'destructive',
-        message: result.error
-      })
-    } catch (error) {
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-        tone: 'destructive',
-        message:
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
-                'Failed to create {{value0}}',
-                { value0: hostedReviewCreateCopy.reviewLabel }
-              )
-      })
-    } finally {
-      createPrInFlightRef.current[activeWorktreeId] = false
-      setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
-    }
-  }, [
-    activeRepo,
-    activeWorktreeId,
-    branchName,
-    createHostedReview,
-    handlePullRequestCreated,
-    hostedReviewCreation,
-    hostedReviewCreateCopy.providerName,
-    hostedReviewCreateCopy.reviewLabel,
-    hostedReviewCreateCopy.titleLabel,
-    hostedReviewCreateProvider,
-    prBase,
-    prBody,
-    prDraft,
-    prGenerating,
-    prTitle,
-    resolvedPrCreationDefaults.openAfterCreate,
-    resolvedPrCreationDefaults.useTemplate,
-    setCreatePrIntentNoticeForWorktree,
-    worktreePath
-  ])
+        if ('existingReview' in result && result.existingReview?.url) {
+          const number = result.existingReview.number
+          toast.success(
+            number
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.eef5446523',
+                  '{{value0}} #{{value1}} is already open',
+                  { value0: hostedReviewCreateCopy.titleLabel, value1: number }
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.d6fb1df5fe',
+                  '{{value0}} is already open',
+                  { value0: hostedReviewCreateCopy.titleLabel }
+                ),
+            {
+              action: {
+                label: translate(
+                  'auto.components.right.sidebar.SourceControl.812cb992ee',
+                  'Open on {{value0}}',
+                  { value0: hostedReviewCreateCopy.providerName }
+                ),
+                onClick: () => window.api.shell.openUrl(result.existingReview!.url)
+              }
+            }
+          )
+          if (number) {
+            setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+            await handlePullRequestCreated({
+              provider: hostedReviewCreateProvider,
+              number,
+              url: result.existingReview.url
+            })
+            return
+          }
+        }
+
+        // Why: stacked creation can create the pull request and still fail to register
+        // the stack. Link the review that exists before surfacing the stack failure, or
+        // the workspace stays unaware of a PR the user can already see on GitHub.
+        if ('createdReview' in result && result.createdReview?.url) {
+          const { number, url } = result.createdReview
+          if (number) {
+            await handlePullRequestCreated({
+              provider: hostedReviewCreateProvider,
+              number,
+              url
+            })
+          }
+        }
+
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message: result.error
+        })
+      } catch (error) {
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message:
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
+                  'Failed to create {{value0}}',
+                  { value0: hostedReviewCreateCopy.reviewLabel }
+                )
+        })
+      } finally {
+        createPrInFlightRef.current[activeWorktreeId] = false
+        setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      }
+    },
+    [
+      activeRepo,
+      activeWorktreeId,
+      branchName,
+      createHostedReview,
+      createStackedHostedReview,
+      handlePullRequestCreated,
+      hostedReviewCreation,
+      hostedReviewCreateCopy.providerName,
+      hostedReviewCreateCopy.reviewLabel,
+      hostedReviewCreateCopy.titleLabel,
+      hostedReviewCreateProvider,
+      prBase,
+      prBody,
+      prDraft,
+      prGenerating,
+      prTitle,
+      resolvedPrCreationDefaults.openAfterCreate,
+      resolvedPrCreationDefaults.useTemplate,
+      setCreatePrIntentNoticeForWorktree,
+      worktreePath
+    ]
+  )
 
   const createHostedReviewForCreatePrIntent = useCallback(
     async (
@@ -3476,17 +3538,33 @@ function SourceControlInner(): React.JSX.Element {
             })
             return false
           }
-          if (generated.success) {
-            fields = {
-              // Why: intent auto-submits, so generated details must not retarget the review without confirmation.
-              base: fields.base,
-              title: generated.fields.title.trim() || fields.title,
-              body: generated.fields.body,
-              draft: generated.fields.draft
-            }
+          const resolved = resolveCreatePrIntentGeneratedReviewFields(fields, generated)
+          if (!resolved.ok) {
+            setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+              tone: 'destructive',
+              message:
+                resolved.error ??
+                translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentEmptyGeneratedBody',
+                  'Generated review details did not include a description. Retry Create PR.'
+                )
+            })
+            return false
           }
+          fields = resolved.fields
         } catch (error) {
           console.warn('[SourceControl] Create PR intent detail generation failed', error)
+          setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+            tone: 'destructive',
+            message:
+              error instanceof Error
+                ? error.message
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentGenerateDetailsFailed',
+                    'Could not generate review details. Retry Create PR.'
+                  )
+          })
+          return false
         }
       }
 
@@ -5529,6 +5607,7 @@ function SourceControlInner(): React.JSX.Element {
           diffCommentCount={diffCommentCount}
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
+          branchLineTotal={branchLineTotal}
           compareBaseRef={compareBaseRef}
           headDisplay={gitIdentityDisplay}
           upstreamStatus={remoteStatus}
@@ -5770,9 +5849,11 @@ function SourceControlInner(): React.JSX.Element {
           {shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation) &&
             (directCreatePrAction ? (
               <CreateHostedReviewComposer
+                key={`${activeRepo?.id ?? ''}:${activeWorktreeId ?? worktreePath ?? ''}:${branchName}`}
                 provider={hostedReviewCreateProvider}
                 branch={branchName}
                 base={prBase}
+                repoDefaultBase={prRepoDefaultBaseRef}
                 setBase={setPrBase}
                 title={prTitle}
                 setTitle={setPrTitle}
@@ -5780,10 +5861,13 @@ function SourceControlInner(): React.JSX.Element {
                 setBody={setPrBody}
                 draft={prDraft}
                 setDraft={setPrDraft}
+                stackedCreationSupported={prStackedCreationSupported}
+                stackParentReview={stackParentReview}
                 baseQuery={prBaseQuery}
                 setBaseQuery={setPrBaseQuery}
                 baseResults={prBaseResults}
                 setBaseResults={setPrBaseResults}
+                baseSearchPending={prBaseSearchPending}
                 baseSearchError={prBaseSearchError}
                 aiGenerationEnabled={sourceControlAiActionsVisible && prAiGenerationEnabled}
                 generating={prGenerating}
@@ -5798,8 +5882,8 @@ function SourceControlInner(): React.JSX.Element {
                 dropdownItems={dropdownItems}
                 onGenerate={handleGeneratePullRequestFieldsClick}
                 onCancelGenerate={handleCancelGeneratePullRequestFields}
-                onPrimaryAction={() => {
-                  void handleCreatePullRequest()
+                onPrimaryAction={(stacked) => {
+                  void handleCreatePullRequest(stacked)
                 }}
                 onDropdownAction={handleActionInvoke}
               />

@@ -6,7 +6,8 @@ import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list-virtual-rows'
-import { EmptyState, SessionLoadingState, VaultGroupHeader } from './AiVaultPanelControls'
+import { VaultGroupHeader } from './AiVaultPanelControls'
+import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import { VaultSessionRow } from './AiVaultSessionRow'
 import type { AiVaultSessionGroup } from './ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
@@ -46,6 +47,7 @@ export function AiVaultSessionVirtualList({
   loading,
   sessionsCount,
   filteredSessionsCount,
+  noAgentsSelected,
   error,
   vaultScope,
   buildResumeStartup,
@@ -64,13 +66,15 @@ export function AiVaultSessionVirtualList({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  onRequestDelete
 }: {
   groups: readonly AiVaultSessionGroup[]
   collapsedGroups: ReadonlySet<string>
   loading: boolean
   sessionsCount: number
   filteredSessionsCount: number
+  noAgentsSelected: boolean
   error: string | null
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
@@ -90,6 +94,7 @@ export function AiVaultSessionVirtualList({
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
+  onRequestDelete: (session: AiVaultSession) => void
 }): React.JSX.Element {
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
@@ -181,10 +186,17 @@ export function AiVaultSessionVirtualList({
 
       {sessionsCount > 0 && filteredSessionsCount === 0 ? (
         <EmptyState
-          title={translate(
-            'auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters',
-            'No sessions match the current filters'
-          )}
+          title={
+            noAgentsSelected
+              ? translate(
+                  'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
+                  'No agents selected'
+                )
+              : translate(
+                  'auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters',
+                  'No sessions match the current filters'
+                )
+          }
         />
       ) : null}
 
@@ -219,6 +231,7 @@ export function AiVaultSessionVirtualList({
               onOpenLog={onOpenLog}
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
+              onRequestDelete={onRequestDelete}
             />
           ))}
         </div>
@@ -253,7 +266,8 @@ function AiVaultVirtualRow({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  onRequestDelete
 }: {
   row: AiVaultListRow | undefined
   index: number
@@ -281,6 +295,7 @@ function AiVaultVirtualRow({
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
+  onRequestDelete: (session: AiVaultSession) => void
 }): React.JSX.Element | null {
   if (!row) {
     return null
@@ -391,6 +406,7 @@ function AiVaultVirtualRow({
           onOpenCwd={
             canOpenLocalSessionPaths && row.session.cwd ? () => onOpenCwd(row.session) : undefined
           }
+          onRequestDelete={onRequestDelete}
         />
       )}
     </div>

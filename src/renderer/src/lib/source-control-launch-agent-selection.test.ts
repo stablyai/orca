@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   resolveSourceControlLaunchAgentScope,
   summarizeReposOverridingActionRecipe

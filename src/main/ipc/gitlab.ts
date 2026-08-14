@@ -3,13 +3,14 @@ GitLab IPC handlers co-located keeps the repo-path validation pattern
 reviewable as one surface. */
 import { ipcMain } from 'electron'
 import { resolve } from 'node:path'
+import { toGitLabJobLogExcerptResult } from '../../shared/gitlab-job-log-excerpt'
 import type {
   GitLabIssueUpdate,
   GitLabMRInlineCommentInput,
   GitLabMRUpdate,
-  GitLabWorkItem,
-  Repo
-} from '../../shared/types'
+  GitLabWorkItem
+} from '../../shared/gitlab-types'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
@@ -520,10 +521,14 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:jobTrace',
     async (
       _event,
-      args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: ProjectRef | null }
+      args: GitLabRepoSelectorArgs & {
+        jobId: number
+        projectRef?: ProjectRef | null
+        logExcerpt?: boolean
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
-      return getJobTrace(
+      const result = await getJobTrace(
         repo.path,
         args.jobId,
         repo.issueSourcePreference,
@@ -531,6 +536,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
+      return args.logExcerpt ? toGitLabJobLogExcerptResult(result) : result
     }
   )
 

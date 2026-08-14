@@ -8,17 +8,25 @@ import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
-// fail to authenticate. Probing default paths matches VS Code's _findDefaultKeyFile.
+// fail to authenticate. Probe the regular and FIDO2 OpenSSH default paths.
 const DEFAULT_KEY_NAMES = ['id_ed25519', 'id_rsa', 'id_ecdsa', 'id_dsa', 'id_xmss']
+const DEFAULT_SECURITY_KEY_NAMES = ['id_ed25519_sk', 'id_ecdsa_sk']
 
 const DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => `~/.ssh/${name}`)
+const DEFAULT_IDENTITY_PATHS = [...DEFAULT_KEY_NAMES, ...DEFAULT_SECURITY_KEY_NAMES].map(
+  (name) => `~/.ssh/${name}`
+)
 const WINDOWS_OPENSSH_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
 
 // Why: resolved IdentityFile paths are expanded before auth resolution, so they
 // won't match the ~/... form in DEFAULT_KEY_PATHS.
-const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_KEY_PATHS.map(resolveSshConfigHomePath)
+const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_IDENTITY_PATHS.map(resolveSshConfigHomePath)
 
 export type PrivateKeyFile = { path: string; contents: Buffer }
+
+export function listDefaultIdentityFilePaths(): string[] {
+  return [...DEFAULT_IDENTITY_PATHS]
+}
 
 export function findDefaultKeyFile(): PrivateKeyFile | undefined {
   for (const keyPath of DEFAULT_KEY_PATHS) {
@@ -97,7 +105,10 @@ function resolveExplicitPrivateKeyPaths(
   return resolvedIdentities
 }
 
-function resolvePrivateKeyPaths(target: SshTarget, resolved: SshResolvedConfig | null): string[] {
+export function resolveIdentityFilePaths(
+  target: SshTarget,
+  resolved: Pick<SshResolvedConfig, 'identityFile'> | null
+): string[] {
   if (isOpenSshConfigBackedTarget(target) && resolved) {
     return resolved.identityFile
   }
@@ -138,7 +149,7 @@ export function resolvePrivateKeys(
   target: SshTarget,
   resolved: SshResolvedConfig | null
 ): PrivateKeyFile[] {
-  const keyPaths = resolvePrivateKeyPaths(target, resolved)
+  const keyPaths = resolveIdentityFilePaths(target, resolved)
   if (keyPaths.length > 0 || resolved || target.identityFile) {
     return readPrivateKeys(keyPaths)
   }
@@ -172,16 +183,6 @@ export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | un
     }
   }
   return undefined
-}
-
-function resolveIdentityFilePaths(target: SshTarget, resolved: SshResolvedConfig | null): string[] {
-  if (isOpenSshConfigBackedTarget(target) && resolved) {
-    return resolved.identityFile
-  }
-  if (target.identityFile) {
-    return [target.identityFile]
-  }
-  return resolved?.identityFile ?? []
 }
 
 export function resolveAgentConfigValue(

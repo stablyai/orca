@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { app } from 'electron'
 import type { SshConnection } from './ssh-connection'
-import type { RelayPlatform } from './relay-protocol'
+import { RELAY_REMOTE_DIR, type RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import {
   waitForSentinel,
@@ -15,11 +15,15 @@ import { writeRelayEndpointCredential } from './ssh-relay-endpoint-credential'
 import {
   createRelayInstallMarkerCommand,
   createRelayInstallNamespace,
+  createRelayUploadStageNamespace,
   makeRelayInstallDirectoryCommand,
   relayHomeRelativeDir,
   relaySftpNamespaceMapping,
-  type RelayInstallNamespace
+  relayUploadStageSftpNamespaceMapping,
+  type RelayInstallNamespace,
+  type RelayUploadStageNamespace
 } from './ssh-relay-install-namespace'
+import { createRelayInstallMarkerFileName } from './ssh-relay-install-marker'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
   readLocalFullVersion,
@@ -36,7 +40,11 @@ import {
   tryAcquireRelayGcClaim,
   waitForRelayGcClaimRelease
 } from './ssh-relay-gc-claim'
-import { NATIVE_DEPS_COMMAND_TIMEOUT_MS, RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
+import {
+  NATIVE_DEPS_COMMAND_TIMEOUT_MS,
+  RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS,
+  RELAY_DEPLOY_TIMEOUT_MS
+} from './ssh-relay-deploy-timing'
 import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
 import {
   probeBuildToolchain,
@@ -50,6 +58,15 @@ import {
   readRemoteHomeCommand,
   removeRemoteFileCommand
 } from './ssh-remote-commands'
+import {
+  cleanupOwnedRelayUploadStageCommand,
+  parseReservedRelayUploadStage,
+  promoteOwnedRelayUploadStageCommand,
+  recoverOneStaleRelayUploadStageCommand,
+  relayUploadStagePromotionConfirmed,
+  RELAY_UPLOAD_STAGE_POOL_NAME,
+  reserveRelayUploadStageCommand
+} from './ssh-relay-upload-stage-commands'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -118,28 +135,74 @@ export async function deployAndLaunchRelay(
   relayInstanceId?: string
 ): Promise<RelayDeployResult> {
   let timeoutHandle: ReturnType<typeof setTimeout>
-  // Why: Promise.race doesn't cancel its loser; abort so a contended install-lock waiter can't mutate the relay after this call times out.
   const deployAbortController = new AbortController()
-  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+  const timedOut = Symbol('relay-deploy-timeout')
+  const deployment = deployAndLaunchRelayInner(
+    conn,
+    onProgress,
+    graceTimeSeconds,
+    relayInstanceId,
+    deployAbortController.signal
+  ).then(
+    (result) => ({ status: 'fulfilled' as const, result }),
+    (error: unknown) => ({ status: 'rejected' as const, error })
+  )
+  const timeoutPromise = new Promise<typeof timedOut>((resolve) => {
     timeoutHandle = setTimeout(() => {
       deployAbortController.abort()
-      reject(new Error(`Relay deployment timed out after ${RELAY_DEPLOY_TIMEOUT_MS / 1000}s`))
+      resolve(timedOut)
     }, RELAY_DEPLOY_TIMEOUT_MS)
   })
 
   try {
-    return await Promise.race([
-      deployAndLaunchRelayInner(
-        conn,
-        onProgress,
-        graceTimeSeconds,
-        relayInstanceId,
-        deployAbortController.signal
-      ),
-      timeoutPromise
-    ])
+    const outcome = await Promise.race([deployment, timeoutPromise])
+    if (outcome !== timedOut) {
+      if (outcome.status === 'fulfilled') {
+        return outcome.result
+      }
+      throw outcome.error
+    }
+
+    const teardownExpired = Symbol('relay-deploy-teardown-timeout')
+    let teardownTimeoutHandle: ReturnType<typeof setTimeout>
+    const teardown = await Promise.race([
+      deployment,
+      new Promise<typeof teardownExpired>((resolve) => {
+        teardownTimeoutHandle = setTimeout(
+          () => resolve(teardownExpired),
+          RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS
+        )
+      })
+    ]).finally(() => clearTimeout(teardownTimeoutHandle!))
+    const timeoutError = Object.assign(
+      new Error(`Relay deployment timed out after ${RELAY_DEPLOY_TIMEOUT_MS / 1000}s`),
+      teardownConfirmation(teardown === teardownExpired ? undefined : teardown)
+    )
+    throw timeoutError
   } finally {
     clearTimeout(timeoutHandle!)
+  }
+}
+
+function teardownConfirmation(
+  outcome:
+    | { status: 'fulfilled'; result: RelayDeployResult }
+    | { status: 'rejected'; error: unknown }
+    | undefined
+): { sshChannelCloseConfirmed: boolean; sshTransferTeardownConfirmed: boolean } {
+  if (!outcome) {
+    return { sshChannelCloseConfirmed: false, sshTransferTeardownConfirmed: false }
+  }
+  if (outcome.status === 'fulfilled') {
+    return { sshChannelCloseConfirmed: true, sshTransferTeardownConfirmed: true }
+  }
+  const error = outcome.error as {
+    sshChannelCloseConfirmed?: unknown
+    sshTransferTeardownConfirmed?: unknown
+  }
+  return {
+    sshChannelCloseConfirmed: error?.sshChannelCloseConfirmed === true,
+    sshTransferTeardownConfirmed: error?.sshTransferTeardownConfirmed === true
   }
 }
 
@@ -324,6 +387,13 @@ async function deployAndLaunchRelayAttempt(
 
   // Why: derive the home-relative suffix once — recomputing it by stripping the shell home breaks on a split namespace.
   const homeRelativeRelayDir = relayHomeRelativeDir(fullVersion)
+  const uploadStagePoolDir = joinRemotePath(
+    hostPlatform,
+    remoteHome,
+    RELAY_REMOTE_DIR,
+    RELAY_UPLOAD_STAGE_POOL_NAME
+  )
+  const homeRelativeUploadStagePoolDir = `${RELAY_REMOTE_DIR}/${RELAY_UPLOAD_STAGE_POOL_NAME}`
 
   let ownsInstallLock = false
   let launchGcClaimToken: string | undefined
@@ -343,63 +413,137 @@ async function deployAndLaunchRelayAttempt(
     launchNamespace = launchFence.sftpNamespace
     deploySignal?.throwIfAborted()
   } else {
-    // Why: serialize concurrent first-installs via a host-native exclusive lock; the loser polls to re-check installed or steal a stale lock.
-    await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
-    ownsInstallLock = true
+    await execHostCommand(
+      conn,
+      hostPlatform,
+      recoverOneStaleRelayUploadStageCommand(hostPlatform, uploadStagePoolDir),
+      { signal: deploySignal }
+    )
+    const uploadStageOwner = createRelayInstallMarkerFileName()
+    const reservation = await execHostCommand(
+      conn,
+      hostPlatform,
+      reserveRelayUploadStageCommand(hostPlatform, uploadStagePoolDir, uploadStageOwner),
+      { signal: deploySignal }
+    )
+    const uploadStage = parseReservedRelayUploadStage(
+      hostPlatform,
+      uploadStagePoolDir,
+      uploadStageOwner,
+      reservation
+    )
+    const uploadStagePayloadDir = joinRemotePath(hostPlatform, uploadStage.slotDir, 'payload')
+    const uploadStageNamespace = createRelayUploadStageNamespace(
+      `${homeRelativeUploadStagePoolDir}/${uploadStage.slotName}`,
+      uploadStageOwner
+    )
+    const uploadStageSftpNamespace = uploadStageNamespaceIfSupported(
+      conn,
+      hostPlatform,
+      uploadStageNamespace
+    )
+    let uploadStageCleanupAllowed = true
+    onProgress?.('Uploading relay...')
+    console.log('[ssh-relay] Uploading relay...')
     try {
-      // Re-probe after acquiring the lock — a sibling installer may have finished while we waited.
-      if (
-        !(await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform, {
-          signal: deploySignal
-        }))
-      ) {
-        launchNamespace = createInstallNamespaceIfSupported(
-          conn,
-          hostPlatform,
-          homeRelativeRelayDir
-        )
-
-        onProgress?.('Uploading relay...')
-        console.log('[ssh-relay] Uploading relay...')
+      try {
         await uploadRelay(
           conn,
           platform,
-          remoteRelayDir,
+          uploadStagePayloadDir,
           fullVersion,
           hostPlatform,
           deploySignal,
-          launchNamespace
+          { rootDir: uploadStage.slotDir, namespace: uploadStageSftpNamespace }
         )
-        console.log('[ssh-relay] Upload complete')
+      } catch (err) {
+        if (isUnconfirmedSshCommandTermination(err)) {
+          uploadStageCleanupAllowed = false
+        }
+        throw err
+      }
 
-        onProgress?.('Installing native dependencies...')
-        console.log('[ssh-relay] Installing native dependencies...')
-        await installNativeDeps(
+      try {
+        await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
+        ownsInstallLock = true
+      } catch (err) {
+        if (isUnconfirmedSshCommandTermination(err)) {
+          ownsInstallLock = true
+        }
+        throw err
+      }
+      try {
+        // Re-probe after acquiring the lock — a sibling installer may have finished while we waited.
+        if (
+          !(await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform, {
+            signal: deploySignal
+          }))
+        ) {
+          launchNamespace = await createRelayLaunchNamespace(
+            conn,
+            hostPlatform,
+            remoteRelayDir,
+            homeRelativeRelayDir,
+            deploySignal
+          )
+          try {
+            const promotion = await execHostCommand(
+              conn,
+              hostPlatform,
+              promoteOwnedRelayUploadStageCommand(
+                hostPlatform,
+                uploadStage,
+                uploadStageOwner,
+                remoteRelayDir
+              ),
+              { signal: deploySignal }
+            )
+            if (!relayUploadStagePromotionConfirmed(uploadStageOwner, promotion)) {
+              throw new Error('Relay upload stage ownership was lost before promotion')
+            }
+          } catch (err) {
+            if (isUnconfirmedSshCommandTermination(err)) {
+              uploadStageCleanupAllowed = false
+            }
+            throw err
+          }
+          console.log('[ssh-relay] Upload complete')
+
+          onProgress?.('Installing native dependencies...')
+          console.log('[ssh-relay] Installing native dependencies...')
+          await installNativeDeps(
+            conn,
+            remoteRelayDir,
+            platform,
+            hostPlatform,
+            nodePath,
+            deploySignal,
+            [],
+            launchNamespace
+          )
+          console.log('[ssh-relay] Native deps installed')
+
+          // Why: mark complete but retain the lock until launch makes daemon liveness observable to cross-version GC.
+          await finalizeInstall(conn, remoteRelayDir, hostPlatform, {
+            signal: deploySignal,
+            releaseLock: false
+          })
+        }
+      } catch (err) {
+        if (!isUnconfirmedSshCommandTermination(err)) {
+          await abandonInstall(conn, remoteRelayDir, hostPlatform)
+          ownsInstallLock = false
+        }
+        throw err
+      }
+    } finally {
+      if (uploadStageCleanupAllowed) {
+        await execHostCommand(
           conn,
-          remoteRelayDir,
-          platform,
           hostPlatform,
-          nodePath,
-          deploySignal,
-          [],
-          launchNamespace
-        )
-        console.log('[ssh-relay] Native deps installed')
-
-        // Why: mark complete but retain the lock until launch makes daemon liveness observable to cross-version GC.
-        await finalizeInstall(conn, remoteRelayDir, hostPlatform, {
-          signal: deploySignal,
-          releaseLock: false
-        })
+          cleanupOwnedRelayUploadStageCommand(hostPlatform, uploadStage, uploadStageOwner)
+        ).catch(() => {})
       }
-    } catch (err) {
-      // Why: leave a partial install dir (no .install-complete) so the next deploy re-runs upload + install.
-      // Why: keep the lock if remote termination was unconfirmed — stale recovery beats overlapping a still-running npm.
-      if (!isUnconfirmedSshCommandTermination(err)) {
-        await abandonInstall(conn, remoteRelayDir, hostPlatform)
-        ownsInstallLock = false
-      }
-      throw err
     }
   }
 
@@ -431,11 +575,19 @@ async function deployAndLaunchRelayAttempt(
   }
   console.log('[ssh-relay] Relay started successfully')
 
-  // Why: best-effort GC of unreferenced sibling version dirs; errors are swallowed so a GC failure never blocks connecting.
-  void gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
-    windowsNodePath: launched.nodePath,
-    windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)]
-  }).catch(() => {})
+  void execHostCommand(
+    conn,
+    hostPlatform,
+    recoverOneStaleRelayUploadStageCommand(hostPlatform, uploadStagePoolDir)
+  )
+    .catch(() => {})
+    .then(() =>
+      gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
+        windowsNodePath: launched.nodePath,
+        windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)]
+      })
+    )
+    .catch(() => {})
 
   return {
     transport: launched.transport,
@@ -457,7 +609,7 @@ async function uploadRelay(
   fullVersion: string,
   hostPlatform: RemoteHostPlatform,
   signal?: AbortSignal,
-  namespace?: RelayInstallNamespace
+  stage?: { rootDir: string; namespace?: RelayUploadStageNamespace }
 ): Promise<void> {
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
@@ -467,18 +619,19 @@ async function uploadRelay(
     )
   }
 
-  // Why: the install-owner marker rides along with mkdir, so a standard install spends no extra exec channel on it.
-  await execHostCommand(
-    conn,
-    hostPlatform,
-    makeRelayInstallDirectoryCommand(hostPlatform, remoteDir, namespace),
-    { signal }
-  )
+  if (!stage) {
+    await execHostCommand(
+      conn,
+      hostPlatform,
+      makeRelayInstallDirectoryCommand(hostPlatform, remoteDir),
+      { signal }
+    )
+  }
 
   await uploadRelayDirectory(conn, localRelayDir, remoteDir, hostPlatform, {
     signal,
-    sftpNamespace: namespace
-      ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir)
+    sftpNamespace: stage?.namespace
+      ? relayUploadStageSftpNamespaceMapping(stage.namespace, hostPlatform, stage.rootDir)
       : undefined
   })
 
@@ -499,8 +652,13 @@ async function uploadRelay(
     fullVersion,
     {
       signal,
-      sftpNamespace: namespace
-        ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir, '.version')
+      sftpNamespace: stage?.namespace
+        ? relayUploadStageSftpNamespaceMapping(
+            stage.namespace,
+            hostPlatform,
+            stage.rootDir,
+            '.version'
+          )
         : undefined
     }
   )
@@ -522,6 +680,19 @@ function createInstallNamespaceIfSupported(
   const usesSystemSsh =
     typeof conn.usesSystemSshTransport === 'function' ? conn.usesSystemSshTransport() : false
   return usesSystemSsh ? undefined : createRelayInstallNamespace(homeRelativeRelayDir)
+}
+
+function uploadStageNamespaceIfSupported(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  namespace: RelayUploadStageNamespace
+): RelayUploadStageNamespace | undefined {
+  if (isWindowsRemoteHost(hostPlatform)) {
+    return undefined
+  }
+  const usesSystemSsh =
+    typeof conn.usesSystemSshTransport === 'function' ? conn.usesSystemSshTransport() : false
+  return usesSystemSsh ? undefined : namespace
 }
 
 const NODE_PTY_VERSION = '1.1.0'

@@ -19,6 +19,11 @@ import {
   type GitExec
 } from './git-handler-ops'
 import {
+  branchDiffEntryAtPinnedOids,
+  isFullGitObjectId,
+  parseOptionalBranchDiffHeadOid
+} from './git-handler-branch-diff-ops'
+import {
   buildSubmoduleInnerCommitRangeDiff,
   computeSubmodulePointerDiff,
   computeSubmoduleRangeEntries,
@@ -56,7 +61,7 @@ import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-st
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
 import { resolveGitRemoteRebaseSource } from '../shared/git-rebase-source'
-import type { GitPushTarget } from '../shared/types'
+import type { GitPushTarget } from '../shared/worktree/types'
 import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream
@@ -89,6 +94,7 @@ import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
+import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { streamRelayGitStdout } from './git-stdout-stream'
 
 const execFileAsync = promisify(execFile)
@@ -112,7 +118,7 @@ function resolveRelayPath(repoPath: string, value: string): string {
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
     return value
   }
-  // Old git ignores `--path-format=absolute`; resolve relative toplevel/git-dir against repoPath, picking the win32/posix resolver by its shape.
+  // Old Git ignores `--path-format=absolute`; resolve relative paths against repoPath by path shape.
   return isWindowsAbsolutePath(repoPath)
     ? path.win32.resolve(repoPath, value)
     : path.posix.resolve(repoPath, value)
@@ -176,10 +182,10 @@ export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
   private readonly gitCapabilities = new GitCapabilityCache()
-  // Why: large diff/exec responses go on the bulk lane so they don't head-of-line-block interactive pty.data echo on the shared SSH channel.
+  // Why: use the bulk lane so large responses do not block interactive PTY echo.
   private readonly responseStreams = new GitResponseStreamRegistry()
 
-  // Why: instance-level TTL cache avoids re-reading `.gitmodules` per diff click over SSH; per-instance so it can't leak across tests.
+  // Why: cache .gitmodules per instance to avoid SSH reads and test leakage.
   private submodulePathsCache: SubmodulePathsCache = createSubmodulePathsCache()
 
   // Why: RelayContext accepted for protocol back-compat (docs/relay-fs-allowlist-removal.md) but no longer consulted on git ops.
@@ -298,6 +304,7 @@ export class GitHandler {
 
   private clearGitMutationReadCaches(): void {
     this.gitDiffReadDedupe.clear()
+    invalidateGitBranchLineTotalInFlight()
     clearGitStatusLineStatsCache()
     clearSubmodulePathsCache(this.submodulePathsCache)
   }
@@ -360,7 +367,7 @@ export class GitHandler {
     })
   }
 
-  // Why: parent status lists one gitlink row per submodule; fetch inner per-file changes by running status inside the submodule's own worktree.
+  // Why: fetch per-file submodule changes from the submodule worktree.
   private async getSubmoduleStatus(params: Record<string, unknown>, context: RequestContext) {
     const worktreePath = params.worktreePath as string
     const submodulePath = params.submodulePath as string
@@ -383,7 +390,7 @@ export class GitHandler {
     // Why: pointer/range probes are part of the same SSH request and must not outlive its cancellation.
     const requestGit: GitExec = (args, cwd, options) =>
       this.git(args, cwd, { ...options, signal: context.signal })
-    // Why: a moved gitlink (clean worktree) has no uncommitted rows; surface files changed between recorded and checked-out commits so it isn't empty.
+    // Why: moved clean gitlinks need committed changes surfaced.
     const { fromOid, toOid } = await resolveSubmoduleCommitRange(
       requestGit,
       worktreePath,
@@ -426,7 +433,7 @@ export class GitHandler {
   private async getDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
-    // Why: filePath is relative and joined for readWorkingFile; validate or `../../etc/passwd` traverses outside the worktree.
+    // Why: validate relative paths to prevent traversal outside the worktree.
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
     if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
@@ -434,11 +441,11 @@ export class GitHandler {
     }
     const staged = params.staged as boolean
     const compareAgainstHead = params.compareAgainstHead as boolean | undefined
-    // Why: register the in-flight dedupe synchronously (before any await) so concurrent identical reads coalesce; submodule routing happens inside.
+    // Why: register dedupe before awaiting so identical reads coalesce.
     const result = await this.gitDiffReadDedupe.run(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
       async () => {
-        // Why: gitlinks can't be read as blobs, so route the gitlink root to a pointer diff and inner files into the submodule's own worktree.
+        // Why: route gitlink roots to pointer diffs and inner files to their submodule worktree.
         const submodulePaths = await listSubmodulePathsCached(
           this.git.bind(this),
           worktreePath,
@@ -775,13 +782,13 @@ export class GitHandler {
   private async branchCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
-    // Why: a baseRef starting with '-' would be read as a git rev-parse flag, potentially leaking environment variables or config.
+    // Why: reject flag-like base refs to prevent rev-parse option injection.
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
     const gitBound = this.git.bind(this)
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
-      // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8; without it parseBranchDiff would get C-style octal-escaped paths.
+      // Why: preserve non-ASCII filenames as UTF-8 for parseBranchDiff.
       const [{ stdout }, { stdout: numstat }] = await Promise.all([
         gitBound(
           ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
@@ -821,7 +828,7 @@ export class GitHandler {
         (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
       )
     } catch (error) {
-      // Why: swallow only 'no upstream configured' (an expected state); other errors (auth, corruption, network) must surface to the user.
+      // Why: suppress only the expected no-upstream error; surface all others.
       if (isNoUpstreamError(error)) {
         return { hasUpstream: false, ahead: 0, behind: 0 }
       }
@@ -1113,7 +1120,7 @@ export class GitHandler {
   }
 
   private async pull(params: Record<string, unknown>) {
-    // Why: plain `git pull` honors the user's merge/rebase/ff policy; with none, Git's policy error is normalized with setup guidance.
+    // Why: plain `git pull` honors user merge/rebase/ff policy.
     await this.pullWithArgs(params, [])
   }
 
@@ -1146,6 +1153,7 @@ export class GitHandler {
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
+    const headOid = parseOptionalBranchDiffHeadOid(params)
     const options = {
       includePatch: params.includePatch as boolean | undefined,
       filePath: params.filePath as string | undefined,
@@ -1156,18 +1164,36 @@ export class GitHandler {
         'branchDiff',
         worktreePath,
         baseRef,
+        headOid ?? null,
         options.includePatch ?? null,
         options.filePath ?? null,
         options.oldPath ?? null
       ]),
-      () =>
-        branchDiffEntries(
+      () => {
+        if (
+          headOid &&
+          isFullGitObjectId(baseRef) &&
+          options.includePatch === true &&
+          typeof options.filePath === 'string' &&
+          options.filePath.length > 0
+        ) {
+          return branchDiffEntryAtPinnedOids(
+            this.gitBuffer.bind(this),
+            worktreePath,
+            baseRef,
+            headOid,
+            options.filePath,
+            options.oldPath
+          )
+        }
+        return branchDiffEntries(
           this.git.bind(this),
           this.gitBuffer.bind(this),
           worktreePath,
           baseRef,
           options
         )
+      }
     )
     return this.maybeStreamResponse(result, params, context)
   }

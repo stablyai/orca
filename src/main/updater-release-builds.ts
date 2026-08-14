@@ -22,6 +22,7 @@ export function getReleaseDownloadUrlForRepo(repo: string, tag: string): string 
 
 type GitHubReleaseEntry = {
   tag_name?: unknown
+  name?: unknown
   draft?: unknown
   published_at?: unknown
   html_url?: unknown
@@ -37,10 +38,15 @@ function parseReleaseEntry(entry: GitHubReleaseEntry, repo: string): ReleaseBuil
   if (!isValidVersion(version) || !channel) {
     return null
   }
+  // Why null when it merely repeats the tag: GitHub titles an untitled release
+  // with its tag name, and hourlies predating the naming change were created that
+  // way too. Neither says anything the version beside it does not.
+  const name = typeof entry.name === 'string' ? entry.name.trim() : ''
   return {
     tag,
     version,
     channel,
+    name: name && name !== tag ? name : null,
     publishedAt: typeof entry.published_at === 'string' ? entry.published_at : null,
     releaseUrl:
       typeof entry.html_url === 'string'

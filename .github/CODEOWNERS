@@ -2,4 +2,4 @@
 /src/renderer/src/i18n/locales/ @brennanb2025
 /config/scripts/*localization*.mjs @brennanb2025
 /config/scripts/*locale*.mjs @brennanb2025
-/i18next.config.ts @brennanb2025
+/config/i18next.config.ts @brennanb2025

@@ -17,7 +17,7 @@ export async function handleLegacyLifecycleSend(args: {
   authority: LegacyCompatibilityAuthority
   request: RpcRequest
   params: LegacySendParams
-}): Promise<unknown | undefined> {
+}): Promise<unknown> {
   const { runtime, authority, request, params } = args
   if (!['heartbeat', 'worker_done', 'escalation'].includes(params.type ?? '')) {
     return undefined

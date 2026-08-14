@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
+import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
 
 const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),
@@ -129,29 +130,41 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'projectHostSetup.setupExistingFolder',
     params: ProjectHostSetupExistingFolder,
-    handler: async (params, { runtime }) => ({
-      result: await runtime.setupProjectExistingFolder(params)
+    handler: async (params, context) => ({
+      result: projectRepoResultVisibilityForClient(
+        await context.runtime.setupProjectExistingFolder(params),
+        context
+      )
     })
   }),
   defineMethod({
     name: 'projectHostSetup.clone',
     params: ProjectHostSetupClone,
-    handler: async (params, { runtime }) => ({
-      result: await runtime.setupProjectClone(params)
+    handler: async (params, context) => ({
+      result: projectRepoResultVisibilityForClient(
+        await context.runtime.setupProjectClone(params),
+        context
+      )
     })
   }),
   defineMethod({
     name: 'projectHostSetup.update',
     params: ProjectHostSetupUpdate,
-    handler: (params, { runtime }) => ({
-      result: runtime.updateProjectHostSetup(params)
+    handler: (params, context) => ({
+      result: projectRepoResultVisibilityForClient(
+        context.runtime.updateProjectHostSetup(params),
+        context
+      )
     })
   }),
   defineMethod({
     name: 'projectHostSetup.delete',
     params: ProjectHostSetupDelete,
-    handler: (params, { runtime }) => ({
-      result: runtime.deleteProjectHostSetup(params)
+    handler: (params, context) => ({
+      result: projectRepoResultVisibilityForClient(
+        context.runtime.deleteProjectHostSetup(params),
+        context
+      )
     })
   })
 ]

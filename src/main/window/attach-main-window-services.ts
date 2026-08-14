@@ -4,12 +4,9 @@ import { randomUUID } from 'node:crypto'
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  CreateWorktreeResult,
-  ReleaseBuildListResult,
-  UpdateCheckOptions,
-  WorktreeStartupLaunch
-} from '../../shared/types'
+import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/update-status-types'
+import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import {
   acknowledgePendingTccPromptNotice,
@@ -17,12 +14,13 @@ import {
   dismissTccPromptNotice,
   releasePendingTccPromptNotice
 } from '../macos-tcc-prompt-notice'
-import { registerRepoHandlers } from '../ipc/repos'
+import { registerRepoHandlers, setRepoRemoteClientNotifier } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import {
   getLocalPtyProvider,
   registerPtyHandlers,
+  type CodexHomePtySpawnedLifecycleArgs,
   type GetSelectedCodexHomePath,
   type PrepareCodexSessionResume
 } from '../ipc/pty'
@@ -35,14 +33,17 @@ import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runti
 import {
   checkForUpdatesFromMenu,
   downloadUpdate,
+  getLinuxPackageInstallInstructions,
   getUpdateStatus,
   quitAndInstall,
   setupAutoUpdater,
+  showLinuxPackage,
   dismissAvailableUpdate,
   dismissNudge,
   listAvailableReleaseBuilds,
   type UpdateInstallMode
 } from '../updater'
+import { isTrustedUIRenderer } from '../ipc/ui'
 import { scheduleHistoryGc } from '../terminal-history-gc'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -63,6 +64,8 @@ import {
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
+import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -95,6 +98,8 @@ export function attachMainWindowServices(
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
     // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
+    onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
+    onPtyExit?: (id: string, exitSequence: number) => void
     onBeforeUpdateQuit?: () => void | Promise<void>
     updateInstallMode?: UpdateInstallMode
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
@@ -102,6 +107,8 @@ export function attachMainWindowServices(
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
+  // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
+  setRepoRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {
     onWorktreeLifecycle: options?.onWorktreeLifecycle
   })
@@ -120,7 +127,9 @@ export function attachMainWindowServices(
       prepareCodexSessionResume: options?.prepareCodexSessionResume,
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
       awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
-      isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
+      isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight,
+      onCodexHomePtySpawned: options?.onCodexHomePtySpawned,
+      onPtyExit: options?.onPtyExit
     }
   )
   // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).
@@ -159,7 +168,7 @@ export function attachMainWindowServices(
         try {
           await options?.onBeforeUpdateQuit?.()
         } finally {
-          store.flush()
+          await store.flushPendingAsync()
         }
       },
       setLastUpdateCheckAt: (timestamp) => {
@@ -311,11 +320,13 @@ function registerRuntimeWindowLifecycle(
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
-  const send = (channel: string, ...args: unknown[]): void => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(channel, ...args)
-    }
-  }
+  const mainWebContents = mainWindow.webContents
+  const rendererNotifications = createRuntimeRendererNotificationSender({
+    isWindowDestroyed: () => mainWindow.isDestroyed(),
+    webContents: mainWebContents,
+    onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
+  })
+  const send = rendererNotifications.send
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
@@ -394,7 +405,7 @@ function registerRuntimeWindowLifecycle(
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
-        send('ui:createTerminal', {
+        const sent = send('ui:createTerminal', {
           requestId,
           worktreeId,
           ptyId: opts.ptyId,
@@ -417,6 +428,11 @@ function registerRuntimeWindowLifecycle(
             : {}),
           ...(opts.focus !== undefined ? { focus: opts.focus } : {})
         })
+        if (!sent) {
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(new Error('runtime_unavailable'))
+        }
       }),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
@@ -482,11 +498,23 @@ function registerRuntimeWindowLifecycle(
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver })
   })
-  // Why: fail closed during renderer reload so CLI calls can't act on stale terminal mappings.
-  mainWindow.webContents.on('did-start-loading', () => {
-    runtime.markRendererReloading(mainWindow.id)
+  registerRendererDocumentNavigation(mainWebContents, () => {
+    rendererNotifications.onMainFrameReloadStarted()
+    const fence = runtime.markRendererReloading(mainWindow.id)
+    return () => {
+      if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
+        rendererNotifications.onMainFrameReloadCancelled()
+      }
+    }
+  })
+  mainWebContents.on('did-finish-load', () => {
+    rendererNotifications.onMainFrameLoadFinished()
+  })
+  mainWebContents.on('render-process-gone', () => {
+    rendererNotifications.onRendererProcessGone()
   })
   mainWindow.on('closed', () => {
+    rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {
       // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.
@@ -530,6 +558,8 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
+  ipcMain.removeHandler('updater:getLinuxPackageInstallInstructions')
+  ipcMain.removeHandler('updater:showLinuxPackage')
   ipcMain.removeHandler('updater:listBuilds')
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
@@ -542,6 +572,16 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
+  // Why: the response carries a local package path and the reveal touches the native desktop, so
+  // neither may be reached from a guest, dashboard popout, stale window, or utility renderer.
+  ipcMain.handle('updater:getLinuxPackageInstallInstructions', (event) => {
+    assertTrustedUpdaterRecoverySender(event)
+    return getLinuxPackageInstallInstructions()
+  })
+  ipcMain.handle('updater:showLinuxPackage', (event) => {
+    assertTrustedUpdaterRecoverySender(event)
+    return showLinuxPackage()
+  })
   ipcMain.handle(
     'updater:listBuilds',
     async (_event, channel: ReleaseChannel): Promise<ReleaseBuildListResult> => {
@@ -557,4 +597,10 @@ export function registerUpdaterHandlers(_store: Store): void {
       }
     }
   )
+}
+
+function assertTrustedUpdaterRecoverySender(event: IpcMainInvokeEvent): void {
+  if (!isTrustedUIRenderer(event.sender)) {
+    throw new Error('Unauthorized updater package recovery sender')
+  }
 }

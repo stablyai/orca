@@ -71,7 +71,9 @@ import {
   sameTerminalOutputSourceIdentity,
   type TerminalOutputSourceRange
 } from '../../../../shared/terminal-output-source-range'
+import type { TerminalSnapshotUnavailableReason } from '../../../../shared/terminal-snapshot-unavailability'
 import type { RemoteTerminalSourceRangeReplacementReservation } from '../../remote-terminal-source-range-consumer'
+import { withTerminalCloseAttribution } from '../terminal-close-attribution'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
@@ -92,9 +94,13 @@ type SnapshotFrameOptions = {
   cwd?: string | null
   truncated?: boolean
   truncatedByByteBudget?: boolean
+  // Why: distinguishes "I could not answer right now" from a genuinely empty buffer; omitted on success.
+  unavailable?: TerminalSnapshotUnavailableReason
   source?: 'headless' | 'renderer'
   oscLinks?: TerminalOscLinkRange[]
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags proven at this frame's own `seq`. */
+  kittyKeyboardFlags?: number
 }
 
 type SerializedSnapshot = {
@@ -109,6 +115,7 @@ type SerializedSnapshot = {
   scrollbackRows: number
   truncatedByByteBudget: boolean
   pendingEscapeTailAnsi?: string
+  kittyKeyboardFlags?: number
 } | null
 
 type TerminalViewportClient = {
@@ -131,6 +138,7 @@ type TerminalMultiplexStream = {
   ackInFlightBytes: number
   ackWindowBytes: number
   supportsOutputPause: boolean
+  supportsWriteUnavailable: boolean
   outputPaused: boolean
   supportsDesktopViewportClaims: boolean
   desktopClaimTail: Promise<boolean>
@@ -311,6 +319,13 @@ function resolveMobileFloorClientId(
   return null
 }
 
+type TerminalStreamInputOutcome = 'delivered' | 'rejected' | 'failed'
+
+function isTerminalStreamInputRejection(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('terminal_not_writable') || message.includes('terminal_handle_stale')
+}
+
 async function sendTerminalStreamInput(
   runtime: OrcaRuntimeService,
   args: {
@@ -319,14 +334,14 @@ async function sendTerminalStreamInput(
     client: TerminalViewportClient | undefined
     isMobile: boolean
   }
-): Promise<void> {
+): Promise<TerminalStreamInputOutcome> {
   const action = { text: args.text, enter: false, interrupt: false }
   const clientId = args.isMobile ? args.client?.id : undefined
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
   try {
     if (!clientId) {
-      await runtime.sendTerminal(args.terminal, action)
-      return
+      const result = await runtime.sendTerminal(args.terminal, action)
+      return result.accepted ? 'delivered' : 'rejected'
     }
     const result = await runtime.sendTerminal(args.terminal, action, {
       reserveWrite: (writePtyId) => {
@@ -340,9 +355,12 @@ async function sendTerminalStreamInput(
     })
     if (!result.accepted) {
       floorClaim.current?.rollback()
+      return 'rejected'
     }
-  } catch {
+    return 'delivered'
+  } catch (error) {
     floorClaim.current?.rollback()
+    return isTerminalStreamInputRejection(error) ? 'rejected' : 'failed'
   }
 }
 
@@ -627,11 +645,21 @@ function sendSnapshotFrames(
         requestId: options.requestId,
         displayMode: options.displayMode,
         reason: options.reason,
+        unavailable: options.unavailable,
         seq: options.seq,
         cwd: options.cwd,
         source: options.source,
         oscLinks: options.oscLinks,
         pendingEscapeTailAnsi: options.pendingEscapeTailAnsi,
+        // Why conditional and additive: old clients ignore the unknown field,
+        // and a new client must read absence as unknown rather than zero, so
+        // no opcode or capability negotiation is involved (Rule 1 of
+        // docs/reference/remote-wire-compatibility.md).
+        // Why `seq` is required: the flags are only proven at this frame's own
+        // seq, so without a replay boundary the client cannot order them.
+        ...(typeof options.seq === 'number' && options.kittyKeyboardFlags !== undefined
+          ? { kittyKeyboardFlags: options.kittyKeyboardFlags }
+          : {}),
         truncated: options.truncated === true,
         truncatedByByteBudget: options.truncatedByByteBudget === true
       })
@@ -812,7 +840,10 @@ const TerminalListParams = z.object({
     .array(requiredString('Missing terminal handle').pipe(z.string().max(256)))
     .max(64)
     .optional(),
-  requireFreshPtyLiveness: z.boolean().optional()
+  requireFreshPtyLiveness: z.boolean().optional(),
+  // Why: layouts are ~31% of a large listing and only the human CLI formatter
+  // reads them. Absent means "include" so pre-flag clients keep rendering them.
+  includeVisualLayouts: z.boolean().optional()
 })
 
 const TerminalResolveActive = z.object({
@@ -1009,7 +1040,8 @@ const TerminalSubscribe = TerminalHandle.extend({
     .object({
       terminalBinaryStream: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
-      mobileInputLeaseOnly: z.literal(1).optional()
+      mobileInputLeaseOnly: z.literal(1).optional(),
+      writeUnavailable: z.literal(1).optional()
     })
     .optional()
 })
@@ -1030,7 +1062,8 @@ const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       ackOutput: z.literal(1).optional(),
       ackOutputSourceRanges: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
-      outputPause: z.literal(1).optional()
+      outputPause: z.literal(1).optional(),
+      writeUnavailable: z.literal(1).optional()
     })
     .optional()
 })
@@ -1107,7 +1140,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
-        requireFreshPtyLiveness: params.requireFreshPtyLiveness
+        requireFreshPtyLiveness: params.requireFreshPtyLiveness,
+        includeVisualLayouts: params.includeVisualLayouts
       })
   }),
   defineMethod({
@@ -1499,15 +1533,27 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.close',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      close: await runtime.closeTerminal(params.terminal)
+    handler: async (params, context) => ({
+      close: await withTerminalCloseAttribution(
+        'terminal.close',
+        context,
+        'terminal',
+        params.terminal,
+        () => context.runtime.closeTerminal(params.terminal)
+      )
     })
   }),
   defineMethod({
     name: 'terminal.closeTab',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      close: await runtime.closeTerminalTab(params.terminal)
+    handler: async (params, context) => ({
+      close: await withTerminalCloseAttribution(
+        'terminal.closeTab',
+        context,
+        'terminal-tab',
+        params.terminal,
+        () => context.runtime.closeTerminalTab(params.terminal)
+      )
     })
   }),
   defineMethod({
@@ -1654,6 +1700,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         sendFrame(streamId, TerminalStreamOpcode.Error, encodeTerminalStreamText(message))
         emit({ type: 'error', streamId, message })
       }
+      const notifyStreamWriteUnavailable = (
+        stream: TerminalMultiplexStream,
+        outcome: TerminalStreamInputOutcome
+      ): void => {
+        if (
+          closed ||
+          streams.get(stream.streamId) !== stream ||
+          outcome !== 'rejected' ||
+          !stream.supportsWriteUnavailable
+        ) {
+          return
+        }
+        sendFrame(stream.streamId, TerminalStreamOpcode.WriteUnavailable)
+      }
       const sendResizedFrame = (
         stream: TerminalMultiplexStream,
         event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
@@ -1792,6 +1852,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               reason: 'ack-pending-overflow',
               seq: serialized.seq,
               source: serialized.source,
+              kittyKeyboardFlags: serialized.kittyKeyboardFlags,
               truncatedByByteBudget: serialized.truncatedByByteBudget,
               data: serialized.data
             }
@@ -2106,16 +2167,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
           // Mobile already has the higher-priority floor, so a rejected desktop claim must not suppress later phone input.
           const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
-          void inputClaimTail.then((claimed) => {
+          void inputClaimTail.then(async (claimed) => {
             if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
               return
             }
-            return sendTerminalStreamInput(runtime, {
+            const outcome = await sendTerminalStreamInput(runtime, {
               terminal: stream.terminal,
               text,
               client: stream.client,
               isMobile: stream.isMobile
             })
+            notifyStreamWriteUnavailable(stream, outcome)
           })
           return
         }
@@ -2262,6 +2324,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 displayMode,
                 truncated: true,
                 truncatedByByteBudget: false,
+                unavailable: 'pending-output-overflowed',
                 data: ''
               })
               return
@@ -2277,10 +2340,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             seq: serialized?.seq,
             cwd: serialized?.cwd,
             source: serialized?.source,
+            kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
             oscLinks: serialized?.oscLinks,
             pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
             truncated: false,
             truncatedByByteBudget: serialized?.truncatedByByteBudget,
+            // Why: no serializer answered, which is not proof the pane is empty — say so instead of passing off '' as the buffer.
+            unavailable: serialized ? undefined : 'no-serializable-buffer',
             data: serialized?.data ?? ''
           })
         } catch (error) {
@@ -2452,6 +2518,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           ackInFlightBytes: 0,
           ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
           supportsOutputPause: request.capabilities?.outputPause === 1,
+          supportsWriteUnavailable: request.capabilities?.writeUnavailable === 1,
           outputPaused: false,
           supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
           desktopClaimTail: Promise.resolve(true),
@@ -2570,7 +2637,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const size = runtime.getTerminalSize(ptyId)
           const displayMode = runtime.getMobileDisplayMode(ptyId)
           const layoutSeq = runtime.getLayout(ptyId)?.seq
-          const snapshotFrameSeq = serialized?.seq ?? layoutSeq
+          // Why: layout versions and output offsets are different sequence domains.
           const snapshotOutputSeq = serialized?.seq
           emit({
             type: 'subscribed',
@@ -2611,11 +2678,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               cols: serialized?.cols ?? size?.cols ?? 80,
               rows: serialized?.rows ?? size?.rows ?? 24,
               displayMode,
-              seq: snapshotFrameSeq,
+              seq: snapshotOutputSeq,
               cwd: serialized?.cwd,
               truncated: initialOutputOverflowed,
               truncatedByByteBudget: serialized?.truncatedByByteBudget,
               source: serialized?.source,
+              kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
               oscLinks: serialized?.oscLinks,
               pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
               data:
@@ -2868,6 +2936,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           : runtime.getRendererTerminalSerializerGeneration(ptyId)
         : 0
       const supportsDesktopViewportClaims = params.capabilities?.desktopViewportClaims === 1
+      const supportsWriteUnavailable = params.capabilities?.writeUnavailable === 1
       if (mobileInputLeaseOnly && clientId) {
         let closed = false
         let resolveStream = (): void => {}
@@ -2974,8 +3043,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             serialized: serialized?.data,
             oscLinks: serialized?.oscLinks,
             cwd: serialized?.cwd,
-            cols: serialized?.cols ?? size?.cols,
-            rows: serialized?.rows ?? size?.rows,
+            // Why: an empty snapshot with no PTY size must still report the dims the fit
+            // will produce — dimless frames re-armed the mobile fit loop (STA-3337).
+            cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols,
+            rows: serialized?.rows ?? size?.rows ?? params.viewport?.rows,
             displayMode,
             seq
           })
@@ -3113,12 +3184,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
                 return
               }
-              await sendTerminalStreamInput(runtime, {
+              const outcome = await sendTerminalStreamInput(runtime, {
                 terminal: params.terminal,
                 text,
                 client: params.client,
                 isMobile
               })
+              if (!closed && outcome === 'rejected' && supportsWriteUnavailable) {
+                sendFrame(TerminalStreamOpcode.WriteUnavailable)
+              }
             })
             return
           }
@@ -3365,8 +3439,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         const displayMode = runtime.getMobileDisplayMode(ptyId)
         // Why: layout seq is the mobile stale-event filter's high-water mark (undefined pre-transition is fail-open). See docs/mobile-terminal-layout-state-machine.md.
         const layoutSeq = runtime.getLayout(ptyId)?.seq
-        const snapshotFrameSeq = serialized?.seq ?? layoutSeq
-        // Why: track the seq that actually covered the buffered chunks (recovery snapshots advance it) or an absorbed query gets zero replies.
+        // Why: only an output offset can cover buffered chunks; layout versions are a separate sequence domain.
         let snapshotOutputSeq = serialized?.seq
         emit({
           type: 'subscribed',
@@ -3381,10 +3454,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         })
         const snapshotStats = sendSnapshotFrames(sendFrame, {
           kind: 'scrollback',
-          cols: serialized?.cols ?? size?.cols ?? 80,
-          rows: serialized?.rows ?? size?.rows ?? 24,
+          // Why: prefer the subscriber's viewport over the 80x24 stopgap when the PTY has
+          // no size yet — the mismatch made mobile burn its resubscribe budget (STA-3337).
+          cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols ?? 80,
+          rows: serialized?.rows ?? size?.rows ?? params.viewport?.rows ?? 24,
           displayMode,
-          seq: snapshotFrameSeq,
+          seq: snapshotOutputSeq,
           cwd: serialized?.cwd,
           truncated: initialOutputOverflowed,
           truncatedByByteBudget: serialized?.truncatedByByteBudget,

@@ -16,6 +16,7 @@ export type PreflightSlice = {
   preflightStatusError: string | null
 
   refreshPreflightStatus: (options?: { force?: boolean }) => Promise<void>
+  invalidatePreflightStatus: () => void
 }
 
 let nonForcedPreflightRequest: { key: string; promise: Promise<void> } | null = null
@@ -51,6 +52,19 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
   preflightStatusLoading: false,
   preflightStatusError: null,
 
+  invalidatePreflightStatus: () => {
+    latestPreflightRequestId += 1
+    nonForcedPreflightRequest = null
+    forcedPreflightRequest = null
+    set({
+      preflightStatus: null,
+      preflightStatusChecked: false,
+      preflightStatusContextKey: null,
+      preflightStatusLoading: false,
+      preflightStatusError: null
+    })
+  },
+
   refreshPreflightStatus: async (options) => {
     const force = options?.force === true
     const context = getLocalPreflightContext(get())
@@ -76,10 +90,13 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
       preflightStatusError: null
     })
 
+    const localPreflightCheck = window.api?.preflight?.check
     const request = (
       runtimeTarget.kind === 'environment'
         ? callRuntimeRpc<PreflightStatus>(runtimeTarget, 'preflight.check', force ? { force } : {})
-        : window.api.preflight.check(preflightArgs)
+        : localPreflightCheck
+          ? localPreflightCheck(preflightArgs)
+          : Promise.reject(new Error('Desktop preflight API is unavailable.'))
     )
       .then((status) => {
         if (requestId !== latestPreflightRequestId) {

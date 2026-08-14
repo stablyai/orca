@@ -24,7 +24,6 @@ vi.mock('child_process', () => ({
 
 import {
   buildSshArgs,
-  findSystemSsh,
   downloadFileViaSystemSsh,
   spawnSystemSsh,
   spawnSystemSshCommand,
@@ -151,22 +150,6 @@ function createMockChildProcess(): EventEmitter & {
   })
   return child
 }
-
-describe('findSystemSsh', () => {
-  beforeEach(() => {
-    existsSyncMock.mockReset()
-  })
-
-  it('returns the first existing ssh path', () => {
-    mockSystemSshExists()
-    expect(findSystemSsh()).toBe(SYSTEM_SSH_PATH)
-  })
-
-  it('returns null when no ssh binary is found', () => {
-    existsSyncMock.mockReturnValue(false)
-    expect(findSystemSsh()).toBeNull()
-  })
-})
 
 describe('spawnSystemSsh', () => {
   let mockProc: {
@@ -827,6 +810,7 @@ describe('spawnSystemSsh', () => {
 
   it('throws when no system ssh is found', () => {
     existsSyncMock.mockReturnValue(false)
+    vi.stubEnv('PATH', '')
     expect(() => spawnSystemSsh(createTarget())).toThrow('No system ssh binary found')
   })
 

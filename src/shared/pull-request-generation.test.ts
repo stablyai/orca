@@ -33,6 +33,84 @@ describe('buildPullRequestFieldsPrompt', () => {
     expect(prompt).toContain('Use conventional PR titles.')
   })
 
+  it('requires ELI5 problem and solution sections before implementation details', () => {
+    const prompt = buildPullRequestFieldsPrompt(context, '')
+
+    expect(prompt).toContain('start with `## Problem`, then `## Solution`')
+    expect(prompt).toContain('simple ELI5 language before details')
+    expect(prompt).toContain('Reuse equivalent existing sections instead of duplicating them')
+  })
+
+  it('includes GitHub issue details and complete or partial reference guidance', () => {
+    const prompt = buildPullRequestFieldsPrompt(
+      {
+        ...context,
+        provider: 'github',
+        linkedIssueDetails: {
+          provider: 'github',
+          number: 12398,
+          title: 'Stop phantom polling',
+          description: 'Helpers repeatedly stat Linux-only PATH entries.'
+        }
+      },
+      ''
+    )
+
+    expect(prompt).toContain('Linked GitHub issue: #12398 Stop phantom polling')
+    expect(prompt).toContain('Issue description:\nHelpers repeatedly stat Linux-only PATH entries.')
+    expect(prompt).toContain('`Fixes #12398` only for a complete fix')
+    expect(prompt).toContain('use `Refs #12398`')
+  })
+
+  it('uses GitLab-specific issue references', () => {
+    const prompt = buildPullRequestFieldsPrompt(
+      {
+        ...context,
+        provider: 'gitlab',
+        linkedIssueDetails: {
+          provider: 'gitlab',
+          number: 42,
+          title: 'Fix runner polling',
+          description: 'The runner checks paths that cannot exist.'
+        }
+      },
+      ''
+    )
+
+    expect(prompt).toContain('Linked GitLab issue: #42 Fix runner polling')
+    expect(prompt).toContain('`Closes #42` only for a complete fix')
+    expect(prompt).toContain('use `Related to #42`')
+    expect(prompt).not.toContain('GitHub issue')
+  })
+
+  it('uses the active provider when no issue is linked', () => {
+    const prompt = buildPullRequestFieldsPrompt({ ...context, provider: 'bitbucket' }, '')
+
+    expect(prompt).toContain('Linked Bitbucket issue: (none)')
+    expect(prompt).toContain('No Bitbucket issue is linked; do not invent one')
+    expect(prompt).not.toContain('GitHub issue')
+  })
+
+  it('uses Azure DevOps work-item syntax', () => {
+    const prompt = buildPullRequestFieldsPrompt(
+      {
+        ...context,
+        provider: 'azure-devops',
+        linkedIssueDetails: {
+          provider: 'azure-devops',
+          number: 99,
+          title: 'Stop unnecessary polling',
+          description: 'Avoid checks for unavailable tools.'
+        }
+      },
+      ''
+    )
+
+    expect(prompt).toContain('Linked Azure DevOps issue: AB#99 Stop unnecessary polling')
+    expect(prompt).toContain('`Fixes AB#99` only for a complete fix')
+    expect(prompt).toContain('use `AB#99`')
+  })
+
   it('tells the agent to preserve existing review templates', () => {
     const prompt = buildPullRequestFieldsPrompt(
       {
@@ -42,7 +120,7 @@ describe('buildPullRequestFieldsPrompt', () => {
       ''
     )
 
-    expect(prompt).toContain('preserve its headings, required sections, and checklists')
+    expect(prompt).toContain('Retain every heading, required section, and checklist')
     expect(prompt).toContain('Leave genuinely unknown template items as TODO or unchecked')
   })
 })

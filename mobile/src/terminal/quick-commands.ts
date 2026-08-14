@@ -1,7 +1,9 @@
-import type { TerminalQuickCommand, TuiAgent } from '../../../src/shared/types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import {
   applyTerminalQuickCommandMutation,
   flattenTerminalQuickCommand,
+  getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand,
   MAX_QUICK_COMMANDS,
   MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
@@ -20,6 +22,7 @@ import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
 // — agent-branded labels, native row truncation, and the launch plan — live here.
 export {
   isTerminalAgentQuickCommand as isAgentQuickCommand,
+  getTerminalQuickCommandBody,
   terminalQuickCommandMatchesRepo as quickCommandMatchesRepo,
   supportsTerminalAgentQuickCommand,
   MAX_QUICK_COMMANDS,
