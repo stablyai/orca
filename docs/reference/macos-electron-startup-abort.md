@@ -66,11 +66,11 @@ sandbox workaround.
 
 - `orca open` reopens the packaged `Orca.app` via Launch Services (`open`), and
   does not exec `Contents/MacOS/Orca` when that path is the packaged binary.
-- `orca serve` (without `--serve-recipe-json`) does not spawn a second GUI
-  process when this `userData` profile is already running (exit code `3`, same
-  contract as the single-instance lock). A second exec is what produced the
-  crash loop: each child died in `_RegisterApplication` before JS could take
-  the lock.
+- `orca serve` (without `--serve-recipe-json`) takes an exclusive
+  `orca-serve.lock` in the `userData` profile, then refuses to spawn if a
+  runtime is already live (exit code `3`, same contract as the single-instance
+  lock). The lock is what stops two overlapping CLIs from both exec'ing
+  Electron before JS can take the single-instance lock.
 - `orca serve --serve-recipe-json` still detaches an ephemeral pairing helper
   and skips that already-running check.
 - If a spawn still SIGABRTs, the CLI names this abort and points at

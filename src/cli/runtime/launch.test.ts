@@ -354,6 +354,34 @@ describe('serveOrcaApp', () => {
     )
   })
 
+  it('lets only one overlapping serve spawn a GUI child', async () => {
+    let onExit: ((code: number | null, signal: string | null) => void) | undefined
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn(
+        (event: string, handler: (code: number | null, signal: string | null) => void) => {
+          if (event === 'exit') {
+            onExit = handler
+          }
+          return child
+        }
+      )
+    }
+    spawnMock.mockReturnValue(child)
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const first = serveOrcaApp({ json: true })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+    await expect(serveOrcaApp({ json: true })).resolves.toBe(3)
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('already running for this userData profile')
+    )
+
+    onExit?.(0, null)
+    await expect(first).resolves.toBe(0)
+    expect(spawnMock).toHaveBeenCalledOnce()
+  })
+
   it('still detaches a recipe-json server when a desktop profile is already running', async () => {
     writeFileSync(
       join(process.env.ORCA_USER_DATA_PATH!, 'orca-runtime.json'),
