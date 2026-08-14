@@ -75,11 +75,6 @@ const runCommand: CommandRunner = (command, args, signal) =>
     )
   })
 
-function parseResetDate(value: string): number | null {
-  const timestamp = Date.parse(`${value}T00:00:00.000Z`)
-  return Number.isFinite(timestamp) ? timestamp : null
-}
-
 export function parseKiroUsageOutput(output: string): ProviderRateLimits {
   const readable = stripAnsiEscapeSequences(output).replace(/\r/g, '')
   const header = readable.match(
@@ -104,7 +99,9 @@ export function parseKiroUsageOutput(output: string): ProviderRateLimits {
     {
       usedPercent,
       windowMinutes: MONTHLY_WINDOW_MINUTES,
-      resetsAt: parseResetDate(header[1]),
+      // Kiro reports a calendar date without a time zone or time of day. Keep it as
+      // display metadata instead of inventing a UTC-midnight countdown.
+      resetsAt: null,
       resetDescription: header[1]
     },
     header[2].trim()

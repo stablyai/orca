@@ -45,6 +45,18 @@ export function formatTimeAgo(ts: number): string {
   return `${hours}h ago`
 }
 
+export function formatRateLimitResetLabel(window: RateLimitWindow): string | null {
+  if (window.resetsAt) {
+    return formatResetCountdown(window.resetsAt - Date.now())
+  }
+  if (window.resetDescription && /^\d{4}-\d{2}-\d{2}$/.test(window.resetDescription)) {
+    return translate('auto.components.status.bar.tooltip.resetOnDate', 'Resets on {{value0}}', {
+      value0: window.resetDescription
+    })
+  }
+  return null
+}
+
 // Re-export so existing tooltip consumers/tests keep their import path; the
 // implementation is shared with mobile in src/shared/rate-limit-reset-format.
 export { formatResetCountdown }
@@ -223,7 +235,7 @@ function ProviderRateLimitWindowSection({
   }
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
+  const resetLabel = formatRateLimitResetLabel(window)
 
   return (
     <div className="space-y-1">

@@ -11,7 +11,10 @@ Credits (1233.74 of 2000 covered in plan)
 
     expect(result).toMatchObject({ provider: 'kiro', status: 'ok', planType: 'KIRO PRO+' })
     expect(result.monthly?.usedPercent).toBeCloseTo(61.687)
-    expect(result.monthly?.resetsAt).toBe(Date.parse('2026-09-01T00:00:00.000Z'))
+    expect(result.monthly).toMatchObject({
+      resetsAt: null,
+      resetDescription: '2026-09-01'
+    })
   })
 
   it('runs the local non-model usage command', async () => {

@@ -27,6 +27,7 @@ import {
   clampUsedPercent,
   formatResetCreditExpiry,
   formatResetCountdown,
+  formatRateLimitResetLabel,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
   getWindowSections,
@@ -69,6 +70,19 @@ describe('formatResetCountdown', () => {
 
   it('keeps the "in" preposition for future reset times', () => {
     expect(formatResetCountdown(12 * 60 * 60_000 + 41 * 60_000)).toBe('Resets in 12h 41m')
+  })
+})
+
+describe('formatRateLimitResetLabel', () => {
+  it('shows a date-only reset without inventing an exact countdown', () => {
+    expect(
+      formatRateLimitResetLabel({
+        usedPercent: 62,
+        windowMinutes: 43_200,
+        resetsAt: null,
+        resetDescription: '2026-09-01'
+      })
+    ).toBe('Resets on 2026-09-01')
   })
 })
 
