@@ -105,4 +105,47 @@ describe('AgentExecHandler Windows command spawning', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
   })
+  it('routes multiline argv through a sibling PowerShell shim on Windows hosts', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-agent-exec-powershell-'))
+    const batchShim = join(tempDir, 'cursor-agent.cmd')
+    const powerShellShim = join(tempDir, 'cursor-agent.ps1')
+    writeFileSync(batchShim, '@echo off\r\n')
+    writeFileSync(powerShellShim, 'exit 0\r\n')
+    try {
+      await withPlatform('win32', async () => {
+        const child = createFakeChild()
+        spawnMock.mockReturnValue(child as never)
+        const handlers = createHandlers()
+
+        const pending = handlers.get('agent.execNonInteractive')!(
+          {
+            binary: batchShim,
+            args: ['--print', 'line one\nline two'],
+            cwd: 'C:\\repo',
+            stdin: null,
+            timeoutMs: 5_000,
+            env: { SystemRoot: 'D:\\Windows' }
+          },
+          requestContext()
+        )
+
+        child.emit('close', 0)
+        await expect(pending).resolves.toMatchObject({ exitCode: 0, timedOut: false })
+        const [spawnCommand, spawnArgs] = spawnMock.mock.calls[0] ?? []
+        expect(spawnCommand).toBe('D:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+        expect(spawnArgs).toEqual([
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          powerShellShim,
+          '--print',
+          'line one\nline two'
+        ])
+      })
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
 })

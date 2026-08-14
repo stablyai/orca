@@ -234,6 +234,47 @@ describe('getSpawnArgsForWindows', () => {
       }
     })
   })
+
+  it('routes unsafe argv through an existing sibling PowerShell shim when allowed', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-win-powershell-shim-'))
+    try {
+      const batchShim = join(tempDir, 'cursor-agent.cmd')
+      const powerShellShim = join(tempDir, 'cursor-agent.ps1')
+      writeFileSync(batchShim, '@echo off\r\n')
+      writeFileSync(powerShellShim, 'exit 0\r\n')
+
+      withPlatform('win32', () => {
+        expect(
+          getSpawnArgsForWindows(batchShim, ['--version'], {
+            allowPowerShellShimFallback: true
+          })
+        ).toEqual({
+          spawnCmd: getCmdExePath(),
+          spawnArgs: ['/d', '/c', batchShim, '--version']
+        })
+        expect(
+          getSpawnArgsForWindows(batchShim, ['--print', 'line one\nline two'], {
+            allowPowerShellShimFallback: true,
+            env: { SystemRoot: 'C:\\Windows' }
+          })
+        ).toEqual({
+          spawnCmd: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+          spawnArgs: [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            powerShellShim,
+            '--print',
+            'line one\nline two'
+          ]
+        })
+      })
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('resolveWindowsCommand', () => {
