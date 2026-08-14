@@ -17,7 +17,7 @@ import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-
 import { getConnectionId } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
-import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
+import { getJiraIssueWorkspaceName, getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import {
   buildDirectWorkItemAgentStartupPlan,
@@ -129,7 +129,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const workspaceName = getWorkspaceSeedName({
     explicitName: item.linearIdentifier
       ? getLinearIssueWorkspaceName({ identifier: item.linearIdentifier, title: item.title })
-      : (workspaceIntentName?.seedName ?? ''),
+      : item.jiraIdentifier
+        ? getJiraIssueWorkspaceName({ key: item.jiraIdentifier, title: item.title })
+        : (workspaceIntentName?.seedName ?? ''),
     prompt: '',
     linkedIssueNumber: itemType === 'issue' ? (itemNumber ?? null) : null,
     linkedPR: itemType === 'pr' ? (itemNumber ?? null) : null

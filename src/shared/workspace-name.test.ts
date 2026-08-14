@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  getJiraIssueWorkspaceName,
   getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -77,7 +78,7 @@ describe('getLinkedWorkItemWorkspaceName', () => {
       })
     ).toEqual({
       displayName: 'PROJ-7 Fix flaky import',
-      seedName: 'proj-7-fix-flaky-import'
+      seedName: 'PROJ-7-fix-flaky-import'
     })
   })
 })
@@ -248,6 +249,26 @@ describe('getWorkspaceIntentName', () => {
     expect(
       split.mock.calls.filter(([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+')
     ).toHaveLength(0)
+  })
+})
+
+describe('getJiraIssueWorkspaceName', () => {
+  it('keeps the Jira key uppercase in the workspace seed', () => {
+    expect(
+      getJiraIssueWorkspaceName({
+        key: 'loan-14770',
+        title: 'Accept late escrow disbursement failure amendments'
+      })
+    ).toBe('LOAN-14770-accept-late-escrow-disbursement-failure')
+  })
+
+  it('does not duplicate a key already present in the Jira title', () => {
+    expect(
+      getJiraIssueWorkspaceName({
+        key: 'LOAN-14770',
+        title: 'LOAN-14770 Accept late escrow disbursement failure amendments'
+      })
+    ).toBe('LOAN-14770-accept-late-escrow-disbursement-failure')
   })
 })
 

@@ -48,6 +48,19 @@ describe('workspace source policy', () => {
       url: 'https://company.atlassian.net/browse/ORCA-123',
       jiraIdentifier: 'ORCA-123'
     })
+    expect(
+      getWorkspaceSourceName({
+        provider: 'jira',
+        type: 'issue',
+        number: 0,
+        title: 'Fix Jira card details',
+        url: 'https://company.atlassian.net/browse/ORCA-123',
+        jiraIdentifier: 'ORCA-123'
+      })
+    ).toEqual({
+      seedName: 'ORCA-123-fix-jira-card-details',
+      displayName: 'ORCA-123 Fix Jira card details'
+    })
   })
 
   it('preserves global work-item sources across repo changes', () => {

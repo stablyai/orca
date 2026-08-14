@@ -174,9 +174,53 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
   return `Issue ${item.number}`
 }
 
+function trimWorkspaceSeed(input: string): string {
+  return input
+    .slice(0, 48)
+    .replace(/[-._]+$/g, '')
+}
+
+/**
+ * Build a git-safe workspace/branch seed for Jira issues: uppercase ticket key
+ * plus a kebab-case title slug (e.g. `LOAN-14770-accept-late-escrow-fix`).
+ */
+export function getJiraIssueWorkspaceName(issue: { key: string; title: string }): string {
+  const key = issue.key
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  const titleSlug = getLinkedWorkItemSuggestedName({ title: issue.title })
+  if (!key) {
+    return titleSlug
+  }
+  let dedupedTitleSlug = titleSlug
+  const keyLower = key.toLowerCase()
+  if (titleSlug === keyLower) {
+    dedupedTitleSlug = ''
+  } else if (titleSlug.startsWith(`${keyLower}-`)) {
+    dedupedTitleSlug = titleSlug.slice(keyLower.length + 1)
+  }
+  return trimWorkspaceSeed([key, dedupedTitleSlug].filter(Boolean).join('-'))
+}
+
 export function getLinkedWorkItemWorkspaceName(
   item: WorkspaceIntentWorkItem
 ): WorkspaceIntentName | null {
+  if (item.jiraIdentifier && !item.linearIdentifier) {
+    const identifier = item.jiraIdentifier.toUpperCase()
+    let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
+    subject = subject
+      .replace(new RegExp(`^${escapeRegExp(item.jiraIdentifier)}\\s*[:-]?\\s*`, 'i'), '')
+      .trim()
+    const displayName = [identifier, subject].filter(Boolean).join(' ') || identifier
+    const seedName = getJiraIssueWorkspaceName({ key: item.jiraIdentifier, title: item.title })
+    if (!seedName) {
+      return null
+    }
+    return { displayName, seedName }
+  }
+
   const identifier = item.linearIdentifier ?? item.jiraIdentifier
   let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
   if (identifier) {
