@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ManualRepoOrderEntry, Repo } from './types'
+import type { Repo } from './repo-types'
+import type { ManualRepoOrderEntry } from './ui-chrome-types'
 import {
   applyManualRepoOrder,
   getManualRepoOrder,
@@ -25,6 +26,26 @@ const remoteDelta = repo('delta', 'runtime:node-b')
 describe('manual repo order', () => {
   it('preserves source order when no overlay exists', () => {
     expect(applyManualRepoOrder([localBravo, localAlpha], [])).toEqual([localBravo, localAlpha])
+  })
+
+  it('returns the input array when no overlay exists', () => {
+    const repos = [localBravo, localAlpha]
+
+    expect(applyManualRepoOrder(repos, [])).toBe(repos)
+  })
+
+  it('returns the input array when the saved order moves nothing', () => {
+    const repos = [localAlpha, remoteCharlie, localBravo, remoteDelta]
+
+    expect(applyManualRepoOrder(repos, getManualRepoOrder(repos))).toBe(repos)
+  })
+
+  it('returns a new array when the saved order actually reorders', () => {
+    const repos = [localBravo, localAlpha]
+    const reordered = applyManualRepoOrder(repos, getManualRepoOrder([localAlpha, localBravo]))
+
+    expect(reordered).not.toBe(repos)
+    expect(reordered).toEqual([localAlpha, localBravo])
   })
 
   it('restores a host-qualified cross-host interleaving', () => {

@@ -6,6 +6,8 @@ export type ColdRestorePayload = {
   cols: number
   rows: number
   oscLinks?: TerminalOscLinkRange[]
+  /** Last OSC title from the recovered checkpoint; seeds title records only. */
+  lastTitle?: string
 }
 
 // Why: restore payloads remain sticky only for remount safety; cap their aggregate main-process footprint.
@@ -15,7 +17,13 @@ export function getColdRestorePayloadBytes(payload: ColdRestorePayload): number 
   const oscLinkBytes =
     payload.oscLinks?.reduce((bytes, link) => bytes + link.uri.length * 2 + 24, 0) ?? 0
   // Why: code-unit sizing bounds V8 string storage without rescanning or flattening multi-MB ropes.
-  return payload.scrollback.length * 2 + payload.cwd.length * 2 + oscLinkBytes + 16
+  return (
+    payload.scrollback.length * 2 +
+    payload.cwd.length * 2 +
+    (payload.lastTitle?.length ?? 0) * 2 +
+    oscLinkBytes +
+    16
+  )
 }
 
 export class ColdRestorePayloadCache {

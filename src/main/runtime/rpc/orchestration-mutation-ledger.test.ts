@@ -38,7 +38,7 @@ describe('durable orchestration mutation ledger', () => {
     }
   })
 
-  function createHarness(dbPath: string | ':memory:' = ':memory:') {
+  function createHarness(dbPath: (string & {}) | ':memory:' = ':memory:') {
     const db = new OrchestrationDb(dbPath)
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
@@ -193,6 +193,54 @@ describe('durable orchestration mutation ledger', () => {
       request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
     )
     expect(result).toMatchObject({ ok: false, error: { code: 'operation_unknown' } })
+    db.close()
+  })
+
+  it('resumes a pending idempotent worker release after restart', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const params = { dispatch: 'ctx_release' }
+    const callerFingerprint = createHash('sha256').update('caller-token').digest('hex')
+    const payloadHash = createHash('sha256')
+      .update(JSON.stringify({ method: 'orchestration.workerRelease', params }))
+      .digest('hex')
+    db.beginMutationReceipt({
+      callerFingerprint,
+      requestId: 'mutation_release',
+      method: 'orchestration.workerRelease',
+      payloadHash
+    })
+    const effect = vi.fn().mockReturnValue({ state: 'release_pending' })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: [
+        defineMethod({
+          name: 'orchestration.workerRelease',
+          params: z.object({ dispatch: z.string() }),
+          handler: effect
+        })
+      ]
+    })
+
+    const result = await dispatcher.dispatch({
+      id: 'rpc_release_retry',
+      authToken: 'caller-token',
+      method: 'orchestration.workerRelease',
+      params,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'mutation_release'
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        state: 'release_pending',
+        mutation: { requestId: 'mutation_release', replayed: true }
+      }
+    })
+    expect(effect).toHaveBeenCalledTimes(1)
+    expect(db.getMutationReceipt(callerFingerprint, 'mutation_release')?.state).toBe('completed')
     db.close()
   })
 

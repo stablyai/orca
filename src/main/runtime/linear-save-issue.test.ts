@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LINEAR_WRITE_BODY_CAP } from '../../shared/linear-agent-access'
+import { LINEAR_WRITE_BODY_CAP } from '../../shared/linear/agent-access'
 import * as linearTeams from '../linear/teams'
 import { OrcaRuntimeService } from './orca-runtime'
 
@@ -23,7 +23,7 @@ const issue = {
 
 type SaveIssueInternals = {
   resolveLinearAssignee(input: string, teamId: string, workspaceId: string): Promise<string>
-  resolveLinearAgentState(input: string, states: unknown[]): unknown | null
+  resolveLinearAgentState(input: string, states: unknown[]): unknown
   buildLinearSaveUpdate(
     params: { labels?: string[] },
     current: typeof issue,

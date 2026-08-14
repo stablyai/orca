@@ -102,6 +102,23 @@ describe('AgentKanbanCard', () => {
     expect(container.querySelector('.lucide-message-circle-question-mark')).toBeNull()
   })
 
+  it('shows the saved SSH host beside the repository metadata', () => {
+    const { container } = renderCard({
+      card: card({
+        hostKind: 'ssh',
+        executionHostId: 'ssh:opaque-target',
+        hostLabel: 'openclaw'
+      }),
+      now: 2_000
+    })
+
+    expect(screen.getByLabelText('SSH host · openclaw')).toHaveAttribute(
+      'data-dashboard-host-badge',
+      'ssh'
+    )
+    expect(container.querySelector('.lucide-server')).toBeInTheDocument()
+  })
+
   it('shows review metadata and expands grouped subagents without opening the terminal', () => {
     const onOpenTerminal = vi.fn()
     renderCard({
@@ -144,7 +161,7 @@ describe('AgentKanbanCard', () => {
     expect(onOpenTerminal).toHaveBeenCalledTimes(1)
   })
 
-  it('labels one subagent and the workspace status accessibly', () => {
+  it('labels one subagent accessibly and never renders a workspace-status dot', () => {
     renderCard({
       card: card({
         workspaceStatusId: 'in-review',
@@ -156,32 +173,32 @@ describe('AgentKanbanCard', () => {
     })
 
     expect(screen.getByRole('button', { name: '1 subagent' })).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'In review' })).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'In review' })).not.toBeInTheDocument()
   })
 
-  it('tints attention amber and done green, leaving every other state neutral', () => {
+  it('tints unseen Done green and keeps acknowledged Done neutral as Idle', () => {
     const { container: attention } = renderCard({
       card: card({ bucket: 'attention', dotState: 'waiting' }),
       now: 2_000
     })
-    expect(attention.firstElementChild?.className).toContain('border-amber-500/40')
+    expect(attention.firstElementChild?.className).toContain('border-agent-question/40')
 
     cleanup()
     const { container: done } = renderCard({
-      card: card({ bucket: 'idle', dotState: 'done' }),
+      card: card({ bucket: 'done', dotState: 'done', unseen: true }),
       now: 2_000
     })
     expect(done.firstElementChild?.className).toContain('border-emerald-500/40')
 
     cleanup()
     const { container: idle } = renderCard({
-      card: card({ bucket: 'idle', dotState: 'idle' }),
+      card: card({ bucket: 'idle', dotState: 'done', unseen: false }),
       now: 2_000
     })
     const idleClassName = idle.firstElementChild?.className ?? ''
     expect(idleClassName).toContain('border-border/60')
     expect(idleClassName).not.toContain('emerald')
-    expect(idleClassName).not.toContain('amber')
+    expect(idleClassName).not.toContain('agent-question')
   })
 
   it('heads the card with the conversation name and drops the worktree to the footer', () => {

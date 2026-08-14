@@ -6,7 +6,7 @@ import {
   type RemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { remoteRuntimeTimeoutError } from './remote-runtime-request-frames'
-import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
+import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from './runtime-rpc-envelope'
 import { toRemoteRuntimeClientError } from './remote-runtime-shared-control-protocol'
 import { rejectSharedControlPendingRequest } from './remote-runtime-shared-control-state'
 import type { SharedControlPendingRequest } from './remote-runtime-shared-control-types'
@@ -19,8 +19,10 @@ export function requestSharedControl<TResult>(args: {
   method: string
   params: unknown
   timeoutMs: number
+  envelope?: RuntimeOrchestrationEnvelope
   ensureReady: () => Promise<void>
   send: (requestId: string) => void
+  retireRequestId?: (requestId: string) => void
   // Why: default off — ordinary short RPCs keep an absolute deadline. Only
   // long-polls routed through this path opt in so keepalives extend them.
   refreshTimeoutOnKeepalive?: boolean
@@ -34,7 +36,8 @@ export function requestSharedControl<TResult>(args: {
         requestId,
         deviceToken: args.deviceToken,
         method: args.method,
-        params: args.params
+        params: args.params,
+        envelope: args.envelope
       })
     )
   } catch (error) {
@@ -48,6 +51,7 @@ export function requestSharedControl<TResult>(args: {
       }
       pendingRequests.delete(requestId)
       releaseRemoteRuntimePreparedRequest(pending)
+      args.retireRequestId?.(requestId)
       // Why: one stalled method does not prove the shared socket is dead;
       // socket liveness owns connection-wide teardown so other RPCs survive.
       pending.reject(remoteRuntimeTimeoutError())

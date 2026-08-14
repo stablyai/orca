@@ -11,6 +11,17 @@ export type HooksJsonSnapshot = {
   config: HooksConfig | null
 }
 
+export function parseHooksJsonText(raw: string): HooksConfig | null {
+  // Why: JSON.parse rejects a decoded UTF-8 BOM; strip only the leading marker.
+  const content = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
+  try {
+    const parsed = JSON.parse(content)
+    return isPlainObject(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 // Why: generation guards abort a mutation when the file no longer matches the
 // bytes it was derived from; the raw snapshot and the parse must come from one
 // read or a concurrent save can slip between them unnoticed.
@@ -24,12 +35,7 @@ export function readHooksJsonWithRaw(configPath: string): HooksJsonSnapshot {
   } catch {
     return { raw: null, config: null }
   }
-  try {
-    const parsed = JSON.parse(raw)
-    return { raw, config: isPlainObject(parsed) ? parsed : null }
-  } catch {
-    return { raw, config: null }
-  }
+  return { raw, config: parseHooksJsonText(raw) }
 }
 
 export function readHooksJson(configPath: string): HooksConfig | null {

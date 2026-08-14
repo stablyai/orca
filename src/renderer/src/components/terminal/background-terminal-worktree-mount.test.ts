@@ -11,6 +11,7 @@ import {
   addBackgroundMountedTerminalWorktree,
   applyBackgroundMountTabRestriction,
   canDeferColdActivationTabsForHost,
+  canMountTerminalWorkspaceForStartup,
   collectDeferredMountTabIds,
   hasRequestedBackgroundTerminalWorktreeMount,
   planColdActivationTabDeferral,
@@ -21,6 +22,32 @@ import {
   takeAllPendingBackgroundTerminalWorktreeMounts,
   shouldMountBackgroundWorktreeTab
 } from './background-terminal-worktree-mount'
+
+describe('terminal workspace startup mount gate', () => {
+  it('waits for hydration unless startup entered degraded mode', () => {
+    expect(
+      canMountTerminalWorkspaceForStartup({
+        workspaceSessionReady: true,
+        hydrationSucceeded: false,
+        startupWorktreeRefreshCompleted: false
+      })
+    ).toBe(false)
+    expect(
+      canMountTerminalWorkspaceForStartup({
+        workspaceSessionReady: true,
+        hydrationSucceeded: true,
+        startupWorktreeRefreshCompleted: false
+      })
+    ).toBe(true)
+    expect(
+      canMountTerminalWorkspaceForStartup({
+        workspaceSessionReady: true,
+        hydrationSucceeded: false,
+        startupWorktreeRefreshCompleted: true
+      })
+    ).toBe(true)
+  })
+})
 
 describe('background terminal mount request registry', () => {
   it('replays a request made before the Terminal listener mounts', () => {
@@ -178,10 +205,22 @@ describe('cold activation tab deferral', () => {
   const tabIds = (count: number): string[] =>
     Array.from({ length: count }, (_, index) => `tab-${index + 1}`)
 
-  it('enables deferral only for a positively resolved local execution host', () => {
+  it('enables deferral for local and snapshot-capable paired execution hosts', () => {
     expect(canDeferColdActivationTabsForHost({ executionHostId: 'local' })).toBe(true)
     expect(canDeferColdActivationTabsForHost({ executionHostId: 'ssh:ssh-1' })).toBe(false)
     expect(canDeferColdActivationTabsForHost({ executionHostId: 'runtime:runtime-1' })).toBe(false)
+    expect(
+      canDeferColdActivationTabsForHost({
+        executionHostId: 'runtime:runtime-1',
+        pairedRuntimeParkingEnvironmentIds: new Set(['runtime-1'])
+      })
+    ).toBe(true)
+    expect(
+      canDeferColdActivationTabsForHost({
+        executionHostId: 'runtime:runtime-1',
+        pairedRuntimeParkingEnvironmentIds: new Set(['runtime-2'])
+      })
+    ).toBe(false)
     expect(canDeferColdActivationTabsForHost({ executionHostId: null })).toBe(false)
   })
 
@@ -238,7 +277,7 @@ describe('cold activation tab deferral', () => {
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2', 'tab-5', 'tab-9']))
   })
 
-  it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', () => {
+  it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', async () => {
     const worktreeId = 'wt-1'
     const allTabIds = tabIds(7)
     const ptyIdByTabId = new Map(
@@ -246,7 +285,7 @@ describe('cold activation tab deferral', () => {
     )
     const legacyPtyId = ptyIdByTabId.get('tab-2')!
     clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], (ids) =>
+    await synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], async (ids) =>
       ids.map((id) => ({ id, authoritative: id !== legacyPtyId }))
     )
     const restrictions = new Map<string, ReadonlySet<string>>()
@@ -276,17 +315,17 @@ describe('cold activation tab deferral', () => {
     )
   })
 
-  it('preserves cold-activation deferral for an all-current daemon worktree', () => {
+  it('preserves cold-activation deferral for an all-current daemon worktree', async () => {
     const worktreeId = 'wt-current'
     const allTabIds = tabIds(7)
     const ptyIdByTabId = new Map(
       allTabIds.map((tabId) => [tabId, `${worktreeId}@@${tabId}-session`])
     )
-    const resolve = vi.fn((ids: string[]) =>
+    const resolve = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true as boolean | null }))
     )
     clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], resolve)
+    await synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], resolve)
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
 

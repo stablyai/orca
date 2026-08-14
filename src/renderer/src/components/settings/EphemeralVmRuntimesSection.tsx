@@ -9,18 +9,24 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { cn } from '@/lib/utils'
 
-const CLEANED_STATUSES = new Set<EphemeralVmRuntimeRecord['status']>(['cleaned'])
+function hasCleanupFailed(runtime: EphemeralVmRuntimeRecord): boolean {
+  return (
+    runtime.cleanupStatus === 'failed' ||
+    runtime.status === 'cleanup_failed' ||
+    (runtime.status === 'cleaned' && runtime.sshTargetId !== undefined)
+  )
+}
 
 export function getVisibleEphemeralVmRuntimes(
   runtimes: readonly EphemeralVmRuntimeRecord[]
 ): EphemeralVmRuntimeRecord[] {
   return runtimes
-    .filter((runtime) => !CLEANED_STATUSES.has(runtime.status))
+    .filter((runtime) => runtime.status !== 'cleaned' || runtime.sshTargetId !== undefined)
     .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
 }
 
 export function getEphemeralVmRuntimeStatusLabel(runtime: EphemeralVmRuntimeRecord): string {
-  if (runtime.cleanupStatus === 'failed') {
+  if (hasCleanupFailed(runtime)) {
     return translate(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupFailed',
       'Cleanup failed'
@@ -68,8 +74,8 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
           error instanceof Error
             ? error.message
             : translate(
-                'auto.components.settings.EphemeralVmRuntimesSection.loadFailed',
-                'Couldn’t load temporary VM runtimes.'
+                'auto.components.settings.EphemeralVmRuntimesSection.cloudVmLoadFailed',
+                'Couldn’t load Cloud VM runtimes.'
               )
         )
       }
@@ -88,12 +94,12 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
     setCleaningId(runtime.id)
     try {
       const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
-      if (cleaned.cleanupStatus === 'failed') {
+      if (hasCleanupFailed(cleaned)) {
         throw new Error(
           cleaned.cleanupLastError ??
             translate(
-              'auto.components.settings.EphemeralVmRuntimesSection.cleanupFailedToast',
-              'Couldn’t clean up temporary VM runtime.'
+              'auto.components.settings.EphemeralVmRuntimesSection.cloudVmCleanupFailedToast',
+              'Couldn’t clean up Cloud VM runtime.'
             )
         )
       }
@@ -101,12 +107,12 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
         toast.success(
           cleaned.cleanupStatus === 'disabled'
             ? translate(
-                'auto.components.settings.EphemeralVmRuntimesSection.markedCleaned',
-                'Marked temporary VM runtime as cleaned.'
+                'auto.components.settings.EphemeralVmRuntimesSection.cloudVmMarkedCleaned',
+                'Marked Cloud VM runtime as cleaned.'
               )
             : translate(
-                'auto.components.settings.EphemeralVmRuntimesSection.cleaned',
-                'Cleaned up temporary VM runtime.'
+                'auto.components.settings.EphemeralVmRuntimesSection.cloudVmCleaned',
+                'Cleaned up Cloud VM runtime.'
               )
         )
       }
@@ -117,8 +123,8 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
           error instanceof Error
             ? error.message
             : translate(
-                'auto.components.settings.EphemeralVmRuntimesSection.cleanupFailedToast',
-                'Couldn’t clean up temporary VM runtime.'
+                'auto.components.settings.EphemeralVmRuntimesSection.cloudVmCleanupFailedToast',
+                'Couldn’t clean up Cloud VM runtime.'
               )
         )
         await refresh()
@@ -171,8 +177,8 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
         <div className="min-w-0 space-y-0.5">
           <div className="text-sm font-medium">
             {translate(
-              'auto.components.settings.EphemeralVmRuntimesSection.title',
-              'Temporary VM runtimes'
+              'auto.components.settings.EphemeralVmRuntimesSection.cloudVmTitle',
+              'Cloud VM runtimes'
             )}
           </div>
           <p className="text-xs text-muted-foreground">
@@ -187,12 +193,12 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
           variant="outline"
           size="icon-sm"
           aria-label={translate(
-            'auto.components.settings.EphemeralVmRuntimesSection.refresh',
-            'Refresh temporary VM runtimes'
+            'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefresh',
+            'Refresh Cloud VM runtimes'
           )}
           title={translate(
-            'auto.components.settings.EphemeralVmRuntimesSection.refresh',
-            'Refresh temporary VM runtimes'
+            'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefresh',
+            'Refresh Cloud VM runtimes'
           )}
           onClick={() => void refresh()}
           disabled={isLoading || cleaningId !== null}
@@ -206,12 +212,12 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
           <div className="px-3 py-4 text-sm text-muted-foreground">
             {isLoading
               ? translate(
-                  'auto.components.settings.EphemeralVmRuntimesSection.loading',
-                  'Checking temporary VM runtimes…'
+                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmLoading',
+                  'Checking Cloud VM runtimes…'
                 )
               : translate(
-                  'auto.components.settings.EphemeralVmRuntimesSection.empty',
-                  'No temporary VM runtimes need cleanup.'
+                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmEmptyWithSetup',
+                  'No Cloud VM runtimes yet. Create one from a workspace using an environment recipe.'
                 )}
           </div>
         ) : (
@@ -247,7 +253,8 @@ function EphemeralVmRuntimeRow({
   onCopyCleanupCommand: () => void
 }): React.JSX.Element {
   const statusLabel = getEphemeralVmRuntimeStatusLabel(runtime)
-  const hasError = runtime.cleanupStatus === 'failed' || runtime.status === 'failed'
+  const cleanupFailed = hasCleanupFailed(runtime)
+  const hasError = cleanupFailed || runtime.status === 'failed'
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div
@@ -297,7 +304,7 @@ function EphemeralVmRuntimeRow({
           disabled={disabled}
         >
           {isCleaning ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
-          {runtime.cleanupStatus === 'failed'
+          {cleanupFailed
             ? translate(
                 'auto.components.settings.EphemeralVmRuntimesSection.retry',
                 'Retry cleanup'

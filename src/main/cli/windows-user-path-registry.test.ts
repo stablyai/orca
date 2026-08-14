@@ -7,7 +7,7 @@ import {
 
 function registryModule(pathValue?: string, type = 2) {
   return {
-    HK: { CU: 0x80000001 },
+    HK: { CU: 0x80000001, LM: 0x80000002 },
     REG: { SZ: 1, EXPAND_SZ: 2 },
     getRegistryKey: vi.fn(() =>
       pathValue === undefined ? {} : { Path: { name: 'Path', type, value: pathValue } }

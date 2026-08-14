@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
 
 // Why: older hosts strip worktree.create's clientMutationId, so mobile must not
@@ -14,11 +15,13 @@ const STATUS_CUTOVER_MAX_RETRIES = 5
 export type NewWorktreeRuntimeCapabilities = {
   tasksSupported: boolean
   idempotentWorktreeCreateSupported: boolean
+  hostPlatform: NodeJS.Platform | null
 }
 
 const UNSUPPORTED_CAPABILITIES: NewWorktreeRuntimeCapabilities = {
   tasksSupported: false,
-  idempotentWorktreeCreateSupported: false
+  idempotentWorktreeCreateSupported: false,
+  hostPlatform: null
 }
 
 // Why: status.get is safe to replay and must settle before create, independently
@@ -32,13 +35,14 @@ export async function readNewWorktreeRuntimeCapabilities(
       if (!response.ok) {
         return UNSUPPORTED_CAPABILITIES
       }
-      const capabilities =
-        ((response as RpcSuccess).result as { capabilities?: string[] }).capabilities ?? []
+      const result = (response as RpcSuccess).result as { capabilities?: string[] }
+      const capabilities = result.capabilities ?? []
       return {
         tasksSupported: capabilities.includes(MOBILE_TASKS_CAPABILITY),
         idempotentWorktreeCreateSupported: capabilities.includes(
           MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY
-        )
+        ),
+        hostPlatform: readMobileRuntimeHostPlatform(result)
       }
     } catch (error) {
       if (!isLogicalClientCutoverError(error) || migrationRetry >= STATUS_CUTOVER_MAX_RETRIES) {
@@ -53,9 +57,11 @@ export function useNewWorktreeRuntimeCapabilities(
   enabled: boolean
 ): {
   tasksSupported: boolean
+  hostPlatform: NodeJS.Platform | null
   getWorktreeCreateCutoverSupport: () => Promise<boolean>
 } {
   const [tasksSupported, setTasksSupported] = useState(false)
+  const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
   const capabilityProbeRef = useRef<{
     client: RpcClient | null
     promise: Promise<NewWorktreeRuntimeCapabilities>
@@ -82,6 +88,7 @@ export function useNewWorktreeRuntimeCapabilities(
     void getCapabilities().then((capabilities) => {
       if (!stale) {
         setTasksSupported(capabilities.tasksSupported)
+        setHostPlatform(capabilities.hostPlatform)
       }
     })
     return () => {
@@ -93,5 +100,5 @@ export function useNewWorktreeRuntimeCapabilities(
     () => getCapabilities().then((capabilities) => capabilities.idempotentWorktreeCreateSupported),
     [getCapabilities]
   )
-  return { tasksSupported, getWorktreeCreateCutoverSupport }
+  return { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport }
 }

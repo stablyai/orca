@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
+import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 function sendResult(accepted: boolean, id = 'send'): RpcSuccess {
   return { id, ok: true, result: { send: { accepted } }, _meta: { runtimeId: 'r' } }
@@ -26,17 +27,22 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 
 describe('pasteMobileNativeChatImagePaths', () => {
   it('clears the input line, then pastes each path as a bracketed, non-submitting terminal.send with the mobile client tag', async () => {
-    const client = clientWithResponses([sendResult(true), sendResult(true), sendResult(true)])
+    const client = clientWithResponses([
+      sendResult(true),
+      sendResult(true),
+      sendResult(true),
+      sendResult(true)
+    ])
 
     const ok = await pasteMobileNativeChatImagePaths({
       client,
       terminal: 'term-1',
       deviceToken: 'device-9',
-      imagePaths: ['/tmp/a.png', '/tmp/b.png']
+      imagePaths: ['/tmp/a.png', '/tmp/b.png', '/tmp/c.png']
     })
 
     expect(ok).toBe(true)
-    expect(client.calls).toHaveLength(3)
+    expect(client.calls).toHaveLength(4)
     // Leading Ctrl+U clears any stale input so a retry can't duplicate the image.
     expect(client.calls[0]).toEqual({
       method: 'terminal.send',
@@ -49,6 +55,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
     })
     expect(client.calls[1]?.params.text).toBe('\x1b[200~/tmp/a.png\x1b[201~')
     expect(client.calls[2]?.params.text).toBe('\x1b[200~/tmp/b.png\x1b[201~')
+    expect(client.calls[3]?.params.text).toBe('\x1b[200~/tmp/c.png\x1b[201~')
   })
 
   it('stops and reports failure as soon as a paste is rejected', async () => {
@@ -99,5 +106,54 @@ describe('pasteMobileNativeChatImagePaths', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('clearing a parked multi-line launch draft before the image paste', () => {
+  it('leads with the caller-sized burst instead of one Ctrl+U', async () => {
+    // One Ctrl+U kills only the LAST line, so the draft's earlier lines would
+    // survive and ride along with the image as part of the prompt body.
+    const client = clientWithResponses([sendResult(true), sendResult(true)])
+    const clearInput = buildAgentTuiClearInputForText('Linked Linear issue: ABC-123\nhttps://x')
+
+    await pasteMobileNativeChatImagePaths({
+      client,
+      terminal: 'term-1',
+      deviceToken: null,
+      imagePaths: ['/tmp/a.png'],
+      clearInput
+    })
+
+    expect(client.calls[0]?.params.text).toBe(clearInput)
+    expect(client.calls[0]?.params.text).not.toBe('\x15')
+  })
+
+  it('clears once, before the paste — never between or after the image writes', async () => {
+    const client = clientWithResponses([sendResult(true), sendResult(true), sendResult(true)])
+    const clearInput = buildAgentTuiClearInputForText('a\nb\nc')
+
+    await pasteMobileNativeChatImagePaths({
+      client,
+      terminal: 'term-1',
+      deviceToken: null,
+      imagePaths: ['/tmp/a.png', '/tmp/b.png'],
+      clearInput
+    })
+
+    expect(client.calls.filter((call) => call.params.text === clearInput)).toHaveLength(1)
+    expect(client.calls[0]?.params.text).toBe(clearInput)
+  })
+
+  it('falls back to a single Ctrl+U when no draft is parked', async () => {
+    const client = clientWithResponses([sendResult(true), sendResult(true)])
+
+    await pasteMobileNativeChatImagePaths({
+      client,
+      terminal: 'term-1',
+      deviceToken: null,
+      imagePaths: ['/tmp/a.png']
+    })
+
+    expect(client.calls[0]?.params.text).toBe('\x15')
   })
 })

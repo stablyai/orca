@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 
 import { workItemsCacheKey, type CacheEntry } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { LinearCollectionResult } from '../../../shared/linear/workspace-types'
 import {
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
@@ -44,6 +46,32 @@ describe('task page cache selectors', () => {
       force: false,
       noCache: false
     })
+  })
+
+  it('reconciles a changed neutral check count', () => {
+    const current = {
+      ...workItem('pr-1', 'repo-1'),
+      checksSummary: {
+        state: 'neutral' as const,
+        total: 1,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        neutral: 0
+      }
+    }
+    const refreshed = {
+      ...current,
+      checksSummary: {
+        state: 'neutral' as const,
+        total: 2,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        neutral: 1
+      }
+    }
+    expect(reconcileTaskPageItemsAfterLandingRefresh([current], [refreshed])).toEqual([refreshed])
   })
 
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {

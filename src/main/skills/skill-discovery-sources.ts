@@ -8,7 +8,7 @@ import type {
   SkillSourceKind
 } from '../../shared/skills'
 import type { AgentType } from '../../shared/agent-status-types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
@@ -130,6 +130,22 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'pi'
+    ),
+    source(
+      'home-omp',
+      'OMP home',
+      pathApi.join(home, '.omp', 'agent', 'skills'),
+      'home',
+      ['agent-skills'],
+      'omp'
+    ),
+    source(
+      'home-prime-agent',
+      'Prime Agent home',
+      pathApi.join(home, '.prime', 'agent', 'skills'),
+      'home',
+      ['agent-skills'],
+      'prime-agent'
     ),
     source(
       'home-gemini',

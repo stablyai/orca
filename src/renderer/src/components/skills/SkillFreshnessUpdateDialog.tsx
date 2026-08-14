@@ -7,6 +7,7 @@ import {
   type SkillFreshnessInventory
 } from '../../../../shared/skill-freshness'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -40,7 +41,7 @@ function RunLog({ output }: { output: string }): React.JSX.Element | null {
     return null
   }
   return (
-    <Collapsible>
+    <Collapsible className="min-w-0">
       <CollapsibleTrigger asChild>
         <Button
           type="button"
@@ -52,9 +53,9 @@ function RunLog({ output }: { output: string }): React.JSX.Element | null {
           {translate('auto.components.skills.SkillFreshnessUpdateDialog.showLog', 'Show log')}
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1">
+      <CollapsibleContent className="mt-1 min-w-0">
         {/* Displayed verbatim, never parsed — `skills update` has no --json. */}
-        <pre className="scrollbar-sleek max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
+        <pre className="scrollbar-sleek max-h-40 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-md border border-border bg-muted px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
           {output.trim()}
         </pre>
       </CollapsibleContent>
@@ -63,7 +64,8 @@ function RunLog({ output }: { output: string }): React.JSX.Element | null {
 }
 
 export function SkillFreshnessUpdateDialog(): React.JSX.Element {
-  const state = useSkillFreshness()
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const state = useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)
   const run = useSkillUpdateRun()
   const open = useSyncExternalStore(
     subscribeSkillFreshnessUpdateDialog,
@@ -276,7 +278,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         </DialogHeader>
 
         {state.error && !isRunning && !showResult ? (
-          <p className="text-xs text-destructive">{state.error}</p>
+          <p className="min-w-0 [overflow-wrap:anywhere] text-xs text-destructive">{state.error}</p>
         ) : (
           headline
         )}
@@ -321,14 +323,14 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         ) : null}
 
         {run.state === 'error' ? (
-          <div className="space-y-2.5 rounded-md border border-destructive/35 bg-destructive/10 p-3">
+          <div className="min-w-0 space-y-2.5 rounded-md border border-destructive/35 bg-destructive/10 p-3">
             <p className="text-[13px] font-medium text-foreground">
               {translate(
                 'auto.components.skills.SkillFreshnessUpdateDialog.errorTitle',
                 "The update didn't finish"
               )}
             </p>
-            <p className="break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
+            <p className="[overflow-wrap:anywhere] font-mono text-[11px] leading-relaxed text-muted-foreground">
               {run.message}
             </p>
             <div className="flex flex-wrap gap-1.5">

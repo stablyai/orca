@@ -15,7 +15,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TelemetryConsentState } from '../../../../shared/telemetry-consent-types'
 
 const { getConsentStateMock, setOptInMock } = vi.hoisted(() => ({
@@ -166,6 +166,9 @@ describe('PrivacyPane — computeBlockedReason', () => {
 })
 
 describe('PrivacyPane — markup respects blocked state', () => {
+  const switchTag = (markup: string): string =>
+    markup.match(/<button[^>]*role="switch"[^>]*>/)?.[0] ?? ''
+
   // The useEffect that fetches consent does not run in renderToStaticMarkup
   // (no DOM, no state flushes), so the rendered toggle always reads the
   // `consent === null` branch of the effect. Env-var blocked-state markup
@@ -189,9 +192,7 @@ describe('PrivacyPane — markup respects blocked state', () => {
         })
       })
     )
-    // Negative assertion: the disabled attribute should not appear on the
-    // switch. renderToStaticMarkup elides `disabled={false}` entirely.
-    expect(markup).not.toMatch(/role="switch"[^>]*disabled/)
+    expect(switchTag(markup)).not.toContain(' disabled=""')
   })
 
   it('leaves the toggle enabled for an existing user awaiting the banner (flip dismisses the banner)', () => {
@@ -206,7 +207,7 @@ describe('PrivacyPane — markup respects blocked state', () => {
         })
       })
     )
-    expect(markup).not.toMatch(/role="switch"[^>]*disabled/)
+    expect(switchTag(markup)).not.toContain(' disabled=""')
   })
 
   it('leaves the toggle enabled once the existing-user banner is resolved', () => {
@@ -218,6 +219,6 @@ describe('PrivacyPane — markup respects blocked state', () => {
         })
       })
     )
-    expect(markup).not.toMatch(/role="switch"[^>]*disabled/)
+    expect(switchTag(markup)).not.toContain(' disabled=""')
   })
 })

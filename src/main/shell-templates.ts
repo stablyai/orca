@@ -5,11 +5,17 @@ function quotePosixSingle(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `if [[ "\${ORCA_SHELL_STARTUP_IDENTITY:-0}" == "1" ]]; then
+  unset ORCA_SHELL_STARTUP_IDENTITY
+  printf "\\033]777;orca-shell-start:%s\\007" "$$"
+fi`
+
 export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
   const header = headerPrefix
     ? `Orca ${headerPrefix} zsh shell-ready wrapper`
     : 'Orca zsh shell-ready wrapper'
   return `# ${header}
+${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 # Why: capture the runtime wrapper dir before it is unset below. On WSL this
 # file is generated with a Windows path but sourced via /mnt/c, so the baked
 # literal is unusable there and ZDOTDIR must be restored from this value.
@@ -158,6 +164,20 @@ export function getZshShellReadyMarkerRegistrationBlock(escapedMarker: string): 
   zle -N zle-line-init __orca_prompt_mark
 fi
 `
+}
+
+// Why: fish has no ZDOTDIR-style wrapper dir, so the marker rides `--init-command`
+// and fires on fish_prompt — the earliest event fish exposes (STA-3417). Unlike zsh's
+// zle-line-init this lands just *before* fish arms `?2004h`, which PostReadyFlushGate
+// absorbs. `builtin printf` so a user-defined printf can't silently swallow the marker
+// and send every launch to the ready timeout.
+export function getFishShellReadyInitCommand(escapedMarker: string): string {
+  return `if test "$ORCA_SHELL_READY_MARKER" = 1
+  function __orca_shell_ready_marker --on-event fish_prompt
+    builtin printf "${escapedMarker}"
+    functions -e __orca_shell_ready_marker
+  end
+end`
 }
 
 export function getZshFinalZdotdirRestoreBlock(homeExpression = '"${ORCA_ORIG_ZDOTDIR:-$HOME}"') {

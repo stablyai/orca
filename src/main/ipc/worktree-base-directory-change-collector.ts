@@ -1,4 +1,4 @@
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import {
   classifyWorktreeBaseChange,
   type WorktreeBaseWatchTarget
@@ -14,6 +14,12 @@ export type WorktreeBaseCollectedChanges = {
   structureRepoIds: string[]
   gitStatusRepoIds: string[]
   headIdentityRepoIds: string[]
+}
+
+export function hasCollectedWorktreeBaseChanges(changes: WorktreeBaseCollectedChanges): boolean {
+  return [changes.structureRepoIds, changes.gitStatusRepoIds, changes.headIdentityRepoIds].some(
+    (ids) => ids.length > 0
+  )
 }
 
 type ChangeBuckets = {

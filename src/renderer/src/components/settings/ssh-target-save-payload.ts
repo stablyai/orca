@@ -61,6 +61,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     host,
     port,
     username,
+    ...(form.gssapiAuthentication ? { gssapiAuthentication: true } : {}),
     relayGracePeriodSeconds: graceSeconds,
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
@@ -77,6 +78,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         // Why: updateTarget merges partially, so explicit undefined values are
         // required to clear optional fields inherited from ~/.ssh/config.
         identityFile,
+        gssapiAuthentication: form.gssapiAuthentication || undefined,
         proxyCommand,
         jumpHost,
         systemSshConnectionReuse,

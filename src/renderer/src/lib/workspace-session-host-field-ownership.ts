@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 export type WorkspaceSessionFieldOwnership =
   | 'global'
@@ -15,6 +15,7 @@ export type WorkspaceSessionFieldOwnership =
 export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeRepoId: 'global',
   activeWorktreeId: 'global',
+  activeWorkspaceExecutionHostId: 'global',
   activeTabId: 'global',
   browserUrlHistory: 'global',
   // Why: SSH remains local-owned, so its connection identifiers stay in the local slice.

@@ -1,19 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
+import type * as Scanner from './scanner'
+
+const { getPathMock } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
+}))
 
 vi.mock('electron', () => ({
   app: {
-    getPath: vi.fn(() => '/tmp/orca-test-userdata')
+    getPath: getPathMock
   }
 }))
 
-import { ClaudeUsageStore } from './store'
+vi.mock('./scanner', async (importOriginal) => ({
+  ...(await importOriginal<typeof Scanner>()),
+  scanClaudeUsageFiles: vi.fn()
+}))
+
+import { ClaudeUsageStore, initClaudeUsagePath } from './store'
+import { scanClaudeUsageFiles } from './scanner'
+
+function createBackingStore(): ConstructorParameters<typeof ClaudeUsageStore>[0] {
+  return {
+    getRepos: () => [],
+    getAllWorktreeMeta: () => ({})
+  }
+}
 
 function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): ClaudeUsageStore {
-  const store = new ClaudeUsageStore({
-    getRepos: () => [],
-    getWorktreeMeta: () => undefined
-  } as never)
+  const store = new ClaudeUsageStore(createBackingStore())
 
   ;(store as unknown as { state: ClaudeUsagePersistedState }).state = {
     schemaVersion: 1,
@@ -34,9 +52,36 @@ function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): Claude
 }
 
 describe('ClaudeUsageStore', () => {
+  let tempUserData: string
+
   beforeEach(() => {
+    tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
+    getPathMock.mockReturnValue(tempUserData)
+    initClaudeUsagePath()
+    vi.mocked(scanClaudeUsageFiles).mockReset()
+    vi.mocked(scanClaudeUsageFiles).mockResolvedValue({
+      processedFiles: [],
+      sessions: [],
+      dailyAggregates: []
+    })
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-09T12:00:00.000-04:00'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    rmSync(tempUserData, { recursive: true, force: true })
+  })
+
+  it('defaults a null legacy opt-in while invalidating the cache', () => {
+    writeFileSync(
+      join(tempUserData, 'orca-claude-usage.json'),
+      JSON.stringify({ schemaVersion: 4, scanState: { enabled: null } })
+    )
+
+    const store = new ClaudeUsageStore(createBackingStore())
+
+    expect(store.getScanState().enabled).toBe(false)
   })
 
   it('reports no data for Orca scope when only non-Orca usage exists', async () => {
@@ -548,5 +593,22 @@ describe('ClaudeUsageStore', () => {
     await store.getAutomationRunUsage(request)
 
     expect(refreshMock).toHaveBeenCalledWith(false)
+  })
+
+  it('adapts Claude scans to pretty-printed cache persistence', async () => {
+    const store = createStoreWithState({
+      schemaVersion: 5,
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+
+    await store.refresh(true)
+
+    expect(scanClaudeUsageFiles).toHaveBeenCalledWith([], [])
+    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
   })
 })

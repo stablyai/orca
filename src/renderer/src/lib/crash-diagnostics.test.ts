@@ -156,18 +156,6 @@ describe('renderer crash diagnostics', () => {
     })
   })
 
-  it('disposes global listeners and the memory interval', () => {
-    diagnostics.installRendererCrashDiagnostics()
-
-    diagnostics._disposeRendererCrashDiagnosticsForTests()
-
-    expect(removeEventListenerMock).toHaveBeenCalledWith('error', expect.any(Function))
-    expect(removeEventListenerMock).toHaveBeenCalledWith('unhandledrejection', expect.any(Function))
-    expect(clearIntervalMock).toHaveBeenCalledWith(1)
-    expect(listeners.get('error')).toHaveLength(0)
-    expect(listeners.get('unhandledrejection')).toHaveLength(0)
-  })
-
   it('does not throw when preload is unavailable', () => {
     vi.stubGlobal('window', {})
 
@@ -223,8 +211,9 @@ describe('renderer crash diagnostics', () => {
     })
 
     // Why: a heap that jumps straight past 80% must emit both levels at once.
-    diagnostics._disposeRendererCrashDiagnosticsForTests()
+    vi.resetModules()
     recordBreadcrumbMock.mockClear()
+    diagnostics = (await import('./crash-diagnostics')) as DiagnosticsModule
     diagnostics.installRendererCrashDiagnostics()
     expect(highwaterCalls()).toHaveLength(2)
     expect(getElementsByTagName).toHaveBeenCalledTimes(3)

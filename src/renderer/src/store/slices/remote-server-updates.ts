@@ -4,7 +4,7 @@ import type { RemoteServerUpdaterSnapshot } from '../../../../shared/remote-serv
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { UpdateCheckOptions } from '../../../../shared/types'
+import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import {
   checkingRemoteServerUpdateEntry,
@@ -33,8 +33,13 @@ const transport: RemoteServerUpdateTransport = {
     window.api.runtimeEnvironments
       .getStatus({ selector: environmentId, timeoutMs })
       .then((response) => unwrapRuntimeRpcResult<RuntimeStatus>(response)),
-  getUpdaterStatus: (environmentId) =>
-    callRemoteUpdater<RemoteServerUpdaterSnapshot>(environmentId, 'updater.getStatus'),
+  getUpdaterStatus: (environmentId, timeoutMs) =>
+    callRemoteUpdater<RemoteServerUpdaterSnapshot>(
+      environmentId,
+      'updater.getStatus',
+      undefined,
+      timeoutMs
+    ),
   check: (environmentId, options) =>
     callRemoteUpdater<RemoteServerUpdaterSnapshot>(environmentId, 'updater.check', options),
   download: (environmentId) =>

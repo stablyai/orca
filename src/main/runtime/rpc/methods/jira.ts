@@ -140,6 +140,11 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
     handler: async (_params, { runtime }) => runtime.jiraStatus()
   }),
   defineMethod({
+    name: 'jira.readStatus',
+    params: null,
+    handler: async (_params, { runtime }) => runtime.jiraReadStatus()
+  }),
+  defineMethod({
     name: 'jira.testConnection',
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraTestConnection(params?.siteId)
@@ -147,8 +152,8 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'jira.searchIssues',
     params: SearchIssues,
-    handler: async (params, { runtime }) =>
-      runtime.jiraSearchIssues(params.jql, params.limit, params.siteId)
+    handler: async (params, { runtime, signal }) =>
+      runtime.jiraSearchIssues(params.jql, params.limit, params.siteId, signal)
   }),
   defineMethod({
     name: 'jira.listIssues',
@@ -160,6 +165,16 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
     name: 'jira.getIssue',
     params: IssueKey,
     handler: async (params, { runtime }) => runtime.jiraGetIssue(params.key.trim(), params.siteId)
+  }),
+  defineMethod({
+    name: 'jira.lookupIssueSummary',
+    params: IssueKey,
+    handler: async (params, { runtime, signal }) => {
+      if (!params.siteId) {
+        throw new Error('Site ID is required')
+      }
+      return runtime.jiraLookupIssueSummary(params.key.trim(), params.siteId, signal)
+    }
   }),
   defineStreamingMethod({
     name: 'jira.getIssueStream',

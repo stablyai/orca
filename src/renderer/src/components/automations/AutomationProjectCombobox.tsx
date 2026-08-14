@@ -11,7 +11,7 @@ import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   getAutomationProjectGroupForRepo,
   getAutomationProjectGroups,
@@ -19,7 +19,7 @@ import {
 } from './automation-project-groups'
 
 type AutomationProjectComboboxProps = {
-  repos: Repo[]
+  repos: readonly Repo[]
   value: string
   onValueChange: (repoId: string) => void
   placeholder?: string

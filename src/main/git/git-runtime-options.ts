@@ -13,3 +13,15 @@ export function gitOptionsForWorktree(
     ...(options.signal ? { signal: options.signal } : {})
   }
 }
+
+export function gitStatusReadOptionsForWorktree(
+  cwd: string,
+  options: GitRuntimeOptions = {}
+): {
+  cwd: string
+  wslDistro?: string
+  signal?: AbortSignal
+  preferWslDirectGit: true
+} {
+  return { ...gitOptionsForWorktree(cwd, options), preferWslDirectGit: true }
+}

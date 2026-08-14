@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { DiffComment } from '../../../shared/types'
+import type { DiffComment } from '../../../shared/diff-comment-types'
 import { formatDiffComment, formatDiffComments } from './diff-comments-format'
 
 function makeComment(overrides: Partial<DiffComment> = {}): DiffComment {

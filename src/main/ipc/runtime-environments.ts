@@ -1,19 +1,13 @@
 import { app, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import {
-  addEnvironmentFromPairingCode,
-  listEnvironments,
-  removeEnvironment,
-  resolveEnvironment
-} from '../../shared/runtime-environment-store'
-import {
-  redactRuntimeEnvironment,
-  type PublicKnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
-import type { RuntimeStatus } from '../../shared/runtime-types'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
 import type { Store } from '../persistence'
+import {
+  isRuntimeEnvironmentManuallyDisconnected,
+  registerRuntimeEnvironmentConnectivityHandlers,
+  registerRuntimeEnvironmentPassiveHandlers
+} from './runtime-environment-connectivity-handlers'
 import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
 import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
 import {
@@ -21,29 +15,17 @@ import {
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
 import {
-  callRuntimeEnvironment,
   clearSharedControlSupport,
-  getRuntimeEnvironmentStatus,
   resetSharedControlSupport,
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
-
-const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
-  'runtimeEnvironments:list',
-  'runtimeEnvironments:addFromPairingCode',
-  'runtimeEnvironments:resolve',
-  'runtimeEnvironments:remove',
-  'runtimeEnvironments:disconnect',
-  'runtimeEnvironments:getStatus',
-  'runtimeEnvironments:call',
-  'runtimeEnvironments:subscribe',
-  'runtimeEnvironments:unsubscribe'
-] as const
+import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
 
 type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   environmentId: string
   ownerWebContentsId: number
   removeDestroyedListener: () => void
+  notifyClosed: () => void
 }
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const getUserDataPath = (): string => app.getPath('userData')
@@ -55,7 +37,22 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
       continue
     }
     remoteRuntimeSubscriptions.delete(subscriptionId)
-    subscription.close()
+    // Why: one failing teardown must not abandon this environment's other
+    // sockets -- that strands exactly the dead handles this sweep exists to
+    // retire. Guard the two steps independently so neither can skip the other,
+    // and so the isolation stays structural rather than resting on a claim that
+    // nothing inside notifyClosed will ever throw.
+    try {
+      subscription.close()
+    } catch (error) {
+      console.warn('[runtime-environments] subscription close failed during retirement:', error)
+    }
+    try {
+      // Why: a shared-control logical close never calls back, so notify directly.
+      subscription.notifyClosed()
+    } catch (error) {
+      console.warn('[runtime-environments] subscription close notice failed:', error)
+    }
   }
 }
 export function invalidateRuntimeEnvironmentTransport(environmentId: string): void {
@@ -64,11 +61,6 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): vo
   closeRemoteRuntimeRequestConnection(environmentId)
   clearSharedControlSupport(environmentId)
   closeSubscriptionsForEnvironment(environmentId)
-}
-
-function listPublicRuntimeEnvironments(): PublicKnownRuntimeEnvironment[] {
-  // Why: a corrupt VM store must not break persisted environment listing.
-  return listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
 }
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {
@@ -80,81 +72,13 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
 
-  ipcMain.handle('runtimeEnvironments:list', listPublicRuntimeEnvironments)
-  ipcMain.handle(
-    'runtimeEnvironments:addFromPairingCode',
-    (
-      _event,
-      args: { name: string; pairingCode: string }
-    ): { environment: PublicKnownRuntimeEnvironment } => ({
-      environment: redactRuntimeEnvironment(addEnvironmentFromPairingCode(getUserDataPath(), args))
-    })
-  )
-  ipcMain.handle('runtimeEnvironments:resolve', (_event, args: { selector: string }) =>
-    redactRuntimeEnvironment(resolveEnvironment(getUserDataPath(), args.selector))
-  )
-  ipcMain.handle(
-    'runtimeEnvironments:remove',
-    (_event, args: { selector: string }): { removed: PublicKnownRuntimeEnvironment } => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
-        throw new Error('Choose another Active Server in Advanced before removing this server.')
-      }
-      const removed = removeEnvironment(getUserDataPath(), args.selector)
-      invalidateRuntimeEnvironmentTransport(removed.id)
-      if (args.selector !== removed.id) {
-        closeRemoteRuntimeRequestConnection(args.selector)
-        clearSharedControlSupport(args.selector)
-      }
-      return { removed: redactRuntimeEnvironment(removed) }
-    }
-  )
-  ipcMain.handle(
-    'runtimeEnvironments:disconnect',
-    (_event, args: { selector: string }): { disconnected: PublicKnownRuntimeEnvironment } => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      // Why: disconnect is intentionally non-destructive; it drops live
-      // transport state while keeping the paired server available for later.
-      invalidateRuntimeEnvironmentTransport(environment.id)
-      if (args.selector !== environment.id) {
-        closeRemoteRuntimeRequestConnection(args.selector)
-        clearSharedControlSupport(args.selector)
-      }
-      return { disconnected: redactRuntimeEnvironment(environment) }
-    }
-  )
+  registerRuntimeEnvironmentConnectivityHandlers({
+    store,
+    getUserDataPath,
+    invalidateTransport: invalidateRuntimeEnvironmentTransport
+  })
   registerRuntimeEnvironmentRecoveryHandler()
-  ipcMain.handle(
-    'runtimeEnvironments:getStatus',
-    async (
-      _event,
-      args: { selector: string; timeoutMs?: number }
-    ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
-      return getRuntimeEnvironmentStatus(getUserDataPath(), args.selector, args.timeoutMs)
-    }
-  )
-  ipcMain.handle(
-    'runtimeEnvironments:call',
-    async (
-      _event,
-      args: {
-        selector: string
-        method: string
-        params?: unknown
-        timeoutMs?: number
-        expectedEnvironmentPairingRevision?: number
-      }
-    ): Promise<RuntimeRpcResponse<unknown>> => {
-      return callRuntimeEnvironment(
-        getUserDataPath(),
-        args.selector,
-        args.method,
-        args.params,
-        args.timeoutMs,
-        args.expectedEnvironmentPairingRevision
-      )
-    }
-  )
+  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
   ipcMain.handle(
     'runtimeEnvironments:subscribe',
     async (
@@ -176,6 +100,9 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         throw new Error('Runtime environment subscription id already exists')
       }
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+        throw new Error('runtime_manually_disconnected')
+      }
       const pairingRevision = environment.pairingRevision ?? environment.createdAt
       if (
         args.expectedEnvironmentPairingRevision !== undefined &&
@@ -209,6 +136,21 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         removeDestroyedListener()
         subscription?.close()
       }
+      // Why: the renderer treats close as terminal and drops its handle, so send it once.
+      // Latch before sending so a re-entrant call cannot duplicate it, and never
+      // throw: a dying renderer must not abort its siblings' retirement.
+      let closeNotified = false
+      const notifyClosed = (): void => {
+        if (closeNotified || sender.isDestroyed()) {
+          return
+        }
+        closeNotified = true
+        try {
+          sender.send('runtimeEnvironments:subscriptionEvent', { subscriptionId, type: 'close' })
+        } catch {
+          // The renderer is gone; there is no one left to tell.
+        }
+      }
       sender.once('destroyed', closeSubscription)
       destroyedListenerAttached = true
       try {
@@ -220,6 +162,12 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
           args.timeoutMs,
           {
             onEvent: (payload) => {
+              if (payload.type === 'close') {
+                // Why: retirement advances the generation before closing, so gating
+                // close on it stranded the renderer with a dead subscription.
+                notifyClosed()
+                return
+              }
               if (transportIsCurrent() && !sender.isDestroyed()) {
                 sender.send('runtimeEnvironments:subscriptionEvent', {
                   subscriptionId,
@@ -261,6 +209,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         environmentId: environment.id,
         ownerWebContentsId,
         removeDestroyedListener,
+        notifyClosed,
         sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
         close: () => {
           removeDestroyedListener()

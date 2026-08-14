@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { WorktreeCardProperty } from '../../../../shared/types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { WorktreeGroupBy } from './worktree-list-groups'
 
 export type WorktreeListReviewCacheState = Pick<

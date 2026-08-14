@@ -1,4 +1,7 @@
-import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
+import type {
+  AgentActivityDisplayMode,
+  WorktreeCardProperty
+} from '../../../../shared/ui-chrome-types'
 import { TASK_WORKTREE_CARD_PROPERTIES } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 
@@ -158,6 +161,16 @@ const ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
       return translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.44713a5d04',
         'Linear issues'
+      )
+    }
+  },
+  {
+    id: 'jira-issue',
+    properties: ['jira-issue'],
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssues',
+        'Jira issues'
       )
     }
   }

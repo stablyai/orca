@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
@@ -117,10 +118,13 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 const mockCreateWebRuntimeSessionTerminal = vi.fn()
+const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
+    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft,
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive,
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
@@ -130,6 +134,7 @@ describe('launchAgentInNewTab', () => {
     vi.clearAllMocks()
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
+    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
     store.settings = {
@@ -179,6 +184,32 @@ describe('launchAgentInNewTab', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'codex'
     })
+  })
+
+  it('keeps Floating Workspace authority on native Windows beside an active WSL project', async () => {
+    store.projects = [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    ]
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      launchPlatform: 'win32'
+    })
+
+    expect(result).not.toBeNull()
+    expect(mockIsWebRuntimeSessionActive).toHaveBeenLastCalledWith(null)
+    expect(mockCreateWebRuntimeSessionTerminal).not.toHaveBeenCalled()
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      undefined,
+      undefined,
+      { launchAgent: 'codex' }
+    )
   })
 
   it('opens supported submit-after-ready launches in chat and seeds a launch prompt echo', async () => {
@@ -268,6 +299,72 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
+  it('mirrors an argv-prefill draft into chat and opens the tab there', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'https://github.com/o/r/issues/12',
+      promptDelivery: 'draft'
+    })
+
+    // Claude takes the draft on --prefill, so no paste runs and
+    // deliverLaunchPromptToAgentTab never fires — this is the only seed.
+    expect(result?.pasteDraftAfterLaunch).toBe(false)
+    expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        agent: 'claude',
+        text: 'https://github.com/o/r/issues/12'
+      })
+    )
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ viewMode: 'chat' })
+    )
+  })
+
+  it('mirrors a multi-line draft into chat and opens the tab there', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const prompt = 'Reproduce first\n\nhttps://github.com/o/r/issues/12'
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt,
+      promptDelivery: 'draft'
+    })
+
+    expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-1', agent: 'claude', text: prompt })
+    )
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ viewMode: 'chat' })
+    )
+  })
+
   it('passes quick command labels only to locally-created agent tabs', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -283,6 +380,75 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
+  it('does not inject native-chat model preferences into terminal Quick Commands', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: { codex: '--profile team' },
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: false,
+      nativeChatSessionOptions: {
+        codex: {
+          model: 'gpt-5.2-codex',
+          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+        }
+      }
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'Review this diff',
+      launchSource: 'quick_command',
+      quickCommandLabel: 'Review'
+    })
+
+    const launch = mockQueueTabStartupCommand.mock.calls[0]?.[1]
+    expect(launch.command).toContain("'--profile' 'team'")
+    expect(launch.command).not.toContain("'-m'")
+    expect(launch.command).not.toContain('model_reasoning_effort=')
+    expect(launch.sessionOptions).toBeUndefined()
+  })
+
+  it('applies native-chat model preferences to Quick Commands opened in chat', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true,
+      nativeChatSessionOptions: {
+        codex: {
+          model: 'gpt-5.2-codex',
+          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+        }
+      }
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'Review this diff',
+      launchSource: 'quick_command',
+      quickCommandLabel: 'Review'
+    })
+
+    const launch = mockQueueTabStartupCommand.mock.calls[0]?.[1]
+    expect(launch.command).toContain("'-m' 'gpt-5.2-codex'")
+    expect(launch.command).toContain("'-c' 'model_reasoning_effort=medium'")
+    expect(launch.sessionOptions).toEqual({ model: 'gpt-5.2-codex', effort: 'medium' })
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ viewMode: 'chat' })
+    )
+  })
+
   it('preserves paired-host draft delivery and supported launch preferences', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     store.settings = {
@@ -290,6 +456,8 @@ describe('launchAgentInNewTab', () => {
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: 'web-runtime',
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true,
       nativeChatSessionOptions: {
         claude: {
           model: 'opus',
@@ -308,15 +476,20 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+    // The draft rides in on the launch command, so this host-class launch also
+    // carries the text that seeds the mirrored tab's chat composer.
+    expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         launchAgent: 'claude',
         prompt: 'review before sending',
         promptDelivery: 'draft',
         agentArgs: '--permission-mode plan',
-        launchPreferences: { model: 'opus', effort: 'high' }
+        launchPreferences: { model: 'opus', effort: 'high' },
+        agent: 'claude',
+        launchDraft: 'review before sending'
       })
     )
+    expect(mockCreateWebRuntimeSessionTerminal).not.toHaveBeenCalled()
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 

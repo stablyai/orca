@@ -88,6 +88,8 @@ export type RpcContext = {
     method: string
     payloadHash: string
   }
+  // Why: Run-scoped handlers must compare declared handles with request attestation.
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
   // Why: only the compatibility authority router can set this trusted scope; user params cannot bypass Run consumer binding.
   legacyCoordinatorRunId?: string
   legacyCoordinatorAuthority?: LegacyCoordinatorAuthorityProof
@@ -105,13 +107,13 @@ export type RpcContext = {
   ) => () => void
 }
 
-export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown
+export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => unknown
 
 // Why: RpcMethod erases the param type; centralizing the cast in defineMethod sidesteps RpcHandler's contravariance.
 export type RpcMethod = {
   readonly name: string
   readonly params: ZodType | null
-  readonly handler: (params: unknown, ctx: RpcContext) => Promise<unknown> | unknown
+  readonly handler: (params: unknown, ctx: RpcContext) => unknown
 }
 
 type DefineMethodSpec<TSchema extends ZodType | null> = {

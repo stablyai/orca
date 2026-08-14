@@ -42,23 +42,22 @@ import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
+import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction
 } from './file-explorer-add-project-action'
-import {
-  isRenameHotspotTarget,
-  resolveDirToggleTiming
-} from './file-explorer-dir-toggle-timing'
+import { isRenameHotspotTarget, resolveDirToggleTiming } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 import { translate } from '@/i18n/i18n'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
-import type { RightSidebarExplorerView } from '../../../../shared/types'
+import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
+import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -82,6 +81,8 @@ function FileExplorerFiles(): React.JSX.Element {
     [nameFilterQuery, showRightSidebarFiles, showRightSidebarSearch]
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const canOpenWorkspaceFileBrowserForPath =
+    useWorkspaceFileBrowserActionPredicate(activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const supportsFolderDownload = useAppStore((s) => {
@@ -151,6 +152,7 @@ function FileExplorerFiles(): React.JSX.Element {
     markPathAsDirectory,
     refreshTree,
     refreshDir,
+    isDirStale,
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
   const hasNameFilterQuery = nameFilterQuery.trim().length > 0
@@ -350,11 +352,14 @@ function FileExplorerFiles(): React.JSX.Element {
       return
     }
     for (const dirPath of expanded) {
-      if (!dirCache[dirPath]?.children.length && !dirCache[dirPath]?.loading) {
-        const depth =
-          splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
-        void loadDir(dirPath, depth)
+      // Why: a full refresh (watcher overflow) re-reads only root and the dirs expanded at the time,
+      // so a listing cached while collapsed is unverified — re-read it here instead of trusting it.
+      const decision = decideExpandedDirLoad(dirCache[dirPath], isDirStale(dirPath))
+      if (decision === 'skip') {
+        continue
       }
+      const depth = splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
+      void loadDir(dirPath, depth, decision === 'reload' ? { force: true } : undefined)
     }
   }, [expanded, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -502,6 +507,7 @@ function FileExplorerFiles(): React.JSX.Element {
       toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
       loadDir,
       statPath,
+      authorizeExternalPath: window.api.fs.authorizeExternalPath,
       markPathAsDirectory,
       setSelectedPath: setSingleSelectedPath,
       scrollRef
@@ -775,6 +781,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 connectionId={activeRepo?.connectionId ?? null}
                 runtimeDownloadContext={runtimeDownloadContext}
                 supportsFolderDownload={supportsFolderDownload}
+                canOpenInOrcaBrowser={canOpenWorkspaceFileBrowserForPath}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
                 onViewFile={handleClick}

@@ -2,9 +2,17 @@
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
+import { remoteRpcContentBudget } from '../../../../shared/remote-rpc-content-budget'
 
 let filesWatchSubscriptionSeq = 0
 const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
+
+function remoteFileContentBudget(
+  clientKind: 'mobile' | 'runtime' | undefined,
+  requestId: string | undefined
+): number | undefined {
+  return clientKind && requestId ? remoteRpcContentBudget(requestId) : undefined
+}
 
 function isValidRuntimeFileBase64(value: unknown): value is string {
   return (
@@ -74,6 +82,16 @@ const ResolveTerminalPath = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
     .nullable()
+    .optional(),
+  crossWorkspace: z
+    .unknown()
+    .transform((v) => v === true)
+    .optional(),
+  nativeChatContext: z
+    .object({
+      tabId: z.string().min(1),
+      sessionId: z.string().min(1)
+    })
     .optional()
 })
 
@@ -252,7 +270,9 @@ export const FILE_METHODS: RpcAnyMethod[] = [
         params.pathText,
         params.cwd ?? null,
         clientId,
-        params.terminal ?? null
+        params.terminal ?? null,
+        params.crossWorkspace === true,
+        params.nativeChatContext ?? null
       )
   }),
   defineMethod({
@@ -269,13 +289,23 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.readTerminalArtifactPreview',
     params: TerminalArtifactFile,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.readTerminalArtifactPreview(
-        params.worktree,
-        params.grantId,
-        params.absolutePath,
-        clientId
-      )
+    handler: async (params, { runtime, clientId, clientKind, requestId }) => {
+      const budget = remoteFileContentBudget(clientKind, requestId)
+      return budget === undefined
+        ? runtime.readTerminalArtifactPreview(
+            params.worktree,
+            params.grantId,
+            params.absolutePath,
+            clientId
+          )
+        : runtime.readTerminalArtifactPreview(
+            params.worktree,
+            params.grantId,
+            params.absolutePath,
+            clientId,
+            budget
+          )
+    }
   }),
   defineMethod({
     name: 'files.writeTerminalArtifact',
@@ -292,8 +322,12 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.readPreview',
     params: FileOpen,
-    handler: async (params, { runtime }) =>
-      runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+    handler: async (params, { runtime, clientKind, requestId }) => {
+      const budget = remoteFileContentBudget(clientKind, requestId)
+      return budget === undefined
+        ? runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+        : runtime.readFileExplorerPreview(params.worktree, params.relativePath, budget)
+    }
   }),
   defineMethod({
     name: 'files.readChunk',

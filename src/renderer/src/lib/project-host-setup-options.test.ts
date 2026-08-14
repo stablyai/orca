@@ -8,7 +8,8 @@ import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
-import type { ProjectHostSetup, Repo } from '../../../shared/types'
+import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import { buildProjectHostSetupOptions } from './project-host-setup-options'
 
 const FULL_HOST_MODEL_RUNTIME_CAPABILITIES = [
@@ -69,6 +70,7 @@ describe('buildProjectHostSetupOptions', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('local-repo'), repo('remote-repo')],
+      hosts: [host('local'), host('ssh:builder')],
       projectHostSetups: [
         setup('remote', 'project-1', 'ssh:builder', 'remote-repo'),
         setup('local', 'project-1', 'local', 'local-repo')
@@ -187,6 +189,7 @@ describe('buildProjectHostSetupOptions', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('ready-repo')],
+      hosts: [host('local')],
       projectHostSetups: [
         setup('ready', 'project-1', 'local', 'ready-repo'),
         setup('setting-up', 'project-1', 'ssh:builder', 'missing-repo', {
@@ -197,6 +200,23 @@ describe('buildProjectHostSetupOptions', () => {
     })
 
     expect(options.map((option) => option.id)).toEqual(['ready'])
+  })
+
+  it('omits ready setups whose host is no longer actionable', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo'), repo('removed-repo')],
+      hosts: [host('local')],
+      projectHostSetups: [
+        setup('local', 'project-1', 'local', 'local-repo'),
+        setup('removed', 'project-1', 'ssh:removed', 'removed-repo')
+      ]
+    })
+
+    expect(options.map((option) => option.id)).toEqual(['local'])
+    expect(options).not.toContainEqual(
+      expect.objectContaining({ connectAction: { kind: 'ssh', targetId: 'removed' } })
+    )
   })
 
   it('collapses duplicate ready setups on one host to the setup creation actually uses', () => {
@@ -249,7 +269,7 @@ describe('buildProjectHostSetupOptions', () => {
         id: 'needs-setup:ssh:builder',
         kind: 'needs-setup',
         label: 'Builder',
-        detail: 'Project not set up on this host',
+        detail: 'Project location not set',
         isAvailable: true
       })
     ])

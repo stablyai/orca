@@ -1,11 +1,16 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import {
+  getUtf8ByteLengthForCodePoint,
+  readUtf8CodePointAt
+} from '../../../shared/utf8-byte-limits'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
 } from '@/components/terminal-pane/terminal-bracketed-paste'
+import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
 
 // Why: bracketed paste markers let supported TUIs treat generated prompt text
@@ -21,6 +26,19 @@ const AGENT_DRAFT_PASTE_INERT_ESCAPE = '\u241b'
 export type AgentDraftPtyInputWriter = (data: string) => boolean | Promise<boolean>
 
 export async function sendAgentDraftPasteContent(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string,
+  content: string,
+  writePty?: AgentDraftPtyInputWriter
+): Promise<boolean> {
+  return await runTerminalPtyInputTransaction(ptyId, () =>
+    sendAgentDraftPasteContentNow(settings, ptyId, content, writePty)
+  )
+}
+
+// Why: callers that must keep extra PTY writes (e.g. submit Enter) inside the same
+// transaction take the lock themselves; taking it again here would deadlock.
+export async function sendAgentDraftPasteContentNow(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   content: string,
@@ -95,7 +113,7 @@ export function* iterateAgentDraftPasteContentChunks(
   let chunkBytes = 0
 
   for (let index = 0; index < terminalContent.length; index += 1) {
-    const codePoint = terminalContent.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(terminalContent, index)
     const codeUnitLength = codePoint > 0xffff ? 2 : 1
     const sanitizedEscape = codePoint === AGENT_DRAFT_PASTE_ESCAPE_CODE_POINT
     const sanitized = sanitizedEscape
@@ -135,7 +153,7 @@ function measureSanitizedUtf8ByteLength(
   let byteLength = 0
   const stopAfterBytes = options.stopAfterBytes
   for (let index = 0; index < content.length; index += 1) {
-    const codePoint = content.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(content, index)
     byteLength += getSanitizedUtf8ByteLengthForCodePoint(codePoint)
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
       return { byteLength, exceededLimit: true }
@@ -151,7 +169,7 @@ async function isSanitizedDraftPasteOverLimit(content: string, maxBytes: number)
   let byteLength = 0
   let nextYieldAt = AGENT_DRAFT_PASTE_PREFLIGHT_YIELD_CODE_UNITS
   for (let index = 0; index < content.length; index += 1) {
-    const codePoint = content.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(content, index)
     byteLength += getSanitizedUtf8ByteLengthForCodePoint(codePoint)
     if (byteLength > maxBytes) {
       return true
@@ -173,19 +191,6 @@ function getSanitizedUtf8ByteLengthForCodePoint(codePoint: number): number {
       ? AGENT_DRAFT_PASTE_INERT_ESCAPE_CODE_POINT
       : codePoint
   )
-}
-
-function getUtf8ByteLengthForCodePoint(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
 }
 
 async function writeAgentDraftPtyInput(

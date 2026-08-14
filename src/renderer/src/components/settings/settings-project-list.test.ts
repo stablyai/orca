@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   buildRepoIdToHostSelection,
   buildRepoIdToRepresentative,
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
   getSettingsProjectRepresentativeRepoId,
+  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
   resolveEffectiveProjectHost,
   resolveSettingsTargetRepoId
@@ -159,6 +161,26 @@ describe('deep-link resolution', () => {
     })
   })
 
+  it('uses an explicit host when same-id repo rows collide', () => {
+    const sameIdProjects = buildSettingsProjectList([
+      makeRepo({ id: 'same-repo', gitRemoteIdentity: gitRemote }),
+      makeRepo({
+        id: 'same-repo',
+        gitRemoteIdentity: gitRemote,
+        executionHostId: 'ssh:server',
+        connectionId: 'server',
+        path: '/remote/repo'
+      })
+    ])
+
+    expect(getSettingsTargetHostSelection(sameIdProjects, 'same-repo', 'ssh:server')).toEqual(
+      expect.objectContaining({
+        projectId: sameIdProjects[0].projectId,
+        hostId: 'ssh:server'
+      })
+    )
+  })
+
   it('parses a repoId from a host-specific subsection sectionId', () => {
     const repoIds = [...buildRepoIdToHostSelection(projects).keys()]
     expect(
@@ -250,9 +272,10 @@ describe('removeSettingsProjectFromAllHosts', () => {
 
     await removeSettingsProjectFromAllHosts(setups, removeProject)
 
+    // errorFeedback: this is a user-initiated removal, so a failure must surface (#11994).
     expect(removeProject.mock.calls).toEqual([
-      ['local-1', { hostId: 'local' }],
-      ['remote-9', { hostId: 'runtime:home-mac' }]
+      ['local-1', { hostId: 'local', errorFeedback: 'toast' }],
+      ['remote-9', { hostId: 'runtime:home-mac', errorFeedback: 'toast' }]
     ])
   })
 

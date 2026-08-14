@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -276,7 +278,9 @@ describe('all-host folder workspace startup catalogs', () => {
     expect(store.getState().projectGroups).toEqual([
       { ...localProjectGroup, executionHostId: 'local' }
     ])
-    expect(store.getState().folderWorkspaces).toEqual([localFolderWorkspace])
+    expect(store.getState().folderWorkspaces).toEqual([
+      { ...localFolderWorkspace, executionHostId: 'local' }
+    ])
   })
 
   it('does not repeat offline runtime compatibility probes across startup catalog loads', async () => {
@@ -305,7 +309,9 @@ describe('all-host folder workspace startup catalogs', () => {
       expect(store.getState().projectGroups).toEqual([
         { ...localProjectGroup, executionHostId: 'local' }
       ])
-      expect(store.getState().folderWorkspaces).toEqual([localFolderWorkspace])
+      expect(store.getState().folderWorkspaces).toEqual([
+        { ...localFolderWorkspace, executionHostId: 'local' }
+      ])
       expect(runtimeEnvironmentTransportCall.mock.calls.map((call) => call[0].method)).toEqual([
         'status.get'
       ])

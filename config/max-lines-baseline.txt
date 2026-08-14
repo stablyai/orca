@@ -2,7 +2,6 @@
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
 # split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").
 # Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)
-inline mobile/src/constants/marine-creatures.ts
 inline src/cli/handlers/automations.ts
 inline src/cli/handlers/orchestration.ts
 inline src/cli/help.ts
@@ -11,7 +10,6 @@ inline src/main/agent-hooks/server.test.ts
 inline src/main/agent-hooks/server.ts
 inline src/main/amp/hook-service.ts
 inline src/main/antigravity/hook-service.ts
-inline src/main/attribution/terminal-attribution.ts
 inline src/main/automations/external-manager.ts
 inline src/main/automations/hermes-cron-output.ts
 inline src/main/browser/agent-browser-bridge.test.ts
@@ -169,7 +167,6 @@ inline src/main/window/attach-main-window-services.ts
 inline src/main/window/createMainWindow.test.ts
 inline src/main/window/createMainWindow.ts
 inline src/main/workspace-space-analysis.ts
-inline src/preload/api-types.ts
 inline src/preload/index.ts
 inline src/relay/agent-hook-server.ts
 inline src/relay/dispatcher.ts
@@ -233,13 +230,10 @@ inline src/renderer/src/components/settings/AgentsPane.tsx
 inline src/renderer/src/components/settings/RepositoryHooksSection.tsx
 inline src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx
 inline src/renderer/src/components/settings/Settings.tsx
-inline src/renderer/src/components/settings/SettingsFormControls.tsx
 inline src/renderer/src/components/sidebar/RemoteFileBrowser.tsx
 inline src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
-inline src/renderer/src/components/sidebar/WorktreeCard.tsx
 inline src/renderer/src/components/sidebar/WorktreeContextMenu.tsx
 inline src/renderer/src/components/sidebar/WorktreeList.lineage-child-card.test.ts
-inline src/renderer/src/components/sidebar/WorktreeList.tsx
 inline src/renderer/src/components/sidebar/use-workspace-kanban-area-selection.ts
 inline src/renderer/src/components/sidebar/worktree-list-groups.test.ts
 inline src/renderer/src/components/sidebar/worktree-list-groups.ts
@@ -247,11 +241,9 @@ inline src/renderer/src/components/stats/usage-overview-model.ts
 inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx
 inline src/renderer/src/components/status-bar/StatusBar.tsx
 inline src/renderer/src/components/status-bar/WorkspaceSpaceManagerPanel.tsx
-inline src/renderer/src/components/tab-bar/TabBar.tsx
 inline src/renderer/src/components/tab-bar/TabBar.windows-shell-launch.test.ts
 inline src/renderer/src/components/tab-group/useTabDragSplit.ts
 inline src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
-inline src/renderer/src/components/task-page-cache-selectors.ts
 inline src/renderer/src/components/terminal-pane/TerminalPane.tsx
 inline src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts
 inline src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts
@@ -266,13 +258,11 @@ inline src/renderer/src/components/terminal-pane/terminal-link-handlers.test.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-context-menu.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
-inline src/renderer/src/components/workspace-cleanup/WorkspaceCleanupDialog.tsx
 inline src/renderer/src/hooks/useAutomationDispatchEvents.ts
 inline src/renderer/src/hooks/useComposerState.ts
 inline src/renderer/src/hooks/useEditorExternalWatch.ts
 inline src/renderer/src/hooks/useIpcEvents.test.ts
 inline src/renderer/src/hooks/useIpcEvents.ts
-inline src/renderer/src/hooks/useIssueMetadata.ts
 inline src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 inline src/renderer/src/lib/active-agent-note-send.test.ts
 inline src/renderer/src/lib/file-type-icons.ts
@@ -325,7 +315,7 @@ inline src/shared/agent-hook-listener.ts
 inline src/shared/automation-schedules.ts
 inline src/shared/commit-message-agent-spec.ts
 inline src/shared/constants.ts
-inline src/shared/github-project-types.ts
+inline src/shared/github/project-types.ts
 inline src/shared/keybindings.test.ts
 inline src/shared/keybindings.ts
 inline src/shared/marine-creatures.ts
@@ -334,7 +324,6 @@ inline src/shared/runtime-types.ts
 inline src/shared/source-control-ai.ts
 inline src/shared/telemetry-events.ts
 inline src/shared/text-search.ts
-inline src/shared/types.ts
 inline tests/e2e/helpers/terminal.ts
 inline tests/e2e/terminal-panes.spec.ts
 mobile-config app/h/*/files/*.tsx
@@ -344,7 +333,6 @@ mobile-config app/h/*/source-control/*.tsx
 mobile-config app/h/*/tasks.tsx
 mobile-config app/index.tsx
 mobile-config app/pair-scan.tsx
-mobile-config app/terminal-settings.tsx
 mobile-config app/troubleshoot.tsx
 mobile-config scripts/mock-server.ts
 mobile-config scripts/repro-terminal-colors.ts

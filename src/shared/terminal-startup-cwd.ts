@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import { resolveRuntimePath } from './cross-platform-path'
 import { parseWorkspaceKey } from './workspace-scope'
-import { splitWorktreeIdForFilesystem } from './worktree-id'
+import { splitWorktreeIdForFilesystem } from './worktree/id'
 
 export type TerminalStartupCwdMissingDirFallback = {
   // Why: only local callers can probe the filesystem — SSH/remote worktree

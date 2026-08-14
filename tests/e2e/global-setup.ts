@@ -17,13 +17,18 @@ import path from 'node:path'
 import os from 'node:os'
 import { prepareDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
 
+export const E2E_TEST_REPO_PATH_FILE_ENV = 'ORCA_E2E_TEST_REPO_PATH_FILE'
 /** Temp file where the test repo path is stored for the fixture to read. */
-export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
+export const TEST_REPO_PATH_FILE =
+  process.env[E2E_TEST_REPO_PATH_FILE_ENV] ??
+  path.join(os.tmpdir(), `orca-e2e-test-repo-path-${randomUUID()}.txt`)
 const ELECTRON_E2E_BUILD_TIMEOUT_MS = 300_000
 const CLI_E2E_BUILD_TIMEOUT_MS = 120_000
 const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
+  // Why: workers and teardown need this run's path, never another concurrent run's.
+  process.env[E2E_TEST_REPO_PATH_FILE_ENV] = TEST_REPO_PATH_FILE
   const root = process.cwd()
   const outMain = path.join(root, 'out', 'main', 'index.js')
   const outCli = path.join(root, 'out', 'cli', 'index.js')

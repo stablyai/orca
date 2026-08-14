@@ -21,7 +21,7 @@ type WebSocketMessageHandler = {
   ): void
 }['bivarianceHack']
 
-// Why: mobile clients background-suspend sockets with no TCP FIN, leaving half-opens that otherwise only the OS keepalive (~2h) reaps; a 15s ping/pong sweep bounds that to ~30s (clients auto-pong per RFC 6455).
+// Why: mobile clients background-suspend sockets with no TCP FIN, leaving half-opens that otherwise only the OS keepalive (~2h) reaps; a 15s ping/pong sweep bounds that to ~60s (clients auto-pong per RFC 6455), since a reap needs consecutive unanswered probes rather than one (STA-3320).
 const HEARTBEAT_INTERVAL_MS = 15_000
 
 export type WebSocketTransportOptions = {
@@ -125,6 +125,12 @@ export class WebSocketTransport implements RpcTransport {
       return addr.port
     }
     return this.port
+  }
+
+  // Why: the actual OS-reported bind interface, so callers can verify loopback vs all-interfaces (STA-2370).
+  get resolvedHost(): string | null {
+    const addr = this.httpServer?.address()
+    return addr && typeof addr === 'object' ? addr.address : null
   }
 
   async start(): Promise<void> {
@@ -295,13 +301,6 @@ export class WebSocketTransport implements RpcTransport {
       this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
     }
 
-    // Why: seed before arming so a fresh first socket survives its initial sweep.
-    this.heartbeatConnections.add(ws)
-    this.heartbeat.noteAlive(ws)
-    if (this.heartbeatConnections.size === 1) {
-      this.heartbeat.start(() => this.wss?.clients ?? [])
-    }
-
     const preAuthTimer = setTimeout(() => {
       if (!this.wsClientIds.has(ws)) {
         // Why: a silent auto-ponging client would otherwise hold a finite mobile slot forever without starting the E2EE handshake.
@@ -319,6 +318,13 @@ export class WebSocketTransport implements RpcTransport {
     // Why: clean up connection-scoped state (e.g. mobile-fit overrides) so a dropped phone doesn't leave orphaned phone-fit on desktop.
     ws.on('close', finalizeConnection)
     ws.on('error', onError)
+
+    // Why: every lifecycle event must have an owner before the first synchronous probe.
+    this.heartbeatConnections.add(ws)
+    this.heartbeat.noteAlive(ws)
+    if (this.heartbeatConnections.size === 1) {
+      this.heartbeat.start(() => this.wss?.clients ?? [])
+    }
   }
 
   private clearPreAuthTimer(ws: WebSocket): void {

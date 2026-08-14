@@ -12,7 +12,8 @@
  * where pre-mount output produces no attention side effects. The one exception
  * is a PTY whose consumer just unregistered: see the handoff buffer below.
  */
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type {
   TerminalSideEffectBatch,
@@ -63,6 +64,7 @@ export function isMainTerminalSideEffectAuthorityForPty(args: {
 }
 
 export type TerminalSideEffectFactConsumerCallbacks = {
+  onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
   /** `meta.staleWorkingTitleClear` marks facts derived from main's 3s
    *  stale-title timer — policy must clear title/cache state without
    *  scheduling task-complete notifications or unread attention. */
@@ -84,8 +86,8 @@ export type TerminalSideEffectFactConsumerCallbacks = {
   onCommandCodeWorking?: (prompt: string) => void
   onCommandCodeDone?: (prompt: string) => void
   /** DECSET 2031 subscribe observed by main's tracker. Registered only by
-   *  hidden-delivery-gated consumers (their bytes never arrive); the theme
-   *  reply is sent renderer-side — query authority stays with the view. */
+   *  hidden-delivery-gated consumers (their bytes never arrive); it records the
+   *  subscription for later theme-flip pushes, it does not answer. */
   onMode2031Subscribe?: () => void
   /** DECSET 2031 withdrawal observed by main's tracker. Clears the pane's
    *  subscription registry so later theme flips stop pushing CSI 997. */
@@ -104,6 +106,9 @@ let channelUnsubscribe: (() => void) | null = null
 
 function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: number): void {
   switch (fact.kind) {
+    case 'agent-status':
+      entry.callbacks.onAgentStatus?.(fact.payload)
+      return
     case 'title':
       entry.lastLiveTitleSeq = seq
       entry.callbacks.onTitleChange?.(
@@ -177,29 +182,46 @@ const HANDOFF_FACT_BUFFER_TTL_MS = 15_000
 const MAX_HANDOFF_FACT_BATCHES = 64
 const MAX_HANDOFF_FACT_PTYS = 32
 
-type HandoffFactBuffer = { batches: TerminalSideEffectBatch[]; expiresAtMs: number }
+type HandoffFactBuffer = {
+  batches: TerminalSideEffectBatch[]
+  expiresAtMs: number
+  expiryTimer: ReturnType<typeof setTimeout>
+}
 const handoffFactBuffersByPtyId = new Map<string, HandoffFactBuffer>()
+
+function deleteHandoffFactBuffer(ptyId: string): void {
+  const buffer = handoffFactBuffersByPtyId.get(ptyId)
+  if (buffer) {
+    clearTimeout(buffer.expiryTimer)
+    handoffFactBuffersByPtyId.delete(ptyId)
+  }
+}
 
 function openHandoffFactBuffer(ptyId: string): void {
   const nowMs = Date.now()
   for (const [bufferedPtyId, buffer] of handoffFactBuffersByPtyId) {
     if (buffer.expiresAtMs <= nowMs) {
-      handoffFactBuffersByPtyId.delete(bufferedPtyId)
+      deleteHandoffFactBuffer(bufferedPtyId)
     }
   }
-  if (
-    !handoffFactBuffersByPtyId.has(ptyId) &&
-    handoffFactBuffersByPtyId.size >= MAX_HANDOFF_FACT_PTYS
-  ) {
+  deleteHandoffFactBuffer(ptyId)
+  if (handoffFactBuffersByPtyId.size >= MAX_HANDOFF_FACT_PTYS) {
     const oldestPtyId = handoffFactBuffersByPtyId.keys().next().value
     if (typeof oldestPtyId === 'string') {
-      handoffFactBuffersByPtyId.delete(oldestPtyId)
+      deleteHandoffFactBuffer(oldestPtyId)
     }
   }
-  handoffFactBuffersByPtyId.set(ptyId, {
+  const buffer: HandoffFactBuffer = {
     batches: [],
-    expiresAtMs: nowMs + HANDOFF_FACT_BUFFER_TTL_MS
-  })
+    expiresAtMs: nowMs + HANDOFF_FACT_BUFFER_TTL_MS,
+    expiryTimer: setTimeout(() => {
+      if (handoffFactBuffersByPtyId.get(ptyId) === buffer) {
+        handoffFactBuffersByPtyId.delete(ptyId)
+      }
+    }, HANDOFF_FACT_BUFFER_TTL_MS)
+  }
+  buffer.expiryTimer.unref?.()
+  handoffFactBuffersByPtyId.set(ptyId, buffer)
 }
 
 function bufferHandoffFactBatch(batch: TerminalSideEffectBatch): void {
@@ -208,7 +230,7 @@ function bufferHandoffFactBatch(batch: TerminalSideEffectBatch): void {
     return
   }
   if (buffer.expiresAtMs <= Date.now()) {
-    handoffFactBuffersByPtyId.delete(batch.ptyId)
+    deleteHandoffFactBuffer(batch.ptyId)
     return
   }
   // Why: replay batches are snapshots the next consumer requests for itself.
@@ -226,7 +248,7 @@ function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): void {
   if (!buffer) {
     return
   }
-  handoffFactBuffersByPtyId.delete(ptyId)
+  deleteHandoffFactBuffer(ptyId)
   if (buffer.expiresAtMs <= Date.now()) {
     return
   }
@@ -235,7 +257,7 @@ function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): void {
   }
 }
 
-function handleSideEffectBatch(batch: TerminalSideEffectBatch): void {
+export function dispatchTerminalSideEffectBatch(batch: TerminalSideEffectBatch): void {
   const entry = consumersByPtyId.get(batch.ptyId)
   if (!entry) {
     bufferHandoffFactBatch(batch)
@@ -254,7 +276,7 @@ function ensureSideEffectChannelSubscription(): void {
   if (typeof onSideEffect !== 'function') {
     return
   }
-  channelUnsubscribe = onSideEffect(handleSideEffectBatch)
+  channelUnsubscribe = onSideEffect(dispatchTerminalSideEffectBatch)
 }
 
 export type TerminalSideEffectFactConsumerOptions = {
@@ -310,13 +332,15 @@ export function registerTerminalSideEffectFactConsumer(
 
 /** Test seam: deliver a batch as if it arrived on the channel. */
 export function _dispatchTerminalSideEffectBatchForTest(batch: TerminalSideEffectBatch): void {
-  handleSideEffectBatch(batch)
+  dispatchTerminalSideEffectBatch(batch)
 }
 
 /** Test seam: reset module state between tests. */
 export function _resetTerminalSideEffectFactConsumersForTest(): void {
   consumersByPtyId.clear()
-  handoffFactBuffersByPtyId.clear()
+  for (const ptyId of Array.from(handoffFactBuffersByPtyId.keys())) {
+    deleteHandoffFactBuffer(ptyId)
+  }
   channelUnsubscribe?.()
   channelUnsubscribe = null
   persistedAuthorityFlagCache = undefined

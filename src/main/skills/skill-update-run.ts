@@ -6,7 +6,7 @@ import {
 } from '../../shared/skill-freshness'
 import { resolveCliCommand } from '../codex-cli/command'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
-import { getSpawnArgsForWindows } from '../win32-utils'
+import { getSpawnArgsForWindows, WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL } from '../win32-utils'
 
 // Why: `skills update` prints ANSI colour and \r + erase-line progress. We show
 // this log verbatim to the user but never parse it — `update` has no --json
@@ -101,9 +101,8 @@ export class SkillUpdateRunner {
       ;({ spawnCmd, spawnArgs } = buildSpawnArgs(npxCommand, npxArgs))
     } catch {
       // Why: the names are already canonical here, so this is the cmd.exe rail
-      // rejecting the resolved npx *path* — a profile directory containing `&`,
-      // `%` or `!` is enough. Publishing the failure keeps the dialog honest;
-      // returning a bare `started: false` would leave the button dead and silent.
+      // rejecting the resolved npx *path*. Publishing the failure keeps the dialog
+      // honest; a bare `started: false` would leave the button dead and silent.
       this.runToken += 1
       this.settling = false
       this.publish({
@@ -112,7 +111,9 @@ export class SkillUpdateRunner {
         finishedAt: this.deps.now(),
         output: '',
         failedNames: canonicalNames,
-        message: `Could not run ${npxCommand} safely from this location.`
+        message:
+          `Could not run ${npxCommand} safely from this location: its path contains one of ` +
+          `${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL}, which cmd.exe would reinterpret.`
       })
       return { started: false, reason: 'unsafe-command-path' }
     }

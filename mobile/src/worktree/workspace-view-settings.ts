@@ -3,7 +3,7 @@
 // RPCs). Keeping these settings in the same global store is what lets a grouping
 // or filter change on the phone show up on desktop and vice-versa.
 
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
@@ -16,6 +16,7 @@ export type WorkspaceViewSettings = {
   sortBy?: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   hideSleepingWorkspaces?: boolean
   hideDefaultBranchWorkspace?: boolean
+  alwaysShowDefaultBranchWorkspace?: boolean
   filterRepoIds?: string[]
   collapsedGroups?: string[]
   workspaceStatuses?: WorkspaceStatusDefinition[]
@@ -60,6 +61,7 @@ export type MobileViewState = {
   sortMode: MobileSortMode
   hideSleeping: boolean
   hideDefaultBranch: boolean
+  alwaysShowDefaultBranch: boolean
   filterRepoIds: string[]
   collapsedGroups: string[]
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -83,6 +85,8 @@ export function applyDesktopViewSettings(
     sortMode: sortMode ?? current.sortMode,
     hideSleeping: settings.hideSleepingWorkspaces ?? current.hideSleeping,
     hideDefaultBranch: settings.hideDefaultBranchWorkspace ?? current.hideDefaultBranch,
+    alwaysShowDefaultBranch:
+      settings.alwaysShowDefaultBranchWorkspace ?? current.alwaysShowDefaultBranch,
     filterRepoIds: settings.filterRepoIds ?? current.filterRepoIds,
     collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups,
     workspaceStatuses

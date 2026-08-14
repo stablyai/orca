@@ -1,9 +1,9 @@
-import { AgentKanbanBoard } from './AgentKanbanBoard'
+import { useEffect, useState } from 'react'
+import { AgentKanbanBoard, type AgentDashboardView } from './AgentKanbanBoard'
 import { useDashboardSnapshot } from './useDashboardSnapshot'
 
 type DashboardPopoutRootProps = {
-  /** The layout requested via popout.html?view=<name>. Only "kanban" exists
-   *  today; unknown views fall back to it. */
+  /** The layout requested via popout.html?view=<name>. */
   view: string | null
 }
 
@@ -13,5 +13,9 @@ type DashboardPopoutRootProps = {
  */
 export function DashboardPopoutRoot(_props: DashboardPopoutRootProps): React.JSX.Element {
   const snapshot = useDashboardSnapshot()
-  return <AgentKanbanBoard snapshot={snapshot} />
+  const [view, setView] = useState<AgentDashboardView>(() =>
+    _props.view === 'map' || _props.view === 'rings' ? 'map' : 'board'
+  )
+  useEffect(() => window.api.dashboard.onViewRequested(setView), [])
+  return <AgentKanbanBoard key={view} snapshot={snapshot} initialView={view} />
 }

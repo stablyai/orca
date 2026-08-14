@@ -17,13 +17,17 @@
  * See docs/resource-usage-merge-spec.md for the full design.
  */
 
-import type { MemorySnapshot, SessionMemory, WorktreeMemory } from '../../../../shared/types'
+import type {
+  MemorySnapshot,
+  SessionMemory,
+  WorktreeMemory
+} from '../../../../shared/process-stats-types'
 import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
 import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
-} from '../../../../shared/worktree-id'
+} from '../../../../shared/worktree/id'
 import type {
   DaemonSession,
   MergeContext,
@@ -69,7 +73,7 @@ function resolveSnapshotSessionLabel(
   if (parsed) {
     const tabs = ctx.tabsByWorktree[worktreeId] ?? []
     const tabIndex = tabs.findIndex((t) => t.id === parsed.tabId)
-    const tab = tabIndex >= 0 ? tabs[tabIndex] : undefined
+    const tab = tabIndex !== -1 ? tabs[tabIndex] : undefined
     if (tab) {
       const custom = tab.customTitle?.trim()
       if (custom) {
@@ -94,7 +98,7 @@ function resolveDaemonSessionLabel(
   if (tabId && resolvedWorktreeId) {
     const tabs = ctx.tabsByWorktree[resolvedWorktreeId] ?? []
     const tabIndex = tabs.findIndex((t) => t.id === tabId)
-    const tab = tabIndex >= 0 ? tabs[tabIndex] : undefined
+    const tab = tabIndex !== -1 ? tabs[tabIndex] : undefined
     if (tab) {
       const custom = tab.customTitle?.trim()
       if (custom) {

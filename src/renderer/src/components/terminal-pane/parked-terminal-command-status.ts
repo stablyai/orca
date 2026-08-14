@@ -5,6 +5,7 @@
  * (foreground process-confirm ladder, key-intent interrupt inference) stay with the mounted pane.
  */
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
@@ -15,6 +16,7 @@ import {
   openCommandCodeDoneSettle,
   setCommandCodeDoneSettleExecutor
 } from './command-code-done-settle'
+import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
 
 export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
@@ -57,6 +59,23 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       paneKey,
       ptyId,
       expectedConnectionId: getConnectionIdFromState(state, worktreeId)
+    })
+  }
+
+  const canApplyCommandCodeOutputStatus = (): boolean => {
+    const state = useAppStore.getState()
+    const tab = (state.tabsByWorktree[worktreeId] ?? []).find((entry) => entry.id === tabId)
+    const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+    const paneOwnerAgent = resolvePaneAgentOwner({
+      launchAgent: tab?.launchAgent,
+      startupLaunchAgent: state.agentLaunchConfigByPaneKey[paneKey]?.identity.agentType,
+      hookAgent: state.agentStatusByPaneKey[paneKey]?.agentType
+    })
+    return canCommandCodeOutputOwnPane({
+      foregroundAgent: foreground?.agent,
+      shellForeground: foreground?.shellForeground,
+      paneOwnerAgent,
+      retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[paneKey]?.agentType
     })
   }
 
@@ -126,13 +145,13 @@ export function createParkedTerminalCommandStatusPolicy(options: {
   )
 
   return {
-    onCommandFinished: (): void => {
+    onCommandFinished: (bestEffortExitCode: number | null): void => {
       if (disposed) {
         return
       }
       // Why: the finished command may have moved HEAD or the index (an agent running
       // `git checkout` in a parked worktree); nudge git UI now instead of waiting for a poll.
-      dispatchTerminalCommandFinishedEvent(worktreeId)
+      dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode)
       // Why: drop the same-turn status row only for SSH PTYs — exact parity with the mounted
       // path, whose foreground tracker refuses SSH ids and drops un-probed. Local PTYs need
       // pty-connection's process-confirm ladder to tell a leaked nested-shell 133;D from a
@@ -145,6 +164,9 @@ export function createParkedTerminalCommandStatusPolicy(options: {
 
     // Port of pty-connection's seedCommandCodeOutputWorkingStatus (store-level only).
     onCommandCodeWorking: (prompt: string): void => {
+      if (!canApplyCommandCodeOutputStatus()) {
+        return
+      }
       clearCommandCodeOutputDoneTimer()
       const routing = resolveRouting()
       if (!routing) {
@@ -178,6 +200,9 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     // Port of pty-connection's scheduleCommandCodeOutputDoneStatus: Command Code keeps rendering
     // the composer while tools run, so only complete the row if no active repaint arrives.
     onCommandCodeDone: (prompt: string): void => {
+      if (!canApplyCommandCodeOutputStatus()) {
+        return
+      }
       const normalizedPrompt = prompt.trim()
       if (!normalizedPrompt) {
         cancelCommandCodeDoneSettle(paneKey)

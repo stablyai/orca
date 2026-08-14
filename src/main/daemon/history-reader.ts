@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises'
 import type { TerminalCheckpointFile } from './types'
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from './terminal-history-log'
+import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { HeadlessEmulator } from './headless-emulator'
 import { PrioritySemaphore } from './priority-semaphore'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
@@ -18,6 +19,7 @@ import {
   hasTerminalHistoryRecoveryProtection,
   isTerminalHistoryQuarantineEntry
 } from './terminal-history-recovery-quarantine'
+import { isTerminalHistoryPendingDeleteEntry } from './terminal-history-session-tombstone'
 import {
   readTerminalHistoryMeta,
   type SessionMeta,
@@ -195,7 +197,10 @@ export class HistoryReader {
         if (!entry.isDirectory()) {
           continue
         }
-        if (isTerminalHistoryQuarantineEntry(entry.name)) {
+        if (
+          isTerminalHistoryQuarantineEntry(entry.name) ||
+          isTerminalHistoryPendingDeleteEntry(entry.name)
+        ) {
           continue
         }
         let sessionId: string
@@ -276,6 +281,7 @@ export class HistoryReader {
       const emulator = new HeadlessEmulator({
         cols: checkpoint?.cols ?? meta.cols,
         rows: checkpoint?.rows ?? meta.rows,
+        scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
         wslDistro
       })
       const replay = new ColdRestoreReplayWriter(emulator)
@@ -311,9 +317,10 @@ export class HistoryReader {
           }
         }
         const snapshot = emulator.getSnapshot()
+        const lastBatch = log.batches.at(-1)!
         return {
           restoreInfo: coldRestoreInfoFromSnapshot(
-            snapshot,
+            { ...snapshot, pendingOutputSeq: lastBatch.seq },
             snapshot.cwd ?? checkpoint?.cwd ?? meta.cwd,
             meta
           ),

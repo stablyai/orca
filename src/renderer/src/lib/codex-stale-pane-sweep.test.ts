@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
   notifyCodexPaneBoundForStaleSweep,
-  resetCodexStalePaneSweepForTests
+  resetCodexStalePaneSweepForTests,
+  sweepRestoredCodexPanesForStaleAccounts
 } from './codex-stale-pane-sweep'
 
 const ACCOUNT_A = 'account-a@example.com'
@@ -430,6 +431,28 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     notifyCodexPaneBoundForStaleSweep('remote:env-1@@term-1')
     notifyCodexPaneBoundForStaleSweep('pty-1')
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({
+      ptyIds: ['pty-1']
+    })
+    expect(inspectCallCountFor('remote:env-1@@term-1')).toBe(0)
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
+    })
+  })
+
+  it('re-raises the prompt for a restored pane whose tab never mounts', async () => {
+    // Regression: the bind-driven sweep needed a pane mount to fire, so a stale
+    // pane restored into a background tab stayed on the old account silently.
+    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
+
+    sweepRestoredCodexPanesForStaleAccounts({
+      ptyIdsByTabId: { 'tab-1': ['pty-1', 'remote:env-1@@term-1'] }
+    })
     await vi.advanceTimersByTimeAsync(300)
 
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({

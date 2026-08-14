@@ -3,7 +3,10 @@ import React, { type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -109,10 +112,6 @@ vi.mock('./WorktreeCardAgents', () => ({
   default: ({ className, agents }: { className?: string; agents?: DashboardAgentRowData[] }) => (
     <div className={className} data-agent-count={agents?.length ?? ''} data-worktree-agents="" />
   )
-}))
-
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({

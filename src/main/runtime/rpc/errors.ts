@@ -5,8 +5,10 @@
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
-import { LINEAR_ERROR_CODES } from '../../../shared/linear-agent-access'
+import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
+import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
+import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -88,6 +90,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'agent_unconfigured',
   'terminal_worktree_mismatch',
   'request_mismatch',
+  'mutation_ledger_full',
   'legacy_read_only',
   'orchestration_migration_required',
   'operation_unknown',
@@ -95,7 +98,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'answer_conflict',
   'stale_delivery',
   'waiter_exists',
-  'invalid_argument'
+  'invalid_argument',
+  GIT_DIFF_TOO_LARGE_CODE,
+  ARTIFACT_SHARING_DISABLED_CODE
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
@@ -107,7 +112,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code))
+    return errorResponse(id, meta, code, message, computerErrorData(code, message))
   }
   if (
     error instanceof Error &&

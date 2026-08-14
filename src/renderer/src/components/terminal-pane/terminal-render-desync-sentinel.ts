@@ -128,7 +128,7 @@ export function sampleRenderDesyncOnce(
       // Why: captures can contain full terminal canvases and buffer contents.
       // Keep recovery available after the per-session evidence budget is spent.
       console.warn(`[terminal] render desync detected on pane ${paneKey}; capture budget exhausted`)
-      resetAndRefreshAllTerminalWebglAtlases()
+      resetAndRefreshAllTerminalWebglAtlases('render-desync')
       stopSampleBurst()
       return
     }
@@ -273,7 +273,7 @@ async function persistEvidenceThenRecover(
     entry.bufferText = undefined
   }
 
-  resetAndRefreshAllTerminalWebglAtlases()
+  resetAndRefreshAllTerminalWebglAtlases('render-desync')
   const timeoutId = setTimeout(() => {
     healedCaptureTimeoutIds.delete(timeoutId)
     void window.api.app

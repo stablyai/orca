@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -43,18 +42,17 @@ internal static class OrcaCliLauncher
 
             // Why: launching without cmd.exe preserves embedded newlines while matching the
             // packaged batch launcher's Electron-as-Node environment contract.
-            MoveEnvironmentVariable(startInfo.EnvironmentVariables, "NODE_OPTIONS", "ORCA_NODE_OPTIONS");
-            MoveEnvironmentVariable(
-                startInfo.EnvironmentVariables,
-                "NODE_REPL_EXTERNAL_MODULE",
-                "ORCA_NODE_REPL_EXTERNAL_MODULE"
+            // Why: ProcessStartInfo's env copy rejects duplicate PATH/Path keys; mutating this
+            // short-lived process preserves the native block for child inheritance (#12046).
+            MoveEnvironmentVariable("NODE_OPTIONS", "ORCA_NODE_OPTIONS");
+            MoveEnvironmentVariable("NODE_REPL_EXTERNAL_MODULE", "ORCA_NODE_REPL_EXTERNAL_MODULE");
+            Environment.SetEnvironmentVariable("ELECTRON_RUN_AS_NODE", "1");
+            Environment.SetEnvironmentVariable("ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER", "1");
+            string requestedCliCommand = Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND");
+            Environment.SetEnvironmentVariable(
+                "ORCA_CLI_COMMAND",
+                requestedCliCommand == "orca-ide" ? "orca-ide" : "orca"
             );
-            startInfo.EnvironmentVariables["ELECTRON_RUN_AS_NODE"] = "1";
-            startInfo.EnvironmentVariables["ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER"] = "1";
-            startInfo.EnvironmentVariables["ORCA_CLI_COMMAND"] =
-                Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND") == "orca-ide"
-                    ? "orca-ide"
-                    : "orca";
 
             using (Process child = Process.Start(startInfo))
             {
@@ -69,19 +67,12 @@ internal static class OrcaCliLauncher
         }
     }
 
-    private static void MoveEnvironmentVariable(
-        StringDictionary environment,
-        string sourceName,
-        string targetName
-    )
+    private static void MoveEnvironmentVariable(string sourceName, string targetName)
     {
         string value = Environment.GetEnvironmentVariable(sourceName);
-        environment.Remove(sourceName);
-        environment.Remove(targetName);
-        if (value != null)
-        {
-            environment[targetName] = value;
-        }
+        Environment.SetEnvironmentVariable(sourceName, null);
+        // Why: a null value clears the target, matching the previous unconditional Remove.
+        Environment.SetEnvironmentVariable(targetName, value);
     }
 
     private static string BuildArguments(string cliPath, string[] args)

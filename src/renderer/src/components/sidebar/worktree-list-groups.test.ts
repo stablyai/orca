@@ -20,16 +20,12 @@ import {
   REPO_HEADER_ACTION_REVEAL_CLASS
 } from './repo-header-action-button-class'
 import { getWorktreeLineageAncestors } from './worktree-lineage-projection'
-import type {
-  DetectedWorktree,
-  Project,
-  ProjectHostSetup,
-  FolderWorkspace,
-  Repo,
-  ProjectGroup,
-  Worktree,
-  WorktreeLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
@@ -65,6 +61,13 @@ const repoMap = new Map([[repo.id, repo]])
 
 function readWorktreeListSource(): string {
   return readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+}
+
+function readSectionHeaderRowSource(): string {
+  return readFileSync(
+    fileURLToPath(new URL('./worktree-list/worktree-section-header-row.tsx', import.meta.url)),
+    'utf8'
+  )
 }
 
 const remoteRepo: Repo = {
@@ -765,7 +768,7 @@ describe('buildRows with pinned worktrees', () => {
     )
   })
 
-  it('splits all project setups when one host has duplicate checkouts', () => {
+  it('splits only the surface with duplicate checkouts', () => {
     const localRepoB: Repo = {
       ...repo,
       id: 'repo-local-b',
@@ -822,8 +825,141 @@ describe('buildRows with pinned worktrees', () => {
     expect(headers.map((row) => row.key)).toEqual([
       'project:github:stablyai/orca::setup:repo-1',
       'project:github:stablyai/orca::setup:repo-local-b',
-      'project:github:stablyai/orca::setup:repo-remote'
+      'project:github:stablyai/orca'
     ])
+  })
+
+  it('counts projection twins for one directory as one checkout', () => {
+    const runtimeHostId = 'runtime:m2-air'
+    const runtimeRepo: Repo = {
+      ...remoteRepo,
+      id: 'repo-runtime',
+      path: '/home/alice/orca-runtime',
+      connectionId: undefined,
+      executionHostId: runtimeHostId
+    }
+    const runtimeWorktree: Worktree = {
+      ...remoteWorktree,
+      id: 'wt-runtime',
+      repoId: runtimeRepo.id,
+      path: '/home/alice/orca-runtime-feature'
+    }
+    const runtimeSetup: ProjectHostSetup = {
+      ...projectHostSetups[1]!,
+      id: runtimeRepo.id,
+      repoId: runtimeRepo.id,
+      path: runtimeRepo.path,
+      hostId: runtimeHostId,
+      executionHostId: runtimeHostId
+    }
+    const derivedSetup: ProjectHostSetup = {
+      ...projectHostSetups[1]!,
+      hostId: runtimeHostId,
+      connectionId: 'intel mac',
+      executionHostId: runtimeHostId
+    }
+    const authoritativeSetup: ProjectHostSetup = {
+      ...derivedSetup,
+      id: 'setup-authoritative',
+      path: `${derivedSetup.path}/`,
+      connectionId: null,
+      executionHostId: 'ssh:intel%20mac'
+    }
+    const grouping = {
+      projects: [{ ...project, sourceRepoIds: [remoteRepo.id, runtimeRepo.id] }],
+      projectHostSetups: [runtimeSetup, derivedSetup, authoritativeSetup]
+    }
+
+    expect([
+      getGroupKeyForWorktree(
+        'repo',
+        remoteWorktree,
+        new Map([[remoteRepo.id, remoteRepo]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      ),
+      getGroupKeyForWorktree(
+        'repo',
+        runtimeWorktree,
+        new Map([[runtimeRepo.id, runtimeRepo]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      )
+    ]).toEqual(['project:github:stablyai/orca', 'project:github:stablyai/orca'])
+  })
+
+  it('keeps Git hosts grouped when folder setups share the project identity', () => {
+    const windowsHostId = 'runtime:windows-server'
+    const windowsRepo: Repo = {
+      ...repo,
+      id: 'repo-windows',
+      path: 'C:\\Users\\neil\\orca\\orca',
+      executionHostId: windowsHostId
+    }
+    const folderRepoA: Repo = {
+      ...repo,
+      id: 'folder-qa-a',
+      path: '/tmp/pr11751-folder-qa',
+      displayName: 'pr11751-folder-qa',
+      kind: 'folder'
+    }
+    const folderRepoB: Repo = {
+      ...folderRepoA,
+      id: 'folder-qa-b',
+      path: '/tmp/pr11767-runtime-folder',
+      displayName: 'pr11767-runtime-folder'
+    }
+    const setups: ProjectHostSetup[] = [
+      projectHostSetups[0]!,
+      { ...projectHostSetups[0]!, id: 'projection-twin' },
+      projectHostSetups[1]!,
+      {
+        ...projectHostSetups[0]!,
+        id: windowsRepo.id,
+        repoId: windowsRepo.id,
+        path: windowsRepo.path,
+        hostId: windowsHostId,
+        executionHostId: windowsHostId
+      },
+      {
+        ...projectHostSetups[0]!,
+        id: folderRepoA.id,
+        repoId: folderRepoA.id,
+        path: folderRepoA.path,
+        displayName: folderRepoA.displayName,
+        kind: 'folder'
+      },
+      {
+        ...projectHostSetups[0]!,
+        id: folderRepoB.id,
+        repoId: folderRepoB.id,
+        path: folderRepoB.path,
+        displayName: folderRepoB.displayName,
+        kind: 'folder'
+      }
+    ]
+    const repos = [repo, remoteRepo, windowsRepo, folderRepoA, folderRepoB]
+    const grouping = {
+      projects: [{ ...project, sourceRepoIds: repos.map((entry) => entry.id) }],
+      projectHostSetups: setups
+    }
+
+    const groupKeys = repos.map((entry) =>
+      getGroupKeyForWorktree(
+        'repo',
+        { ...worktree, id: `wt-${entry.id}`, repoId: entry.id, path: entry.path },
+        new Map([[entry.id, entry]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      )
+    )
+    expect(new Set(groupKeys)).toEqual(new Set(['project:github:stablyai/orca']))
   })
 
   it('keeps a provisioned runtime copy under the project header alongside a same-host checkout', () => {
@@ -3856,7 +3992,7 @@ describe('buildRows workspace lineage nesting', () => {
 
 describe('WorktreeList header styles', () => {
   it('does not title-case workspace group labels', () => {
-    const source = readWorktreeListSource()
+    const source = readSectionHeaderRowSource()
 
     expect(source).not.toContain('leading-none capitalize')
   })
@@ -3876,7 +4012,7 @@ describe('WorktreeList header styles', () => {
   })
 
   it('resolves repo header color from project group headers only', () => {
-    const source = readWorktreeListSource()
+    const source = readSectionHeaderRowSource()
 
     expect(source).toContain('resolveProjectGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')

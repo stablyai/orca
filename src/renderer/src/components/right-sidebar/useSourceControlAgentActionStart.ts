@@ -5,7 +5,9 @@ import type {
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
@@ -43,6 +45,8 @@ type UseSourceControlAgentActionStartArgs = {
     actionId: SourceControlLaunchActionId,
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
+  onLaunchAccepted?: () => void
+  onLaunchAborted?: () => void
   onLaunched?: () => void
   onClose: () => void
 }
@@ -84,6 +88,8 @@ export function useSourceControlAgentActionStart({
   refreshDetectedAgents,
   onStart,
   onSaveAgentDefault,
+  onLaunchAccepted,
+  onLaunchAborted,
   onLaunched,
   onClose
 }: UseSourceControlAgentActionStartArgs): UseSourceControlAgentActionStartResult {
@@ -158,6 +164,8 @@ export function useSourceControlAgentActionStart({
           launchSource,
           onStart,
           onSaveAgentDefault,
+          onLaunchAccepted,
+          onLaunchAborted,
           onLaunched,
           onClose: () => {
             resetDeliveryPlan()
@@ -179,6 +187,8 @@ export function useSourceControlAgentActionStart({
       launchSource,
       launchPlatform,
       onClose,
+      onLaunchAborted,
+      onLaunchAccepted,
       onLaunched,
       onSaveAgentDefault,
       onStart,

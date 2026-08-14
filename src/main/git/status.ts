@@ -4,18 +4,20 @@ import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   GitBranchChangeEntry,
-  GitBranchChangeStatus,
   GitBranchCompareResult,
   GitBranchCompareSummary,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type {
+  GitBranchChangeStatus,
   GitConflictKind,
   GitConflictOperation,
-  GitDiffResult,
   GitFileStatus,
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../shared/types'
+} from '../../shared/git-status-types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import {
   getEffectiveGitUpstreamStatus,
@@ -46,13 +48,21 @@ import {
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
 import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
-import { gitOptionsForWorktree } from './git-runtime-options'
+import { gitOptionsForWorktree, gitStatusReadOptionsForWorktree } from './git-runtime-options'
+import { GitStatusReadLeaseOwner } from './git-status-read-lease-owner'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
+import {
+  computeGitBranchLineTotal,
+  invalidateGitBranchLineTotalInFlight,
+  readGitBranchLineTotalMergeBaseParam,
+  GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS,
+  type GitBranchLineTotal
+} from '../../shared/git-branch-line-total'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCache,
@@ -92,12 +102,14 @@ const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatu
 const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
-const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
+const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
-// Why: clear both diff and status in-flight caches; clearing only diff would let getStatus() join a pre-mutation read.
+// Why: clear every in-flight git read cache; clearing only some would let a post-mutation
+// getStatus() join a pre-mutation read and publish it as current.
 export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
-  statusReadsInFlight.clear()
+  statusReadLeaseOwner.invalidate()
+  invalidateGitBranchLineTotalInFlight()
   clearGitStatusLineStatsCache()
   clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()
@@ -194,6 +206,9 @@ export function getEffectiveUpstreamStatusGenerationCountForTests(): number {
 export type GetStatusOptions = GitRuntimeOptions & {
   includeIgnored?: boolean
   reuseLineStats?: boolean
+  /** Merge-base OID the caller wants the branch line total measured against;
+   *  omitted means the chip is hidden, so no ranged diff runs at all. */
+  branchLineTotalMergeBase?: string
   /**
    * Max changed-file entries before git is stopped and the result is marked
    * `didHitLimit`. Defaults to DEFAULT_GIT_STATUS_LIMIT; 0 disables the cap.
@@ -216,40 +231,29 @@ export async function getStatus(
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
   gitDiffReadDedupe.clear()
-  if (options.signal) {
-    return runGetStatus(worktreePath, options)
-  }
   // Why: dedupe only concurrent identical reads; after settle, callers must run a fresh read.
   const cacheKey = getStatusReadKey(worktreePath, options)
-  const inFlightStatus = statusReadsInFlight.get(cacheKey)
-  if (inFlightStatus) {
-    return inFlightStatus
-  }
-
-  const statusPromise = runGetStatus(worktreePath, options)
-  statusReadsInFlight.set(cacheKey, statusPromise)
-  try {
-    return await statusPromise
-  } finally {
-    if (statusReadsInFlight.get(cacheKey) === statusPromise) {
-      statusReadsInFlight.delete(cacheKey)
-    }
-  }
+  return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
+    runGetStatus(worktreePath, { ...options, signal: sharedSignal })
+  )
 }
 
 function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
   // Why: each key part can change the output shape or runtime routing.
   const limit = resolveGitStatusLimit(options.limit)
-  return [
+  return stableInFlightKey([
     worktreePath,
     options.wslDistro ?? '',
     options.includeIgnored === true,
     options.reuseLineStats === true,
+    // Why: the result carries a total only for callers who asked, and only for
+    // this fork point, so a shared lease must never serve one to the other.
+    options.branchLineTotalMergeBase ?? '',
     options.bypassEffectiveUpstreamNegativeCache === true,
     limit,
     // Why: this changes which entries survive, so it must not share a cache slot.
-    (options.sharedLinkPaths ?? []).join('\u0001')
-  ].join('\0')
+    options.sharedLinkPaths ?? []
+  ])
 }
 
 /** Remove untracked entries that are shared symlinks Orca created.
@@ -313,21 +317,32 @@ async function runGetStatus(
   // Why: stream + parse and stop at `limit` so a huge un-ignored folder can't buffer enough to crash the process.
   const parser = new StatusPorcelainParser()
   let didHitLimit = false
+  // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
+  const statusSettlementPromise = Promise.allSettled([
+    (async () => {
+      const result = await gitStreamStdout(statusArgs, {
+        cwd: worktreePath,
+        wslDistro: options.wslDistro,
+        preferWslDirectGit: true,
+        // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
+        env: gitOptionalLocksDisabledEnv(),
+        signal: options.signal,
+        onStdout: (chunk) => parser.update(chunk, limit)
+      })
+      if (!result.stoppedEarly) {
+        parser.finish()
+      }
+      return result
+    })()
+  ])
   const conflictOperation = await conflictPromise
 
   try {
-    const { stoppedEarly } = await gitStreamStdout(statusArgs, {
-      cwd: worktreePath,
-      wslDistro: options.wslDistro,
-      // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
-      env: gitOptionalLocksDisabledEnv(),
-      signal: options.signal,
-      onStdout: (chunk) => parser.update(chunk, limit)
-    })
-    if (!stoppedEarly) {
-      parser.finish()
+    const [statusResult] = await statusSettlementPromise
+    if (statusResult.status === 'rejected') {
+      throw statusResult.reason
     }
-    didHitLimit = stoppedEarly
+    didHitLimit = statusResult.value.stoppedEarly
     statusSucceeded = true
   } catch (error) {
     // Why: an aborted scan must reject, not resolve as an empty result.
@@ -384,16 +399,25 @@ async function runGetStatus(
   }
 
   // Why: line counts run only for areas with entries (clean tree = 0 calls); skip past the limit to avoid numstat over a huge set.
+  let branchLineTotal: GitBranchLineTotal | undefined
   if (!didHitLimit) {
-    await reuseOrRecomputeGitStatusLineStats({
+    const branchLineTotalInput = createBranchLineTotalInput(
+      worktreePath,
+      entries,
+      options,
+      statusSucceeded
+    )
+    const lineStats = await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,
       head,
       entries,
       writeToken: lineStatsWriteToken,
       reuse: options.reuseLineStats === true,
       isAborted: () => options.signal?.aborted === true,
-      recompute: () => attachLineStats(worktreePath, entries, options)
+      recompute: () => attachLineStats(worktreePath, entries, options),
+      ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     })
+    branchLineTotal = lineStats.branchLineTotal
   } else {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
@@ -411,6 +435,7 @@ async function runGetStatus(
     head,
     branch,
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
+    ...(branchLineTotal ? { branchLineTotal } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded
       ? {
@@ -426,6 +451,43 @@ async function runGetStatus(
               : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
+  }
+}
+
+/** Undefined — and therefore zero extra work — unless the caller asked for a total we can know exact. */
+function createBranchLineTotalInput(
+  worktreePath: string,
+  entries: GitStatusEntry[],
+  options: GetStatusOptions,
+  statusSucceeded: boolean
+): { mergeBase: string; compute: () => Promise<GitBranchLineTotal | undefined> } | undefined {
+  const mergeBase = readGitBranchLineTotalMergeBaseParam(options.branchLineTotalMergeBase)
+  // Why: a failed status scan leaves the untracked list untrustworthy, so the
+  // total would silently under-count rather than be absent.
+  if (mergeBase === undefined || !statusSucceeded) {
+    return undefined
+  }
+  return {
+    mergeBase,
+    compute: () =>
+      computeGitBranchLineTotal({
+        worktreePath,
+        // Why: the same path can be a different filesystem per WSL distro.
+        hostKey: options.wslDistro ?? 'native',
+        mergeBase,
+        untrackedPaths: entries
+          .filter((entry) => entry.area === 'untracked')
+          .map((entry) => entry.path),
+        runDiffNumstat: (args, signal) =>
+          gitExecFileAsync(args, {
+            ...gitStatusReadOptionsForWorktree(worktreePath, options),
+            // Why: after the spread, so the shared lease signal wins over this caller's own.
+            signal,
+            env: gitOptionalLocksDisabledEnv(),
+            timeout: GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS
+          }).then((result) => result.stdout),
+        ...(options.signal ? { signal: options.signal } : {})
+      })
   }
 }
 
@@ -569,7 +631,10 @@ async function runNumstat(
         '--numstat',
         '-M'
       ],
-      { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
+      {
+        ...gitStatusReadOptionsForWorktree(worktreePath, options),
+        env: gitOptionalLocksDisabledEnv()
+      }
     )
     return parseNumstat(stdout)
   } catch (error) {
@@ -803,7 +868,7 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
   } else if (cached) {
     try {
       const status = await getGitUpstreamStatusForUpstreamName(
-        (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
+        (args) => gitExecFileAsync(args, gitStatusReadOptionsForWorktree(worktreePath, options)),
         cached.upstreamName
       )
       return { status, probedSameNameOriginRef: false }
@@ -840,7 +905,7 @@ async function probeEffectiveUpstreamStatus(
 ): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
   let probedSameNameOriginRef = false
   const snapshotRunner = createGitConfigSnapshotRunner((args) =>
-    gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+    gitExecFileAsync(args, gitStatusReadOptionsForWorktree(worktreePath, options))
   )
   const status = await getEffectiveGitUpstreamStatus((args) => {
     if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {

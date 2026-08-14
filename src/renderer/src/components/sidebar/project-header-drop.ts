@@ -4,7 +4,7 @@ import {
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
 import type { Row } from './worktree-list-groups'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 export type ProjectHeaderDragBucketKey = string
 
@@ -26,16 +26,6 @@ export function getProjectHeaderDragBucketKey(
   repo: Pick<Repo, 'projectGroupId'>
 ): ProjectHeaderDragBucketKey {
   return repo.projectGroupId ? `group:${repo.projectGroupId}` : 'ungrouped'
-}
-
-export function getSidebarOrderedRepoHeaderIds(rows: readonly Row[]): string[] {
-  const ids: string[] = []
-  for (const row of rows) {
-    if (row.type === 'header' && row.repo) {
-      ids.push(row.repo.id)
-    }
-  }
-  return ids
 }
 
 export function getSidebarOrderedRepoHeaderIdsByBucket(

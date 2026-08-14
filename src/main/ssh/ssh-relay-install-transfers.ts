@@ -40,7 +40,9 @@ export async function uploadRelayDirectory(
       sftpNamespace: options?.sftpNamespace
     })
     options?.signal?.throwIfAborted()
-    await uploadDirectory(sftp, localRelayDir, targetDir)
+    await uploadDirectory(sftp, localRelayDir, targetDir, localRelayDir, {
+      signal: options?.signal
+    })
   })
 }
 
@@ -93,6 +95,7 @@ async function runSftpFallbackTransfer(
       (onClose) => {
         sftp.once('close', onClose)
         endSftp()
+        return () => sftp.removeListener('close', onClose)
       }
     )
   } finally {
