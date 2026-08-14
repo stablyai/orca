@@ -2450,8 +2450,18 @@ describe('web UI preload API', () => {
     expect(runtimeCalls).toEqual([])
   })
 
-  it('migrates missing right sidebar visibility from the effective web legacy default', async () => {
+  it('defaults missing right sidebar visibility to open for new web profiles', async () => {
     const { api } = await installApi('Linux')
+
+    const ui = await api.ui.get()
+
+    // Why: match getDefaultUIState / desktop so new users discover the explorer panel.
+    expect(ui.rightSidebarOpen).toBe(true)
+  })
+
+  it('migrates missing right sidebar visibility from an explicit legacy settings default', async () => {
+    const { api, storage } = await installApi('Linux')
+    storage.setItem('orca.web.settings.v1', JSON.stringify({ rightSidebarOpenByDefault: false }))
 
     const ui = await api.ui.get()
 
@@ -2460,11 +2470,11 @@ describe('web UI preload API', () => {
 
   it('keeps explicit local right sidebar visibility over the legacy default', async () => {
     const { api, storage } = await installApi('Linux')
-    storage.setItem('orca.web.ui.v1', JSON.stringify({ rightSidebarOpen: true }))
+    storage.setItem('orca.web.ui.v1', JSON.stringify({ rightSidebarOpen: false }))
 
     const ui = await api.ui.get()
 
-    expect(ui.rightSidebarOpen).toBe(true)
+    expect(ui.rightSidebarOpen).toBe(false)
   })
 
   it('seeds missing local card display properties from runtime-backed compact settings when ui.get is unavailable', async () => {
