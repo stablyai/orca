@@ -1,4 +1,5 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
 import {
   isTerminalImeCandidateDigitKeyEvent,
   isTerminalImeCandidateSelectionKeyEvent
@@ -152,7 +153,11 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
 }
 
 function isTerminalInterruptCKey(event: XtermBypassEvent): boolean {
-  const normalizedKey = event.key.toLowerCase()
+  const layoutBaseKey =
+    isSingleNonAsciiPrintableText(event.key) && event.code
+      ? getLayoutBaseCharacterForCode(event.code)
+      : undefined
+  const normalizedKey = layoutBaseKey ?? event.key.toLowerCase()
   const logicalKeyAvailable = normalizedKey !== '' && normalizedKey !== 'unidentified'
   return logicalKeyAvailable ? normalizedKey === 'c' : event.code === 'KeyC' || event.keyCode === 67
 }

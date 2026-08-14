@@ -113,6 +113,7 @@ import {
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
+import { prefetchLayoutBaseCharacters } from '@/lib/keyboard-layout/layout-base-character'
 import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
@@ -985,6 +986,7 @@ export function useTerminalPaneLifecycle({
         const pendingTerminalImeCandidateKeyReleases =
           createTerminalImePendingCandidateKeyReleases()
         const isMac = navigator.userAgent.includes('Mac')
+        prefetchLayoutBaseCharacters()
         // Why: Android/ChromeOS UAs also contain "Linux"; scope the fcitx candidate-key policy to desktop Linux.
         const isLinux =
           !isMac &&

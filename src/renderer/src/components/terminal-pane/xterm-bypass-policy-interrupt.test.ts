@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { _setLayoutMapForTests } from '../../lib/keyboard-layout/layout-base-character'
 import {
   shouldHandleTerminalInterruptKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
@@ -20,6 +21,8 @@ function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
     ...overrides
   }
 }
+
+afterEach(() => _setLayoutMapForTests(null))
 
 describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
   it('exports the ETX byte used for terminal interrupts', () => {
@@ -91,6 +94,19 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
         event({ key: 'Unidentified', keyCode: 67, ctrlKey: true }),
         { isMac: true, hasSelection: false }
       )
+    ).toBe(true)
+  })
+
+  it('handles Korean-layout Ctrl+C through the active layout map', () => {
+    _setLayoutMapForTests(new Map([['KeyC', 'c']]))
+    expect(
+      shouldHandleTerminalInterruptKeyboardEvent(
+        event({ key: 'ㅊ', code: 'KeyC', ctrlKey: true }),
+        { isMac: true, hasSelection: false }
+      )
+    ).toBe(true)
+    expect(
+      shouldSuppressTerminalInterruptKeyup(event({ type: 'keyup', key: 'ㅊ', code: 'KeyC' }))
     ).toBe(true)
   })
 
