@@ -49,8 +49,11 @@ export const selectManagedAccount: CommandHandler = async (ctx) => {
   const selected = await ctx.client.call<
     ClaudeRateLimitAccountsState | CodexRateLimitAccountsState
   >(agent === 'codex' ? 'accounts.selectCodex' : 'accounts.selectClaude', { accountId })
-  const activeAccountId =
-    selected.result.activeAccountIdsByRuntime?.host ?? selected.result.activeAccountId
+  // Why: an explicit `host: null` means the host scope has no active account; the legacy
+  // field describes a different scope and must not confirm the selection.
+  const activeAccountId = selected.result.activeAccountIdsByRuntime
+    ? selected.result.activeAccountIdsByRuntime.host
+    : selected.result.activeAccountId
   if (activeAccountId !== accountId) {
     throw new RuntimeClientError(
       'operation_unknown',

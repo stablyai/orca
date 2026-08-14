@@ -446,6 +446,7 @@ describe('orchestration worker-start CLI contract', () => {
     expect(logSpy).toHaveBeenCalledWith(
       expect.stringContaining('"state": "acceptance_recorded_release_pending"')
     )
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"ok": false'))
     expect(process.exitCode).toBe(1)
     logSpy.mockRestore()
   })

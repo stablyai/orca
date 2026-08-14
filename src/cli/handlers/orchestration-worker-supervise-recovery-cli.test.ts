@@ -75,6 +75,7 @@ describe('orchestration worker-supervise recovery contract', () => {
 
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"state": "start_outcome_unknown"'))
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"startRequestId"'))
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"ok": false'))
     expect(process.exitCode).toBe(1)
     logSpy.mockRestore()
   })

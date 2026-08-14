@@ -169,6 +169,8 @@ describe('orchestration worker-supervise CLI contract', () => {
     expect(checkCall?.[1]).toEqual(expect.objectContaining({ all: true }))
     expect(checkCall?.[1]).not.toHaveProperty('peek')
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"state": "awaiting_acceptance"'))
+    // 信封 ok 跟隨結束碼：成功收在 ok:true。
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"ok": true'))
     // 每個 attempt 都要留下可精確恢復的 startRequestId。
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"startRequestId"'))
     expect(process.exitCode).toBeUndefined()
@@ -266,6 +268,7 @@ describe('orchestration worker-supervise CLI contract', () => {
         callMock.mock.calls.filter(([method]) => method === 'orchestration.workerStart')
       ).toHaveLength(1)
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('timed_out_between_attempts'))
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"ok": false'))
       expect(process.exitCode).toBe(1)
     } finally {
       nowSpy.mockRestore()
@@ -531,6 +534,7 @@ describe('orchestration worker-supervise CLI contract', () => {
       callMock.mock.calls.filter(([method]) => method === 'orchestration.workerStart')
     ).toHaveLength(1)
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"state": "release_unsettled"'))
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"ok": false'))
     expect(process.exitCode).toBe(1)
     logSpy.mockRestore()
   })

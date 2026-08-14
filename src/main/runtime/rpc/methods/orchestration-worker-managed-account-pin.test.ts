@@ -169,7 +169,12 @@ describe('orchestration workerStart managed-account pin', () => {
         terminal: 'term_worker',
         managedAccount: { provider: 'codex', id: 'account-3', label: 'Codex #3' }
       })
-    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      // Why: prepareLocalWorkerStart also rejects agent+terminal with invalid_argument; the
+      // message binds this test to the managed-account terminal guard specifically.
+      message: expect.stringContaining('cannot be combined with --terminal')
+    })
   })
 
   it('登錄表無紀錄＝無法證明，fail-closed', async () => {

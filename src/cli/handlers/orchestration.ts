@@ -515,7 +515,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 function printLocalResult(value: unknown, json: boolean, text: string): void {
-  console.log(json ? JSON.stringify({ ok: true, result: value }, null, 2) : text)
+  // Why: local receipts must not claim success while the process is exiting non-zero; the
+  // envelope's `ok` mirrors the exit code so JSON consumers need not re-derive failure.
+  const ok = !process.exitCode
+  console.log(json ? JSON.stringify({ ok, result: value }, null, 2) : text)
 }
 
 function formatWorkerRelease(value: WorkerReleaseReceipt): string {
@@ -1078,8 +1081,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       const selected = await client.call<CodexRateLimitAccountsState>('accounts.selectCodex', {
         accountId: account.id
       })
-      const activeAccountId =
-        selected.result.activeAccountIdsByRuntime?.host ?? selected.result.activeAccountId
+      // Why: an explicit `host: null` must not fall back to the legacy field (different scope).
+      const activeAccountId = selected.result.activeAccountIdsByRuntime
+        ? selected.result.activeAccountIdsByRuntime.host
+        : selected.result.activeAccountId
       if (activeAccountId !== account.id) {
         // Why: print the durable attempt history before failing, so earlier account evidence
         // survives even when the runtime cannot confirm this selection.
@@ -1205,11 +1210,23 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
           recoveryArgs.push('--retry-start-retry-of', retryOf)
         }
         recoveryArgs.push('--json')
-        const recoveryCommand = `orca ${recoveryArgs.map(posixShellQuote).join(' ')}`
+        // Why: the ledger hashes devMode too, so the replay must run through the same CLI
+        // entrypoint (`orca-dev` sets ORCA_DEV_CLI_INVOCATION for its child) — and the rendered
+        // text uses POSIX single-quote escaping, so `recoveryArgs` stays the authoritative
+        // replay input for non-POSIX shells.
+        const recoveryExecutable = isDevCliInvocation() ? 'orca-dev' : 'orca'
+        const recoveryCommand = `${recoveryExecutable} ${recoveryArgs.map(posixShellQuote).join(' ')}`
         printLocalResult(
-          { state: 'start_outcome_unknown', recoveryCommand, recoveryArgs, attempts },
+          {
+            state: 'start_outcome_unknown',
+            recoveryCommand,
+            recoveryCommandShell: 'posix',
+            recoveryExecutable,
+            recoveryArgs,
+            attempts
+          },
           json,
-          `The start for account ${account.id} did not return a receipt. Recover the exact same start (same account, lineage, request id, and runtime — no second Dispatch) with:\n${recoveryCommand}`
+          `The start for account ${account.id} did not return a receipt. Recover the exact same start (same account, lineage, request id, and runtime — no second Dispatch) with this POSIX-shell command (non-POSIX shells: compose from recoveryArgs):\n${recoveryCommand}`
         )
         return
       }

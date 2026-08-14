@@ -31,6 +31,14 @@ export function parseAccountOrder(
     .sort((left, right) => right.order - left.order)
     .map((entry) => entry.selector)
 
+  // Why: two accounts sharing one workspace #N would make every later resolve of that selector
+  // ambiguous mid-run; failing during setup keeps the failover from starting doomed.
+  const duplicated = numbered.filter((selector, index) => numbered.indexOf(selector) !== index)
+  if (duplicated.length > 0) {
+    throw new Error(
+      `Codex workspace number(s) ${[...new Set(duplicated)].join(', ')} match more than one managed account. Pass --accounts with exact IDs.`
+    )
+  }
   if (numbered.length === 0) {
     throw new Error(
       'No numbered Codex accounts were found. Pass --accounts with exact IDs, emails, labels, or #numbers.'

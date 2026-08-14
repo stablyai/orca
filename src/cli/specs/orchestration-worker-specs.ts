@@ -42,7 +42,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-supervise'],
     summary: 'Run a Codex worker with ordered account failover until completion or attention',
     usage:
-      'orca orchestration worker-supervise --task <task_id> [--accounts <id|email|label|#number,...>] [worker-start flags] [--wait-timeout-ms <n>] [--poll-ms <n>] [--retry-start-request <id>] [--json]',
+      'orca orchestration worker-supervise --task <task_id> [--accounts <id|email|label|#number,...>] [worker-start flags] [--wait-timeout-ms <n>] [--poll-ms <n>] [--retry-start-request <id>] [--retry-start-retry-of <dispatch_id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',

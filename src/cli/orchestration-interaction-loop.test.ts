@@ -26,6 +26,40 @@ describe('Orca 完整互動循環', () => {
     expect(parseAccountOrder(undefined, accounts)).toEqual(['#3', '#2', '#1'])
   })
 
+  it('明示 --accounts 原樣採用；空字串與無編號標籤明確報錯', () => {
+    expect(parseAccountOrder('id-1, #3 ,two@example.com', accounts)).toEqual([
+      'id-1',
+      '#3',
+      'two@example.com'
+    ])
+    expect(() => parseAccountOrder('  , ,  ', accounts)).toThrow(
+      'must contain at least one account selector'
+    )
+    expect(() =>
+      parseAccountOrder(undefined, [{ id: 'x', email: 'x@example.com', workspaceLabel: '無編號' }])
+    ).toThrow('No numbered Codex accounts were found')
+  })
+
+  it('workspaceLabel 撞號＝設定期即失敗，不讓遞補跑到一半才爆模糊', () => {
+    const clashing = [
+      { id: 'a', email: 'a@example.com', workspaceLabel: 'Codex #3｜A' },
+      { id: 'b', email: 'b@example.com', workspaceLabel: 'Codex #3｜B' },
+      { id: 'c', email: 'c@example.com', workspaceLabel: 'Codex #2｜C' }
+    ]
+    expect(() => parseAccountOrder(undefined, clashing)).toThrow(
+      'match more than one managed account'
+    )
+  })
+
+  it('模糊與無匹配的選擇器各自明確報錯', () => {
+    const clashing = [
+      { id: 'a', email: 'a@example.com', workspaceLabel: 'Codex #3｜A' },
+      { id: 'b', email: 'b@example.com', workspaceLabel: 'Codex #3｜B' }
+    ]
+    expect(() => resolveCodexAccount(clashing, '#3')).toThrow('is ambiguous')
+    expect(() => resolveCodexAccount(accounts, '#9')).toThrow('did not match a managed account')
+  })
+
   it('以 ID、完整標籤、email 或唯一編號解析帳號', () => {
     expect(resolveCodexAccount(accounts, 'id-3').id).toBe('id-3')
     expect(resolveCodexAccount(accounts, 'Codex #2｜H Team').id).toBe('id-2')

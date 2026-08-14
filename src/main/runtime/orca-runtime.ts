@@ -31709,11 +31709,17 @@ export class OrcaRuntimeService {
   // the select→start ABA race that an active-account re-read cannot detect.
   getCodexTerminalLaunchAccount(handle: string): { known: boolean; accountId: string | null } {
     try {
-      const pty = this.getLivePtyForHandle(handle)
-      if (!pty) {
+      // Why: once a background-spawned worker terminal is revealed, its handle record loses the
+      // `pty:` tabId prefix and getLivePtyForHandle stops resolving it — the leaf path is the
+      // same fallback getOrchestrationDispatchAuthority uses for exactly this lifecycle.
+      const ptyId =
+        this.getLivePtyForHandle(handle)?.pty.ptyId ??
+        this.resolveLiveLeafForHandle(handle)?.ptyId ??
+        null
+      if (!ptyId) {
         return { known: false, accountId: null }
       }
-      const record = getCodexPaneAccount(pty.pty.ptyId)
+      const record = getCodexPaneAccount(ptyId)
       if (!record) {
         return { known: false, accountId: null }
       }
