@@ -2,10 +2,13 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
+import { getBashStartupProfileSourceBlock } from '../main/bash-startup-exec-preservation'
 import {
+  getZshStartupExecPreservationStart,
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
+  ZSH_STARTUP_EXEC_PRESERVATION_END,
   getZshStartupFileSourceBlock
 } from '../main/shell-templates'
 
@@ -90,7 +93,11 @@ export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 case "\${ORCA_ORIG_ZDOTDIR%/}" in
   */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
 esac
-[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
+if [[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]]; then
+${getZshStartupExecPreservationStart(quotePosixSingle(zshDir))}
+  source "$ORCA_ORIG_ZDOTDIR/.zshenv"
+${ZSH_STARTUP_EXEC_PRESERVATION_END}
+fi
 export ORCA_USER_ZDOTDIR="\${ZDOTDIR:-\${ORCA_ORIG_ZDOTDIR:-$HOME}}"
 case "\${ORCA_USER_ZDOTDIR%/}" in
   */shell-ready/zsh) export ORCA_USER_ZDOTDIR="$HOME" ;;
@@ -136,14 +143,7 @@ ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
 `
   const bashRc = `# Orca relay bash overlay wrapper
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
-[[ -f /etc/profile ]] && source /etc/profile
-if [[ -f "$HOME/.bash_profile" ]]; then
-  source "$HOME/.bash_profile"
-elif [[ -f "$HOME/.bash_login" ]]; then
-  source "$HOME/.bash_login"
-elif [[ -f "$HOME/.profile" ]]; then
-  source "$HOME/.profile"
-fi
+${getBashStartupProfileSourceBlock(SHELL_READY_MARKER_ESCAPED)}
 # Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
 # a single literal paste (ESC[200~…ESC[201~); without it, older readline builds
 # treat each embedded newline as Enter and mangle the prompt into PS2

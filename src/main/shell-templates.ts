@@ -10,6 +10,78 @@ export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `if [[ "\${ORCA_SHELL_STARTUP
   printf "\\033]777;orca-shell-start:%s\\007" "$$"
 fi`
 
+export function getZshStartupExecPreservationStart(wrapperZdotdirExpression: string): string {
+  return `_orca_exec_wrapper_zdotdir=${wrapperZdotdirExpression}
+_orca_exec_debug_installed=0
+# Why: route through a just-in-time function so argument/redirection expansion
+# uses the user's ZDOTDIR before the replacement inherits Orca's wrapper.
+if (( ! \${+functions[TRAPDEBUG]} && ! \${+aliases[exec]} && ! \${+functions[exec]} )); then
+  TRAPDEBUG() {
+    [[ -z "\${_orca_exec_shim_active:-}" ]] || return 0
+    local -a _orca_exec_words
+    _orca_exec_words=("\${(z)ZSH_DEBUG_CMD}")
+    local _orca_exec_index=1
+    while (( _orca_exec_index <= \${#_orca_exec_words} )) && [[ "\${(Q)_orca_exec_words[_orca_exec_index]}" == *=* ]]; do
+      (( _orca_exec_index++ ))
+    done
+    while (( _orca_exec_index <= \${#_orca_exec_words} )) && [[ "\${(Q)_orca_exec_words[_orca_exec_index]}" == noglob || "\${(Q)_orca_exec_words[_orca_exec_index]}" == time ]]; do
+      (( _orca_exec_index++ ))
+    done
+    if [[ "\${(Q)_orca_exec_words[_orca_exec_index]-}" == exec && \${+functions[exec]} -eq 0 ]]; then
+      (( _orca_exec_index++ ))
+      while (( _orca_exec_index <= \${#_orca_exec_words} )); do
+        case "\${(Q)_orca_exec_words[_orca_exec_index]}" in
+          -a) (( _orca_exec_index += 2 )) ;;
+          -c|-l|-cl|-lc) (( _orca_exec_index++ )) ;;
+          --) (( _orca_exec_index++ )); break ;;
+          *) break ;;
+        esac
+      done
+      while (( _orca_exec_index <= \${#_orca_exec_words} )); do
+        case "\${(Q)_orca_exec_words[_orca_exec_index]-}" in
+          *"<"*|*">"*) (( _orca_exec_index += 2 )) ;;
+          "") break ;;
+          *)
+            exec() {
+              local _orca_exec_status
+              local _orca_exec_had_zdotdir=\${+ZDOTDIR}
+              local _orca_exec_previous_zdotdir="\${ZDOTDIR-}"
+              _orca_exec_shim_active=1
+              unfunction exec
+              export ZDOTDIR="$_orca_exec_wrapper_zdotdir"
+              builtin exec "$@"
+              _orca_exec_status=$?
+              if (( _orca_exec_had_zdotdir )); then
+                export ZDOTDIR="$_orca_exec_previous_zdotdir"
+              else
+                unset ZDOTDIR
+              fi
+              unset _orca_exec_shim_active
+              return $_orca_exec_status
+            }
+            _orca_exec_shim_body="\${functions[exec]}"
+            break
+            ;;
+        esac
+      done
+    fi
+  }
+  _orca_exec_debug_body="\${functions[TRAPDEBUG]}"
+  _orca_exec_debug_installed=1
+fi`
+}
+
+export const ZSH_STARTUP_EXEC_PRESERVATION_END = `if (( \${_orca_exec_debug_installed:-0} )); then
+  if [[ "\${functions[TRAPDEBUG]-}" == "\${_orca_exec_debug_body-}" ]]; then
+    unfunction TRAPDEBUG
+  fi
+fi
+if [[ -n "\${_orca_exec_shim_body:-}" && "\${functions[exec]-}" == "$_orca_exec_shim_body" ]]; then
+  unfunction exec
+fi
+unset _orca_exec_wrapper_zdotdir _orca_exec_debug_installed _orca_exec_debug_body
+unset _orca_exec_shim_active _orca_exec_shim_body`
+
 export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
   const header = headerPrefix
     ? `Orca ${headerPrefix} zsh shell-ready wrapper`
@@ -54,6 +126,12 @@ case "\${_orca_zshenv_source_dir}" in
   ""|*/shell-ready/zsh) _orca_zshenv_source_dir="$HOME" ;;
 esac
 
+if [[ -n "\${_orca_wrapper_zdotdir_self:-}" && -f "\${_orca_wrapper_zdotdir_self:-}/.zshenv" ]]; then
+  _orca_effective_wrapper_zdotdir="\${_orca_wrapper_zdotdir_self:-}"
+else
+  _orca_effective_wrapper_zdotdir=${quotePosixSingle(zshDir)}
+fi
+
 # Why: source at wrapper top level, not in a function/subshell, so .zshenv
 # exports, functions, path/fpath typesets, and zsh options keep normal scope.
 unset ZDOTDIR
@@ -61,7 +139,9 @@ if [[ -n "\${_orca_zshenv_source_dir:-}" && -f "\${_orca_zshenv_source_dir}/.zsh
   _orca_zshenv_path="\${_orca_zshenv_source_dir}/.zshenv"
 fi
 if [[ -n "\${_orca_zshenv_path:-}" ]]; then
+${getZshStartupExecPreservationStart('"$_orca_effective_wrapper_zdotdir"')}
   source "\${_orca_zshenv_path}"
+${ZSH_STARTUP_EXEC_PRESERVATION_END}
 fi
 
 _orca_discovered_zdotdir="\${ZDOTDIR:-}"
@@ -90,14 +170,8 @@ case "\${ORCA_ORIG_ZDOTDIR}" in
   ""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
 esac
 
-# Why: use :- after user .zshenv — a pathological unset under set -u must not
-# abort the wrapper; empty falls through to the baked-literal branch.
-if [[ -n "\${_orca_wrapper_zdotdir_self:-}" && -f "\${_orca_wrapper_zdotdir_self:-}/.zshenv" ]]; then
-  export ZDOTDIR="\${_orca_wrapper_zdotdir_self:-}"
-else
-  export ZDOTDIR=${quotePosixSingle(zshDir)}
-fi
-unset _orca_spawn_orig_zdotdir _orca_user_zdotdir _orca_zshenv_source_dir _orca_zshenv_path _orca_discovered_zdotdir _orca_wrapper_zdotdir_self
+export ZDOTDIR="$_orca_effective_wrapper_zdotdir"
+unset _orca_spawn_orig_zdotdir _orca_user_zdotdir _orca_zshenv_source_dir _orca_zshenv_path _orca_discovered_zdotdir _orca_wrapper_zdotdir_self _orca_effective_wrapper_zdotdir
 `
 }
 
@@ -123,7 +197,9 @@ if [[ ${checks.join(' && ')} ]]; then
   # Why: user startup files resolve plugin/config paths from their own ZDOTDIR;
   # Orca restores its wrapper dir afterward so zsh still loads wrapper files.
   export ZDOTDIR="$_orca_home"
+${getZshStartupExecPreservationStart('"$_orca_wrapper_zdotdir"')}
   source "$_orca_home/${options.fileName}"
+${ZSH_STARTUP_EXEC_PRESERVATION_END}
   export ZDOTDIR="$_orca_wrapper_zdotdir"
   unset _orca_wrapper_zdotdir
 fi

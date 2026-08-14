@@ -20,6 +20,7 @@ import {
   getPosixCodexShellLaunchPreflight
 } from '../pty/codex-shell-launch-preflight'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import { getBashStartupProfileSourceBlock } from '../bash-startup-exec-preservation'
 import {
   getFishShellReadyInitCommand,
   getZshEnvTemplate,
@@ -98,14 +99,7 @@ function resolveOriginalZshenvSourceDir(): string {
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
-[[ -f /etc/profile ]] && source /etc/profile
-if [[ -f "$HOME/.bash_profile" ]]; then
-  source "$HOME/.bash_profile"
-elif [[ -f "$HOME/.bash_login" ]]; then
-  source "$HOME/.bash_login"
-elif [[ -f "$HOME/.profile" ]]; then
-  source "$HOME/.profile"
-fi
+${getBashStartupProfileSourceBlock(SHELL_READY_MARKER_ESCAPED)}
 # Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
 # a single literal paste (ESC[200~…ESC[201~). Without it, older readline builds
 # treat each embedded newline as Enter and mangle the prompt into PS2

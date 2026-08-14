@@ -247,6 +247,7 @@ jobs:
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            src/relay/pty-shell-launch.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
   test:
@@ -283,6 +284,7 @@ jobs:
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            --exclude=src/relay/pty-shell-launch.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}

@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -7,16 +7,24 @@ import { getRelayShellLaunchConfig } from './pty-shell-launch'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
+const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+const itWithZsh = hasZsh ? it : it.skip
 
-function runInteractiveBashRcfile(rcfile: string, homeDir: string): string {
+function runInteractiveBashRcfile(
+  rcfile: string,
+  homeDir: string,
+  input = 'true\nfalse\nexit 0\n',
+  extraEnv: Record<string, string> = {}
+): string {
   const result = spawnSync(
     'bash',
-    ['-lc', 'bash --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
+    ['--noprofile', '--norc', '-c', 'bash --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
     {
-      input: 'true\nfalse\nexit 0\n',
+      input,
       encoding: 'utf8',
       env: {
         ...process.env,
+        ...extraEnv,
         HOME: homeDir,
         TERM: process.env.TERM || 'xterm'
       },
@@ -191,6 +199,74 @@ describe('getRelayShellLaunchConfig', () => {
       expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
     }
   )
+
+  itWithZsh('re-enters the relay zsh wrapper after a startup file exec', () => {
+    const replacement = join(homeDir, 'zsh-replacement')
+    writeFileSync(replacement, '#!/bin/sh\nexec zsh -o noglobalrcs -l -i\n')
+    chmodSync(replacement, 0o755)
+    writeFileSync(
+      join(homeDir, '.zprofile'),
+      [
+        'if [[ -z "${ORCA_EXEC_REPRO_DONE:-}" ]]; then',
+        '  export ORCA_EXEC_REPRO_DONE=1',
+        '  Q_START_TEXT=relay-seed exec "$ZDOTDIR/zsh-replacement"',
+        'fi',
+        ''
+      ].join('\n')
+    )
+    const config = getRelayShellLaunchConfig(
+      'zsh',
+      { HOME: homeDir, PATH: process.env.PATH ?? '/usr/bin:/bin' },
+      process.platform,
+      { emitReadyMarker: true }
+    )
+    const result = spawnSync('zsh', [...config.args, '-i'], {
+      input:
+        `printf 'RELAY_EXEC_WIDGET=%s:Q_START_TEXT=%s\\n' "\${widgets[zle-line-init]-}" "$Q_START_TEXT"\n` +
+        'exit 0\n',
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HOME: homeDir,
+        PATH: process.env.PATH ?? '/usr/bin:/bin',
+        TERM: process.env.TERM || 'xterm',
+        ...config.env
+      },
+      timeout: 5_000
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('RELAY_EXEC_WIDGET=user:__orca_prompt_mark')
+    expect(result.stdout).toContain('Q_START_TEXT=relay-seed')
+  })
+
+  itWithBash('restores relay bash OSC 133 after a startup file exec', () => {
+    writeFileSync(
+      join(homeDir, '.bash_profile'),
+      [
+        'if [[ -z "${ORCA_EXEC_REPRO_DONE:-}" ]]; then',
+        '  export ORCA_EXEC_REPRO_DONE=1',
+        '  Q_START_TEXT=relay-seed exec -a figterm-test bash --noprofile --norc -l -i',
+        'fi',
+        ''
+      ].join('\n')
+    )
+    const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir }, 'linux', {
+      emitReadyMarker: true
+    })
+    const output = runInteractiveBashRcfile(
+      config.args[1] as string,
+      homeDir,
+      'printf \'RELAY_EXEC_PC=%s:Q_START_TEXT=%s\\n\' "$PROMPT_COMMAND" "$Q_START_TEXT"\nexit 0\n',
+      config.env
+    )
+
+    expect(output).toContain('RELAY_EXEC_PC=__orca_exec_osc133_precmd')
+    expect(output).toContain('Q_START_TEXT=relay-seed')
+    expect(output).toContain('\x1b]777;orca-shell-ready\x07')
+    expect(output).toContain('\x1b]133;C\x07')
+  })
 
   it.skipIf(process.platform === 'win32')(
     'enables the shell-ready marker for requested bash startup delivery',

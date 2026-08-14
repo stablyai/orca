@@ -19,6 +19,8 @@ type ShellFixture = {
   replacement: string
   command: string
   instrumentationOutput: string
+  restoresOsc133: boolean
+  preservesStartupText: boolean
   secretRead: string
   childRead: string
 }
@@ -28,9 +30,12 @@ const FIXTURES: ShellFixture[] = [
     name: 'zsh profile',
     shellPath: '/bin/zsh',
     startupFile: '.zprofile',
-    replacement: 'exec -a kiro-cli-term /bin/zsh -o noglobalrcs -l -i',
-    command: `printf 'ORCA_STARTUP_%s:PF=%s\\n' COMMAND_RAN "\${(j:,:)precmd_functions}"\r`,
-    instrumentationOutput: `${COMMAND_OUTPUT}:PF=`,
+    replacement:
+      'Q_START_TEXT=seed exec -a kiro-cli-term 3>/dev/null env /bin/zsh -o noglobalrcs -l -i',
+    command: `printf 'ORCA_STARTUP_%s:PF=%s:DEBUG_TRAP=%s:Q_START_TEXT=%s\\n' COMMAND_RAN "\${(j:,:)precmd_functions}" "\${+functions[TRAPDEBUG]}" "$Q_START_TEXT"\r`,
+    instrumentationOutput: `${COMMAND_OUTPUT}:PF=__orca_osc133_precmd`,
+    restoresOsc133: true,
+    preservesStartupText: true,
     secretRead: `: > "$HOME/${READ_STARTED_FILE}"; read -sk 1\n`,
     childRead: `/bin/zsh -fc ': > "$HOME/${READ_STARTED_FILE}"; read -sk 1'\n`
   },
@@ -39,8 +44,10 @@ const FIXTURES: ShellFixture[] = [
     shellPath: '/bin/zsh',
     startupFile: '.zshenv',
     replacement: 'exec /bin/zsh -o noglobalrcs -l -i',
-    command: `printf 'ORCA_STARTUP_%s:PF=%s\\n' COMMAND_RAN "\${(j:,:)precmd_functions}"\r`,
-    instrumentationOutput: `${COMMAND_OUTPUT}:PF=`,
+    command: `printf 'ORCA_STARTUP_%s:PF=%s:DEBUG_TRAP=%s\\n' COMMAND_RAN "\${(j:,:)precmd_functions}" "\${+functions[TRAPDEBUG]}"\r`,
+    instrumentationOutput: `${COMMAND_OUTPUT}:PF=__orca_osc133_precmd`,
+    restoresOsc133: true,
+    preservesStartupText: false,
     secretRead: `: > "$HOME/${READ_STARTED_FILE}"; read -sk 1\n`,
     childRead: `/bin/zsh -fc ': > "$HOME/${READ_STARTED_FILE}"; read -sk 1'\n`
   },
@@ -48,9 +55,11 @@ const FIXTURES: ShellFixture[] = [
     name: 'bash profile',
     shellPath: '/bin/bash',
     startupFile: '.bash_profile',
-    replacement: 'exec -a figterm-test /bin/bash --noprofile --norc -l -i',
-    command: `printf 'ORCA_STARTUP_%s:PC=%s\\n' COMMAND_RAN "$PROMPT_COMMAND"\r`,
-    instrumentationOutput: `${COMMAND_OUTPUT}:PC=`,
+    replacement: 'Q_START_TEXT=seed exec -a figterm-test /bin/bash --noprofile --norc -l -i',
+    command: `printf 'ORCA_STARTUP_%s:PC=%s:Q_START_TEXT=%s\\n' COMMAND_RAN "$PROMPT_COMMAND" "$Q_START_TEXT"\r`,
+    instrumentationOutput: `${COMMAND_OUTPUT}:PC=__orca_exec_osc133_precmd`,
+    restoresOsc133: true,
+    preservesStartupText: true,
     secretRead: `: > "$HOME/${READ_STARTED_FILE}"; read -s -n 1\n`,
     childRead: `/bin/bash --noprofile --norc -c ': > "$HOME/${READ_STARTED_FILE}"; read -s -n 1'\n`
   }
@@ -237,6 +246,7 @@ async function runExecOracle(fixture: ShellFixture): Promise<void> {
     fixture,
     `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
   export ORCA_EXEC_REPRO_DONE=1
+  ${fixture.shellPath.endsWith('bash') ? `PROMPT_COMMAND='printf "USER_EXEC_PROMPT\\n"'` : ''}
   ${fixture.replacement}
 fi
 `
@@ -246,6 +256,18 @@ fi
     expect(running.session.shellState).toBe('ready')
     expect(count(running.output(), COMMAND_OUTPUT)).toBe(1)
     expect(running.output()).toContain(fixture.instrumentationOutput)
+    if (fixture.restoresOsc133) {
+      expect(running.output()).toContain('\x1b]133;C\x07')
+      if (fixture.shellPath.endsWith('zsh')) {
+        expect(running.output()).toContain('DEBUG_TRAP=0')
+      }
+    }
+    if (fixture.preservesStartupText) {
+      expect(running.output()).toContain('Q_START_TEXT=seed')
+    }
+    if (fixture.shellPath.endsWith('bash')) {
+      expect(running.output()).toContain('USER_EXEC_PROMPT')
+    }
     expect(running.output()).not.toContain('orca-shell-start')
   } finally {
     await running.cleanup()

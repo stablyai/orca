@@ -12,6 +12,7 @@ const shellContractFiles = [
   'src/main/daemon/shell-ready.test.ts',
   'src/main/providers/local-pty-shell-ready.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
+  'src/relay/pty-shell-launch.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
 const patchedNodePtyContractFiles = [

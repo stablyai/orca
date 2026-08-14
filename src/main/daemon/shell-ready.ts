@@ -11,6 +11,7 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { getBashStartupProfileSourceBlock } from '../bash-startup-exec-preservation'
 import {
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight
@@ -94,14 +95,7 @@ function shellReadyWrappersExist(): boolean {
 export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
-[[ -f /etc/profile ]] && source /etc/profile
-if [[ -f "$HOME/.bash_profile" ]]; then
-  source "$HOME/.bash_profile"
-elif [[ -f "$HOME/.bash_login" ]]; then
-  source "$HOME/.bash_login"
-elif [[ -f "$HOME/.profile" ]]; then
-  source "$HOME/.profile"
-fi
+${getBashStartupProfileSourceBlock(SHELL_READY_MARKER)}
 # Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
 # a single literal paste (ESC[200~…ESC[201~); without it, older readline builds
 # treat each embedded newline as Enter and mangle the prompt into PS2
