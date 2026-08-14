@@ -420,4 +420,80 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
 
     expect(second).toEqual(first)
   })
+
+  it('adopts pty-bound ssh panes over a revision-only base full of dormant tab rows', () => {
+    const ghostLeaf = '22222222-2222-4222-8222-222222222222'
+    const base = session({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [tab('ghost-1'), tab('ghost-2')]
+      },
+      terminalLayoutsByTabId: {
+        'ghost-1': { ...layout(null), root: { type: 'leaf', leafId: ghostLeaf } },
+        'ghost-2': { ...layout(null), root: { type: 'leaf', leafId: ghostLeaf } }
+      },
+      terminalPtyIncarnationsByPaneKey: {
+        [`ghost-1:${ghostLeaf}`]: 'inc-ghost-1',
+        [`ghost-2:${ghostLeaf}`]: 'inc-ghost-2'
+      },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 162 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@pty-34')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@pty-34') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-live' },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: WORKTREE_ID,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'session-live' },
+          prompt: 'live',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(adoption.sourceAuthoritativeWorktreeIds).toEqual([WORKTREE_ID])
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'tab-1'
+    ])
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.[0]?.ptyId).toBe('ssh:one@@pty-34')
+    expect(adoption.session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]?.providerSession?.id).toBe(
+      'session-live'
+    )
+    expect(adoption.session.terminalPtyIncarnationsByPaneKey?.[PANE_KEY]).toBe('inc-live')
+  })
+
+  it('does not resurrect a tombstoned pane through the pty-bound tiebreak', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('ghost-1')] },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 30 },
+      terminalSurfaceTombstonesByPaneKey: {
+        [PANE_KEY]: {
+          worktreeId: WORKTREE_ID,
+          parentTabId: 'tab-1',
+          leafId: LEAF_ID,
+          ptyId: 'ssh:one@@pty-5',
+          incarnationId: 'inc-closed',
+          retiredAt: 20
+        }
+      }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@pty-5')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@pty-5') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-closed' }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(
+      adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id) ?? []
+    ).not.toContain('tab-1')
+  })
 })
