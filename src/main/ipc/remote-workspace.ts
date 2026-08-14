@@ -15,7 +15,7 @@ import type {
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 

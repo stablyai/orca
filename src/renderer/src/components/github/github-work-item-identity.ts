@@ -1,4 +1,4 @@
-import { githubProjectHost } from '../../../../shared/github-project-identity'
+import { githubProjectHost } from '../../../../shared/github/project-identity'
 import type { GitHubOwnerRepo, GitHubWorkItem } from '../../../../shared/types'
 
 // Why: the dialog lacks repository context, so recover its host-aware identity from the canonical item URL.

@@ -96,7 +96,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getGitHubRuntimeRepoId,

@@ -14,11 +14,11 @@ import { loadLinearSdk } from './linear-sdk'
 import {
   LINEAR_ISSUE_API_PAGE_SIZE_MAX,
   clampLinearIssueListLimit
-} from '../../shared/linear-issue-read-limits'
+} from '../../shared/linear/issue-read-limits'
 import {
   isEmptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
-} from '../../shared/linear-issue-attribute-filter'
+} from '../../shared/linear/issue-attribute-filter'
 import {
   acquire,
   release,

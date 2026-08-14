@@ -10,7 +10,7 @@ import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
 } from '../../../../shared/terminal-quick-commands'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../shared/types'

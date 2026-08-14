@@ -6,7 +6,7 @@ import type {
   PRReviewDecision,
   PRState
 } from '../../shared/types'
-import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 import { ghExecFileAsync } from '../git/runner'
 import {
   githubHostExecOptions,

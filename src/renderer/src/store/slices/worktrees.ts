@@ -28,7 +28,7 @@ import {
   type WorktreeSlice
 } from './worktree-helpers'
 import { projectWorktreeTabModelReconciliation } from './tabs'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
@@ -113,7 +113,7 @@ import {
   classifyWorktreeForceDeleteReason,
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
-} from '../../../../shared/worktree-removal'
+} from '../../../../shared/worktree/removal'
 import { FolderWorkspaceActivityPersistence } from './folder-workspace-activity-persistence'
 import {
   createDetectedWorktreeRefreshLeaseRegistry,

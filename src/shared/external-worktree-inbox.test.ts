@@ -20,7 +20,7 @@ import {
   buildKnownOrcaWorkspaceLayouts,
   EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT,
   toDetectedWorktree
-} from './worktree-ownership'
+} from './worktree/ownership'
 
 const repo: Repo = {
   id: 'repo-1',

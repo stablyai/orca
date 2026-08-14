@@ -3,10 +3,10 @@ import type { GitHubAssignableUser, GlobalSettings } from '../../../shared/types
 import type {
   ListAssignableUsersBySlugResult,
   ListLabelsBySlugResult
-} from '../../../shared/github-project-types'
+} from '../../../shared/github/project-types'
 import { clearMetadataRequestStore, createMetadataRequestStore } from './metadata-request-cache'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
-import { githubProjectHost } from '../../../shared/github-project-identity'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
+import { githubProjectHost } from '../../../shared/github/project-identity'
 import { useMetadataListRequest, type MetadataListState } from './useMetadataListRequest'
 
 const slugLabelStore = createMetadataRequestStore<string[]>()

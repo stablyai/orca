@@ -28,10 +28,10 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
-import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
+import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github/pull-request-merge-methods'
 import { summarizeProviderChecks } from '../../shared/provider-check-summary'
-import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
-import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
+import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github/work-items-query-bounds'
+import { classifyGitHubUnavailable } from '../../shared/github/api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
@@ -91,7 +91,7 @@ import {
   type GitHubRepoExecOptions,
   type GitHubApiRepository
 } from './github-api-repository'
-import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -127,7 +127,7 @@ import {
 import {
   GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS,
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE
-} from '../../shared/github-check-details-deadline'
+} from '../../shared/github/check-details-deadline'
 import { hydrateGitHubPRStack, mergeGitHubPRStack } from './github-pr-stack'
 
 type GhExecOptions = GitHubRepoExecOptions & { signal?: AbortSignal }

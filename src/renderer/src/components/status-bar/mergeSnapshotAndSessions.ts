@@ -23,7 +23,7 @@ import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pa
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
-} from '../../../../shared/worktree-id'
+} from '../../../../shared/worktree/id'
 import type {
   DaemonSession,
   MergeContext,

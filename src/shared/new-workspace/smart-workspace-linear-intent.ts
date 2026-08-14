@@ -4,7 +4,7 @@ import {
   parseLinearIssueUrlIntent,
   type LinearIssueUrlIntent,
   type ParsedLinearIssueInput
-} from '../linear-links'
+} from '../linear/links'
 import { isSmartWorkspaceSourceQueryWithinLimit } from './smart-workspace-source-query'
 
 type SmartWorkspaceLinearMode = 'smart' | 'linear' | (string & {})

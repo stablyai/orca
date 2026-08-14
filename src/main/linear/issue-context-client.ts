@@ -1,5 +1,5 @@
-import type { LinearSearchIssueSummary, LinearSearchResult } from '../../shared/linear-agent-access'
-import { clampLinearSearchLimit } from '../../shared/linear-agent-access'
+import type { LinearSearchIssueSummary, LinearSearchResult } from '../../shared/linear/agent-access'
+import { clampLinearSearchLimit } from '../../shared/linear/agent-access'
 import type { LinearWorkspace } from '../../shared/types'
 import {
   acquire,

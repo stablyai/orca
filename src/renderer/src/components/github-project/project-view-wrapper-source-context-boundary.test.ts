@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { GitHubProjectRow } from '../../../../shared/github-project-types'
+import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 
 const COMPONENT_ROOT = __dirname
 
