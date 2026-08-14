@@ -119,6 +119,40 @@ describe('main title tracker parity with the renderer transport processor', () =
     expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
   })
 
+  it('derives working and idle facts from static OMP WSL titles', () => {
+    const chunk = `${ESC}]0;zsh | π : cwd${BEL}response text\r\n` + `${ESC}]0;zsh | π > cwd${BEL}`
+    feedBoth(paths, chunk)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    const kinds = paths.main.events.map((event) => event.kind)
+    expect(kinds).toContain('became-working')
+    expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
+  })
+
+  it('treats marker-shaped text in the OMP label as opaque', () => {
+    feedBoth(paths, `${ESC}]0;zsh | π > session | π : note | π ! note${BEL}`)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events.map((event) => event.kind)).not.toContain('became-working')
+  })
+
+  it('clears a stale wrapped native OMP working title in both paths', () => {
+    feedBoth(paths, `${ESC}]0;zsh | π : release | π > note | π ! note ✦ ⏲ ◇ ✋ ⠋${BEL}`)
+    feedBoth(paths, 'title-free output')
+    vi.advanceTimersByTime(3_000)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events).toContainEqual({
+      kind: 'title',
+      normalized: 'zsh | π > release | π > note | π ! note ✦ ⏲ ◇ ✋ ⠋',
+      raw: 'zsh | π > release | π > note | π ! note ✦ ⏲ ◇ ✋ ⠋'
+    })
+    expect(paths.main.events).toContainEqual({
+      kind: 'became-idle',
+      title: 'zsh | π > release | π > note | π ! note ✦ ⏲ ◇ ✋ ⠋'
+    })
+  })
+
   it('derives identical facts from BEL- and ST-terminated titles', () => {
     feedBoth(paths, `${ESC}]2;Codex working${ST}body bytes`)
     feedBoth(paths, `${ESC}]0;Codex done${BEL}`)

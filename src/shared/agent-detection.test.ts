@@ -167,6 +167,51 @@ describe('Pi-compatible title detection', () => {
     expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
   })
 
+  it.each([
+    ['π : my-project', 'working'],
+    ['π > my-project', 'idle'],
+    ['π ! my-project', 'permission'],
+    ['π: my-project', 'idle'],
+    ['zsh | π : wrapped-project', 'working'],
+    ['zsh | tmux | π > wrapped-project', 'idle'],
+    ['zsh | π ! wrapped-project', 'permission'],
+    ['π : release | windows', 'working'],
+    ['π > release | windows', 'idle'],
+    ['π ! release | windows', 'permission'],
+    ['zsh | π : release | windows', 'working'],
+    ['zsh | π > release | windows', 'idle'],
+    ['zsh | π ! release | windows', 'permission']
+  ] as const)('classifies native OMP title %s', (title, expectedStatus) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it.each([
+    ['π : session | π > note | π ! note', 'working'],
+    ['π > session | π : note | π ! note', 'idle'],
+    ['π ! session | π : note | π > note', 'permission'],
+    ['zsh | π : session | π > note | π ! note', 'working'],
+    ['zsh | π > session | π : note | π ! note', 'idle'],
+    ['zsh | π ! session | π : note | π > note', 'permission']
+  ] as const)('treats the native OMP label as opaque: %s', (title, expectedStatus) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it.each([
+    ['π : session ✦ ⏲ ◇ ✋', 'working'],
+    ['π > session ✦ ⏲ ◇ ✋', 'idle'],
+    ['π ! session ✦ ⏲ ◇ ✋', 'permission'],
+    ['zsh | π : session ✦ ⏲ ◇ ✋', 'working'],
+    ['zsh | π > session ✦ ⏲ ◇ ✋', 'idle'],
+    ['zsh | π ! session ✦ ⏲ ◇ ✋', 'permission']
+  ] as const)('prioritizes native OMP state over glyphs in its label: %s', (title, status) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(status)
+  })
+
+  it('does not normalize a wrapped OMP title as Gemini from label glyphs', () => {
+    const title = 'zsh | π > session ✦ ⏲ ◇ ✋'
+    expect(normalizeTerminalTitle(title)).toBe(title)
+  })
+
   it('re-detects status after display-title normalization for Pi idle frames', () => {
     expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
     expect(detectAgentStatusFromTitle(normalizeTerminalTitle('π - my-project'))).toBe('idle')

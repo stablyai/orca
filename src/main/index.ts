@@ -1950,6 +1950,8 @@ registerPaneKeyTeardownListener((paneKey) => {
   stopSyntheticTitleSpinner(paneKey)
 })
 
+agentHookServer.subscribeStatusDrop(stopSyntheticTitleSpinner)
+
 function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return

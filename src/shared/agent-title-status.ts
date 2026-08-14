@@ -24,6 +24,7 @@ import {
   isPiTerminalTitle
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
+import { clearOmpNativeWorkingStatus, getOmpNativeTitleStatus } from './omp-native-title-status'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
@@ -32,6 +33,10 @@ import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
  * Strip working-status indicators so stale exit titles stop reporting working.
  */
 export function clearWorkingIndicators(title: string): string {
+  const clearedOmpNativeWorkingStatus = clearOmpNativeWorkingStatus(title)
+  if (clearedOmpNativeWorkingStatus) {
+    return clearedOmpNativeWorkingStatus
+  }
   let cleaned = title
 
   cleaned = cleaned.replace(GEMINI_WORKING, '')
@@ -119,7 +124,7 @@ export function normalizeTerminalTitle(title: string): string {
     return title
   }
 
-  if (isGeminiTerminalTitle(title)) {
+  if (!getOmpNativeTitleStatus(title) && isGeminiTerminalTitle(title)) {
     const status = detectAgentStatusFromTitle(title)
     if (status === 'permission') {
       return `${GEMINI_PERMISSION} Gemini CLI`
@@ -164,6 +169,11 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 
   if (isOpenCodeNativeTitle(title)) {
     return containsAgentSpinnerGlyph(title) ? 'working' : 'idle'
+  }
+
+  const ompNativeStatus = getOmpNativeTitleStatus(title)
+  if (ompNativeStatus) {
+    return ompNativeStatus
   }
 
   if (title.includes(GEMINI_PERMISSION)) {

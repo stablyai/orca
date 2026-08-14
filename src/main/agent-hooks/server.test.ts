@@ -1988,6 +1988,39 @@ describe('AgentHookServer listener replay', () => {
     expect(listener).toHaveBeenNthCalledWith(4, [])
   })
 
+  it('notifies status-drop subscribers only when a live row is dropped', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.subscribeStatusDrop(listener)
+
+    server.dropStatusEntry(PANE)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.clearStatusEntriesForConnection('conn-1')
+    server.clearPaneState(PANE)
+    expect(listener).not.toHaveBeenCalled()
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.dropStatusEntry(PANE)
+
+    expect(listener).toHaveBeenCalledExactlyOnceWith(PANE)
+  })
+
   it('notifies pane-status-clear listener when pane teardown evicts a cached status', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
