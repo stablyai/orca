@@ -233,6 +233,7 @@ export function useNativeChatSessionOptions(args: {
       modelDiscoveryPtyId
     )
     if (cached) {
+      surface.replaceModels(cached)
       void retirePersistedModelMissingFromDiscovery(agent, cached).catch(() => undefined)
     }
     ensureNativeChatModelEnrichment({

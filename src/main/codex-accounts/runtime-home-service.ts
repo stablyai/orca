@@ -296,7 +296,8 @@ export class CodexRuntimeHomeService {
       // gate off). Do not use the globally selected managed account.
       if (!this.canRouteHostSystemDefaultToRealHome()) {
         this.invalidateBackfillAfterManagedSystemDefaultLaunch()
-        this.syncForCurrentSelection({ runtime: 'host' })
+        // Why: syncForCurrentSelection follows the globally selected managed
+        // account and would leave that account's auth in the shared mirror.
         syncSystemCodexResourcesIntoManagedHome()
         syncSystemConfigIntoManagedCodexHome()
         void startSystemCodexSessionBridgeInBackground(

@@ -385,6 +385,26 @@ describe('agent session RPC methods', () => {
     expect(runtime.createAgentSession).not.toHaveBeenCalled()
   })
 
+  it('rejects a Codex account reference on a non-Codex create request', async () => {
+    const runtime = runtimeStub()
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS
+    })
+
+    const response = await dispatcher.dispatch(
+      request('terminal.createAgentSession', {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'claude',
+        providerAccountRef: { provider: 'codex', accountId: 'account-a', runtime: 'host' }
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.createAgentSession).not.toHaveBeenCalled()
+  })
+
   it('rejects oversized structured agent arguments before runtime mutation', async () => {
     const runtime = runtimeStub()
     const dispatcher = new RpcDispatcher({

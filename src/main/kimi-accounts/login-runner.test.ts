@@ -37,6 +37,21 @@ describe('parseKimiLoginInstructions', () => {
     expect(instructions?.message).not.toMatch(/secret|bearer|access_token|refresh_token/i)
   })
 
+  it('drops a bare bearer credential line', () => {
+    const instructions = parseKimiLoginInstructions(
+      [
+        'Open https://auth.kimi.com/device in your browser.',
+        'Enter code: ABCD-EFGH',
+        'Bearer secret-token-value'
+      ].join('\n'),
+      '/managed/home'
+    )
+
+    expect(instructions?.message).toBe(
+      'Open https://auth.kimi.com/device in your browser.\nEnter code: ABCD-EFGH'
+    )
+  })
+
   it('drops a truncated leading line so a cut managed-home path cannot leak', () => {
     const managedHomePath = '/private/managed/home'
     const suffix = 'Open https://auth.kimi.com/device\nEnter code: ABCD-EFGH'

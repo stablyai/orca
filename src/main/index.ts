@@ -1068,6 +1068,11 @@ function prepareCodexRuntimeHomeForLaunch(
     const runtimeHomePath = codexRuntimeHome!.prepareForCodexAccountLaunch(resolvedAccountRef, {
       unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
     })
+    if (runtimeHomePath === null) {
+      // Why: null is the real ~/.codex lane. Managed-home hook writes must not
+      // target a path Codex will not read for this launch.
+      return null
+    }
     const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
     const hookTarget =
       resolvedAccountRef.runtime === 'wsl'

@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type {
   KimiManagedAccount,
   KimiManagedAccountsState
@@ -200,7 +208,12 @@ export class KimiAccountService {
         accountId,
         systemKimiHomePath: getHostKimiHome()
       })
-      rmSync(resolve(ownedHome, '..'), { recursive: true, force: true })
+      const accountRoot = resolve(ownedHome, '..')
+      const child = relative(realpathSync(this.managedAccountsRoot), accountRoot)
+      if (child === '' || isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`)) {
+        throw new Error('Managed Kimi home is not an owned account directory.')
+      }
+      rmSync(accountRoot, { recursive: true, force: true })
       const settings = this.store.getSettings()
       this.store.updateSettings({
         kimiManagedAccounts: (settings.kimiManagedAccounts ?? []).filter(

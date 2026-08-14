@@ -235,6 +235,16 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
       })
     }
     if (
+      value.providerAccountRef &&
+      (value.agent !== 'codex' || value.providerAccountRef.provider !== 'codex')
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['providerAccountRef', 'provider'],
+        message: 'Account reference must match the launched agent'
+      })
+    }
+    if (
       value.providerAccountRef?.runtime === 'host' &&
       value.providerAccountRef.wslDistro != null
     ) {

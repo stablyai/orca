@@ -85,7 +85,7 @@ function readRegistry(): RegistryFile {
   return cachedRegistry
 }
 
-function writeRegistry(registry: RegistryFile): void {
+function writeRegistry(registry: RegistryFile): boolean {
   const registryPath = getRegistryPath()
   const temporaryPath = `${registryPath}.${process.pid}.tmp`
   try {
@@ -95,11 +95,13 @@ function writeRegistry(registry: RegistryFile): void {
       mode: 0o600
     })
     renameSync(temporaryPath, registryPath)
+    return true
   } catch (error) {
     console.warn('[codex-session-accounts] Failed to persist session account registry:', error)
     try {
       rmSync(temporaryPath, { force: true })
     } catch {}
+    return false
   }
 }
 
@@ -139,8 +141,7 @@ export function recordCodexSessionAccount(
       .slice(0, sessionIds.length - MAX_TRACKED_SESSIONS)
       .forEach((staleSessionId) => delete registry.sessions[staleSessionId])
   }
-  writeRegistry(registry)
-  return true
+  return writeRegistry(registry)
 }
 
 export function getCodexSessionAccountId(sessionId: string): string | null | undefined {

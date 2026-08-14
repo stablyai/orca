@@ -8,7 +8,8 @@ const MAX_LOGIN_OUTPUT_CHARS = 8_000
 const MAX_INSTRUCTION_CHARS = 1_200
 const URL_PATTERN = /https:\/\/[^\s<>"']+/i
 const USER_CODE_PATTERN = /\b(?:user\s+)?code\s*[:=]\s*[A-Z0-9-]{4,}\b/i
-const SENSITIVE_LINE_PATTERN = /access[_ -]?token|refresh[_ -]?token|authorization:\s*bearer/i
+const SENSITIVE_LINE_PATTERN =
+  /access[_ -]?token|refresh[_ -]?token|authorization:\s*bearer|\bbearer\s+\S+/i
 const INSTRUCTION_LINE_PATTERN = /https:\/\/|\b(code|visit|open|browser|authoriz)\w*\b/i
 
 export type KimiLoginInstructions = {

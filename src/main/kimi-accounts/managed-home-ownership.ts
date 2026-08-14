@@ -24,6 +24,9 @@ export function assertOwnedKimiManagedHome(args: {
   if (!existsSync(args.candidatePath)) {
     throw new Error('Managed Kimi home does not exist on disk.')
   }
+  if (!existsSync(expectedPath)) {
+    throw new Error('Managed Kimi home does not match its persisted account ID.')
+  }
   const canonicalRoot = realpathSync(args.managedAccountsRoot)
   const canonicalCandidate = realpathSync(args.candidatePath)
   const canonicalExpected = realpathSync(expectedPath)
