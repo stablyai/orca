@@ -1,5 +1,5 @@
 import type { RepoIcon } from './repo-icon'
-import type { GitHubRepositoryIdentity } from './github-pr-types'
+import type { GitHubRepositoryIdentity } from './github/pull-request-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'

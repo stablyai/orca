@@ -177,8 +177,8 @@ import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
-} from '../../../shared/github-pr-merge-methods'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+} from '../../../shared/github/pull-request-merge-methods'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import {
   findGithubIssueWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel

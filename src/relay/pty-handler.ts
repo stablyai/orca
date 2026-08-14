@@ -25,7 +25,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
-import { splitWorktreeId } from '../shared/worktree-id'
+import { splitWorktreeId } from '../shared/worktree/id'
 import { formatPtyExitedError } from '../shared/ssh-pty-failure-tokens'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
 import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'

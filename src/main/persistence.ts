@@ -142,7 +142,7 @@ import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../shared/worktree-visibility-sources'
+} from '../shared/worktree/visibility-sources'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
@@ -174,7 +174,7 @@ import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
-} from '../shared/worktree-id'
+} from '../shared/worktree/id'
 import {
   isPathInsideOrEqual,
   isWindowsAbsolutePathLike,
@@ -221,7 +221,7 @@ import {
 } from '../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../shared/combined-diff-file-tree-width'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree/ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
 import {

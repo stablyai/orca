@@ -1,4 +1,4 @@
-import { githubRepoIdentityKey } from './github-repository-identity-key'
+import { githubRepoIdentityKey } from './github/repository-identity-key'
 import type { TaskProvider } from './task-providers'
 import type { ProjectProviderIdentity } from './types'
 

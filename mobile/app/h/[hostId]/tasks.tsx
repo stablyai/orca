@@ -119,11 +119,11 @@ import {
   isIterationCurrent,
   sortRows,
   type ProjectGroup
-} from '../../../../src/shared/github-project-group-sort'
+} from '../../../../src/shared/github/project-group-sort'
 import type {
   GitHubProjectSortDirection,
   GitHubProjectTable as SharedGitHubProjectTable
-} from '../../../../src/shared/github-project-types'
+} from '../../../../src/shared/github/project-types'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   isGitHubWorkItemsSshRemoteRequiredError,
@@ -161,7 +161,7 @@ import type { HostedReviewDecision } from '../../../../src/shared/hosted-review'
 import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
-} from '../../../../src/shared/github-project-identity'
+} from '../../../../src/shared/github/project-identity'
 
 type RepoSummary = {
   id: string

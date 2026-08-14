@@ -3,11 +3,11 @@ import {
   parseGitHubIssueOrPRLink,
   type GitHubIssueOrPRLink,
   type RepoSlug
-} from '../../../shared/github-links'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+} from '../../../shared/github/links'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../shared/new-workspace/gitlab-links'
 import { parseJiraIssueUrl, type ParsedJiraIssueUrl } from '../../../shared/jira-issue-url'
-import { parseLinearIssueUrlIntent, type LinearIssueUrlIntent } from '../../../shared/linear-links'
+import { parseLinearIssueUrlIntent, type LinearIssueUrlIntent } from '../../../shared/linear/links'
 import type { Repo, Worktree } from '../../../shared/types'
 import { normalizeLinearIdentifier } from './linear-issue-workspace-attachment'
 import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'

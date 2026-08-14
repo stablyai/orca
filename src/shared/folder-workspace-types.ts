@@ -6,7 +6,7 @@ import type {
   WorkspaceCreatorProvenance,
   WorkspaceLinkedItem,
   WorkspaceStatus
-} from './worktree-types'
+} from './worktree/types'
 
 export type WorkspaceScope =
   | { type: 'worktree'; worktreeId: string }

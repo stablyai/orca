@@ -1,5 +1,5 @@
 import type { PRRefreshErrorType } from '../../shared/types'
-import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
+import { classifyGitHubUnavailable } from '../../shared/github/api-availability'
 import { extractExecError } from '../git/exec-error'
 
 /**

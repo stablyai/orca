@@ -318,7 +318,7 @@ inline src/shared/agent-hook-listener.ts
 inline src/shared/automation-schedules.ts
 inline src/shared/commit-message-agent-spec.ts
 inline src/shared/constants.ts
-inline src/shared/github-project-types.ts
+inline src/shared/github/project-types.ts
 inline src/shared/keybindings.test.ts
 inline src/shared/keybindings.ts
 inline src/shared/marine-creatures.ts

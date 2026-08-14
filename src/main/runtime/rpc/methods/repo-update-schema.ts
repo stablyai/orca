@@ -6,7 +6,7 @@ import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../../shared/worktree-visibility-sources'
+} from '../../../../shared/worktree/visibility-sources'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()

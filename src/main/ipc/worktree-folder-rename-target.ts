@@ -1,6 +1,6 @@
 import { posix } from 'node:path'
 import type { GlobalSettings } from '../../shared/types'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 import { computeWorktreePath } from './worktree-logic'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>

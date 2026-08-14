@@ -1,4 +1,4 @@
-import type { GitHubIssueOrPRLink } from '../../../shared/github-links'
+import type { GitHubIssueOrPRLink } from '../../../shared/github/links'
 import type { GitHubWorkItem, Repo } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from './github-work-item-source-lookup'

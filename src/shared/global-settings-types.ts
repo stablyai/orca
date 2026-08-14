@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
-import type { GitHubProjectSettings } from './github-project-types'
+import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
@@ -35,7 +35,7 @@ import type {
   SourceControlViewMode,
   TaskViewPresetId
 } from './ui-chrome-types'
-import type { SetupScriptLaunchMode } from './worktree-launch-types'
+import type { SetupScriptLaunchMode } from './worktree/launch-types'
 
 export type GlobalSettings = {
   workspaceDir: string

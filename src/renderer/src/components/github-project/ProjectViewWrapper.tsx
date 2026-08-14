@@ -40,7 +40,7 @@ import type {
   GitHubProjectViewError,
   GitHubProjectViewSummary,
   ListProjectViewsResult
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import type { GitHubWorkItem } from '../../../../shared/types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
@@ -64,7 +64,7 @@ import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-c
 import {
   githubProjectHost,
   githubProjectIdentityKey
-} from '../../../../shared/github-project-identity'
+} from '../../../../shared/github/project-identity'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>

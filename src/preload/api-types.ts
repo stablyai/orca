@@ -108,7 +108,7 @@ import type {
 } from '../shared/orca-profiles'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
-import type { LinearIssueAttributeFilter } from '../shared/linear-issue-attribute-filter'
+import type { LinearIssueAttributeFilter } from '../shared/linear/issue-attribute-filter'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
@@ -347,7 +347,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
-} from '../shared/github-project-types'
+} from '../shared/github/project-types'
 import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
@@ -475,7 +475,7 @@ import type {
   WorkspacePortScanRequest,
   WorkspacePortScanResult
 } from '../shared/workspace-ports'
-import type { GhAuthDiagnostic } from '../shared/github-auth-types'
+import type { GhAuthDiagnostic } from '../shared/github/auth-types'
 import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../shared/codex-usage-types'
 import type {
   OpenCodeUsageBreakdownKind,

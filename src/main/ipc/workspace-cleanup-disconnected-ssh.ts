@@ -6,7 +6,7 @@ import {
   createWorkspaceCleanupFingerprint,
   type WorkspaceCleanupCandidate
 } from '../../shared/workspace-cleanup'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import {
   getNewestWorkspaceCleanupDiffCommentAt,
   getWorkspaceCleanupInactivityReasonsForWorkspace,

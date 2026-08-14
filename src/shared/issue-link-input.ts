@@ -1,5 +1,5 @@
-import { parseGitHubIssueOrPRLink } from './github-links'
-import { parseLinearIssueInput } from './linear-links'
+import { parseGitHubIssueOrPRLink } from './github/links'
+import { parseLinearIssueInput } from './linear/links'
 import type { WorkspaceSourceProvider } from './new-workspace/workspace-source'
 
 // Why: narrows the canonical provider union instead of minting a parallel one,

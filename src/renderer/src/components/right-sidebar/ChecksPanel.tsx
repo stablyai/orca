@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { githubProjectHost } from '../../../../shared/github-project-identity'
+import { githubProjectHost } from '../../../../shared/github/project-identity'
 import HostedReviewActions from './HostedReviewActions'
 import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
 import {
@@ -97,7 +97,7 @@ import type {
   PendingPRCommentAiAck,
   PendingPRCommentAiAckGithubTarget
 } from './pr-comments-ai-launch-ack'
-import { parseGitHubIssueOrPRLink } from '../../../../shared/github-links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import {
   hostedReviewProviderSupportsDraft,

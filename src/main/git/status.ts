@@ -46,7 +46,7 @@ import {
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
 import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'

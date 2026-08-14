@@ -11,7 +11,7 @@ import {
   canonicalizeLinearIssueAttributeFilter,
   emptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
-} from '../../../shared/linear-issue-attribute-filter'
+} from '../../../shared/linear/issue-attribute-filter'
 import type { LinearTeam } from '../../../shared/types'
 import {
   LinearIssueFilterSectionDetail,
