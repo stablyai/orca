@@ -1,9 +1,10 @@
 import type { ChildProcess } from 'node:child_process'
 import { SERVE_SUPERVISED_SHUTDOWN_GRACE_MS } from '../../shared/serve-supervision'
+import { SERVE_REPLACEMENT_READY_TIMEOUT_MS } from '../../shared/startup-readiness-deadlines'
 import { parseServeSupervisorMessage } from '../../shared/serve-update-handoff'
 import type { ServeRuntimeHealth } from './serve-runtime-health'
 
-export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
+export { SERVE_REPLACEMENT_READY_TIMEOUT_MS }
 export const SERVE_HEALTH_CHECK_INTERVAL_MS = 10_000
 export const SERVE_HEALTH_PROBE_TIMEOUT_MS = 5_000
 export const SERVE_HEALTH_FAILURE_LIMIT = 3

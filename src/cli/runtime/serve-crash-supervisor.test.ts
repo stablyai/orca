@@ -4,6 +4,10 @@ import {
   SERVE_ALREADY_RUNNING_EXIT_CODE,
   SERVE_SUPERVISED_SHUTDOWN_GRACE_MS
 } from '../../shared/serve-supervision'
+import {
+  LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS,
+  SERVE_REPLACEMENT_READY_TIMEOUT_MS
+} from '../../shared/startup-readiness-deadlines'
 import { waitForForegroundServeChild } from './serve-child-monitor'
 import {
   SERVE_SUPERVISOR_STOP_EXIT_CODE,
@@ -58,6 +62,39 @@ function supervisorArgs(
 }
 
 describe('foreground serve crash supervisor', () => {
+  it('outlives the child daemon-preservation fail-open before requiring readiness', async () => {
+    vi.useFakeTimers()
+    const child = new FakeChildProcess(4101)
+    const healthProbe = vi.fn(async () => ({
+      healthy: true as const,
+      runtimeId: 'runtime-ready'
+    }))
+    try {
+      const result = waitForForegroundServeChild(child as never, null, {
+        healthProbe,
+        healthCheckIntervalMs: 60_000,
+        healthProbeTimeoutMs: 5_000,
+        healthFailureLimit: 3
+      })
+
+      expect(
+        SERVE_REPLACEMENT_READY_TIMEOUT_MS - LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS
+      ).toBeGreaterThanOrEqual(30_000)
+      await vi.advanceTimersByTimeAsync(LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS + 1)
+      expect(child.kill).not.toHaveBeenCalled()
+
+      child.emit('message', readyMessage)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(healthProbe).toHaveBeenCalledOnce()
+      expect(child.kill).not.toHaveBeenCalled()
+
+      child.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
+      await expect(result).resolves.toMatchObject({ readiness: 'verified' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves the main-process teardown budget before forcing exit', async () => {
     vi.useFakeTimers()
     const child = new FakeChildProcess(4101)
