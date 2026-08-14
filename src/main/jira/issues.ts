@@ -15,6 +15,7 @@ import type {
   JiraPriority,
   JiraProject,
   JiraProjectStatusOrder,
+  JiraProjectStatusOrderColumn,
   JiraSite,
   JiraSiteSelection,
   JiraStatus,
@@ -1220,10 +1221,13 @@ export async function getProjectStatusOrder(
 
     // Why: issues already carry status names and IDs, so returning board IDs
     // avoids a second metadata request and keeps duplicate names unambiguous.
+    // Column names ride along so empty board columns can still render.
     const seenStatusIds = new Set<string>()
     const statusIdsByColumn: string[][] = []
+    const namedColumns: JiraProjectStatusOrderColumn[] = []
     for (const column of columns) {
-      const statuses = asRecord(column).statuses
+      const columnRecord = asRecord(column)
+      const statuses = columnRecord.statuses
       if (!Array.isArray(statuses)) {
         continue
       }
@@ -1237,9 +1241,16 @@ export async function getProjectStatusOrder(
       }
       if (columnStatusIds.length > 0) {
         statusIdsByColumn.push(columnStatusIds)
+        const columnName = typeof columnRecord.name === 'string' ? columnRecord.name.trim() : ''
+        namedColumns.push({
+          name: columnName,
+          statusIds: columnStatusIds
+        })
       }
     }
-    return { statusIdsByColumn }
+    return namedColumns.some((column) => column.name.length > 0)
+      ? { statusIdsByColumn, columns: namedColumns }
+      : { statusIdsByColumn }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)

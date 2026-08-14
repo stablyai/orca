@@ -2030,7 +2030,13 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "jiraBoardNoTransition": "No Jira transition to \"{{value0}}\" is available for {{value1}}",
+        "jiraBoardMoveFailed": "Failed to move Jira issue",
+        "jiraViewMode": "Jira view mode",
+        "jiraSprintFilter": "Sprint",
+        "jiraSprintFilterTooltip": "Only issues in open sprints",
+        "jiraBoardEmptyColumn": "No issues"
       },
       "Terminal": {
         "73768427cf": "Close",
