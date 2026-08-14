@@ -1368,6 +1368,121 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
   })
 
+  it('defers a Codex hook done while the pane is still producing output (#9333)', async () => {
+    // Regression for #9333: during a multi-step, tool-driven Codex turn the hook
+    // status goes working -> done -> working as Codex ends each intermediate
+    // response. If the gap between that 'done' and the next tool exceeds the
+    // 1.5s quiet window, Orca fired a premature "Task complete". Output still
+    // arriving means the turn is mid-flight, not finished.
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult('codex')),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'multi-step task',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'multi-step task',
+      agentType: 'codex'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+
+    // Codex keeps streaming tool output past the quiet window; the intermediate
+    // 'done' must not fire a completion while that output keeps arriving.
+    for (let i = 0; i < 8; i++) {
+      vi.advanceTimersByTime(1_000)
+      coordinator.observeOutputActivity()
+      await flushAsyncTicks()
+    }
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    // Output stops and the turn is genuinely idle; now the completion fires.
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+      await flushAsyncTicks()
+    }
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({ source: 'hook' })
+    )
+  })
+
+  it('still fires a Codex done when the agent TUI never stops redrawing (#9333)', async () => {
+    // Why: the deferral must delay a completion, never swallow it. A pane that
+    // prints forever still notifies once the ceiling is spent, so the user is
+    // never left waiting on a notification that never arrives.
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-2',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult('codex')),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    coordinator.observeHookStatus({ state: 'working', prompt: 'task', agentType: 'codex' })
+    coordinator.observeHookStatus({ state: 'done', prompt: 'task', agentType: 'codex' })
+
+    // 60s of unbroken output — far past the deferral ceiling.
+    for (let i = 0; i < 120; i++) {
+      vi.advanceTimersByTime(500)
+      coordinator.observeOutputActivity()
+      await flushAsyncTicks()
+    }
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('fires a Codex done exactly once when Stop repeats across a turn (#9333)', async () => {
+    // Why: #9333 is about *repeated* "Task complete" notifications; a burst of
+    // Stop hooks in one turn must still collapse to a single notification.
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-3',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult('codex')),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    coordinator.observeHookStatus({ state: 'working', prompt: 'task', agentType: 'codex' })
+    for (let i = 0; i < 5; i++) {
+      coordinator.observeHookStatus({ state: 'done', prompt: 'task', agentType: 'codex' })
+      vi.advanceTimersByTime(200)
+      await flushAsyncTicks()
+    }
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+      await flushAsyncTicks()
+    }
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
   it('still fires a pending Pi done when process inspection sees the agent exit first', async () => {
     // Why: a process-exit probe landing inside the quiet window must not tear
     // down agent evidence, or the pending hook 'done' would be silently dropped.
