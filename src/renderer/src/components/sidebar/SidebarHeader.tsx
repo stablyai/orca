@@ -1,6 +1,7 @@
 import React from 'react'
-import { FolderPlus, Plus } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, FolderPlus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
@@ -20,6 +21,12 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const groupBy = useAppStore((s) => s.groupBy)
   const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+  const hasCollapsibleGroups = useAppStore((s) => s.sidebarVisibleGroupKeys.length > 0)
+  const allGroupsCollapsed = useAppStore((s) => s.sidebarVisibleGroupsAllCollapsed)
+  const toggleAllCollapsedGroups = useAppStore((s) => s.toggleAllCollapsedGroups)
+  const collapseToggleLabel = allGroupsCollapsed
+    ? translate('auto.components.sidebar.SidebarHeader.ae1097f309', 'Expand All Groups')
+    : translate('auto.components.sidebar.SidebarHeader.ec1e5538bb', 'Collapse All Groups')
 
   return (
     <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
@@ -32,6 +39,37 @@ const SidebarHeader = React.memo(function SidebarHeader({
         </span>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={cn(
+                'text-muted-foreground',
+                !hasCollapsibleGroups && 'cursor-not-allowed opacity-50'
+              )}
+              aria-label={collapseToggleLabel}
+              aria-disabled={!hasCollapsibleGroups}
+              // Why: native disabled buttons suppress Radix tooltip triggers in Chromium.
+              onClick={() => {
+                if (!hasCollapsibleGroups) {
+                  return
+                }
+                toggleAllCollapsedGroups()
+              }}
+            >
+              {allGroupsCollapsed ? (
+                <ChevronsUpDown className="size-3.5" strokeWidth={2.25} />
+              ) : (
+                <ChevronsDownUp className="size-3.5" strokeWidth={2.25} />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {collapseToggleLabel}
+          </TooltipContent>
+        </Tooltip>
+
         <SidebarWorkspaceOptionsMenu
           preserveWorkspaceBoardOpen
           onMenuOpenChange={onWorkspaceBoardMenuOpenChange}

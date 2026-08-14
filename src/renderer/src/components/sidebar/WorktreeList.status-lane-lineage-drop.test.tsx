@@ -298,6 +298,7 @@ function setStatusLaneState(): void {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
+    setSidebarGroupCollapseState: vi.fn(),
     updateRepo: vi.fn(),
     updateWorktreeMeta: mockStore.updateWorktreeMeta,
     updateWorktreesMeta: mockStore.updateWorktreesMeta,

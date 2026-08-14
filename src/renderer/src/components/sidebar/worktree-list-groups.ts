@@ -395,6 +395,27 @@ export function getLineageGroupKey(worktreeId: string): string {
   return `${LINEAGE_GROUP_PREFIX}${worktreeId}`
 }
 
+// Mirrors the header chevron affordance: repo/project/status/pinned headers fold;
+// flat labels (All, PR buckets) and empty groups don't.
+export function isCollapsibleGroupHeaderRow(
+  row: Pick<GroupHeaderRow, 'key' | 'count' | 'repo' | 'projectGroup'>,
+  groupBy: WorktreeGroupBy,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+): boolean {
+  if (row.count <= 0) {
+    return false
+  }
+  if (row.key === PINNED_GROUP_KEY) {
+    return true
+  }
+  if (groupBy === 'repo') {
+    return row.repo !== undefined || row.projectGroup !== undefined
+  }
+  return groupBy === 'workspace-status'
+    ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses) !== null
+    : false
+}
+
 export function getPRGroupKey(
   worktree: Worktree,
   repoMap: Map<string, Repo>,

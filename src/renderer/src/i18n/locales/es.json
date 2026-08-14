@@ -4284,7 +4284,9 @@
           "5c9c7c16aa": "Agregar un proyecto para crear espacios de trabajo",
           "ca6f729da2": "Nuevo espacio de trabajo ({{value0}})",
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
-          "25a95899c9": "Agregar proyecto"
+          "25a95899c9": "Agregar proyecto",
+          "ec1e5538bb": "Contraer todos los grupos",
+          "ae1097f309": "Expandir todos los grupos"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",

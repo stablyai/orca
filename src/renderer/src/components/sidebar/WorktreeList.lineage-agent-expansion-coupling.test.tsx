@@ -288,6 +288,7 @@ function setAgentLineageState(options: {
       }
       mockStore.state.collapsedGroups = set
     }),
+    setSidebarGroupCollapseState: vi.fn(),
 
     // ── worktree list plumbing ──
     activeModal: '',

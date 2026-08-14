@@ -5,12 +5,9 @@ import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'ex
 import {
   Search,
   X,
-  Pin,
   List,
   SlidersHorizontal,
   Layers,
-  ChevronDown,
-  ChevronRight,
   ChevronLeft,
   Plus,
   Moon,
@@ -42,7 +39,8 @@ import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
 import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
-import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
+import { WorkspaceSectionHeader } from '../../../src/components/WorkspaceSectionHeader'
+import { CollapseAllGroupsButton } from '../../../src/components/CollapseAllGroupsButton'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
 import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-scroll'
@@ -86,7 +84,14 @@ import {
   type Worktree
 } from '../../../src/worktree/workspace-list-sections'
 import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sections'
-import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
+import {
+  areAllSectionsCollapsed,
+  toggleAllSectionsCollapsed
+} from '../../../../src/shared/workspace-group-collapse'
+import {
+  getMobileWorkspaceLineageGroupKey,
+  MOBILE_WORKSPACE_LINEAGE_KEY_PREFIX
+} from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
 import { WorktreeCatalogSnapshotClient } from '../../../src/worktree/worktree-catalog-snapshot-client'
 import { HostWorkspaceListStates } from '../../../src/worktree/host-workspace-list-states'
@@ -786,6 +791,19 @@ export function HostScreen({
     collapsedGroups,
     workspaceStatuses
   })
+  const allGroupsCollapsed = areAllSectionsCollapsed(
+    collapsedGroups,
+    rawSections.map((s) => s.key)
+  )
+  const toggleAllGroupsCollapsed = useCallback(() => {
+    persistViewSettings({
+      collapsedGroups: toggleAllSectionsCollapsed(
+        new Set(viewStateRef.current.collapsedGroups),
+        rawSections.map((s) => s.key),
+        [MOBILE_WORKSPACE_LINEAGE_KEY_PREFIX]
+      )
+    })
+  }, [rawSections, persistViewSettings])
   const existingWorktreePaths = useMemo(() => worktrees.map((w) => w.path), [worktrees])
 
   const { sectionListRef, onScrollToIndexFailed } = useActiveWorktreeScroll(sections)
@@ -1007,6 +1025,13 @@ export function HostScreen({
                 />
               </Pressable>
 
+              <CollapseAllGroupsButton
+                allCollapsed={allGroupsCollapsed}
+                disabled={rawSections.length === 0}
+                onPress={toggleAllGroupsCollapsed}
+                style={styles.embeddedToolbarIconButton}
+              />
+
               <Pressable
                 style={styles.embeddedToolbarIconButton}
                 onPress={() => setShowSearch((s) => !s)}
@@ -1085,6 +1110,13 @@ export function HostScreen({
               />
             </Pressable>
 
+            <CollapseAllGroupsButton
+              allCollapsed={allGroupsCollapsed}
+              disabled={rawSections.length === 0}
+              onPress={toggleAllGroupsCollapsed}
+              style={styles.searchToggle}
+            />
+
             <Pressable style={styles.searchToggle} onPress={() => setShowSearch((s) => !s)}>
               {showSearch ? (
                 <X size={16} color={colors.textSecondary} />
@@ -1157,40 +1189,22 @@ export function HostScreen({
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
-          renderSectionHeader={({ section }) => {
-            if (!section.title) {
-              return null
-            }
-            const isCollapsed = collapsedGroups.has(section.key)
-            const rawSection = rawSections.find((s) => s.key === section.key)
-            const count = rawSection?.data.length ?? 0
-            const repoSectionColor =
-              groupMode === 'repo' ? uniqueRepoColors.get(section.title) : null
-            const repoSectionIcon = groupMode === 'repo' ? repoIconsByName.get(section.title) : null
-            return (
-              <Pressable style={styles.sectionHeader} onPress={() => toggleCollapsed(section.key)}>
-                {isCollapsed ? (
-                  <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                ) : (
-                  <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {section.icon === 'pin' && (
-                  <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {groupMode === 'repo' ? (
-                  <View style={styles.sectionRepoIcon}>
-                    <MobileRepoIcon
-                      repoIcon={repoSectionIcon}
-                      size={14}
-                      color={repoSectionColor ?? colors.textSecondary}
-                    />
-                  </View>
-                ) : null}
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <Text style={styles.sectionCount}>{count}</Text>
-              </Pressable>
-            )
-          }}
+          renderSectionHeader={({ section }) => (
+            <WorkspaceSectionHeader
+              section={section}
+              collapsed={collapsedGroups.has(section.key)}
+              count={rawSections.find((s) => s.key === section.key)?.data.length ?? 0}
+              repoBadge={
+                groupMode === 'repo'
+                  ? {
+                      icon: repoIconsByName.get(section.title) ?? null,
+                      color: uniqueRepoColors.get(section.title) ?? null
+                    }
+                  : undefined
+              }
+              onToggle={toggleCollapsed}
+            />
+          )}
           ItemSeparatorComponent={ListSeparator}
           // Why (#8498): manual pull-to-refresh forces a fresh snapshot after a stale-cache reconnect.
           refreshControl={
@@ -1602,31 +1616,6 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingBottom: spacing.lg
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  sectionIcon: {
-    marginRight: spacing.xs
-  },
-  sectionRepoIcon: {
-    marginRight: spacing.xs
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  sectionCount: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginLeft: spacing.xs
   },
   separator: {
     height: 1,

@@ -4496,7 +4496,9 @@
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
           "ca6f729da2": "New workspace ({{value0}})",
-          "a30e34eb5c": "Close workspace board"
+          "a30e34eb5c": "Close workspace board",
+          "ae1097f309": "Expand All Groups",
+          "ec1e5538bb": "Collapse All Groups"
         },
         "SidebarNav": {
           "80611a8b10": "Search",

@@ -36,6 +36,7 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import { collapseAllSections, expandAllSections } from '../../../../shared/workspace-group-collapse'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -890,6 +891,12 @@ export type UISlice = {
   setFilterRepoIds: (ids: readonly string[]) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  // Collapsible header keys the sidebar list currently renders, plus the
+  // effective all-collapsed verdict; feeds the bulk collapse toggle.
+  sidebarVisibleGroupKeys: string[]
+  sidebarVisibleGroupsAllCollapsed: boolean
+  setSidebarGroupCollapseState: (keys: string[], allCollapsed: boolean) => void
+  toggleAllCollapsedGroups: () => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void
@@ -2116,6 +2123,36 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
       return { collapsedGroups: next }
+    }),
+
+  sidebarVisibleGroupKeys: [],
+  sidebarVisibleGroupsAllCollapsed: false,
+  setSidebarGroupCollapseState: (keys, allCollapsed) =>
+    set((s) => {
+      const prev = s.sidebarVisibleGroupKeys
+      const sameKeys = prev.length === keys.length && prev.every((key, i) => key === keys[i])
+      if (sameKeys && s.sidebarVisibleGroupsAllCollapsed === allCollapsed) {
+        return s
+      }
+      return {
+        sidebarVisibleGroupKeys: sameKeys ? prev : keys,
+        sidebarVisibleGroupsAllCollapsed: allCollapsed
+      }
+    }),
+  toggleAllCollapsedGroups: () =>
+    set((s) => {
+      if (s.sidebarVisibleGroupKeys.length === 0) {
+        return s
+      }
+      // Direction follows the effective (rendered) verdict published by the list,
+      // so a forced-open reveal can't invert the action. Row-scoped keys survive
+      // bulk expand: lineage disclosure ('lineage:', worktree-list-groups.ts) and
+      // host sections ('host:', host-section-rows.ts).
+      const next = s.sidebarVisibleGroupsAllCollapsed
+        ? expandAllSections(s.collapsedGroups, ['lineage:', 'host:'])
+        : collapseAllSections(s.collapsedGroups, s.sidebarVisibleGroupKeys)
+      window.api.ui.set({ collapsedGroups: next }).catch(console.error)
+      return { collapsedGroups: new Set(next) }
     }),
 
   worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
