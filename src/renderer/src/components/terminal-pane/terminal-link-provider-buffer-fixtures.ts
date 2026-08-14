@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { IDisposable, ILink } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
+import { createFilePathLinkProvider } from './terminal-link-handlers'
 import type {
   installFilePathLinkClickFallback,
   openFilePathLinkAtBufferPosition
@@ -88,8 +88,7 @@ export function createProviderSetup(
       pathExistsCache,
       ...depsOverrides
     },
-    linkTooltip,
-    getTerminalFileOpenHint()
+    linkTooltip
   )
   return { provider, linkTooltip }
 }

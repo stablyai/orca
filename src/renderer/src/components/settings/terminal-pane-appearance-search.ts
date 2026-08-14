@@ -4,6 +4,10 @@ import {
   getTerminalLinkActionsDescription,
   getTerminalLinkActionsTitle
 } from './terminal-link-actions-copy'
+import {
+  getTerminalFileLinkModifierDescription,
+  getTerminalFileLinkModifierTitle
+} from './terminal-file-link-modifier-copy'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -84,6 +88,19 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
     // list already carries both 'cmd' and 'ctrl'.
     description: getTerminalLinkActionsDescription({ isMac: true }),
     keywords: getTerminalLinkActionSearchKeywords({ isMac: true })
+  },
+  {
+    title: getTerminalFileLinkModifierTitle(),
+    // Why: the index is platform-agnostic, so it pins the Mac chord and keeps
+    // "ctrl" as a keyword for Windows/Linux users typing what they see.
+    description: getTerminalFileLinkModifierDescription({ isMac: true }),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.file', 'file'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.link', 'link'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.shift', 'shift'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.modifier', 'modifier')
+    ]
   },
   {
     title: translate('auto.components.settings.terminal.search.c6178a2b4d', 'Focus Follows Mouse'),

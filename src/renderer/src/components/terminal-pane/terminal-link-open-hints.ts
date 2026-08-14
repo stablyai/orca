@@ -9,8 +9,19 @@ function terminalLinkActionHintPrefix(showActions: boolean): string {
   return showActions ? 'Click for actions, ' : ''
 }
 
-export function getTerminalFileOpenHint(showActions = true): string {
+// Why: every inverted hint has the same shape — the bare modifier reaches the OS
+// destination and Shift reaches Orca — so one template covers all three link kinds.
+function invertedChordHint(prefix: string, bareTarget: string, shiftTarget: string): string {
+  return isMacPlatform()
+    ? `${prefix}⌘+click ${bareTarget}, or ⇧⌘+click ${shiftTarget}`
+    : `${prefix}Ctrl+click ${bareTarget}, or Shift+Ctrl+click ${shiftTarget}`
+}
+
+export function getTerminalFileOpenHint(showActions = true, modifierInverts = false): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
+  if (modifierInverts) {
+    return invertedChordHint(prefix, 'for default app', 'to open in Orca')
+  }
   return isMacPlatform()
     ? `${prefix}⌘+click to open, or ⇧⌘+click for default app`
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default app`
@@ -24,11 +35,40 @@ export function getTerminalOrcaFileOpenHint(showActions = true): string {
 }
 
 // Why: local HTML paths keep Shift+modifier as the system-browser shortcut.
-export function getTerminalHtmlFileOpenHint(showActions = true): string {
+export function getTerminalHtmlFileOpenHint(showActions = true, modifierInverts = false): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
+  if (modifierInverts) {
+    return invertedChordHint(prefix, 'for default browser', 'to open in Orca')
+  }
   return isMacPlatform()
     ? `${prefix}⌘+click to open, or ⇧⌘+click for default browser`
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default browser`
+}
+
+export type TerminalFileLinkHoverHintOptions = {
+  canOpenWithSystemDefault: boolean
+  isWorktreeRoot: boolean
+  isHtmlFile: boolean
+  showActions: boolean
+  modifierInverts: boolean
+}
+
+export function getTerminalFileLinkHoverHint({
+  canOpenWithSystemDefault,
+  isWorktreeRoot,
+  isHtmlFile,
+  showActions,
+  modifierInverts
+}: TerminalFileLinkHoverHintOptions): string {
+  if (isWorktreeRoot) {
+    return getTerminalWorktreePathOpenHint(canOpenWithSystemDefault, showActions, modifierInverts)
+  }
+  if (!canOpenWithSystemDefault) {
+    return getTerminalOrcaFileOpenHint(showActions)
+  }
+  return isHtmlFile
+    ? getTerminalHtmlFileOpenHint(showActions, modifierInverts)
+    : getTerminalFileOpenHint(showActions, modifierInverts)
 }
 
 export type TerminalUrlOpenHintOptions = {
@@ -101,7 +141,8 @@ export function getTerminalUrlOrcaBrowserHint(): string {
 
 export function getTerminalWorktreePathOpenHint(
   canOpenWithSystemDefault: boolean,
-  showActions = true
+  showActions = true,
+  modifierInverts = false
 ): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
   if (!canOpenWithSystemDefault) {
@@ -109,6 +150,14 @@ export function getTerminalWorktreePathOpenHint(
     return isMacPlatform()
       ? `${directPrefix}⌘+click to switch workspace`
       : `${directPrefix}Ctrl+click to switch workspace`
+  }
+
+  if (modifierInverts) {
+    return invertedChordHint(
+      prefix,
+      isMacPlatform() ? 'to open in Finder' : 'to open folder',
+      'to switch workspace'
+    )
   }
 
   return isMacPlatform()

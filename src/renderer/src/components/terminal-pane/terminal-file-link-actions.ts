@@ -1,5 +1,6 @@
 import {
   getTerminalFileContext,
+  isTerminalFileLinkModifierInverted,
   mapTerminalFilePath,
   openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault,
@@ -29,11 +30,13 @@ export function handleTerminalFileLink(
   actionContext?: TerminalLinkActionContext | null,
   actionDestination?: string
 ): boolean {
+  const modifierInverts = isTerminalFileLinkModifierInverted()
   if (isTerminalLinkDirectActivation(event)) {
     event?.preventDefault?.()
     openDetectedFilePath(filePath, line, column, {
       ...deps,
-      openWithSystemDefault: Boolean(event?.shiftKey)
+      // Why: Shift normally picks the OS default app; inverting swaps the two chords.
+      openWithSystemDefault: Boolean(event?.shiftKey) !== modifierInverts
     })
     return true
   }
@@ -52,45 +55,45 @@ export function handleTerminalFileLink(
   const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, mappedPath)
   const isMac = navigator.userAgent.includes('Mac')
 
+  const orcaAction = {
+    label: worktreeRoot
+      ? translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
+          'Switch workspace'
+        )
+      : translate('auto.components.terminal.pane.TerminalLinkActionPopover.openFile', 'Open file'),
+    run: () => openDetectedFilePath(filePath, line, column, deps)
+  }
+  const systemDefaultAction = {
+    label: worktreeRoot
+      ? isMac
+        ? translate(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openInFinder',
+            'Open in Finder'
+          )
+        : translate(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openFolder',
+            'Open folder'
+          )
+      : translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
+          'Open with default app'
+        ),
+    run: () =>
+      openDetectedFilePath(filePath, line, column, {
+        ...deps,
+        openWithSystemDefault: true
+      })
+  }
+  // Why: the popover's primary must match what the bare modifier click does.
+  const primaryIsSystemDefault = modifierInverts && canOpenWithSystemDefault
+
   return requestTerminalLinkAction(event, actionContext, {
     destination: actionDestination ?? mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
-    primary: {
-      label: worktreeRoot
-        ? translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
-            'Switch workspace'
-          )
-        : translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.openFile',
-            'Open file'
-          ),
-      run: () => openDetectedFilePath(filePath, line, column, deps)
-    },
+    primary: primaryIsSystemDefault ? systemDefaultAction : orcaAction,
     ...(canOpenWithSystemDefault
-      ? {
-          alternate: {
-            label: worktreeRoot
-              ? isMac
-                ? translate(
-                    'auto.components.terminal.pane.TerminalLinkActionPopover.openInFinder',
-                    'Open in Finder'
-                  )
-                : translate(
-                    'auto.components.terminal.pane.TerminalLinkActionPopover.openFolder',
-                    'Open folder'
-                  )
-              : translate(
-                  'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
-                  'Open with default app'
-                ),
-            run: () =>
-              openDetectedFilePath(filePath, line, column, {
-                ...deps,
-                openWithSystemDefault: true
-              })
-          }
-        }
+      ? { alternate: primaryIsSystemDefault ? orcaAction : systemDefaultAction }
       : {})
   })
 }

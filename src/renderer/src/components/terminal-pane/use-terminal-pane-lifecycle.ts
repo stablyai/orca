@@ -29,7 +29,6 @@ import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-term
 import type { PaneProcessExit } from './pty-connection-types'
 import {
   createFilePathLinkProvider,
-  getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
@@ -988,7 +987,6 @@ export function useTerminalPaneLifecycle({
       getTabWideAgentHintLeafId
     })
 
-    const fileOpenLinkHint = getTerminalFileOpenHint()
     // Why: read settingsRef at fire time so toggling link routing applies without recreating panes.
     const getUrlOpenLinkHint = (paneId: number): string =>
       getTerminalUrlOpenHint({
@@ -1220,7 +1218,7 @@ export function useTerminalPaneLifecycle({
         const linkPointerGesture = installTerminalLinkPointerGesture(pane.terminal)
         linkPointerGestures.set(pane.id, linkPointerGesture)
         const linkProviderDisposable = pane.terminal.registerLinkProvider(
-          createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
+          createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip)
         )
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
         const terminalHandleLinkDisposable = pane.terminal.registerLinkProvider(

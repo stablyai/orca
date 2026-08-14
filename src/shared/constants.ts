@@ -264,6 +264,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openLinksInAppPreferencePrompted: false,
     openLinksInAppModifierInverts: false,
     terminalLinkActionPopoverEnabled: true,
+    terminalFileLinkModifierInverts: false,
     openAgentTabsInChatByDefault: false,
     experimentalNativeChat: false,
     nativeChatSessionOptions: {},

@@ -244,6 +244,21 @@ describe('handleOscLink', () => {
     )
   })
 
+  it('names the swapped destinations in hover hints when the modifier inverts', () => {
+    setPlatform('Macintosh')
+    expect(getTerminalFileOpenHint(true, true)).toBe(
+      'Click for actions, ⌘+click for default app, or ⇧⌘+click to open in Orca'
+    )
+    expect(getTerminalHtmlFileOpenHint(true, true)).toBe(
+      'Click for actions, ⌘+click for default browser, or ⇧⌘+click to open in Orca'
+    )
+
+    setPlatform('Windows')
+    expect(getTerminalFileOpenHint(true, true)).toBe(
+      'Click for actions, Ctrl+click for default app, or Shift+Ctrl+click to open in Orca'
+    )
+  })
+
   it('omits plain-click actions from hover hints when the popover is disabled', () => {
     setPlatform('Macintosh')
     expect(getTerminalFileOpenHint(false)).toBe('⌘+click to open, or ⇧⌘+click for default app')

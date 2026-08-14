@@ -14,6 +14,7 @@ import {
 import {
   getTerminalFileContext,
   isHtmlFilePath,
+  isTerminalFileLinkModifierInverted,
   mapTerminalFilePath,
   shouldOpenTerminalFileWithSystemDefault,
   terminalLinkWslDistro
@@ -29,13 +30,7 @@ import {
   readTerminalPathExistsCache,
   writeTerminalPathExistsCache
 } from './terminal-path-exists-cache'
-import {
-  getTerminalHtmlFileOpenHint,
-  getTerminalOrcaFileOpenHint,
-  getTerminalWorktreePathOpenHint,
-  getTerminalFileOpenHint,
-  getTerminalUrlOpenHint
-} from './terminal-link-open-hints'
+import { getTerminalFileLinkHoverHint } from './terminal-link-open-hints'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
@@ -45,7 +40,11 @@ import { handleTerminalFileLink } from './terminal-file-link-actions'
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { mapTerminalFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
-export { getTerminalFileOpenHint, getTerminalHtmlFileOpenHint, getTerminalUrlOpenHint }
+export {
+  getTerminalFileOpenHint,
+  getTerminalHtmlFileOpenHint,
+  getTerminalUrlOpenHint
+} from './terminal-link-open-hints'
 export { isTerminalLinkActivation } from './terminal-link-activation'
 
 export type LinkHandlerDeps = {
@@ -98,8 +97,7 @@ function preferLongestNonOverlappingLinks(links: ProvidedFileLink[]): ProvidedFi
 export function createFilePathLinkProvider(
   paneId: number,
   deps: LinkHandlerDeps,
-  linkTooltip: HTMLElement,
-  openLinkHint: string
+  linkTooltip: HTMLElement
 ): ILinkProvider {
   const { startupCwd, managerRef, pathExistsCache, worktreeId, worktreePath } = deps
   return {
@@ -207,24 +205,20 @@ export function createFilePathLinkProvider(
                     }
                   },
                   hover: () => {
-                    // Why: only local paths can offer the Shift+modifier system
-                    // default escape hatch; remote paths may not exist locally.
-                    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
-                      fileContext,
-                      mappedPath
-                    )
-                    const showActions = deps.getLinkActionContext
-                      ? deps.getLinkActionContext(paneId) !== null
-                      : true
-                    const hint = worktreeRootLink
-                      ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault, showActions)
-                      : canOpenWithSystemDefault
-                        ? isHtmlFilePath(mappedPath)
-                          ? getTerminalHtmlFileOpenHint(showActions)
-                          : showActions
-                            ? openLinkHint
-                            : getTerminalFileOpenHint(false)
-                        : getTerminalOrcaFileOpenHint(showActions)
+                    const hint = getTerminalFileLinkHoverHint({
+                      // Why: only local paths can offer the system-default escape
+                      // hatch; remote paths may not exist locally.
+                      canOpenWithSystemDefault: shouldOpenTerminalFileWithSystemDefault(
+                        fileContext,
+                        mappedPath
+                      ),
+                      isWorktreeRoot: worktreeRootLink !== null,
+                      isHtmlFile: isHtmlFilePath(mappedPath),
+                      showActions: deps.getLinkActionContext
+                        ? deps.getLinkActionContext(paneId) !== null
+                        : true,
+                      modifierInverts: isTerminalFileLinkModifierInverted()
+                    })
                     linkTooltip.textContent = `${mappedPath} (${hint})`
                     linkTooltip.style.display = ''
                   },
@@ -301,7 +295,7 @@ export function installFilePathLinkClickFallback(
         runtimeEnvironmentId,
         wslDistro: deps.wslDistro,
         pathExistsCache: deps.pathExistsCache,
-        openWithSystemDefault: Boolean(event.shiftKey)
+        openWithSystemDefault: event.shiftKey !== isTerminalFileLinkModifierInverted()
       }
     )
     if (opened) {

@@ -86,6 +86,12 @@ export function terminalLinkWslDistro(
   return runtimeEnvironmentId ? null : wslDistro
 }
 
+// Why: the chord swap is a global preference, so every terminal file-link entry
+// point reads it here rather than threading it down from the pane lifecycle.
+export function isTerminalFileLinkModifierInverted(): boolean {
+  return useAppStore.getState().settings?.terminalFileLinkModifierInverts === true
+}
+
 export function shouldOpenTerminalFileWithSystemDefault(
   fileContext: RuntimeFileOperationArgs,
   filePath: string
@@ -145,7 +151,9 @@ export function openDetectedFilePath(
       mappedFilePath
     )
 
-    if (!openWithSystemDefault) {
+    // Why: a remote path has no OS default to reach, so the system-default request
+    // degrades to the Orca action instead of doing nothing.
+    if (!(openWithSystemDefault && canOpenWithSystemDefault)) {
       const worktreeRootLink = resolveKnownWorktreeRootPathLink(mappedFilePath)
       if (worktreeRootLink) {
         // Why: root workspace switching must work for SSH/runtime paths without

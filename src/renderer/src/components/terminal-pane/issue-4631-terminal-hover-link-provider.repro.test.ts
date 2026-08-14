@@ -4,7 +4,7 @@ import type { IDisposable } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { extractTerminalFileLinks } from '@/lib/terminal-links'
-import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
+import { createFilePathLinkProvider } from './terminal-link-handlers'
 import { buildWrappedLogicalLine } from './wrapped-terminal-link-ranges'
 
 vi.mock('@/store', () => ({
@@ -112,8 +112,7 @@ describe('issue 4631 terminal hover link-provider repro', () => {
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
         pathExistsCache: new Map()
       },
-      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
-      getTerminalFileOpenHint()
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement
     )
 
     const start = performance.now()

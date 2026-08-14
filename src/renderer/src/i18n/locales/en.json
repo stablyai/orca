@@ -10001,6 +10001,10 @@
             "5930244899": "Font Size",
             "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
             "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+            "file": "file",
+            "link": "link",
+            "shift": "shift",
+            "modifier": "modifier",
             "scrollSpeed": {
               "title": "Scroll Speed",
               "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
@@ -10715,6 +10719,10 @@
           "titleOrca": "Hold Shift to open in Orca",
           "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
           "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
+        },
+        "TerminalFileLinkModifierSetting": {
+          "title": "Hold Shift to open files in Orca",
+          "description": "{{modifier}}+click opens a terminal file link in Orca and {{chord}}+click uses your default app. When enabled, the two swap."
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Show terminal link actions",
