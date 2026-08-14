@@ -59,6 +59,7 @@ export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
   'cookie-import': 'browser',
   'floating-workspace': 'workspace',
   'floating-workspace-hidden': 'workspace',
+  'line-blame': 'review',
   'mobile-pairing': 'collaboration',
   notifications: 'settings',
   ports: 'resource_management',

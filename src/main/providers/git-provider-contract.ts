@@ -3,6 +3,7 @@ import type {
   GitCommitCompareResult,
   GitDiffResult
 } from '../../shared/git-diff-compare-types'
+import type { GitLineBlameResult } from '../../shared/git-line-blame-types'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type {
   GitConflictOperation,
@@ -35,6 +36,15 @@ export type IGitProvider = {
     staged: boolean,
     compareAgainstHead?: boolean
   ): Promise<GitDiffResult>
+  getLineBlame(
+    worktreePath: string,
+    repoRelativeFilePath: string,
+    line1Indexed: number
+  ): Promise<GitLineBlameResult | null>
+  getFileBlame(
+    worktreePath: string,
+    repoRelativeFilePath: string
+  ): Promise<Record<number, GitLineBlameResult> | null>
   stageFile(worktreePath: string, filePath: string): Promise<void>
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>

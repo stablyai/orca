@@ -90,6 +90,12 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
+// Why: older hosts answer git.lineBlame with method_not_found, so clients must
+// hide the line-blame segment for remote runtimes unless advertised.
+export const GIT_LINE_BLAME_RUNTIME_CAPABILITY = 'git.line-blame.v1' as const
+// Why separate from line blame: a host may answer per-line blame but not know
+// the whole-file method, so the client must ask before relying on it.
+export const GIT_FILE_BLAME_RUNTIME_CAPABILITY = 'git.file-blame.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
 
@@ -128,7 +134,9 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
-  CODEX_RESET_CREDIT_RUNTIME_CAPABILITY
+  CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
+  GIT_LINE_BLAME_RUNTIME_CAPABILITY,
+  GIT_FILE_BLAME_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

@@ -33,7 +33,8 @@
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。クリックすると、CPU、メモリ、セッション、デーモンコントロール、ワークスペースディスクスキャンの情報を確認できます。",
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
         "antigravityToggleDescription": "アクティブなワークスペースの Antigravity サブスクリプション使用量を表示します。",
-        "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。"
+        "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。",
+        "lineBlameToggleDescription": "カーソル行を最後に変更したコミットの作成者と日時を表示します。"
       },
       "menuBarIcon": {
         "title": "メニューバーアイコンを表示",
@@ -3512,6 +3513,10 @@
             "stoppingLabel": "更新を停止しています",
             "stoppingTooltip": "スキルの更新を停止しています…",
             "stoppingAria": "スキルの更新を停止しています。クリックすると詳細を開きます。"
+          },
+          "LineBlameStatusSegment": {
+            "uncommitted": "未コミット",
+            "uncommittedTooltip": "この行には未コミットの変更があります。"
           }
         }
       },
@@ -5873,7 +5878,9 @@
           "b82f86d7d2": "リッチ Markdown のスペルチェック",
           "5195f0b9ef": "リッチ Markdown の編集中に、ブラウザのスペルミス下線と修正候補を表示します。",
           "7ddd66fede": "エディターのワードラップ",
-          "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
+          "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
+          "inlineBlameTitle": "インライン Git blame",
+          "inlineBlameDescription": "カーソル行を最後に変更した人をその行の末尾に表示します。"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -7807,7 +7814,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "使用率",
-            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。",
+            "lineBlameTitle": "行の作成者",
+            "lineBlameDescription": "現在の行を最後に変更した人をステータスバーに表示します。",
+            "lineBlameKeywordAuthor": "作成者",
+            "lineBlameKeywordLine": "行"
           }
         },
         "auto": {
@@ -13197,6 +13208,9 @@
               }
             }
           }
+        },
+        "useInlineGitBlame": {
+          "uncommitted": "未コミットの変更"
         }
       },
       "diff": {

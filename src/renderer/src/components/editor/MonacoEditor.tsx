@@ -40,6 +40,7 @@ import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selec
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
+import { useInlineGitBlame } from './useInlineGitBlame'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import {
   getDiffCommentPopoverLeft,
@@ -759,6 +760,10 @@ export default function MonacoEditor({
     }
     conflictDecorationsRef.current.set(decorations)
   }, [conflictDecorationsEnabled, content, mountedEditor])
+
+  // Why: read-only tabs (diffs, previews) show content that isn't the file on
+  // disk, so end-of-line authorship there would label the wrong lines.
+  useInlineGitBlame(mountedEditor, !readOnly)
 
   useEffect(() => {
     updateMarkdownCompletionDocuments()

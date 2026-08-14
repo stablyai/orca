@@ -19,7 +19,16 @@ import type {
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitLineBlameResult } from '../../shared/git-line-blame-types'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
+import {
+  BLAME_TIMEOUT_MS,
+  buildFileBlameArgs,
+  buildLineBlameArgs,
+  FILE_BLAME_TIMEOUT_MS,
+  parseBlamePorcelain,
+  parseFileBlamePorcelain
+} from '../git/line-blame'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
@@ -411,6 +420,46 @@ export class SshGitProvider implements IGitProvider {
           compareAgainstHead
         })) as GitDiffResult
     ) as Promise<GitDiffResult>
+  }
+
+  async getLineBlame(
+    worktreePath: string,
+    repoRelativeFilePath: string,
+    line1Indexed: number
+  ): Promise<GitLineBlameResult | null> {
+    if (!Number.isInteger(line1Indexed) || line1Indexed < 1) {
+      return null
+    }
+    // Why: reuse the generic git.exec relay channel + shared porcelain parser so
+    // this works on existing relays without a new dedicated RPC channel.
+    try {
+      const { stdout } = await this.exec(
+        buildLineBlameArgs(line1Indexed, repoRelativeFilePath),
+        worktreePath,
+        // Cap it so a slow remote blame can't stall cursor-driven updates.
+        { timeoutMs: BLAME_TIMEOUT_MS }
+      )
+      return parseBlamePorcelain(stdout)
+    } catch {
+      return null
+    }
+  }
+
+  async getFileBlame(
+    worktreePath: string,
+    repoRelativeFilePath: string
+  ): Promise<Record<number, GitLineBlameResult> | null> {
+    // Why whole-file over the relay too: `-L` doesn't make blame cheaper, so one
+    // walk per file beats one round trip per cursor line on a remote host.
+    try {
+      const { stdout } = await this.exec(buildFileBlameArgs(repoRelativeFilePath), worktreePath, {
+        timeoutMs: FILE_BLAME_TIMEOUT_MS
+      })
+      const byLine = parseFileBlamePorcelain(stdout)
+      return Object.keys(byLine).length > 0 ? byLine : null
+    } catch {
+      return null
+    }
   }
 
   async stageFile(worktreePath: string, filePath: string): Promise<void> {

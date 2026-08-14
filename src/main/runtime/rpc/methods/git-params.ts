@@ -47,6 +47,11 @@ export const GitDiff = GitFilePath.extend({
   compareAgainstHead: z.boolean().optional()
 })
 
+export const GitFileBlame = GitFilePath
+export const GitLineBlame = GitFilePath.extend({
+  line: z.number().int().min(1)
+})
+
 export const GitBranchCompare = WorktreeSelector.extend({
   baseRef: z
     .unknown()

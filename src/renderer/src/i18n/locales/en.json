@@ -60,7 +60,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "lineBlameToggleDescription": "Show the author and date of the last commit that changed the line at your cursor."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3699,6 +3700,10 @@
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
+          },
+          "LineBlameStatusSegment": {
+            "uncommitted": "Uncommitted",
+            "uncommittedTooltip": "This line has uncommitted changes."
           }
         }
       },
@@ -6240,7 +6245,9 @@
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "7ddd66fede": "Editor Word Wrap",
-          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling."
+          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
+          "inlineBlameTitle": "Inline Git Blame",
+          "inlineBlameDescription": "Show who last changed the cursor line at the end of that line."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -8205,7 +8212,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "lineBlameTitle": "Line Author",
+            "lineBlameDescription": "Show who last changed the current line in the status bar.",
+            "lineBlameKeywordAuthor": "author",
+            "lineBlameKeywordLine": "line"
           }
         },
         "auto": {
@@ -13919,6 +13930,9 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "useInlineGitBlame": {
+          "uncommitted": "Uncommitted changes"
         }
       },
       "diff": {

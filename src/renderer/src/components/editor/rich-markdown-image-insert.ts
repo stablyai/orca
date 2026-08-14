@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
 import { dirname, basename } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import { worktreePathFromState } from '@/lib/worktree-path'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
@@ -32,7 +33,7 @@ export async function insertRichMarkdownImageFromPath({
 }: RichMarkdownImageInsertArgs): Promise<void> {
   try {
     const state = useAppStore.getState()
-    const worktreePath = getWorktreePath(worktreeId)
+    const worktreePath = worktreePathFromState(state, worktreeId)
     const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
     const resolvedConnectionId = getConnectionId(worktreeId)
     if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
@@ -104,21 +105,4 @@ function encodeMarkdownImageBasename(destPath: string): string {
   // Why: unescaped spaces and delimiters in markdown image destinations make
   // screenshot filenames render as literal text or broken partial paths.
   return encodeURIComponent(basename(destPath))
-}
-
-function getWorktreePath(worktreeId: string | null): string | null {
-  if (!worktreeId) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
-  if (parsedWorkspaceKey?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find(
-        (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
-      )?.folderPath ?? null
-    )
-  }
-  const worktrees = Object.values(state.worktreesByRepo ?? {}).flat()
-  return worktrees.find((worktree) => worktree.id === worktreeId)?.path ?? null
 }

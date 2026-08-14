@@ -226,6 +226,38 @@ describe('validateGitExecArgs', () => {
     })
   })
 
+  describe('git blame', () => {
+    it('allows the single-line porcelain shape the Line Author segment sends', () => {
+      expectAllowed(['blame', '--porcelain', '-L', '5,5', '--', 'src/index.ts'])
+      expectAllowed(['blame', '--porcelain', '-L', '1,1', '--', 'a b/c.ts'])
+    })
+
+    it('allows the whole-file porcelain shape', () => {
+      expectAllowed(['blame', '--porcelain', '--', 'src/index.ts'])
+    })
+
+    it.each([
+      // Why: --contents and -S would turn blame into an arbitrary file reader.
+      [['blame', '--porcelain', '--contents', '/etc/passwd', '--', 'src/index.ts']],
+      [['blame', '--porcelain', '--', 'src/index.ts', 'extra']],
+      [['blame', '--incremental', '--', 'src/index.ts']],
+      [['blame', '--porcelain', '--contents', '/etc/passwd', '-L', '1,1', '--', 'src/index.ts']],
+      [['blame', '-S', '/etc/passwd', '--porcelain', '-L', '1,1', '--', 'src/index.ts']],
+      [['blame', '--porcelain', '-L', '1,1', '--', '/etc/passwd', 'extra']],
+      // Why: a wide range would stream whole-file authorship over the relay.
+      [['blame', '--porcelain', '-L', '1,999999', '--', 'src/index.ts']],
+      [['blame', '--porcelain', '-L', '2,1', '--', 'src/index.ts']],
+      [['blame', '--porcelain', '-L', '1,1', 'src/index.ts']],
+      [['blame', '-L', '1,1', '--', 'src/index.ts']],
+      [['blame', '--porcelain', '-L', 'HEAD', '--', 'src/index.ts']],
+      [['blame', '--porcelain', '-L', '1,1', '--', '']],
+      [['blame', 'src/index.ts']],
+      [['blame']]
+    ])('rejects unsafe blame args %j', (args) => {
+      expectBlocked(args, 'git blame via exec is restricted')
+    })
+  })
+
   describe('git init and empty commit', () => {
     it('allows only the SSH create-project init and empty commit shapes', () => {
       expectAllowed(['init'])

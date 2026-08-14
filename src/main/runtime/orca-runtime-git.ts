@@ -19,6 +19,7 @@ import type { CommitMessageDraftContext } from '../../shared/commit-message-gene
 import { assertGitDiffWithinTransportBudget } from '../../shared/git-diff-transport-budget'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitLineBlameResult } from '../../shared/git-line-blame-types'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   type ResolvedSourceControlAiGenerationParams
@@ -50,6 +51,7 @@ import {
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import { getHistory as getGitHistory } from '../git/history'
+import { getFileBlame, getLineBlame } from '../git/line-blame'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
@@ -373,6 +375,39 @@ export class RuntimeGitCommands {
       ),
       maxContentBytes
     )
+  }
+
+  async getRuntimeGitLineBlame(
+    worktreeSelector: string,
+    filePath: string,
+    line: number
+  ): Promise<GitLineBlameResult | null> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.getLineBlame(target.worktree.path, relativePath, line)
+    }
+    return getLineBlame(target.worktree.path, relativePath, line, localGitOptionsForTarget(target))
+  }
+
+  async getRuntimeGitFileBlame(
+    worktreeSelector: string,
+    filePath: string
+  ): Promise<Record<number, GitLineBlameResult> | null> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.getFileBlame(target.worktree.path, relativePath)
+    }
+    return getFileBlame(target.worktree.path, relativePath, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitBranchCompare(

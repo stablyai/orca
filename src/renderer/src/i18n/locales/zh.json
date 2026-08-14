@@ -33,7 +33,8 @@
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
         "portsToggleDescription": "显示实时工作区端口。点击可查看工作区范围的端口和外部监听器。",
         "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用情况。",
-        "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用情况。"
+        "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用情况。",
+        "lineBlameToggleDescription": "显示最后一次更改光标所在行的提交的作者和日期。"
       },
       "menuBarIcon": {
         "title": "显示菜单栏图标",
@@ -3524,6 +3525,10 @@
             "stoppingLabel": "Stopping update",
             "stoppingTooltip": "正在停止技能更新…",
             "stoppingAria": "正在停止技能更新。点击查看详情。"
+          },
+          "LineBlameStatusSegment": {
+            "uncommitted": "未提交",
+            "uncommittedTooltip": "此行有未提交的更改。"
           }
         }
       },
@@ -5885,7 +5890,9 @@
           "b82f86d7d2": "Markdown 拼写检查（富文本）",
           "5195f0b9ef": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。",
           "7ddd66fede": "编辑器自动换行",
-          "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动。"
+          "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动。",
+          "inlineBlameTitle": "内联 Git blame",
+          "inlineBlameDescription": "在光标所在行的末尾显示最后更改该行的人。"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
@@ -7782,7 +7789,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "用量百分比",
-            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。"
+            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。",
+            "lineBlameTitle": "行作者",
+            "lineBlameDescription": "在状态栏中显示最后更改当前行的人。",
+            "lineBlameKeywordAuthor": "作者",
+            "lineBlameKeywordLine": "行"
           }
         },
         "auto": {
@@ -13217,6 +13228,9 @@
               }
             }
           }
+        },
+        "useInlineGitBlame": {
+          "uncommitted": "未提交的更改"
         }
       },
       "diff": {

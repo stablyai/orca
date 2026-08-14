@@ -33,7 +33,8 @@
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del daemon y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
-        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI.",
+        "lineBlameToggleDescription": "Muestra el autor y la fecha del último commit que cambió la línea donde está el cursor."
       },
       "menuBarIcon": {
         "title": "Mostrar icono en la barra de menús",
@@ -3512,6 +3513,10 @@
             "stoppingLabel": "Stopping update",
             "stoppingTooltip": "Stopping the skill update…",
             "stoppingAria": "Stopping the skill update. Click to open details."
+          },
+          "LineBlameStatusSegment": {
+            "uncommitted": "Sin confirmar",
+            "uncommittedTooltip": "Esta línea tiene cambios sin confirmar."
           }
         }
       },
@@ -5888,7 +5893,9 @@
           "b82f86d7d2": "Corrector ortográfico de Rich Markdown",
           "5195f0b9ef": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
           "7ddd66fede": "Ajuste de línea en el editor",
-          "9b18de6eea": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal."
+          "9b18de6eea": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
+          "inlineBlameTitle": "Git blame en línea",
+          "inlineBlameDescription": "Muestra quién cambió por última vez la línea del cursor al final de esa línea."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -7785,7 +7792,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Porcentajes de uso",
-            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
+            "lineBlameTitle": "Autor de la línea",
+            "lineBlameDescription": "Muestra quién cambió por última vez la línea actual en la barra de estado.",
+            "lineBlameKeywordAuthor": "autor",
+            "lineBlameKeywordLine": "línea"
           }
         },
         "auto": {
@@ -13197,6 +13208,9 @@
               }
             }
           }
+        },
+        "useInlineGitBlame": {
+          "uncommitted": "Cambios sin confirmar"
         }
       },
       "diff": {

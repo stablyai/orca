@@ -24,7 +24,8 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'commit',
   'for-each-ref',
   'check-ref-format',
-  'config'
+  'config',
+  'blame'
 ])
 const CONFIG_READ_ONLY_FLAGS = new Set(['--get', '--get-all', '--list', '--get-regexp', '-l'])
 // Why: checking presence of a read-only flag is insufficient — a request could
@@ -108,6 +109,36 @@ function validateCloneArgs(args: string[]): void {
 function validateInitArgs(args: string[]): void {
   if (args.length !== 1) {
     throw new Error('git init via exec is restricted to init with no arguments')
+  }
+}
+
+// Why: blame is read-only, but `--contents <file>` and `-S <revs-file>` turn it
+// into an arbitrary file reader, so permit only the exact single-line shape the
+// Line Author status-bar segment sends. The range must be one line — a wide
+// `-L 1,999999` would stream whole-file authorship over the relay.
+function validateBlameArgs(args: string[]): void {
+  // Whole-file shape: `blame --porcelain -- <path>`. Same allow-nothing-else
+  // rule as the single-line form, so an option value can't smuggle a path.
+  if (args.length === 4) {
+    if (args[1] !== '--porcelain' || args[2] !== '--' || !args[3] || args[3].includes('\0')) {
+      throw new Error(
+        'git blame via exec is restricted to blame --porcelain [-L <n>,<n>] -- <path>'
+      )
+    }
+    return
+  }
+  const range = /^(\d+),(\d+)$/.exec(args[3] ?? '')
+  if (
+    args.length !== 6 ||
+    args[1] !== '--porcelain' ||
+    args[2] !== '-L' ||
+    !range ||
+    range[1] !== range[2] ||
+    args[4] !== '--' ||
+    !args[5] ||
+    args[5].includes('\0')
+  ) {
+    throw new Error('git blame via exec is restricted to blame --porcelain [-L <n>,<n>] -- <path>')
   }
 }
 
@@ -197,6 +228,9 @@ export function validateGitExecArgs(args: string[]): void {
     if (unsupportedArg) {
       throw new Error(`git diff flag not allowed via exec: ${unsupportedArg}`)
     }
+  }
+  if (subcommand === 'blame') {
+    validateBlameArgs(args)
   }
   if (subcommand === 'clone') {
     validateCloneArgs(args)

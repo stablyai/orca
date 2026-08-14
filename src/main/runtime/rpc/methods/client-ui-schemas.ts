@@ -4,6 +4,7 @@ import {
   type FeatureInteractionId
 } from '../../../../shared/feature-interactions'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
+import { STATUS_BAR_ITEMS } from '../../../../shared/status-bar-defaults'
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
@@ -59,19 +60,7 @@ const RightSidebarTabParam = z.custom<StaticRightSidebarTab | `plugin:${string}`
   { message: 'Unknown right sidebar tab' }
 )
 const AgentActivityDisplayMode = z.enum(['compact', 'full'])
-const StatusBarItem = z.enum([
-  'claude',
-  'codex',
-  'gemini',
-  'antigravity',
-  'opencode-go',
-  'kimi',
-  'minimax',
-  'grok',
-  'ssh',
-  'resource-usage',
-  'ports'
-])
+const StatusBarItem = z.enum(STATUS_BAR_ITEMS)
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
   label: z.string(),
@@ -226,6 +215,7 @@ const UiUpdateFields = z
     _minimaxStatusBarDefaultAdded: z.boolean().optional(),
     _antigravityStatusBarDefaultAdded: z.boolean().optional(),
     _grokStatusBarDefaultAdded: z.boolean().optional(),
+    _lineBlameStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),

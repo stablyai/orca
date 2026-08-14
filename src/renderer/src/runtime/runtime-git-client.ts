@@ -23,8 +23,17 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
+import type { GitLineBlameResult } from '../../../shared/git-line-blame-types'
+import {
+  GIT_FILE_BLAME_RUNTIME_CAPABILITY,
+  GIT_LINE_BLAME_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  getActiveRuntimeTarget,
+  runtimeEnvironmentSupportsCapability
+} from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 export type RuntimeGenerateCommitMessageResult =
@@ -370,6 +379,65 @@ export async function getRuntimeGitDiff(
     'git.diff',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
     { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitLineBlame(
+  context: RuntimeGitContext,
+  args: { filePath: string; line: number }
+): Promise<GitLineBlameResult | null> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.lineBlame({
+      worktreePath: resolveLocalWorktreePath(context),
+      filePath: args.filePath,
+      line: args.line,
+      connectionId: context.connectionId
+    })
+  }
+  // Why: older remote hosts answer git.lineBlame with method_not_found, so treat
+  // "capability not advertised" as "no authorship" instead of surfacing errors.
+  const supported = await runtimeEnvironmentSupportsCapability(
+    target.environmentId,
+    GIT_LINE_BLAME_RUNTIME_CAPABILITY
+  )
+  if (!supported) {
+    return null
+  }
+  return callRuntimeRpc<GitLineBlameResult | null>(
+    target,
+    'git.lineBlame',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitFileBlame(
+  context: RuntimeGitContext,
+  args: { filePath: string }
+): Promise<Record<number, GitLineBlameResult> | null> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.fileBlame({
+      worktreePath: resolveLocalWorktreePath(context),
+      filePath: args.filePath,
+      connectionId: context.connectionId
+    })
+  }
+  // Why: a host that predates whole-file blame answers method_not_found, so the
+  // caller falls back to per-line rather than surfacing an error.
+  const supported = await runtimeEnvironmentSupportsCapability(
+    target.environmentId,
+    GIT_FILE_BLAME_RUNTIME_CAPABILITY
+  )
+  if (!supported) {
+    return null
+  }
+  return callRuntimeRpc<Record<number, GitLineBlameResult> | null>(
+    target,
+    'git.fileBlame',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
+    { timeoutMs: 30_000 }
   )
 }
 

@@ -19,6 +19,8 @@ import {
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   GitHistory,
+  GitFileBlame,
+  GitLineBlame,
   GitPush,
   GitRebaseFromBase,
   GitRemoteCommitUrl,
@@ -176,6 +178,18 @@ export const GIT_METHODS: RpcMethod[] = [
         params.compareAgainstHead,
         remoteDiffContentBudget(clientKind, requestId)
       )
+  }),
+  defineMethod({
+    name: 'git.fileBlame',
+    params: GitFileBlame,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitFileBlame(params.worktree, params.filePath)
+  }),
+  defineMethod({
+    name: 'git.lineBlame',
+    params: GitLineBlame,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitLineBlame(params.worktree, params.filePath, params.line)
   }),
   defineMethod({
     name: 'git.branchCompare',

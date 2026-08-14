@@ -33,7 +33,8 @@
         "resourceUsageToggleDescription": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다.",
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
         "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
-        "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다."
+        "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다.",
+        "lineBlameToggleDescription": "커서가 있는 줄을 마지막으로 변경한 커밋의 작성자와 날짜를 표시합니다."
       },
       "menuBarIcon": {
         "title": "메뉴 바 아이콘 표시",
@@ -3512,6 +3513,10 @@
             "stoppingLabel": "Stopping update",
             "stoppingTooltip": "Stopping the skill update…",
             "stoppingAria": "Stopping the skill update. Click to open details."
+          },
+          "LineBlameStatusSegment": {
+            "uncommitted": "커밋되지 않음",
+            "uncommittedTooltip": "이 줄에는 커밋되지 않은 변경 사항이 있습니다."
           }
         }
       },
@@ -5873,7 +5878,9 @@
           "b82f86d7d2": "리치 Markdown 맞춤법 검사",
           "5195f0b9ef": "리치 Markdown을 편집하는 동안 브라우저 맞춤법 밑줄과 제안을 표시합니다.",
           "7ddd66fede": "편집기 자동 줄 바꿈",
-          "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
+          "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
+          "inlineBlameTitle": "인라인 Git blame",
+          "inlineBlameDescription": "커서가 있는 줄을 마지막으로 변경한 사람을 그 줄 끝에 표시합니다."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
@@ -7770,7 +7777,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "사용량 백분율",
-            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다.",
+            "lineBlameTitle": "줄 작성자",
+            "lineBlameDescription": "현재 줄을 마지막으로 변경한 사람을 상태 표시줄에 표시합니다.",
+            "lineBlameKeywordAuthor": "작성자",
+            "lineBlameKeywordLine": "줄"
           }
         },
         "auto": {
@@ -13197,6 +13208,9 @@
               }
             }
           }
+        },
+        "useInlineGitBlame": {
+          "uncommitted": "커밋되지 않은 변경 사항"
         }
       },
       "diff": {

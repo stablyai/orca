@@ -15,6 +15,7 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../shared/commit-message-agent-spec'
+import type { GitLineBlameResult } from '../../shared/git-line-blame-types'
 
 export type GitInspectionApi = {
   status: (args: {
@@ -51,6 +52,17 @@ export type GitInspectionApi = {
   history: (
     args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
   ) => Promise<GitHistoryResult>
+  fileBlame: (args: {
+    worktreePath: string
+    filePath: string
+    connectionId?: string
+  }) => Promise<Record<number, GitLineBlameResult> | null>
+  lineBlame: (args: {
+    worktreePath: string
+    filePath: string
+    line: number
+    connectionId?: string
+  }) => Promise<GitLineBlameResult | null>
   conflictOperation: (args: {
     worktreePath: string
     connectionId?: string

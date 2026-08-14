@@ -9215,6 +9215,10 @@ export class OrcaRuntimeService {
     this.gitCommands.listRuntimeGitLocalBranches.bind(this.gitCommands)
   getRuntimeGitDiff: RuntimeGitCommands['getRuntimeGitDiff'] =
     this.gitCommands.getRuntimeGitDiff.bind(this.gitCommands)
+  getRuntimeGitLineBlame: RuntimeGitCommands['getRuntimeGitLineBlame'] =
+    this.gitCommands.getRuntimeGitLineBlame.bind(this.gitCommands)
+  getRuntimeGitFileBlame: RuntimeGitCommands['getRuntimeGitFileBlame'] =
+    this.gitCommands.getRuntimeGitFileBlame.bind(this.gitCommands)
   getRuntimeGitBranchCompare: RuntimeGitCommands['getRuntimeGitBranchCompare'] =
     this.gitCommands.getRuntimeGitBranchCompare.bind(this.gitCommands)
   getRuntimeGitCommitCompare: RuntimeGitCommands['getRuntimeGitCommitCompare'] =
