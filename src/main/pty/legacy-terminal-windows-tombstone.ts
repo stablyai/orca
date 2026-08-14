@@ -7,6 +7,10 @@ set "orca_real=%ORCA_REAL___ORCA_UPPER_COMMAND__%"
 set "orca_wrapper_dir=%~dp0"
 set "orca_legacy_wrapper_dir=%ORCA_ATTRIBUTION_SHIM_DIR%"
 set "orca_clean_path="
+rem Why: holds a single separator so the trailing-separator tests below need neither a literal
+rem backslash before a quote (which breaks cmd parsing) nor a sentinel character (which would
+rem corrupt any path containing it).
+set "orca_sep=\"
 rem Why: an empty PATH leaves the substitution below with an unbalanced quote, which
 rem desynchronizes cmd parsing for the rest of the file. Skip the line entirely instead.
 if not defined PATH goto :orca_path_walked
@@ -54,9 +58,7 @@ for %%G in ("%~1") do set "orca_candidate_dir=%%~fG"
 rem Why: full-path expansion preserves a trailing separator, so without normalizing, the
 rem self-exclusion below misses a wrapper-dir entry spelled with one and the wrapper resolves
 rem to itself, looping forever.
-set "orca_candidate_dir=%orca_candidate_dir%#"
-set "orca_candidate_dir=%orca_candidate_dir:\#=#%"
-set "orca_candidate_dir=%orca_candidate_dir:~0,-1%"
+if "%orca_candidate_dir:~-1%"=="%orca_sep%" set "orca_candidate_dir=%orca_candidate_dir:~0,-1%"
 rem Why: the script-dir operator is rebound to this label inside CALL, so compare against the
 rem cached wrapper dir captured at top level.
 if /I "%orca_candidate_dir%\"=="%orca_wrapper_dir%" exit /b
@@ -68,9 +70,7 @@ exit /b
 :orca_append_path
 for %%G in ("%~1") do set "orca_path_entry_dir=%%~fG"
 rem Why: full-path expansion preserves a trailing separator; normalize before comparing.
-set "orca_path_entry_dir=%orca_path_entry_dir%#"
-set "orca_path_entry_dir=%orca_path_entry_dir:\#=#%"
-set "orca_path_entry_dir=%orca_path_entry_dir:~0,-1%"
+if "%orca_path_entry_dir:~-1%"=="%orca_sep%" set "orca_path_entry_dir=%orca_path_entry_dir:~0,-1%"
 set "orca_path_entry_dir=%orca_path_entry_dir%\"
 if /I "%orca_path_entry_dir%"=="%orca_wrapper_dir%" exit /b
 set "orca_skip_entry="
@@ -81,9 +81,7 @@ exit /b
 
 :orca_reject_legacy_dir
 for %%G in ("%orca_legacy_wrapper_dir%") do set "orca_legacy_norm=%%~fG"
-set "orca_legacy_norm=%orca_legacy_norm%#"
-set "orca_legacy_norm=%orca_legacy_norm:\#=#%"
-set "orca_legacy_norm=%orca_legacy_norm:~0,-1%"
+if "%orca_legacy_norm:~-1%"=="%orca_sep%" set "orca_legacy_norm=%orca_legacy_norm:~0,-1%"
 if /I "%orca_path_entry_dir%"=="%orca_legacy_norm%\" set "orca_skip_entry=1"
 exit /b
 `

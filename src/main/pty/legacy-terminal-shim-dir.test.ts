@@ -118,7 +118,11 @@ describe('legacy terminal shim neutralization', () => {
       // spelled with one escapes self-exclusion and the wrapper tail-loops on itself.
       // Why: `if "%var:~-1%"=="\\"` breaks cmd's parser, so the trailing separator is stripped
       // with a sentinel instead. Verified on Windows.
-      expect(cmd).toContain('set "orca_candidate_dir=%orca_candidate_dir:\\#=#%"')
+      // Why: compared against a variable holding the separator — a literal backslash before the
+      // closing quote breaks cmd's parser, and a sentinel would corrupt paths containing it.
+      expect(cmd).toContain('set "orca_sep=')
+      expect(cmd).toContain('if "%orca_candidate_dir:~-1%"=="%orca_sep%"')
+      expect(cmd).not.toContain(':\\#=#%')
       // A candidate inside the wrapper directory must still be rejected, compared against the
       // cached wrapper dir because %~dp0 is rebound inside a CALL.
       expect(cmd).toContain('if /I "%orca_candidate_dir%\\"=="%orca_wrapper_dir%" exit /b')
@@ -186,6 +190,30 @@ describe('legacy terminal shim neutralization', () => {
         expect(cmd.indexOf(guard)).toBeLessThan(cmd.indexOf(loop))
       }
     }
+  })
+
+  it('never bakes an ambient interpreter lookup on Windows', () => {
+    // Why: the POSIX tombstone is written on Windows too (Git Bash and WSL panes run it), but no
+    // absolute candidate exists to a Windows process and PATH there is ';'-separated, so the
+    // search cannot succeed — without this the fallback reopened the interpreter hijack.
+    expect(resolvePosixTombstoneInterpreter(undefined, [], 'win32')).toBe('/bin/bash')
+    expect(resolvePosixTombstoneInterpreter('C:\\Git\\bin;C:\\Windows', [], 'win32')).toBe(
+      '/bin/bash'
+    )
+  })
+
+  itOnPosix('rejects interpreter candidates that are unusable in a shebang', () => {
+    const userData = makeUserDataDir()
+    const spaced = join(userData, 'a b')
+    const dirNamedBash = join(userData, 'dirbin')
+    mkdirSync(spaced, { recursive: true })
+    mkdirSync(join(dirNamedBash, 'bash'), { recursive: true })
+    writeFileSync(join(spaced, 'bash'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+
+    // A shebang cannot quote, so a path containing whitespace is unusable.
+    expect(resolvePosixTombstoneInterpreter(spaced, [], 'linux')).toBe('/usr/bin/env bash')
+    // X_OK is true for a directory; it still cannot be exec'd.
+    expect(resolvePosixTombstoneInterpreter(dirNamedBash, [], 'linux')).toBe('/usr/bin/env bash')
   })
 
   itOnPosix('resolves the interpreter from absolute PATH entries only', () => {
@@ -323,7 +351,7 @@ describe('legacy terminal shim neutralization', () => {
     // Why: `call :label && ...` is not valid cmd; the flag variable is what makes it work.
     expect(cmd).toContain('if defined orca_skip_entry exit /b')
     expect(cmd).not.toContain('call :orca_reject_legacy_dir &&')
-    expect(cmd).toContain('set "orca_path_entry_dir=%orca_path_entry_dir:\\#=#%"')
+    expect(cmd).toContain('if "%orca_path_entry_dir:~-1%"=="%orca_sep%"')
 
     const powershell = readFileSync(join(win32Dir, 'git-wrapper.ps1'), 'utf8')
     expect(powershell.indexOf('$legacyWrapperDir = $env:ORCA_ATTRIBUTION_SHIM_DIR')).toBeLessThan(
