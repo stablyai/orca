@@ -41,10 +41,12 @@ describe('serveSignalExitError', () => {
     expect(error).toBeInstanceOf(RuntimeClientError)
     expect(error.code).toBe('runtime_serve_failed')
     expect(error.message).toContain('aborted with SIGABRT on macOS')
-    expect(error.message).toContain('macOS window server')
+    expect(error.message).toContain('_RegisterApplication')
+    expect(error.message).toContain('electron/electron#51871')
     expect(error.data).toMatchObject({
       nextSteps: [
-        expect.stringContaining('macOS desktop login'),
+        expect.stringContaining('orca status'),
+        expect.stringContaining('Do not exec'),
         expect.stringContaining('~/Library/Logs/DiagnosticReports/Orca-*.ips')
       ]
     })

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -87,6 +88,9 @@ describe('serveOrcaApp', () => {
   beforeEach(() => {
     spawnMock.mockReset()
     process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
+    const isolated = mkdtempSync(join(tmpdir(), 'orca-serve-isolated-'))
+    temporaryDirectories.push(isolated)
+    process.env.ORCA_USER_DATA_PATH = isolated
   })
 
   afterEach(() => {
@@ -127,6 +131,7 @@ describe('serveOrcaApp', () => {
         supervisorExited = true
         return code
       })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
       const childEnv = spawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv | undefined
       const handoffPath = childEnv?.ORCA_SERVE_UPDATE_HANDOFF_PATH
       expect(handoffPath).toBeTruthy()
@@ -325,6 +330,58 @@ describe('serveOrcaApp', () => {
       }
     }
   )
+
+  it('does not spawn a second GUI process when this userData profile is already running', async () => {
+    writeFileSync(
+      join(process.env.ORCA_USER_DATA_PATH!, 'orca-runtime.json'),
+      JSON.stringify({
+        runtimeId: 'runtime-live',
+        pid: process.pid,
+        transports: [
+          { kind: 'unix', endpoint: join(process.env.ORCA_USER_DATA_PATH!, 'missing.sock') }
+        ],
+        authToken: 'token',
+        startedAt: 1
+      })
+    )
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    await expect(serveOrcaApp({ json: true })).resolves.toBe(3)
+
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('already running for this userData profile')
+    )
+  })
+
+  it('still detaches a recipe-json server when a desktop profile is already running', async () => {
+    writeFileSync(
+      join(process.env.ORCA_USER_DATA_PATH!, 'orca-runtime.json'),
+      JSON.stringify({
+        runtimeId: 'runtime-live',
+        pid: process.pid,
+        transports: [
+          { kind: 'unix', endpoint: join(process.env.ORCA_USER_DATA_PATH!, 'missing.sock') }
+        ],
+        authToken: 'token',
+        startedAt: 1
+      })
+    )
+    const child = new FakeChildProcess()
+    spawnMock.mockReturnValue(child)
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    const result = serveOrcaApp({
+      recipeJson: true,
+      projectRoot: '/workspace/repo'
+    })
+    queueMicrotask(() => {
+      child.stdout.emit('data', `${RECIPE_JSON}\n`)
+    })
+
+    await expect(result).resolves.toBe(0)
+    expect(spawnMock).toHaveBeenCalledOnce()
+  })
 
   it('pins the Electron child cwd to the app root instead of the caller cwd', async () => {
     const child = {
@@ -605,6 +662,38 @@ describe('launchOrcaApp', () => {
     delete process.env.ORCA_OPEN_COMMAND
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
+  })
+
+  it.runIf(process.platform === 'darwin')(
+    'reopens the packaged Orca.app via Launch Services instead of execing the inner binary',
+    () => {
+      process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
+      const child = new FakeChildProcess()
+      spawnMock.mockReturnValue(child)
+
+      launchOrcaApp()
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'open',
+        ['/Applications/Orca.app'],
+        expect.objectContaining({ detached: true, stdio: 'ignore' })
+      )
+    }
+  )
+
+  it('still execs a non-Orca Electron.app override used by dev launches', () => {
+    process.env.ORCA_APP_EXECUTABLE =
+      '/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
+    const child = new FakeChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    launchOrcaApp()
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron',
+      [],
+      expect.objectContaining({ detached: true })
+    )
   })
 
   it('handles asynchronous detached spawn errors without throwing', async () => {

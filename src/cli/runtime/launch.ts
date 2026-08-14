@@ -9,13 +9,19 @@ import {
   getEphemeralVmRecipeResultConnection,
   parseEphemeralVmRecipeResult
 } from '../../shared/ephemeral-vm-recipes'
-import { getDefaultUserDataPath } from './metadata'
+import {
+  SERVE_ALREADY_RUNNING_EXIT_CODE,
+  SERVE_ALREADY_RUNNING_MESSAGE,
+  shouldSpawnForegroundServe
+} from './foreground-serve-policy'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
+import { getDefaultUserDataPath } from './metadata'
 import {
   readServeUpdateHandoffSync,
   resumeInterruptedServeUpdate,
   superviseForegroundServe
 } from './serve-update-supervisor'
+import { getCliStatus } from './status'
 import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
@@ -29,6 +35,17 @@ export function launchOrcaApp(): void {
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
+    const packagedBundlePath = packagedOrcaAppBundlePath(overrideExecutable)
+    if (packagedBundlePath) {
+      // Why: exec'ing Contents/MacOS/Orca skips Launch Services. On macOS 26 that
+      // aborts in +[NSApplication sharedApplication] / _RegisterApplication
+      // before any JS runs. Dev Electron lives in Electron.app and must still
+      // be exec'd with the app root — only the packaged Orca.app is re-opened.
+      spawnDetached('open', [packagedBundlePath], {
+        env: stripElectronRunAsNode(process.env)
+      })
+      return
+    }
     spawnDetached(overrideExecutable, getExecutableAppArgs(), {
       ...getExecutableSpawnOptions(overrideExecutable),
       env: stripElectronRunAsNode(process.env)
@@ -38,7 +55,7 @@ export function launchOrcaApp(): void {
 
   if (process.env.ELECTRON_RUN_AS_NODE === '1') {
     if (process.platform === 'darwin') {
-      const appBundlePath = getMacAppBundlePath(process.execPath)
+      const appBundlePath = packagedOrcaAppBundlePath(process.execPath)
       if (appBundlePath) {
         // Why: launching the inner MacOS binary directly can trigger macOS app
         // launch failures and bypass normal bundle lifecycle. The public
@@ -74,7 +91,7 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
   child.unref()
 }
 
-export function serveOrcaApp(
+export async function serveOrcaApp(
   args: {
     json?: boolean
     port?: string | null
@@ -85,6 +102,16 @@ export function serveOrcaApp(
     projectRoot?: string | null
   } = {}
 ): Promise<number> {
+  // Why: a second GUI Electron dies in _RegisterApplication before the
+  // single-instance lock in JS can run. Attach to the live owner instead.
+  if (args.recipeJson !== true) {
+    const status = await getCliStatus(getDefaultUserDataPath())
+    if (!shouldSpawnForegroundServe(status.result)) {
+      process.stderr.write(`${SERVE_ALREADY_RUNNING_MESSAGE}\n`)
+      return SERVE_ALREADY_RUNNING_EXIT_CODE
+    }
+  }
+
   const executable = resolveForegroundOrcaExecutable()
   const childArgs = [...getExecutableAppArgs()]
   if (process.env.ORCA_APPIMAGE_NO_SANDBOX === '1') {
@@ -254,6 +281,14 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
     // stdio closes so a last recipe chunk is not mistaken for missing output.
     child.once('close', onClose)
   })
+}
+
+function packagedOrcaAppBundlePath(executable: string): string | null {
+  const appBundlePath = getMacAppBundlePath(executable)
+  if (!appBundlePath) {
+    return null
+  }
+  return appBundlePath === 'Orca.app' || appBundlePath.endsWith('/Orca.app') ? appBundlePath : null
 }
 
 function getExecutableAppArgs(): string[] {

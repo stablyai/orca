@@ -20,11 +20,12 @@ export function serveSignalExitError(
   // phase, so the cause is offered as the likely one rather than asserted.
   return new RuntimeClientError(
     'runtime_serve_failed',
-    'Orca serve aborted with SIGABRT on macOS. This most often happens at application startup, when the process cannot register with the macOS window server, which is common in restricted or sandboxed environments, SSH sessions without a GUI login, and CI.',
+    'Orca serve aborted with SIGABRT on macOS. Electron dies inside +[NSApplication sharedApplication] → _RegisterApplication before any Orca JavaScript runs, usually because Launch Services cannot assign an application identity. That is common in sandboxed agent environments, SSH sessions without a GUI login, and CI. This is not the Electron UTF-8 write abort (electron/electron#51871).',
     {
       nextSteps: [
-        'Re-run `orca serve` outside a sandboxed or restricted environment, with a macOS desktop login active.',
-        `Look for a crash report at ${MAC_CRASH_REPORT_GLOB}.`
+        'If a desktop Orca is already running, use `orca status` / `orca` against that instance instead of `orca serve`.',
+        'Do not exec /Applications/Orca.app/Contents/MacOS/Orca from a sandbox. Re-run from a normal macOS desktop login, or use `open -a Orca`.',
+        `Look for a crash report at ${MAC_CRASH_REPORT_GLOB} (crashing frame: _RegisterApplication).`
       ]
     }
   )
