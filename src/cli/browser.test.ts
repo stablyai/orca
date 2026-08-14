@@ -1,3 +1,4 @@
+import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -39,6 +40,10 @@ import { RuntimeClientError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 
 describe('orca cli browser page targeting', () => {
+  const managedWorktreePath = resolve('test-fixtures', 'repo', 'feature')
+  const nestedManagedPath = join(managedWorktreePath, 'src')
+  const unmanagedPath = resolve('test-fixtures', 'unmanaged')
+
   beforeEach(() => {
     callMock.mockReset()
   })
@@ -130,7 +135,7 @@ describe('orca cli browser page targeting', () => {
     queueFixtures(callMock, okFixture('req_close', { closed: true }))
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(['tab', 'close', '--page', 'page-2', '--json'], '/tmp/not-an-orca-worktree')
+    await main(['tab', 'close', '--page', 'page-2', '--json'], unmanagedPath)
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('browser.tabClose', {
@@ -142,21 +147,21 @@ describe('orca cli browser page targeting', () => {
   it('validates page-targeted tab closes against an explicit current worktree', async () => {
     queueFixtures(
       callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      worktreeListFixture([buildWorktree(managedWorktreePath, 'feature/foo')]),
       okFixture('req_close', { closed: true })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
       ['tab', 'close', '--page', 'page-2', '--worktree', 'current', '--json'],
-      '/tmp/repo/feature/src'
+      nestedManagedPath
     )
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'browser.tabClose', {
       index: undefined,
       page: 'page-2',
-      worktree: 'id:repo::/tmp/repo/feature'
+      worktree: `id:repo::${managedWorktreePath}`
     })
   })
 
