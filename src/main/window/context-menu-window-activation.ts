@@ -13,10 +13,7 @@ export type ContextMenuWindowActivationOptions = {
   platform?: NodeJS.Platform
 }
 
-// Why: macOS never activates an app on a right press, and Chromium suspends focus
-// events while the window is unfocused. Radix drives menu highlighting from DOM
-// focus, so a context menu opened from a background window renders with no hover
-// and no keyboard target until something else focuses the window.
+// Why: macOS skips activation on a right press, and an unfocused window emits no focus events, so Radix highlights nothing.
 export function shouldActivateWindowForContextMenuInput(
   input: ContextMenuActivationInput,
   windowFocused: boolean,
