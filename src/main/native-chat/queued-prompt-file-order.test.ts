@@ -25,6 +25,17 @@ describe('anchorQueuedPromptsToFileOrder', () => {
     ])
   })
 
+  // Why: equal timestamps fall to the id tie-break, which can put the queued
+  // prompt above the record it was appended after.
+  it('anchors a queued prompt stamped exactly at its predecessor', () => {
+    const messages = [
+      message({ id: 'work', role: 'assistant', timestamp: 300 }),
+      message({ id: 'queued', timestamp: 300, queued: true })
+    ]
+
+    expect(anchorQueuedPromptsToFileOrder(messages).map((m) => m.timestamp)).toEqual([300, 301])
+  })
+
   it('leaves a queued prompt that already sorts where the file put it', () => {
     const messages = [
       message({ id: 'u1', timestamp: 100 }),

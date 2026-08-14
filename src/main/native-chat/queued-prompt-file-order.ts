@@ -22,10 +22,12 @@ export function anchorQueuedPromptsToFileOrder(
       previousTimestamp = message.timestamp ?? previousTimestamp
       return message
     }
+    // Why: an equal timestamp is not safe either — the sorter breaks those ties
+    // on id, which can lift the queued prompt above the record it followed.
     if (
       previousTimestamp === null ||
       message.timestamp === null ||
-      message.timestamp >= previousTimestamp
+      message.timestamp > previousTimestamp
     ) {
       previousTimestamp = message.timestamp ?? previousTimestamp
       return message

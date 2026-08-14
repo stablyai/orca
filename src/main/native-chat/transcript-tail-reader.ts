@@ -142,12 +142,16 @@ export async function readNativeChatTranscriptTailFile(
       decodeLine(0, newestFirst)
     }
     const chronological = newestFirst.toReversed()
+    // Why: anchor before windowing — the predecessor a queued prompt anchors to
+    // may sit just outside the page, and slicing first would strand it.
+    // No-op for agents that never mark a message queued.
+    const anchored = anchorQueuedPromptsToFileOrder(chronological.map((entry) => entry.message))
     // Why: slice(-0) returns the whole array, so a non-positive limit must
     // window to nothing explicitly rather than leak every buffered record.
-    const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
+    const windowStart = limit > 0 ? Math.max(0, chronological.length - limit) : chronological.length
+    const selected = chronological.slice(windowStart)
     return {
-      // No-op for agents that never mark a message queued.
-      messages: anchorQueuedPromptsToFileOrder(selected.map((entry) => entry.message)),
+      messages: anchored.slice(windowStart),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,
