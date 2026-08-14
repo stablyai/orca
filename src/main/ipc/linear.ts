@@ -24,8 +24,8 @@ import {
 } from '../linear/projects'
 import { listTeams, getTeamStates, getTeamLabels, getTeamMembers } from '../linear/teams'
 import type { LinearListFilter } from '../linear/issues'
-import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
-import { optionalParsedLinearIssueAttributeFilter } from '../../shared/linear-issue-attribute-filter'
+import { clampLinearIssueListLimit } from '../../shared/linear/issue-read-limits'
+import { optionalParsedLinearIssueAttributeFilter } from '../../shared/linear/issue-attribute-filter'
 import type {
   LinearCustomViewModel,
   LinearIssueUpdate,

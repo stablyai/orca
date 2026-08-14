@@ -4,6 +4,7 @@ import type { SetupScriptImportCandidate } from '../../../shared/setup-script-im
 import type { Repo, RepoHookSettings } from '../../../shared/types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-client'
+import { hasEffectiveSetupCommand } from './setup-script-status'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -69,25 +70,6 @@ export async function inspectSetupScriptPromptState({
   }
 }
 
-export function hasEffectiveSetupCommand(repo: Repo, hooksResult: HookCheckResult): boolean {
-  const localSetup = repo.hookSettings?.scripts?.setup?.trim()
-  const sharedSetup = hooksResult.hooks?.scripts?.setup?.trim()
-  const rawPolicy = repo.hookSettings?.commandSourcePolicy
-  const sourcePolicy = resolveHookCommandSourcePolicy(rawPolicy, {
-    hasLocalScript: Boolean(localSetup)
-  })
-
-  if (sourcePolicy === 'local-only') {
-    return Boolean(localSetup)
-  }
-
-  if (sourcePolicy === 'run-both') {
-    return Boolean(sharedSetup || localSetup)
-  }
-
-  return Boolean(sharedSetup)
-}
-
 export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boolean {
   const localSetup = repo.hookSettings?.scripts?.setup?.trim()
   return (
@@ -108,14 +90,25 @@ export function isSetupScriptPromptDismissed(
   return dismissedEntries.includes(getSetupScriptPromptDismissalKey(repoHostIdentity))
 }
 
+function isUnchangedDismissalList(
+  value: unknown,
+  next: readonly string[]
+): value is readonly string[] {
+  return (
+    Array.isArray(value) &&
+    value.length === next.length &&
+    value.every((entry, index) => entry === next[index])
+  )
+}
+
 export function filterSetupScriptPromptDismissalsToValidRepos(
   value: unknown,
   validRepoHostIdentities: Set<string>
-): string[] {
+): readonly string[] {
   const unambiguousIdentityByRepoId = new Map<string, string | null>()
   for (const identity of validRepoHostIdentities) {
     const separatorIndex = identity.indexOf('\0')
-    const repoId = separatorIndex >= 0 ? identity.slice(separatorIndex + 1) : identity
+    const repoId = separatorIndex !== -1 ? identity.slice(separatorIndex + 1) : identity
     unambiguousIdentityByRepoId.set(
       repoId,
       unambiguousIdentityByRepoId.has(repoId) ? null : identity
@@ -135,10 +128,18 @@ export function filterSetupScriptPromptDismissalsToValidRepos(
       }
     }
   }
+  // Why: fetchRepos / fetchRuntimeEnvironmentRepos / validateRepoScopedUi assign
+  // this into set() on every catalog refresh. SetupScriptPromptCard Object.is-
+  // subscribes to the array, so a fresh copy on a no-op prune is a guaranteed miss.
+  // Compare against the original input, not the sanitize copy — sanitize always
+  // allocates, including for [] and already-valid host-identity keys.
+  if (isUnchangedDismissalList(value, next)) {
+    return value
+  }
   return next
 }
 
-export function sanitizeSetupScriptPromptDismissals(value: unknown): string[] {
+export function sanitizeSetupScriptPromptDismissals(value: unknown): readonly string[] {
   if (!Array.isArray(value)) {
     return []
   }

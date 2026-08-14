@@ -181,6 +181,12 @@ describe('getRelayShellLaunchConfig', () => {
       expect(config.args).toEqual(['-l'])
       expect(config.env.ZDOTDIR).toBe(zshRoot)
       expect(config.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(readFileSync(join(zshRoot, '.zshenv'), 'utf8')).toContain(
+        'printf "\\033]777;orca-shell-start:%s\\007" "$$"'
+      )
+      expect(readFileSync(join(zshRoot, '.zshenv'), 'utf8')).toContain(
+        'unset ORCA_SHELL_STARTUP_IDENTITY'
+      )
       expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
       expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
     }
@@ -195,8 +201,23 @@ describe('getRelayShellLaunchConfig', () => {
       const bashRc = readFileSync(config.args[1] as string, 'utf8')
 
       expect(config.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+      expect(bashRc).toContain('unset ORCA_SHELL_STARTUP_IDENTITY')
       expect(bashRc).toContain('__orca_append_prompt_command "__orca_prompt_mark"')
       expect(bashRc).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'wraps zsh when only startup identity emission is requested',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/zsh', { HOME: homeDir }, 'linux', {
+        emitStartupIdentity: true
+      })
+
+      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.orca-relay', 'shell-ready', 'zsh'))
+      expect(config.env.ORCA_SHELL_STARTUP_IDENTITY).toBe('1')
+      expect(config.env.ORCA_SHELL_READY_MARKER).toBeUndefined()
     }
   )
 

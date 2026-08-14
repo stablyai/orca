@@ -40,6 +40,23 @@ export function resolveAdvertisedPairingEndpoint(
   return valid(formatWebSocketUrl(endpoint))
 }
 
+// Why: callers that must reason about WHERE a link points (loopback vs off-host) need the hostname the
+// offer will advertise, not the raw string the user typed — `127.0.0.1:8443`, `[::1]:6768` and
+// `ws://127.0.0.1:6768` all advertise a loopback host but none of them parse as one on their own.
+export function resolveAdvertisedPairingHostname(
+  advertisedAddress: string | null | undefined
+): string | null {
+  const override = advertisedAddress?.trim()
+  if (!override) {
+    return null
+  }
+  if (override.includes('://')) {
+    const normalized = normalizePairingUrl(override)
+    return normalized ? unbracketIpv6(new URL(normalized).hostname) : null
+  }
+  return parseHostOverride(override)?.hostname ?? null
+}
+
 function resolveFullUrl(value: string): PairingEndpointResolution {
   const endpoint = normalizePairingUrl(value)
   return endpoint ? valid(endpoint) : invalid()

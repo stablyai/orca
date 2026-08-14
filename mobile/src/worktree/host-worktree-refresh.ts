@@ -39,11 +39,11 @@ export function startHostWorktreeRefresh({
       return
     }
     void fetchWorktrees()
-    // Why: desktop Settings repo edits (icon/color/name, repo removal) notify only the
-    // renderer IPC, not the runtime clientEvents stream, so `reposChanged` never reaches
-    // mobile. Keep a periodic repo.list as the convergence safety-net; fetchRepoMetadata
-    // self-throttles to REPO_METADATA_REFRESH_MS (60s), so this is ~1 request/min while
-    // foregrounded — the AppState gate is what removes the waste (both stop while backgrounded).
+    // Why: desktop Settings repo edits (icon/color/name, repo removal) now emit `reposChanged`
+    // (#11994), but a host on an older build does not; keep this periodic repo.list as the
+    // convergence safety-net. fetchRepoMetadata self-throttles to REPO_METADATA_REFRESH_MS
+    // (60s), so this is ~1 request/min while foregrounded — the AppState gate is what removes
+    // the waste (both stop while backgrounded).
     void fetchRepoMetadata()
   }, WORKTREE_REFRESH_MS)
   const unsubscribe = client.subscribe(

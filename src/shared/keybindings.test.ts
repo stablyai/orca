@@ -775,9 +775,9 @@ describe('keybindings', () => {
     ).toBe(true)
 
     const definition = getKeybindingDefinition('workspace.openBoard')
-    expect(definition?.title).toBe('Open Workspace Board')
+    expect(definition?.title).toBe('Toggle Workspace Board')
     expect(definition?.searchKeywords).toEqual(
-      expect.arrayContaining(['workspace', 'board', 'kanban'])
+      expect.arrayContaining(['workspace', 'board', 'kanban', 'toggle', 'open', 'close'])
     )
   })
 
@@ -1111,13 +1111,64 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
-  it('keeps the existing terminal paste defaults on Windows and Linux', () => {
+  it('keeps terminal clipboard shortcuts platform-native without stealing bare Ctrl+A', () => {
+    expect(getEffectiveKeybindingsForAction('terminal.copySelection', 'darwin')).toEqual(['Mod+C'])
+    expect(getEffectiveKeybindingsForAction('terminal.copySelection', 'linux')).toEqual([
+      'Ctrl+Shift+C',
+      'Ctrl+C'
+    ])
+    expect(getEffectiveKeybindingsForAction('terminal.selectAll', 'darwin')).toEqual(['Mod+A'])
+    expect(getEffectiveKeybindingsForAction('terminal.selectAll', 'linux')).toEqual([
+      'Ctrl+Shift+A'
+    ])
     expect(getEffectiveKeybindingsForAction('terminal.paste', 'darwin')).toEqual(['Mod+V'])
     expect(getEffectiveKeybindingsForAction('terminal.paste', 'linux')).toEqual([
       'Ctrl+V',
       'Ctrl+Shift+V',
       'Shift+Insert'
     ])
+    expect(
+      keybindingMatchesAction(
+        'terminal.copySelection',
+        { key: 'c', code: 'KeyC', control: false, meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'terminal.copySelection',
+        { key: 'c', code: 'KeyC', control: true, meta: false, alt: false, shift: true },
+        'linux'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'terminal.copySelection',
+        { key: 'c', code: 'KeyC', control: true, meta: false, alt: false, shift: false },
+        'linux'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'terminal.selectAll',
+        { key: 'a', code: 'KeyA', control: false, meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'terminal.selectAll',
+        { key: 'a', code: 'KeyA', control: true, meta: false, alt: false, shift: true },
+        'linux'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'terminal.selectAll',
+        { key: 'a', code: 'KeyA', control: true, meta: false, alt: false, shift: false },
+        'linux'
+      )
+    ).toBe(false)
     expect(
       keybindingMatchesAction(
         'terminal.paste',

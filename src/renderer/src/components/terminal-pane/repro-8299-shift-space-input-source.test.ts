@@ -161,6 +161,15 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
     expect(tracker.consumeCompanion({ type: 'keyup', key: ' ', code: 'Space' })).toBe(false)
   })
 
+  it('keeps a native-only key armed through held-key repeats', () => {
+    const tracker = createTerminalNativeOnlyShortcutTracker()
+    tracker.armKeyDown({ key: 'a', code: 'KeyA' })
+    tracker.prepareKeyDown({ key: 'a', code: 'KeyA', repeat: true })
+
+    expect(tracker.consumeCompanion({ type: 'keypress', key: 'a', code: 'KeyA' })).toBe(true)
+    expect(tracker.consumeCompanion({ type: 'keyup', key: 'a', code: 'KeyA' })).toBe(true)
+  })
+
   it('suppresses only the shortcut text on the beforeinput fallback', () => {
     const tracker = createTerminalNativeOnlyShortcutTracker()
     tracker.armKeyDown({ key: ' ', code: 'Space' })

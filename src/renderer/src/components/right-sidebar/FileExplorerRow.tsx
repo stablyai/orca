@@ -267,6 +267,7 @@ type FileExplorerRowProps = {
   connectionId?: string | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
   supportsFolderDownload?: boolean
+  canOpenInOrcaBrowser: boolean
   canCollapseFolderSubtree: boolean
   targetDir: string
   targetDepth: number
@@ -342,6 +343,14 @@ export function shouldShowCopyFileAction(
   )
 }
 
+function getLocalDownloadName(destinationPath: string, platform: NodeJS.Platform): string {
+  const lastSeparatorIndex =
+    platform === 'win32'
+      ? Math.max(destinationPath.lastIndexOf('/'), destinationPath.lastIndexOf('\\'))
+      : destinationPath.lastIndexOf('/')
+  return destinationPath.slice(lastSeparatorIndex + 1)
+}
+
 export async function downloadRemoteFile(
   node: TreeNode,
   connectionIdOrRuntimeContext: string | RuntimeFileOperationArgs
@@ -363,17 +372,22 @@ export async function downloadRemoteFile(
     if (result.canceled) {
       return
     }
+    // Why: POSIX permits backslashes in saved names; only Windows treats them as separators.
+    const savedName = getLocalDownloadName(
+      result.destinationPath,
+      window.api.platform.get().platform
+    )
     toast.success(
       node.isDirectory
         ? translate(
             'auto.components.right.sidebar.FileExplorerRow.a4029c996b',
             "Downloaded folder '{{value0}}'",
-            { value0: node.name }
+            { value0: savedName }
           )
         : translate(
             'auto.components.right.sidebar.FileExplorerRow.bce4d4e44f',
             "Downloaded '{{value0}}'",
-            { value0: node.name }
+            { value0: savedName }
           ),
       {
         action: {
@@ -412,12 +426,16 @@ export async function copyFileToOsClipboard(
     'auto.components.right.sidebar.FileExplorerRow.b234ab25b4',
     'Could not copy the file to the clipboard'
   )
+  const stagingFailureMessage = translate(
+    'auto.components.right.sidebar.FileExplorerRow.clipboardStagingUnavailable',
+    "Could not copy the file because Orca's temporary storage is unavailable"
+  )
   try {
     const result = await window.api.ui.writeClipboardFile(
       connectionId ? { filePath: node.path, connectionId } : node.path
     )
     if (!result.ok) {
-      toast.error(failureMessage)
+      toast.error(result.reason === 'staging-unavailable' ? stagingFailureMessage : failureMessage)
     }
   } catch (error) {
     toast.error(extractIpcErrorMessage(error, failureMessage))
@@ -438,6 +456,7 @@ export function FileExplorerRow({
   connectionId,
   runtimeDownloadContext,
   supportsFolderDownload = false,
+  canOpenInOrcaBrowser,
   canCollapseFolderSubtree,
   targetDir,
   targetDepth,
@@ -747,7 +766,7 @@ export function FileExplorerRow({
             {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
           </ContextMenuItem>
         )}
-        {!node.isDirectory && activeWorktreeId && (
+        {!node.isDirectory && activeWorktreeId && canOpenInOrcaBrowser && (
           <ContextMenuItem onSelect={handleOpenInOrcaBrowser}>
             <Globe />
             {translate(

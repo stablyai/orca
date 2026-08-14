@@ -63,7 +63,7 @@ export function isChecksPanelCreateEligibilityConfirmable(input: {
  * provisional or draft-preserve path.
  */
 export function shouldOpenChecksPanelCreateComposer(input: {
-  activeReview: unknown | null
+  activeReview: unknown
   isFolder: boolean
   branch: string
   hostedReviewCreation: HostedReviewCreationEligibility | null

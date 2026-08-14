@@ -64,14 +64,23 @@ describe('stopMissingWorktreeTerminals', () => {
     const localProvider = createProvider([`${deletedId}@@local-session`])
     const sshProvider = createProvider([`${deletedId}@@ssh-session`])
     const getSshProvider = vi.fn(() => sshProvider)
+    const runtime = createRuntime()
 
     await stopMissingWorktreeTerminals({ ...localRepo, connectionId: 'ssh-1' }, [deletedId], [], {
-      runtime: createRuntime(),
+      runtime,
       getLocalProvider: () => localProvider,
       getSshProvider
     })
 
     expect(getSshProvider).toHaveBeenCalledWith('ssh-1')
+    // The runtime graph holds both hosts' terminals under one id, so the sweep must fence to this one.
+    expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(
+      deletedId,
+      expect.objectContaining({
+        resolvedWorktreeId: deletedId,
+        resolvedConnectionId: 'ssh-1'
+      })
+    )
     expect(sshProvider.shutdown).toHaveBeenCalledWith(
       `${deletedId}@@ssh-session`,
       expect.objectContaining({ immediate: true })
@@ -95,7 +104,12 @@ describe('stopMissingWorktreeTerminals', () => {
     )
 
     expect(result).toEqual({ stoppedWorktreeIds: [deletedId] })
-    expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(deletedId)
+    // The graph fallback still names the owning connection: this repo's inventory must not
+    // stop a same-id workspace's terminals on another host.
+    expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(deletedId, {
+      resolvedWorktreeId: deletedId,
+      resolvedConnectionId: 'ssh-1'
+    })
   })
 
   // Why: an agent cleaning up workspaces deletes many at once. Enumerating the

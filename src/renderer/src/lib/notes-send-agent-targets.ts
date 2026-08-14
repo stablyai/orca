@@ -59,10 +59,8 @@ function detectTitleHintPaneEvidence(
  * CLIs do not have that owner bit, so their runtime title is the only pre-hook
  * signal available.
  *
- * The title hint is gated on a recognized agent title (pane or tab) — the same
- * signal isTerminalRunningAgent checks — so a freshly spawned tab is only listed
- * once the runtime would actually accept the send. Without that gate, clicking a
- * still-booting pane fails with "not a recognized agent session".
+ * The title hint gates discoverability only. The runtime independently checks
+ * current hook/process evidence before any guarded write.
  */
 export function deriveNotesSendAgentTargets(
   state: NotesSendAgentTargetState,
@@ -129,9 +127,8 @@ function deriveTitleHintAgentTarget(
   const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
   const titleEvidence = detectTitleHintPaneEvidence(paneTitleResolution, tab.title)
   if (!titleEvidence) {
-    // Why: launchAgent is set the instant Orca spawns the tab, but the runtime
-    // only accepts a send once the pane reads as an agent; manually started
-    // CLIs need the same title proof before appearing in the send menu.
+    // Why: launch metadata predates TUI identity; require a matching current title
+    // before listing either launched or manually started panes.
     return null
   }
   const disabledReason =

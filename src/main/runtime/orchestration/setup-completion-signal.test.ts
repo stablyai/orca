@@ -64,6 +64,19 @@ describe('orchestration setup completion signal', () => {
     expect(command).toContain('bash /c/repo/.git/orca/setup-runner.sh')
   })
 
+  it('keeps a batch runner on the Windows completion path from a Git Bash pane', () => {
+    // Regression (#6896): a Git Bash terminal with a batch setup script still gets a .cmd
+    // runner; observing it must not shell out to bash or type a bare `cmd.exe /c` switch.
+    const runnerPath = 'C:\\repo\\.git\\orca\\setup-runner.cmd'
+    const observed = buildObservedSetupCommand(runnerPath, 'windows', 'token-git-bash-cmd', {
+      family: 'posix'
+    })
+
+    expect(observed.command).toContain('powershell.exe -NoLogo -NoProfile -NonInteractive')
+    expect(observed.command).not.toContain('bash ')
+    expect(observed.env).toEqual({ ORCA_SETUP_RUNNER_PATH: runnerPath })
+  })
+
   it('recognizes one completion signal across output chunk boundaries', () => {
     const onComplete = vi.fn()
     const scanner = createSetupCompletionScanner('token-chunks', onComplete)

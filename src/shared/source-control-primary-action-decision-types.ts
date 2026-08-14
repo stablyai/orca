@@ -60,6 +60,21 @@ export type SourceControlPrimaryActionDecision = {
   requiresForceWithLease?: boolean
 }
 
+export type SourceControlCommitAreaPrimaryActionDecision = Omit<
+  SourceControlPrimaryActionDecision,
+  'kind' | 'labelIntent' | 'titleIntent'
+> & {
+  kind: Exclude<SourceControlPrimaryActionKind, 'create_pr_intent' | 'create_pr'>
+  labelIntent: Exclude<
+    SourceControlPrimaryActionDecision['labelIntent'],
+    'create_pr_intent' | 'create_pr'
+  >
+  titleIntent: Exclude<
+    SourceControlPrimaryActionTitleIntent,
+    'prepare_review' | 'create_review' | 'checking_review_creation'
+  >
+}
+
 export type SourceControlPrimaryActionDecisionInputs = {
   stagedCount: number
   hasUnstagedChanges: boolean

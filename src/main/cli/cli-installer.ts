@@ -17,6 +17,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-install-types'
+import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 import {
   invalidateWindowsUserPathRegistryCache,
@@ -958,7 +959,7 @@ export ORCA_NODE_OPTIONS="\${NODE_OPTIONS-}"
 export ORCA_NODE_REPL_EXTERNAL_MODULE="\${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
-ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" "$@"
+ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
 `
 }
 
@@ -1085,13 +1086,6 @@ function normalizeWindowsPath(
     .replaceAll('/', '\\')
     .replace(/\\+$/, '')
     .toLowerCase()
-}
-
-function expandWindowsEnvironmentVariables(value: string, env: NodeJS.ProcessEnv): string {
-  return value.replace(/%([^%]+)%/g, (match, rawName: string) => {
-    const envKey = Object.keys(env).find((key) => key.toLowerCase() === rawName.toLowerCase())
-    return envKey && env[envKey] ? env[envKey] : match
-  })
 }
 
 function escapeWindowsBatchValue(value: string): string {

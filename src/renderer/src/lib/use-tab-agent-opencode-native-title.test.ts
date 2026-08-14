@@ -23,7 +23,8 @@ const identityScenarios: [
 ][] = [
   ['live local', { isRemote: false }],
   ['inactive local split', { isRemote: false, siblingHookAgent: 'claude' }],
-  ['inactive SSH/tmux', { isRemote: true, title: 'tmux | OC | Greeting' }]
+  ['inactive SSH/tmux', { isRemote: true, title: 'tmux | OC | Greeting' }],
+  ['multi-token SSH wrapper', { isRemote: true, title: 'ssh build-host | OC | Greeting' }]
 ]
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
@@ -255,7 +256,6 @@ describe('OpenCode native title tab identity', () => {
     for (const title of [
       'OpenCode ready',
       'oc | Greeting',
-      'my session | OC | Greeting',
       '⠋ Fix foo | OC | Greeting',
       '✦ Gemini CLI',
       '⠋ Codex',

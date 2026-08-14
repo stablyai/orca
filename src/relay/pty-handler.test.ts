@@ -11,9 +11,11 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
+import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 
-const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
+const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
+  mockCreateShellPromptReadinessProbe: vi.fn(),
   mockPtyInstance: {
     // Why: attach now proves the backing pid is alive before replaying, so the
     // default managed PTY must report a live pid. Reuse the test runner's own
@@ -32,6 +34,14 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
 
 vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
+}))
+
+vi.mock('../main/pty/posix-pty-process-groups', () => ({
+  forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
+}))
+
+vi.mock('../main/shell-prompt-readiness-probe', () => ({
+  createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
 import {
@@ -102,6 +112,7 @@ function createMockDispatcher() {
 describe('PtyHandler', () => {
   let dispatcher: ReturnType<typeof createMockDispatcher>
   let handler: PtyHandler
+  let originalPlatform: PropertyDescriptor | undefined
 
   async function spawnPty(
     params: Record<string, unknown> = {}
@@ -122,6 +133,8 @@ describe('PtyHandler', () => {
   }
 
   beforeEach(() => {
+    originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     vi.useFakeTimers()
     mockPtySpawn.mockReset()
     mockPtyInstance.onData.mockReset()
@@ -132,6 +145,12 @@ describe('PtyHandler', () => {
     mockPtyInstance.clear.mockReset()
     mockPtyInstance.pause.mockReset()
     mockPtyInstance.resume.mockReset()
+    mockCreateShellPromptReadinessProbe.mockReset()
+    mockCreateShellPromptReadinessProbe.mockReturnValue({
+      notifyOutput: vi.fn(),
+      dispose: vi.fn()
+    })
+    vi.spyOn(ptyShellUtils, 'processHasChildren').mockResolvedValue(false)
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -144,6 +163,10 @@ describe('PtyHandler', () => {
     await vi.runAllTimersAsync()
     await cleanup.catch(() => {})
     vi.useRealTimers()
+    vi.restoreAllMocks()
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
   })
 
   it('registers all expected handlers', () => {
@@ -286,7 +309,56 @@ describe('PtyHandler', () => {
 
     const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(spawnOptions.env.NODE_ENV).toBeUndefined()
-    expect(spawnOptions.env.PATH).toBe(process.env.PATH)
+    const expectedEnv = { PATH: process.env.PATH ?? '' }
+    stripLegacyTerminalShimEnv(expectedEnv, process.platform)
+    expect(spawnOptions.env.PATH).toBe(expectedEnv.PATH)
+  })
+
+  it('does not inherit legacy attribution state from the relay process', async () => {
+    const keys = ['ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_ATTRIBUTION_SHIM_DIR', 'PATH'] as const
+    const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+    process.env.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
+    process.env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-terminal-attribution/posix'
+    process.env.PATH = '/tmp/orca-terminal-attribution/posix:/usr/bin'
+
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+      const spawnedEnv = mockPtySpawn.mock.calls.at(-1)?.[2] as {
+        env: Record<string, string>
+      }
+      expect(spawnedEnv.env.PATH).toBe('/usr/bin')
+      expect(spawnedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+      expect(spawnedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+
+      const state = (await dispatcher.callRequest('pty.serialize', {
+        ids: ['pty-1']
+      })) as string
+      await handler.dispose({ waitForPhysicalExit: false })
+      mockPtySpawn.mockClear()
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+
+      const revivedEnv = mockPtySpawn.mock.calls.at(-1)?.[2] as {
+        env: Record<string, string>
+      }
+      expect(revivedEnv.env.PATH).toBe('/usr/bin')
+      expect(revivedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+      expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
   })
 
   it('keeps a renderer-supplied NODE_ENV for the spawned shell', async () => {
@@ -817,6 +889,7 @@ describe('PtyHandler', () => {
     vi.advanceTimersByTime(49)
     const term = mockPtySpawn.mock.results[0]?.value
     expect(handler.retainedStartupCommandCount).toBe(1)
+    expect(handler.retainedStartupCommandBytes).toBe('echo provider-owned'.length)
     expect(term.write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
@@ -858,6 +931,9 @@ describe('PtyHandler', () => {
         | { env?: Record<string, string> }
         | undefined
       expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(handler.retainedStartupCommandCount).toBe(1)
+      expect(handler.retainedStartupCommandBytes).toBe(0)
+      vi.advanceTimersByTime(15_000)
       expect(handler.retainedStartupCommandCount).toBe(0)
     }
   )
@@ -894,7 +970,7 @@ describe('PtyHandler', () => {
         | { env?: Record<string, string> }
         | undefined
       expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
-      expect(handler.retainedStartupCommandCount).toBe(0)
+      expect(handler.retainedStartupCommandCount).toBe(1)
     }
   )
 
@@ -1032,6 +1108,224 @@ describe('PtyHandler', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'recovers provider delivery when startup exec replaces the relay wrapper',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-provider-exec-spawn-'))
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/bash'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-exec',
+          commandDelivery: 'provider',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
+      await vi.advanceTimersByTimeAsync(8)
+
+      const promptOptions = mockCreateShellPromptReadinessProbe.mock.calls[0]?.[0] as {
+        onPromptReady: () => void
+      }
+      expect(
+        mockCreateShellPromptReadinessProbe.mock.results[0]?.value.notifyOutput
+      ).toHaveBeenCalledWith('\x1b[?2004hremote $ ')
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b[?2004hremote $ '
+      })
+      promptOptions.onPromptReady()
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(term.write).toHaveBeenCalledWith('echo after-exec\n')
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'signals renderer delivery when startup exec replaces the relay wrapper',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-exec-spawn-'))
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/bash'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-exec',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
+      await vi.advanceTimersByTimeAsync(8)
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b[?2004hremote $ '
+      })
+
+      const promptOptions = mockCreateShellPromptReadinessProbe.mock.calls[0]?.[0] as {
+        onPromptReady: () => void
+      }
+      promptOptions.onPromptReady()
+      await vi.advanceTimersByTimeAsync(8)
+
+      expect(term.write).not.toHaveBeenCalled()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]777;orca-shell-ready\x07'
+      })
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'forwards the supported ready marker to renderer delivery',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-ready-spawn-'))
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/bash'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-ready',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.(
+        `\x1b]777;orca-shell-start:${process.pid}\x07\x1b]777;orca-shell-ready\x07remote $ `
+      )
+      await vi.advanceTimersByTimeAsync(8)
+
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]777;orca-shell-ready\x07remote $ '
+      })
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'releases split renderer readiness through one completed path',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-split-ready-spawn-'))
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/bash'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-ready',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b]777;orca-shell-ready`)
+      dataCallback?.('\x07remote $ ')
+      await vi.advanceTimersByTimeAsync(8)
+
+      const probe = mockCreateShellPromptReadinessProbe.mock.results[0]?.value
+      expect(probe.notifyOutput).not.toHaveBeenCalled()
+      expect(probe.dispose).toHaveBeenCalledOnce()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]777;orca-shell-ready\x07remote $ '
+      })
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not retain renderer readiness state for unsupported shells',
+    async () => {
+      const oldShell = process.env.SHELL
+      process.env.SHELL = '/bin/sh'
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          command: 'x'.repeat(256 * 1024),
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('0')
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'flushes held shell-ready marker bytes when provider delivery falls back',
     async () => {
       let dataCallback: ((data: string) => void) | undefined
@@ -1129,6 +1423,50 @@ describe('PtyHandler', () => {
       dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
     ).rejects.toThrow('PTY "pty-1" not found')
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'releases renderer readiness state when attach reaps a dead shell',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-dead-shell-ready-spawn-'))
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'x'.repeat(256 * 1024),
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+      expect(handler.retainedStartupCommandCount).toBe(1)
+
+      const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+      try {
+        await expect(dispatcher.callRequest('pty.attach', { id: 'pty-1' })).rejects.toThrow(
+          'PTY "pty-1" not found'
+        )
+      } finally {
+        aliveSpy.mockRestore()
+      }
+
+      expect(handler.retainedStartupCommandCount).toBe(0)
+      vi.advanceTimersByTime(15_000)
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
 
   it('settles concurrent immediate shutdown when attach proves the shell exited', async () => {
     const mockKill = vi.fn()
@@ -2511,16 +2849,16 @@ describe('PtyHandler', () => {
     handler.addEnvAugmenter(() => ({
       TERM: 'augmenter-term',
       TERM_PROGRAM: 'augmenter-terminal',
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/augmenter-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/augmenter-stale'
     }))
 
     await dispatcher.callRequest('pty.spawn', {
       env: {
         TERM: 'screen-256color',
         TERM_PROGRAM: 'renderer-terminal',
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/renderer-attribution'
+        ORCA_STALE_TEST_ENV: '/tmp/renderer-stale'
       },
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      envToDelete: ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
     })
 
     const spawnEnv = mockPtySpawn.mock.calls[0][2] as {
@@ -2532,7 +2870,7 @@ describe('PtyHandler', () => {
     expect(spawnEnv.env.COLORTERM).toBe('truecolor')
     expect(spawnEnv.env.FORCE_HYPERLINK).toBe('1')
     expect(spawnEnv.env.TERM_PROGRAM).toBeUndefined()
-    expect(spawnEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(spawnEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('replaces an ambient TERM=dumb when no explicit TERM is supplied', async () => {
@@ -2555,6 +2893,27 @@ describe('PtyHandler', () => {
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
     expect(spawnEnv.env.TERM_PROGRAM).toBe('Orca')
+  })
+
+  it('expands variables in PATH before spawning a Windows relay shell', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: {
+          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnEnv.env.PATH).toBe('C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows')
   })
 
   it('uses the safe terminal default when TERM is deleted without a custom value', async () => {
@@ -2701,9 +3060,16 @@ describe('PtyHandler', () => {
       ORCA_AGENT_HOOK_TOKEN: 'abc-uuid'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const oldStartupIdentity = process.env.ORCA_SHELL_STARTUP_IDENTITY
+    process.env.ORCA_SHELL_STARTUP_IDENTITY = '1'
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
+      if (oldStartupIdentity === undefined) {
+        delete process.env.ORCA_SHELL_STARTUP_IDENTITY
+      } else {
+        process.env.ORCA_SHELL_STARTUP_IDENTITY = oldStartupIdentity
+      }
       killSpy.mockRestore()
     }
 
@@ -2716,6 +3082,8 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
     expect(callArgs.env.TERM).toBe('xterm-256color')
     expect(callArgs.env.TERM_PROGRAM).toBe('Orca')
+    expect(callArgs.env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(callArgs.env.ORCA_SHELL_STARTUP_IDENTITY).toBe('0')
   })
 
   it('fences both revived worktree identity and cwd with rollback', async () => {
@@ -2867,7 +3235,7 @@ describe('PtyHandler', () => {
   it('normalizes an explicit empty TERM and preserves sanitized env deletions on revive', async () => {
     await dispatcher.callRequest('pty.spawn', {
       env: { TERM: '' },
-      envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR', '', 42]
+      envToDelete: ['ORCA_STALE_TEST_ENV', '', 42]
     })
 
     const initialEnv = mockPtySpawn.mock.calls[0][2] as {
@@ -2883,14 +3251,14 @@ describe('PtyHandler', () => {
       envToDelete?: string[]
     }[]
     expect(serialized.explicitTerm).toBeUndefined()
-    expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
+    expect(serialized.envToDelete).toEqual(['ORCA_STALE_TEST_ENV'])
 
     await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
     handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/revived-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/revived-stale'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
@@ -2905,7 +3273,7 @@ describe('PtyHandler', () => {
     }
     expect(revivedEnv.name).toBe('xterm-256color')
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('drops legacy empty explicit TERM metadata after revive', async () => {
@@ -2917,11 +3285,11 @@ describe('PtyHandler', () => {
         rows: 24,
         cwd: process.cwd(),
         explicitTerm: '',
-        envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+        envToDelete: ['ORCA_STALE_TEST_ENV']
       }
     ])
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/legacy-empty-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/legacy-empty-stale'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
@@ -2936,7 +3304,7 @@ describe('PtyHandler', () => {
     }
     expect(revivedEnv.name).toBe('xterm-256color')
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
 
     const serializedState = (await dispatcher.callRequest('pty.serialize', {
       ids: ['pty-8']
@@ -2946,13 +3314,13 @@ describe('PtyHandler', () => {
       envToDelete?: string[]
     }[]
     expect(serialized.explicitTerm).toBeUndefined()
-    expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
+    expect(serialized.envToDelete).toEqual(['ORCA_STALE_TEST_ENV'])
   })
 
   it('preserves explicit TERM and env deletions through repeated revive cycles', async () => {
     await dispatcher.callRequest('pty.spawn', {
       env: { TERM: 'screen-256color' },
-      envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+      envToDelete: ['ORCA_STALE_TEST_ENV']
     })
     let state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
 
@@ -2963,7 +3331,7 @@ describe('PtyHandler', () => {
       dispatcher = createMockDispatcher()
       handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
       handler.addEnvAugmenter(() => ({
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/first-revive'
+        ORCA_STALE_TEST_ENV: '/tmp/first-revive'
       }))
       await dispatcher.callRequest('pty.revive', { state })
 
@@ -2973,12 +3341,12 @@ describe('PtyHandler', () => {
       }
       expect(firstRevivedEnv.name).toBe('screen-256color')
       expect(firstRevivedEnv.env.TERM).toBe('screen-256color')
-      expect(firstRevivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      expect(firstRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
       state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
       expect(JSON.parse(state)).toMatchObject([
         {
           explicitTerm: 'screen-256color',
-          envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+          envToDelete: ['ORCA_STALE_TEST_ENV']
         }
       ])
 
@@ -2987,7 +3355,7 @@ describe('PtyHandler', () => {
       dispatcher = createMockDispatcher()
       handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
       handler.addEnvAugmenter(() => ({
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/second-revive'
+        ORCA_STALE_TEST_ENV: '/tmp/second-revive'
       }))
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -3000,12 +3368,12 @@ describe('PtyHandler', () => {
     }
     expect(secondRevivedEnv.name).toBe('screen-256color')
     expect(secondRevivedEnv.env.TERM).toBe('screen-256color')
-    expect(secondRevivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(secondRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('revives legacy serialized entries with default TERM and no env deletions', async () => {
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/legacy-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/legacy-stale'
     }))
     const state = JSON.stringify([
       {
@@ -3025,7 +3393,7 @@ describe('PtyHandler', () => {
 
     const revivedEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBe('/tmp/legacy-attribution')
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBe('/tmp/legacy-stale')
   })
 
   it('revive preserves attach identity metadata without exporting hook identity env', async () => {

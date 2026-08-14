@@ -112,7 +112,16 @@ const ACTIVE_EXECUTION_STATUS_RE = new RegExp(
   `(?:^|[\\r\\n])\\s*(?:${COMMAND_CODE_STATUS_GLYPH_RE_SOURCE}\\s*)?(?:Executing:\\s+\\S|Running\\s*\\()`
 )
 const IDLE_PROMPT_RE = /(?:^|[\r\n])\s*[❯>]\s+Ask your question\.\.\./
-const COMMAND_CODE_BANNER_RE = /\bCommand Code\b/
+const SEMVER_NUMBER_RE_SOURCE = '(?:0|[1-9]\\d*)'
+const SEMVER_PRERELEASE_IDENTIFIER_RE_SOURCE = '(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)'
+const SEMVER_BUILD_IDENTIFIER_RE_SOURCE = '[0-9A-Za-z-]+'
+const COMMAND_CODE_BANNER_RE = new RegExp(
+  `(?:^|[\\r\\n])[ \\t]*#[ \\t]+Command Code[ \\t]+v` +
+    `${SEMVER_NUMBER_RE_SOURCE}\\.${SEMVER_NUMBER_RE_SOURCE}\\.${SEMVER_NUMBER_RE_SOURCE}` +
+    `(?:-${SEMVER_PRERELEASE_IDENTIFIER_RE_SOURCE}(?:\\.${SEMVER_PRERELEASE_IDENTIFIER_RE_SOURCE})*)?` +
+    `(?:\\+${SEMVER_BUILD_IDENTIFIER_RE_SOURCE}(?:\\.${SEMVER_BUILD_IDENTIFIER_RE_SOURCE})*)?` +
+    `(?=[ \\t]*[\\r\\n])`
+)
 
 function cleanPromptCandidate(value: string): string {
   return cleanCommandCodePromptCandidate(stripTerminalControl(value))
@@ -233,17 +242,19 @@ export function createCommandCodeOutputStatusDetector(args: {
         : scanRawText
 
       if (!hasSeenCommandCodeUi) {
-        if (
-          !rawTextMayContainCommandCodeBanner(scanRawText) &&
-          !rawTextMayContainCommandCodeBanner(scanRawTextWithChunkBoundary)
-        ) {
+        if (!rawTextMayContainCommandCodeBanner(scanRawText)) {
           return false
         }
         const scanText = stripTerminalControl(scanRawText)
         const scanTextWithChunkBoundary = stripTerminalControl(scanRawTextWithChunkBoundary)
+        const previousTextWithChunkBoundaryLength = previousRawText
+          ? stripTerminalControl(`${previousRawText}\n`).length
+          : 0
         if (
           !COMMAND_CODE_BANNER_RE.test(scanText) &&
-          !COMMAND_CODE_BANNER_RE.test(scanTextWithChunkBoundary)
+          !COMMAND_CODE_BANNER_RE.test(
+            scanTextWithChunkBoundary.slice(previousTextWithChunkBoundaryLength)
+          )
         ) {
           return false
         }

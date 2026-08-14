@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: these activation cases share one mock store and assert ordering across startup, setup, issue commands, and default tabs. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SetupScriptLaunchMode } from '../../../shared/types'
+import { SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from './worktree-activation'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
 import { useAppStore } from '@/store'
@@ -369,6 +370,38 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it('does not create a fallback while a backend startup terminal awaits mirroring', () => {
+    useAppStore.setState({
+      getKnownWorktreeById: ((id: string) =>
+        id === 'wt-1'
+          ? { id: 'wt-1' }
+          : undefined) as unknown as AppStoreState['getKnownWorktreeById']
+    } as Partial<AppStoreState>)
+    const store = createMockStore()
+
+    const result = ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      { command: 'gh issue view 42' },
+      undefined,
+      { backendStartupTerminalSpawned: true }
+    )
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] }
+    } as unknown as Partial<AppStoreState>)
+
+    expect(useAppStore.getState().pendingIssueCommandSplitByTabId['mirror-tab-1']).toEqual({
+      command: 'gh issue view 42'
+    })
+  })
+
   it('creates a local initial terminal for explicitly local worktrees while a runtime is focused', () => {
     useAppStore.setState((state) => ({
       settings: state.settings
@@ -698,13 +731,19 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.stringContaining('Timed out waiting for setup before starting agent.')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining(
+            'Timed out waiting for setup before starting agent.'
+          )
+        })
       })
     )
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.stringContaining('exec claude')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining('exec claude')
+        })
       })
     )
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
@@ -765,7 +804,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.stringContaining('exec claude')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining('exec claude')
+        })
       })
     )
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
@@ -799,7 +840,11 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.stringContaining('/mnt/c/repo/.git/orca/setup-runner.sh')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining(
+            '/mnt/c/repo/.git/orca/setup-runner.sh'
+          )
+        })
       })
     )
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {

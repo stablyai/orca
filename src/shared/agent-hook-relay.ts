@@ -8,7 +8,7 @@
 // the renderer-bound IPC + installer contract; this module is the wire envelope
 // between Orca's main process and the remote relay.
 //
-// Per the design doc:
+// Invariants both ends rely on:
 // - The relay normalizes; Orca routes. The envelope's `payload` field has
 //   already been through `normalizeHookPayload` (which calls
 //   `parseAgentStatusPayload` → `normalizeAgentStatusObject`) on the relay
@@ -34,24 +34,34 @@ import type { AgentHookTarget } from './agent-hook-types'
 // Promoted from `src/main/agent-hooks/server.ts` so the relay can import it
 // without dragging Electron in (the shared listener module is the only place
 // that consumes it from the relay side).
-export type AgentHookSource =
-  | 'claude'
-  | 'codex'
-  | 'gemini'
-  | 'antigravity'
-  | 'amp'
-  | 'opencode'
-  | 'mimo-code'
-  | 'cursor'
-  | 'pi'
-  | 'omp'
-  | 'droid'
-  | 'command-code'
-  | 'grok'
-  | 'copilot'
-  | 'hermes'
-  | 'devin'
-  | 'kimi'
+const AGENT_HOOK_SOURCES = [
+  'claude',
+  'codex',
+  'gemini',
+  'antigravity',
+  'amp',
+  'opencode',
+  'mimo-code',
+  'cursor',
+  'pi',
+  'omp',
+  'prime-agent',
+  'droid',
+  'command-code',
+  'grok',
+  'copilot',
+  'hermes',
+  'devin',
+  'kimi'
+] as const
+
+export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]
+
+const AGENT_HOOK_SOURCE_SET: ReadonlySet<string> = new Set(AGENT_HOOK_SOURCES)
+
+export function isAgentHookSource(value: unknown): value is AgentHookSource {
+  return typeof value === 'string' && AGENT_HOOK_SOURCE_SET.has(value)
+}
 
 /** Env marker used by the remote relay. It is a transport/location marker, not
  *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */
@@ -75,6 +85,10 @@ export type AgentHookRelayEnvelope = {
   promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
+  /** Claude's provider-owned user-prompt UUID. */
+  providerPromptId?: string
+  /** Active Claude compact generation, keyed by provider prompt identity. */
+  compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
   /** Claude subagent identity, when the source hook provides one. */
@@ -180,8 +194,9 @@ export function restoreShedStatusFields(
 }
 
 /** JSON-RPC request method Orca issues after `--connect` reattach to ask the
- *  relay to replay its per-paneKey last-payload cache. See §5 Path 3 of the
- *  design doc for the race that ruled out push-on-`setWrite`. */
+ *  relay to replay its per-paneKey last-payload cache. Pull, not push: a relay
+ *  that pushed on `setWrite` can emit before Orca has wired its `agent.hook`
+ *  handler, and those notifications are dropped silently. */
 export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as const
 
 /** JSON-RPC request method Orca issues at session-ready to ship the

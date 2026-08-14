@@ -45,12 +45,15 @@ export type WorktreeCreationRequest = {
   /** Runtime environment created from the VM's pairing code. Used to refresh
    *  live status immediately after the workspace takes ownership. */
   ephemeralVmRuntimeEnvironmentId?: string
+  /** Checkout ownership selected by the provisioned recipe. */
+  ephemeralVmCheckoutMode?: 'orca-worktree' | 'provisioned-root'
   /** Recipe to provision before creating the worktree. Kept serializable so
    *  retry can rerun the recipe after a failed create. */
   ephemeralVmRecipe?: {
     sourceRepoId: string
     recipeId: string
     projectId: string
+    checkoutMode?: 'orca-worktree' | 'provisioned-root'
   }
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
@@ -121,6 +124,29 @@ export type PendingWorktreeCreation = {
   error?: string
   provisioningLog?: string
   request: WorktreeCreationRequest
+}
+
+export function findPendingLinkedWorkItemCreationId(
+  pendingCreations: Readonly<Record<string, PendingWorktreeCreation>>,
+  request: Pick<
+    WorktreeCreationRequest,
+    'repoId' | 'linkedIssue' | 'linkedPR' | 'workspaceRunContext'
+  >
+): string | null {
+  if (request.linkedIssue == null && request.linkedPR == null) {
+    return null
+  }
+  const hostId = request.workspaceRunContext?.hostId ?? null
+  const match = Object.values(pendingCreations).find((entry) => {
+    const pending = entry.request
+    return (
+      pending.repoId === request.repoId &&
+      pending.linkedIssue === request.linkedIssue &&
+      pending.linkedPR === request.linkedPR &&
+      (pending.workspaceRunContext?.hostId ?? null) === hostId
+    )
+  })
+  return match?.creationId ?? null
 }
 
 /** Human-readable progress line for an in-flight create, shared by the in-frame

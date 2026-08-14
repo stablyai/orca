@@ -2,6 +2,16 @@ import type { Repo } from '../shared/types'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
+// Why 6h: a resolved identity only changes when a remote is added or the project is renamed or
+// transferred, so this trades a `git remote -v` per repo per quarter-day for identity gates that
+// stop being frozen for the life of the repo record.
+const RESOLVED_IDENTITY_REFRESH_TTL_MS = 6 * 60 * 60 * 1000
+// Why: the deadline map is per-process, so a restart would otherwise make every resolved repo due
+// at once, on the first list call — the worst moment to spawn a subprocess per repo.
+const RESOLVED_IDENTITY_REFRESH_STARTUP_DELAY_MS = 5 * 60 * 1000
+// Why: refreshes are speculative, so a large repo list drains across sweeps instead of stalling one
+// list call behind N sequential probes (each an SSH round trip for off-host repos).
+const MAX_IDENTITY_REFRESHES_PER_SWEEP = 4
 
 type RepoIdentityStore = {
   getRepos(): Repo[]
@@ -14,7 +24,7 @@ type EnrichmentOptions = {
 }
 
 const inFlightProbesByLocation = new Map<string, Promise<boolean>>()
-const noIdentityRetryAfterByLocation = new Map<string, number>()
+const probeRetryAfterByLocation = new Map<string, number>()
 
 function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
   return `${repo.connectionId ?? 'local'}\0${repo.path}`
@@ -24,14 +34,26 @@ function getCurrentRepo(store: RepoIdentityStore, id: string): Repo | undefined 
   return store.getRepo?.(id) ?? store.getRepos().find((repo) => repo.id === id)
 }
 
-function isSameUnenrichedRepo(snapshot: Repo, current: Repo | undefined): boolean {
+function isSameProbedRepo(snapshot: Repo, current: Repo | undefined): current is Repo {
   return (
     !!current &&
     current.kind !== 'folder' &&
-    !current.gitRemoteIdentity &&
     current.path === snapshot.path &&
     (current.connectionId ?? null) === (snapshot.connectionId ?? null)
   )
+}
+
+function shouldWriteProbedIdentity(current: Repo, probed: Repo['gitRemoteIdentity']): boolean {
+  const existing = current.gitRemoteIdentity
+  if (!existing) {
+    // Why: the no-remote marker is re-derived on every retry; skip the redundant
+    // write so repo-list consumers do not churn.
+    return !(probed === null && existing === null)
+  }
+  // Why: a resolved identity is replaced only by a probe that found a genuinely different repo.
+  // Failures and no-remote answers must never clear it — consumers read an absent identity as
+  // "unknown" and gate permissively, so losing one is worse than carrying a stale one.
+  return !!probed && probed.canonicalKey !== existing.canonicalKey
 }
 
 function writeIdentity(
@@ -40,12 +62,10 @@ function writeIdentity(
   gitRemoteIdentity: Repo['gitRemoteIdentity']
 ): boolean {
   const current = getCurrentRepo(store, snapshot.id)
-  if (!isSameUnenrichedRepo(snapshot, current)) {
-    return false
-  }
-  // Why: the no-remote marker is re-derived on every retry; skip the redundant
-  // write so repo-list consumers do not churn.
-  if (gitRemoteIdentity === null && current?.gitRemoteIdentity === null) {
+  if (
+    !isSameProbedRepo(snapshot, current) ||
+    !shouldWriteProbedIdentity(current, gitRemoteIdentity)
+  ) {
     return false
   }
   return !!store.updateRepo(snapshot.id, { gitRemoteIdentity })
@@ -53,7 +73,7 @@ function writeIdentity(
 
 async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo): Promise<boolean> {
   const locationKey = getRepoLocationKey(repo)
-  const retryAfter = noIdentityRetryAfterByLocation.get(locationKey) ?? 0
+  const retryAfter = probeRetryAfterByLocation.get(locationKey) ?? 0
   if (retryAfter > Date.now()) {
     return false
   }
@@ -61,19 +81,24 @@ async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo)
   if (inFlight) {
     return inFlight
   }
+  // Why: a failed refresh of an already-resolved repo backs off on the long TTL — an SSH host that
+  // is down for the day must not re-probe every five minutes for an identity we already hold.
+  const missTtlMs = repo.gitRemoteIdentity
+    ? RESOLVED_IDENTITY_REFRESH_TTL_MS
+    : NO_IDENTITY_RETRY_TTL_MS
   const probe = (async () => {
     const result = await probeGitRemoteIdentity(repo.path, repo.connectionId)
     if (result.status !== 'resolved') {
       // Why: repos without a parseable remote are common; cache misses briefly so
       // list calls stay cheap while still allowing recent remote changes to land.
-      noIdentityRetryAfterByLocation.set(locationKey, Date.now() + NO_IDENTITY_RETRY_TTL_MS)
+      probeRetryAfterByLocation.set(locationKey, Date.now() + missTtlMs)
       // Why: only a probe that actually reached git settles "no usable remote".
       // An unreachable host leaves the identity unknown so consumers can keep
       // treating the repo as pending instead of ineligible.
       return result.status === 'no-remote' ? writeIdentity(store, repo, null) : false
     }
 
-    noIdentityRetryAfterByLocation.delete(locationKey)
+    probeRetryAfterByLocation.set(locationKey, Date.now() + RESOLVED_IDENTITY_REFRESH_TTL_MS)
     return writeIdentity(store, repo, result.identity)
   })().finally(() => {
     if (inFlightProbesByLocation.get(locationKey) === probe) {
@@ -84,17 +109,45 @@ async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo)
   return probe
 }
 
-async function enrichMissingRepoGitRemoteIdentitiesInBackground(
-  store: RepoIdentityStore,
-  options: EnrichmentOptions
-): Promise<void> {
+function isIdentityRefreshDue(repo: Repo, now: number): boolean {
+  const locationKey = getRepoLocationKey(repo)
+  const dueAt = probeRetryAfterByLocation.get(locationKey)
+  if (dueAt === undefined) {
+    probeRetryAfterByLocation.set(locationKey, now + RESOLVED_IDENTITY_REFRESH_STARTUP_DELAY_MS)
+    return false
+  }
+  return dueAt <= now
+}
+
+function selectEnrichmentCandidates(store: RepoIdentityStore): Repo[] {
+  const now = Date.now()
+  const repos = store.getRepos().filter((repo) => repo.kind !== 'folder')
   // Why: the settled `null` marker stays a candidate on purpose — a repo that
   // gains a remote later must still resolve. Do not tighten this to
   // `=== undefined`; the retry TTL already bounds the cost and `writeIdentity`
   // skips the redundant rewrite.
-  const candidates = store
-    .getRepos()
-    .filter((repo) => repo.kind !== 'folder' && !repo.gitRemoteIdentity)
+  const candidates = repos.filter((repo) => !repo.gitRemoteIdentity)
+  // Why re-probe at all: an identity resolved once is otherwise frozen for the life of the repo
+  // record, so a later `git remote add upstream` or a project rename/transfer keeps misjudging
+  // identity gates against the path the repo had when it was added.
+  let refreshes = 0
+  for (const repo of repos) {
+    if (refreshes >= MAX_IDENTITY_REFRESHES_PER_SWEEP) {
+      break
+    }
+    if (repo.gitRemoteIdentity && isIdentityRefreshDue(repo, now)) {
+      candidates.push(repo)
+      refreshes += 1
+    }
+  }
+  return candidates
+}
+
+async function enrichMissingRepoGitRemoteIdentitiesInBackground(
+  store: RepoIdentityStore,
+  options: EnrichmentOptions
+): Promise<void> {
+  const candidates = selectEnrichmentCandidates(store)
   let changed = false
   for (const repo of candidates) {
     // Why: enrichment runs later; capture the location we probed so a mutable
@@ -123,5 +176,5 @@ export async function flushRepoGitRemoteIdentityEnrichmentForTests(): Promise<vo
 
 export function resetRepoGitRemoteIdentityEnrichmentForTests(): void {
   inFlightProbesByLocation.clear()
-  noIdentityRetryAfterByLocation.clear()
+  probeRetryAfterByLocation.clear()
 }

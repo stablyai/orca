@@ -38,7 +38,7 @@ import {
   WATCH_BATCH_TRAILING_MS
 } from '../../shared/filesystem-watch-batch-window'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 describe('local filesystem watcher large batches', () => {
   const handlers: HandlerMap = {}

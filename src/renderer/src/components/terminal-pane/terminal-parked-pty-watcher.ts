@@ -1,5 +1,5 @@
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
@@ -82,10 +82,7 @@ export function startParkedPtyWatcher(args: {
     paneId: pane.paneId,
     drivesTabTitle: pane.drivesTabTitle,
     ...(initialTitle !== undefined ? { initialTitle } : {}),
-    ...(restoreTitleOnRegister ? { restoreTitleOnRegister: true } : {}),
-    sendInput: (data) => {
-      sendRuntimePtyInput(useAppStore.getState().settings, ptyId, data)
-    }
+    ...(restoreTitleOnRegister ? { restoreTitleOnRegister: true } : {})
   })
   const unsubscribeExit = isRemoteRuntimePtyId(ptyId)
     ? () => {}

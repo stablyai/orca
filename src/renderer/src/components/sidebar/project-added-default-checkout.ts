@@ -9,7 +9,7 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/ty
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
 
@@ -24,12 +24,21 @@ function getProjectWorktreesForHost<T extends Worktree>(
   if (!executionHostId) {
     return [...worktrees]
   }
+  const parsedHost = parseExecutionHostId(executionHostId)
   return worktrees.filter((worktree) => {
-    if (worktree.hostId) {
+    if (parsedHost?.kind === 'runtime') {
+      if (worktree.runtimeOwnerEnvironmentId) {
+        return worktree.runtimeOwnerEnvironmentId === parsedHost.environmentId
+      }
+      // Reachable: a colliding repo id can carry a runtime-qualified hostId with
+      // no runtimeOwnerEnvironmentId, so match it against the execution host.
       return worktree.hostId === executionHostId
     }
     if (worktree.runtimeOwnerEnvironmentId) {
-      return executionHostId === `runtime:${encodeURIComponent(worktree.runtimeOwnerEnvironmentId)}`
+      return false
+    }
+    if (worktree.hostId) {
+      return worktree.hostId === executionHostId
     }
     return executionHostId === 'local'
   })

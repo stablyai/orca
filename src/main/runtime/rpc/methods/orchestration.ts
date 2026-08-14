@@ -13,6 +13,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import { waitForFederatedLifecycleSettlement } from '../../orchestration/federation-lifecycle-settlement'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import {
   ORCHESTRATION_LEGACY_RUN_ID,
@@ -28,7 +29,10 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
-import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import {
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+} from '../../../../shared/protocol-version'
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
@@ -86,6 +90,7 @@ const SendParams = z
     // Why: pane key is the remint-stable identity used to verify worker_done/heartbeat ownership; the from handle stays routing metadata.
     senderPaneKey: OptionalString,
     run: OptionalString,
+    waitForLifecycleSettlement: OptionalBoolean,
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
@@ -387,18 +392,30 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: SendParams,
     handler: async (
       params,
-      { runtime, orchestrationCapability, legacyCoordinatorRunId, revalidateLegacyCoordinator }
+      {
+        runtime,
+        orchestrationCapability,
+        legacyCoordinatorRunId,
+        revalidateLegacyCoordinator,
+        orchestrationCompatibilityCallerAuthority,
+        signal
+      }
     ) => {
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
-      // Why: caller-supplied pane fields are only compatibility metadata; lifecycle authority uses the runtime-observed pane plus capability.
-      const senderPaneKey = runtime.getTerminalPaneKey(from) ?? undefined
+      const attestedCaller =
+        orchestrationCompatibilityCallerAuthority?.terminalHandle === from
+          ? orchestrationCompatibilityCallerAuthority
+          : undefined
+      // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
+      const senderPaneKey = attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
       if (remoteAttachment) {
         rejectFederatedExplicitTarget(params)
-        const processIncarnation = runtime.getTerminalProcessIncarnation(from)
+        const processIncarnation =
+          attestedCaller?.processIncarnation ?? runtime.getTerminalProcessIncarnation(from)
         if (
           !db.verifyRemoteAttachmentAuthority({
             dispatchId: remoteAttachment.dispatch_id,
@@ -434,6 +451,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             'Remote worker_done requires outcome=succeeded|failed.'
           )
         }
+        const supportsLifecycleSettlement =
+          remoteAttachment.protocol_version >=
+          ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
         const relay = db.enqueueFederationRelay({
           dispatchId: remoteAttachment.dispatch_id,
           direction: 'to_home',
@@ -447,8 +467,31 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             threadId: params.threadId ?? null,
             payload: params.payload ?? null
           }),
-          settleRemoteOutcome: outcome
+          ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})
         })
+        const lifecycle =
+          outcome && supportsLifecycleSettlement
+            ? await waitForFederatedLifecycleSettlement(
+                runtime,
+                relay.dispatch_id,
+                relay.sequence,
+                {
+                  timeoutMs: 30_000,
+                  signal
+                }
+              )
+            : outcome
+              ? {
+                  action: outcome === 'succeeded' ? ('completed' as const) : ('failed' as const),
+                  authority: 'worker_server_legacy' as const
+                }
+              : undefined
+        if (outcome && supportsLifecycleSettlement && !lifecycle) {
+          throw new OrchestrationError(
+            'operation_unknown',
+            'worker_done was queued, but the Run-home runtime did not confirm settlement. Verify the Task and Dispatch before retrying.'
+          )
+        }
         return {
           relay: {
             messageId: relay.message_id,
@@ -457,9 +500,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             destination: 'run_home',
             accepted: true
           },
-          ...(outcome
-            ? { lifecycle: { action: outcome === 'succeeded' ? 'completed' : 'failed' } }
-            : {})
+          ...(lifecycle ? { lifecycle } : {})
         }
       }
       const routing = resolveMessageRun(runtime, {
@@ -582,7 +623,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             dispatchId: dispatch.id,
             capability: orchestrationCapability,
             paneKey: senderPaneKey,
-            processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
+            processIncarnation:
+              attestedCaller?.processIncarnation ??
+              runtime.getTerminalProcessIncarnation(from) ??
+              undefined
           })
           if (!authority.valid) {
             const rejection =
@@ -614,13 +658,19 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             runtime.notifyMessageArrived(to, rejection.type)
             return { message: rejection, lifecycle: reconciled }
           }
+          runtime.notifyMessageArrived(to, msg.type)
+          return msg.type === 'worker_done'
+            ? { message: msg, lifecycle: reconciled }
+            : { message: msg }
         }
         runtime.notifyMessageArrived(to, msg.type)
         return { message: msg }
       }
 
       // Why: fan out one message per recipient (independent read-tracking) but share a thread_id for correlation (Section 4.5).
-      const { terminals } = await runtime.listTerminals()
+      const { terminals } = await runtime.listTerminals(undefined, undefined, {
+        includeVisualLayouts: false
+      })
       const handles = resolveGroupAddress(to, from, terminals, (handle: string) =>
         runtime.getAgentStatusForHandle(handle)
       )
@@ -1086,6 +1136,16 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           throw new Error('Invalid --deps: must be a JSON array of task IDs')
         }
       }
+      const run = resolveRunScope(runtime, {
+        runId: params.run,
+        callerTerminalHandle: params.callerTerminalHandle,
+        requireCurrentConsumer: true,
+        legacyCoordinatorRunId,
+        callerEvidence: orchestrationCompatibilityEvidence
+      })
+      const creatorAuthority = params.callerTerminalHandle
+        ? runtime.getOrchestrationDispatchAuthority(params.callerTerminalHandle)
+        : null
       const task = db.createTask({
         spec: params.spec,
         taskTitle: params.taskTitle,
@@ -1093,13 +1153,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         deps,
         parentId: params.parent,
         createdByTerminalHandle: params.callerTerminalHandle,
-        runId: resolveRunScope(runtime, {
-          runId: params.run,
-          callerTerminalHandle: params.callerTerminalHandle,
-          requireCurrentConsumer: true,
-          legacyCoordinatorRunId,
-          callerEvidence: orchestrationCompatibilityEvidence
-        }).id
+        ...(creatorAuthority?.paneKey && creatorAuthority.processIncarnation
+          ? {
+              createdByPaneKey: creatorAuthority.paneKey,
+              createdByProcessIncarnation: creatorAuthority.processIncarnation,
+              createdByRunGeneration: run.consumer_generation
+            }
+          : {}),
+        runId: run.id
       })
       return { task }
     }
@@ -1242,9 +1303,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const assigneePaneKey =
         dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
       const processIncarnation =
-        dispatchAuthority?.processIncarnation ??
-        runtime.getTerminalProcessIncarnation(to) ??
-        undefined
+        dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
+          ? dispatchAuthority.processIncarnation
+          : undefined
       if (params.inject && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
@@ -1257,7 +1318,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         params.task,
         to,
         assigneePaneKey,
-        dispatchAuthority?.launchTokenHash ?? undefined
+        dispatchAuthority?.launchTokenHash ?? undefined,
+        processIncarnation
       )
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
@@ -1499,10 +1561,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (params.all) {
+        runtime.stopOrchestrationFederationRelay()
         db.resetAll()
         return { reset: 'all' }
       }
       if (params.tasks) {
+        runtime.stopOrchestrationFederationRelay()
         db.resetTasks()
         return { reset: 'tasks' }
       }

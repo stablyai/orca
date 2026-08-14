@@ -5,7 +5,7 @@ import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from './new-workspace'
 import { parseGitHubIssueOrPRLink } from './github-links'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 
 export type SmartGitHubSubmitIntent =
   | {

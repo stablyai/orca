@@ -1432,6 +1432,36 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.session?.usedPercent).toBe(40)
   })
 
+  it('passes the resolved Kimi home into each fetch cycle', async () => {
+    const service = new RateLimitService()
+    const home = {
+      runtime: 'wsl' as const,
+      wslDistro: 'Ubuntu',
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\.kimi-code'
+    }
+    const resolver = vi.fn(async () => home)
+    service.setKimiHomeResolver(resolver)
+    mockFreshBackgroundProviderFetches()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10))
+
+    await service.refresh()
+    await service.refresh()
+
+    // Resolved per cycle so a runtime-policy change takes effect without a restart.
+    expect(resolver).toHaveBeenCalledTimes(2)
+    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ home })
+  })
+
+  it('reads the host Kimi home when no resolver is wired', async () => {
+    const service = new RateLimitService()
+    mockFreshBackgroundProviderFetches()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10))
+
+    await service.refresh()
+
+    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ home: undefined })
+  })
+
   it('passes the selected WSL Codex home into active account rate-limit fetches', async () => {
     const service = new RateLimitService()
     const wslCodexHome =

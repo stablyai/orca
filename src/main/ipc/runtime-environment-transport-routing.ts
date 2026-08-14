@@ -1,5 +1,6 @@
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import { resolveEnvironment, markEnvironmentUsed } from '../../shared/runtime-environment-store'
+import { isOrchestrationMutation } from '../../shared/orchestration-rpc-contract'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -66,7 +67,10 @@ export async function getRuntimeEnvironmentStatus(
     )
   }
   if (response.ok === true) {
-    markEnvironmentUsed(userDataPath, environment.id, { runtimeId: response._meta.runtimeId })
+    markEnvironmentUsed(userDataPath, environment.id, {
+      runtimeId: response._meta.runtimeId,
+      pairedDeviceId: response.result.pairedDeviceId
+    })
     reconnectRemoteRuntimeSharedControlConnection(environment.id)
   }
   return attachRemoteControlDiagnostics(
@@ -105,7 +109,8 @@ export async function callRuntimeEnvironment(
       const pairing = getPreferredPairingOffer(currentEnvironment)
       endpoint = pairing.endpoint
       const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
-      if (envelope) {
+      const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
+      if (envelope && !sharedControlEnvelope) {
         const response = await sendRemoteRuntimeRequest(
           pairing,
           method,
@@ -132,19 +137,36 @@ export async function callRuntimeEnvironment(
         !shouldUseOneShotRequest(method) &&
         (await supportsSharedControl(userDataPath, currentEnvironment, pairing, effectiveTimeoutMs))
       ) {
-        const response = await sendRemoteRuntimeSharedControlRequest(
-          currentEnvironment.id,
-          pairing,
-          method,
-          params,
-          effectiveTimeoutMs
-        )
+        const response = sharedControlEnvelope
+          ? await sendRemoteRuntimeSharedControlRequest(
+              currentEnvironment.id,
+              pairing,
+              method,
+              params,
+              effectiveTimeoutMs,
+              sharedControlEnvelope
+            )
+          : await sendRemoteRuntimeSharedControlRequest(
+              currentEnvironment.id,
+              pairing,
+              method,
+              params,
+              effectiveTimeoutMs
+            )
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response
       }
       // Why: startup/control-plane RPCs use the proven one-shot path so repo
       // hydration cannot be coupled to a stale terminal-control connection.
-      const response = await sendRemoteRuntimeRequest(pairing, method, params, effectiveTimeoutMs)
+      const response = sharedControlEnvelope
+        ? await sendRemoteRuntimeRequest(
+            pairing,
+            method,
+            params,
+            effectiveTimeoutMs,
+            sharedControlEnvelope
+          )
+        : await sendRemoteRuntimeRequest(pairing, method, params, effectiveTimeoutMs)
       markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
       return response
     })
@@ -248,6 +270,16 @@ function markEnvironmentUsedFromResponse(
 
 function shouldUseCachedRequestConnection(method: string): boolean {
   return method === 'terminal.send' || method === 'terminal.updateViewport'
+}
+
+function shouldUseSharedControlEnvelope(
+  method: string,
+  params: unknown,
+  envelope: RuntimeOrchestrationEnvelope | undefined
+): RuntimeOrchestrationEnvelope | undefined {
+  return envelope && method.startsWith('orchestration.') && !isOrchestrationMutation(method, params)
+    ? envelope
+    : undefined
 }
 
 function shouldUseOneShotRequest(method: string): boolean {

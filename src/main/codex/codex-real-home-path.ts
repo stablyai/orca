@@ -5,6 +5,8 @@ import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 export type CodexShellStartupHomeOverride = {
   home: string
   shell?: string
+  /** Why recorded: fish reads config under it, so re-reads must use the same root. */
+  configHome?: string
   codexHome: string
 }
 
@@ -54,7 +56,10 @@ export function getCustomCodexHomeOverrideForLaunch(
   }
   const home = launchEnv ? getLaunchEnvValue(launchEnv, 'HOME') : process.env.HOME
   const shell = launchEnv ? getLaunchEnvValue(launchEnv, 'SHELL') : process.env.SHELL
-  const shellCodexHome = readShellStartupEnvVar('CODEX_HOME', home, shell)
+  const configHome = launchEnv
+    ? getLaunchEnvValue(launchEnv, 'XDG_CONFIG_HOME')
+    : process.env.XDG_CONFIG_HOME
+  const shellCodexHome = readShellStartupEnvVar('CODEX_HOME', home, shell, configHome)
   if (!home || !shellCodexHome || !hasCustomCodexHomeOverride({ CODEX_HOME: shellCodexHome })) {
     return null
   }
@@ -63,6 +68,7 @@ export function getCustomCodexHomeOverrideForLaunch(
     context: {
       home,
       ...(shell ? { shell } : {}),
+      ...(configHome ? { configHome } : {}),
       codexHome: shellCodexHome
     }
   }
@@ -85,7 +91,8 @@ export function shellStartupCodexHomeOverrideMatches(
   const currentCodexHome = readShellStartupEnvVar(
     'CODEX_HOME',
     currentContext.home,
-    currentContext.shell
+    currentContext.shell,
+    currentContext.configHome
   )
   return Boolean(
     currentCodexHome &&
@@ -101,15 +108,16 @@ export function shellStartupCodexHomeOverrideContextsEqual(
   return (
     normalizePathForComparison(left.home) === normalizePathForComparison(right.home) &&
     left.shell === right.shell &&
+    left.configHome === right.configHome &&
     normalizePathForComparison(left.codexHome) === normalizePathForComparison(right.codexHome)
   )
 }
 
 function getLaunchEnvValue(
   launchEnv: NodeJS.ProcessEnv,
-  key: 'CODEX_HOME' | 'ORCA_CODEX_HOME' | 'HOME' | 'SHELL'
+  key: 'CODEX_HOME' | 'ORCA_CODEX_HOME' | 'HOME' | 'SHELL' | 'XDG_CONFIG_HOME'
 ): string | undefined {
-  return Object.prototype.hasOwnProperty.call(launchEnv, key) ? launchEnv[key] : process.env[key]
+  return Object.hasOwn(launchEnv, key) ? launchEnv[key] : process.env[key]
 }
 
 function normalizePathForComparison(value: string): string {

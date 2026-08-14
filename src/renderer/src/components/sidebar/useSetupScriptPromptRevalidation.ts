@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/types'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 
 /**
@@ -19,15 +20,27 @@ export function useSetupScriptPromptRevalidation(input: {
 }): void {
   const { activeRepo, isDismissed, sidebarOpen, promptState, requestRevalidation } = input
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
+  const repoHost = parseExecutionHostId(activeRepo ? getRepoExecutionHostId(activeRepo) : null)
+  const repoRuntimeEnvironmentId = repoHost?.kind === 'runtime' ? repoHost.environmentId : null
+  // Why: scope to the repo's own runtime so an unrelated host reconnect does not
+  // re-fire inspections for every repo.
+  const repoConnectionGeneration = useAppStore((s) =>
+    repoRuntimeEnvironmentId
+      ? (s.runtimeStatusByEnvironmentId.get(repoRuntimeEnvironmentId)?.connectionGeneration ?? 0)
+      : 0
+  )
 
-  // Why: only revalidate while the prompt still shows no effective setup — there is
-  // nothing to clear (and no RPC worth spending, notably over SSH) once it is
-  // configured.
-  const showsMissingSetup =
-    promptState?.status === 'ok' &&
-    promptState.repoId === activeRepo?.id &&
-    Boolean(activeRepo && promptState.repoHostIdentity === getRepoHostIdentity(activeRepo)) &&
-    !promptState.hasEffectiveSetup
+  // Why: revalidate while the prompt shows no effective setup or a failed inspection —
+  // both can be stale. `forbidden` is permanent and an effective setup has nothing to
+  // clear, so neither is worth an RPC (notably over SSH).
+  const promptBelongsToActiveRepo =
+    promptState?.repoId === activeRepo?.id &&
+    Boolean(activeRepo && promptState?.repoHostIdentity === activeRepoHostIdentity)
+  const promptNeedsRevalidation =
+    promptBelongsToActiveRepo &&
+    (promptState?.status === 'error' ||
+      (promptState?.status === 'ok' && !promptState.hasEffectiveSetup))
 
   // Why: orca.yaml is edited on disk or the hook runs in a terminal outside React
   // state. Re-inspect on window focus so returning to Orca detects it (mirrors
@@ -38,7 +51,7 @@ export function useSetupScriptPromptRevalidation(input: {
       !activeRepo ||
       !isGitRepoKind(activeRepo) ||
       isDismissed ||
-      !showsMissingSetup
+      !promptNeedsRevalidation
     ) {
       return
     }
@@ -46,18 +59,56 @@ export function useSetupScriptPromptRevalidation(input: {
     return () => {
       window.removeEventListener('focus', requestRevalidation)
     }
-  }, [activeRepo, isDismissed, requestRevalidation, showsMissingSetup, sidebarOpen])
+  }, [activeRepo, isDismissed, requestRevalidation, promptNeedsRevalidation, sidebarOpen])
 
   // Why: the setup hook runs during worktree creation, so activating a worktree in
   // this repo can make the setup effective after a negative result was cached. Fire
   // only on an actual activation change, not on mount/remount with a seeded id —
   // the initial inspection already covers the mounted worktree.
   const previousWorktreeIdRef = useRef(activeWorktreeId)
+  const previousRepoHostIdentityRef = useRef(activeRepoHostIdentity)
+  const previousConnectionGenerationRef = useRef(repoConnectionGeneration)
+  // Why: these signals usually land while the prompt state is still unsettled (the
+  // card nulls it for the whole inspection round trip). Remember them instead of
+  // dropping them, then replay once a revalidatable result exists.
+  const pendingRevalidationRef = useRef(false)
+
   useEffect(() => {
-    const changed = previousWorktreeIdRef.current !== activeWorktreeId
+    const worktreeChanged = previousWorktreeIdRef.current !== activeWorktreeId
+    const hostChanged = previousRepoHostIdentityRef.current !== activeRepoHostIdentity
+    // Why: a runtime reconnect can turn an unreadable orca.yaml into a readable one,
+    // and nothing else in the card's inputs changes when that happens.
+    const reconnected = repoConnectionGeneration > previousConnectionGenerationRef.current
     previousWorktreeIdRef.current = activeWorktreeId
-    if (changed && showsMissingSetup) {
-      requestRevalidation()
+    previousRepoHostIdentityRef.current = activeRepoHostIdentity
+    previousConnectionGenerationRef.current = repoConnectionGeneration
+    if (hostChanged) {
+      // A repo/host switch re-runs the card's own inspection, so no extra pass is owed.
+      pendingRevalidationRef.current = false
+    } else if (worktreeChanged || reconnected) {
+      pendingRevalidationRef.current = true
     }
-  }, [activeWorktreeId, requestRevalidation, showsMissingSetup])
+
+    if (
+      !pendingRevalidationRef.current ||
+      !sidebarOpen ||
+      !activeRepo ||
+      !isGitRepoKind(activeRepo) ||
+      isDismissed ||
+      !promptNeedsRevalidation
+    ) {
+      return
+    }
+    pendingRevalidationRef.current = false
+    requestRevalidation()
+  }, [
+    activeRepo,
+    activeRepoHostIdentity,
+    activeWorktreeId,
+    isDismissed,
+    promptNeedsRevalidation,
+    repoConnectionGeneration,
+    requestRevalidation,
+    sidebarOpen
+  ])
 }

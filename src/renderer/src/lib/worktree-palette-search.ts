@@ -8,6 +8,10 @@ import type { Repo, Worktree } from '../../../shared/types'
 import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment-snippet'
 import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
 import { matchWorktreePaletteReview } from './worktree-palette-review-match'
+import {
+  matchWorktreePaletteTaskUrl,
+  parseCmdJTaskSourceUrl
+} from './worktree-palette-task-url-match'
 
 export type MatchRange = { start: number; end: number }
 
@@ -88,6 +92,21 @@ export function searchWorktrees(
   const q = trimmedQuery.toLowerCase()
   const numericQuery = q.startsWith('#') ? q.slice(1) : q
   const results: PaletteSearchResult[] = []
+  const taskSourceUrl = parseCmdJTaskSourceUrl(trimmedQuery)
+  if (taskSourceUrl) {
+    for (const worktree of worktrees) {
+      const match = matchWorktreePaletteTaskUrl({
+        worktree,
+        intent: taskSourceUrl,
+        repo: repoMap.get(worktree.repoId),
+        review: checksReviewByWorktree?.get(worktree)
+      })
+      if (match) {
+        results.push(match)
+      }
+    }
+    return results
+  }
 
   // Support "repo/worktree" composite queries (e.g. "orca/main") so users can
   // narrow by repo and worktree in a single token. Worktrees are identified by

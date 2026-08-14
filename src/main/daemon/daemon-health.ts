@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- Why: pid validation shares process-identity
 helpers with kill escalation so the SIGKILL safety checks stay co-located. */
 import { execFile, execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { promisify } from 'node:util'
 import {
@@ -10,7 +10,16 @@ import {
 } from '../../shared/process-output-field-scanner'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 import { encodeNdjson } from './ndjson'
-import { getDaemonPidPath } from './daemon-spawner'
+import {
+  getDaemonPidPath,
+  unlinkDaemonPidFileWhen,
+  unlinkOwnedDaemonPidFile
+} from './daemon-spawner'
+import {
+  endpointIsProvenDead,
+  probeSocketConnect,
+  type SocketProbeOutcome
+} from './daemon-endpoint-probe'
 import {
   PROTOCOL_VERSION,
   type HelloMessage,
@@ -20,9 +29,13 @@ import {
 } from './types'
 
 const HEALTH_CHECK_TIMEOUT_MS = 3_000
+const PS_IDENTITY_TIMEOUT_MS = 2_000
 const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
+// Why: SIGKILL is delivered on return from an uninterruptible syscall, so confirm the exit
+// rather than assume it — but keep the wait short, it only guards the rare wedged case.
+const SIGKILL_CONFIRM_WAIT_MS = 1_000
 const START_TIME_TOLERANCE_MS = 1_500
 // Why: e2e forces the failed-health preserve path without SIGSTOP races —
 // a stopped daemon also blocks listSessions, so the unhealthy guard cannot
@@ -48,43 +61,7 @@ export type ParsedDaemonPid = {
   launchNonce: string | null
   linuxStartTicks: string | null
   bootId: string | null
-}
-
-function canConnectSocket(socketPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (process.platform !== 'win32' && !existsSync(socketPath)) {
-      resolve(false)
-      return
-    }
-    const sock = connect({ path: socketPath })
-    let settled = false
-    const cleanup = (): void => {
-      clearTimeout(timer)
-      sock.off('connect', onConnect)
-      sock.off('error', onError)
-    }
-    const settle = (result: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      resolve(result)
-    }
-    const onConnect = (): void => {
-      settle(true)
-      sock.destroy()
-    }
-    const onError = (): void => {
-      settle(false)
-    }
-    const timer = setTimeout(() => {
-      settle(false)
-      sock.destroy()
-    }, 500)
-    sock.on('connect', onConnect)
-    sock.on('error', onError)
-  })
+  spawnerExecPath: string | null
 }
 
 export function checkDaemonHealth(socketPath: string, tokenPath: string): Promise<DaemonHealth> {
@@ -278,7 +255,12 @@ export function getMacDaemonSystemResolverHealth(
           }
           // Why: the daemon must report health from inside its own process;
           // external launchctl bsexec probes can misclassify healthy PTYs.
-          sock?.write(encodeNdjson({ id: 'resolver-health-1', type: 'systemResolverHealth' }))
+          sock?.write(
+            encodeNdjson({
+              id: 'resolver-health-1',
+              type: 'systemResolverHealth'
+            })
+          )
           continue
         }
 
@@ -327,6 +309,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
       launchNonce?: unknown
       linuxStartTicks?: unknown
       bootId?: unknown
+      spawnerExecPath?: unknown
     }
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
@@ -339,7 +322,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
         appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : null,
         launchNonce: typeof parsed.launchNonce === 'string' ? parsed.launchNonce : null,
         linuxStartTicks: typeof parsed.linuxStartTicks === 'string' ? parsed.linuxStartTicks : null,
-        bootId: typeof parsed.bootId === 'string' ? parsed.bootId : null
+        bootId: typeof parsed.bootId === 'string' ? parsed.bootId : null,
+        spawnerExecPath: typeof parsed.spawnerExecPath === 'string' ? parsed.spawnerExecPath : null
       }
     }
   } catch {
@@ -355,7 +339,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
         appVersion: null,
         launchNonce: null,
         linuxStartTicks: null,
-        bootId: null
+        bootId: null,
+        spawnerExecPath: null
       }
     : null
 }
@@ -366,7 +351,10 @@ function getLinuxProcessStartedAtMs(pid: number): number | null {
     const startTicks = parseLinuxProcStartTicks(stat)
     const bootTimeSeconds = parseLinuxBootTimeSeconds(readFileSync('/proc/stat', 'utf8'))
     const ticksPerSecond = Number(
-      execFileSync('getconf', ['CLK_TCK'], { encoding: 'utf8', timeout: 1_000 }).trim()
+      execFileSync('getconf', ['CLK_TCK'], {
+        encoding: 'utf8',
+        timeout: 1_000
+      }).trim()
     )
     if (
       !Number.isFinite(startTicks) ||
@@ -415,16 +403,7 @@ export function getProcessStartedAtMs(pid: number): number | null {
     return null
   }
 
-  try {
-    const output = execFileSync('ps', ['-p', String(pid), '-o', 'lstart='], {
-      encoding: 'utf8',
-      timeout: 2_000
-    }).trim()
-    const startedAtMs = Date.parse(output)
-    return Number.isFinite(startedAtMs) ? startedAtMs : null
-  } catch {
-    return null
-  }
+  return getPsProcessIdentity(pid)?.startedAtMs ?? null
 }
 
 export function startTimeMatches(pid: number, expectedStartedAtMs: number | null): boolean {
@@ -453,6 +432,57 @@ const execFileAsync = promisify(execFile)
 export type WindowsProcessIdentity = {
   commandLine: string
   startedAtMs: number | null
+}
+
+type PsProcessIdentity = {
+  commandLine: string
+  startedAtMs: number | null
+}
+
+function parsePsProcessIdentity(output: string): PsProcessIdentity {
+  // BSD ps formats lstart as a fixed-width 24-character timestamp.
+  const startedAtMs = Date.parse(output.slice(0, 24))
+  return {
+    commandLine: output.slice(24).trim(),
+    startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null
+  }
+}
+
+function getPsProcessIdentity(pid: number): PsProcessIdentity | null {
+  try {
+    const output = execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'command='], {
+      encoding: 'utf8',
+      timeout: 2_000
+    })
+    return parsePsProcessIdentity(output)
+  } catch {
+    return null
+  }
+}
+
+async function getPsProcessIdentityAsync(pid: number): Promise<PsProcessIdentity | null> {
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        'ps',
+        ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
+        {
+          encoding: 'utf8',
+          timeout: PS_IDENTITY_TIMEOUT_MS
+        },
+        (error, output) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve(output)
+        }
+      )
+    })
+    return parsePsProcessIdentity(stdout)
+  } catch {
+    return null
+  }
 }
 
 export function parseWindowsProcessIdentityJson(stdout: string): WindowsProcessIdentity | null {
@@ -515,50 +545,58 @@ async function queryWindowsProcessIdentity(pid: number): Promise<WindowsProcessI
   }
 }
 
-async function isDaemonProcess(
+/**
+ * 'unknown' is load-bearing: a failed inspection is not evidence that the recorded PID is
+ * someone else's. `ps` runs under a 2s budget and PowerShell CIM under 3s, and a loaded
+ * machine blows both — reading that as "not our daemon" is what authorized reclaiming a live
+ * daemon's ownership in the first place.
+ */
+type DaemonProcessIdentity = 'match' | 'mismatch' | 'unknown'
+
+async function inspectDaemonProcessIdentity(
   pid: number,
   socketPath: string,
   tokenPath: string,
   startedAtMs: number | null
-): Promise<boolean> {
+): Promise<DaemonProcessIdentity> {
   try {
     process.kill(pid, 0)
-  } catch {
-    return false
+  } catch (error) {
+    // Why: only ESRCH proves the process is gone. EPERM means it exists and belongs to
+    // another user — reading that as absence deletes a live daemon's ownership.
+    return isNoSuchProcessError(error) ? 'mismatch' : 'unknown'
   }
+
+  const verdict = (matches: boolean): DaemonProcessIdentity => (matches ? 'match' : 'mismatch')
 
   if (process.platform === 'win32') {
     const identity = await queryWindowsProcessIdentity(pid)
     if (identity === null) {
-      return false
+      return 'unknown'
     }
     // Why: image names are too broad after PID reuse. Match the daemon entry
     // plus the exact socket/token args so we only kill the daemon for this
     // userData protocol endpoint.
-    return (
+    return verdict(
       commandLineMatchesDaemon(identity.commandLine, socketPath, tokenPath) &&
-      startTimesWithinTolerance(identity.startedAtMs, startedAtMs, WIN32_START_TIME_TOLERANCE_MS)
+        startTimesWithinTolerance(identity.startedAtMs, startedAtMs, WIN32_START_TIME_TOLERANCE_MS)
     )
   }
 
   try {
     const cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8')
-    return (
+    return verdict(
       commandLineMatchesDaemon(cmdline, socketPath, tokenPath) && startTimeMatches(pid, startedAtMs)
     )
   } catch {
-    try {
-      const output = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
-        encoding: 'utf8',
-        timeout: 2_000
-      })
-      return (
-        commandLineMatchesDaemon(output, socketPath, tokenPath) &&
-        startTimeMatches(pid, startedAtMs)
-      )
-    } catch {
-      return false
+    const identity = await getPsProcessIdentityAsync(pid)
+    if (!identity) {
+      return 'unknown'
     }
+    return verdict(
+      commandLineMatchesDaemon(identity.commandLine, socketPath, tokenPath) &&
+        startTimesWithinTolerance(identity.startedAtMs, startedAtMs, START_TIME_TOLERANCE_MS)
+    )
   }
 }
 
@@ -570,14 +608,7 @@ async function getDaemonCommandLine(pid: number): Promise<string | null> {
   try {
     return readFileSync(`/proc/${pid}/cmdline`, 'utf8')
   } catch {
-    try {
-      return execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
-        encoding: 'utf8',
-        timeout: 2_000
-      })
-    } catch {
-      return null
-    }
+    return (await getPsProcessIdentityAsync(pid))?.commandLine ?? null
   }
 }
 
@@ -627,7 +658,12 @@ async function readVerifiedDaemonPid(
 
   if (
     !parsedPid ||
-    !(await isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs))
+    (await inspectDaemonProcessIdentity(
+      parsedPid.pid,
+      socketPath,
+      tokenPath,
+      parsedPid.startedAtMs
+    )) !== 'match'
   ) {
     return null
   }
@@ -657,22 +693,196 @@ export async function isDaemonStaleForCurrentBundle(
   return true
 }
 
+// 'severed': macOS can no longer resolve the daemon's TCC responsible process, so
+// Accessibility/Automation grants on Orca silently stop covering its terminals (STA-3491).
+// 'unknown' fails open: legacy pid files and probe failures must not trigger replacement.
+export type MacDaemonTccAttributionHealth = 'intact' | 'severed' | 'unknown'
+
+let cachedMacDaemonTccAttributionHealth: {
+  key: string
+  pending: Promise<MacDaemonTccAttributionHealth>
+} | null = null
+
+function getMacDaemonTccAttributionCacheKey(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  packagedAppVersion: string | null,
+  protocolVersion: number
+): string | null {
+  try {
+    const pidRecord = readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    const parsedPid = parseDaemonPidFile(pidRecord)
+    if (!parsedPid) {
+      return null
+    }
+    const spawnerExists = parsedPid.spawnerExecPath ? existsSync(parsedPid.spawnerExecPath) : null
+    return JSON.stringify([
+      socketPath,
+      tokenPath,
+      packagedAppVersion,
+      protocolVersion,
+      pidRecord,
+      spawnerExists
+    ])
+  } catch {
+    return null
+  }
+}
+
+/**
+ * macOS pins a process's TCC "responsible process" to the binary that forked it,
+ * by file reference. The detached daemon outlives that app instance, and once the
+ * spawning binary is deleted (every packaged update replaces the bundle) tccd
+ * can't resolve the grant subject — `osascript`/System Events from every terminal
+ * hosted by that daemon is silently denied (-25211) no matter what the user grants.
+ */
+export async function getMacDaemonTccAttributionHealth(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  packagedAppVersion: string | null,
+  protocolVersion = PROTOCOL_VERSION
+): Promise<MacDaemonTccAttributionHealth> {
+  if (process.platform !== 'darwin') {
+    return 'unknown'
+  }
+  const cacheKey = getMacDaemonTccAttributionCacheKey(
+    runtimeDir,
+    socketPath,
+    tokenPath,
+    packagedAppVersion,
+    protocolVersion
+  )
+  if (cacheKey && cachedMacDaemonTccAttributionHealth?.key === cacheKey) {
+    return await cachedMacDaemonTccAttributionHealth.pending
+  }
+
+  const pending = (async (): Promise<MacDaemonTccAttributionHealth> => {
+    const parsedPid = await readVerifiedDaemonPid(
+      runtimeDir,
+      socketPath,
+      tokenPath,
+      protocolVersion
+    )
+    if (!parsedPid) {
+      return 'unknown'
+    }
+    // Packaged updates can replace the bundle at the same path; missing version
+    // metadata also identifies a daemon from before the current packaged generation.
+    if (packagedAppVersion !== null && parsedPid.appVersion !== packagedAppVersion) {
+      return 'severed'
+    }
+    if (parsedPid.spawnerExecPath) {
+      return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'
+    }
+    return 'unknown'
+  })()
+  if (cacheKey) {
+    cachedMacDaemonTccAttributionHealth = { key: cacheKey, pending }
+  }
+  const health = await pending
+  if (
+    health === 'unknown' &&
+    cachedMacDaemonTccAttributionHealth?.key === cacheKey &&
+    cachedMacDaemonTccAttributionHealth.pending === pending
+  ) {
+    cachedMacDaemonTccAttributionHealth = null
+  }
+  return health
+}
+
+function isNoSuchProcessError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ESRCH'
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    try {
+      process.kill(pid, 0)
+    } catch {
+      return true
+    }
+    if (Date.now() >= deadline) {
+      return false
+    }
+    await new Promise((resolve) => setTimeout(resolve, KILL_POLL_MS))
+  }
+}
+
+/**
+ * Direct-construction-only seam. Which errno a non-socket path yields is platform-specific
+ * (macOS ENOTSOCK vs Linux refused), so the decision rule below cannot be driven portably
+ * through real syscalls. The probe itself is covered separately; this injects its verdict.
+ */
+export type StaleDaemonKillTestHooks = {
+  probeEndpoint?: (socketPath: string) => Promise<SocketProbeOutcome>
+}
+
+export type StaleDaemonKillOutcome = {
+  /** A daemon was positively confirmed gone. Drives replacement telemetry. */
+  killed: boolean
+  /**
+   * We could not prove the recorded daemon is gone. Its PID record and endpoint are left
+   * intact and the caller must not fork a replacement beside it — that is exactly how two
+   * daemons end up alive with one owning the socket and the other hosting the sessions.
+   */
+  liveOwnerSurvived: boolean
+}
+
 export async function killStaleDaemon(
   runtimeDir: string,
   socketPath: string,
   tokenPath: string,
-  protocolVersion = PROTOCOL_VERSION
-): Promise<boolean> {
+  protocolVersion = PROTOCOL_VERSION,
+  testHooks?: StaleDaemonKillTestHooks
+): Promise<StaleDaemonKillOutcome> {
+  const probeEndpoint = testHooks?.probeEndpoint ?? probeSocketConnect
   const pidPath = getDaemonPidPath(runtimeDir, protocolVersion)
   let killedDaemon = false
+  let liveOwnerSurvived = false
+  // Why: identity is resolved once, and the record we may later remove is captured here so
+  // cleanup can be fenced to this exact incarnation rather than to whatever occupies the path
+  // by the time we get there.
+  let recordedOwner: ParsedDaemonPid | null = null
   try {
     const parsedPid = parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
+    recordedOwner = parsedPid
+    const identity = parsedPid
+      ? await inspectDaemonProcessIdentity(
+          parsedPid.pid,
+          socketPath,
+          tokenPath,
+          parsedPid.startedAtMs
+        )
+      : 'mismatch'
     if (
       parsedPid &&
-      (await isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs))
+      identity === 'unknown' &&
+      !endpointIsProvenDead(await probeEndpoint(socketPath))
     ) {
+      // Why: the inspection failed, which is not evidence that this PID is someone else's.
+      // The endpoint is the tiebreaker, and it only settles the question when it positively
+      // proves nothing is serving. A probe that merely timed out is not proof either, so
+      // two inconclusive signals must preserve ownership rather than combine into a licence.
+      console.warn(
+        '[daemon] Preserving daemon that could not be inspected: reason=identity_probe_failed'
+      )
+      return { killed: false, liveOwnerSurvived: true }
+    }
+    if (parsedPid && identity === 'match') {
       const { pid, startedAtMs } = parsedPid
-      process.kill(pid, 'SIGTERM')
+      try {
+        process.kill(pid, 'SIGTERM')
+      } catch (error) {
+        // Why: ESRCH means it is already gone. Anything else (EPERM from a daemon owned by
+        // another user) means it is alive and we cannot stop it — falling through to the
+        // blanket catch would report "nothing alive" and authorize a duplicate beside it.
+        if (!isNoSuchProcessError(error)) {
+          return { killed: false, liveOwnerSurvived: true }
+        }
+      }
       const deadline = Date.now() + KILL_WAIT_MS
       let exited = false
       while (Date.now() < deadline) {
@@ -689,38 +899,79 @@ export async function killStaleDaemon(
         // window is long enough for the pid to be recycled if the original
         // daemon died during the wait. Without this, we'd SIGKILL an unrelated
         // process that happens to now own the same pid.
-        if (!(await isDaemonProcess(pid, socketPath, tokenPath, startedAtMs))) {
+        const recheck = await inspectDaemonProcessIdentity(pid, socketPath, tokenPath, startedAtMs)
+        if (recheck === 'mismatch') {
+          // Why: the pid provably no longer belongs to our daemon, so it is gone regardless
+          // of what the endpoint says.
           console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
           exited = true
-          killedDaemon = true
+        } else if (recheck === 'unknown') {
+          // Why: the inspection failed under load. Only an endpoint that proves nothing is
+          // serving may license reclaiming — a timed-out probe is not a second opinion.
+          if (endpointIsProvenDead(await probeEndpoint(socketPath))) {
+            console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
+            exited = true
+          } else {
+            console.warn(
+              '[daemon] Preserving daemon that could not be identified: reason=identity_probe_failed'
+            )
+            liveOwnerSurvived = true
+          }
         } else {
           try {
             process.kill(pid, 'SIGKILL')
-            exited = true
           } catch {
             // Already dead
+            exited = true
+          }
+          // Why: issuing SIGKILL is not proof of death — a process blocked in an
+          // uninterruptible syscall only dies once it returns. Claiming the kill without
+          // confirming it is what let the endpoint be reclaimed out from under a daemon
+          // that was still alive and still serving.
+          exited = exited || (await waitForProcessExit(pid, SIGKILL_CONFIRM_WAIT_MS))
+          if (!exited) {
+            console.warn('[daemon] Daemon survived SIGKILL: reason=unconfirmed_exit')
           }
         }
       }
-      killedDaemon = killedDaemon || exited
+      killedDaemon = exited
+      // Why: SIGTERM and SIGKILL both failed to produce an exit, so the daemon is still out
+      // there holding the endpoint. Treat it as the owner rather than racing it.
+      liveOwnerSurvived = liveOwnerSurvived || !exited
     }
   } catch {
     // PID file missing or process already dead
   }
 
-  try {
-    unlinkSync(pidPath)
-  } catch {
-    // Best-effort
+  if (liveOwnerSurvived) {
+    // Why: removing the record of a daemon we failed to kill is what let a replacement
+    // publish its own ownership beside it. Leaving it intact keeps the exclusive PID claim
+    // held, so a duplicate cannot take the endpoint.
+    return { killed: killedDaemon, liveOwnerSurvived }
   }
 
-  const socketIsLive = await canConnectSocket(socketPath)
-  if (process.platform !== 'win32' && existsSync(socketPath) && (killedDaemon || !socketIsLive)) {
-    try {
-      unlinkSync(socketPath)
-    } catch {
-      // Best-effort
-    }
+  // Why: remove only the record belonging to the daemon we just dealt with. An unfenced
+  // unlink deletes whatever occupies the path now, which after a slow kill can be a
+  // replacement's freshly published ownership.
+  if (recordedOwner) {
+    unlinkOwnedDaemonPidFile(pidPath, recordedOwner.pid, recordedOwner.launchNonce)
+  } else {
+    // Why: a record we cannot parse names no owner to fence against, but leaving it in place
+    // fails the next daemon's exclusive publish with EEXIST — no daemon at all. Reclaim it
+    // under the same rename claim, and only while it is still unparseable, so a valid record
+    // published in the meantime is left alone.
+    unlinkDaemonPidFileWhen(pidPath, (content) => parseDaemonPidFile(content) === null)
   }
-  return killedDaemon
+
+  // Why this only reads: removing an endpoint on another daemon's behalf is the whole defect
+  // class this design retires. A replacement takes the name itself, by replacing an entry it
+  // has proven dead in one rename. So the only question left here is whether something is
+  // still answering — and only a positive answer withholds the fork.
+  // An unclassifiable entry is no longer a reason to refuse: the publisher probes again and
+  // will not overwrite anything it cannot prove dead, which makes this judgement a hint
+  // rather than a correctness dependency.
+  if ((await probeEndpoint(socketPath)) === 'connected') {
+    return { killed: killedDaemon, liveOwnerSurvived: true }
+  }
+  return { killed: killedDaemon, liveOwnerSurvived }
 }

@@ -12,6 +12,7 @@ import {
   writeAiVaultViewOptions,
   type AiVaultViewOptions
 } from './ai-vault-view-options-persistence'
+import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 type AiVaultViewOptionsUpdate = (current: AiVaultViewOptions) => AiVaultViewOptions
 
@@ -20,9 +21,11 @@ export function usePersistedAiVaultViewOptions(): {
   sort: AiVaultSort
   group: AiVaultGroup
   hideEmptySessions: boolean
+  sessionLimit: AiVaultSessionLimit
   setSort: (sort: AiVaultSort) => void
   setGroup: (group: AiVaultGroup) => void
   setHideEmptySessions: (hide: boolean) => void
+  setSessionLimit: (limit: AiVaultSessionLimit) => void
   setAgentEnabled: (agent: AiVaultAgent, enabled: boolean) => void
   setAllAgentsEnabled: (enabled: boolean) => void
   resetViewOptions: () => void
@@ -62,6 +65,13 @@ export function usePersistedAiVaultViewOptions(): {
         current.hideEmptySessions === hideEmptySessions
           ? current
           : { ...current, hideEmptySessions }
+      ),
+    [updateOptions]
+  )
+  const setSessionLimit = useCallback(
+    (sessionLimit: AiVaultSessionLimit) =>
+      updateOptions((current) =>
+        current.sessionLimit === sessionLimit ? current : { ...current, sessionLimit }
       ),
     [updateOptions]
   )
@@ -110,9 +120,11 @@ export function usePersistedAiVaultViewOptions(): {
     sort: options.sort,
     group: options.group,
     hideEmptySessions: options.hideEmptySessions,
+    sessionLimit: options.sessionLimit,
     setSort,
     setGroup,
     setHideEmptySessions,
+    setSessionLimit,
     setAgentEnabled,
     setAllAgentsEnabled,
     resetViewOptions

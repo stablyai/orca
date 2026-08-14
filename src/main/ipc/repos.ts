@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { z } from 'zod'
 import type { Store } from '../persistence'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   BaseRefSearchResult,
   Project,
@@ -40,10 +41,16 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
+import { DiffCommentSchema } from '../../shared/diff-comment-schema'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
-import { gitExecFileAsync, gitSpawn, nonInteractiveGitEnv } from '../git/runner'
+import {
+  awaitWindowsHostGitEnvironmentReady,
+  gitExecFileAsync,
+  gitSpawnAfterWindowsEnvironmentReady,
+  nonInteractiveGitEnv
+} from '../git/runner'
 import { isAbsolute, join, posix } from 'node:path'
 import {
   cleanupClaimedCloneTarget,
@@ -111,6 +118,10 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import {
+  normalizeCustomWorktreeVisibilitySources,
+  normalizeWorktreeVisibilitySourcePreferences
+} from '../../shared/worktree/visibility-sources'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import { isCurrentSshProviderAuthority } from '../ssh/ssh-provider-authority'
@@ -282,6 +293,9 @@ async function addLocalRepoFromPath(
   kind: 'git' | 'folder' = 'git'
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
+  if (repoKind === 'git') {
+    await awaitWindowsHostGitEnvironmentReady({ cwd: path })
+  }
   if (repoKind === 'git' && !isGitRepo(path)) {
     return { error: `Not a valid git repository: ${path}` }
   }
@@ -750,8 +764,18 @@ type ActiveRemoteCloneMetadata = {
   controller: AbortController
 }
 
+type RepoRemoteClientNotifier = Pick<OrcaRuntimeService, 'notifyReposChangedForRemoteClients'>
+
+// Why: notifyReposChanged is module-level and cannot close over a handler argument (#11994).
+let repoRemoteClientNotifier: RepoRemoteClientNotifier | null = null
+
+export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier): void {
+  repoRemoteClientNotifier = notifier
+}
+
 // Why: module-scoped so the abort handle survives macOS window re-creation, when registerRepoHandlers re-runs.
 let activeClone: ActiveCloneMetadata | null = null
+const pendingLocalCloneControllers = new Set<AbortController>()
 let activeRemoteClone: ActiveRemoteCloneMetadata | null = null
 let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
@@ -932,7 +956,8 @@ const FolderWorkspaceUpdateArgs = z.object({
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),
-      lastActivityAt: z.number().finite().optional()
+      lastActivityAt: z.number().finite().optional(),
+      diffComments: z.array(DiffCommentSchema).optional()
     })
     .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 })
@@ -1159,6 +1184,10 @@ async function scanNestedReposForIpc(args: {
 }): Promise<NestedRepoScanResult> {
   validateNestedRepoScanRoot(args.path, args.connectionId)
   if (!args.connectionId) {
+    await awaitWindowsHostGitEnvironmentReady({
+      cwd: args.path,
+      ...(args.signal ? { signal: args.signal } : {})
+    })
     return scanNestedRepos({
       path: args.path,
       options: args.options,
@@ -1497,7 +1526,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         { getSshFilesystemProvider }
       )
       assertFolderWorkspacePathUsable(status)
-      const workspace = store.createFolderWorkspace(args)
+      const workspace = store.createFolderWorkspace({
+        ...args,
+        creatorProvenance: { kind: 'host' }
+      })
       notifyReposChanged(mainWindow)
       return workspace
     }
@@ -1689,10 +1721,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               continue
             }
             importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
-          } else if (!isGitRepo(repoPath)) {
-            results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
-            continue
           } else {
+            await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
+            if (!isGitRepo(repoPath)) {
+              results.push({
+                path: repoPath,
+                status: 'failed',
+                error: 'Not a valid git repository'
+              })
+              continue
+            }
             importRepoPath = await importTargetResolver.resolveLocal(repoPath)
           }
           const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
@@ -2092,6 +2130,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'externalWorktreeInboxBaselinePaths'
             | 'importedExternalWorktreePaths'
+            | 'agentWorktreeVisibility'
+            | 'customWorktreeVisibilitySources'
+            | 'worktreeVisibilitySourcePreferences'
             | 'projectGroupId'
             | 'projectGroupOrder'
           >
@@ -2161,6 +2202,34 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.externalWorktreeVisibility !== 'show'
       ) {
         delete updates.externalWorktreeVisibility
+      }
+      if (
+        'agentWorktreeVisibility' in updates &&
+        updates.agentWorktreeVisibility !== undefined &&
+        updates.agentWorktreeVisibility !== 'hide' &&
+        updates.agentWorktreeVisibility !== 'show'
+      ) {
+        delete updates.agentWorktreeVisibility
+      }
+      if ('customWorktreeVisibilitySources' in updates) {
+        const normalized = normalizeCustomWorktreeVisibilitySources(
+          updates.customWorktreeVisibilitySources
+        )
+        if (!normalized) {
+          delete updates.customWorktreeVisibilitySources
+        } else {
+          updates.customWorktreeVisibilitySources = normalized
+        }
+      }
+      if ('worktreeVisibilitySourcePreferences' in updates) {
+        const normalized = normalizeWorktreeVisibilitySourcePreferences(
+          updates.worktreeVisibilitySourcePreferences
+        )
+        if (!normalized) {
+          delete updates.worktreeVisibilitySourcePreferences
+        } else {
+          updates.worktreeVisibilitySourcePreferences = normalized
+        }
       }
       if (
         'externalWorktreeVisibilityPromptDismissedAt' in updates &&
@@ -2312,6 +2381,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('repos:cloneAbort', async () => {
+    for (const controller of pendingLocalCloneControllers) {
+      controller.abort()
+    }
+    pendingLocalCloneControllers.clear()
     if (activeClone) {
       const clone = activeClone
       clone.abortRequested = true
@@ -2348,24 +2421,30 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         // Why: spawn (not execFile) avoids the maxBuffer limit — clone progress on stderr can exceed Node's 1 MB default.
         // Why: --progress forces git to emit progress even when stderr isn't a TTY.
         const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
-        await new Promise<void>((resolve, reject) => {
+        let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
+        const pendingController = new AbortController()
+        pendingLocalCloneControllers.add(pendingController)
+        try {
           // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
           // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
-          let proc: ReturnType<typeof gitSpawn>
-          try {
-            proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
+          proc = await gitSpawnAfterWindowsEnvironmentReady(
+            ['clone', '--progress', '--', args.url, clonePath],
+            {
               cwd: args.destination,
               // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
               env: nonInteractiveGitEnv(),
+              signal: pendingController.signal,
               stdio: ['ignore', 'ignore', 'pipe']
-            })
-          } catch (err) {
-            void cleanupClaimedCloneTarget(clonePath, claimedTarget).finally(() => {
-              const message = err instanceof Error ? err.message : String(err)
-              reject(new Error(`Clone failed: ${message}`))
-            })
-            return
-          }
+            }
+          )
+        } catch (err) {
+          await cleanupClaimedCloneTarget(clonePath, claimedTarget)
+          const message = err instanceof Error ? err.message : String(err)
+          throw new Error(`Clone failed: ${message}`)
+        } finally {
+          pendingLocalCloneControllers.delete(pendingController)
+        }
+        await new Promise<void>((resolve, reject) => {
           const generation = nextCloneGeneration++
           latestCloneGenerationByPath.set(clonePathKey, generation)
           const metadata: ActiveCloneMetadata = {
@@ -2700,6 +2779,14 @@ function getRepoForExecutionHost(
 function notifyReposChanged(mainWindow: BrowserWindow): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
+  }
+  // Why: paired clients only refetch a remote catalog on this event; without it a
+  // host-side delete or rename stays invisible to them indefinitely (#11994).
+  try {
+    repoRemoteClientNotifier?.notifyReposChangedForRemoteClients()
+  } catch (err) {
+    // Why: a broadcast failure must never fail the mutation the user actually asked for.
+    console.error('[repos] failed to notify remote clients of repo change', err)
   }
   scheduleCurrentWorktreeBaseDirectoryWatcherSync()
 }

@@ -1,4 +1,4 @@
-import type { LinearWorkspaceCandidate } from '../../shared/linear-agent-access'
+import type { LinearWorkspaceCandidate } from '../../shared/linear/agent-access'
 import type { LinearWorkspace } from '../../shared/types'
 import { linearError } from './issue-context-errors'
 

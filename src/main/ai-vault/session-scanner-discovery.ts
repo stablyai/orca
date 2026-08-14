@@ -1,6 +1,9 @@
-import { readdir, stat } from 'node:fs/promises'
-import { basename, delimiter, extname, join } from 'node:path'
+import type { Dirent } from 'node:fs'
+import { extname, join } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 
@@ -13,15 +16,31 @@ export async function discoverFiles(args: {
   filePredicate?: (path: string) => boolean
   directoryPredicate?: (name: string, depth: number) => boolean
 }): Promise<SessionFileDiscovery> {
-  const paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
-    extensions: new Set(args.extensions),
-    filePredicate: args.filePredicate,
-    directoryPredicate: args.directoryPredicate
-  })
+  let paths: string[]
+  try {
+    paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
+      extensions: new Set(args.extensions),
+      filePredicate: args.filePredicate,
+      directoryPredicate: args.directoryPredicate
+    })
+  } catch (err) {
+    // Why: discoverAiVaultSessionSources fans out with Promise.all, so one
+    // stalled distro would otherwise reject the whole vault scan — including
+    // every healthy local agent. Contain it to this root.
+    if (!(err instanceof WslTranscriptFsError)) {
+      throw err
+    }
+    recordSessionScanIssue(args.issues, {
+      agent: args.agent,
+      path: args.rootDir,
+      message: err.message
+    })
+    return { agent: args.agent, rootDir: args.rootDir, files: [] }
+  }
   const files: FileWithMtime[] = []
   for (const path of paths) {
     try {
-      const fileStat = await stat(path)
+      const fileStat = await wslGatedStat(path, 'scan')
       files.push({
         path,
         mtimeMs: fileStat.mtimeMs,
@@ -32,7 +51,11 @@ export async function discoverFiles(args: {
         nlink: fileStat.nlink
       })
     } catch (err) {
-      args.issues.push({ agent: args.agent, path, message: errorMessage(err) })
+      recordSessionScanIssue(args.issues, {
+        agent: args.agent,
+        path,
+        message: errorMessage(err)
+      })
     }
   }
   return {
@@ -40,30 +63,6 @@ export async function discoverFiles(args: {
     rootDir: args.rootDir,
     files: files.sort((left, right) => right.mtimeMs - left.mtimeMs).slice(0, args.limit)
   }
-}
-
-export async function discoverOpenClawFiles(args: {
-  rootDirs: string[]
-  limit: number
-  issues: AiVaultScanIssue[]
-}): Promise<SessionFileDiscovery> {
-  const discoveries = await Promise.all(
-    args.rootDirs.map((rootDir) =>
-      discoverFiles({
-        rootDir: basename(rootDir) === 'agents' ? rootDir : join(rootDir, 'agents'),
-        limit: args.limit,
-        agent: 'openclaw',
-        issues: args.issues,
-        extensions: ['.jsonl'],
-        filePredicate: (path) => path.split(/[\\/]/).includes('sessions')
-      })
-    )
-  )
-  const files = discoveries
-    .flatMap((discovery) => discovery.files)
-    .sort((left, right) => right.mtimeMs - left.mtimeMs)
-    .slice(0, args.limit)
-  return { agent: 'openclaw', rootDir: args.rootDirs.join(delimiter), files }
 }
 
 export async function walkSessionFiles(
@@ -76,18 +75,30 @@ export async function walkSessionFiles(
     // Return false to skip descending into a directory; depth 0 is a child of
     // rootDir, so pruned subtrees are never stat'd or parsed.
     directoryPredicate?: (name: string, depth: number) => boolean
+    readDirectory?: (dirPath: string) => Promise<Dirent[]>
+    signal?: AbortSignal
   },
   depth = 0
 ): Promise<string[]> {
+  options.signal?.throwIfAborted()
   let entries
   try {
-    entries = await readdir(dirPath, { withFileTypes: true })
-  } catch {
+    entries = options.readDirectory
+      ? await options.readDirectory(dirPath)
+      : await wslGatedReaddir(dirPath, 'scan', options.signal)
+  } catch (error) {
+    options.signal?.throwIfAborted()
+    // Why: a gate refusal means the scan could not run, not that the tree is
+    // empty — swallowing it would misreport a stalled distro as "no transcript".
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return []
   }
 
   const files: string[] = []
   for (const entry of entries) {
+    options.signal?.throwIfAborted()
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
       // Skip whole subtrees an agent never wants (e.g. subagent transcripts),

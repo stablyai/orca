@@ -7,6 +7,7 @@ export const AI_VAULT_AGENTS = [
   'hermes',
   'pi',
   'omp',
+  'prime-agent',
   'cursor',
   'gemini',
   'antigravity',
@@ -25,6 +26,17 @@ export const AI_VAULT_AGENTS = [
 // value are optional belt-and-braces, not required for the request to succeed.
 export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
 
+// Why: IPC rejection drops `Error.name`, so the renderer can only recognise a
+// cancelled scan by its message. Both sides share this literal.
+export const AI_VAULT_SCAN_CANCELLED_MESSAGE = 'Agent Session History scan was cancelled'
+
+export function isAiVaultScanCancelledError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === 'AbortError' || error.message.includes(AI_VAULT_SCAN_CANCELLED_MESSAGE))
+  )
+}
+
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
 export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'
@@ -36,6 +48,7 @@ export const AI_VAULT_AGENT_LABELS = {
   hermes: 'Hermes',
   pi: 'Pi',
   omp: 'OMP',
+  'prime-agent': 'Prime Agent',
   cursor: 'Cursor',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
@@ -172,23 +185,29 @@ export function isAiVaultSessionRecoverableEmpty(
 export type AiVaultScanIssue = {
   executionHostId?: ExecutionHostId
   agent: AiVaultAgent
+  // 'notice' rows are scanner commentary (issue-list overflow), never a failure.
+  kind?: 'host' | 'scope' | 'notice'
   path: string
   message: string
 }
 
 export type AiVaultListArgs = {
   limit?: number
+  unlimited?: boolean
   force?: boolean
   // Active workspace/project paths. The global result is recency-capped, so these
   // guarantee a scoped view still surfaces its own (possibly older) sessions.
   scopePaths?: readonly string[]
   executionHostScope?: ExecutionHostScope
+  requestToken?: string
 }
 
 export type AiVaultListResult = {
   sessions: AiVaultSession[]
   issues: AiVaultScanIssue[]
   scannedAt: string
+  /** Set only by the desktop IPC boundary: this scan was superseded, so its empty body means "nothing to apply". */
+  cancelled?: true
 }
 
 export function aiVaultAgentLabel(agent: AiVaultAgent): string {

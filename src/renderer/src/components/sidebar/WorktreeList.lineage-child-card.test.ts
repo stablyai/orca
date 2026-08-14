@@ -201,35 +201,11 @@ vi.mock('./WorktreeTitleInlineRename', () => ({
     )
 }))
 
-vi.mock('./WorktreeActivityStatusIndicator', () => ({
-  WorktreeActivityStatusIndicator: () => React.createElement('span', { 'data-status-dot': true })
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
-}))
-
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: ({
-    open,
-    status,
-    targetId,
-    targetLabel
-  }: {
-    open: boolean
-    status: string
-    targetId: string
-    targetLabel: string
-  }) =>
-    React.createElement('aside', {
-      'data-lineage-ssh-dialog': open ? 'open' : 'closed',
-      'data-ssh-status': status,
-      'data-ssh-target-id': targetId,
-      'data-ssh-target-label': targetLabel
-    })
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({

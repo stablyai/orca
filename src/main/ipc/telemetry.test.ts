@@ -160,6 +160,7 @@ describe('telemetry IPC handlers', () => {
       count_bucket: 'count_1',
       bucket_source: 'crossed_now'
     })
+    handler({}, 'daemon_audit_eligibility', {})
     expect(trackMock).not.toHaveBeenCalled()
     expect(getCohortAtEmitMock).not.toHaveBeenCalled()
   })

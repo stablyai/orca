@@ -3,7 +3,7 @@ import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-re
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo, Worktree } from '../../../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,

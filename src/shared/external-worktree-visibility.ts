@@ -30,7 +30,7 @@ export function getExternalWorktreeParentPath(worktreePath: string | undefined):
     return `//${parts.slice(0, -1).join('/')}`
   }
   const lastSeparatorIndex = normalized.lastIndexOf('/')
-  if (lastSeparatorIndex < 0) {
+  if (lastSeparatorIndex === -1) {
     return UNKNOWN_EXTERNAL_WORKTREE_PARENT_PATH
   }
   if (lastSeparatorIndex === 0) {
@@ -66,4 +66,11 @@ export function effectiveExternalWorktreeVisibility(
     return repo.externalWorktreeVisibility
   }
   return isLegacyRepoForVisibility ? 'show' : 'hide'
+}
+
+export function effectiveAgentWorktreeVisibility(
+  repo: Pick<Repo, 'agentWorktreeVisibility'>
+): ExternalWorktreeVisibility {
+  // Why: scratch worktrees have always defaulted hidden, including for legacy repos.
+  return repo.agentWorktreeVisibility === 'show' ? 'show' : 'hide'
 }

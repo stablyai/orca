@@ -4,9 +4,9 @@ import { getProjectGroupSubtreeIds } from '../../../shared/project-groups'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 
 export type FolderWorkspaceConnectionState = {
-  folderWorkspaces: FolderWorkspace[]
-  projectGroups: ProjectGroup[]
-  repos: Repo[]
+  folderWorkspaces: readonly FolderWorkspace[]
+  projectGroups: readonly ProjectGroup[]
+  repos: readonly Repo[]
 }
 
 function getFolderScopeCandidateRepos(args: {

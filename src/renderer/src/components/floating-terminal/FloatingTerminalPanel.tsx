@@ -95,21 +95,28 @@ export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
   anchorFloatingTerminalPanelBounds,
   clampFloatingTerminalBounds,
-  getDefaultFloatingTerminalCommittedBounds,
   getDefaultFloatingTerminalBounds,
+  getDefaultFloatingTerminalCommittedBounds,
   getMaximizedFloatingTerminalBounds,
   persistFloatingTerminalPanelBounds,
   readPersistedFloatingTerminalPanelBounds,
-  resolveFloatingTerminalPanelCommittedBounds,
   resolveFloatingTerminalPanelBounds,
+  resolveFloatingTerminalPanelCommittedBounds,
   shouldReconcileFloatingTerminalPanelBounds,
   type FloatingTerminalPanelBounds,
-  type FloatingTerminalPanelCommittedBounds,
-  type FloatingTerminalPanelBoundsSource
+  type FloatingTerminalPanelBoundsSource,
+  type FloatingTerminalPanelCommittedBounds
 } from './floating-terminal-panel-bounds'
+import {
+  persistFloatingTerminalPanelMaximized,
+  readPersistedFloatingTerminalPanelViewState
+} from './floating-terminal-panel-view-state'
+import { useSettledPanelViewport } from './use-settled-panel-viewport'
+import { shouldRestoreMaximizedPanelBounds } from './floating-terminal-panel-restore-geometry'
 import { translate } from '@/i18n/i18n'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
 const NO_ACTIVITY_TERMINAL_PORTALS = []
 
@@ -162,6 +169,17 @@ function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
   const defaultCommittedBounds = getDefaultFloatingTerminalCommittedBounds()
   const defaultRenderedBounds = getDefaultFloatingTerminalBounds()
   const persistedBounds = readPersistedFloatingTerminalPanelBounds()
+  if (shouldRestoreMaximizedPanelBounds(readPersistedFloatingTerminalPanelViewState())) {
+    // Why maximized wins the RENDERED rect while the committed rect stays the restore
+    // target: the first paint must already be final geometry, or the panes fit at the
+    // smaller size and the later maximize reflows them. Un-maximizing still returns to
+    // the user's own bounds because those remain committed.
+    return {
+      committedBounds: persistedBounds ?? defaultCommittedBounds,
+      renderedBounds: getMaximizedFloatingTerminalBounds(),
+      source: persistedBounds ? 'user' : 'default'
+    }
+  }
   return persistedBounds
     ? {
         committedBounds: persistedBounds,
@@ -254,6 +272,11 @@ export function FloatingTerminalPanel({
   const newMarkdownShortcut = useShortcutKeyDetails('tab.newMarkdown')
   const openMarkdownShortcut = useShortcutKeyDetails('tab.openMarkdown')
   const closeShortcut = useShortcutKeyDetails('tab.close')
+  const managedBrowserCreationEnabled = useAppStore(
+    (state) =>
+      getClientCreationActionPolicy(state, FLOATING_TERMINAL_WORKTREE_ID)['managed-browser']
+        .state === 'enabled'
+  )
 
   const [cwd, setCwd] = useState<string | null>(null)
   const [markdownCwd, setMarkdownCwd] = useState<string | null>(null)
@@ -268,7 +291,10 @@ export function FloatingTerminalPanel({
     initialBoundsStateRef.current.committedBounds
   )
   const [bounds, setBounds] = useState(initialBoundsStateRef.current.renderedBounds)
-  const [maximized, setMaximized] = useState(false)
+  const [maximized, setMaximized] = useState(
+    () => readPersistedFloatingTerminalPanelViewState()?.maximized === true
+  )
+  const panelViewportSettled = useSettledPanelViewport()
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
     () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
@@ -369,6 +395,7 @@ export function FloatingTerminalPanel({
     terminalTabs: tabs,
     assignments: terminalAssignments,
     isWorktreeActive: open,
+    activeTerminalTabId: activeTerminalId,
     coldParkTerminalPanes: false,
     shouldMeasureHiddenWorktree: false,
     activityTerminalPortals: NO_ACTIVITY_TERMINAL_PORTALS
@@ -774,6 +801,14 @@ export function FloatingTerminalPanel({
   )
 
   const createFloatingBrowserTab = useCallback(() => {
+    const availability = getClientCreationActionPolicy(
+      useAppStore.getState(),
+      FLOATING_TERMINAL_WORKTREE_ID
+    )['managed-browser']
+    if (availability.state !== 'enabled') {
+      toast.error(availability.reason)
+      return
+    }
     const url = browserDefaultUrl ?? 'about:blank'
     createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
       title: translate(
@@ -1115,9 +1150,9 @@ export function FloatingTerminalPanel({
   const toggleMaximized = useCallback(() => {
     if (maximized) {
       const restoredState = restoreBoundsRef.current ?? {
-        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
-        renderedBounds: getDefaultFloatingTerminalBounds(),
-        source: 'default' as const
+        committedBounds: committedBoundsRef.current,
+        renderedBounds: resolveFloatingTerminalPanelCommittedBounds(committedBoundsRef.current),
+        source: boundsSourceRef.current
       }
       restoreBoundsRef.current = null
       boundsSourceRef.current = restoredState.source
@@ -1128,6 +1163,7 @@ export function FloatingTerminalPanel({
       stagedBoundsRef.current = null
       setBounds(restoredBounds)
       setMaximized(false)
+      persistFloatingTerminalPanelMaximized(false)
       return
     }
     restoreBoundsRef.current = {
@@ -1138,6 +1174,7 @@ export function FloatingTerminalPanel({
     stagedBoundsRef.current = null
     setBounds(getMaximizedFloatingTerminalBounds())
     setMaximized(true)
+    persistFloatingTerminalPanelMaximized(true)
   }, [bounds, maximized])
 
   const maximizePanel = useCallback(() => {
@@ -1155,6 +1192,7 @@ export function FloatingTerminalPanel({
     stagedBoundsRef.current = null
     setBounds(getMaximizedFloatingTerminalBounds())
     setMaximized(true)
+    persistFloatingTerminalPanelMaximized(true)
   }, [bounds, maximized])
 
   useEffect(() => {
@@ -1261,6 +1299,14 @@ export function FloatingTerminalPanel({
         if (resolution.action === 'tab.newTerminal') {
           createFloatingTerminalTab()
         } else if (resolution.action === 'tab.newBrowser') {
+          const availability = getClientCreationActionPolicy(
+            useAppStore.getState(),
+            FLOATING_TERMINAL_WORKTREE_ID
+          )['managed-browser']
+          if (availability.state !== 'enabled') {
+            toast.error(availability.reason)
+            return 'handled'
+          }
           createFloatingBrowserTab()
         } else if (resolution.action === 'tab.newMarkdown') {
           createFloatingMarkdownTab()
@@ -1840,7 +1886,11 @@ export function FloatingTerminalPanel({
             hasVisibleFloatingTabs ? 'floating-workspace-surface' : undefined
           }
         >
-          {cwd
+          {/* Why also gated on a settled viewport: a restored-maximized panel derives its
+              rect from the live viewport, so mounting terminals before the window finishes
+              maximizing fits them to a grid it is about to leave, and the correcting fit
+              reflows the buffer under a live TUI. */}
+          {cwd && panelViewportSettled
             ? tabs
                 .filter((tab) => !parkedTerminalTabIds.has(tab.id))
                 .map((tab) => {
@@ -1920,6 +1970,7 @@ export function FloatingTerminalPanel({
                 <EditorPanel
                   activeFileId={activeEditorFile.id}
                   activeViewStateId={activeEditorUnifiedId}
+                  isVisible={open}
                   markdownAnnotationsEnabled={false}
                 />
               </Suspense>
@@ -1931,6 +1982,7 @@ export function FloatingTerminalPanel({
               onNewMarkdown={createFloatingMarkdownTab}
               onOpenMarkdown={openFloatingMarkdownTab}
               onNewBrowser={createFloatingBrowserTab}
+              showNewBrowser={managedBrowserCreationEnabled}
               onClose={() => onOpenChange(false)}
               onFocusPanel={focusPanelForShortcuts}
               newTerminalShortcut={newTerminalShortcut}
@@ -2073,6 +2125,7 @@ function FloatingTerminalEmptyState({
   onNewMarkdown,
   onOpenMarkdown,
   onNewBrowser,
+  showNewBrowser,
   onClose,
   onFocusPanel,
   newTerminalShortcut,
@@ -2085,6 +2138,7 @@ function FloatingTerminalEmptyState({
   onNewMarkdown: () => void
   onOpenMarkdown: () => void
   onNewBrowser: () => void
+  showNewBrowser: boolean
   onClose: () => void
   onFocusPanel: () => void
   newTerminalShortcut: ShortcutKeyComboDetails
@@ -2148,21 +2202,23 @@ function FloatingTerminalEmptyState({
           </span>
           <FloatingEmptyStateShortcut shortcut={openMarkdownShortcut} />
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
-          onClick={onNewBrowser}
-        >
-          <Globe className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.8b07759314',
-              'New Browser'
-            )}
-          </span>
-          <FloatingEmptyStateShortcut shortcut={newBrowserShortcut} />
-        </Button>
+        {showNewBrowser ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+            onClick={onNewBrowser}
+          >
+            <Globe className="size-3.5 opacity-90" />
+            <span className="truncate text-left leading-none">
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.8b07759314',
+                'New Browser'
+              )}
+            </span>
+            <FloatingEmptyStateShortcut shortcut={newBrowserShortcut} />
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"

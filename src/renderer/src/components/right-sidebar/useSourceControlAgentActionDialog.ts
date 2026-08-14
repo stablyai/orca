@@ -37,6 +37,8 @@ export function useSourceControlAgentActionDialog({
   launchSource,
   savedAgentId,
   onSaveAgentDefault,
+  onLaunchAccepted,
+  onLaunchAborted,
   onLaunched,
   onStart
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
@@ -187,6 +189,8 @@ export function useSourceControlAgentActionDialog({
       refreshDetectedAgents,
       onStart,
       onSaveAgentDefault,
+      onLaunchAccepted,
+      onLaunchAborted,
       onLaunched,
       onClose: closeDialog
     })
@@ -247,33 +251,24 @@ export function useSourceControlAgentActionDialog({
     detecting
   })
 
-  const onSelectedAgentChange = useCallback(
-    (agent: TuiAgent | null) => {
-      setSelectedAgent(agent)
-      resetDeliveryPlan()
-    },
+  // Why: editing any launch field invalidates the previewed delivery plan.
+  const resetPlanAfter = useCallback(
+    <T>(apply: (value: T) => void) =>
+      (value: T): void => {
+        apply(value)
+        resetDeliveryPlan()
+      },
     [resetDeliveryPlan]
   )
-  const onAgentArgsChange = useCallback(
-    (value: string) => {
-      setAgentArgs(value)
-      resetDeliveryPlan()
-    },
-    [resetDeliveryPlan]
+  const onSelectedAgentChange = useMemo(() => resetPlanAfter(setSelectedAgent), [resetPlanAfter])
+  const onAgentArgsChange = useMemo(() => resetPlanAfter(setAgentArgs), [resetPlanAfter])
+  const onCommandTemplateChange = useMemo(
+    () => resetPlanAfter(setCommandTemplate),
+    [resetPlanAfter]
   )
-  const onCommandTemplateChange = useCallback(
-    (value: string) => {
-      setCommandTemplate(value)
-      resetDeliveryPlan()
-    },
-    [resetDeliveryPlan]
-  )
-  const onSaveLaunchRecipeChange = useCallback(
-    (value: boolean) => {
-      setSaveLaunchRecipe(value)
-      resetDeliveryPlan()
-    },
-    [resetDeliveryPlan]
+  const onSaveLaunchRecipeChange = useMemo(
+    () => resetPlanAfter(setSaveLaunchRecipe),
+    [resetPlanAfter]
   )
 
   const agentScopeNote = useMemo(() => {

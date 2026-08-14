@@ -61,6 +61,51 @@ describe('buildSetupRunnerCommand', () => {
       'bash /c/repo/.git/orca/setup-runner.sh'
     )
   })
+
+  it('never hands a batch runner to bash, even from a Git Bash pane', () => {
+    // Regression: a Git Bash terminal with a batch-syntax setup script gets a .cmd runner,
+    // so the launch shell being POSIX must not be read as "the runner is a shell script".
+    const command = buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.cmd', 'windows', {
+      family: 'posix'
+    })
+
+    expect(command).not.toContain('bash ')
+    expect(command).not.toContain('/c/repo')
+  })
+
+  it('avoids the bare /c switch when a POSIX pane launches a batch runner', () => {
+    // Regression (#6896): MSYS rewrites `cmd.exe /c` into a drive path inside Git Bash, so cmd
+    // opens interactively and the runner payload never executes.
+    const command = buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.cmd', 'windows', {
+      family: 'posix'
+    })
+
+    expect(command).not.toContain('cmd.exe /c')
+    expect(command).toMatch(
+      /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+$/
+    )
+  })
+
+  it('keeps the batch runner path in native form for a POSIX pane launch', () => {
+    // Why: the PowerShell launcher hands the path to cmd, which cannot read /c/... MSYS paths;
+    // marker and completion paths derive from this value too.
+    expect(
+      resolveSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.cmd', 'windows', {
+        family: 'posix'
+      })
+    ).toMatchObject({
+      runnerScriptPathForShell: 'C:\\repo\\.git\\orca\\setup-runner.cmd',
+      shell: 'windows'
+    })
+  })
+
+  it('still uses bash for a POSIX runner launched from a POSIX pane', () => {
+    expect(
+      buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.sh', 'windows', {
+        family: 'posix'
+      })
+    ).toBe('bash /c/repo/.git/orca/setup-runner.sh')
+  })
 })
 
 describe('buildSetupRunnerCommand cmd metacharacter guard', () => {

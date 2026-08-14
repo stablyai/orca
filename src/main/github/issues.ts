@@ -87,7 +87,7 @@ export async function getIssue(
     }
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
-      ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels'],
+      ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels,body'],
       ghOptions
     )
     const data = JSON.parse(stdout)
@@ -473,6 +473,7 @@ export async function addIssueComment(
     )
     const data = JSON.parse(stdout) as {
       id?: number
+      node_id?: string | null
       user: { login: string; avatar_url: string; type?: string } | null
       body?: string
       created_at?: string
@@ -483,6 +484,7 @@ export async function addIssueComment(
     }
     const comment: PRComment = {
       id: data.id,
+      reactionSubjectId: data.node_id?.trim() || undefined,
       author: data.user?.login ?? 'You',
       authorAvatarUrl: data.user?.avatar_url ?? '',
       body: data.body ?? body,

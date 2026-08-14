@@ -198,6 +198,10 @@ export function LinuxPackageInstallRecoveryCard({
       'auto.components.LinuxPackageInstallRecoveryCard.3da99454c6',
       'Try Automatic Install Again'
     ),
+    // Why: the retry re-proves the package digest before it quits, so the click is no longer
+    // instant — without this the card would just go inert for the length of the hash.
+    pendingLabel: CHECKING_LABEL,
+    isPending: pendingAction === 'retry',
     disabled: pendingAction !== null,
     onClick: handleRetryAutomatic
   }

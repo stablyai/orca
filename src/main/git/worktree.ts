@@ -5,16 +5,23 @@ import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   getBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { withSpan } from '../observability/tracer'
+import { withWorktreeRemoveStageSpan } from '../observability/instrumentation'
+import {
+  moveWorktreeDirectoryToTrash,
+  restoreWorktreeDirectoryFromTrash,
+  scheduleWorktreeTrashDeletion
+} from '../worktree-trash'
+import { parseWslPath } from '../wsl'
 import type {
   GitWorktreeInfo,
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion,
   RemoveWorktreeResult
 } from '../../shared/types'
-import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
-import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree-submodule-removal'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
+import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree/submodule-removal'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -23,7 +30,7 @@ import {
   isUnsupportedRevParsePathFormatError,
   isUnsupportedWorktreeListZError
 } from '../../shared/git-worktree-command-capabilities'
-import { getLocalGitCapabilityCache } from './git-capability-state'
+import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir, runWithGitReadCacheInvalidation } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -87,6 +94,7 @@ const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); generous enough for a legit large checkout (#7225).
 export const WORKTREE_ADD_TIMEOUT_MS = 180_000
 export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
+export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
 // Why: one wedged shared scan otherwise hangs every later list, including create's post-add re-list.
 export const WORKTREE_LIST_TIMEOUT_MS = 30_000
 
@@ -402,32 +410,32 @@ async function readRepoLocation(
   resolveBasePath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<RepoLocation | undefined> {
-  const capabilities = getLocalGitCapabilityCache({
-    cwd: repoPath,
-    wslDistro: options.wslDistro
-  })
   try {
-    return await capabilities.runWithFallback(
-      'rev-parse-path-format',
-      async () => {
-        const { stdout } = await gitExecFileAsync(
-          ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
-          gitExecOptions(repoPath, options)
+    return await withLocalGitCapabilityCacheForExecution(
+      { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
+      (capabilities) =>
+        capabilities.runWithFallback(
+          'rev-parse-path-format',
+          async () => {
+            const { stdout } = await gitExecFileAsync(
+              ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+              gitExecOptions(repoPath, options)
+            )
+            if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
+              // Why: some old Git echoes the unknown option and exits zero; remember that compat signal even though parsing recovers.
+              capabilities.rememberUnsupported('rev-parse-path-format')
+            }
+            return parseRepoLocation(resolveBasePath, stdout)
+          },
+          async () => {
+            const { stdout } = await gitExecFileAsync(
+              ['rev-parse', '--show-toplevel', '--git-common-dir'],
+              gitExecOptions(repoPath, options)
+            )
+            return parseRepoLocation(resolveBasePath, stdout)
+          },
+          isUnsupportedRevParsePathFormatError
         )
-        if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
-          // Why: some old Git echoes the unknown option and exits zero; remember that compat signal even though parsing recovers.
-          capabilities.rememberUnsupported('rev-parse-path-format')
-        }
-        return parseRepoLocation(resolveBasePath, stdout)
-      },
-      async () => {
-        const { stdout } = await gitExecFileAsync(
-          ['rev-parse', '--show-toplevel', '--git-common-dir'],
-          gitExecOptions(repoPath, options)
-        )
-        return parseRepoLocation(resolveBasePath, stdout)
-      },
-      isUnsupportedRevParsePathFormatError
     )
   } catch {
     return undefined
@@ -570,41 +578,44 @@ async function readWorktreeList(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
-  const capabilities = getLocalGitCapabilityCache({
-    cwd: repoPath,
-    wslDistro: options.wslDistro
-  })
   const execOptions = {
     cwd: repoPath,
     ...options,
     timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   }
-  return capabilities.runWithFallback(
-    'worktree-list-z',
-    async () => {
-      const { stdout } = await gitExecFileAsync(
-        ['worktree', 'list', '--porcelain', '-z'],
-        execOptions
+  return withLocalGitCapabilityCacheForExecution(
+    { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
+    (capabilities) =>
+      capabilities.runWithFallback(
+        'worktree-list-z',
+        async () => {
+          const { stdout } = await gitExecFileAsync(
+            ['worktree', 'list', '--porcelain', '-z'],
+            execOptions
+          )
+          return normalizeMainWorktreePath(
+            repoPath,
+            parseWorktreeList(stdout, { nulDelimited: true }),
+            options
+          )
+        },
+        async () => {
+          // Why: `-z` preserves worktree paths with newlines but Git <2.36 rejects it; fall back to the line parser.
+          const { stdout } = await gitExecFileAsync(
+            ['worktree', 'list', '--porcelain'],
+            execOptions
+          )
+          const normalized = await normalizeMainWorktreePath(
+            repoPath,
+            parseWorktreeList(stdout),
+            options
+          )
+          // Why: Git <2.31 emits no `prunable`, so probe each linked path for existence instead of trusting
+          // stale registrations; a harmless backstop on 2.31–2.35 where parseWorktreeList already set it (#8389).
+          return annotatePrunableByExistence(normalized, repoPath, options)
+        },
+        isUnsupportedWorktreeListZError
       )
-      return normalizeMainWorktreePath(
-        repoPath,
-        parseWorktreeList(stdout, { nulDelimited: true }),
-        options
-      )
-    },
-    async () => {
-      // Why: `-z` preserves worktree paths with newlines but Git <2.36 rejects it; fall back to the line parser.
-      const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions)
-      const normalized = await normalizeMainWorktreePath(
-        repoPath,
-        parseWorktreeList(stdout),
-        options
-      )
-      // Why: Git <2.31 emits no `prunable`, so probe each linked path for existence instead of trusting
-      // stale registrations; a harmless backstop on 2.31–2.35 where parseWorktreeList already set it (#8389).
-      return annotatePrunableByExistence(normalized, repoPath, options)
-    },
-    isUnsupportedWorktreeListZError
   )
 }
 
@@ -1131,23 +1142,27 @@ async function performRemoveWorktree(
   // Why: callers outside the IPC/runtime preflight must not bypass Git's lock contract or rely on localized stderr after side effects.
   assertWorktreeUnlockedForRemoval(removedWorktree)
 
-  const args = ['worktree', 'remove']
-  if (force) {
-    args.push('--force')
-  }
-  args.push(worktreePath)
-  try {
-    await gitExecFileAsync(args, gitExecOptions(repoPath, options))
-  } catch (error) {
-    if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
-      throw error
+  if (
+    !(await tryRemoveWorktreeWithDeferredDirectoryDeletion(repoPath, worktreePath, force, options))
+  ) {
+    const args = ['worktree', 'remove']
+    if (force) {
+      args.push('--force')
     }
-    // Why: Git refuses non-force removal of a worktree with an initialised submodule even when clean; re-prove cleanliness, then --force.
-    await assertWorktreeCleanForRemoval(worktreePath, false, options)
-    await gitExecFileAsync(
-      ['worktree', 'remove', '--force', worktreePath],
-      gitExecOptions(repoPath, options)
-    )
+    args.push(worktreePath)
+    try {
+      await gitExecFileAsync(args, gitExecOptions(repoPath, options))
+    } catch (error) {
+      if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
+        throw error
+      }
+      // Why: Git refuses non-force removal of a worktree with an initialised submodule even when clean; re-prove cleanliness, then --force.
+      await assertWorktreeCleanForRemoval(worktreePath, false, options)
+      await gitExecFileAsync(
+        ['worktree', 'remove', '--force', worktreePath],
+        gitExecOptions(repoPath, options)
+      )
+    }
   }
 
   if (!branchName) {
@@ -1162,6 +1177,82 @@ async function performRemoveWorktree(
   return withSpan('worktree.remove.branch_delete', () =>
     deleteBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options)
   )
+}
+
+/**
+ * Rename the checkout into a sibling trash directory and clear Git's registration for the
+ * now-missing path, so the multi-GB recursive delete runs after this removal has returned.
+ * Returns false when the caller must let `git worktree remove` delete the directory inline.
+ */
+async function tryRemoveWorktreeWithDeferredDirectoryDeletion(
+  repoPath: string,
+  worktreePath: string,
+  force: boolean,
+  options: RemoveWorktreeOptions
+): Promise<boolean> {
+  // Why: WSL-owned checkouts are deleted inside the distro, so Node on Windows must not rename them.
+  if (options.wslDistro || parseWslPath(worktreePath)) {
+    return false
+  }
+  if (!force) {
+    try {
+      // Why: `git worktree remove` re-checks cleanliness as it removes; prove the same thing here or leave removal to Git.
+      await assertWorktreeCleanForRemoval(worktreePath, false, options)
+    } catch {
+      return false
+    }
+  }
+
+  const trashPath = await withWorktreeRemoveStageSpan('trash_rename', 'local', () =>
+    moveWorktreeDirectoryToTrash(worktreePath)
+  )
+  if (!trashPath) {
+    return false
+  }
+  try {
+    await clearGitRegistrationForMissingWorktree(repoPath, worktreePath, options)
+  } catch (error) {
+    // Why: put the checkout back so the in-place removal below still sees the worktree Git registered.
+    if (await restoreWorktreeDirectoryFromTrash(trashPath, worktreePath)) {
+      return false
+    }
+    throw error
+  }
+  scheduleWorktreeTrashDeletion(trashPath)
+  return true
+}
+
+async function clearGitRegistrationForMissingWorktree(
+  repoPath: string,
+  worktreePath: string,
+  options: RemoveWorktreeOptions
+): Promise<void> {
+  const registrationOptions = {
+    ...options,
+    timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
+  }
+  try {
+    // Removing an already-missing directory is accepted back to the Git 2.25 baseline and touches only this entry.
+    await gitExecFileAsync(
+      ['worktree', 'remove', '--force', worktreePath],
+      gitExecOptions(repoPath, registrationOptions)
+    )
+    return
+  } catch (error) {
+    console.warn(
+      `[git] Failed to deregister the moved worktree "${worktreePath}"; pruning instead`,
+      error
+    )
+  }
+
+  await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, registrationOptions))
+  // Strict (not the shared scan): an unreadable repo must not read as proof that the row is gone.
+  const stillRegistered = (await listWorktreesStrict(repoPath, registrationOptions)).some(
+    (worktree) => areWorktreePathsEqual(worktree.path, worktreePath)
+  )
+  if (stillRegistered) {
+    throw new Error(`Git still reports a registration for "${worktreePath}" after pruning it.`)
+  }
 }
 
 async function deleteBranchAfterWorktreeRemoval(
@@ -1267,14 +1358,12 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
     })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
-  if (
-    !(await branchHasNoUnmergedChangesWithLazyTargetRefresh(
-      runGit,
-      branchName,
-      targetRefs,
-      getLocalGitCapabilityCache({ cwd: repoPath, wslDistro: options.wslDistro })
-    ))
-  ) {
+  const hasNoUnmergedChanges = await withLocalGitCapabilityCacheForExecution(
+    { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
+    (capabilities) =>
+      branchHasNoUnmergedChangesWithLazyTargetRefresh(runGit, branchName, targetRefs, capabilities)
+  )
+  if (!hasNoUnmergedChanges) {
     return false
   }
   await forceDeleteLocalBranch(repoPath, branchName, branchHead, (args, cwd) =>

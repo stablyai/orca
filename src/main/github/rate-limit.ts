@@ -9,7 +9,7 @@ import type {
   GitHubRateLimitBucket,
   GitHubRateLimitSnapshot
 } from '../../shared/types'
-import { isDefaultGitHubHost } from '../../shared/github-repository-identity-key'
+import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { acquire, release } from './gh-utils'
 import { ghExecFileAsync } from '../git/runner'

@@ -122,6 +122,17 @@ export type IpcEventsHarness = {
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
+  /** Fire a main-process digit chord (zero-based index). */
+  jumpToWorktreeIndex: (index: number) => void
+  jumpToTabIndex: (index: number) => void
+  navigationUpdate: (event: { browserPageId: string; url: string; title: string }) => void
+  /** Standard (non-palette) target of a workspace digit chord. */
+  activateAndRevealWorkspace: ReturnType<typeof vi.fn>
+}
+
+export type IpcEventsHarnessOptions = {
+  /** Sidebar order the workspace digit chord indexes into. */
+  visibleWorktreeIds?: string[]
 }
 
 /**
@@ -129,11 +140,17 @@ export type IpcEventsHarness = {
  * create-terminal IPC, so reveal/adoption behavior is asserted through the hook.
  */
 export async function loadIpcEventsHarness(
-  storeState: HarnessStoreState
+  storeState: HarnessStoreState,
+  options: IpcEventsHarnessOptions = {}
 ): Promise<IpcEventsHarness> {
   const replyTerminalCreate = vi.fn()
+  const activateAndRevealWorkspace = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
+  let navigationUpdateListener:
+    | ((event: { browserPageId: string; url: string; title: string }) => void)
+    | null = null
+  const indexJumpListeners = new Map<string, (index: number) => void>()
 
   vi.resetModules()
   vi.unstubAllGlobals()
@@ -148,9 +165,12 @@ export async function loadIpcEventsHarness(
   vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
   vi.doMock('@/lib/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
+    activateAndRevealWorkspace,
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({ getVisibleWorktreeIds: () => [] }))
+  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    getVisibleWorktreeIds: () => options.visibleWorktreeIds ?? []
+  }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab: vi.fn(),
     isEmptyFloatingWorkspacePanelVisible: () => false,
@@ -188,6 +208,14 @@ export async function loadIpcEventsHarness(
           onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
             requestTerminalCreateListener = listener
             return () => {}
+          },
+          onJumpToWorktreeIndex: (listener: (index: number) => void) => {
+            indexJumpListeners.set('worktree', listener)
+            return () => {}
+          },
+          onJumpToTabIndex: (listener: (index: number) => void) => {
+            indexJumpListeners.set('tab', listener)
+            return () => {}
           }
         }),
         rateLimits: {
@@ -219,6 +247,14 @@ export async function loadIpcEventsHarness(
           onStatus: () => () => {},
           onClearDismissal: () => () => {}
         },
+        browser: createApiNamespaceStub({
+          onNavigationUpdate: (
+            listener: (event: { browserPageId: string; url: string; title: string }) => void
+          ) => {
+            navigationUpdateListener = listener
+            return () => {}
+          }
+        }),
         mobile: createApiNamespaceStub({
           consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false)
         }),
@@ -243,6 +279,27 @@ export async function loadIpcEventsHarness(
       }
       requestTerminalCreateListener(request)
     },
-    replyTerminalCreate
+    replyTerminalCreate,
+    jumpToWorktreeIndex: (index) => fireIndexJump(indexJumpListeners, 'worktree', index),
+    jumpToTabIndex: (index) => fireIndexJump(indexJumpListeners, 'tab', index),
+    navigationUpdate: (event) => {
+      if (typeof navigationUpdateListener !== 'function') {
+        throw new Error('Expected the browser navigation listener to be registered')
+      }
+      navigationUpdateListener(event)
+    },
+    activateAndRevealWorkspace
   }
+}
+
+function fireIndexJump(
+  listeners: Map<string, (index: number) => void>,
+  kind: string,
+  index: number
+): void {
+  const listener = listeners.get(kind)
+  if (!listener) {
+    throw new Error(`Expected the ${kind}-index jump listener to be registered`)
+  }
+  listener(index)
 }

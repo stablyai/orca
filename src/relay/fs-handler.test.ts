@@ -164,19 +164,23 @@ describe('FsHandler', () => {
     await expect(dispatcher.callRequest('fs.tempDir')).resolves.toBe(tmpdir())
   })
 
-  it('readDir returns sorted entries with directories first', async () => {
+  it('readDir returns entries directories-first in natural name order', async () => {
     mkdirSync(path.join(tmpDir, 'subdir'))
-    writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
-    writeFileSync(path.join(tmpDir, 'aaa.txt'), 'world')
+    for (const name of ['file.txt', '100 - b.txt', '99 - a.txt', '9 - c.txt']) {
+      writeFileSync(path.join(tmpDir, name), 'x')
+    }
 
     const result = (await dispatcher.callRequest('fs.readDir', { dirPath: tmpDir })) as {
       name: string
       isDirectory: boolean
     }[]
-    expect(result[0].name).toBe('subdir')
-    expect(result[0].isDirectory).toBe(true)
-    expect(result.find((e) => e.name === 'file.txt')).toBeDefined()
-    expect(result.find((e) => e.name === 'aaa.txt')).toBeDefined()
+    expect(result[0]).toMatchObject({ name: 'subdir', isDirectory: true })
+    expect(result.slice(1).map((e) => e.name)).toEqual([
+      '9 - c.txt',
+      '99 - a.txt',
+      '100 - b.txt',
+      'file.txt'
+    ])
   })
 
   it('readDir reports symlinked directories as directories', async () => {

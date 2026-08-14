@@ -628,6 +628,16 @@ describe('legacy coordinator takeover races', () => {
       handle === COORDINATOR_HANDLE ? COORDINATOR_PANE : handle === targetHandle ? targetPane : null
     )
     vi.spyOn(harness.runtime, 'getTerminalProcessIncarnation').mockReturnValue('current-process')
+    vi.spyOn(harness.runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
+      handle === targetHandle
+        ? ({
+            terminalHandle: targetHandle,
+            paneKey: targetPane,
+            processIncarnation: 'current-process',
+            launchTokenHash: null
+          } as never)
+        : null
+    )
     let resolveDetection: ((detected: boolean) => void) | undefined
     let signalDetectionStarted: (() => void) | undefined
     const detectionStarted = new Promise<void>((resolve) => {

@@ -33,7 +33,6 @@ type CommitMessageGenerationOverride = {
   sourceControlAi?: GlobalSettings['sourceControlAi']
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
   agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
-  enableGitHubAttribution?: boolean
   commitMessageDiscoveryHostKey?: string
 }
 
@@ -44,7 +43,6 @@ function buildCommitMessageGenerationOverride(params: {
   sourceControlAi?: unknown
   sourceControlAiResolvedParams?: unknown
   agentCmdOverrides?: unknown
-  enableGitHubAttribution?: boolean
   commitMessageDiscoveryHostKey?: string
 }): CommitMessageGenerationOverride | undefined {
   if (
@@ -52,7 +50,6 @@ function buildCommitMessageGenerationOverride(params: {
     params.sourceControlAi === undefined &&
     params.sourceControlAiResolvedParams === undefined &&
     params.agentCmdOverrides === undefined &&
-    params.enableGitHubAttribution === undefined &&
     params.commitMessageDiscoveryHostKey === undefined
   ) {
     return undefined
@@ -75,9 +72,6 @@ function buildCommitMessageGenerationOverride(params: {
           agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
         }
       : {}),
-    ...(params.enableGitHubAttribution !== undefined
-      ? { enableGitHubAttribution: params.enableGitHubAttribution }
-      : {}),
     ...(params.commitMessageDiscoveryHostKey !== undefined
       ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
       : {})
@@ -93,6 +87,7 @@ export const GIT_METHODS: RpcMethod[] = [
         params.includeIgnored === undefined &&
         params.bypassEffectiveUpstreamNegativeCache === undefined &&
         params.reuseLineStats === undefined &&
+        params.branchLineTotalMergeBase === undefined &&
         signal === undefined
           ? undefined
           : {
@@ -103,6 +98,9 @@ export const GIT_METHODS: RpcMethod[] = [
                 ? { bypassEffectiveUpstreamNegativeCache: true }
                 : {}),
               ...(params.reuseLineStats === true ? { reuseLineStats: true } : {}),
+              ...(params.branchLineTotalMergeBase === undefined
+                ? {}
+                : { branchLineTotalMergeBase: params.branchLineTotalMergeBase }),
               ...(signal ? { signal } : {})
             }
       return options === undefined

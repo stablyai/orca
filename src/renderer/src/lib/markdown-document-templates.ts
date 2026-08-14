@@ -126,7 +126,7 @@ export function applyMarkdownTemplatePlaceholders(
   }
 
   return content.replace(/\{\{\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*\}\}/g, (match, key: string) => {
-    return Object.prototype.hasOwnProperty.call(replacements, key) ? replacements[key] : match
+    return Object.hasOwn(replacements, key) ? replacements[key] : match
   })
 }
 

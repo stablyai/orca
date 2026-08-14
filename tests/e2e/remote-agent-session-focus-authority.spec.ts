@@ -140,7 +140,7 @@ async function readRenderedTabOrder(page: Page): Promise<string[]> {
 
 function expectImmediatelyAfter(order: string[], predecessor: string, created: string): void {
   const predecessorIndex = order.indexOf(predecessor)
-  if (predecessorIndex < 0) {
+  if (predecessorIndex === -1) {
     throw new Error(
       `placement predecessor ${predecessor} missing before ${created}: ${JSON.stringify(order)}`
     )

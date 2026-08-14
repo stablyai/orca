@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 
 const callbacks = {
   onRetry: vi.fn(),
@@ -109,6 +110,30 @@ describe('BrowserLoadFailureOverlay', () => {
       />
     )
     expect(screen.queryByRole('button', { name: 'Try HTTPS' })).toBeNull()
+  })
+
+  it('presents guest recovery failures without network troubleshooting', () => {
+    render(
+      <BrowserLoadFailureOverlay
+        loadError={{
+          code: BROWSER_GUEST_RECOVERY_ERROR_CODE,
+          description: 'The browser page stopped unexpectedly. Retry to restore it.',
+          validatedUrl: 'http://localhost:3000/app'
+        }}
+        externalUrl="http://localhost:3000/app"
+        currentUrl="http://localhost:3000/app"
+        httpsRecoveryUrl="https://localhost:3000/app"
+        {...callbacks}
+      />
+    )
+
+    expect(screen.getByText('Browser page stopped')).toBeInTheDocument()
+    expect(
+      screen.getByText('The browser page stopped unexpectedly. Retry to restore it.')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/make sure the server is running/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try HTTPS' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
   })
 
   it('hides Open Externally and works without an external handler', () => {

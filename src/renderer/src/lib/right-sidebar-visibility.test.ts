@@ -30,15 +30,7 @@ function makeState(
 
 describe('right sidebar visibility helpers', () => {
   it('suppresses right sidebar controls on full-page views', () => {
-    for (const view of [
-      'settings',
-      'tasks',
-      'activity',
-      'automations',
-      'space',
-      'skills',
-      'mobile'
-    ]) {
+    for (const view of ['settings', 'tasks', 'activity', 'automations', 'space', 'mobile']) {
       expect(canShowRightSidebarForView(view as AppState['activeView'])).toBe(false)
     }
   })

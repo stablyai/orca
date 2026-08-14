@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sourceKeyForPreview } from './mobile-file-preview-source'
+import { previewSourceFromRoute, sourceKeyForPreview } from './mobile-file-preview-source'
 
 describe('mobile-file-preview-source', () => {
   it('uses structured preview keys so colons in paths cannot collide', () => {
@@ -24,5 +24,22 @@ describe('mobile-file-preview-source', () => {
     expect(
       sourceKeyForPreview({ source: 'worktree', worktreeId: 'wt:1', relativePath: 'a:b.ts' })
     ).toBe(JSON.stringify(['worktree', 'wt:1', 'a:b.ts']))
+  })
+
+  it('makes native-chat artifact previews read-only', () => {
+    expect(
+      previewSourceFromRoute({
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        source: 'terminalArtifact',
+        absolutePath: '/tmp/result.html',
+        grantId: 'grant-1',
+        nativeChatTab: 'tab-1',
+        nativeChatSession: 'session-1'
+      })
+    ).toMatchObject({
+      nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' },
+      readOnly: true
+    })
   })
 })

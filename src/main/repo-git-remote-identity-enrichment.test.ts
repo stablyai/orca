@@ -38,8 +38,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   }
 }
 
-function makeStore(repo: Repo): RepoIdentityStore & { updateRepo: ReturnType<typeof vi.fn> } {
-  const repos = [repo]
+function makeStore(...repos: Repo[]): RepoIdentityStore & { updateRepo: ReturnType<typeof vi.fn> } {
   return {
     getRepos: () => repos,
     getRepo: (id) => repos.find((candidate) => candidate.id === id),
@@ -63,6 +62,27 @@ function deferred<T>(): {
     resolve = resolvePromise
   })
   return { promise, resolve }
+}
+
+const REFRESH_STARTUP_DELAY_MS = 5 * 60 * 1000
+const REFRESH_TTL_MS = 6 * 60 * 60 * 1000
+
+const movedIdentity: GitRemoteIdentity = {
+  canonicalKey: 'git.company.test/platform/sample-app',
+  remoteName: 'upstream',
+  remoteUrl: 'git@git.company.test:platform/sample-app.git'
+}
+
+/** Drains the sequential sweep: each flush only awaits the probe in flight at that moment. */
+async function drainEnrichmentSweep(): Promise<void> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await flushRepoGitRemoteIdentityEnrichmentForTests()
+  }
+}
+
+async function sweep(store: RepoIdentityStore): Promise<void> {
+  enrichMissingRepoGitRemoteIdentities(store)
+  await drainEnrichmentSweep()
 }
 
 afterEach(() => {
@@ -166,6 +186,147 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
     expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: remoteIdentity })
+  })
+
+  it('does not re-probe a resolved identity before the refresh window elapses', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const store = makeStore(makeRepo({ gitRemoteIdentity: remoteIdentity }))
+
+    // Why two sweeps: the first only schedules the re-probe, so a restart cannot fan out at launch.
+    await sweep(store)
+    expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
+
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    await sweep(store)
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + REFRESH_TTL_MS - 1)
+    await sweep(store)
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-probes a resolved identity after the refresh window elapses', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const store = makeStore(makeRepo({ gitRemoteIdentity: remoteIdentity }))
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + REFRESH_TTL_MS + 2)
+    await sweep(store)
+
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(2)
+  })
+
+  it('overwrites a resolved identity when the re-probe finds a different canonical key', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue({
+      status: 'resolved',
+      identity: movedIdentity
+    })
+    const repo = makeRepo({ gitRemoteIdentity: remoteIdentity })
+    const store = makeStore(repo)
+    const onChanged = vi.fn()
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    enrichMissingRepoGitRemoteIdentities(store, { onChanged })
+    await drainEnrichmentSweep()
+
+    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: movedIdentity })
+    expect(repo.gitRemoteIdentity).toEqual(movedIdentity)
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('writes nothing when the re-probe returns the same canonical key', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue({
+      status: 'resolved',
+      identity: { ...remoteIdentity, remoteUrl: 'https://git.company.test/team/sample-app.git' }
+    })
+    const store = makeStore(makeRepo({ gitRemoteIdentity: remoteIdentity }))
+    const onChanged = vi.fn()
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    enrichMissingRepoGitRemoteIdentities(store, { onChanged })
+    await drainEnrichmentSweep()
+
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(1)
+    expect(store.updateRepo).not.toHaveBeenCalled()
+    expect(onChanged).not.toHaveBeenCalled()
+  })
+
+  it('keeps the existing identity when a re-probe cannot reach the host', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'unavailable' })
+    const repo = makeRepo({ connectionId: 'builder', gitRemoteIdentity: remoteIdentity })
+    const store = makeStore(repo)
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    await sweep(store)
+
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(1)
+    expect(store.updateRepo).not.toHaveBeenCalled()
+    expect(repo.gitRemoteIdentity).toEqual(remoteIdentity)
+  })
+
+  it('keeps the existing identity when a re-probe reports no usable remote', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'no-remote' })
+    const repo = makeRepo({ gitRemoteIdentity: remoteIdentity })
+    const store = makeStore(repo)
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    await sweep(store)
+
+    expect(store.updateRepo).not.toHaveBeenCalled()
+    expect(repo.gitRemoteIdentity).toEqual(remoteIdentity)
+  })
+
+  it('bounds re-probes per sweep so a large repo list drains gradually', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const repos = Array.from({ length: 6 }, (_unused, index) =>
+      makeRepo({
+        id: `repo-${index}`,
+        path: `/workspace/sample-app-${index}`,
+        gitRemoteIdentity: remoteIdentity
+      })
+    )
+    const store = makeStore(...repos)
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    await sweep(store)
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(4)
+
+    await sweep(store)
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(6)
+  })
+
+  it('does not re-probe folder workspaces', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const store = makeStore(makeRepo({ kind: 'folder', gitRemoteIdentity: remoteIdentity }))
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + REFRESH_TTL_MS + 1)
+    await sweep(store)
+
+    expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
   })
 
   it('does not write stale identity data after the repo path changes', async () => {

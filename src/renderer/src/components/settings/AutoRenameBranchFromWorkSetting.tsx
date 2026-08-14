@@ -18,6 +18,7 @@ import { SourceControlActionVariableChips } from '../source-control/SourceContro
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Label } from '../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { Switch } from '../ui/switch'
 import { getAutoRenameBranchAdvancedSearchEntries } from './auto-rename-branch-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
@@ -172,24 +173,18 @@ export function AutoRenameBranchFromWorkSetting({
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={settings.autoRenameBranchFromWork}
-          onClick={() =>
+        <Switch
+          aria-label={translate(
+            'auto.components.settings.AutoRenameBranchFromWorkSetting.ef787db0e3',
+            'Auto-rename branch & worktree'
+          )}
+          checked={settings.autoRenameBranchFromWork}
+          onCheckedChange={(checked) =>
             updateSettings({
-              autoRenameBranchFromWork: !settings.autoRenameBranchFromWork
+              autoRenameBranchFromWork: checked
             })
           }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.autoRenameBranchFromWork ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.autoRenameBranchFromWork ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        />
       </div>
 
       <Collapsible open={advancedOpen} onOpenChange={setOptionsOpen}>

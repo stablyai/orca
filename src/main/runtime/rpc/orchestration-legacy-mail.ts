@@ -20,7 +20,7 @@ export async function handleLegacyCheck(args: {
   request: RpcRequest
   params: LegacyCheckParams
   signal?: AbortSignal
-}): Promise<unknown | undefined> {
+}): Promise<unknown> {
   const { runtime, authority, request, params, signal } = args
   if (params.run) {
     return undefined
@@ -138,7 +138,7 @@ export async function handleLegacyReply(args: {
   authority: LegacyCompatibilityAuthority
   request: RpcRequest
   params: LegacyReplyParams
-}): Promise<unknown | undefined> {
+}): Promise<unknown> {
   const { runtime, authority, request, params } = args
   const db = runtime.getOrchestrationDb()
   const original = db.getMessageById(params.id)

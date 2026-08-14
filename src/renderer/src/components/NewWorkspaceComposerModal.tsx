@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import {
@@ -20,6 +20,7 @@ import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type {
+  GitHubWorkItem,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
@@ -41,9 +42,11 @@ type ComposerModalData = {
   initialEphemeralVmRecipeId?: string
   initialProjectGroupId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
+  initialGitHubWorkItem?: GitHubWorkItem | null
   taskSourceContext?: TaskSourceContext | null
   initialBaseBranch?: string
   initialWorkspaceStatus?: WorkspaceStatus
+  enableIssueAutomation?: boolean
   /** Telemetry surface that opened the composer. Set by each
    *  `openModal('new-workspace-composer', ...)` site so
    *  `workspace_created.source` carries the right value. Falls back to
@@ -58,42 +61,29 @@ export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const modalData = useAppStore((s) => s.modalData as ComposerModalData | undefined)
   const closeModal = useAppStore((s) => s.closeModal)
 
-  // Why: Dialog open-state transitions must be driven by the store, not a
-  // mirror useState, so palette/open-modal calls feel instantaneous and the
-  // modal doesn't linger with stale data after close.
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        closeModal()
-      }
-    },
-    [closeModal]
-  )
-
   if (!visible) {
     return null
   }
 
-  return (
-    <ComposerModalBody
-      modalData={modalData ?? {}}
-      onClose={closeModal}
-      onOpenChange={handleOpenChange}
-    />
-  )
+  return <ComposerModalBody modalData={modalData ?? {}} onClose={closeModal} />
 }
 
 function ComposerModalBody({
   modalData,
-  onClose,
-  onOpenChange
+  onClose
 }: {
   modalData: ComposerModalData
   onClose: () => void
-  onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
+  const submitCancelledRef = useRef(false)
+  const handleDismiss = useCallback(() => {
+    submitCancelledRef.current = true
+    onClose()
+  }, [onClose])
+  const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
+
   return (
-    <Dialog open onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
         className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
         onOpenAutoFocus={(event) => {
@@ -106,7 +96,13 @@ function ComposerModalBody({
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <QuickTabBody modalData={modalData} onClose={onClose} active />
+        <QuickTabBody
+          modalData={modalData}
+          onClose={onClose}
+          onDismiss={handleDismiss}
+          isSubmissionCancelled={isSubmissionCancelled}
+          active
+        />
       </DialogContent>
     </Dialog>
   )
@@ -115,10 +111,14 @@ function ComposerModalBody({
 function QuickTabBody({
   modalData,
   onClose,
+  onDismiss,
+  isSubmissionCancelled,
   active
 }: {
   modalData: ComposerModalData
   onClose: () => void
+  onDismiss: () => void
+  isSubmissionCancelled: () => boolean
   active: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
@@ -136,6 +136,7 @@ function QuickTabBody({
     // intentionally ignored even if older callers still send it.
     initialPrompt: '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
+    initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialRepoId: modalData.initialRepoId,
     initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
@@ -144,8 +145,9 @@ function QuickTabBody({
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
     onCreated: onClose,
+    isSubmissionCancelled,
     ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
-    enableIssueAutomation: false,
+    enableIssueAutomation: modalData.enableIssueAutomation === true,
     createGateMode: 'quick'
   })
   // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
@@ -267,7 +269,7 @@ function QuickTabBody({
           return
         }
         event.preventDefault()
-        onClose()
+        onDismiss()
         return
       }
 
@@ -287,7 +289,7 @@ function QuickTabBody({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen, onClose])
+  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen, onDismiss])
 
   return (
     <>

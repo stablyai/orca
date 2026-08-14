@@ -92,6 +92,22 @@ export class RelayAuthCoordinator {
     return this.ownership?.valid ? this.ownership.broker : null
   }
 
+  // Why: some broker deaths end with no retry timer — an auth refresh that
+  // fails past token expiry (laptop sleep), or a transient context read that
+  // returned null at open. Periodic/power-resume callers use this as a
+  // dead-man's switch; it never disturbs a live broker, a scheduled retry,
+  // or an open already in flight.
+  ensureLive(): void {
+    if (this.stopped || this.retryTimer || this.pendingOwnerships.size > 0) {
+      return
+    }
+    const ownership = this.ownership
+    if (ownership?.valid && (ownership.broker?.isLive?.() ?? true)) {
+      return
+    }
+    this.beginReconcile(false)
+  }
+
   async waitForActiveBroker(): Promise<CoordinatedRelayBroker | null> {
     while (!this.stopped) {
       const broker = this.getActiveBroker()

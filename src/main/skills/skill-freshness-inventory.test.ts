@@ -274,6 +274,139 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.eligibleUpdateNames).toEqual([])
   })
 
+  it('scopes the lock hash to the current bundle, not every path a revision ever shipped', async () => {
+    // A file revision 1 shipped and the current revision dropped is a stale leftover, not
+    // part of what the updater installed. Scoping to the union of all revisions would drag
+    // it back into the hash on the accident of its name, and the copy the CLI just wrote
+    // would read "may be modified".
+    const test = await fixture()
+    const legacy = describeObservedSkillFile(
+      'references/legacy.md',
+      Buffer.from('dropped after rev 1\n'),
+      false
+    )
+    const registryPath = join(test.resourceRoot, 'skills', 'snapshot-registry.json')
+    const registry = JSON.parse(await readFile(registryPath, 'utf8'))
+    registry.skills['orca-cli'][0].files.push(legacy)
+    await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`)
+
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    // The lock records the source tree — SKILL.md alone, no leftover.
+    const sourceTree = await test.writeSkill(join(test.root, 'source'), upstreamMarkdown)
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(sourceTree))
+    await mkdir(join(canonical, 'references'), { recursive: true })
+    await writeFile(join(canonical, 'references', 'legacy.md'), 'dropped after rev 1\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('trusts the updater lock for upstream bytes beside an agent CLI sidecar (#12694)', async () => {
+    // The reported folder shape after a successful update: `skills update` wrote
+    // source-repo HEAD no bundle knows yet, and Codex's own agents/openai.yaml sits
+    // beside it. The lock records the source tree — SKILL.md alone — so a folder hash
+    // taken over the sidecar too can never match it, and the copy the command just
+    // wrote would be reported as a failed update.
+    const test = await fixture()
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    const sourceTree = await test.writeSkill(join(test.root, 'source'), upstreamMarkdown)
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(sourceTree))
+    await mkdir(join(canonical, 'agents'), { recursive: true })
+    await writeFile(join(canonical, 'agents', 'openai.yaml'), 'display_name: test\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('still trusts the lock when the upstream revision added a file (#11220 guard)', async () => {
+    // The other half of the sidecar fix: scoping the lock hash to official paths alone
+    // would drop a file upstream genuinely shipped, and that file IS in the lock's tree.
+    // A clean install would then read "may be modified" and its update run report failure.
+    const test = await fixture()
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    await mkdir(join(canonical, 'references'), { recursive: true })
+    await writeFile(
+      join(canonical, 'references', 'new.md'),
+      'Shipped upstream, no bundle knows it\n'
+    )
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(canonical))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('still withholds an unwinnable update when a sidecar sits beside the stale copy', async () => {
+    // Recognising the copy is only half the job: the lock already names the revision the
+    // source has, so `skills update` would compare lock to source, see no work and write
+    // nothing. Offering it promises a button that can never finish. A sidecar must not
+    // make the placement unidentifiable and retire that guard.
+    const test = await fixture()
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      test.oldMarkdown
+    )
+    await mkdir(join(canonical, 'agents'), { recursive: true })
+    await writeFile(join(canonical, 'agents', 'openai.yaml'), 'display_name: test\n')
+    // The fixture's synthetic tree sha for revision 2 — the revision on disk is 1.
+    await writeSkillLockHash(test.homeDir, (2).toString(16).padStart(40, '0'))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'outdated',
+      installedReleaseRevision: 1
+    })
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
   it('still flags canonical bytes that do not match what the lock says was installed', async () => {
     const test = await fixture()
     const editedMarkdown = `${test.currentMarkdown}\nLocal edit the updater never wrote.\n`
@@ -522,10 +655,14 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.eligibleUpdateNames).toEqual([])
   })
 
-  it('keeps a plugin-cache copy with known official files unrecognized', async () => {
+  it('reads a plugin-cache copy with untouched official files as current', async () => {
+    // The deliberate posture change behind #12694: an unlisted neighbour is not evidence
+    // of an edit, so the bytes Orca owns decide alone — here and in every scope, not just
+    // the canonical copy the updater writes. The drifted-SKILL.md case above still fails
+    // closed, which is what keeps "unrecognized" meaningful.
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
-    const modifiedRoot = join(
+    const withSidecarRoot = join(
       test.homeDir,
       '.codex',
       'plugins',
@@ -534,9 +671,9 @@ describe('read-only skill freshness inventory', () => {
       'modified',
       'orca-cli'
     )
-    await mkdir(modifiedRoot, { recursive: true })
-    await writeFile(join(modifiedRoot, 'SKILL.md'), test.currentMarkdown)
-    await writeFile(join(modifiedRoot, 'README.md'), 'Modified official package\n')
+    await mkdir(withSidecarRoot, { recursive: true })
+    await writeFile(join(withSidecarRoot, 'SKILL.md'), test.currentMarkdown)
+    await writeFile(join(withSidecarRoot, 'README.md'), 'Neighbouring file Orca never shipped\n')
 
     const inventory = await inventorySkillFreshness({
       currentAppVersion: '2.0.0',
@@ -548,8 +685,8 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.installations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          unresolvedPath: modifiedRoot,
-          status: 'unrecognized'
+          unresolvedPath: withSidecarRoot,
+          status: 'current'
         })
       ])
     )

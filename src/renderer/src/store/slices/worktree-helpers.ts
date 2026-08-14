@@ -22,7 +22,7 @@ import type {
   WorkspaceKey
 } from '../../../../shared/types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
+import type { WorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -34,8 +34,9 @@ import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
-export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import type { AppState } from '../types'
+export { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
@@ -46,10 +47,19 @@ export type WorktreeDeleteState = {
   lockReason?: string | null
 }
 
+type RendererRemoveWorktreeResult = Omit<RemoveWorktreeResult, 'preservedBranch'> & {
+  preservedBranch?: NonNullable<RemoveWorktreeResult['preservedBranch']> & {
+    hostId?: ExecutionHostId
+    runtimeEnvironmentId?: string
+  }
+}
+
 export type WorktreeFetchOptions = {
   requireAuthoritative?: boolean
   executionHostId?: ExecutionHostId
   forceLocalOwner?: boolean
+  /** Skip automatic remote lineage when the caller owns a final host-wide refresh. */
+  suppressRemoteLineageRefresh?: boolean
 }
 
 export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {
@@ -70,11 +80,17 @@ export type WorktreeRenameRequest = {
   rowKey?: string
 }
 
+export type ActiveWorktreeStateTransition = (state: AppState) => {
+  patch: Partial<AppState>
+  activate: boolean
+  preferredActiveUnifiedTabId?: string
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
-  worktreeLineageById: Record<string, WorktreeLineage>
-  workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
+  worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
+  workspaceLineageByChildKey: Readonly<Record<WorkspaceKey, WorkspaceLineage>>
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
@@ -191,6 +207,13 @@ export type WorktreeSlice = {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
+      startupDraft?: string
+      provisionedRoot?: {
+        runtimeId: string
+        executionHostId: ExecutionHostId
+        expectedPath: string
+      }
     }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
@@ -227,20 +250,27 @@ export type WorktreeSlice = {
       // PTY stopped; `force` alone is set by the ordinary delete confirmation.
       allowUnverifiedPtyStop?: boolean
     }
-  ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
+  ) => Promise<({ ok: true } & RendererRemoveWorktreeResult) | { ok: false; error: string }>
   markWorktreesDeleting: (worktreeIds: readonly string[]) => void
   markWorktreesQueuedForDeletion: (worktreeIds: readonly string[]) => void
   forceDeletePreservedBranch: (
     worktreeId: string,
     branchName: string,
-    expectedHead: string
+    expectedHead: string,
+    options?: {
+      suppressToast?: boolean
+      hostId?: ExecutionHostId
+      runtimeEnvironmentId?: string
+    }
   ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
+  /** Never rejects — most callers fire-and-forget. Callers that own a surface
+   *  the user is waiting on should read the result and say what went wrong. */
   updateWorktreeMeta: (
     worktreeId: string,
     updates: Partial<WorktreeMeta>,
     options?: WorktreeMetaUpdateOptions
-  ) => Promise<void>
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
@@ -280,7 +310,11 @@ export type WorktreeSlice = {
    * fresh visit.
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
-  setActiveWorktree: (worktreeId: string | null, executionHostId?: ExecutionHostId) => void
+  setActiveWorktree: (
+    worktreeId: string | null,
+    executionHostId?: ExecutionHostId,
+    options?: { stateTransition?: ActiveWorktreeStateTransition }
+  ) => boolean
   /**
    * Health-driven remount of one terminal tab: bumps the tab's generation so
    * TerminalPane unmounts, detaches (preserving a live PTY), and remounts with
@@ -364,9 +398,7 @@ export function withoutErasedRequiredWorktreeFields(
   updates: Partial<WorktreeMeta>
 ): Partial<WorktreeMeta> {
   const erased = Object.keys(ERASURE_PROTECTED_KEYS).filter(
-    (key) =>
-      updates[key as keyof WorktreeMeta] === undefined &&
-      Object.prototype.hasOwnProperty.call(updates, key)
+    (key) => updates[key as keyof WorktreeMeta] === undefined && Object.hasOwn(updates, key)
   )
   if (erased.length === 0) {
     return updates
