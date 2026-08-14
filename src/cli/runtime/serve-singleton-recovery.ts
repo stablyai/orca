@@ -2,6 +2,7 @@ import { readlink, symlink, unlink } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { probeServeRuntimeHealth, type ServeRuntimeHealth } from './serve-runtime-health'
+import { isServeProcessAlive } from './serve-process-liveness'
 import { quarantineSingletonArtifacts } from './serve-singleton-quarantine'
 
 export { SINGLETON_ARTIFACT_NAMES } from './serve-singleton-quarantine'
@@ -59,7 +60,7 @@ export async function recoverStaleServeSingleton(
   }
 
   const localHostname = options.localHostname ?? hostname()
-  const isProcessAlive = options.isProcessAlive ?? defaultIsProcessAlive
+  const isProcessAlive = options.isProcessAlive ?? isServeProcessAlive
   const initialOwner = await readSingletonOwner(userDataPath)
   const initialAssessment = assessOwner(initialOwner, localHostname, isProcessAlive)
   if (initialAssessment) {
@@ -233,16 +234,6 @@ async function createMutex(
     return errorCode === 'EEXIST'
       ? { state: 'exists' }
       : { state: 'failed', ...(errorCode ? { errorCode } : {}) }
-  }
-}
-
-function defaultIsProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    // Only ESRCH proves the recorded process is gone; every other error stays fail-closed.
-    return (error as NodeJS.ErrnoException).code !== 'ESRCH'
   }
 }
 

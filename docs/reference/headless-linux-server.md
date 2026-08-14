@@ -193,7 +193,9 @@ Exit status `3` means another process may own this userData profile. On Linux,
 the supervisor first proves the recorded local owner is no longer alive,
 checks runtime health again under a recovery lock, quarantines the unchanged
 singleton artifacts, and retries exactly once. It never changes an active,
-remote-host, changed, or otherwise ambiguous lock. Exit status `4` means the
+remote-host, changed, or otherwise ambiguous lock. A later supervisor removes
+an interrupted recovery's quarantine only after its recorded recovery process
+is proven gone. Exit status `4` means the
 bounded restart budget was exhausted or startup cannot safely continue, such
 as an unusable temporary directory. `RestartPreventExitStatus=3 4` stops the
 unit for both conditions instead of creating another outer restart loop.

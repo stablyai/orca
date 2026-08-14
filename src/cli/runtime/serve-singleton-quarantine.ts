@@ -1,5 +1,6 @@
-import { link, lstat, readlink, rename, rmdir, symlink, unlink } from 'node:fs/promises'
+import { link, lstat, readdir, readlink, rename, rmdir, symlink, unlink } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { isServeProcessAlive } from './serve-process-liveness'
 
 export const SINGLETON_ARTIFACT_NAMES = [
   'SingletonSocket',
@@ -14,6 +15,55 @@ export type SingletonQuarantineResult =
   | { state: 'failed'; errorCode?: string }
 
 type MovedArtifact = { source: string; target: string; name: string }
+
+const STALE_QUARANTINE_SUFFIX = /^stale-\d+-(\d+)$/
+
+export async function reconcileSingletonQuarantines(
+  userDataPath: string,
+  tempDirectory: string
+): Promise<void> {
+  await removeAbandonedServeSingletonQuarantines(userDataPath, tempDirectory).catch((error) => {
+    process.stderr.write(
+      `[serve] could not remove abandoned singleton quarantine: ${error instanceof Error ? error.message : String(error)}\n`
+    )
+  })
+}
+
+export async function removeAbandonedServeSingletonQuarantines(
+  userDataPath: string,
+  tempDirectory: string,
+  isProcessAlive: (pid: number) => boolean = isServeProcessAlive
+): Promise<void> {
+  const entries = new Set(
+    await readdir(userDataPath).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return []
+      }
+      throw error
+    })
+  )
+  const suffixes = new Set<string>()
+  for (const entry of entries) {
+    for (const name of SINGLETON_ARTIFACT_NAMES) {
+      const prefix = `${name}.`
+      if (!entry.startsWith(prefix)) {
+        continue
+      }
+      const suffix = entry.slice(prefix.length)
+      const match = STALE_QUARANTINE_SUFFIX.exec(suffix)
+      const ownerPid = Number(match?.[1])
+      if (match && Number.isSafeInteger(ownerPid) && ownerPid > 0 && !isProcessAlive(ownerPid)) {
+        suffixes.add(suffix)
+      }
+    }
+  }
+  for (const suffix of suffixes) {
+    const paths = SINGLETON_ARTIFACT_NAMES.map((name) => `${name}.${suffix}`).filter((path) =>
+      entries.has(path)
+    )
+    await removeServeSingletonQuarantine(userDataPath, paths, tempDirectory)
+  }
+}
 
 export async function removeServeSingletonQuarantine(
   userDataPath: string,

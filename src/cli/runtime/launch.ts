@@ -13,6 +13,7 @@ import {
 import { getDefaultUserDataPath } from './metadata'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
 import { probeServeRuntimeHealth } from './serve-runtime-health'
+import { prepareLinuxServeSupervision } from './serve-linux-supervision-startup'
 import { recoverStaleServeSingleton } from './serve-singleton-recovery'
 import { removeServeSingletonQuarantine as cleanSingleton } from './serve-singleton-quarantine'
 import {
@@ -28,7 +29,6 @@ import {
 } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
 
-const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
   if (typeof overrideCommand === 'string' && overrideCommand.trim().length > 0) {
@@ -75,12 +75,11 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
     stdio: 'ignore',
     ...options
   })
-  // Why: detached errors arrive after return; openOrca reports the startup timeout.
   child.once('error', () => {})
   child.unref()
 }
 
-export function serveOrcaApp(
+export async function serveOrcaApp(
   args: {
     json?: boolean
     port?: string | null
@@ -131,7 +130,7 @@ export function serveOrcaApp(
       throw error
     }
     process.stderr.write(`[serve] ${error.message}\n`)
-    return Promise.resolve(serveSupervision.SERVE_SUPERVISOR_STOP_EXIT_CODE)
+    return serveSupervision.SERVE_SUPERVISOR_STOP_EXIT_CODE
   }
   const handoffPath =
     args.recipeJson !== true && getMacAppBundlePath(executable)
@@ -141,7 +140,7 @@ export function serveOrcaApp(
   const childEnv = applyServeTempDirectory(stripElectronRunAsNode(process.env), tempDirectory)
   delete childEnv.ORCA_APPIMAGE_NO_SANDBOX
   if (useCrashSupervisor) {
-    childEnv[serveSupervision.SERVE_SUPERVISOR_ENV] = '1'
+    await prepareLinuxServeSupervision(userDataPath, tempDirectory, childEnv)
   }
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
@@ -226,7 +225,7 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
     const writeIgnoredRecipeStdout = (): void => {
       // Why: non-readiness child stdout is untrusted and cannot be safely
       // redacted, including schema-valid results with arbitrary user data.
-      process.stderr.write(`${IGNORED_NON_RECIPE_STDOUT}\n`)
+      process.stderr.write('[serve] ignored non-recipe stdout\n')
     }
     const processRecipeOutputLine = (line: string): void => {
       const normalizedLine = line.endsWith('\r') ? line.slice(0, -1) : line
@@ -298,9 +297,6 @@ function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shel
 }
 
 function resolveAppRoot(): string {
-  // Why: dev-mode resource resolution in the Electron child may consult
-  // process.cwd(). Pin it to the app root so `orca serve` behaves the same
-  // regardless of the shell directory it was launched from.
   return resolve(__dirname, '../../..')
 }
 
