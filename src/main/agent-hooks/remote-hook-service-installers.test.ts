@@ -707,7 +707,9 @@ describe('remote hook service installers', () => {
 
   it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
     const { sftp } = createFakeSftp()
-    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev')
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
+      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+    })
     const byAgent = new Map(results.map((r) => [r.agent, r.state]))
     expect(byAgent.get('droid')).toBe('installed')
     expect(byAgent.get('copilot')).toBe('installed')
@@ -725,6 +727,19 @@ describe('remote hook service installers', () => {
     for (const unusedHome of ['.factory', '.gemini', '.grok', '.hermes', '.commandcode']) {
       expect(paths.some((path) => path.includes(`/home/dev/${unusedHome}`))).toBe(false)
     }
+  })
+
+  it('fails closed when the agent allowlist is omitted or empty (issue #11641)', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    await expect(installRemoteManagedAgentHooks(sftp, '/home/dev')).resolves.toEqual([])
+    await expect(
+      installRemoteManagedAgentHooks(sftp, '/home/dev', { agents: [] })
+    ).resolves.toEqual([])
+
+    // Why: fake SFTP seeds '/' only; no agent config homes or files may appear.
+    expect([...fs.files.keys()]).toEqual([])
+    expect([...fs.dirs]).toEqual(['/'])
   })
 
   it('stops before the next installer when its relay request is cancelled', async () => {
@@ -746,7 +761,10 @@ describe('remote hook service installers', () => {
       const { sftp } = createFakeSftp()
 
       await expect(
-        installRemoteManagedAgentHooks(sftp, '/home/dev', { signal: controller.signal })
+        installRemoteManagedAgentHooks(sftp, '/home/dev', {
+          signal: controller.signal,
+          agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+        })
       ).rejects.toMatchObject({ name: 'AbortError' })
       expect(claudeInstall).toHaveBeenCalledTimes(1)
       expect(openClaudeInstall).not.toHaveBeenCalled()

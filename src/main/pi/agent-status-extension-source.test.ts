@@ -30,6 +30,7 @@ type Harness = {
   fsMock: {
     existsSync: ReturnType<typeof vi.fn>
     readFileSync: ReturnType<typeof vi.fn>
+    statSync: ReturnType<typeof vi.fn>
   }
   handlers: Record<string, HookHandler>
   processEnv: Record<string, string | undefined>
@@ -62,6 +63,7 @@ function createHarness(args: {
   argv?: string[]
   existsSync?: (path: string) => boolean
   readFileSync?: (path: string, encoding: string) => string
+  statSync?: (path: string) => { mtimeMs: number; size: number; ino: number }
   fetchImpl?: (...params: Parameters<typeof fetch>) => Promise<unknown>
 }): Harness {
   const fetchMock = vi.fn(
@@ -86,6 +88,12 @@ function createHarness(args: {
 
   const fsMock = {
     existsSync: vi.fn(args.existsSync ?? (() => false)),
+    statSync: vi.fn(
+      args.statSync ??
+        ((path: string) => {
+          throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
+        })
+    ),
     readFileSync: vi.fn(
       args.readFileSync ??
         ((path: string) => {
@@ -560,6 +568,31 @@ describe('getPiAgentStatusExtensionSource', () => {
         payload: { hook_event_name: 'agent_start' }
       })
     )
+  })
+
+  it('uses current Windows coordinates when a same-token guest endpoint is stale', async () => {
+    const endpointPath = '/home/u/.orca-wsl/agent-hooks/instance-test/endpoint.env'
+    const harness = createHarness({
+      kind: 'prime-agent',
+      env: { WSL_DISTRO_NAME: 'Ubuntu', ORCA_AGENT_HOOK_ENDPOINT: endpointPath },
+      existsSync: (path) => path === '/mnt/c/Windows/System32/curl.exe',
+      statSync: () => ({ mtimeMs: 1, size: 80, ino: 1 }),
+      readFileSync: (path) => {
+        if (path === endpointPath) {
+          return 'ORCA_AGENT_HOOK_PORT=9999\nORCA_AGENT_HOOK_TOKEN=token-1\n'
+        }
+        throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
+      },
+      fetchImpl: vi.fn(async () => {
+        throw new Error('stale guest relay')
+      })
+    })
+
+    await harness.callHook('agent_start')
+
+    expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:9999/hook/prime-agent')
+    await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(1))
+    expect(harness.spawnMock.mock.calls[0]?.[1]).toContain('http://127.0.0.1:4321/hook/prime-agent')
   })
 
   it('probes WSL evidence and the curl path once per process', async () => {

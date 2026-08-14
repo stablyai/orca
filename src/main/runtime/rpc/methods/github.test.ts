@@ -192,6 +192,32 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: [] })
   })
 
+  it('forwards request cancellation to PR check-details work', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRepoPRCheckDetails: vi.fn().mockResolvedValue(null)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+    const controller = new AbortController()
+
+    await dispatcher.dispatch(
+      makeRequest('github.prCheckDetails', { repo: 'repo-1', checkRunId: 9 }),
+      { signal: controller.signal }
+    )
+
+    expect(runtime.getRepoPRCheckDetails).toHaveBeenCalledWith(
+      'repo-1',
+      {
+        checkRunId: 9,
+        workflowRunId: undefined,
+        checkName: undefined,
+        url: undefined,
+        prRepo: null
+      },
+      controller.signal
+    )
+  })
+
   it('fetches PR comments on the runtime server with explicit PR repo', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   ChevronDown,
   GitMerge,
@@ -21,10 +22,15 @@ import {
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import {
+  hostedReviewProviderSupportsDraft,
+  type HostedReviewProvider
+} from '../../../../shared/hosted-review'
 import { stripBaseRef } from './useCreatePullRequestDialogFields'
+import type { HostedReviewStackParent } from './useHostedReviewStackParent'
 import type { DropdownActionKind, DropdownEntry } from './source-control-dropdown-items'
 import { CreateHostedReviewComposerFields } from './CreateHostedReviewComposerFields'
+import { getCreateButtonLabel } from './create-hosted-review-button-label'
 import {
   RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS,
   RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS,
@@ -44,16 +50,20 @@ export type CreateHostedReviewComposerProps = {
   branch: string
   base: string
   setBase: (value: string) => void
+  repoDefaultBase: string | null
   title: string
   setTitle: (value: string) => void
   body: string
   setBody: (value: string) => void
   draft: boolean
   setDraft: (value: boolean) => void
+  stackedCreationSupported: boolean
+  stackParentReview: HostedReviewStackParent | null
   baseQuery: string
   setBaseQuery: (value: string) => void
   baseResults: string[]
   setBaseResults: (value: string[]) => void
+  baseSearchPending: boolean
   baseSearchError: string | null
   aiGenerationEnabled: boolean
   generating: boolean
@@ -67,7 +77,7 @@ export type CreateHostedReviewComposerProps = {
   dropdownItems?: DropdownEntry[]
   onGenerate: () => void
   onCancelGenerate: () => void
-  onPrimaryAction: () => void
+  onPrimaryAction: (stacked: boolean) => void
   onDropdownAction?: (kind: DropdownActionKind) => void
 }
 
@@ -77,16 +87,20 @@ export function CreateHostedReviewComposer({
   branch,
   base,
   setBase,
+  repoDefaultBase,
   title,
   setTitle,
   body,
   setBody,
   draft,
   setDraft,
+  stackedCreationSupported,
+  stackParentReview,
   baseQuery,
   setBaseQuery,
   baseResults,
   setBaseResults,
+  baseSearchPending,
   baseSearchError,
   aiGenerationEnabled,
   generating,
@@ -104,8 +118,24 @@ export function CreateHostedReviewComposer({
   onDropdownAction
 }: CreateHostedReviewComposerProps): React.JSX.Element {
   const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
+  // Providers without draft reviews must not carry a stale draft flag into submit.
+  const supportsDraft = hostedReviewProviderSupportsDraft(provider)
+  const effectiveDraft = supportsDraft && draft
   const ReviewIcon = provider === 'gitlab' ? GitMerge : GitPullRequestArrow
+  const stackedModeAvailable = provider === 'github' && stackedCreationSupported
   const normalizedBase = stripBaseRef(base)
+  const stackSelectionKey = stackParentReview
+    ? `${normalizedBase}:${stackParentReview.number}`
+    : null
+  const [stackSelection, setStackSelection] = useState({ key: '', enabled: false })
+  const effectiveStacked =
+    stackedModeAvailable &&
+    stackSelectionKey !== null &&
+    stackSelection.key === stackSelectionKey &&
+    stackSelection.enabled
+  const setStacked = (enabled: boolean): void => {
+    setStackSelection({ key: stackSelectionKey ?? '', enabled })
+  }
   const strippedBranch = stripBaseRef(branch)
   const baseSameAsBranch = normalizedBase.toLowerCase() === strippedBranch.toLowerCase()
   const createDisabled =
@@ -191,7 +221,9 @@ export function CreateHostedReviewComposer({
 
   return (
     <div className={cn('px-3 pb-2', className)}>
-      <div className="space-y-2.5">
+      {/* Why: one gap between groups, tighter gaps inside them — the form reads as
+          content → merge target → options → action instead of a stack of boxes. */}
+      <div className="space-y-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5 text-xs">
             <ReviewIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -223,16 +255,22 @@ export function CreateHostedReviewComposer({
           copy={copy}
           base={base}
           setBase={setBase}
+          repoDefaultBase={repoDefaultBase}
           title={title}
           setTitle={setTitle}
           body={body}
           setBody={setBody}
           draft={draft}
           setDraft={setDraft}
+          supportsDraft={supportsDraft}
+          stacked={effectiveStacked}
+          setStacked={setStacked}
+          stackParentReview={stackedModeAvailable ? stackParentReview : null}
           baseQuery={baseQuery}
           setBaseQuery={setBaseQuery}
           baseResults={baseResults}
           setBaseResults={setBaseResults}
+          baseSearchPending={baseSearchPending}
           baseSearchError={baseSearchError}
           generateError={generateError}
           createError={createError}
@@ -243,14 +281,14 @@ export function CreateHostedReviewComposer({
           baseSameAsBranch={baseSameAsBranch}
         />
 
-        <div className={cn(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS, 'pt-0.5')}>
+        <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>
           <Button
             type="button"
             size="xs"
             disabled={createDisabled}
-            onClick={() => onPrimaryAction()}
+            onClick={() => onPrimaryAction(effectiveStacked)}
             className={cn(
-              'h-7 px-3 text-xs',
+              'h-8 px-3 text-xs',
               showDropdown && 'rounded-r-none',
               RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS
             )}
@@ -265,7 +303,8 @@ export function CreateHostedReviewComposer({
               {getCreateButtonLabel({
                 isCreating,
                 pushBeforeCreate,
-                draft,
+                draft: effectiveDraft,
+                stacked: effectiveStacked,
                 shortLabel: copy.shortLabel
               })}
             </span>
@@ -277,7 +316,7 @@ export function CreateHostedReviewComposer({
                   type="button"
                   size="xs"
                   className={cn(
-                    'h-7 rounded-l-none border-l border-primary-foreground/20 px-1.5 shrink-0',
+                    'h-8 rounded-l-none border-l border-primary-foreground/20 px-1.5 shrink-0',
                     createDisabled && 'opacity-50'
                   )}
                   aria-label={translate(
@@ -329,37 +368,4 @@ export function CreateHostedReviewComposer({
       </div>
     </div>
   )
-}
-
-function getCreateButtonLabel({
-  isCreating,
-  pushBeforeCreate,
-  draft,
-  shortLabel
-}: {
-  isCreating: boolean
-  pushBeforeCreate: boolean
-  draft: boolean
-  shortLabel: string
-}): string {
-  if (isCreating) {
-    return translate('auto.components.right.sidebar.SourceControl.26511c22b4', 'Creating...')
-  }
-  if (pushBeforeCreate) {
-    return translate(
-      'auto.components.right.sidebar.CreateHostedReviewComposer.741ff8a0d2',
-      'Push & Create {{value0}}',
-      { value0: shortLabel }
-    )
-  }
-  if (draft) {
-    return translate(
-      'auto.components.right.sidebar.SourceControl.aaf1451654',
-      'Create draft {{value0}}',
-      { value0: shortLabel }
-    )
-  }
-  return translate('auto.components.right.sidebar.SourceControl.5acbcedc1a', 'Create {{value0}}', {
-    value0: shortLabel
-  })
 }

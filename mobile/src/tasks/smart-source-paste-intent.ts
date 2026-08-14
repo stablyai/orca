@@ -9,7 +9,7 @@ import { parseGitLabIssueOrMRLink } from '../../../src/shared/new-workspace/gitl
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
-import { githubRepoIdentityKey } from '../../../src/shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 
 // A repo the picker can switch to for a cross-repo GitHub paste. Slug is derived
 // best-effort from the repo's remote metadata.

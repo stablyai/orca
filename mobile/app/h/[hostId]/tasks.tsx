@@ -115,13 +115,15 @@ import {
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
 import {
-  type GitHubProjectSortDirection,
-  type GitHubProjectTable as SharedGitHubProjectTable,
   groupRows,
   isIterationCurrent,
   sortRows,
   type ProjectGroup
-} from '../../../src/tasks/mobile-github-project-group-sort'
+} from '../../../../src/shared/github/project-group-sort'
+import type {
+  GitHubProjectSortDirection,
+  GitHubProjectTable as SharedGitHubProjectTable
+} from '../../../../src/shared/github/project-types'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   isGitHubWorkItemsSshRemoteRequiredError,
@@ -159,7 +161,7 @@ import type { HostedReviewDecision } from '../../../../src/shared/hosted-review'
 import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
-} from '../../../../src/shared/github-project-identity'
+} from '../../../../src/shared/github/project-identity'
 
 type RepoSummary = {
   id: string

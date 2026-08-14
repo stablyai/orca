@@ -1,5 +1,7 @@
 import { colors } from '../theme/mobile-theme'
+import { MOBILE_RICH_MARKDOWN_KEYBOARD_DISMISS_SCRIPT } from './mobile-rich-markdown-keyboard-dismiss-script'
 import { MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT } from './mobile-rich-markdown-editor-keyboard-inset-script'
+import { MOBILE_RICH_MARKDOWN_SELECTION_SCRIPT } from './mobile-rich-markdown-selection-script'
 
 export function escapeInjectedJavaScriptString(value: string): string {
   return JSON.stringify(value).replace(/<\/script/gi, '<\\/script')
@@ -559,6 +561,9 @@ export function buildMobileRichMarkdownEditorHtml(): string {
         window.clearTimeout(inputTimer);
         documentGeneration = Number(generation) || 0;
         suppressInput = true;
+        // Why: replacing innerHTML detaches the remembered caret's nodes.
+        savedSelectionRange = null;
+        selectionDroppedOnBlur = false;
         lastMarkdown = String(markdown || '');
         editor.innerHTML = markdownToHtml(lastMarkdown);
         syncTaskCheckboxesDisabled();
@@ -571,39 +576,8 @@ export function buildMobileRichMarkdownEditorHtml(): string {
         syncTaskCheckboxesDisabled();
       }
 
-      function focusEditor() {
-        editor.focus();
-      }
-
-      function restoreSelectionOrEnd() {
-        focusEditor();
-        var selection = window.getSelection();
-        if (!selection || selection.rangeCount > 0) return;
-        var range = document.createRange();
-        range.selectNodeContents(editor);
-        range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
-
-      function wrapSelection(tagName) {
-        restoreSelectionOrEnd();
-        var selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) return;
-        var range = selection.getRangeAt(0);
-        if (range.collapsed) return;
-        var wrapper = document.createElement(tagName);
-        try {
-          range.surroundContents(wrapper);
-        } catch (_error) {
-          wrapper.appendChild(range.extractContents());
-          range.insertNode(wrapper);
-        }
-        selection.removeAllRanges();
-        selection.selectAllChildren(wrapper);
-        emitChange();
-      }
-
+${MOBILE_RICH_MARKDOWN_SELECTION_SCRIPT}
+${MOBILE_RICH_MARKDOWN_KEYBOARD_DISMISS_SCRIPT}
       function runCommand(command) {
         if (!editable || editor.getAttribute('contenteditable') !== 'true') return;
         restoreSelectionOrEnd();
@@ -632,6 +606,7 @@ export function buildMobileRichMarkdownEditorHtml(): string {
       }
 
       editor.addEventListener('input', function () {
+        selectionDroppedOnBlur = false;
         if (editable) emitChange();
       });
       editor.addEventListener('change', function (event) {
@@ -654,7 +629,19 @@ export function buildMobileRichMarkdownEditorHtml(): string {
           return;
         }
         var input = event.target && event.target.closest && event.target.closest('input[type="checkbox"]');
-        if (!input) return;
+        if (!input) {
+          if (!editable) return;
+          // Why: a task-list label forwards its click to the checkbox, so refocusing here would steal it and re-open the keyboard.
+          var uneditable = event.target && event.target.closest && event.target.closest('[contenteditable="false"]');
+          if (uneditable && uneditable !== editor) return;
+          selectionDroppedOnBlur = false;
+          if (document.activeElement === editor) return;
+          // Why: refocusing after a dismissal otherwise types at the stale caret, not where the user tapped.
+          var caret = caretRangeAtPoint(event.clientX, event.clientY);
+          focusEditor();
+          if (caret && editor.contains(caret.commonAncestorContainer)) applySelectionRange(caret);
+          return;
+        }
         if (!editable) {
           event.preventDefault();
           return;
@@ -670,7 +657,7 @@ export function buildMobileRichMarkdownEditorHtml(): string {
         }
       });
 
-      window.__orcaRichMarkdown = { setMarkdown: setMarkdown, setEditable: setEditable, runCommand: runCommand, currentMarkdown: currentMarkdown };
+      window.__orcaRichMarkdown = { setMarkdown: setMarkdown, setEditable: setEditable, runCommand: runCommand, currentMarkdown: currentMarkdown, dismissKeyboard: dismissKeyboard };
 ${MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT}
       post({ type: 'ready' });
     })();

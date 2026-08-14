@@ -1070,6 +1070,74 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('does not let late Codex tool hooks with explicit prompt resurrect an inferred interrupt', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'UserPromptSubmit',
+          payload: {
+            state: 'working',
+            prompt: 'Run sleep 30, then reply done.',
+            agentType: 'codex'
+          }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'Run sleep 30, then reply done.',
+          baselineAgentType: 'codex',
+          intent: 'plain-escape'
+        })
+      ).toBe(true)
+
+      vi.setSystemTime(6_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'PostToolUse',
+          payload: {
+            state: 'working',
+            prompt: 'Run sleep 30, then reply done.',
+            agentType: 'codex',
+            toolName: 'Bash',
+            toolInput: 'sleep 30'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'Run sleep 30, then reply done.',
+          agentType: 'codex',
+          interrupted: true,
+          receivedAt: 1_500,
+          stateStartedAt: 1_500
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('allows a new prompt after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

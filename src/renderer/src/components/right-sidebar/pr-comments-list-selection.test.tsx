@@ -7,46 +7,66 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuItem: ({
-    children,
-    onSelect
-  }: {
-    children: ReactNode
-    onSelect?: (event: Event) => void
-  }) => (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={() => onSelect?.({ preventDefault: () => {} } as unknown as Event)}
-    >
-      {children}
-    </button>
-  ),
-  DropdownMenuRadioGroup: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuRadioItem: ({
-    children,
-    onSelect
-  }: {
-    children: ReactNode
-    onSelect?: (event: Event) => void
-  }) => (
-    <button
-      type="button"
-      role="menuitemradio"
-      onClick={() => onSelect?.({ preventDefault: () => {} } as unknown as Event)}
-    >
-      {children}
-    </button>
-  ),
-  DropdownMenuSeparator: () => <hr />,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
-}))
+vi.mock('@/components/ui/dropdown-menu', () => {
+  // Radix keeps the selection callback on the group, so the mocked items need it too.
+  let onRadioValueChange: ((value: string) => void) | undefined
+  return {
+    DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
+    DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    DropdownMenuItem: ({
+      children,
+      onSelect
+    }: {
+      children: ReactNode
+      onSelect?: (event: Event) => void
+    }) => (
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => onSelect?.({ preventDefault: () => {} } as unknown as Event)}
+      >
+        {children}
+      </button>
+    ),
+    DropdownMenuRadioGroup: ({
+      children,
+      onValueChange
+    }: {
+      children: ReactNode
+      onValueChange?: (value: string) => void
+    }) => {
+      onRadioValueChange = onValueChange
+      return <>{children}</>
+    },
+    DropdownMenuRadioItem: ({
+      children,
+      value,
+      onSelect
+    }: {
+      children: ReactNode
+      value?: string
+      onSelect?: (event: Event) => void
+    }) => (
+      <button
+        type="button"
+        role="menuitemradio"
+        onClick={() => {
+          onSelect?.({ preventDefault: () => {} } as unknown as Event)
+          if (value !== undefined) {
+            onRadioValueChange?.(value)
+          }
+        }}
+      >
+        {children}
+      </button>
+    ),
+    DropdownMenuSeparator: () => <hr />,
+    DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+  }
+})
 import type { PRComment } from '../../../../shared/types'
-import type { PRCommentGroup } from '@/lib/pr-comment-groups'
+import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
   MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS,
   clearPRCommentsListSelectionsForTests,
@@ -167,6 +187,24 @@ function hasButton(label: string): boolean {
   )
 }
 
+function selectDisplayMode(label: string): void {
+  const item = [...container.querySelectorAll('[role="menuitemradio"]')].find(
+    (candidate) => candidate.textContent === label
+  )
+  if (!item) {
+    throw new Error(`Display mode not found: ${label}`)
+  }
+  act(() => {
+    item.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+}
+
+function renderedGroupOrder(labels: readonly string[]): string[] {
+  return [...container.querySelectorAll('[data-testid="pr-comment-group"]')].map(
+    (row) => labels.find((label) => row.textContent?.includes(label)) ?? '<unmatched>'
+  )
+}
+
 function clickMenuItem(label: string): void {
   clickButton('More comment actions')
   const menuItem =
@@ -256,12 +294,20 @@ describe('PRCommentsList comment resolution selection', () => {
   it('lets a user queue one eligible comment thread for the agent from the visible row action', () => {
     const onResolveSelectedCommentsWithAI = vi.fn()
     renderList({
+      // Why: distinct timestamps pin thread-1 to the first row under the newest-first grouped order.
       comments: [
-        comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false }),
+        comment({
+          id: 1,
+          createdAt: '2026-05-15T00:00:00Z',
+          threadId: 'thread-1',
+          path: 'src/a.ts',
+          isResolved: false
+        }),
         comment({
           id: 2,
           author: 'bob',
           body: 'Second thread.',
+          createdAt: '2026-05-14T00:00:00Z',
           threadId: 'thread-2',
           path: 'src/b.ts',
           isResolved: false
@@ -497,5 +543,64 @@ describe('PRCommentsList comment resolution selection', () => {
 
     renderList({ comments, contextKey: 'review:keep' })
     expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+  })
+})
+
+describe('PRCommentsList comment ordering', () => {
+  const labels = ['Oldest note.', 'Middle note.', 'Newest note.']
+
+  it('reads newest-first in grouped mode and oldest-first in timeline mode', () => {
+    renderList({
+      comments: [
+        comment({ id: 1, body: 'Middle note.', createdAt: '2026-05-14T00:00:00Z' }),
+        comment({ id: 2, body: 'Newest note.', createdAt: '2026-05-15T00:00:00Z' }),
+        comment({ id: 3, body: 'Oldest note.', createdAt: '2026-05-13T00:00:00Z' })
+      ]
+    })
+
+    expect(renderedGroupOrder(labels)).toEqual(['Newest note.', 'Middle note.', 'Oldest note.'])
+
+    selectDisplayMode('Timeline')
+
+    expect(renderedGroupOrder(labels)).toEqual(['Oldest note.', 'Middle note.', 'Newest note.'])
+  })
+
+  it('ranks a replied-to thread by its fresh reply in grouped mode only', () => {
+    const threadLabels = ['Replied thread.', 'Quiet thread.']
+    renderList({
+      comments: [
+        comment({
+          id: 1,
+          body: 'Replied thread.',
+          createdAt: '2026-05-14T00:00:00Z',
+          threadId: 'thread-1',
+          path: 'src/a.ts',
+          isResolved: false
+        }),
+        comment({
+          id: 2,
+          body: 'Quiet thread.',
+          createdAt: '2026-05-13T00:00:00Z',
+          threadId: 'thread-2',
+          path: 'src/b.ts',
+          isResolved: false
+        }),
+        comment({
+          id: 3,
+          body: 'Fresh reply.',
+          createdAt: '2026-05-16T00:00:00Z',
+          threadId: 'thread-1',
+          path: 'src/a.ts',
+          isResolved: false
+        })
+      ]
+    })
+
+    expect(renderedGroupOrder(threadLabels)).toEqual(['Replied thread.', 'Quiet thread.'])
+
+    // Why: timeline ranks by when a thread started, so the quiet older root leads again.
+    selectDisplayMode('Timeline')
+
+    expect(renderedGroupOrder(threadLabels)).toEqual(['Quiet thread.', 'Replied thread.'])
   })
 })

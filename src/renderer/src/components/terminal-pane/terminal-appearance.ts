@@ -150,7 +150,10 @@ export function applyTerminalAppearance(
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
 
-  const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
+  const terminalFontWeights = resolveTerminalFontWeights(
+    settings.terminalFontWeight,
+    settings.terminalFontWeightBold
+  )
   const ligaturesEnabled = resolveTerminalLigaturesEnabled(
     settings.terminalLigatures,
     settings.terminalFontFamily

@@ -227,7 +227,7 @@ function readGitBlobs(objectShas) {
   let offset = 0
   for (const requestedSha of uniqueShas) {
     const headerEnd = output.indexOf(10, offset)
-    if (headerEnd < 0) {
+    if (headerEnd === -1) {
       throw new Error(`Missing git cat-file header for ${requestedSha}`)
     }
     const header = output.subarray(offset, headerEnd).toString('utf8')
@@ -648,8 +648,8 @@ async function main() {
   const argv = process.argv.slice(2)
   const rebuildFromTags = argv.includes('--rebuild-from-tags')
   const releaseIndex = argv.indexOf('--release')
-  const releaseVersion = releaseIndex >= 0 ? argv[releaseIndex + 1] : null
-  if (releaseIndex >= 0 && !releaseVersion) {
+  const releaseVersion = releaseIndex !== -1 ? argv[releaseIndex + 1] : null
+  if (releaseIndex !== -1 && !releaseVersion) {
     throw new Error('--release requires a version argument, e.g. --release 1.4.160')
   }
 

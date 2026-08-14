@@ -7,7 +7,7 @@ export function useAddRepoHostChangeReset({
   onResetHostScopedState
 }: {
   isOpen: boolean
-  selectedHostId: string
+  selectedHostId: string | null
   onResetClosed: () => void
   onResetHostScopedState: () => void
 }) {

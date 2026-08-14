@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow from './ProjectRow'
-import { groupRows, sortRows } from '../../../../shared/github-project-group-sort'
+import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
   ACTION_COLUMN_WIDTH,
@@ -21,7 +21,7 @@ import type {
   GitHubProjectRow,
   GitHubProjectSortDirection,
   GitHubProjectTable
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 

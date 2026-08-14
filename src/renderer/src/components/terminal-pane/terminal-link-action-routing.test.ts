@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import {
+  registerHttpLinkStoreAccessor,
+  registerRuntimeHttpLinkBrowserOpener
+} from '@/lib/http-link-routing'
 import {
   closeTerminalLinkActionRequest,
+  requestTerminalLinkAction,
   type TerminalLinkActionContext,
   type TerminalLinkActionRequest
 } from './terminal-link-action-request'
@@ -11,6 +15,7 @@ import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
 const openUrl = vi.fn()
 const createBrowserTab = vi.fn()
 const setActiveWorktree = vi.fn()
+const openRuntimeBrowserTab = vi.fn(() => Promise.resolve())
 
 function plainEvent(): MouseEvent {
   return {
@@ -29,6 +34,7 @@ function actionContext(request = vi.fn()): TerminalLinkActionContext {
   return {
     paneId: 7,
     pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+    claimPtyMouse: vi.fn(() => true),
     request,
     focusTerminal: vi.fn()
   }
@@ -42,9 +48,11 @@ beforeEach(() => {
     setActiveWorktree,
     createBrowserTab
   }))
+  registerRuntimeHttpLinkBrowserOpener(openRuntimeBrowserTab)
 })
 
 afterEach(() => {
+  registerRuntimeHttpLinkBrowserOpener(null)
   vi.clearAllMocks()
   vi.unstubAllGlobals()
 })
@@ -56,6 +64,54 @@ describe('terminal link action routing', () => {
 
     expect(closeTerminalLinkActionRequest(second, first)).toBe(second)
     expect(closeTerminalLinkActionRequest(first, first)).toBeNull()
+  })
+
+  it('claims PTY mouse ownership only after the pointer gesture is eligible', () => {
+    const claimPtyMouse = vi.fn(() => true)
+    const request = vi.fn()
+    const context = actionContext(request)
+    context.claimPtyMouse = claimPtyMouse
+
+    expect(
+      requestTerminalLinkAction(plainEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run: vi.fn() }
+      })
+    ).toBe(true)
+    expect(claimPtyMouse).toHaveBeenCalledOnce()
+    expect(claimPtyMouse.mock.invocationCallOrder[0]).toBeLessThan(
+      request.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('leaves PTY mouse ownership with an ineligible pointer gesture', () => {
+    const context = actionContext()
+    context.pointerGesture.canRequestAction = () => false
+
+    expect(
+      requestTerminalLinkAction(plainEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run: vi.fn() }
+      })
+    ).toBe(false)
+    expect(context.claimPtyMouse).not.toHaveBeenCalled()
+    expect(context.request).not.toHaveBeenCalled()
+  })
+
+  it('leaves the action closed when the child already owns the gesture', () => {
+    const context = actionContext()
+    context.claimPtyMouse = vi.fn(() => false)
+
+    expect(
+      requestTerminalLinkAction(plainEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run: vi.fn() }
+      })
+    ).toBe(false)
+    expect(context.request).not.toHaveBeenCalled()
   })
 
   it('offers system browser first and Orca second when system browser is the default', () => {
@@ -131,6 +187,28 @@ describe('terminal link action routing', () => {
     expect(request.mock.calls[0][0].alternate).toBeUndefined()
   })
 
+  it('routes an explicit Orca Browser action to the owning runtime', () => {
+    const request = vi.fn()
+
+    handleTerminalHttpLink('https://example.com/path', plainEvent(), {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+      linkActionContext: actionContext(request),
+      actionDestinations: { primary: 'system', alternate: 'orca' }
+    })
+
+    request.mock.calls[0][0].primary.run()
+    expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
+    request.mock.calls[0][0].alternate.run()
+    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/path',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'env-1'
+    })
+    expect(createBrowserTab).not.toHaveBeenCalled()
+  })
+
   it('uses Shift+modifier for the alternate local destination', () => {
     const event = { ...plainEvent(), metaKey: true, shiftKey: true }
 
@@ -143,6 +221,19 @@ describe('terminal link action routing', () => {
       activate: true
     })
     expect(openUrl).not.toHaveBeenCalled()
+  })
+
+  it('keeps Shift+modifier on the only capability-backed destination', () => {
+    const event = { ...plainEvent(), metaKey: true, shiftKey: true }
+
+    handleTerminalHttpLink('https://example.com/path', event, {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+      actionDestinations: { primary: 'system' }
+    })
+
+    expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
+    expect(openRuntimeBrowserTab).not.toHaveBeenCalled()
   })
 
   it('exposes the actual hidden OSC 8 destination', () => {

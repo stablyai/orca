@@ -29,7 +29,7 @@ import {
   type RepoSlugMatches,
   type SlugIndex
 } from './repo-slug-cache'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'
 
@@ -126,7 +126,7 @@ async function resolveRepoSlug(
 }
 
 async function buildIndex(
-  repos: Repo[],
+  repos: readonly Repo[],
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): Promise<{ index: SlugIndex; upstreamIndex: SlugIndex; retryDelayMs: number | null }> {
   // Why: evict cached entries for repos that no longer exist in state so

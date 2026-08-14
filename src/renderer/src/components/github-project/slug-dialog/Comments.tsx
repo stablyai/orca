@@ -16,7 +16,7 @@ import type { GlobalSettings, PRComment } from '../../../../../shared/types'
 import type {
   GitHubProjectCommentMutationResult,
   GitHubProjectMutationResult
-} from '../../../../../shared/github-project-types'
+} from '../../../../../shared/github/project-types'
 import { translate } from '@/i18n/i18n'
 
 function getRuntimeTarget(settings: Parameters<typeof getActiveRuntimeTarget>[0]) {

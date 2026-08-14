@@ -38,7 +38,7 @@ describe('grok session option catalog', () => {
   })
 
   it('offers only effort values the shared option labels localize', () => {
-    const localized = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+    const localized = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
     const effort = grokEffortOption()
     for (const choice of effort.kind.type === 'select' ? effort.kind.choices : []) {
       expect(localized).toContain(choice.value)

@@ -3,6 +3,7 @@ import { isTuiAgent } from './tui-agent-config'
 import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
+import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -53,6 +54,7 @@ export function normalizeFolderWorkspaces(
     const now = Date.now()
     const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
+    const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
     seen.add(raw.id)
     workspaces.push({
       id: raw.id,
@@ -65,6 +67,7 @@ export function normalizeFolderWorkspaces(
           : raw.connectionId === null
             ? null
             : (group?.connectionId ?? null),
+      ...(creatorProvenance ? { creatorProvenance } : {}),
       linkedTask,
       linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(
         linkedTask,
@@ -100,7 +103,10 @@ export function normalizeFolderWorkspaces(
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
-        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now
+        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+      // Legacy read: unreleased #14112 builds wrote notes inline. Canonical home is
+      // PersistedState.folderWorkspaceDiffComments.
+      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
     })
   }
   return workspaces.sort(

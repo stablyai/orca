@@ -7,6 +7,7 @@ import {
   toHostReadableTranscriptPath,
   wslCodexSessionsDirs
 } from './host-readable-transcript-path'
+import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 const DEBIAN_HOME = '\\\\wsl.localhost\\Debian\\home\\other'
@@ -46,7 +47,7 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath(ROLLOUT_LINUX, {
         platform: 'win32',
-        pathExists: (candidate) => candidate === ROLLOUT_UNC,
+        pathExists: async (candidate) => candidate === ROLLOUT_UNC,
         listWslHomeDirs: async () => [UBUNTU_HOME]
       })
     ).resolves.toBe(ROLLOUT_UNC)
@@ -59,7 +60,7 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath('/home/ada/x.jsonl', {
         platform: 'win32',
-        pathExists: (candidate) => {
+        pathExists: async (candidate) => {
           seen.push(candidate)
           return true
         },
@@ -75,7 +76,7 @@ describe('toHostReadableTranscriptPath', () => {
       await expect(
         toHostReadableTranscriptPath(path, {
           platform: 'win32',
-          pathExists: (candidate) => candidate === path,
+          pathExists: async (candidate) => candidate === path,
           listWslHomeDirs: async () => {
             throw new Error('should not enumerate distros')
           }
@@ -89,7 +90,7 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath('/home/ada/.codex/sessions/rollout.jsonl', {
         platform: 'win32',
-        pathExists: (candidate) => {
+        pathExists: async (candidate) => {
           seen.push(candidate)
           return true
         },
@@ -103,17 +104,49 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath(ROLLOUT_LINUX, {
         platform: 'win32',
-        pathExists: () => false,
+        pathExists: async () => false,
         listWslHomeDirs: async () => [UBUNTU_HOME]
       })
     ).resolves.toBeNull()
+  })
+
+  it('prefers a later distro hit over an earlier gate refusal', async () => {
+    // Guest path under Debian's $HOME so the refusing Debian probe ranks first.
+    await expect(
+      toHostReadableTranscriptPath('/home/other/x.jsonl', {
+        platform: 'win32',
+        pathExists: async (candidate) => {
+          if (candidate.includes('Debian')) {
+            throw new WslTranscriptFsError('timeout', 'slow share')
+          }
+          return candidate.includes('Ubuntu')
+        },
+        listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
+      })
+    ).resolves.toBe('\\\\wsl.localhost\\Ubuntu\\home\\other\\x.jsonl')
+  })
+
+  it('reports unavailability, not a miss, when a refused distro was never probed', async () => {
+    const refusal = new WslTranscriptFsError('timeout', 'slow share')
+    await expect(
+      toHostReadableTranscriptPath('/home/other/x.jsonl', {
+        platform: 'win32',
+        pathExists: async (candidate) => {
+          if (candidate.includes('Debian')) {
+            throw refusal
+          }
+          return false
+        },
+        listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
+      })
+    ).rejects.toBe(refusal)
   })
 
   it('does not translate guest paths off Windows', async () => {
     await expect(
       toHostReadableTranscriptPath('/home/ada/rollout.jsonl', {
         platform: 'darwin',
-        pathExists: (candidate) => candidate === '/home/ada/rollout.jsonl',
+        pathExists: async (candidate) => candidate === '/home/ada/rollout.jsonl',
         listWslHomeDirs: async () => {
           throw new Error('should not enumerate distros')
         }
@@ -128,7 +161,7 @@ describe('toHostReadableTranscriptPath', () => {
     for (let tick = 0; tick < 5; tick += 1) {
       await toHostReadableTranscriptPath(ROLLOUT_LINUX, {
         platform: 'win32',
-        pathExists: () => false,
+        pathExists: async () => false,
         listWslHomeDirs
       })
     }
@@ -151,7 +184,7 @@ describe('toHostReadableTranscriptPath', () => {
       const call = (): Promise<string | null> =>
         toHostReadableTranscriptPath('/home/other/x.jsonl', {
           platform: 'win32',
-          pathExists: (candidate) => candidate === debianRollout,
+          pathExists: async (candidate) => candidate === debianRollout,
           listWslHomeDirs
         })
 

@@ -7,7 +7,7 @@ import { getSettingsForRepoRuntimeOwner } from './repo-runtime-owner'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey
-} from '../../../shared/github-repository-identity-key'
+} from '../../../shared/github/repository-identity-key'
 
 /** Lowercased `owner/repo` → Repo[]. */
 export type SlugIndex = Map<string, Repo[]>

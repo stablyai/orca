@@ -10,9 +10,7 @@ function sameStringRecord(
   const rightKeys = Object.keys(right)
   return (
     leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key) => Object.prototype.hasOwnProperty.call(right, key) && left[key] === right[key]
-    )
+    leftKeys.every((key) => Object.hasOwn(right, key) && left[key] === right[key])
   )
 }
 

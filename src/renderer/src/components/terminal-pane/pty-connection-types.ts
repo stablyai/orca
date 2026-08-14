@@ -48,6 +48,9 @@ export type PtyConnectionDeps = {
   } | null
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
+  /** Park intent sampled at render time, before the host disposes the tab's
+   *  watchers; consumed once the restored layout has been replayed. */
+  mountFollowsTerminalPark: boolean
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   /** Per-pane mirror of the kitty keyboard flags the pane's application
@@ -98,10 +101,9 @@ export type PtyConnectionDeps = {
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
-  /** Records a DECSET 2031 subscription answered from main's
-   *  '2031-subscribe' fact, mirroring the xterm CSI handler's registry write
-   *  (paneMode2031 + last replied theme) so later theme flips push CSI 997.
-   *  The reply itself is sent by the fact handler — query authority stays
-   *  with the view (model/view contract invariant 6). */
-  recordPaneMode2031Subscription?: (paneId: number, repliedMode: 'dark' | 'light') => void
+  deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
+  /** Records a DECSET 2031 subscription seen through main's '2031-subscribe'
+   *  fact (paneMode2031 + the mode at subscribe time) so later theme flips push
+   *  CSI 997. Subscribing itself is silent — see #9993. */
+  recordPaneMode2031Subscription?: (paneId: number, subscribedMode: 'dark' | 'light') => void
 }

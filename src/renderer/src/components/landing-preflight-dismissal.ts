@@ -23,7 +23,7 @@ function storageKey(issueId: string): string {
 
 /** GitHub-backed project identity keys for the current repo set, de-duped so
  *  the same GitHub project added twice doesn't read as two distinct projects. */
-export function githubProjectKeys(repos: Repo[]): string[] {
+export function githubProjectKeys(repos: readonly Repo[]): string[] {
   const keys = repos
     .filter((repo) => isGitHubBackedRepo(repo))
     .map((repo) => getProjectIdentityKey(repo))
@@ -45,7 +45,7 @@ function readRecord(issueId: string): DismissalRecord | null {
 
 /** True when the issue was dismissed and no new GitHub project has appeared
  *  since. A GitHub key present now but absent from the snapshot re-surfaces it. */
-export function isPreflightIssueDismissed(issueId: string, repos: Repo[]): boolean {
+export function isPreflightIssueDismissed(issueId: string, repos: readonly Repo[]): boolean {
   const record = readRecord(issueId)
   if (!record) {
     return false
@@ -55,7 +55,7 @@ export function isPreflightIssueDismissed(issueId: string, repos: Repo[]): boole
   return !hasNewGithubProject
 }
 
-export function dismissPreflightIssue(issueId: string, repos: Repo[]): void {
+export function dismissPreflightIssue(issueId: string, repos: readonly Repo[]): void {
   try {
     const record: DismissalRecord = { githubKeys: githubProjectKeys(repos) }
     localStorage.setItem(storageKey(issueId), JSON.stringify(record))

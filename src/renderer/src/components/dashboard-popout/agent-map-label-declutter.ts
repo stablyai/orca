@@ -38,8 +38,6 @@ type LabelGrid = Map<number, Map<number, LabelBox[]>>
 export type AgentMapVisibleLabels = {
   /** Worktree ring ids whose name can render without colliding. */
   worktreeIds: Set<string>
-  /** Worktree names that hover/focus may reveal without covering an agent. */
-  worktreeAgentSafeIds: Set<string>
   /** Project ids whose agent/workspace count line still has room. The count is
    *  the first thing dropped: it repeats what the filter rail already says. */
   projectCountIds: Set<string>
@@ -221,7 +219,6 @@ export function selectVisibleAgentMapLabels(
   })
 
   const worktreeIds = new Set<string>()
-  const worktreeAgentSafeIds = new Set<string>()
   for (const worktree of candidates.slice(0, MAX_LABEL_CANDIDATES)) {
     const box = baselineBox(
       worktree.x,
@@ -234,7 +231,6 @@ export function selectVisibleAgentMapLabels(
     if (collides(agentGrid, box)) {
       continue
     }
-    worktreeAgentSafeIds.add(worktree.id)
     if (collides(grid, box)) {
       continue
     }
@@ -261,5 +257,5 @@ export function selectVisibleAgentMapLabels(
     projectCountIds.add(project.id)
   }
 
-  return { worktreeIds, worktreeAgentSafeIds, projectCountIds }
+  return { worktreeIds, projectCountIds }
 }

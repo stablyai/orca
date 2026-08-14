@@ -4,7 +4,7 @@ import type { LinearWorkspace } from '../../../shared/types'
 import {
   buildLinearPersonalApiKeySettingsUrl,
   buildLinearWorkspaceApiSettingsUrl
-} from '../../../shared/linear-links'
+} from '../../../shared/linear/links'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'

@@ -24,7 +24,18 @@ export const EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE: TerminalReplyQueryScanState 
   pendingStartSeq: null
 }
 
-function isReplyElicitingCsi(sequence: string): boolean {
+/**
+ * Sequences worth replaying to a late-attaching view, because a scrollback snapshot
+ * carries only rendered cells and drops the control bytes that produced them.
+ *
+ * Most entries are reply-eliciting queries the attaching emulator must answer once.
+ * The DECSET/DECRST 2031 pair is different: since #9993 nothing answers the subscribe,
+ * but a remote renderer derives its color-scheme subscription registry from these very
+ * bytes (pty-connection observeLiveMode2031Chunk), so both toggles must be carried —
+ * an arm without its withdraw would leave the client subscribed for a TUI that already
+ * retired the subscription, and fish rearms/withdraws on every prompt.
+ */
+function isReplayableCsi(sequence: string): boolean {
   if (DEVICE_ATTRIBUTES_QUERY_RE.test(sequence)) {
     return true
   }
@@ -41,7 +52,10 @@ function isReplyElicitingCsi(sequence: string): boolean {
     sequence === '\x1b[16t' ||
     sequence === '\x1b[18t' ||
     sequence === '\x1b[?u' ||
-    sequence === '\x1b[?2031h'
+    sequence === '\x1b[?2031h' ||
+    // Why paired with the arm above, exact-form only: replaying a combined DECRST such as
+    // `CSI ?2004;2031l` would also toggle unrelated modes in the attaching emulator.
+    sequence === '\x1b[?2031l'
   )
 }
 
@@ -81,7 +95,7 @@ export function scanTerminalReplyQuerySequences(
     if (input.startsWith(`${ESC}[`, candidateIndex)) {
       endIndex = findCsiFinalByteIndex(input, candidateIndex + 2)
       if (endIndex !== -1) {
-        matches = isReplyElicitingCsi(input.slice(candidateIndex, endIndex + 1))
+        matches = isReplayableCsi(input.slice(candidateIndex, endIndex + 1))
       }
     } else if (input.startsWith(`${ESC}]`, candidateIndex)) {
       const osc = parseTerminalOscColorQuery(input, candidateIndex)

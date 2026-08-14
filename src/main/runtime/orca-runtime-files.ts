@@ -45,6 +45,7 @@ import type {
   RuntimeFileReadChunkResult,
   RuntimeFilePreviewResult,
   RuntimeFileReadResult,
+  RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
 } from '../../shared/runtime-types'
 import {
@@ -58,6 +59,11 @@ import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
 import { searchWithGitGrep } from '../ipc/filesystem-search-git'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { checkRgAvailable } from '../ipc/rg-availability'
+import {
+  absorbPendingRipgrepSpawnError,
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess
+} from '../../shared/ripgrep-process-availability'
 import {
   listMarkdownDocuments,
   markdownDocumentsFromRelativePaths
@@ -178,6 +184,8 @@ type TerminalFileGrant = {
   clientId?: string
   expiresAt: number
   statIdentity: string | null
+  readOnly: boolean
+  provenance: 'terminal-output' | 'native-chat'
   expiryTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -519,6 +527,12 @@ export type RuntimeFileCommandHost = {
     pathText: string,
     absolutePath: string
   ): boolean | Promise<boolean>
+  hasRecentNativeChatOutputPath?(
+    worktreeId: string,
+    context: RuntimeNativeChatFileContext,
+    pathText: string,
+    absolutePath: string
+  ): boolean | Promise<boolean>
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
@@ -721,7 +735,8 @@ export class RuntimeFileCommands {
     cwd?: string | null,
     clientId?: string,
     terminalHandle?: string | null,
-    crossWorkspace?: boolean
+    crossWorkspace?: boolean,
+    nativeChatContext?: RuntimeNativeChatFileContext | null
   ): Promise<RuntimeTerminalPathResolution> {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
@@ -745,9 +760,9 @@ export class RuntimeFileCommands {
       isDirectory: false
     }
 
-    // Why: remote home is unknown (only local os.homedir), so a tapped ~/… on a remote worktree is not-openable, not guessed.
+    // Why: SSH/WSL homes are unknown here; native-chat grants must not expand their ~/… paths against the local host home.
     const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
-    if (isTilde && connectionId) {
+    if (isTilde && (connectionId || (nativeChatContext && parseWslPath(worktree.path)))) {
       return empty
     }
     const expanded = isTilde ? resolveRuntimePath(homedir(), pathText.slice(2)) : pathText
@@ -797,6 +812,26 @@ export class RuntimeFileCommands {
         }
       }
 
+      if (
+        nativeChatContext &&
+        (await this.host.hasRecentNativeChatOutputPath?.(
+          worktree.id,
+          nativeChatContext,
+          pathText,
+          absolutePath
+        ))
+      ) {
+        const artifactPath = await this.resolveNativeChatArtifactPath(absolutePath, connectionId)
+        return await this.resolveAbsoluteFileGrant({
+          worktreeId: worktree.id,
+          artifactPath,
+          connectionId,
+          clientId,
+          readOnly: true,
+          provenance: 'native-chat'
+        })
+      }
+
       // Why: mobile taps may hit agent artifacts outside the worktree; grant the exact path, not arbitrary absolute paths.
       if (!normalizedTerminalHandle || !terminalCwd) {
         return { ...empty, relativePath, absolutePath }
@@ -826,38 +861,13 @@ export class RuntimeFileCommands {
       ) {
         return { ...empty, relativePath, absolutePath }
       }
-      const stats = connectionId
-        ? await this.statRemoteTerminalPath(artifactPath, connectionId)
-        : await this.statLocalTerminalPath(artifactPath)
-      const isDirectory = stats.isDirectory()
-      if (!isDirectory && isTerminalArtifactHardLinked(stats)) {
-        return { ...empty, relativePath, absolutePath }
-      }
-      const grant = isDirectory
-        ? null
-        : this.createTerminalFileGrant({
-            worktreeId: worktree.id,
-            absolutePath: artifactPath,
-            provider: connectionId ? 'ssh' : 'local',
-            connectionId,
-            clientId,
-            stats
-          })
-      return {
-        worktree: worktree.id,
-        relativePath: null,
-        absolutePath: artifactPath,
-        exists: true,
-        isDirectory,
-        openTarget: grant
-          ? {
-              kind: 'absolute-file',
-              provider: grant.provider,
-              absolutePath: artifactPath,
-              grantId: grant.id
-            }
-          : undefined
-      }
+      return await this.resolveAbsoluteFileGrant({
+        worktreeId: worktree.id,
+        artifactPath,
+        rejectedAbsolutePath: absolutePath,
+        connectionId,
+        clientId
+      })
     } catch (error) {
       // Report genuine not-found as missing; let transport/permission errors surface so remote taps aren't all reported missing.
       if (
@@ -904,6 +914,72 @@ export class RuntimeFileCommands {
     return resolveAllowedLocalTerminalArtifactPath(args.absolutePath, args.worktreePath)
   }
 
+  private async resolveNativeChatArtifactPath(
+    absolutePath: string,
+    connectionId?: string
+  ): Promise<string> {
+    if (!connectionId) {
+      return canonicalPathForArtifactComparison(absolutePath)
+    }
+    const provider = getSshFilesystemProvider(connectionId)
+    if (!provider) {
+      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    return provider.realpath(absolutePath)
+  }
+
+  private async resolveAbsoluteFileGrant(args: {
+    worktreeId: string
+    artifactPath: string
+    rejectedAbsolutePath?: string
+    connectionId?: string
+    clientId?: string
+    readOnly?: boolean
+    provenance?: TerminalFileGrant['provenance']
+  }): Promise<RuntimeTerminalPathResolution> {
+    const stats = args.connectionId
+      ? await this.statRemoteTerminalPath(args.artifactPath, args.connectionId)
+      : await this.statLocalTerminalPath(args.artifactPath)
+    const isDirectory = stats.isDirectory()
+    if (!isDirectory && isTerminalArtifactHardLinked(stats)) {
+      return {
+        worktree: args.worktreeId,
+        relativePath: null,
+        absolutePath: args.rejectedAbsolutePath ?? args.artifactPath,
+        exists: false,
+        isDirectory: false
+      }
+    }
+    const grant = isDirectory
+      ? null
+      : this.createTerminalFileGrant({
+          worktreeId: args.worktreeId,
+          absolutePath: args.artifactPath,
+          provider: args.connectionId ? 'ssh' : 'local',
+          connectionId: args.connectionId,
+          clientId: args.clientId,
+          readOnly: args.readOnly === true,
+          provenance: args.provenance ?? 'terminal-output',
+          stats
+        })
+    return {
+      worktree: args.worktreeId,
+      relativePath: null,
+      absolutePath: args.artifactPath,
+      exists: true,
+      isDirectory,
+      openTarget: grant
+        ? {
+            kind: 'absolute-file',
+            provider: grant.provider,
+            absolutePath: args.artifactPath,
+            grantId: grant.id,
+            ...(grant.readOnly ? { readOnly: true } : {})
+          }
+        : undefined
+    }
+  }
+
   private async resolveAllowedRemoteTerminalArtifactPath(
     absolutePath: string,
     connectionId: string
@@ -948,6 +1024,8 @@ export class RuntimeFileCommands {
     provider: 'local' | 'ssh'
     connectionId?: string
     clientId?: string
+    readOnly?: boolean
+    provenance: TerminalFileGrant['provenance']
     stats: RuntimeFileStatLike
   }): TerminalFileGrant {
     assertTerminalArtifactNotHardLinked(args.stats)
@@ -959,7 +1037,9 @@ export class RuntimeFileCommands {
       ...(args.connectionId ? { connectionId: args.connectionId } : {}),
       ...(args.clientId ? { clientId: args.clientId } : {}),
       expiresAt: Date.now() + TERMINAL_FILE_GRANT_TTL_MS,
-      statIdentity: terminalFileStatIdentity(args.stats)
+      statIdentity: terminalFileStatIdentity(args.stats),
+      readOnly: args.readOnly === true,
+      provenance: args.provenance
     }
     this.terminalFileGrants.set(grant.id, grant)
     this.scheduleTerminalFileGrantExpiry(grant)
@@ -1124,6 +1204,9 @@ export class RuntimeFileCommands {
       absolutePath,
       clientId
     )
+    if (grant.readOnly) {
+      throw new Error('terminal_file_grant_read_only')
+    }
     if (isMobileBinaryPath(grant.absolutePath)) {
       throw new Error('binary_file')
     }
@@ -1275,12 +1358,15 @@ export class RuntimeFileCommands {
     if (!provider) {
       throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
     }
-    const allowedPath = await this.resolveAllowedRemoteTerminalArtifactPath(
-      grant.absolutePath,
-      grant.connectionId
-    )
-    // Why: relay I/O follows symlinks, so re-canonicalize a remote temp-artifact grant after the process can mutate it.
-    if (allowedPath !== grant.absolutePath) {
+    const canonicalPath =
+      grant.provenance === 'native-chat'
+        ? await provider.realpath(grant.absolutePath)
+        : await this.resolveAllowedRemoteTerminalArtifactPath(
+            grant.absolutePath,
+            grant.connectionId
+          )
+    // Why: relay I/O follows symlinks, so re-canonicalize after the remote process can mutate the path.
+    if (canonicalPath !== grant.absolutePath) {
       throw new Error('terminal_file_grant_stale')
     }
     return provider
@@ -1920,26 +2006,33 @@ export class RuntimeFileCommands {
       1,
       Math.min(options.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
     )
-    const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
-    if (!rgAvailable) {
+    const wslInfo = parseWslPath(authorizedRootPath)
+    if (
+      (wslInfo || localGitOptions.wslDistro) &&
+      !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro))
+    ) {
       return searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions)
     }
 
-    return new Promise((resolvePromise) => {
+    return new Promise<SearchResult>((resolvePromise) => {
       const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
       const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
-      this.activeRuntimeTextSearches.get(searchKey)?.kill()
+      const previousChild = this.activeRuntimeTextSearches.get(searchKey)
+      if (previousChild) {
+        killSpawnedRipgrepProcess(previousChild)
+      }
 
       const acc = createAccumulator()
       let stdoutBuffer = ''
       let resolved = false
+      let processErrorObserved = false
+      let unavailableExitObserved = false
       let child: ChildProcess | null = null
-      const wslInfo = parseWslPath(authorizedRootPath)
       const transformAbsPath = wslInfo
         ? (p: string): string => toWindowsWslPath(p, wslInfo.distro)
         : undefined
 
-      const resolveOnce = (): void => {
+      const finish = (result: SearchResult | PromiseLike<SearchResult>): void => {
         if (resolved) {
           return
         }
@@ -1948,8 +2041,11 @@ export class RuntimeFileCommands {
           this.activeRuntimeTextSearches.delete(searchKey)
         }
         cleanupListeners()
-        resolvePromise(finalize(acc))
+        resolvePromise(result)
       }
+      const resolveOnce = (): void => finish(finalize(acc))
+      const resolveWithoutRipgrep = (): void =>
+        finish(searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions))
 
       let killTimeout: ReturnType<typeof setTimeout> | null = null
       const cleanupListeners = (): void => {
@@ -1961,6 +2057,12 @@ export class RuntimeFileCommands {
         child?.stderr?.off('data', onStderrData)
         child?.off('error', onError)
         child?.off('close', onClose)
+        if (child) {
+          absorbPendingRipgrepSpawnError(child, {
+            errorObserved: processErrorObserved,
+            unavailableExitObserved
+          })
+        }
       }
 
       const processLine = (line: string): void => {
@@ -1971,8 +2073,8 @@ export class RuntimeFileCommands {
           maxResults,
           transformAbsPath
         )
-        if (verdict === 'stop') {
-          child?.kill()
+        if (verdict === 'stop' && child) {
+          killSpawnedRipgrepProcess(child)
         }
       }
 
@@ -1996,8 +2098,25 @@ export class RuntimeFileCommands {
       const onStderrData = (): void => {
         // Drain stderr so rg cannot block on a full pipe.
       }
-      const onError = (): void => resolveOnce()
-      const onClose = (): void => {
+      const onError = (): void => {
+        processErrorObserved = true
+        if (child && isRipgrepUnavailableExit(child, null, null)) {
+          resolveWithoutRipgrep()
+          return
+        }
+        resolveOnce()
+      }
+      const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+        if (
+          child &&
+          isRipgrepUnavailableExit(child, code, signal, {
+            classifyNativeLauncherExit: !(wslInfo || localGitOptions.wslDistro)
+          })
+        ) {
+          unavailableExitObserved = true
+          resolveWithoutRipgrep()
+          return
+        }
         if (stdoutBuffer) {
           processLine(stdoutBuffer)
         }
@@ -2011,7 +2130,9 @@ export class RuntimeFileCommands {
 
       killTimeout = setTimeout(() => {
         acc.truncated = true
-        child?.kill()
+        if (child) {
+          killSpawnedRipgrepProcess(child)
+        }
         resolveOnce()
       }, SEARCH_TIMEOUT_MS)
     })

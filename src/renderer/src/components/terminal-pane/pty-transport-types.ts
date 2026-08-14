@@ -18,6 +18,8 @@ import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-
 
 export type PtyBufferSnapshot = {
   data: string
+  /** Live state that can be restored without an alternate-screen frame. */
+  frameRestoreAnsi?: string
   cols: number
   rows: number
   seq?: number
@@ -39,6 +41,21 @@ export type PtyBufferSnapshot = {
    *  before post-snapshot live chunks — so the continuation completes it
    *  exactly as live instead of rendering literal (Bug E / #7329). */
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags the owner of this image proved at `seq`. Absent
+   *  means unknown; never rewrite that silence into a known `0`. */
+  kittyKeyboardFlags?: number
+}
+
+/** Metadata for one authoritative replay payload. */
+export type PtyReplayDataMeta = {
+  clearBeforeReplay?: boolean
+  pendingEscapeTailAnsi?: string
+  /** Kitty flags the snapshot's owner PROVED at `snapshotSeq`. Absent means
+   *  unknown; the pane tracker must stay unproven rather than assume zero. */
+  kittyKeyboardFlags?: number
+  /** The boundary `kittyKeyboardFlags` describes, recorded as the renderer's
+   *  ordered high-water so a quiet pane can still publish a coherent snapshot. */
+  snapshotSeq?: number
 }
 
 export type LocalPtySessionMetadata = {
@@ -59,6 +76,17 @@ export type PtyConnectResult = {
   snapshot?: string
   snapshotCols?: number
   snapshotRows?: number
+  /** Normal-buffer history and mode preamble before an alternate-screen frame. */
+  snapshotPrefixAnsi?: string
+  /** Visual alternate-screen frame. Both fields are absent on older hosts. */
+  snapshotFrameAnsi?: string
+  /** Live state to append when omitting `snapshotFrameAnsi`. */
+  snapshotFrameRestoreAnsi?: string
+  /** Kitty keyboard flags the daemon snapshot proved, paired with the renderer-
+   *  domain `snapshotSeq` main reconciled for the same attach boundary. Absent
+   *  means unknown, never a proven inactive protocol. */
+  snapshotKittyKeyboardFlags?: number
+  snapshotSeq?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
@@ -76,12 +104,12 @@ type PtyCallbacks = {
   /** Called before an adopted PTY can publish buffered/live bytes. */
   onReattachDetermined?: () => void
   onConnect?: () => void
+  /** A stream re-established after loss carries only new bytes, so the pane must
+   *  re-pull the host's retained buffer or an idle/exited pane paints nothing. */
+  onStreamRecovered?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
-  onReplayData?: (
-    data: string,
-    meta?: { clearBeforeReplay?: boolean; pendingEscapeTailAnsi?: string }
-  ) => void
+  onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
@@ -116,6 +144,7 @@ export type PtyTransport = {
      *  Ignored by remote-runtime transports (not gate-markable). */
     initiallyHidden?: boolean
     command?: string
+    commandDelivery?: 'renderer' | 'provider'
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
@@ -196,6 +225,7 @@ export type IpcPtyTransportOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   agentPrompt?: string

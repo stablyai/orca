@@ -2,7 +2,7 @@ import {
   normalizeLinearIssueViewResumeState,
   resolveLinearIssueViewResumeState,
   type LinearIssueViewResumeState
-} from '../../../shared/linear-issue-view-resume-state'
+} from '../../../shared/linear/issue-view-resume-state'
 
 // Why: issue-list layout is a per-device view preference, not host state. Routing it
 // through `ui.set` put it inside a strict nested schema, where a host that predates

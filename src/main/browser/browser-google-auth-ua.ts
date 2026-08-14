@@ -49,3 +49,11 @@ export function setUserAgentHeader(headers: Record<string, string>, value: strin
   const existing = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent')
   headers[existing ?? 'User-Agent'] = value
 }
+
+// Why: the outgoing header carries the WebContents UA override, so reading it
+// (case-insensitively) tells us whether a request originated from the Firefox
+// auth document even when its destination host isn't an auth host.
+export function currentUserAgent(headers: Record<string, string>): string | undefined {
+  const existing = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent')
+  return existing ? headers[existing] : undefined
+}

@@ -103,7 +103,7 @@ export function getPosixPtyForegroundGroup(
 export function signalPosixPtyForegroundGroup(
   rootPid: number,
   ptsName: string | undefined,
-  signal: NodeJS.Signals | string,
+  signal: NodeJS.Signals | (string & {}),
   fallback: () => void,
   deps: PosixPtyForegroundGroupDeps = {}
 ): void {

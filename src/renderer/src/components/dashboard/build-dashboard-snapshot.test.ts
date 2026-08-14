@@ -603,6 +603,50 @@ describe('buildDashboardSnapshot', () => {
     expect(mapMetadataCalls.parentPaneKey).not.toHaveBeenCalled()
   })
 
+  it('indexes runtime host labels once per detailed snapshot', () => {
+    let environmentIdReads = 0
+    const environmentCount = 24
+    const runtimeEnvironments = Array.from({ length: environmentCount }, (_, index) => {
+      const environment = { id: `environment-${index}`, name: `Builder ${index}` }
+      Object.defineProperty(environment, 'id', {
+        enumerable: true,
+        get: () => {
+          environmentIdReads += 1
+          return `environment-${index}`
+        }
+      })
+      return environment
+    }) as unknown as DashboardSnapshotState['runtimeEnvironments']
+    const executionHostId = `runtime:environment-${environmentCount - 1}` as const
+
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [
+          {
+            id: 'r1',
+            path: '/r1',
+            displayName: 'Repo One',
+            badgeColor: '#000',
+            addedAt: 0,
+            executionHostId
+          }
+        ],
+        worktreesByRepo: {
+          r1: [
+            { ...worktree(), hostId: executionHostId },
+            { ...worktree('w2', 'wt-two'), hostId: executionHostId }
+          ]
+        },
+        runtimeEnvironments,
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0].hostLabel).toBe(`Builder ${environmentCount - 1}`)
+    expect(environmentIdReads).toBe(environmentCount)
+  })
+
   it("resolves a live pty's host-input profile for card snapshots", () => {
     const snapshot = buildDashboardSnapshot(
       baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) } }),

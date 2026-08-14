@@ -19,7 +19,7 @@ export function hasOwnActionOverride(
   overrides: RepoSourceControlAiOverrides['actionOverrides'],
   actionId: SourceControlActionId
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(overrides ?? {}, actionId)
+  return Object.hasOwn(overrides ?? {}, actionId)
 }
 
 export function triStateValue(value: boolean | null | undefined): 'inherit' | 'on' | 'off' {

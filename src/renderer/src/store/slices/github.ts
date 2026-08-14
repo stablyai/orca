@@ -2,8 +2,8 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
-import { githubProjectIdentityKey } from '../../../../shared/github-project-identity'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { githubProjectIdentityKey } from '../../../../shared/github/project-identity'
 import type {
   ClassifiedError,
   GitHubOwnerRepo,
@@ -36,7 +36,7 @@ import type {
   GitHubProjectRow,
   GitHubProjectTable,
   GitHubProjectViewError
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import {
   isGitHubWorkItemsSshRemoteRequiredError,
   sortWorkItemsByNumber,
@@ -58,7 +58,7 @@ import {
   GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN,
   isGitHubWorkItemsQueryTooLarge
 } from './github-work-items-query-bounds'
-import { classifyGitHubUnavailable } from '../../../../shared/github-api-availability'
+import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { translate } from '@/i18n/i18n'
 import {
@@ -74,8 +74,11 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
-import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github-pr-for-branch-outcome'
+import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github/pull-request-for-branch-outcome'
 import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
+import { withGitHubCheckDetailsTimeout } from '@/runtime/github-check-details-timeout'
+import { getGitHubRepoLookupIndex } from './github-repo-lookup-index'
+import { areValuesEqual, reconcileCatalogRows } from './repo-identity-reconcile'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: separate from CacheEntry<T> — project-view has a single GraphQL source (no issue/PR fallback) and a distinct error union.
@@ -125,7 +128,7 @@ function getRuntimeRepoTarget(
   if (target.kind !== 'environment') {
     return null
   }
-  const repo = state.repos.find((candidate) => candidate.path === repoPath)
+  const repo = getGitHubRepoLookupIndex(state.repos).findByPath(repoPath)
   return repo ? { target, repo } : null
 }
 
@@ -249,9 +252,9 @@ function findRepoForGitHubOwner(
   repoId: string | undefined,
   repoPath: string
 ): Repo | undefined {
-  return (state.repos ?? []).find((candidate) =>
-    repoId ? candidate.id === repoId || candidate.path === repoPath : candidate.path === repoPath
-  )
+  return state.repos
+    ? getGitHubRepoLookupIndex(state.repos).findByIdOrPath(repoId, repoPath)
+    : undefined
 }
 
 function getGitHubFocusedRepoOwnerHostId(
@@ -682,7 +685,7 @@ type InflightChecks = {
 const inflightChecksRequests = new Map<string, InflightChecks>()
 const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
 type InflightWorkItems = {
-  promise: Promise<GitHubWorkItem[]>
+  promise: Promise<readonly GitHubWorkItem[]>
   force: boolean
   noCache: boolean
   requireComplete: boolean
@@ -962,13 +965,7 @@ function getPRChecksCacheTtl(entry: CacheEntry<PRCheckDetail[]> | undefined): nu
 }
 
 function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    const worktree = worktrees.find((w) => w.id === worktreeId)
-    if (worktree) {
-      return worktree
-    }
-  }
-  return null
+  return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
 }
 
 type WorktreeLookupEntry = {
@@ -981,9 +978,12 @@ type WorktreeLookupIndex = {
   repoHostIdsByRepoId: Map<string, Set<string>>
 }
 
+const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
+const EMPTY_WORKTREE_REPOS: AppState['repos'] = []
+
 function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   const byId = new Map<string, WorktreeLookupEntry>()
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
+  for (const worktrees of Object.values(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO)) {
     for (const worktree of worktrees) {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
@@ -1007,11 +1007,29 @@ function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   return { byId, repoHostIdsByRepoId }
 }
 
+// Why: worktree/owner updates replace these snapshots, while weak ownership avoids retaining superseded state.
+const worktreeLookupIndexes = new WeakMap<
+  AppState['worktreesByRepo'],
+  { repos: AppState['repos']; index: WorktreeLookupIndex }
+>()
+
+function getWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
+  const worktreesByRepo = state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO
+  const repos = state.repos ?? EMPTY_WORKTREE_REPOS
+  const cached = worktreeLookupIndexes.get(worktreesByRepo)
+  if (cached && cached.repos === repos) {
+    return cached.index
+  }
+  const index = buildWorktreeLookupIndex(state)
+  worktreeLookupIndexes.set(worktreesByRepo, { repos, index })
+  return index
+}
+
 function findUniqueWorktreeById(
   state: AppState,
   worktreeId: string,
   executionHostId?: string,
-  lookupIndex = buildWorktreeLookupIndex(state)
+  lookupIndex = getWorktreeLookupIndex(state)
 ): Worktree | null {
   const match = lookupIndex.byId.get(worktreeId)?.unique ?? null
   // Why: metadata persistence is keyed only by worktree id; an id owned by two hosts is non-unique so destructive clears fail closed.
@@ -1130,9 +1148,10 @@ function shouldApplyBranchMismatchedLinkedPRClear(args: {
 function buildPRRefreshCandidate(
   state: AppState,
   worktree: Worktree,
-  repoPath?: string
+  repoPath?: string,
+  repoOverride?: Repo
 ): GitHubPRRefreshCandidate | null {
-  const repo = state.repos.find((r) => r.id === worktree.repoId)
+  const repo = repoOverride ?? getGitHubRepoLookupIndex(state.repos).findById(worktree.repoId)
   if (!repo) {
     return null
   }
@@ -1834,7 +1853,7 @@ export type GitHubSlice = {
   prRefreshStates: Record<string, PRRefreshState>
   prVisibleRefreshGeneration: number
   // Why: keyed by repoId + limit + query so same-path repos on different SSH targets don't share results.
-  workItemsCache: Record<string, CacheEntry<GitHubWorkItem[]>>
+  workItemsCache: Record<string, CacheEntry<readonly GitHubWorkItem[]>>
   fetchPRForBranch: (
     repoPath: string,
     branch: string,
@@ -1932,7 +1951,7 @@ export type GitHubSlice = {
     query: string,
     repoPath?: string,
     sourceContext?: TaskSourceContext | null
-  ) => GitHubWorkItem[] | null
+  ) => readonly GitHubWorkItem[] | null
   /** Returns a thin view (sources + error, never items) so it stays a cheap selector without dragging the whole work-item array through the equality check. */
   getWorkItemsSourcesAndError: (
     repoId: string,
@@ -1955,7 +1974,7 @@ export type GitHubSlice = {
     limit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<GitHubWorkItem[]>
+  ) => Promise<readonly GitHubWorkItem[]>
   /**
    * Fan out one work-item query across repos; partial failures don't reject — a repo with no cached fallback increments `failedCount`, but one served stale cache on rejection isn't counted.
    * `githubUnavailable`: every selected GitHub source refresh failed because GitHub was unreachable (5xx/network/rate-limit), even if stale cache remains — lets the caller attribute the stale/empty list.
@@ -2639,7 +2658,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return null
   },
 
-  fetchWorkItems: async (repoId, repoPath, limit, query, options): Promise<GitHubWorkItem[]> => {
+  fetchWorkItems: async (
+    repoId,
+    repoPath,
+    limit,
+    query,
+    options
+  ): Promise<readonly GitHubWorkItem[]> => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return []
     }
@@ -2721,15 +2746,54 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         if (get().workItemsInvalidationNonce !== requestInvalidationNonce) {
           return items
         }
-        set((s) => ({
-          workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
-            data: items,
-            fetchedAt: Date.now(),
-            sources: envelope.sources,
-            ...(errorForCache ? { error: errorForCache } : {}),
-            ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
-          })
-        }))
+        // Why: TaskPage useShallow-selects cache entry refs. A new { ...entry, fetchedAt }
+        // still remaps every visible row. IPC structuredClone rebuilds nested records, so
+        // data === previous.data never holds — reconcile structurally, then either mutate
+        // fetchedAt in place or write one entry that keeps unchanged row/meta refs.
+        set((s) => {
+          const previousEntry = s.workItemsCache[key]
+          const previousData = previousEntry?.data ?? []
+          const reconciled = reconcileCatalogRows(
+            previousData,
+            items,
+            (row) => `${row.repoId}\0${row.id}`
+          )
+          const nextFellBack = envelope.issueSourceFellBack ? true : undefined
+          const sourcesUnchanged = areValuesEqual(previousEntry?.sources, envelope.sources)
+          const errorUnchanged = areValuesEqual(previousEntry?.error, errorForCache)
+          const fellBackUnchanged = previousEntry?.issueSourceFellBack === nextFellBack
+          if (
+            previousEntry &&
+            reconciled === previousData &&
+            sourcesUnchanged &&
+            errorUnchanged &&
+            fellBackUnchanged
+          ) {
+            previousEntry.fetchedAt = Date.now()
+            return {}
+          }
+          const previousSources = previousEntry?.sources
+          const previousError = previousEntry?.error
+          return {
+            workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
+              // Why: `reconciled` already is `previousEntry.data` when nothing changed —
+              // reconcileCatalogRows returns the previous array on a structural match.
+              data: reconciled,
+              fetchedAt: Date.now(),
+              sources:
+                sourcesUnchanged && previousSources !== undefined
+                  ? previousSources
+                  : envelope.sources,
+              ...(errorForCache
+                ? {
+                    error:
+                      errorUnchanged && previousError !== undefined ? previousError : errorForCache
+                  }
+                : {}),
+              ...(nextFellBack ? { issueSourceFellBack: true } : {})
+            })
+          }
+        })
         return items
       } catch (err) {
         // Why: rethrow but keep the stale cache entry so the UI still renders while the user retries.
@@ -2989,9 +3053,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repoLookup = getGitHubRepoLookupIndex(get().repos)
+    const repo = options?.repoId
+      ? repoLookup.findById(options.repoId)
+      : repoLookup.findByPath(repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
     const cacheKey = prCacheKey(
@@ -3574,30 +3639,35 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repoPath,
       options?.sourceContext
     )
-    return requestContext.target.kind === 'environment'
-      ? await callRuntimeRpc<PRCheckRunDetails | null>(
-          { kind: 'environment', environmentId: requestContext.target.environmentId },
-          'github.prCheckDetails',
-          {
-            repo: requestContext.target.runtimeRepoId,
+    const requestTarget = requestContext.target
+    return requestTarget.kind === 'environment'
+      ? await withGitHubCheckDetailsTimeout((signal) =>
+          callRuntimeRpc<PRCheckRunDetails | null>(
+            { kind: 'environment', environmentId: requestTarget.environmentId },
+            'github.prCheckDetails',
+            {
+              repo: requestTarget.runtimeRepoId,
+              checkRunId: args.checkRunId,
+              workflowRunId: args.workflowRunId,
+              checkName: args.checkName,
+              url: args.url,
+              prRepo: args.prRepo ?? null
+            },
+            { timeoutMs: 30_000, signal }
+          )
+        )
+      : await withGitHubCheckDetailsTimeout(() =>
+          window.api.gh.prCheckDetails({
+            repoPath,
+            repoId,
             checkRunId: args.checkRunId,
             workflowRunId: args.workflowRunId,
             checkName: args.checkName,
             url: args.url,
-            prRepo: args.prRepo ?? null
-          },
-          { timeoutMs: 30_000 }
+            prRepo: args.prRepo ?? null,
+            sourceContext: options?.sourceContext
+          })
         )
-      : ((await window.api.gh.prCheckDetails({
-          repoPath,
-          repoId,
-          checkRunId: args.checkRunId,
-          workflowRunId: args.workflowRunId,
-          checkName: args.checkName,
-          url: args.url,
-          prRepo: args.prRepo ?? null,
-          sourceContext: options?.sourceContext
-        })) as PRCheckRunDetails | null)
   },
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
@@ -4415,22 +4485,33 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   refreshAllGitHub: () => {
     // Clear comments cache; evict stale entries to bound long-session growth across repos/branches.
-    set((s) => ({
-      commentsCache: {},
-      prCache: evictStaleEntries(s.prCache),
-      issueCache: evictStaleEntries(s.issueCache),
-      checksCache: evictStaleEntries(s.checksCache),
-      workItemsCache: evictStaleEntries(s.workItemsCache),
-      projectViewCache: evictStaleEntries(s.projectViewCache),
-      prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
-    }))
+    set((s) => {
+      const next = {
+        commentsCache: Object.keys(s.commentsCache).length === 0 ? s.commentsCache : {},
+        prCache: evictStaleEntries(s.prCache),
+        issueCache: evictStaleEntries(s.issueCache),
+        checksCache: evictStaleEntries(s.checksCache),
+        workItemsCache: evictStaleEntries(s.workItemsCache),
+        projectViewCache: evictStaleEntries(s.projectViewCache),
+        prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
+      }
+      // Why: each eviction helper returns its input untouched when nothing changed, so an
+      // unchanged sweep can return `s` and avoid waking every subscriber on window resume.
+      return next.commentsCache === s.commentsCache &&
+        next.prCache === s.prCache &&
+        next.issueCache === s.issueCache &&
+        next.checksCache === s.checksCache &&
+        next.workItemsCache === s.workItemsCache &&
+        next.projectViewCache === s.projectViewCache &&
+        next.prRefreshStates === s.prRefreshStates
+        ? s
+        : next
+    })
 
     // Why: don't prune prRequestGenerations here — deleting a live generation makes its response look stale.
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()
-    const now = Date.now()
-    const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
     const cardProps = state.worktreeCardProperties ?? []
     const rawCardProps = cardProps as readonly string[]
     const shouldRefreshIssues = shouldRefreshIssueDecorations(state)
@@ -4442,10 +4523,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       (state.settings?.experimentalNewWorktreeCardStyle === true
         ? cardProps.includes('status')
         : cardProps.includes('pr') || rawCardProps.includes('ci'))
+    if (!shouldRefreshPRs && !shouldRefreshIssues) {
+      return
+    }
+
+    const now = Date.now()
+    const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
+    const repoLookup = getGitHubRepoLookupIndex(state.repos)
 
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
-        const repo = state.repos.find((r) => r.id === wt.repoId)
+        const repo = repoLookup.findById(wt.repoId)
         if (!repo) {
           continue
         }
@@ -4463,7 +4551,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           )
           const prEntry = state.prCache[prKey]
           if (!prEntry || now - prEntry.fetchedAt >= CACHE_TTL) {
-            const candidate = buildPRRefreshCandidate(state, wt)
+            const candidate = buildPRRefreshCandidate(state, wt, undefined, repo)
             if (candidate) {
               stalePRCandidates.push({
                 candidate,
@@ -4664,7 +4752,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     set((s) => {
       const prefix = `${repoId}::`
       const legacyPrefix = `${repoPath}::`
-      const next: Record<string, CacheEntry<GitHubWorkItem[]>> = {}
+      const next: Record<string, CacheEntry<readonly GitHubWorkItem[]>> = {}
       for (const [key, entry] of Object.entries(s.workItemsCache)) {
         if (!key.startsWith(prefix) && !key.startsWith(legacyPrefix)) {
           next[key] = entry

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
+import { getPairedDeviceIdsByEnvironment } from './workspace-creator-visibility'
 import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
@@ -79,6 +80,8 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    hideWorkspacesFromOtherDevices: false,
+    pairedDeviceIdsByEnvironment: new Map(),
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -88,6 +91,68 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
 }
 
 describe('computeVisibleWorktreeIds', () => {
+  it('prefers the authenticated live device id over cached pairing metadata', () => {
+    const deviceIds = getPairedDeviceIdsByEnvironment(
+      [{ id: 'env-1', pairedDeviceId: 'cached-device' } as never],
+      new Map([
+        [
+          'env-1',
+          {
+            status: { pairedDeviceId: 'authenticated-device' } as never
+          }
+        ]
+      ])
+    )
+
+    expect(deviceIds.get('env-1')).toBe('authenticated-device')
+  })
+
+  it('hides only known workspaces created by another device', () => {
+    const own = {
+      ...makeWorktree('own'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-a' }
+    }
+    const other = {
+      ...makeWorktree('other'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-b' }
+    }
+    const host = {
+      ...makeWorktree('host'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'host' as const }
+    }
+    const legacy = { ...makeWorktree('legacy'), runtimeOwnerEnvironmentId: 'env-1' }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [own, other, host, legacy] },
+      [own.id, other.id, host.id, legacy.id],
+      visibleOptions({
+        hideWorkspacesFromOtherDevices: true,
+        pairedDeviceIdsByEnvironment: new Map([['env-1', 'device-a']])
+      })
+    )
+
+    expect(result).toEqual([own.id, legacy.id])
+  })
+
+  it('fails open when an older host does not publish the requester device id', () => {
+    const other = {
+      ...makeWorktree('other'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-b' }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [other] },
+      [other.id],
+      visibleOptions({ hideWorkspacesFromOtherDevices: true })
+    )
+
+    expect(result).toEqual([other.id])
+  })
+
   it('keeps browser-tab worktrees visible when sleeping workspaces are hidden', () => {
     const wt = makeWorktree('wt-browser')
 

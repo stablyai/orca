@@ -65,6 +65,8 @@ describe('mobile-file-preview-route', () => {
       terminal: 'term-1',
       pathText: 'result.json',
       cwd: '/tmp/run',
+      nativeChatTab: 'tab-1',
+      nativeChatSession: 'session-1',
       line: '12',
       column: '3'
     })
@@ -80,6 +82,8 @@ describe('mobile-file-preview-route', () => {
         terminal: 'term-1',
         pathText: 'result.json',
         cwd: '/tmp/run',
+        nativeChatTab: 'tab-1',
+        nativeChatSession: 'session-1',
         line: '12',
         column: '3'
       }
