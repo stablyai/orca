@@ -1,9 +1,9 @@
+import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
-  CreateWorktreeResult,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
-} from './types'
+} from './worktree/launch-types'
 import type { SshConnectionState } from './ssh-types'
 import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'

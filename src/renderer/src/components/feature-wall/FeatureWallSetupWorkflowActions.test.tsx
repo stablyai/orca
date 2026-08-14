@@ -14,7 +14,7 @@ import {
 } from './FeatureWallSetupWorkflowActions'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('sonner', () => ({
   toast: {

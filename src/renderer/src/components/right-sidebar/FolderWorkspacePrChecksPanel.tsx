@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
 import type { ParentPrChecksRefreshOutcome, ParentPrChecksRow } from './parent-pr-checks-rows'
@@ -181,7 +181,7 @@ export default function FolderWorkspacePrChecksPanel({
           workflowRunId: check.workflowRunId,
           checkName: check.name,
           url: check.url,
-          prRepo: null
+          prRepo: row.githubRepository ?? null
         },
         { repoId: row.repo.id }
       )

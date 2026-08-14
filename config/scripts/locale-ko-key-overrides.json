@@ -1058,36 +1058,6 @@
   "auto.components.feature.wall.EditorAnimatedVisual.e16479c1c5": {
     "ko": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
   },
-  "auto.components.feature.wall.FeatureTourPreview.04d54d50ec": {
-    "ko": "orca · zsh"
-  },
-  "auto.components.feature.wall.FeatureTourPreview.304ad0dfc1": {
-    "ko": "생각 중..."
-  },
-  "auto.components.feature.wall.FeatureTourPreview.3822d8d14b": {
-    "ko": "fix/worktree-picker-truncates"
-  },
-  "auto.components.feature.wall.FeatureTourPreview.47f16ecf34": {
-    "ko": "여러 작업을 동시에 진행하세요. 각 워크스페이스는 브랜치, terminal, agent 활동을 함께 보관합니다."
-  },
-  "auto.components.feature.wall.FeatureTourPreview.5d6ee181b6": {
-    "ko": "워크스페이스를 열어 terminal로 돌아가고, 테스트와 로그, agents 용으로 패널을 나누세요."
-  },
-  "auto.components.feature.wall.FeatureTourPreview.6218a9014d": {
-    "ko": "pnpm playwright test"
-  },
-  "auto.components.feature.wall.FeatureTourPreview.6ed43cb0e0": {
-    "ko": "dashboard.spec.ts"
-  },
-  "auto.components.feature.wall.FeatureTourPreview.70aa182266": {
-    "ko": "목표를 넘겨두고 자리를 비우세요. 코디네이터 agent가 작업을 나누어 병렬 PR을 만듭니다."
-  },
-  "auto.components.feature.wall.FeatureTourPreview.f10c14dd9d": {
-    "ko": "탭을 오갈 필요 없이 GitHub 또는 Linear 백로그에서 선택하고 한 번의 클릭으로 워크스페이스를 시작하세요."
-  },
-  "auto.components.feature.wall.FeatureTourWorkspaceCard.9220794f6a": {
-    "ko": "작업 중"
-  },
   "auto.components.feature.wall.FeatureWallSetupChecklist.713cc529a5": {
     "ko": "마일스톤"
   },
@@ -1502,12 +1472,6 @@
   "auto.components.new.workspace.ProjectCombobox.search": {
     "ko": "프로젝트 검색..."
   },
-  "auto.components.new.workspace.ProjectHostSetupCombobox.empty": {
-    "ko": "이 프로젝트에 준비된 호스트가 없습니다."
-  },
-  "auto.components.new.workspace.ProjectHostSetupCombobox.placeholder": {
-    "ko": "호스트 선택"
-  },
   "auto.components.notification.sound.options.0acd3d384e": {
     "ko": "클랙"
   },
@@ -1519,9 +1483,6 @@
   },
   "auto.components.notification.sound.options.86af8d938c": {
     "ko": "봉 소리"
-  },
-  "auto.components.onboarding.AgentFeatureSetupStep.97dcdc010f": {
-    "ko": "기능 활성화"
   },
   "auto.components.onboarding.AgentStep.1eee1c7bd8": {
     "ko": "PATH에서 agents를 찾지 못했습니다. 나중에 설치할 항목을 선택하거나 빈 terminal로 계속 진행하세요."
@@ -1538,12 +1499,6 @@
   "auto.components.onboarding.AgentStep.yoloPermissionsTooltip": {
     "ko": "중단을 줄이기 위해 agents 권한 확인을 건너뜁니다."
   },
-  "auto.components.onboarding.FeatureSetupChecklist.01426f3a23": {
-    "ko": "Agents가 사이트를 탐색하고, 페이지를 검사하고, 브라우저 작업을 처리할 수 있습니다."
-  },
-  "auto.components.onboarding.FeatureSetupChecklist.c5292c409d": {
-    "ko": "Agents는 요청 시 앱 창을 검사하고 로컬 앱을 작동할 수 있습니다."
-  },
   "auto.components.onboarding.IntegrationsStep.0b4a7d23ab": {
     "ko": "로그인 중"
   },
@@ -1555,18 +1510,6 @@
   },
   "auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle": {
     "ko": "새 창에서 사용할 기본 셸과 terminal에서 오른쪽 클릭이 동작하는 방식을 선택하세요."
-  },
-  "auto.components.onboarding.RepoStep.466108ab89": {
-    "ko": "선택한 호스트에 존재하는 경로를 입력하세요."
-  },
-  "auto.components.onboarding.RepoStep.6558d50c69": {
-    "ko": "한 번에 여러 repos를 가져오고 싶으신가요? 상위 폴더를 선택하세요."
-  },
-  "auto.components.onboarding.RepoStep.c33b190ca3": {
-    "ko": "호스트 경로만"
-  },
-  "auto.components.onboarding.RepoStep.cf23006ba7": {
-    "ko": "선택한 호스트"
   },
   "auto.components.onboarding.ThemeStep.7ee9234e54": {
     "ko": "Ghostty 설정을 찾았습니다."
@@ -2330,12 +2273,6 @@
   "auto.components.settings.GitPane.976afc6b3e": {
     "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고, 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 예:"
   },
-  "auto.components.settings.GitPane.b5f534717a": {
-    "ko": "공동 작성"
-  },
-  "auto.components.settings.GitPane.b9b5771bb1": {
-    "ko": "표기"
-  },
   "auto.components.settings.GitPane.b9c011fbc2": {
     "ko": "속도 제한"
   },
@@ -2344,9 +2281,6 @@
   },
   "auto.components.settings.GitPane.db3a127eb1": {
     "ko": "이렇게 하면 다음과 같은 명령이 유지됩니다"
-  },
-  "auto.components.settings.GitPane.e02ea23a32": {
-    "ko": "Orca 표기"
   },
   "auto.components.settings.GitPane.f35007e6e8": {
     "ko": "git-username"
@@ -4511,9 +4445,6 @@
   "auto.components.sidebar.worktree.list.groups.6798dc7c94": {
     "ko": "리뷰 중"
   },
-  "auto.components.skills.SkillsPage.b088e0785d": {
-    "ko": "베타"
-  },
   "auto.components.source.control.SourceControlActionVariableChips.4bf6d88039": {
     "ko": "(비어 있음)"
   },
@@ -4975,9 +4906,6 @@
   },
   "auto.components.ui.color.picker.faa855a582": {
     "ko": "Hex"
-  },
-  "auto.components.ui.team.multi.combobox.18ec58881e": {
-    "ko": "팀 검색..."
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569": {
     "ko": "리뷰 필요"

@@ -18,7 +18,7 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.

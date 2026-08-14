@@ -75,6 +75,7 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       // Why: the desktop's Curve25519 public key is pinned by the pairing
       // offer, while relayHostId is verified from its decoded bytes later.
       publicKeyB64: z.string().min(1).max(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
+      pairedDeviceId: z.string().min(1).max(128).optional(),
       scope: PairingScopeSchema.optional(),
       relay: relaySchema.optional()
     })

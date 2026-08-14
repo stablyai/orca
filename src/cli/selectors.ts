@@ -237,6 +237,14 @@ export async function getEmulatorWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
+  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
+  if (terminalWorktreeId?.trim()) {
+    return terminalWorktreeId
+  }
+  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
+  if (folderWorkspaceId?.startsWith('folder:')) {
+    return folderWorkspaceId
+  }
   try {
     return await resolveCurrentWorktreeSelector(cwd, client)
   } catch {

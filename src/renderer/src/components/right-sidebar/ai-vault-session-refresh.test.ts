@@ -431,13 +431,213 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     await fireWindowFocused()
     expect(latest?.scanResult).toBe(firstResult)
 
+    // A reminted stamp with the same empty body is still the snapshot on screen.
     listSessionsMock.mockResolvedValueOnce({
       ...EMPTY_RESULT,
       scannedAt: '2026-07-01T00:00:02.000Z'
     })
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()
-    expect(latest?.scanResult).not.toBe(firstResult)
+    expect(latest?.scanResult).toBe(firstResult)
+  })
+
+  // An 'all' result is a merge of legs on independent clocks, stamped with the
+  // newest leg. A paired host whose clock lags the desktop can return new
+  // sessions while the merged stamp repeats, so the stamp guard above must not
+  // decide anything under 'all' — only the structural reconcile may.
+  it('applies a changed all-host result whose merged scannedAt stood still', async () => {
+    const pinned = '2026-07-01T00:00:00.000Z'
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [makeVaultSession(1)],
+      issues: [],
+      scannedAt: pinned
+    })
+    await renderHook([], 'all')
+    await flushMicrotasks()
+    expect(latest?.sessions).toHaveLength(1)
+
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [makeVaultSession(1), makeVaultSession(2)],
+      issues: [],
+      scannedAt: pinned
+    })
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.sessions).toHaveLength(2)
+    expect(latest?.sessions[1]?.id).toBe('session-2')
+  })
+
+  // The main process routes an empty or unrecognized scope to the same all-host
+  // merge, so the renderer has to read those as merged too or the guard returns
+  // for exactly the results it cannot reason about.
+  it('treats a scope that normalizes to all-host as merged', async () => {
+    const pinned = '2026-07-01T00:00:00.000Z'
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [makeVaultSession(1)],
+      issues: [],
+      scannedAt: pinned
+    })
+    await renderHook([], '' as ExecutionHostScope)
+    await flushMicrotasks()
+    expect(latest?.sessions).toHaveLength(1)
+
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [makeVaultSession(1), makeVaultSession(2)],
+      issues: [],
+      scannedAt: pinned
+    })
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.sessions).toHaveLength(2)
+  })
+
+  it('still reuses all-host identity when a repeated stamp carries an unchanged body', async () => {
+    const pinned = '2026-07-01T00:00:00.000Z'
+    const first: AiVaultListResult = {
+      sessions: [makeVaultSession(1)],
+      issues: [],
+      scannedAt: pinned
+    }
+    listSessionsMock.mockResolvedValueOnce(first)
+    await renderHook([], 'all')
+    await flushMicrotasks()
+    const applied = latest?.scanResult
+    const appliedSessions = latest?.sessions
+
+    // Dropping the stamp guard for 'all' must not reintroduce the churn: the
+    // reconcile still has to recognise an independently cloned identical body.
+    listSessionsMock.mockResolvedValueOnce(structuredClone(first))
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.scanResult).toBe(applied)
+    expect(latest?.sessions).toBe(appliedSessions)
+  })
+
+  it('keeps session row identity when a reminted scan is a structuredClone of the same nested rows', async () => {
+    const session = makeVaultSession(1)
+    const first: AiVaultListResult = {
+      sessions: [
+        {
+          ...session,
+          previewMessages: [
+            {
+              role: 'user',
+              text: 'keep session list identity on reminted scannedAt',
+              timestamp: session.modifiedAt
+            },
+            {
+              role: 'assistant',
+              text: 'reuse previous row refs when the transcript did not change',
+              timestamp: session.modifiedAt
+            }
+          ],
+          previewMessagesTruncated: true,
+          lastUserPrompt: 'keep session list identity on reminted scannedAt',
+          subagent: {
+            parentSessionId: session.sessionId,
+            agentType: 'Explore',
+            status: 'completed'
+          }
+        }
+      ],
+      issues: [],
+      scannedAt: '2026-07-01T00:00:00.000Z'
+    }
+    listSessionsMock.mockResolvedValueOnce(first)
+    await renderHook()
+    await flushMicrotasks()
+    const appliedSessions = latest?.sessions
+    const appliedResult = latest?.scanResult
+    expect(appliedSessions?.[0]?.previewMessages).toHaveLength(2)
+
+    const reminted = structuredClone(first)
+    reminted.scannedAt = '2026-07-01T00:00:15.000Z'
+    expect(reminted.sessions).not.toBe(first.sessions)
+    expect(reminted.sessions[0]).not.toBe(first.sessions[0])
+    expect(reminted.sessions[0]?.previewMessages).not.toBe(first.sessions[0]?.previewMessages)
+
+    listSessionsMock.mockResolvedValueOnce(reminted)
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.sessions).toBe(appliedSessions)
+    expect(latest?.sessions[0]).toBe(appliedSessions?.[0])
+    expect(latest?.sessions[0]?.previewMessages).toBe(appliedSessions?.[0]?.previewMessages)
+    expect(latest?.scanResult).toBe(appliedResult)
+  })
+
+  it('replaces the changed row when a reminted scan edits nested preview text', async () => {
+    const session = makeVaultSession(1)
+    const sibling = makeVaultSession(2)
+    const first: AiVaultListResult = {
+      sessions: [
+        {
+          ...session,
+          previewMessages: [{ role: 'user', text: 'original ask', timestamp: session.modifiedAt }]
+        },
+        sibling
+      ],
+      issues: [],
+      scannedAt: '2026-07-01T00:00:00.000Z'
+    }
+    listSessionsMock.mockResolvedValueOnce(first)
+    await renderHook()
+    await flushMicrotasks()
+    const appliedSessions = latest?.sessions
+    expect(appliedSessions).toHaveLength(2)
+
+    const reminted = structuredClone(first)
+    reminted.scannedAt = '2026-07-01T00:00:15.000Z'
+    const changed = reminted.sessions[0]
+    const preview = changed?.previewMessages[0]
+    if (!changed || !preview) {
+      throw new Error('expected a nested preview message')
+    }
+    reminted.sessions[0] = {
+      ...changed,
+      previewMessages: [{ ...preview, text: 'follow-up ask' }]
+    }
+
+    listSessionsMock.mockResolvedValueOnce(reminted)
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.sessions).not.toBe(appliedSessions)
+    expect(latest?.sessions[0]).not.toBe(appliedSessions?.[0])
+    expect(latest?.sessions[0]?.previewMessages[0]?.text).toBe('follow-up ask')
+    expect(latest?.sessions[1]).toBe(appliedSessions?.[1])
+  })
+
+  it('appends a new session on refocus and keeps the surviving row identity', async () => {
+    const first: AiVaultListResult = {
+      sessions: [makeVaultSession(1)],
+      issues: [],
+      scannedAt: '2026-07-01T00:00:00.000Z'
+    }
+    listSessionsMock.mockResolvedValueOnce(first)
+    await renderHook()
+    await flushMicrotasks()
+    const surviving = latest?.sessions[0]
+    const previous = first.sessions[0]
+    expect(surviving?.id).toBe('session-1')
+    if (!previous) {
+      throw new Error('expected the first scan to include a session')
+    }
+
+    listSessionsMock.mockResolvedValueOnce({
+      sessions: [structuredClone(previous), makeVaultSession(2)],
+      issues: [],
+      scannedAt: '2026-07-01T00:00:15.000Z'
+    })
+    await advance(THROTTLE_MS + 1)
+    await fireWindowFocused()
+
+    expect(latest?.sessions).toHaveLength(2)
+    expect(latest?.sessions[0]).toBe(surviving)
+    expect(latest?.sessions[1]?.id).toBe('session-2')
   })
 
   it('keeps the current list when a superseded scan resolves cancelled', async () => {

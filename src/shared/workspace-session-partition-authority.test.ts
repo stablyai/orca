@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from './constants'
-import type { TerminalLayoutSnapshot, TerminalTab, WorkspaceSessionState } from './types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { workspaceTerminalAuthority } from './workspace-session-partition-authority'
 
 const WORKTREE_ID = 'repo-1::/srv/wt'

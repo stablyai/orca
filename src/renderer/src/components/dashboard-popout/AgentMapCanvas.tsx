@@ -15,8 +15,9 @@ import type {
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentMapAgentNode, AgentMapProjectRing, AgentMapLayout } from './agent-map-layout'
+import type { AgentMapFlareStatus } from './agent-map-node-metadata'
 import { AgentMapScene } from './AgentMapScene'
 import { agentFocusZoom, clamp, MAX_ZOOM, MIN_ZOOM } from './agent-map-canvas-zoom'
 import { AgentMapViewportControls } from './AgentMapViewportControls'
@@ -28,13 +29,12 @@ import {
 import type { AgentMapViewport } from './agent-map-viewport-transition'
 import { useAgentMapContextMenus } from './useAgentMapContextMenus'
 import { useAgentMapCanvasSize } from './useAgentMapCanvasSize'
+import { useAgentMapPointerHold } from './useAgentMapPointerHold'
 import { useAgentMapMotionLayout } from './useAgentMapMotionLayout'
 import { useAgentMapSelectedFocus } from './useAgentMapSelectedFocus'
 import { useAgentMapViewportTransition } from './useAgentMapViewportTransition'
 
 const AGENT_FOCUS_DURATION_MS = 240
-
-type Point = { x: number; y: number }
 
 export type AgentMapCanvasHandle = {
   fit: () => void
@@ -47,6 +47,7 @@ type AgentMapCanvasProps = {
   selectedPaneKey: string | null
   allowAggregation: boolean
   showOrchestrationLinks: boolean
+  recentFlareStatuses: ReadonlyMap<string, AgentMapFlareStatus>
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   workspaceContextMenusEnabled?: boolean
   onWorkspaceContextMenuOpenChange?: (open: boolean) => void
@@ -63,6 +64,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       selectedPaneKey,
       allowAggregation,
       showOrchestrationLinks,
+      recentFlareStatuses,
       launchableAgentsByWorktreeId,
       workspaceContextMenusEnabled = false,
       onWorkspaceContextMenuOpenChange,
@@ -77,8 +79,8 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     const nodeRefs = useRef(new Map<string, SVGGElement>())
     const dragRef = useRef<{
       pointerId: number
-      point: Point
-      center: Point
+      point: AgentMapViewport['center']
+      center: AgentMapViewport['center']
       worldPerPixelX: number
       worldPerPixelY: number
     } | null>(null)
@@ -86,6 +88,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     const pendingViewportRef = useRef<AgentMapViewport | null>(null)
     const interactionBoundsRef = useRef<DOMRect | null>(null)
     const hasShownProjectsRef = useRef(layout.projects.length > 0)
+    const { held, hold, release: releaseHold, clearDrag } = useAgentMapPointerHold(dragRef)
     const clearInteractionBounds = useCallback(() => {
       interactionBoundsRef.current = null
     }, [])
@@ -112,7 +115,6 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       [allowAggregation, layout, selectedPaneKey, zoom]
     )
     const hasProjects = layout.projects.length > 0
-    const hasMotionProjects = motionLayout.projects.length > 0
     const aspect = size.width / Math.max(1, size.height)
     const baseWidth = Math.max(layout.width, layout.height * aspect)
     const baseHeight = baseWidth / aspect
@@ -301,7 +303,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
 
     return (
       <div ref={containerRef} className="agent-map-canvas relative min-h-0 flex-1 overflow-hidden">
-        {!hasMotionProjects ? (
+        {motionLayout.projects.length === 0 ? (
           <div className="absolute inset-0 grid place-items-center text-center text-xs text-muted-foreground">
             {translate('dashboardPopout.map.empty', 'No agents match the current filters.')}
           </div>
@@ -315,7 +317,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               'Nested project, workspace, and agent map'
             )}
             onPointerDown={(event) => {
-              if (event.button !== 0) {
+              if (event.button !== 0 || dragRef.current) {
                 return
               }
               if (
@@ -337,11 +339,16 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
                 worldPerPixelX: baseWidth / current.zoom / bounds.width,
                 worldPerPixelY: baseHeight / current.zoom / bounds.height
               }
+              hold(event.target as Element)
               event.currentTarget.setPointerCapture(event.pointerId)
             }}
             onPointerMove={(event) => {
               const drag = dragRef.current
-              if (!drag || drag.pointerId !== event.pointerId) {
+              if (!drag) {
+                releaseHold()
+                return
+              }
+              if (drag.pointerId !== event.pointerId) {
                 return
               }
               scheduleViewport({
@@ -353,14 +360,19 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               })
             }}
             onPointerUp={(event) => {
-              if (dragRef.current?.pointerId === event.pointerId) {
-                dragRef.current = null
+              if (clearDrag(event.pointerId)) {
                 event.currentTarget.releasePointerCapture(event.pointerId)
               }
             }}
             onPointerCancel={(event) => {
-              if (dragRef.current?.pointerId === event.pointerId) {
-                dragRef.current = null
+              clearDrag(event.pointerId)
+            }}
+            onLostPointerCapture={(event) => {
+              clearDrag(event.pointerId)
+            }}
+            onPointerLeave={() => {
+              if (!dragRef.current) {
+                releaseHold()
               }
             }}
           >
@@ -370,9 +382,12 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               zoom={zoom}
               labelScale={labelScale}
               mapScale={mapScale}
+              heldProjectId={held?.projectId ?? null}
+              heldWorktreeId={held?.worktreeId ?? null}
               selectedPaneKey={selectedPaneKey}
               allowAggregation={allowAggregation}
               showOrchestrationLinks={showOrchestrationLinks}
+              recentFlareStatuses={recentFlareStatuses}
               launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
               nodeRefs={nodeRefs}
               onSelectAgent={onSelectAgent}

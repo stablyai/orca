@@ -86,8 +86,8 @@ export function scheduleSessionParseCachePersist(stats: SessionParseStats): void
   }
 }
 
-/** Run any pending debounced save immediately and wait for it. Test-only. */
-export async function flushSessionParseCachePersistForTests(): Promise<void> {
+/** Run any pending debounced save immediately and wait for it before process exit. */
+export async function flushSessionParseCachePersist(): Promise<void> {
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
@@ -98,6 +98,8 @@ export async function flushSessionParseCachePersistForTests(): Promise<void> {
   }
   await lastSave
 }
+
+export const flushSessionParseCachePersistForTests = flushSessionParseCachePersist
 
 async function loadPersistedEntries(current: SessionParseCachePersistenceOptions): Promise<void> {
   await sweepOrphanedTempFiles(current.filePath)

@@ -1,18 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   countRecordKeysByReference,
-  getScrollTopToRevealBounds,
   resolvePendingSidebarReveal,
-  WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
-} from './WorktreeList'
+} from './worktree-list/worktree-sidebar-scroll-tuning'
+import {
+  getScrollTopToRevealBounds,
+  WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+} from './worktree-sidebar-reveal'
 import {
   extractWorktreeVirtualRowIndexes,
   estimateRenderRowSize,
   GROUP_HEADER_ROW_HEIGHT,
   getActiveStickyHeaderIndexForScroll
 } from './worktree-list-virtual-rows'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { Row } from './worktree-list-groups'
 
 const repo: Repo = {

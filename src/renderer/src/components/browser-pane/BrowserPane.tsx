@@ -68,7 +68,7 @@ import type {
   BrowserLoadError,
   BrowserPage as BrowserPageState,
   BrowserWorkspace as BrowserWorkspaceState
-} from '../../../../shared/types'
+} from '../../../../shared/browser-workspace-types'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
@@ -82,7 +82,7 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
-import { rememberLiveBrowserUrl } from './browser-runtime'
+import { getLiveBrowserUrl, rememberLiveBrowserUrl, seedLiveBrowserUrl } from './browser-runtime'
 import { ensureBrowserPageWebview } from './browser-page-webview'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
@@ -135,6 +135,7 @@ import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
 import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
+import { useRemoteBrowserStreamActivation } from './use-remote-browser-stream-activation'
 import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey
@@ -188,6 +189,7 @@ import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 import { isBrowserPagePanePaintable } from './browser-page-paintability'
+import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import { useMarkupMode, type MarkupCaptureContext } from './markup/useMarkupMode'
 import { MarkupOverlay } from './markup/MarkupOverlay'
 import { MarkupDrawButton } from './markup/MarkupDrawButton'
@@ -688,33 +690,8 @@ function getRemoteBrowserDeviceScaleFactor(): number {
   return Math.min(2, Math.max(1, Number(scale.toFixed(2))))
 }
 
-function getOpenableExternalUrl(
-  webview: Electron.WebviewTag | null,
-  fallbackUrl: string
-): string | null {
-  let currentUrl = fallbackUrl
-  if (webview) {
-    try {
-      currentUrl = webview.getURL() || fallbackUrl
-    } catch {
-      // Why: querying nav state before dom-ready throws and blanks the whole IDE on launch; fall back to the persisted URL.
-      currentUrl = fallbackUrl
-    }
-  }
+function getOpenableExternalUrl(currentUrl: string): string | null {
   return normalizeExternalBrowserUrl(redactKagiSessionToken(currentUrl))
-}
-
-function getCurrentBrowserUrl(webview: Electron.WebviewTag | null, fallbackUrl: string): string {
-  let currentUrl = fallbackUrl
-  if (webview) {
-    try {
-      currentUrl = webview.getURL() || fallbackUrl
-    } catch {
-      // Why: toolbar actions need a stable URL during early guest attach/restore; fall back to the persisted URL instead of throwing.
-      currentUrl = fallbackUrl
-    }
-  }
-  return toDisplayUrl(currentUrl)
 }
 
 function retryBrowserTabLoad(
@@ -959,7 +936,6 @@ function RemoteBrowserPagePane({
   const remotePageHandle = useAppStore(
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
-  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const keybindings = useAppStore((state) => state.keybindings)
@@ -1484,29 +1460,15 @@ function RemoteBrowserPagePane({
     setReopenNonce((nonce) => nonce + 1)
   }, [])
 
-  useEffect(() => {
-    if (!isActive) {
-      return
-    }
-    const closeStream = lifecycle.open()
-    return () => {
-      closeStream()
-      clearPendingRemoteWheel()
-    }
-    // Why: the lifecycle reads tab/environment/worktree live, so it only needs to reopen when the
-    // pane's identity actually changes — not when an unrelated callback identity does.
-    //
-    // browserTab.id is load-bearing because lifecycle.open() reads tab identity through refs.
-    // reopenNonce re-runs the full open path for an explicit reconnect.
-  }, [
+  useRemoteBrowserStreamActivation({
     activeRuntimeEnvironmentId,
-    browserTab.id,
+    browserPageId: browserTab.id,
     clearPendingRemoteWheel,
     isActive,
     lifecycle,
     reopenNonce,
     runtimeWorktree
-  ])
+  })
 
   useEffect(() => {
     if (!isActive) {
@@ -2075,10 +2037,19 @@ function RemoteBrowserPagePane({
                       role="menuitem"
                       className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                       onClick={() => {
-                        createBrowserTab(worktreeId, contextMenu.linkUrl!, {
-                          title: contextMenu.linkUrl!
-                        })
+                        const linkUrl = contextMenu.linkUrl!
                         setContextMenu(null)
+                        void openWorkspaceBrowserTab({
+                          workspaceId: worktreeId,
+                          url: linkUrl,
+                          intent: { kind: 'url' },
+                          expectedRuntimeEnvironmentId: runtimeEnvironmentId
+                        }).catch((error) => {
+                          setPaneNotice({
+                            kind: 'direct',
+                            text: error instanceof Error ? error.message : String(error)
+                          })
+                        })
                       }}
                     >
                       {translate(
@@ -2921,7 +2892,7 @@ function BrowserPagePane({
         return
       }
       // Why: convert OS screen cursor coords to renderer CSS pixels — immune to guest/renderer coordinate-space mismatches from zoom/DPI.
-      const zoomFactor = Math.pow(1.2, window.api.ui.getZoomLevel())
+      const zoomFactor = 1.2 ** window.api.ui.getZoomLevel()
       const x = Math.round((event.screenX - window.screenX) / zoomFactor)
       const y = Math.round((event.screenY - window.screenY) / zoomFactor)
       console.debug(
@@ -3430,6 +3401,7 @@ function BrowserPagePane({
     container = ensuredWebview.container
     const webview = ensuredWebview.webview
     const needsInitialNavigation = ensuredWebview.created
+    seedLiveBrowserUrl(browserTab.id, redactKagiSessionToken(browserTabUrlRef.current))
 
     if (!ensuredWebview.created) {
       // pointerEvents already applied inside ensureBrowserPageWebview for the reused-webview path.
@@ -4556,8 +4528,10 @@ function BrowserPagePane({
 
   // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
-  const externalUrl = getOpenableExternalUrl(webviewRef.current, browserTab.url)
-  const currentBrowserUrl = getCurrentBrowserUrl(webviewRef.current, browserTab.url)
+  // Why: synchronous webview URL access blocks render; navigation handlers update this cache before their store writes can re-render the pane.
+  const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
+  const externalUrl = getOpenableExternalUrl(liveBrowserUrl)
+  const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
   const shareableArtifactFile =
     workspaceConnectionId === null ? getShareableBrowserArtifactFile(currentBrowserUrl) : null
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl

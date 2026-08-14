@@ -1,4 +1,4 @@
-import type { GitPushTarget } from './types'
+import type { GitPushTarget } from './worktree/types'
 
 const SAFE_REMOTE_NAME_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const GITHUB_CLONE_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/

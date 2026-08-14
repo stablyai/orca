@@ -6,7 +6,7 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 type RuntimeAutomationCreateInput = Omit<
   AutomationCreateInput,

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'

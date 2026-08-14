@@ -10,7 +10,7 @@
  */
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'

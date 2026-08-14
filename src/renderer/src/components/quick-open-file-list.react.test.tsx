@@ -3,7 +3,8 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -189,6 +190,43 @@ describe('useRuntimeFileListForWorktree', () => {
       root.unmount()
     })
 
+    expect(cancelRuntimeFileListMock).toHaveBeenCalledWith(listContext, listRequest.requestToken)
+  })
+
+  it('cancels the in-flight scan as soon as listing is disabled', async () => {
+    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
+    listRuntimeFilesMock.mockReturnValue(new Promise<string[]>(() => {}))
+
+    useAppStore.setState({
+      folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
+      projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
+      repos: [],
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+
+    const root = await renderProbe({
+      enabled: true,
+      onState: () => {},
+      worktreeId: workspaceKey
+    })
+    await waitForListRuntimeFilesCall()
+
+    const [listContext, listRequest] = listRuntimeFilesMock.mock.calls[0]
+    expect(listContext.connectionId).toBe('ssh-1')
+    expect(cancelRuntimeFileListMock).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.render(
+        createElement(HookProbe, {
+          enabled: false,
+          onState: () => {},
+          worktreeId: workspaceKey
+        })
+      )
+    })
+    await flushEffects()
+
+    expect(cancelRuntimeFileListMock).toHaveBeenCalledTimes(1)
     expect(cancelRuntimeFileListMock).toHaveBeenCalledWith(listContext, listRequest.requestToken)
   })
 

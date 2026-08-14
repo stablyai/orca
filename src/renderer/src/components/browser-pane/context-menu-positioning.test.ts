@@ -43,7 +43,7 @@ function computeCorrection(
 
 describe('screen-to-viewport coordinate conversion', () => {
   it('converts screen coords to viewport at zoom 1.0', () => {
-    const result = computeViewportCoords(650, 400, 100, 50, 1.0)
+    const result = computeViewportCoords(650, 400, 100, 50, 1)
     expect(result.x).toBe(550)
     expect(result.y).toBe(350)
   })
@@ -64,7 +64,7 @@ describe('screen-to-viewport coordinate conversion', () => {
   })
 
   it('handles cursor at window origin', () => {
-    const result = computeViewportCoords(100, 50, 100, 50, 1.0)
+    const result = computeViewportCoords(100, 50, 100, 50, 1)
     expect(result.x).toBe(0)
     expect(result.y).toBe(0)
   })
@@ -203,7 +203,7 @@ describe('full pipeline', () => {
       screenCursor.y,
       windowPos.x,
       windowPos.y,
-      1.0
+      1
     )
 
     expect(menuPos.x).toBe(550)
@@ -236,7 +236,7 @@ describe('full pipeline', () => {
       screenCursor.y,
       windowPos.x,
       windowPos.y,
-      1.0
+      1
     )
     const cssOffset = { x: 60, y: 40 }
     const measured = { left: menuPos.x + cssOffset.x, top: menuPos.y + cssOffset.y }
@@ -255,7 +255,7 @@ describe('full pipeline', () => {
       screenCursor.y,
       windowPos.x,
       windowPos.y,
-      1.0
+      1
     )
     const corrected = computeCorrection(menuPos.x, menuPos.y, menuPos.x, menuPos.y)
 

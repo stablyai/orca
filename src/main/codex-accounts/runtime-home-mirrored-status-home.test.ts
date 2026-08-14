@@ -3,7 +3,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as NodeOs from 'node:os'
-import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}

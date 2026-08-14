@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import {
   getAgentAwakeDescription,
@@ -57,7 +57,7 @@ export function AgentAwakeSetting({
               },
               {
                 value: 'auto',
-                label: translate('auto.components.settings.AgentAwakeSetting.auto', 'Auto')
+                label: translate('auto.components.settings.AgentAwakeSetting.auto', 'Agent')
               },
               {
                 value: 'off',

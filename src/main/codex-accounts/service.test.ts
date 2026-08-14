@@ -14,7 +14,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import type { CodexRateLimitAccountsState, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexRateLimitAccountsState } from '../../shared/managed-account-types'
 import type { ProviderRateLimits, RateLimitState } from '../../shared/rate-limit-types'
 import { buildCodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CodexResetCreditAttemptLedger } from '../../shared/codex-reset-credit-attempt-ledger'
@@ -67,6 +68,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     markdownReviewToolsEnabled: true,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
+    terminalFontWeightBold: 700,
     terminalFontWeight: 500,
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
@@ -159,7 +161,6 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     compactWorktreeCards: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
-    enableGitHubAttribution: true,
     ...overrides,
     diffWordWrap: overrides.diffWordWrap ?? false,
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },

@@ -61,54 +61,55 @@ import type {
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
+import type { BrowserViewportOverride } from '../shared/browser-workspace-types'
+import type { SearchResult } from '../shared/code-search-types'
 import type {
-  BaseRefSearchResult,
-  BaseRefDefaultResult,
-  BrowserViewportOverride,
-  CustomPet,
-  FsChangedPayload,
   FilesystemPathFlavor,
-  GetRateLimitResult,
+  FsChangedPayload,
+  MarkdownDocument
+} from '../shared/filesystem-entry-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../shared/git-fork-sync'
+import type { GitStagingArea, GitUpstreamStatus } from '../shared/git-status-types'
+import type { GitHubCommentResult, GitHubReactionContent } from '../shared/github/comment-types'
+import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
-  GitHubPRRefreshReason,
-  GitHubAssignableUser,
-  GitHubCommentResult,
-  GitHubCreateIssueResult,
-  GitHubOwnerRepo,
-  GitHubReactionContent,
-  GitHubWorkItem,
-  JiraProjectStatusOrder,
-  GitPushTarget,
-  GitStagingArea,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitUpstreamStatus,
-  GhosttyImportPreview,
-  ListWorkItemsResult,
-  LinearProjectDetail,
-  MemorySnapshot,
+  GitHubPRRefreshReason
+} from '../shared/github/pull-request-refresh-types'
+import type { GitHubAssignableUser, GitHubOwnerRepo } from '../shared/github/pull-request-types'
+import type { GetRateLimitResult } from '../shared/github/rate-limit-types'
+import type { GitHubWorkItem, ListWorkItemsResult } from '../shared/github/work-item-types'
+import type { GhosttyImportPreview } from '../shared/global-settings-types'
+import type { GitHubCreateIssueResult } from '../shared/issue-mutation-types'
+import type { JiraProjectStatusOrder } from '../shared/jira-types'
+import type { LinearProjectDetail } from '../shared/linear/project-types'
+import type {
+  NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationDispatchResult,
-  NotificationDeliveryProbeResult,
   NotificationPermissionStatusResult,
   NotificationSoundDataResult,
   NotificationSoundPathResult,
-  NotificationSoundResult,
-  NestedRepoScanResult,
-  OnboardingState,
-  PersistedUIState,
-  FloatingTerminalCwdRequest,
-  MarkdownDocument,
-  SearchResult,
-  TuiAgent,
-  UpdateStatus,
+  NotificationSoundResult
+} from '../shared/notification-settings-types'
+import type { OnboardingState } from '../shared/onboarding-state-types'
+import type { PersistedUIState } from '../shared/persisted-ui-state-types'
+import type { CustomPet } from '../shared/pet-types'
+import type { MemorySnapshot } from '../shared/process-stats-types'
+import type { NestedRepoScanResult } from '../shared/project-group-types'
+import type { BaseRefDefaultResult, BaseRefSearchResult } from '../shared/repo-types'
+import type { TuiAgent } from '../shared/tui-agent'
+import type { FloatingTerminalCwdRequest } from '../shared/ui-chrome-types'
+import type { UpdateStatus } from '../shared/update-status-types'
+import type {
   WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent
+} from '../shared/worktree/base-ref-drift-types'
+import type {
   WorktreeDefaultTabsLaunch,
-  WorktreeHeadIdentity,
-  WorktreeRemoteBranchConflictEvent,
   WorktreeSetupLaunch
-} from '../shared/types'
+} from '../shared/worktree/launch-types'
+import type { GitPushTarget, WorktreeHeadIdentity } from '../shared/worktree/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
 import type {
@@ -137,9 +138,9 @@ import type {
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
+  RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
-  RuntimeSyncWindowGraph,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
@@ -160,7 +161,7 @@ import type {
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
 import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
-import type { GhAuthDiagnostic } from '../shared/github-auth-types'
+import type { GhAuthDiagnostic } from '../shared/github/auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
 import type {
   AddIssueCommentBySlugArgs,
@@ -189,7 +190,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
-} from '../shared/github-project-types'
+} from '../shared/github/project-types'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
@@ -226,6 +227,7 @@ import type {
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
+import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
@@ -568,9 +570,15 @@ const api = {
   platform: {
     get: () => ({
       platform: process.platform,
+      // Why: sandboxed preload cannot require node:os; Electron exposes the OS
+      // version on process.getSystemVersion when available.
       osRelease:
         (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ??
         '',
+      arch: process.arch,
+      // Why: these identify the default shell without probing user config files.
+      // process.env is available in the sandboxed preload; node:os is not.
+      shell: process.env.SHELL?.trim() || process.env.ComSpec?.trim() || '',
       displayServer: getLinuxDisplayServer()
     })
   } satisfies PreloadApi['platform'],
@@ -790,6 +798,8 @@ const api = {
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
+    adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
+
     onCreateProgress: (
       callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
     ): (() => void) => {
@@ -898,14 +908,23 @@ const api = {
         .invoke('workspaceCleanup:scan', { ...args, scanId })
         .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
     },
+    cancelScan: (scanId) => ipcRenderer.invoke('workspaceCleanup:cancelScan', scanId),
+    getCachedScan: () => ipcRenderer.invoke('workspaceCleanup:getCachedScan'),
     dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
     clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
     hasKillableLocalProcesses: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args)
+      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args),
+    beginRemovalSnapshotPruneBatch: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:beginRemovalSnapshotPruneBatch', args),
+    recordRemovalSnapshotPrune: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
+    finishRemovalSnapshotPruneBatch: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
   } satisfies PreloadApi['workspaceCleanup'],
 
   workspaceSpace: {
     analyze: () => ipcRenderer.invoke('workspaceSpace:analyze'),
+    getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
     cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
     onProgress: (callback) => {
       const listener = (
@@ -939,6 +958,7 @@ const api = {
       env?: Record<string, string>
       envToDelete?: string[]
       command?: string
+      commandDelivery?: 'renderer' | 'provider'
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
@@ -963,6 +983,11 @@ const api = {
       snapshot?: string
       snapshotCols?: number
       snapshotRows?: number
+      snapshotPrefixAnsi?: string
+      snapshotFrameAnsi?: string
+      snapshotFrameRestoreAnsi?: string
+      snapshotKittyKeyboardFlags?: number
+      snapshotSeq?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
       replay?: string
@@ -1073,6 +1098,7 @@ const api = {
       opts?: { scrollbackRows?: number }
     ): Promise<{
       data: string
+      frameRestoreAnsi?: string
       cols: number
       rows: number
       cwd?: string | null
@@ -1082,6 +1108,7 @@ const api = {
       alternateScreen?: boolean
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
+      kittyKeyboardFlags?: number
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -1244,6 +1271,7 @@ const api = {
         rows: number
         seq?: number
         lastTitle?: string
+        kittyKeyboardFlags?: number
       } | null
     ): void => {
       ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })
@@ -1450,7 +1478,7 @@ const api = {
       checkName?: string
       url?: string | null
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<unknown | null> => ipcRenderer.invoke('gh:prCheckDetails', args),
+    }): Promise<unknown> => ipcRenderer.invoke('gh:prCheckDetails', args),
 
     rerunPRChecks: (args: {
       repoPath: string
@@ -1704,11 +1732,28 @@ const api = {
       ipcRenderer.invoke('hostedReview:forBranch', args),
     getCreationEligibility: (args: unknown): Promise<unknown> =>
       ipcRenderer.invoke('hostedReview:getCreationEligibility', args),
-    create: (args: unknown): Promise<unknown> => ipcRenderer.invoke('hostedReview:create', args)
+    create: (args: unknown): Promise<unknown> => ipcRenderer.invoke('hostedReview:create', args),
+    createStacked: (args: unknown): Promise<unknown> =>
+      ipcRenderer.invoke('hostedReview:createStacked', args)
   },
 
   // Why: GitLab bindings live in `./gitlab` so `gl.*` changes don't conflict on every upstream sync of this central file.
   gl: glApi,
+
+  bitbucket: {
+    connect: (args: {
+      authMode: 'token' | 'basic'
+      accessToken?: string | null
+      email?: string | null
+      apiToken?: string | null
+      baseUrl?: string | null
+    }): Promise<{ ok: true; account: string | null } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('bitbucket:connect', args),
+
+    disconnect: (): Promise<void> => ipcRenderer.invoke('bitbucket:disconnect'),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('bitbucket:status')
+  },
 
   linear: {
     connect: (args: {
@@ -3618,6 +3663,7 @@ const api = {
         requestId: string
         url: string
         worktreeId?: string
+        browserPageId?: string
         sessionProfileId?: string | null
         sessionPartition?: string
         activate?: boolean
@@ -3629,6 +3675,7 @@ const api = {
           requestId: string
           url: string
           worktreeId?: string
+          browserPageId?: string
           sessionProfileId?: string | null
           sessionPartition?: string
           activate?: boolean
@@ -3677,7 +3724,11 @@ const api = {
       ipcRenderer.on('browser:requestTabClose', listener)
       return () => ipcRenderer.removeListener('browser:requestTabClose', listener)
     },
-    replyTabClose: (reply: { requestId: string; error?: string }): void => {
+    replyTabClose: (reply: {
+      requestId: string
+      error?: string
+      code?: 'browser_tab_not_found'
+    }): void => {
       ipcRenderer.send('browser:tabCloseReply', reply)
     },
     onNewTerminalTab: (callback: () => void): (() => void) => {
@@ -4214,59 +4265,9 @@ const api = {
     getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
   },
 
-  claudeUsage: {
-    getScanState: (): Promise<unknown> => ipcRenderer.invoke('claudeUsage:getScanState'),
-    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:setEnabled', args),
-    refresh: (args?: { force?: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:refresh', args),
-    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getSnapshot', args),
-    getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getSummary', args),
-    getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getDaily', args),
-    getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getBreakdown', args),
-    getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getRecentSessions', args)
-  },
-
-  codexUsage: {
-    getScanState: (): Promise<unknown> => ipcRenderer.invoke('codexUsage:getScanState'),
-    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:setEnabled', args),
-    refresh: (args?: { force?: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:refresh', args),
-    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getSnapshot', args),
-    getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getSummary', args),
-    getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getDaily', args),
-    getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getBreakdown', args),
-    getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getRecentSessions', args)
-  },
-
-  openCodeUsage: {
-    getScanState: (): Promise<unknown> => ipcRenderer.invoke('openCodeUsage:getScanState'),
-    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:setEnabled', args),
-    refresh: (args?: { force?: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:refresh', args),
-    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getSnapshot', args),
-    getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getSummary', args),
-    getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getDaily', args),
-    getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getBreakdown', args),
-    getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getRecentSessions', args)
-  },
+  claudeUsage: createUsageProviderApi(ipcRenderer, 'claudeUsage'),
+  codexUsage: createUsageProviderApi(ipcRenderer, 'codexUsage'),
+  openCodeUsage: createUsageProviderApi(ipcRenderer, 'openCodeUsage'),
 
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
@@ -4324,7 +4325,9 @@ const api = {
   },
 
   runtime: {
-    syncWindowGraph: (graph: RuntimeSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
+    syncWindowGraph: (
+      graph: RuntimeRendererSyncWindowGraph
+    ): Promise<RuntimeSyncWindowGraphResult> =>
       ipcRenderer.invoke('runtime:syncWindowGraph', graph),
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
@@ -4956,8 +4959,7 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in dts)
   window.electron = electronAPI
-  // @ts-ignore (define in dts)
+  // @ts-expect-error (define in dts)
   window.api = api
 }

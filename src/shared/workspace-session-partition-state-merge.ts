@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from './types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { repoIdForWorkspaceKey } from './workspace-session-partition-authority'
 import {
   mergeBrowserHistory,

@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { sourceControlAiSettingsFromLegacy } from '../../shared/source-control-ai'
 import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -89,7 +89,6 @@ beforeEach(() => {
 describe('resolveCommitMessageSettings', () => {
   it('falls back when a dynamic persisted model was not discovered', () => {
     const settings = getDefaultSettings('/tmp')
-    settings.enableGitHubAttribution = true
     settings.commitMessageAi = {
       enabled: true,
       agentId: 'codex',

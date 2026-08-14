@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { TerminalTab, WorkspaceSessionState } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildHostIdByWorktreeId,

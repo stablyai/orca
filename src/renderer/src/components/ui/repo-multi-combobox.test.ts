@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoMultiComboboxDetail } from './repo-multi-combobox'
 
 function repo(overrides: Partial<Repo> = {}): Repo {

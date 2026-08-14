@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
@@ -7,9 +7,12 @@ import {
   openMobileNativeChatSendBudget,
   clearMobileNativeChatInput,
   sendMobileNativeChatMessage,
-  sendMobileNativeChatMessageWithOutcome
+  sendMobileNativeChatMessageWithOutcome,
+  typeMobileNativeChatCommandWithOutcome
 } from './mobile-native-chat-send'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+
+afterEach(() => vi.useRealTimers())
 
 function clientWithResponse(response: unknown): RpcClient {
   return {
@@ -287,6 +290,65 @@ describe('sendMobileNativeChatMessage', () => {
     const budget = openMobileNativeChatSendBudget() - Date.now()
     expect(budget).toBeGreaterThan(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS - 1_000)
     expect(budget).toBeLessThanOrEqual(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS)
+  })
+})
+
+describe('typeMobileNativeChatCommandWithOutcome', () => {
+  it('writes the Codex picker command as keys instead of one pasted text write', async () => {
+    vi.useFakeTimers()
+    const client = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime' }
+    })
+    const result = typeMobileNativeChatCommandWithOutcome({
+      client,
+      terminal: 'term',
+      command: '/model'
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(result).resolves.toBe('accepted')
+    expect(
+      vi.mocked(client.sendRequest).mock.calls.map((call) => {
+        const params = call[1] as { text: string; enter: boolean }
+        return { text: params.text, enter: params.enter }
+      })
+    ).toEqual(
+      ['\x15', '/', 'm', 'o', 'd', 'e', 'l', '\r'].map((text) => ({
+        text,
+        enter: false
+      }))
+    )
+  })
+
+  it('retires a parked launch draft only with the final typed Enter', async () => {
+    vi.useFakeTimers()
+    const client = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime' }
+    })
+    const result = typeMobileNativeChatCommandWithOutcome({
+      client,
+      terminal: 'term',
+      command: '/model',
+      resolvedLaunchDraft: { text: 'seed', createdAt: 7 }
+    })
+    await vi.runAllTimersAsync()
+    await result
+
+    const params = vi.mocked(client.sendRequest).mock.calls.map((call) => call[1]) as Array<{
+      text: string
+      resolvedLaunchDraft?: { text: string; createdAt: number }
+    }>
+    expect(params.slice(0, -1).every((entry) => entry.resolvedLaunchDraft === undefined)).toBe(true)
+    expect(params.at(-1)).toMatchObject({
+      text: '\r',
+      resolvedLaunchDraft: { text: 'seed', createdAt: 7 }
+    })
   })
 })
 

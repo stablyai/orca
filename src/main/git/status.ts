@@ -4,18 +4,20 @@ import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   GitBranchChangeEntry,
-  GitBranchChangeStatus,
   GitBranchCompareResult,
   GitBranchCompareSummary,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type {
+  GitBranchChangeStatus,
   GitConflictKind,
   GitConflictOperation,
-  GitDiffResult,
   GitFileStatus,
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../shared/types'
+} from '../../shared/git-status-types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import {
   getEffectiveGitUpstreamStatus,
@@ -46,7 +48,7 @@ import {
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
 import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
@@ -315,22 +317,32 @@ async function runGetStatus(
   // Why: stream + parse and stop at `limit` so a huge un-ignored folder can't buffer enough to crash the process.
   const parser = new StatusPorcelainParser()
   let didHitLimit = false
+  // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
+  const statusSettlementPromise = Promise.allSettled([
+    (async () => {
+      const result = await gitStreamStdout(statusArgs, {
+        cwd: worktreePath,
+        wslDistro: options.wslDistro,
+        preferWslDirectGit: true,
+        // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
+        env: gitOptionalLocksDisabledEnv(),
+        signal: options.signal,
+        onStdout: (chunk) => parser.update(chunk, limit)
+      })
+      if (!result.stoppedEarly) {
+        parser.finish()
+      }
+      return result
+    })()
+  ])
   const conflictOperation = await conflictPromise
 
   try {
-    const { stoppedEarly } = await gitStreamStdout(statusArgs, {
-      cwd: worktreePath,
-      wslDistro: options.wslDistro,
-      preferWslDirectGit: true,
-      // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
-      env: gitOptionalLocksDisabledEnv(),
-      signal: options.signal,
-      onStdout: (chunk) => parser.update(chunk, limit)
-    })
-    if (!stoppedEarly) {
-      parser.finish()
+    const [statusResult] = await statusSettlementPromise
+    if (statusResult.status === 'rejected') {
+      throw statusResult.reason
     }
-    didHitLimit = stoppedEarly
+    didHitLimit = statusResult.value.stoppedEarly
     statusSucceeded = true
   } catch (error) {
     // Why: an aborted scan must reject, not resolve as an empty result.

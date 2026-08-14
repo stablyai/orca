@@ -21,7 +21,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -142,7 +142,7 @@ export default function BrowserTab({
   onCloseOthers: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
-  onDuplicate: () => void
+  onDuplicate?: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
@@ -307,11 +307,15 @@ export default function BrowserTab({
             groupId={dragData.groupId}
             trailingSeparator
           />
-          <DropdownMenuItem onSelect={onDuplicate}>
-            <Copy className="size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {onDuplicate ? (
+            <>
+              <DropdownMenuItem onSelect={onDuplicate}>
+                <Copy className="size-3.5" />
+                {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <DropdownMenuItem onSelect={onTogglePin}>
             {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
             {isPinned

@@ -1,8 +1,9 @@
-import type { TerminalTab, WorkspaceSessionState } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import { splitWorktreeId } from '../../../shared/worktree-id'
+import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '../store/types'
 import { collectLeafIdsInOrder } from '../components/terminal-pane/terminal-layout-leaf-ids'
 

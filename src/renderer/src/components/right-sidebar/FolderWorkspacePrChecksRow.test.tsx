@@ -3,7 +3,9 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CheckStatus, Repo, Worktree } from '../../../../shared/types'
+import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { ParentPrChecksRow, ParentPrChecksRowStatus } from './parent-pr-checks-rows'
 
 vi.mock('@/i18n/i18n', () => ({

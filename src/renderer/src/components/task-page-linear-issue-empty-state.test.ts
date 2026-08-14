@@ -3,7 +3,7 @@ import {
   resolveLinearIssueEmptyKind,
   shouldOfferLinearIssueFetchMore
 } from './task-page-linear-issue-empty-state'
-import { emptyLinearIssueAttributeFilter } from '../../../shared/linear-issue-attribute-filter'
+import { emptyLinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
 
 describe('task-page-linear-issue-empty-state', () => {
   it('prefers context, then search, then server filter, then client team, then unfiltered', () => {

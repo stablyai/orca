@@ -13,7 +13,7 @@ import type {
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
 import type { DirectSshAuthority, SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import { adoptOrphanedWorkspaceSessionPartition } from '../../shared/workspace-session-partition-adoption'

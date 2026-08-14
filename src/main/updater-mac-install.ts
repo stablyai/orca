@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 
 const MAC_INSTALL_READY_TIMEOUT_MS = 15000

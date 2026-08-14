@@ -3,7 +3,7 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewLookupOutcome
 } from '../../../../shared/hosted-review'
-import type { PRRefreshErrorType } from '../../../../shared/types'
+import type { PRRefreshErrorType } from '../../../../shared/github/pull-request-refresh-types'
 import { normalizeHostedReviewBaseRef } from '../../../../shared/hosted-review-refs'
 import type { ChecksPanelReviewLookup } from './checks-panel-review-lookup-authority'
 // Single source of truth for the hard-refresh error set, shared with the
@@ -63,7 +63,7 @@ export function isChecksPanelCreateEligibilityConfirmable(input: {
  * provisional or draft-preserve path.
  */
 export function shouldOpenChecksPanelCreateComposer(input: {
-  activeReview: unknown | null
+  activeReview: unknown
   isFolder: boolean
   branch: string
   hostedReviewCreation: HostedReviewCreationEligibility | null

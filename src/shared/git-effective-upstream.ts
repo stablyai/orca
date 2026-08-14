@@ -1,5 +1,5 @@
 import { isNoUpstreamError } from './git-remote-error'
-import type { GitUpstreamStatus } from './types'
+import type { GitUpstreamStatus } from './git-status-types'
 import {
   getConfiguredBranchRemoteUpstream,
   hasConfiguredBranchPushTarget

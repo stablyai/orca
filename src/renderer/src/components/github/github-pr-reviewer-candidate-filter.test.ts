@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubAssignableUser } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 import {
   GITHUB_PR_REVIEWER_QUERY_MAX_BYTES,
   filterGitHubPRReviewerCandidates,

@@ -66,6 +66,23 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
+  it('advertises source-default support on worktree catalog requests', async () => {
+    const session = new FakeSession('connected')
+    session.sendRequest.mockResolvedValue(success([]))
+    const client = createStableLogicalRpcClient(session, 'lan')
+
+    await client.sendRequest('worktree.ps', { limit: 10_000 })
+    await client.sendRequest('status.get')
+
+    expect(session.sendRequest).toHaveBeenNthCalledWith(
+      1,
+      'worktree.ps',
+      { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
+      undefined
+    )
+    expect(session.sendRequest).toHaveBeenNthCalledWith(2, 'status.get', undefined, undefined)
+  })
+
   it('makes before break, rejects in-flight work, and replays subscriptions', async () => {
     const oldSession = new FakeSession('connected')
     const nextSession = new FakeSession('connecting')
@@ -146,8 +163,9 @@ describe('stable logical RPC client', () => {
     await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
   })
 
-  it('lets the physical close settle in-flight requests on suspend, preserving delivery marks', async () => {
+  it('preserves delivery ambiguity without replaying a mutation after relay replacement', async () => {
     const session = new FakeSession('connected')
+    const replacement = new FakeSession('connected')
     const inFlight = deferred<RpcResponse>()
     session.sendRequest.mockReturnValue(inFlight.promise)
     // Mirror the real physical contract: close() rejects post-write pendings
@@ -161,8 +179,10 @@ describe('stable logical RPC client', () => {
 
     await expect(request).rejects.toBe(closeError)
     await expect(request.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
-    // New requests while suspended still fail definitively before any write.
-    await expect(client.sendRequest('status.get')).rejects.toThrow('Client suspended')
+    await client.migrateTo(replacement, 'relay')
+    expect(replacement.sendRequest).not.toHaveBeenCalled()
+    replacement.sendRequest.mockResolvedValue(success('next'))
+    await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
   })
 
   it('lets the physical close settle in-flight requests on close, keeping pre-write failures definite', async () => {

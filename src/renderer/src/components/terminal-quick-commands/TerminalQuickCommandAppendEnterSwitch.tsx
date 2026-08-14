@@ -3,11 +3,13 @@ import { Switch } from '@/components/ui/switch'
 type TerminalQuickCommandAppendEnterSwitchProps = {
   appendEnter: boolean
   onToggle: () => void
+  disabled?: boolean
 }
 
 export function TerminalQuickCommandAppendEnterSwitch({
   appendEnter,
-  onToggle
+  onToggle,
+  disabled = false
 }: TerminalQuickCommandAppendEnterSwitchProps): React.JSX.Element {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -27,6 +29,7 @@ export function TerminalQuickCommandAppendEnterSwitch({
       </div>
       <Switch
         checked={appendEnter}
+        disabled={disabled}
         aria-label={translate(
           'auto.components.terminal.quick.commands.TerminalQuickCommandAppendEnterSwitch.e4e5fed3b3',
           'Toggle append Enter'

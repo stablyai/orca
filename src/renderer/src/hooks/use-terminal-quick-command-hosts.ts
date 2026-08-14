@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GlobalSettings, TerminalQuickCommand } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -43,11 +44,11 @@ type TerminalQuickCommandHostState = {
   remoteEnvironmentId: string | null
   remoteHostId: ExecutionHostId | null
   remoteState: RuntimeTerminalQuickCommands | undefined
-  runtimeEnvironments: PublicKnownRuntimeEnvironment[]
+  runtimeEnvironments: readonly PublicKnownRuntimeEnvironment[]
   settings: GlobalSettings | null
 }
 
-const EMPTY_RUNTIME_ENVIRONMENTS: PublicKnownRuntimeEnvironment[] = []
+const EMPTY_RUNTIME_ENVIRONMENTS: readonly PublicKnownRuntimeEnvironment[] = []
 const DISABLED_TERMINAL_QUICK_COMMAND_HOSTS: TerminalQuickCommandHost[] = []
 const DISABLED_TERMINAL_QUICK_COMMAND_HOST_STATE: TerminalQuickCommandHostState = {
   executionHostId: LOCAL_EXECUTION_HOST_ID,

@@ -4,12 +4,12 @@
    error handling and restart prompts below; splitting them into separate files
    would scatter those flows without a meaningful abstraction boundary. */
 import { useEffect, useRef, useState } from 'react'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
-  CodexSystemDefaultIdentity,
-  GlobalSettings
-} from '../../../../shared/types'
+  CodexSystemDefaultIdentity
+} from '../../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import { Badge } from '../ui/badge'
@@ -383,12 +383,12 @@ export function AccountsPane({
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
   const [codexAction, setCodexAction] = useState<
-    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
+    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string}`
   >('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<
-    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
+    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string}`
   >('idle')
   // Why: capture the account's runtime slot when the dialog opens; the roster
   // can change underneath an open dialog and lose the slot to diff for restarts.

@@ -312,11 +312,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '显示中',
     ja: '表示中'
   },
-  'auto.components.skills.SkillsPage.a68dee6a32': {
-    ko: '스킬 검색',
-    zh: '搜索技能',
-    ja: 'スキルを検索'
-  },
   'auto.components.editor.RichMarkdownSlashMenu.550189b06c': {
     ko: '블록 검색',
     zh: '搜索块',
@@ -434,11 +429,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ko: '에이전트 위치',
     zh: '代理位置',
     ja: 'Agent の場所'
-  },
-  'auto.components.skills.SkillsPage.38e0951c3a': {
-    ko: '에이전트 스킬',
-    zh: '代理技能',
-    ja: 'Agent のスキル'
   },
   'auto.components.sidebar.SidebarNav.e518f544b1': {
     ko: '감지된 에이전트 없음',

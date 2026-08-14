@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from './constants'
-import type { TerminalLayoutSnapshot, TerminalTab, WorkspaceSessionState } from './types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { folderWorkspaceKey } from './workspace-scope'
 import { adoptOrphanedWorkspaceSessionPartition } from './workspace-session-partition-adoption'
 

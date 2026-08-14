@@ -60,16 +60,10 @@ export class MobileEndpointSupervisor {
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
       controller: this.relayReconnect,
-      now: dependencies.now,
       isStopped: () => this.stopped,
       isForeground: () => this.foreground,
       setForeground: (foreground) => this.setForeground(foreground),
       replaceRelay: () => void this.recoverRelay(true, true),
-      recoverAfterDeadProbe: (detail) => {
-        this.logRelay('relay probe failed; recovering', detail)
-        suspendRelayIfStillConnected(this.relayReconnect, this.logical)
-        void this.recoverRelay()
-      },
       scheduleDirectProbe: () => this.directProbe.schedule(0)
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {

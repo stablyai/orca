@@ -1,12 +1,8 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type {
-  BrowserPage,
-  BrowserTab,
-  DetectedWorktreeListResult,
-  Worktree
-} from '../../../../shared/types'
+import type { BrowserPage, BrowserTab } from '../../../../shared/browser-workspace-types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -1742,6 +1738,8 @@ describe('reconnectPersistedTerminals', () => {
         hideAutomationGeneratedWorkspaces: false,
         hideCliCreatedWorkspaces: false,
         hideDetachedHeadWorkspaces: false,
+        hideWorkspacesFromOtherDevices: false,
+        pairedDeviceIdsByEnvironment: new Map(),
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
         workspaceHostScope: 'all',
         defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -2089,6 +2087,8 @@ describe('reconnectPersistedTerminals', () => {
         hideAutomationGeneratedWorkspaces: false,
         hideCliCreatedWorkspaces: false,
         hideDetachedHeadWorkspaces: false,
+        hideWorkspacesFromOtherDevices: false,
+        pairedDeviceIdsByEnvironment: new Map(),
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
         workspaceHostScope: 'all',
         defaultHostId: LOCAL_EXECUTION_HOST_ID,

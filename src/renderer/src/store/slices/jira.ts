@@ -10,7 +10,7 @@ import type {
   JiraIssueFilter,
   JiraSiteSelection,
   JiraViewer
-} from '../../../../shared/types'
+} from '../../../../shared/jira-types'
 import type { CacheEntry } from './github'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import {

@@ -2,16 +2,11 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type {
-  BrowserPage,
-  BrowserWorkspace,
-  Repo,
-  Tab,
-  TabContentType,
-  TabGroup,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useOpenTabSearch } from './use-open-tab-search'

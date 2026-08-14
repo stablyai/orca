@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { gitHubPRToChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
-import type { PRInfo } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
 function makePR(overrides: Partial<PRInfo> = {}): PRInfo {

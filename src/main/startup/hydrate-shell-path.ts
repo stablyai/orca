@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
-import type { ShellHydrationFailureReason } from '../../shared/types'
+import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
+import { WindowsShellPathOwnership, windowsPathSegmentKey } from './windows-shell-path-ownership'
 
 // Why: GUI-launched Electron can miss PATH entries added by shell profiles.
 // Tools installed into ~/.opencode/bin, ~/.cargo/bin, pyenv/volta/fnm
@@ -35,7 +36,7 @@ let configuredWindowsShell = 'powershell.exe'
 let configuredWindowsGitBashPath: string | null = null
 let configuredWindowsFallbackShell: string | null = null
 let windowsShellConfigurationVersion = 0
-const windowsIntroducedPathKeys = new Set<string>()
+const windowsPathOwnership = new WindowsShellPathOwnership()
 
 /** @internal - tests need a clean hydration cache between cases. */
 export function _resetHydrateShellPathCache(): void {
@@ -45,7 +46,7 @@ export function _resetHydrateShellPathCache(): void {
   configuredWindowsGitBashPath = null
   configuredWindowsFallbackShell = null
   windowsShellConfigurationVersion = 0
-  windowsIntroducedPathKeys.clear()
+  windowsPathOwnership.reset()
 }
 
 function pickShell(): string | null {
@@ -70,11 +71,11 @@ function pickShell(): string | null {
 function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): string[] {
   const cleaned = stdout.replace(ANSI_RE, '')
   const first = cleaned.indexOf(DELIMITER)
-  if (first < 0) {
+  if (first === -1) {
     return []
   }
   const second = cleaned.indexOf(DELIMITER, first + DELIMITER.length)
-  if (second < 0) {
+  if (second === -1) {
     return []
   }
   const value = cleaned.slice(first + DELIMITER.length, second).trim()
@@ -211,6 +212,9 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
   const spawner = options.spawner ?? spawnShellAndReadPath
   const fallbackShell = options.shellOverride === undefined ? configuredWindowsFallbackShell : null
   const probe = probeQueue.then(async () => {
+    if (platform === 'win32') {
+      windowsPathOwnership.restore(process.env)
+    }
     const result = await spawner(shell)
     if (!result.ok && result.failureReason === 'spawn_error' && fallbackShell) {
       return spawner(fallbackShell)
@@ -248,7 +252,7 @@ export function configureWindowsShellPathHydration(
   ) {
     return
   }
-  clearWindowsIntroducedPathSegments()
+  windowsPathOwnership.restore(process.env)
   configuredWindowsShell = next
   configuredWindowsGitBashPath = gitBashPath
   configuredWindowsFallbackShell = fallbackShell
@@ -268,25 +272,6 @@ function uniquePathSegments(segments: string[], pathKey: (segment: string) => st
   })
 }
 
-function windowsPathKey(segment: string): string {
-  const normalized = pathWin32.normalize(segment)
-  const root = pathWin32.parse(normalized).root
-  const withoutTrailingSlash =
-    normalized.length > root.length ? normalized.replace(/[\\/]+$/, '') : normalized
-  return withoutTrailingSlash.toLowerCase()
-}
-
-function clearWindowsIntroducedPathSegments(): void {
-  if (process.platform !== 'win32' || windowsIntroducedPathKeys.size === 0) {
-    return
-  }
-  const currentSegments = (process.env.PATH ?? '').split(pathWin32.delimiter).filter(Boolean)
-  process.env.PATH = currentSegments
-    .filter((segment) => !windowsIntroducedPathKeys.has(windowsPathKey(segment)))
-    .join(pathWin32.delimiter)
-  windowsIntroducedPathKeys.clear()
-}
-
 /**
  * Promote shell-discovered PATH segments to the front of process.env.PATH,
  * preserving shell ordering and avoiding duplicates. Returns the segments that
@@ -296,11 +281,14 @@ export function mergePathSegments(segments: string[]): string[] {
   if (segments.length === 0) {
     return []
   }
-  const current = process.env.PATH ?? ''
+  if (process.platform === 'win32') {
+    windowsPathOwnership.restore(process.env)
+  }
+  const current = process.env.PATH ?? process.env.Path ?? ''
   const pathDelimiter = process.platform === 'win32' ? pathWin32.delimiter : delimiter
   const currentSegments = current.split(pathDelimiter).filter(Boolean)
   const pathKey =
-    process.platform === 'win32' ? windowsPathKey : (segment: string): string => segment
+    process.platform === 'win32' ? windowsPathSegmentKey : (segment: string): string => segment
   const shellSegments = uniquePathSegments(segments, pathKey)
   const shellSegmentSet = new Set(shellSegments.map(pathKey))
   const existing = new Set(currentSegments.map(pathKey))
@@ -316,11 +304,10 @@ export function mergePathSegments(segments: string[]): string[] {
   // Why: shell-provided entries must win over hardcoded packaged-app fallbacks.
   // A seeded fallback can point at a stale CLI while the user's shell resolves
   // a healthy one from the same directory list in a different order.
-  process.env.PATH = next
   if (process.platform === 'win32') {
-    for (const segment of added) {
-      windowsIntroducedPathKeys.add(windowsPathKey(segment))
-    }
+    windowsPathOwnership.apply(process.env, next)
+  } else {
+    process.env.PATH = next
   }
   return added
 }

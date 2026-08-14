@@ -1,4 +1,4 @@
-import type { Project, ProjectHostSetup } from '../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import {
   projectHostSetupProjectionFromRepos,
   type ProjectHostSetupProjection

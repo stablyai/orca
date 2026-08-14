@@ -113,7 +113,7 @@ describe('macOS daemon TCC attribution health', () => {
     await withDaemonLikeProcess(async (writePidFile) => {
       const spawnerPath = join(dir, 'Orca')
       writeFileSync(spawnerPath, '', 'utf8')
-      writePidFile({ spawnerExecPath: spawnerPath })
+      writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.3' })
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
         'intact'
       )
@@ -134,11 +134,15 @@ describe('macOS daemon TCC attribution health', () => {
     })
   })
 
-  it('flags legacy records only on a packaged app-version change', async () => {
+  it('flags missing or changed app-version metadata only for packaged builds', async () => {
     if (process.platform !== 'darwin') {
       return
     }
     await withDaemonLikeProcess(async (writePidFile) => {
+      writePidFile({})
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
+        'severed'
+      )
       writePidFile({ appVersion: '1.2.2' })
       // Updater replaced the bundle since this daemon was forked → attribution is gone.
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(

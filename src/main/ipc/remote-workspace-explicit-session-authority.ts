@@ -5,8 +5,8 @@ import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-sess
 import type { RemoteWorkspaceSession } from '../../shared/remote-workspace-types'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { DirectSshAuthority } from '../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 
 type SessionAuthorityStore = Pick<Store, 'getRepo' | 'getWorkspaceSession'>
 

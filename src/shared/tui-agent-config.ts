@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
@@ -331,7 +331,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
 }
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
-  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
+  return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
 }
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {

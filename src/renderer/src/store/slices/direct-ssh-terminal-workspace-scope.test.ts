@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveDirectSshTerminalWorkspaceKeys } from './direct-ssh-terminal-workspace-scope'
 
 function tab(worktreeId: string, ptyId: string): TerminalTab {

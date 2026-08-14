@@ -5,16 +5,13 @@ import {
 } from '../../../automations/workspace-provenance'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { defineMethod, type RpcMethod } from '../core'
-import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import {
   WorktreeCreate,
-  WorktreeDetectedListParams,
   WorktreeActivate,
   WorktreeForceDeleteBranch,
-  WorktreeListParams,
   WorktreePrefetchCreateBase,
-  WorktreePsParams,
   WorktreeRemove,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
@@ -23,30 +20,10 @@ import {
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-schemas'
+import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 
 export const WORKTREE_METHODS: RpcMethod[] = [
-  defineMethod({
-    name: 'worktree.ps',
-    params: WorktreePsParams,
-    handler: async (params, { runtime }) => {
-      const result = await runtime.getWorktreePs(params.limit)
-      // Why: callers that never send the field get the byte-exact legacy response.
-      if (params.afterSnapshotId === undefined) {
-        return result
-      }
-      return resolveWorktreeCatalogSnapshot(result, params.afterSnapshotId)
-    }
-  }),
-  defineMethod({
-    name: 'worktree.list',
-    params: WorktreeListParams,
-    handler: async (params, { runtime }) => runtime.listManagedWorktrees(params.repo, params.limit)
-  }),
-  defineMethod({
-    name: 'worktree.detectedList',
-    params: WorktreeDetectedListParams,
-    handler: async (params, { runtime }) => runtime.listDetectedManagedWorktrees(params.repo)
-  }),
+  ...WORKTREE_CATALOG_METHODS,
   defineMethod({
     name: 'worktree.teardownMissingTerminals',
     params: WorktreeTeardownMissingTerminalsParams,
@@ -96,11 +73,12 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.create',
     params: WorktreeCreate,
-    handler: async (params, { runtime }) =>
+    handler: async (params, context) =>
       // Why: a mobile create interrupted by a connection migration is retried with
       // the same clientMutationId; dedupe so the host returns the in-flight/created
       // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
-      runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
+      context.runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
+        const { runtime } = context
         const repo = await runtime.showRepo(params.repo)
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
@@ -145,6 +123,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
               startupAgent: params.startupAgent ?? params.createdWithAgent,
               createdAt: Date.now()
             }),
+            creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context),
             startup: params.startupCommand
               ? {
                   command: params.startupCommand,
@@ -271,12 +250,15 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.rm',
     params: WorktreeRemove,
     handler: async (params, { runtime }) => {
-      const result = await runtime.removeManagedWorktree(
+      const removalArgs = [
         params.worktree,
         params.force === true,
         params.runHooks === true,
         params.allowUnverifiedPtyStop === true
-      )
+      ] as const
+      const result = params.hostId
+        ? await runtime.removeManagedWorktree(...removalArgs, params.hostId)
+        : await runtime.removeManagedWorktree(...removalArgs)
       return { removed: true, ...result }
     }
   }),
@@ -284,6 +266,17 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.forceDeleteBranch',
     params: WorktreeForceDeleteBranch,
     handler: async (params, { runtime }) =>
-      runtime.forceDeletePreservedBranch(params.worktree, params.branchName, params.expectedHead)
+      params.hostId
+        ? runtime.forceDeletePreservedBranch(
+            params.worktree,
+            params.branchName,
+            params.expectedHead,
+            params.hostId
+          )
+        : runtime.forceDeletePreservedBranch(
+            params.worktree,
+            params.branchName,
+            params.expectedHead
+          )
   })
 ]

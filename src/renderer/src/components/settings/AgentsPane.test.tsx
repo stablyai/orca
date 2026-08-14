@@ -2,7 +2,8 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
@@ -244,10 +245,10 @@ describe('AgentsPane', () => {
     expect(markup).not.toContain('aria-label="Agent runtime"')
     expect(markup).toContain('Keep computer awake')
     expect(markup).toContain(
-      'Choose On, Auto while agents are working, or Off. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+      'Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
     )
     expect(markup).toContain('role="radiogroup"')
-    expect(markup).toContain('>Auto<')
+    expect(markup).toContain('>Agent<')
   })
 
   it('hides desktop-only awake modes in paired web clients', () => {
@@ -316,7 +317,7 @@ describe('AgentsPane', () => {
 
   it('describes Windows lid behavior according to the device', () => {
     expect(getAgentAwakeDescription('Windows')).toBe(
-      "Choose On, Auto while agents are working, or Off. Lid-close behavior follows this device's power settings."
+      "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings."
     )
   })
 

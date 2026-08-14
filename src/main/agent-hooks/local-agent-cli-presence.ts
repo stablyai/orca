@@ -9,7 +9,7 @@ import {
   isSafeExecutableBasename
 } from '../../shared/managed-agent-command-token'
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 
 export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'

@@ -1,9 +1,6 @@
-import type {
-  BrowserHistoryEntry,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  WorkspaceSessionState
-} from './types'
+import type { BrowserHistoryEntry } from './browser-workspace-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 export const WORKTREE_RECORD_FIELDS = [
   'tabsByWorktree',

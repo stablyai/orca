@@ -1,4 +1,7 @@
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -12,7 +15,7 @@ type DetectedWorktreeListing = { worktrees: readonly WorktreeOwnerRecord[] }
 type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 type FolderWorkspaceOwnerRecord = Pick<
   FolderWorkspace,
-  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
 >
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 

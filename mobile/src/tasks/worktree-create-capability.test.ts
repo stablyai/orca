@@ -18,7 +18,7 @@ function statusClient(outcomes: Array<'cutover' | 'error' | string[]>): RpcClien
       return {
         id: '1',
         ok: true,
-        result: { capabilities: outcome },
+        result: { capabilities: outcome, hostPlatform: 'darwin' },
         _meta: { runtimeId: 'r' }
       }
     }
@@ -33,7 +33,8 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
       )
     ).resolves.toEqual({
       tasksSupported: true,
-      idempotentWorktreeCreateSupported: true
+      idempotentWorktreeCreateSupported: true,
+      hostPlatform: 'darwin'
     })
   })
 
@@ -44,14 +45,16 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
       )
     ).resolves.toEqual({
       tasksSupported: false,
-      idempotentWorktreeCreateSupported: true
+      idempotentWorktreeCreateSupported: true,
+      hostPlatform: 'darwin'
     })
   })
 
   it('fails closed when capability detection is unavailable', async () => {
     await expect(readNewWorktreeRuntimeCapabilities(statusClient(['error']))).resolves.toEqual({
       tasksSupported: false,
-      idempotentWorktreeCreateSupported: false
+      idempotentWorktreeCreateSupported: false,
+      hostPlatform: null
     })
   })
 })

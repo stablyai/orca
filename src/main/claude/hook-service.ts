@@ -2,6 +2,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandHook,
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
@@ -13,6 +14,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   buildPosixHookPayloadCapture,
   buildWindowsHookEnvironmentGuardLines,
@@ -28,6 +30,7 @@ import {
   getManagedScriptFileName,
   getConfigPath,
   getManagedCommand,
+  getManagedLifecycleHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
@@ -36,6 +39,7 @@ import {
   getStatusLineScriptFileName,
   getStatusLineScriptPath,
   getStatusLineSlotState,
+  hasSameManagedHookInvocation,
   removeManagedHooks,
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
@@ -139,7 +143,7 @@ export class ClaudeHookService {
     }
 
     // Why: report partial registration instead of a false installed state.
-    const command = getManagedCommand(scriptPath)
+    const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const missing: string[] = []
     let presentCount = 0
     for (const event of CLAUDE_EVENTS) {
@@ -147,7 +151,7 @@ export class ClaudeHookService {
         ? config.hooks![event.eventName]!
         : []
       const hasCommand = definitions.some((definition) =>
-        (definition.hooks ?? []).some((hook) => hook.command === command)
+        (definition.hooks ?? []).some((hook) => hasSameManagedHookInvocation(hook, expectedHook))
       )
       if (hasCommand) {
         presentCount += 1
@@ -171,6 +175,18 @@ export class ClaudeHookService {
     return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
   }
 
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(
+      getManagedScriptPath(this.options.settings),
+      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+    )
+    // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
+    await refreshManagedScriptIfPresent(
+      getStatusLineScriptPath(this.options.settings),
+      getManagedStatusLineScript('local')
+    )
+  }
+
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath(this.options.settings)
     const scriptPath = getManagedScriptPath(this.options.settings)
@@ -185,10 +201,10 @@ export class ClaudeHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
+    const hook = getManagedLifecycleHook(scriptPath, this.options.settings)
     let nextConfig = applyManagedHooks(
       config,
-      command,
+      hook,
       getManagedScriptFileName(this.options.settings)
     )
     writeManagedScript(
@@ -246,9 +262,9 @@ export class ClaudeHookService {
         }
       }
 
-      // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
-      const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+      // Why: settings resolve HOME at runtime while SFTP still targets the discovered remote home.
+      const hook = buildManagedCommandHook(getRemoteManagedCommand(remoteScriptPath))
+      const nextConfig = applyManagedHooks(config, hook, remoteScriptFileName)
 
       // Why: write scripts before settings to avoid settings pointing to missing scripts.
       // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.

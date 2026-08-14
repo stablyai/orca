@@ -32,6 +32,7 @@ function leafIdForPane(paneId: number): string {
 type ConnectCallbacks = {
   onReattachDetermined?: () => void
   onConnect?: () => void
+  onStreamRecovered?: () => void
   onData?: (
     data: string,
     meta?: { seq?: number; rawLength?: number; background?: boolean; droppedOutput?: boolean }
@@ -63,7 +64,6 @@ type MockTransport = {
 
 const scheduleRuntimeGraphSync = vi.fn()
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
-const scheduleTerminalWebglAtlasRecovery = vi.fn()
 const toastInfo = vi.fn()
 const notifyCodexPaneBoundForStaleSweep = vi.fn()
 
@@ -86,10 +86,6 @@ vi.mock('@/store', () => ({
       }
     }
   }
-}))
-
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
 }))
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
@@ -384,6 +380,7 @@ type RemotePaneDrive = {
   disposable: { dispose: () => void }
   deliver: (data: string, seq: number) => void
   setOutputPaused: (paused: boolean) => void
+  recoverStream: () => void
   writtenChunks: () => string[]
 }
 
@@ -401,9 +398,11 @@ async function connectHiddenRemoteAgentPane(
   const capturedOutputPauseCallback: {
     current: ((paused: boolean, supported: boolean) => void) | null
   } = { current: null }
+  const capturedStreamRecoveredCallback: { current: (() => void) | null } = { current: null }
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
     capturedDataCallback.current = callbacks?.onData ?? null
     capturedOutputPauseCallback.current = callbacks?.onOutputPauseChanged ?? null
+    capturedStreamRecoveredCallback.current = callbacks?.onStreamRecovered ?? null
     return REMOTE_PTY_ID
   })
   transportFactoryQueue.push(transport)
@@ -420,6 +419,7 @@ async function connectHiddenRemoteAgentPane(
     disposable,
     deliver: (data, seq) => capturedDataCallback.current?.(data, { seq, rawLength: data.length }),
     setOutputPaused: (paused) => capturedOutputPauseCallback.current?.(paused, true),
+    recoverStream: () => capturedStreamRecoveredCallback.current?.(),
     writtenChunks: () => pane.terminal.write.mock.calls.map(([data]) => String(data))
   }
 }
@@ -621,6 +621,24 @@ describe('remote hidden-output restore outcomes', () => {
     }
     delete (globalThis as unknown as { window?: unknown }).window
     resetAgentStartupDelayedDeliveryForTests()
+  })
+
+  it('[modern] repaints a recovered visible pane from the retained host buffer', async () => {
+    const serializeBuffer = vi.fn()
+    const serializeBufferOutcome = vi.fn().mockResolvedValue({
+      availability: { kind: 'snapshot' },
+      snapshot: HOST_SNAPSHOT
+    })
+    const drive = await connectHiddenRemoteAgentPane(serializeBuffer, serializeBufferOutcome)
+    ;(drive.deps.isVisibleRef as { current: boolean }).current = true
+
+    drive.recoverStream()
+    await flushAsyncTicks(20)
+
+    expect(serializeBufferOutcome).toHaveBeenCalledTimes(1)
+    expect(drive.writtenChunks().join('')).toContain(HOST_SNAPSHOT_MARKER)
+    expect(serializeBuffer).not.toHaveBeenCalled()
+    drive.disposable.dispose()
   })
 
   it('[modern] accepts an empty snapshot as successful recovery without a loss banner', async () => {

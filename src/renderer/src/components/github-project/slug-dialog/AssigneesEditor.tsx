@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import type { GlobalSettings } from '../../../../../shared/types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 export function AssigneesEditor({

@@ -1,6 +1,6 @@
-import type { WorkspaceSessionState } from './types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { parseWorkspaceKey } from './workspace-scope'
-import { getRepoIdFromWorktreeId } from './worktree-id'
+import { getRepoIdFromWorktreeId } from './worktree/id'
 import {
   collectWorkspaceKeys,
   hasPtyBoundPane,

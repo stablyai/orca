@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
-import type { BrowserPage } from '../../../../shared/types'
+import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 
 function makeBrowserPage(id: string): BrowserPage {
   return {
