@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SetStateAction } from 'react'
-import type { DirEntry } from '../../../../shared/types'
+import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import type { DirCache } from './file-explorer-types'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'

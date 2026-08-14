@@ -6,7 +6,7 @@ import type {
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs
 } from '../../shared/hosted-review'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {

@@ -70,9 +70,9 @@ import {
 import type {
   LinearComment,
   LinearIssue,
-  LinearIssueChildSummary,
-  LinearProjectSummary
-} from '../../../shared/types'
+  LinearIssueChildSummary
+} from '../../../shared/linear/issue-types'
+import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 

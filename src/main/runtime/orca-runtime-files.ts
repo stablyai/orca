@@ -10,7 +10,6 @@ import {
   lstat,
   mkdir,
   open,
-  readFile,
   readdir,
   rename,
   realpath,
@@ -20,15 +19,9 @@ import {
 } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
-import type {
-  DirEntry,
-  FsChangeEvent,
-  GitWorktreeInfo,
-  MarkdownDocument,
-  SearchOptions,
-  SearchResult,
-  Worktree
-} from '../../shared/types'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import {
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
@@ -37,6 +30,10 @@ import {
   relativePathInsideRoot,
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
+import {
+  REMOTE_RPC_MAX_CONTENT_BYTES,
+  remoteRpcResultExceedsContentBudget
+} from '../../shared/remote-rpc-content-budget'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import type {
@@ -82,7 +79,8 @@ import {
   onSshFilesystemProviderRegistered,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-filesystem-dispatch'
-import type { FileStat, IFilesystemProvider } from '../providers/types'
+import type { FileReadLimits, FileStat, IFilesystemProvider } from '../providers/types'
+import { FileReadCapExceededError } from '../ssh/ssh-filesystem-stream-reader'
 import {
   isWatcherProcessFailure,
   WatcherProcessFailure
@@ -96,13 +94,68 @@ import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileWithinLimit
+} from '../../shared/node-bounded-file-reader'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
 const MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES = 8
 const MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS = 30_000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
-const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
+const LOCAL_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
+const PREVIEWABLE_BINARY_EMPTY_RESULT_BYTES = Buffer.byteLength(
+  JSON.stringify({
+    content: '',
+    isBinary: true,
+    isImage: true,
+    mimeType: 'application/octet-stream'
+  }),
+  'utf8'
+)
+const PREVIEW_CONTENT_FIELDS = ['content'] as const
+
+function previewableBinaryByteLimit(maxContentBytes: number): number {
+  const base64Bytes = Math.max(0, maxContentBytes - PREVIEWABLE_BINARY_EMPTY_RESULT_BYTES)
+  return Math.floor(base64Bytes / 4) * 3
+}
+
+// Why: the stream reader aborts an over-cap read with a raw protocol message; clients key on
+// `file_too_large`, so translate it here rather than surfacing internal stream wording.
+async function readPreviewFileWithinCap(
+  provider: IFilesystemProvider,
+  filePath: string,
+  limits: FileReadLimits
+): Promise<RuntimeFilePreviewResult> {
+  try {
+    return await provider.readFile(filePath, limits)
+  } catch (error) {
+    if (error instanceof FileReadCapExceededError) {
+      throw new Error('file_too_large')
+    }
+    throw error
+  }
+}
+
+function assertPreviewWithinTransportBudget(
+  result: RuntimeFilePreviewResult,
+  maxContentBytes: number | undefined
+): RuntimeFilePreviewResult {
+  if (
+    maxContentBytes !== undefined &&
+    remoteRpcResultExceedsContentBudget(result, maxContentBytes, PREVIEW_CONTENT_FIELDS)
+  ) {
+    throw new Error('file_too_large')
+  }
+  return result
+}
+
+// Why: previews are reachable only over RPC and base64 inflates them 4/3, so derive the cap from the
+// transport ceiling — a hardcoded 10 MiB serializes past the outbound envelope and kills the socket.
+export const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = previewableBinaryByteLimit(
+  REMOTE_RPC_MAX_CONTENT_BYTES
+)
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
 export const WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS = 10_000
 const TERMINAL_FILE_GRANT_TTL_MS = 10 * 60 * 1000
@@ -1165,7 +1218,8 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     grantId: string,
     absolutePath: string,
-    clientId?: string
+    clientId?: string,
+    maxContentBytes?: number
   ): Promise<RuntimeFilePreviewResult> {
     const { grant } = await this.requireTerminalFileGrant(
       worktreeSelector,
@@ -1176,13 +1230,20 @@ export class RuntimeFileCommands {
     if (grant.connectionId) {
       const provider = await this.assertRemoteTerminalFileGrantFreshForRead(grant)
       this.refreshTerminalFileGrant(grant)
-      return this.readRemoteTerminalArtifactPreview(provider, grant)
+      return assertPreviewWithinTransportBudget(
+        await this.readRemoteTerminalArtifactPreview(provider, grant, maxContentBytes),
+        maxContentBytes
+      )
     }
     const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
     try {
-      const preview = await readLocalTerminalArtifactPreviewFromHandle(handle, grant)
+      const preview = await readLocalTerminalArtifactPreviewFromHandle(
+        handle,
+        grant,
+        maxContentBytes
+      )
       this.refreshTerminalFileGrant(grant)
-      return preview
+      return assertPreviewWithinTransportBudget(preview, maxContentBytes)
     } finally {
       await handle.close()
     }
@@ -1279,16 +1340,24 @@ export class RuntimeFileCommands {
 
   private async readRemoteTerminalArtifactPreview(
     provider: IFilesystemProvider,
-    grant: TerminalFileGrant
+    grant: TerminalFileGrant,
+    maxContentBytes: number | undefined
   ): Promise<RuntimeFilePreviewResult> {
-    const preview = await this.readRemoteTerminalArtifact(
-      provider,
-      grant,
-      RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES
-    )
+    const binaryMaxBytes =
+      maxContentBytes === undefined
+        ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
+        : previewableBinaryByteLimit(maxContentBytes)
+    const preview = await this.readRemoteTerminalArtifact(provider, grant, binaryMaxBytes)
     if (
       !preview.isBinary &&
       Buffer.byteLength(preview.content, 'utf8') > MOBILE_FILE_READ_MAX_BYTES
+    ) {
+      throw new Error('file_too_large')
+    }
+    if (
+      preview.isBinary &&
+      maxContentBytes !== undefined &&
+      Buffer.byteLength(preview.content, 'utf8') > maxContentBytes
     ) {
       throw new Error('file_too_large')
     }
@@ -1502,8 +1571,13 @@ export class RuntimeFileCommands {
 
   async readFileExplorerPreview(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    maxContentBytes?: number
   ): Promise<RuntimeFilePreviewResult> {
+    const binaryMaxBytes =
+      maxContentBytes === undefined
+        ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
+        : previewableBinaryByteLimit(maxContentBytes)
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
@@ -1511,37 +1585,62 @@ export class RuntimeFileCommands {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       const fileStats = await provider.stat(target.path)
-      if (fileStats.size > RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES) {
+      if (fileStats.size > binaryMaxBytes) {
         throw new Error('file_too_large')
       }
-      const result = await provider.readFile(target.path)
-      return result
+      const result = await readPreviewFileWithinCap(provider, target.path, {
+        maxBinaryBytes: binaryMaxBytes,
+        maxTextBytes: MOBILE_FILE_READ_MAX_BYTES
+      })
+      // Why: the stat gate sizes base64 binaries; text crosses the wire JSON-escaped (up to 6x), so
+      // hold it to the same decoded limit the local branch enforces before reading.
+      if (
+        !result.isBinary &&
+        Buffer.byteLength(result.content, 'utf8') > MOBILE_FILE_READ_MAX_BYTES
+      ) {
+        throw new Error('file_too_large')
+      }
+      if (
+        result.isBinary &&
+        maxContentBytes !== undefined &&
+        Buffer.byteLength(result.content, 'utf8') > maxContentBytes
+      ) {
+        throw new Error('file_too_large')
+      }
+      return assertPreviewWithinTransportBudget(result, maxContentBytes)
     }
 
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const fileStats = await stat(filePath)
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-    if (mimeType) {
-      if (fileStats.size > RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES) {
+    const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
+    let buffer: Buffer
+    try {
+      buffer = (await readNodeFileWithinLimit(filePath, maxBytes)).buffer
+    } catch (error) {
+      if (error instanceof NodeFileReadTooLargeError) {
         throw new Error('file_too_large')
       }
-      const buffer = await readFile(filePath)
-      return {
-        content: buffer.toString('base64'),
-        isBinary: true,
-        isImage: true,
-        mimeType
-      }
+      throw error
+    }
+    if (mimeType) {
+      return assertPreviewWithinTransportBudget(
+        {
+          content: buffer.toString('base64'),
+          isBinary: true,
+          isImage: true,
+          mimeType
+        },
+        maxContentBytes
+      )
     }
 
-    if (fileStats.size > MOBILE_FILE_READ_MAX_BYTES) {
-      throw new Error('file_too_large')
-    }
-    const buffer = await readFile(filePath)
     if (isBinaryBuffer(buffer)) {
-      return { content: '', isBinary: true }
+      return assertPreviewWithinTransportBudget({ content: '', isBinary: true }, maxContentBytes)
     }
-    return { content: buffer.toString('utf-8'), isBinary: false }
+    return assertPreviewWithinTransportBudget(
+      { content: buffer.toString('utf-8'), isBinary: false },
+      maxContentBytes
+    )
   }
 
   async readFileExplorerChunk(
@@ -2392,7 +2491,8 @@ async function readLocalTerminalArtifactFileFromHandle(
 
 async function readLocalTerminalArtifactPreviewFromHandle(
   handle: FileHandle,
-  grant: TerminalFileGrant
+  grant: TerminalFileGrant,
+  maxContentBytes: number | undefined
 ): Promise<RuntimeFilePreviewResult> {
   const fileStats = await handle.stat()
   if (fileStats.isDirectory()) {
@@ -2401,13 +2501,17 @@ async function readLocalTerminalArtifactPreviewFromHandle(
   assertTerminalFileGrantFresh(grant, fileStats)
   const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(grant.absolutePath).toLowerCase()]
   if (mimeType) {
-    if (fileStats.size > RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES) {
+    const binaryMaxBytes =
+      maxContentBytes === undefined
+        ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
+        : previewableBinaryByteLimit(maxContentBytes)
+    if (fileStats.size > binaryMaxBytes) {
       throw new Error('file_too_large')
     }
-    const buffer = await readFileHandleBufferBounded(
-      handle,
-      RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
-    )
+    const buffer = await readFileHandleBufferBounded(handle, binaryMaxBytes + 1)
+    if (buffer.byteLength > binaryMaxBytes) {
+      throw new Error('file_too_large')
+    }
     return {
       content: buffer.toString('base64'),
       isBinary: true,

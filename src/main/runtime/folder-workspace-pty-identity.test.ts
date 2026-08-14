@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../shared/types'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import { OrcaRuntimeService } from './orca-runtime'
 
 // Folder projects back several workspaces with ONE directory; only the

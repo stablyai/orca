@@ -1,4 +1,4 @@
-import type { GitWorktreeInfo } from '../../shared/types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { listWorktreeGraph } from '../git/worktree'
 

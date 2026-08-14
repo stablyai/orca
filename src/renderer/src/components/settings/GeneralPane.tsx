@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
 import { Separator } from '../ui/separator'
 import { CliSection } from './CliSection'

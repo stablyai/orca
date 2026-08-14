@@ -2,7 +2,7 @@ import {
   getProjectIdentityKey,
   isGitHubBackedRepo
 } from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
 // Why: GitHub-CLI setup nudges are dismissible, but the dismissal must lapse
 // when the user adds a NEW GitHub-backed project — that's the moment the CLI

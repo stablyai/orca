@@ -1,5 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { readProposedPaneFitDimensions } from '@/lib/pane-manager/pane-fit'
+import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
 
 /**
  * Shared guards and write choreography for painting a main-model snapshot into
@@ -81,7 +82,11 @@ export function buildMainModelSnapshotReplayWrites(
   if (!snapshot.alternateScreen) {
     // Why: \x1b[3J wipes xterm scrollback; safe here because a normal-buffer
     // snapshot carries its own history in data (mirrors pty-transport.ts).
-    return ['\x1b[2J\x1b[3J\x1b[H', snapshot.data]
+    // Why the leading SGR reset: a replay only happens because renderer-bound
+    // bytes were dropped, so the pen the drop interrupted is unknown — without
+    // clearing it the whole replayed buffer inherits it (STA-4042). The
+    // alt-screen branches below already reset; this one did not.
+    return [`${RESET_AFTER_BYTE_GAP}\x1b[2J\x1b[3J\x1b[H`, snapshot.data]
   }
   // Older snapshot producers do not expose the mode/frame boundary. Keep their
   // composed data rather than dropping terminal modes together with the frame.
@@ -92,15 +97,18 @@ export function buildMainModelSnapshotReplayWrites(
   if (snapshot.scrollbackAnsi !== undefined) {
     // Why: main serializes normal + alt buffers separately; rebuild normal
     // while active, then return to a clean alt frame.
+    // Why the reset moved to the front too: scrollbackAnsi was replayed BEFORE
+    // the existing \x1b[0m, so the normal-buffer history inherited the stale pen
+    // even though the alt frame after it did not (STA-4042).
     return [
-      '\x1b[?1049l\x1b[2J\x1b[3J\x1b[H',
+      `${RESET_AFTER_BYTE_GAP}\x1b[?1049l\x1b[2J\x1b[3J\x1b[H`,
       snapshot.scrollbackAnsi,
-      '\x1b[0m\x1b[?1049h\x1b[2J\x1b[H',
+      `${RESET_AFTER_BYTE_GAP}\x1b[?1049h\x1b[2J\x1b[H`,
       ...altFrame
     ]
   }
   // Why: the snapshot's ?1049h no-ops when already on alt screen and skips
   // blank cells; clear the alt buffer so the pre-hide frame can't bleed
   // through blank cells (spares normal-buffer scrollback).
-  return ['\x1b[0m\x1b[?1049h\x1b[2J\x1b[H', ...altFrame]
+  return [`${RESET_AFTER_BYTE_GAP}\x1b[?1049h\x1b[2J\x1b[H`, ...altFrame]
 }

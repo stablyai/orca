@@ -21,14 +21,12 @@ export function createMockDeps(): SshRelaySessionTestDeps {
     upsertSshPtyConsumerRecovery: vi.fn(),
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
-    supersedeDuplicatePaneLeases: vi.fn().mockReturnValue(0),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),
     markSshRemotePtyLeasesForShutdown: vi.fn(),
     markSshRemotePtyLeasesAttachedAsync: vi.fn(),
-    markSshRemotePtyLeasesTerminatedAsync: vi.fn(),
-    persistPtyBinding: vi.fn().mockReturnValue(true)
+    persistPtyBinding: vi.fn()
   } as unknown as Store
   const mockPortForward = {
     removeAllForwards: vi.fn()

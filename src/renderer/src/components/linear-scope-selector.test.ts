@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LinearTeam, LinearWorkspace } from '../../../shared/types'
+import type { LinearTeam, LinearWorkspace } from '../../../shared/linear/workspace-types'
 import {
   LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES,
   filterLinearScopeTeams,

@@ -2,7 +2,7 @@ import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
-import type { PersistedMobileClientTabSelections } from '../../shared/types'
+import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
 
 export type ClientSessionTabSelection = {

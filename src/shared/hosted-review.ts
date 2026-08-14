@@ -4,7 +4,7 @@ import type {
   PRConflictSummary,
   PRMergeableState,
   PRReviewDecision
-} from './types'
+} from './github/pull-request-types'
 
 export type HostedReviewProvider =
   | 'github'

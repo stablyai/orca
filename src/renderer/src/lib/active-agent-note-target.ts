@@ -11,7 +11,7 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import {
   classifyTitleActivity,
   isExplicitAgentStatusFresh,

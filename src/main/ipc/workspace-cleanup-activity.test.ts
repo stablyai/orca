@@ -1,6 +1,9 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
+import type { Worktree } from '../../shared/worktree/types'
 import { resolveWorkspaceCleanupActivityWorktree } from './workspace-cleanup-activity'
 
 const REPO: Repo = {
@@ -134,8 +137,38 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       readTextFile
     )
 
-    expect(readTextFile).toHaveBeenCalledWith(reflogPath)
+    // Why: only the tail of the reflog is read — the newest entry is enough.
+    expect(readTextFile).toHaveBeenCalledWith(reflogPath, { tailBytes: 8192 })
     expect(worktree.lastActivityAt).toBe(1_700_000_900_000)
+  })
+
+  it('falls back to a full reflog read when the newest entry exceeds the tail window', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'cleanup-activity-'))
+    try {
+      const gitDir = path.join(dir, 'gitdir')
+      await mkdir(path.join(gitDir, 'logs'), { recursive: true })
+      const worktreePath = path.join(dir, 'wt')
+      await mkdir(worktreePath, { recursive: true })
+      await writeFile(path.join(worktreePath, '.git'), `gitdir: ${gitDir}\n`)
+      // Why: a single record longer than the 8192-byte tail window keeps its
+      // timestamp before the window; the reader must fall back to a full read.
+      await writeFile(
+        path.join(gitDir, 'logs', 'HEAD'),
+        '0000 1111 Dev <dev@example.com> 1700000000 -0700\tbranch: Created from HEAD\n' +
+          `1111 2222 Dev <dev@example.com> 1700000900 -0700\tcommit: ${'x'.repeat(9000)}\n`
+      )
+      const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
+
+      const worktree = await resolveWorkspaceCleanupActivityWorktree(
+        REPO,
+        makeWorktree({ path: worktreePath }),
+        statPath
+      )
+
+      expect(worktree.lastActivityAt).toBe(1_700_000_900_000)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it('degrades to other probes when the reflog was expired to an empty file', async () => {

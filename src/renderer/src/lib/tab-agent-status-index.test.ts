@@ -14,7 +14,8 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 
 // ─── Oracle: the pre-index full-map scans, kept here (not in src) so the

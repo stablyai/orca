@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { statRuntimePath } from '@/runtime/runtime-file-client'

@@ -3,6 +3,10 @@ import { OptionalFiniteNumber, OptionalString } from '../schemas'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import {
+  normalizeCustomWorktreeVisibilitySources,
+  normalizeWorktreeVisibilitySourcePreferences
+} from '../../../../shared/worktree/visibility-sources'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -55,6 +59,14 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       externalWorktreeInboxBaselinePaths: z.array(z.string()).optional(),
       importedExternalWorktreePaths: z.array(z.string()).optional(),
       agentWorktreeVisibility: z.enum(['hide', 'show']).optional(),
+      customWorktreeVisibilitySources: z
+        .unknown()
+        .transform((value) => normalizeCustomWorktreeVisibilitySources(value))
+        .optional(),
+      worktreeVisibilitySourcePreferences: z
+        .unknown()
+        .transform((value) => normalizeWorktreeVisibilitySourcePreferences(value))
+        .optional(),
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber,

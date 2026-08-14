@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-12",
+  "updatedAt": "2026-08-13",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -786,6 +786,143 @@
       "demotionRule": "Keep experimental or demote if focused tests flake, HOST_OFFLINE can park indefinitely, direct probes serialize configured endpoints, loser cleanup leaks clients, or physical-device radio cost exceeds the measured budget."
     },
     {
+      "id": "mobile-transport.lifecycle-liveness",
+      "title": "Wanted mobile hosts self-heal without false physical-session death",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "mobile-runtime",
+      "layer": "mobile-provider-and-physical-session-contract",
+      "surfaces": [
+        "mobile host acquisition",
+        "Keychain and Keystore catalog reads",
+        "direct LAN and Tailscale RPC",
+        "cloud relay RPC",
+        "foreground and network revival"
+      ],
+      "platforms": ["ios", "android", "macos", "linux", "windows"],
+      "providers": ["lan", "tailscale", "cloud-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["lan", "tailscale", "cloud-relay"],
+      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, and stale-generation outcomes. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4153/mobile-app-disconnects-frequently"
+      ],
+      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death.",
+      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay.",
+      "commands": [
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts"
+      ],
+      "testFiles": [
+        "mobile/src/transport/client-context.test.ts",
+        "mobile/src/transport/host-open-recovery.test.tsx",
+        "mobile/src/transport/host-open-retry-scheduler.test.ts",
+        "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+        "mobile/src/transport/rpc-session-liveness-integration.test.ts",
+        "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+        "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
+        "mobile/src/transport/mobile-endpoint-nudge-router.test.ts",
+        "mobile/src/transport/mobile-relay-e2ee-link.test.ts",
+        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "mobile/src/transport/client-context.test.ts",
+          "assertions": ["a retired close-on-release owner closes an ownerless manual reconnect"]
+        },
+        {
+          "file": "mobile/src/transport/host-open-recovery.test.tsx",
+          "assertions": [
+            "catalog, missing-host, and construction failures retry without remounting",
+            "final release and forget prevent later client publication",
+            "refresh bypasses a never-settling stale open and stale failure cannot clobber its replacement",
+            "revival expedites recovery without resetting the failure tier",
+            "a retired owner's release cannot cancel a newer owner's open",
+            "explicit reconnect demand survives a pre-client failure"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+          "assertions": [
+            "authenticated traffic resets the idle and missed-probe clocks",
+            "two fair misses are tolerated and the third terminates exactly once",
+            "scheduler stalls and replacement identities cannot terminate the current session",
+            "continuous authenticated traffic does not churn idle timers per frame"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/rpc-session-liveness-integration.test.ts",
+          "assertions": [
+            "direct handshake and probe write exceptions recover without escaping",
+            "one silent foreground window preserves the connected direct socket",
+            "authenticated terminal binary output restores direct-session liveness",
+            "a replay write failure retains every queued stream for the replacement session",
+            "liveness probe replies cannot consume the authentication retry budget"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+          "assertions": [
+            "written Relay requests retain delivery-unknown failures",
+            "resume confirmation and stream routing remain authenticated"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
+          "assertions": [
+            "an idle Relay emits zero periodic traffic",
+            "RPCs and subscriptions after prolonged silence emit no liveness probe",
+            "foreground Relay liveness uses two fair 4-second misses and a 10-second sequence rate limit",
+            "network change does not probe the replaced Relay",
+            "a failed foreground probe write disconnects immediately"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "assertions": ["a delivery-unknown mutation is not replayed onto a replacement Relay"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.74,
+          "summary": "Ten focused files passed 66 deterministic provider lifecycle, direct/Relay liveness, traffic, and delivery-ambiguity tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused mobile provider and transport unit tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One deterministic local focused run exists; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Current main failed six deterministic assertions: terminal catalog failure, zero-owner publication, stale failure clobber, initial direct handshake write throw, one-window direct death, and foreground probe write throw. The candidate passes the same assertions and adds relay parity, backoff, cancellation, and scheduler-fairness coverage."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Each wanted clientless host owns at most one open and one retry timer with a 60-second capped tail. Direct sessions own one idle or probe timer. Idle Relay sessions own no liveness timer and emit no periodic or demand-driven liveness traffic; foreground sequences start at most once per 10 seconds. No subprocess, wire opcode, or server-side work is introduced."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Capture the existing final-timeout log immediately before an affected-device drop.",
+        "Run physical iOS and Android direct LAN, Tailscale, relay, background/resume, and network-handoff journeys.",
+        "Measure reconnect radio and battery impact during the 60-second catalog retry tail, direct 44-second idle liveness budget, and Relay foreground probes."
+      ],
+      "knownGaps": [
+        "No physical iOS or Android device was exercised.",
+        "No affected-device log yet proves the old one-window watchdog caused the reported live-session drop.",
+        "Carrier NAT, production Tailscale, production relay cells, and real scheduler suspension remain unmeasured.",
+        "Persistent pre-client failure metadata is not yet exposed in Home UI."
+      ],
+      "demotionRule": "Keep experimental or demote if a wanted host can park without retry, stale work can publish or notify, disconnect or forget resurrects a host, direct closes before three fair misses, Relay polls while idle or on demand, survives two fair foreground misses, authenticated traffic fails to restore health, timers leak across identity replacement, mutations replay after ambiguous delivery, or physical-device radio cost exceeds the measured budget."
+    },
+    {
       "id": "desktop-relay.assignment-backpressure",
       "title": "Desktop relay drain recovery cannot amplify a director outage",
       "maturity": "experimental",
@@ -1316,6 +1453,181 @@
       "demotionRule": "Quarantine the Electron journey only with a linked product or harness defect; demote if activation changes the owner/runtime/daemon/PTY identity, loses prior output, opens before provider readiness, or fails to honor a committed quit."
     },
     {
+      "id": "runtime.renderer-graph-reload-termination",
+      "title": "Renderer graph reloads terminate under exact document and window authority",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "electron-runtime-contract",
+      "surfaces": [
+        "desktop renderer reload and crash recovery",
+        "headless-to-desktop promotion",
+        "CLI and paired-runtime graph availability"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "paired-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon", "paired-runtime"],
+      "coverageNotes": "Deterministic lifecycle, IPC, window-notification, and runtime ownership tests cover generation replacement, stale callbacks, same-frame old-document publication, blocked external navigation, cancelled renderer navigation, concurrent provisional starts, process loss, timeout cleanup, headless fallback, and competing windows. Isolated macOS Electron validation covers cancelled navigation, forced renderer recovery, and headless serve promotion with live daemon-backed PTY identity and I/O. Linux, Windows, WSL, SSH promotion, and mixed-version desktop/server live runs remain uncollected; the renderer generation stays local to Electron IPC and does not change the remote wire.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/14066",
+        "https://linear.app/stably/issue/STA-4016",
+        "https://github.com/stablyai/orca/pull/14070"
+      ],
+      "invariant": "Every genuine renderer graph reload revision settles exactly once, while a blocked external navigation that preserves the current document never starts a revision. A cancelled renderer-document navigation restores authority only when that same renderer survived; cancellation after an earlier document committed remains fenced until publication or timeout. Replacing a reload cancels only the prior revision; its timer and callbacks cannot settle a newer revision. A desktop reload succeeds only from a publication carrying a new renderer-document generation, while a failed headless promotion may recover only from its originating window. Timeout, renderer loss, and close reach a terminal graph state, and successful desktop publication permanently retires headless sentinel fallback until a new headless runtime is established.",
+      "oracle": "Start a blocked external main-frame navigation and require the current renderer graph and notification path to remain authoritative. Start a same-renderer navigation, cancel it before commit, and require the renderer canary and ready authority to survive; coalesce overlapping provisional starts into one fence, and keep an earlier committed reload fenced if a later navigation is cancelled. Drive two genuine reloads half a timeout apart and require the first deadline to leave the second revision reloading while the second deadline alone makes it unavailable. During the second revision publish from the prior renderer document through the still-current main frame and require rejection without graph mutation or timeout cancellation. Restore headless authority after failed promotion, publish from a competing window, and require rejection while the sentinel remains authoritative. Then force a real renderer crash and separately promote an isolated headless serve owner; require runtime graph readiness, stable runtime/main/daemon/PTY identities, recovered visible terminal output, and post-recovery input/output.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-graph-reload-lifecycle.test.ts src/main/window/runtime-renderer-notification-sender.test.ts src/main/window/renderer-document-navigation.test.ts src/main/ipc/runtime.test.ts src/main/window/attach-main-window-services.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/renderer-blocked-navigation-graph-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test e2e/renderer-crash-recovery-terminal-input.spec.ts tests/e2e/renderer-crash-recovery-terminal-input.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test e2e/headless-serve-desktop-activation.spec.ts tests/e2e/headless-serve-desktop-activation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/runtime/runtime-graph-reload-lifecycle.test.ts",
+        "src/main/window/runtime-renderer-notification-sender.test.ts",
+        "src/main/window/renderer-document-navigation.test.ts",
+        "src/main/ipc/runtime.test.ts",
+        "src/main/window/attach-main-window-services.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts",
+        "src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
+        "tests/e2e/renderer-blocked-navigation-graph-authority.spec.ts",
+        "tests/e2e/renderer-crash-recovery-terminal-input.spec.ts",
+        "tests/e2e/headless-serve-desktop-activation.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/runtime-graph-reload-lifecycle.test.ts",
+          "assertions": [
+            "each revision settles exactly once",
+            "replacement cancels the old revision and fences its timeout",
+            "settlement and timeout release their timers"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "only the newest reload owns the terminal timeout",
+            "a superseded renderer-document generation cannot settle a reload",
+            "cancelled navigation restores only the renderer or headless authority that actually survived",
+            "cancellation after an earlier document commit stays fenced until its restarted timeout",
+            "failed headless promotion remains pinned to its originating window",
+            "successful desktop publication retires headless fallback"
+          ]
+        },
+        {
+          "file": "src/main/ipc/runtime.test.ts",
+          "assertions": [
+            "graph publication requires a non-empty renderer generation",
+            "only the current BrowserWindow main frame may publish"
+          ]
+        },
+        {
+          "file": "src/main/window/runtime-renderer-notification-sender.test.ts",
+          "assertions": [
+            "renderer failure is contained once per load generation",
+            "late events cannot revive a closed sender"
+          ]
+        },
+        {
+          "file": "src/main/window/renderer-document-navigation.test.ts",
+          "assertions": [
+            "blocked external navigation does not start a renderer generation",
+            "only the packaged renderer file or development origin starts a renderer generation",
+            "concurrent provisional starts share one reload fence and cancel only after every attempt fails"
+          ]
+        },
+        {
+          "file": "tests/e2e/renderer-blocked-navigation-graph-authority.spec.ts",
+          "assertions": [
+            "blocked external navigation starts and stops loading without replacing the renderer document",
+            "runtime graph epoch, readiness, and authoritative window remain unchanged",
+            "a later listener can cancel a renderer navigation while its canary and authoritative graph recover"
+          ]
+        },
+        {
+          "file": "tests/e2e/renderer-crash-recovery-terminal-input.spec.ts",
+          "assertions": [
+            "main observes renderer process loss and a completed recovery load",
+            "the same daemon-backed PTY remains reachable through transport and direct-write probes"
+          ]
+        },
+        {
+          "file": "tests/e2e/headless-serve-desktop-activation.spec.ts",
+          "assertions": [
+            "promotion preserves main owner, runtime, daemon, and PTY identity",
+            "terminal output survives promotion and post-promotion input/output remains live"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-graph-reload-lifecycle.test.ts src/main/window/runtime-renderer-notification-sender.test.ts src/main/window/renderer-document-navigation.test.ts src/main/ipc/runtime.test.ts src/main/window/attach-main-window-services.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
+          "result": "passed",
+          "durationSeconds": 12,
+          "summary": "Eight focused files passed with 1,175 tests and one pre-existing skip after the merge from latest main. The suite covers exact reload settlement, timeout replacement, cancelled-navigation recovery, concurrent provisional starts, document and window authority, notification containment, preload IPC, and renderer publication scheduling."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/renderer-blocked-navigation-graph-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 8,
+          "summary": "Two isolated Electron flows passed: blocked external navigation left epoch and authority unchanged, and a same-renderer navigation cancelled by a later listener preserved its canary while returning the incremented graph generation to ready under the same authoritative window."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test e2e/renderer-crash-recovery-terminal-input.spec.ts tests/e2e/renderer-crash-recovery-terminal-input.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 18,
+          "summary": "Two forced renderer process deaths each produced a main-observed recovery load; the same daemon-backed PTY remained live through renderer transport and direct-write probes."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test e2e/headless-serve-desktop-activation.spec.ts tests/e2e/headless-serve-desktop-activation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 10,
+          "summary": "The isolated headless serve owner promoted to a real renderer while preserving main owner, runtime, daemon, and PTY identity. Pre-promotion output remained visible and post-promotion terminal input/output succeeded; a full-window proof image records both markers."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 420,
+        "scope": "focused deterministic contracts plus isolated forced-crash and headless-promotion Electron journeys"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Fresh deterministic and two isolated Electron journeys are green; CI soak history is pending."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "A byte-identical three-case oracle was rerun on 2026-08-13. Latest main ee8dd4796e failed all three: reload remained reloading after 22.5 seconds, the prior renderer document settled the replacement, and a competing window stole failed-promotion authority. Submitted PR head feeca6c22f passed the bounded replacement timeout but failed both authority cases. The locally rewritten candidate passed all three. Disabling the local document-generation and pending-window fences reproduces the submitted-head failures; disabling the cancelled-navigation classifier leaves the graph reloading and increments its epoch in the new live oracle."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Fresh delegated audit passed with no blocking, major, or actionable minor findings. The candidate retains at most one unref'd timer, reuses the existing renderer document UUID, adds about 67 serialized bytes to each already-coalesced local graph IPC, and performs constant-time generation/window checks. It adds no polling, subprocess, network request, remote frame, provider scan, or steady-state fanout; a dedicated benchmark would measure existing graph/structured-clone noise rather than meaningful incremental work."
+      },
+      "promotionCriteria": [
+        "Collect CI and soak history without unexplained flakes.",
+        "Collect live Linux and Windows desktop reload evidence.",
+        "Add live SSH or WSL promotion evidence if provider-specific graph restoration diverges."
+      ],
+      "knownGaps": [
+        "The live journeys cover macOS and daemon-backed local terminals, not Linux desktop, Windows, WSL, or SSH promotion.",
+        "The same-frame stale-document race is deterministic fault injection because Playwright cannot schedule an invoke precisely between did-start-loading and frame replacement.",
+        "No mixed-version live run is required because rendererGeneration is confined to same-version preload/main Electron IPC and the remote runtime wire is unchanged."
+      ],
+      "demotionRule": "Demote if a reload revision settles more than once, a stale document or competing window can publish, a timer survives settlement, desktop failure stays indefinitely reloading, headless fallback returns after successful promotion, or either isolated Electron journey loses runtime or PTY identity."
+    },
+    {
       "id": "runtime.websocket-heartbeat-cadence",
       "title": "Runtime WebSockets enter an owned shared heartbeat cadence",
       "maturity": "experimental",
@@ -1680,19 +1992,24 @@
       "providers": ["remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "A headed macOS desktop host and separate paired client exercise the Explorer eye-button path with a real remote file URL, host browser DOM, renderer split layout, background preview creation, explicit browser activation, browser close, forced capability rejection after caller preflight, and a forced post-create reconciliation timeout. The same fault oracles pass against a live headless server. Unit contracts cover absent, unknown, and mixed-version capabilities, visible rejection, empty-split cleanup, owning-runtime routing, exact client materialization, confirmed rollback, ambiguous cleanup, and teardown. Linux and Windows live journeys remain gaps.",
+      "coverageNotes": "A headed macOS desktop host and separate paired client exercise the Explorer eye-button path with a real remote file URL, host browser DOM, renderer split layout, background preview creation, explicit browser activation, browser close, forced capability rejection after caller preflight, a forced post-create reconciliation timeout, and navigation held beyond the client create deadline. The same reconciliation fault oracles pass against a live headless server. Unit contracts cover absent, unknown, and mixed-version capabilities, visible rejection, empty-split cleanup, owning-runtime routing, canonical preallocated page identity, navigation-independent acknowledgement, exact client materialization, confirmed rollback, ambiguous cleanup, and teardown. Linux and Windows live journeys remain gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-3872/unable-to-open-html-files-in-remote-server",
         "https://linear.app/stably/issue/STA-4025/p1-browser-create-reports-success-when-tab-reconcile-fails-after-pr",
         "https://linear.app/stably/issue/STA-4063/p1-paired-html-preview-rejects-outside-cleanup-after-pr-13909",
+        "https://linear.app/stably/issue/STA-4231/p1-owner-pinned-paired-browser-create-can-time-out-after-host-tab",
+        "https://github.com/stablyai/orca/pull/14363",
         "https://github.com/stablyai/orca/pull/13876"
       ],
-      "invariant": "Opening one HTML preview from a paired client succeeds only after exactly one browser page on the worktree-owning runtime materializes as exactly one client browser workspace and unified tab in the requested group. Capability rejection before host mutation must preserve the original error, issue no RPC, surface a failure toast, and remove only a caller-declared newly-created empty split. Post-create reconciliation failure requires exact rollback; ambiguous rollback rejects without local fallback. Preview focus and close preserve the source editor and terminal.",
-      "oracle": "Run one unchanged contract oracle for direct create and side-preview callers with absent status, unknown capabilities, and a mixed-version host. Require the original unsupported error or visible toast, zero RPCs, and no retained new split. Run it on the scan target, latest main, candidate, and candidate with the cleanup boundary disabled. In headed paired Electron, arm capability rejection after the caller preflight, invoke the visible HTML side-preview action, require the failure toast, and compare exact host/client browser, editor, terminal, and group inventories to baseline. Repeat against headless serve. Retain the separate exact-page reconciliation rollback oracle.",
+      "invariant": "Opening one HTML preview from a paired client succeeds only after exactly one browser page on the worktree-owning runtime materializes as exactly one client browser workspace and unified tab in the requested group. Owner-pinned creation returns the canonical host page identity before navigation readiness; delayed navigation cannot turn a created page into an unidentifiable failure or a duplicate retry. Capability rejection before host mutation must preserve the original error, issue no RPC, surface a failure toast, and remove only a caller-declared newly-created empty split. Post-create reconciliation failure requires exact rollback; ambiguous rollback rejects without local fallback. Preview focus and close preserve the source editor and terminal.",
+      "oracle": "Run one unchanged contract oracle for direct create and side-preview callers with absent status, unknown capabilities, and a mixed-version host. Require the original unsupported error or visible toast, zero RPCs, and no retained new split. Run it on the scan target, latest main, candidate, and candidate with the cleanup boundary disabled. In headed paired Electron, arm capability rejection after the caller preflight, invoke the visible HTML side-preview action, require the failure toast, and compare exact host/client browser, editor, terminal, and group inventories to baseline. Hold a real navigation response beyond the 15-second client deadline after host creation; require the first RPC to return the exact host inventory page ID, one host page, and no retry. Repeat reconciliation faults against headless serve. Retain the separate exact-page reconciliation rollback oracle.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-browser-create-navigation-deadline.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -1711,7 +2028,10 @@
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
         "src/renderer/src/runtime/remote-server-parity.test.ts",
+        "src/renderer/src/hooks/useIpcEvents.test.ts",
+        "src/renderer/src/store/slices/browser.test.ts",
         "tests/e2e/paired-remote-html-browser-focus.spec.ts",
+        "tests/e2e/paired-browser-create-navigation-deadline.spec.ts",
         "tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts"
       ],
       "assertionRefs": [
@@ -1747,10 +2067,34 @@
           "file": "src/renderer/src/runtime/web-runtime-session.test.ts",
           "assertions": [
             "a post-create timeout returns false only after exact host close and a confirming snapshot",
+            "owner-pinned creation launches navigation separately and materializes without awaiting it",
+            "a lost create acknowledgement cleans the capability-gated canonical page ID",
             "unconfirmed cleanup rejects so callers cannot create a competing local fallback",
             "the canonical placement and a newly-created empty split are released on rollback",
             "one failed preview cannot remove a shared split still reserved after an environment ownership change",
             "if every overlapping creation fails, the last reservation closes the caller-created empty split"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-browser.test.ts",
+          "assertions": [
+            "explicit renderer cleanup bypasses guest registration while retaining typed missing-page behavior",
+            "offscreen cleanup rejects a page outside the requested worktree"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/useIpcEvents.test.ts",
+          "assertions": [
+            "renderer-backed creation preserves the requested canonical page ID while keeping its workspace identity independent",
+            "closing an absent renderer page returns browser_tab_not_found instead of an untyped failure",
+            "explicit cleanup cannot close a page owned by another worktree"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/browser.test.ts",
+          "assertions": [
+            "a requested canonical page ID is stored on the page rather than reused as its workspace ID",
+            "duplicate canonical page IDs are rejected before a second tab can materialize"
           ]
         },
         {
@@ -1782,6 +2126,13 @@
             "one HTML open produces one client workspace, one client unified tab, and one host page",
             "the source editor and remote frame remain visible in separate groups",
             "preview creation leaves the editor active, an explicit browser click is authoritative, and close preserves the editor and terminal"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-browser-create-navigation-deadline.spec.ts",
+          "assertions": [
+            "a held navigation exceeds the former create deadline while the first RPC returns the exact authoritative host page ID",
+            "host inventory contains exactly one new page and the user retry branch is never entered"
           ]
         },
         {
@@ -1938,6 +2289,24 @@
           "result": "failed",
           "durationSeconds": 12.3,
           "summary": "Candidate d05217c40d with only the side-preview focusOnCreate:false call disabled failed the byte-identical 2ec1dcf1 oracle because preview creation activated the browser instead of preserving editor focus."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
+          "result": "passed",
+          "durationSeconds": 10.83,
+          "summary": "Five post-review host, IPC, store, and client lifecycle files passed 1,356 tests with one pre-existing skip, including both shards that failed before the canonical page/workspace identity and typed missing-page cleanup corrections."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-browser-create-navigation-deadline.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 18.1,
+          "summary": "Two isolated headed Electron/CDP journeys passed: the direct owner-pinned call returned one canonical host ID before held navigation, and the real remote-pane context-menu route materialized that one page without retry or duplicate."
         }
       ],
       "runtimeBudget": {
@@ -1950,11 +2319,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The unchanged STA-4063 five-assertion oracle is red 5/5 on scan e4c278eb52 and latest main bc2e30000b, partially green 2/5 on pre-fix PR #14100, green 5/5 on candidate 14b5877a75, and red 3/5 when only the new transaction cleanup boundary is disabled on final candidate a9e6fb7716. The earlier STA-4025 transaction oracle remains red on the post-#13909 base and green on this candidate. The byte-identical 2ec1dcf1 Electron oracle remains red on latest main 346e59c879, green on candidate d05217c40d, and red with only side-preview focus disabled; historical 5806b23f evidence separately proves owning-runtime routing."
+        "evidence": "The unchanged STA-4063 five-assertion oracle is red 5/5 on scan e4c278eb52 and latest main bc2e30000b, partially green 2/5 on pre-fix PR #14100, green 5/5 on candidate 14b5877a75, and red 3/5 when only the new transaction cleanup boundary is disabled on final candidate a9e6fb7716. The earlier STA-4025 transaction oracle remains red on the post-#13909 base and green on this candidate. The byte-identical STA-4231 headed oracle is red on latest-main b19d99bd00: both 15-second creates return runtime_timeout without a page ID while the host retains two distinct pages after retry. The relevant behavior is unchanged through 0a0ae974d4. The candidate is green with one returned canonical ID, one host/client page, and no retry; disabling only the navigation-independent acknowledgement is red with the same two orphaned pages. The byte-identical 2ec1dcf1 Electron oracle remains red on latest main 346e59c879, green on candidate d05217c40d, and red with only side-preview focus disabled; historical 5806b23f evidence separately proves owning-runtime routing."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The transaction adds no timer, polling, retry, subprocess, RPC method, stream opcode, or host publication. Capability rejection performs zero RPCs and one bounded empty-group close. Successful creation adds one post-operation list; known-page failure adds one exact close and one confirming list. The E2E-only one-shot faults are build-gated, retain one promise/flag and a bounded page-id set, and reset after each run. Pending client placements remain capped at 128 and clear on adoption, failure, or teardown."
+        "evidence": "The transaction adds no timer, polling, retry, subprocess, RPC method, stream opcode, or global host publication. Owner-pinned success performs one create RPC followed by one asynchronous goto, retains one page, and performs zero retry or cleanup calls. A lost create acknowledgement performs one exact close by the preallocated canonical ID and at most one confirming snapshot. Headless goto publishes one worktree-scoped session snapshot after navigation. Capability rejection performs zero RPCs and one bounded empty-group close. The E2E-only one-shot faults are build-gated, retain one promise/flag and a bounded page-id set, and reset after each run. Pending client placements remain capped at 128 and clear on adoption, failure, or teardown."
       },
       "promotionCriteria": [
         "Collect Linux and physical Windows paired-server evidence.",
@@ -6801,7 +7170,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-session-terminal-handle-events.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalPaneDisconnectedBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/direct-ssh-terminal-retry.test.ts src/renderer/src/store/slices/direct-ssh-pane-detach-ledger.test.ts src/renderer/src/store/slices/direct-ssh-terminal-recovery.test.ts src/renderer/src/store/slices/direct-ssh-terminal-workspace-scope.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/hooks/direct-ssh-reconnect-coordinator.test.ts src/renderer/src/hooks/direct-ssh-host-hydration.test.ts src/renderer/src/hooks/direct-ssh-state-routing.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts src/shared/ssh-types.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
@@ -6822,7 +7191,7 @@
         "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts",
-        "src/renderer/src/components/terminal-pane/TerminalPaneDisconnectedBanner.test.tsx",
+        "src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx",
         "src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts",
         "src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts",
         "src/renderer/src/runtime/web-session-terminal-handle-events.test.ts",
@@ -6904,7 +7273,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/TerminalPaneDisconnectedBanner.test.tsx",
+          "file": "src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx",
           "assertions": [
             "automatic recovery renders as a quiet bounded status without a button",
             "the disconnected state exposes one explicit Reconnect action"
@@ -7179,7 +7548,7 @@
           "date": "2026-07-21",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalPaneDisconnectedBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
           "result": "passed",
           "durationSeconds": 5,
           "summary": "Eleven fault-injection and recovery-UI files and 127 tests passed, covering suspended heartbeat clocks, stale socket, PTY, and create generations, canonical pre-ready close recovery with one replacement subscription, cold and repeated PTY reattachment, authoritative health, bounded PTY and terminal-create recovery, post-probe timeout clipping, manually retryable create cutoff, accurate capability-probe failures, same-PTY manual reconnect, pane-state cleanup, fatal error deduplication, stable create identity, cross-process PTY adoption, and fail-closed legacy inventory."
@@ -8276,10 +8645,10 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract and a live dev-runtime CLI repro. SSH, daemon, remote-runtime, Linux, and Windows remain provider/platform gaps; the product path stays provider-owned and does not add local filesystem or process assumptions.",
+      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract, a live dev-runtime CLI repro, and a Haiku composer trace. The Claude render gate stays on the PTY-owning runtime, so paired and SSH callers use the same provider write/output path without a wire change. SSH, daemon, remote-runtime, Linux, and Windows live journeys remain gaps.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/7226"],
-      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and send Enter only after the paste frame completes.",
-      "oracle": "Runtime tests assert the exact PTY write sequence and failure cleanup; orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness dispatches a 32KB task to a fake Codex-like TUI and requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
+      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Claude must emit a post-paste composer marker and then settle, or reach the bounded fallback first.",
+      "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, and a Claude-shaped multi-frame render where the legacy 500 ms delay and first show-cursor marker are both premature. The candidate waits for post-marker output quiescence before one submit, resets that window on later frames, and still submits once at the hard deadline if output never settles. Orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
@@ -8305,6 +8674,9 @@
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "runtime writes bracketed paste before a delayed submit",
+            "Claude ignores unrelated and split pre-marker output, then waits for post-marker render quiescence before one submit",
+            "a silent Claude composer reaches one bounded fallback submit",
+            "a marked Claude composer with continuous render output reaches one bounded fallback submit",
             "large prompt frames are chunked and reconstructed before submit",
             "partial prompt write failure closes the paste frame and does not submit"
           ]
@@ -8335,6 +8707,24 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "result": "passed",
+          "durationSeconds": 13.3,
+          "summary": "4 files and 1,283 tests passed. The hardened multi-frame oracle failed on the first-marker candidate because it submitted at 751 ms during an intermediate Claude frame; the quiescence candidate waited through the final 1,000 ms frame and submitted once at 2,500 ms. Continuous render output remained bounded to one fallback submit at 8 seconds. An isolated Claude Code 2.1.231 Haiku probe saw the first marker at 400 ms, continued output through 1,500 ms, sent one Enter at 3,000 ms after 1.5 seconds quiet, and created the expected marker; no Fable or Opus probe was used."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "result": "passed",
+          "durationSeconds": 16.9,
+          "summary": "4 files and 1,282 tests passed. Unmodified main wrote Enter at 500 ms before the deterministic Claude composer rendered at 750 ms; the candidate waited for the split show-cursor marker and wrote one Enter. A live Claude Code 2.1.231 Haiku trace rendered the pasted marker and show-cursor in one 523-byte frame without submitting a model request."
+        },
+        {
           "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
@@ -8363,11 +8753,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The live harness reproduced the unsafe raw multiline contract before the fix and passes after the fix; intentional-break evidence is local only and not yet in CI."
+        "evidence": "The original Claude-shaped oracle fails on unmodified main and passes with the render gate. The hardened multi-frame oracle then fails on the first-marker candidate, which submits at 751 ms during an intermediate frame, and passes when the gate requires post-marker quiescence. The earlier live harness also reproduced the unsafe raw multiline contract before its framing fix. Intentional-break evidence remains local rather than a separate CI job."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent prompt dispatch remains O(prompt bytes), uses the existing 16KB terminal input chunking and one existing 500ms submit delay, and adds no polling, provider listing, subprocess churn, hidden-pane wakeups, or renderer work."
+        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude adds one PTY-local output listener until 1.5s of post-marker output quiescence or an 8s fallback; each later frame resets one timer. Other agents retain the platform delay. No polling, provider listing, subprocess churn, hidden-pane wakeups, renderer work, or wire traffic is added."
       },
       "promotionCriteria": [
         "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",
@@ -11643,6 +12033,122 @@
         "Physical Windows, WSL, SSH, and paired-runtime-host journeys were not run."
       ],
       "demotionRule": "Demote if any exit duration can evade the spawn budget, concurrent children or timers appear, cleanup retains resources, or a transient failure cannot recover within the budget."
+    },
+    {
+      "id": "runtime.headless-serve-graceful-signal-exit",
+      "title": "Packaged headless Linux serve exits cleanly after foreground signals",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "electron-headless-quit-lifecycle",
+      "surfaces": ["packaged Linux AppImage", "headless orca serve", "owned Xvfb lifecycle"],
+      "platforms": ["linux"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "An Ubuntu 26.04 amd64 container extracts the packaged AppImage into disposable HOME and XDG directories, leaves APPDIR unset to preserve extracted-AppRun direct serve mode, waits for structured serve readiness, then exercises terminal-style foreground-process-group SIGINT and the documented systemd KillMode=mixed main-PID SIGTERM in separate containers. Local evidence runs under Rosetta on an arm64 Docker host; native amd64 PR CI repeats the same foreground AppRun identity contract.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/14109",
+        "https://linear.app/stably/issue/STA-4051"
+      ],
+      "invariant": "After packaged foreground headless serve publishes structured readiness, one SIGINT or SIGTERM exits successfully without an Electron fatal trap or core evidence, releases the exact listener and owned Xvfb/process tree, and leaves an unrelated process identity untouched.",
+      "oracle": "For each signal, start a fresh unprivileged Ubuntu 26.04 container with disposable profile and runtime directories, a random loopback port, DISPLAY unset, software GL, and the extracted AppImage in a fresh session. Wait for orca_server_ready schema version 1, record the listener owner, process tree, owned Xvfb, and unrelated canary identities, deliver SIGINT to the foreground process group or the documented KillMode=mixed graceful SIGTERM to the AppRun PID, then require wait status zero, no Failed to shutdown, SIGTRAP, core, listener, recorded descendant, profile/AppImage/Xvfb residue, or changed canary identity. The 30-second bounds are failure deadlines, never success conditions.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts config/scripts/headless-serve-shutdown-workflow.test.mjs --reporter=dot",
+        "shellcheck config/docker/headless-serve-shutdown/run-signal-case.sh",
+        "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage",
+        "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64"
+      ],
+      "testFiles": [
+        "src/main/startup/ensure-virtual-display.test.ts",
+        "config/scripts/headless-serve-shutdown-workflow.test.mjs",
+        "config/scripts/run-headless-serve-shutdown-docker.mjs",
+        "config/docker/headless-serve-shutdown/run-signal-case.sh"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/startup/ensure-virtual-display.test.ts",
+          "assertions": [
+            "owned Xvfb starts with terminate-after-last-client semantics",
+            "owned Xvfb uses an independent process group so terminal Ctrl-C cannot preempt Electron teardown",
+            "owned Xvfb retains an early-process-exit guard until Electron is ready",
+            "owned Xvfb is not stopped from Electron's cancelable will-quit event",
+            "external displays and non-Linux startup remain untouched"
+          ]
+        },
+        {
+          "file": "config/scripts/headless-serve-shutdown-workflow.test.mjs",
+          "assertions": [
+            "PR CI builds an x64 AppImage before invoking the packaged shutdown oracle",
+            "the documented systemd unit uses KillMode=mixed so graceful TERM targets Orca before its owned Xvfb"
+          ]
+        },
+        {
+          "file": "config/scripts/run-headless-serve-shutdown-docker.mjs",
+          "assertions": [
+            "SIGINT and SIGTERM run in separate disposable containers",
+            "both signal failures are reported before the oracle exits",
+            "the exact AppImage SHA-256, entrypoint, and signal target are published",
+            "the launcher exec overlay isolates the related STA-4017 signal boundary"
+          ]
+        },
+        {
+          "file": "config/docker/headless-serve-shutdown/run-signal-case.sh",
+          "assertions": [
+            "SIGINT reaches the isolated foreground process group while owned Xvfb stays in its own group",
+            "SIGTERM reaches the exact AppRun PID under the documented systemd KillMode=mixed policy",
+            "target and descendant identities are fenced by PID start ticks before signaling and residue checks"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts config/scripts/headless-serve-shutdown-workflow.test.mjs --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 1,
+          "summary": "The focused startup and workflow contracts passed with owned-display termination semantics and native amd64 CI wiring."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "linux",
+          "command": "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
+          "result": "passed",
+          "durationSeconds": 48,
+          "summary": "The extracted candidate AppRun passed process-group SIGINT and systemd-mixed main-PID SIGTERM under Ubuntu 26.04 amd64 emulation with status zero, no fatal evidence, full listener/Xvfb/tree cleanup, and an unchanged canary identity."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 240,
+        "scope": "two fresh Ubuntu 26.04 containers, one per foreground signal"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The event- and identity-driven harness is new; soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical Docker oracle failed process-group SIGINT and main-PID SIGTERM on v1.4.180 AppImage af3b6e6a67fc, launch-day main AppImage 017ff5abc35a, and candidate-with-fix-disabled AppImage f409f58dd9c3 with wait status 133 plus Electron Failed to shutdown and SIGTRAP. The prior candidate 5b94b86a9879 passed PID signals but failed process-group SIGINT with status 133, proving Xvfb also needed an independent process group. Final candidate AppImage 5c82936043e4 passed process-group SIGINT and the documented systemd KillMode=mixed main-PID SIGTERM with status zero and complete cleanup. A control-group TERM that also targets Xvfb remains red, proving KillMode=mixed is required for the documented owned-Xvfb unit. Applying PR #14071's launcher exec semantics with PID delivery left v1.4.180 red and the candidate green, proving the launcher and Electron/Xvfb fixes are independent and composable."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The product change adds one standard Xvfb startup flag, isolates the existing Xvfb child from foreground process-group signals, replaces one Electron lifecycle listener with a process listener that is removed at ready, and adds no polling, timer, subprocess, IPC, provider fanout, renderer work, retained payload, native dependency, or recurring hot-path work. After ready, Xvfb exits from its existing client-disconnect path."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive native amd64 CI or soak passes or 14 days without an unexplained flake.",
+        "Collect one native Ubuntu 26.04 AppRun signal run with foreground wait status zero for both signals.",
+        "Keep exact listener, Xvfb, descendant, fatal-evidence, and canary identity assertions green."
+      ],
+      "knownGaps": [
+        "The local arm64 Docker host uses Rosetta for amd64 containers; native amd64 PR CI supplies the non-emulated repeat of the same extracted-AppRun PID contract.",
+        "Ubuntu 20.04 is covered by the packaged native-binary glibc floor gate; this lifecycle journey runs on the reported Ubuntu 26.04 topology.",
+        "Systemd units that override or omit the documented KillMode=mixed policy can still terminate owned Xvfb before Electron disconnects.",
+        "The harness exercises foreground headless Linux shutdown and does not replace desktop, updater, SSH, or detached PTY lifecycle coverage."
+      ],
+      "demotionRule": "Keep experimental or demote if either signal traps, returns nonzero, retains its listener/Xvfb/run-owned process identity, touches the unrelated canary, or the focused gate flakes without an identified product or harness defect."
     },
     {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",

@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   HookCommandSourcePolicy,
   OrcaHooks,
-  Repo,
   RepoHookSettings,
   SetupAgentStartupPolicy,
   SetupRunPolicy
-} from '../../../../shared/types'
+} from '../../../../shared/orca-yaml-hook-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { AlertTriangle, ChevronRight, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'

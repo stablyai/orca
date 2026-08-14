@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import type { LinuxRootPackageType } from '../shared/types'
+import type { LinuxRootPackageType } from '../shared/update-status-types'
 
 export type { LinuxRootPackageType }
 

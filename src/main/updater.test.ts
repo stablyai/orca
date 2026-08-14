@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as UpdaterModule from './updater'
 import type * as RecoveryModule from './linux-package-update-recovery'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 
 type RevalidationVerdict = Awaited<
   ReturnType<typeof RecoveryModule.revalidateLinuxPackageForInstall>

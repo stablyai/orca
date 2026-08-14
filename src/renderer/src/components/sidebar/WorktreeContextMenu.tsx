@@ -34,12 +34,12 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
-  Worktree,
   WorkspaceStatus,
-  WorkspaceStatusDefinition
-} from '../../../../shared/types'
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import {
   deferWorktreeContextMenuDeleteIntent,
   type WorktreeContextMenuDeleteIntent

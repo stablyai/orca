@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   TerminalQuickCommand,
-  TerminalQuickCommandScope,
-  TuiAgent
-} from '../../../../shared/types'
+  TerminalQuickCommandScope
+} from '../../../../shared/terminal-quick-command-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   getTerminalQuickCommandAction,
   getTerminalQuickCommandScope,

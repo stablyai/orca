@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { Plus, Search } from 'lucide-react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'

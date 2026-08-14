@@ -56,13 +56,9 @@ import {
 } from './nested-repo-telemetry'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
-import type {
-  DiscoveryStatusEmitted,
-  GlobalSettings,
-  OnboardingChecklistState,
-  PathSource,
-  ShellHydrationFailureReason
-} from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { DiscoveryStatusEmitted, OnboardingChecklistState } from './onboarding-state-types'
+import type { PathSource, ShellHydrationFailureReason } from './shell-path-hydration-types'
 
 // ── Shared property enums ───────────────────────────────────────────────
 
@@ -389,6 +385,9 @@ export type RuntimeRpcStartErrorClass = z.infer<typeof runtimeRpcStartErrorClass
 const runtimeRpcStartFailedSchema = z
   .object({ error_class: runtimeRpcStartErrorClassSchema })
   .strict()
+
+// Why: classify session-killing 1013 closures as producer size failures or queue backpressure.
+const remoteOutboundBudgetCloseSchema = z.object({ emitter: z.enum(['size', 'queue']) }).strict()
 
 // Why: a deadlocked main thread never crashes, so it produces no crash report and no user report
 // beyond "it froze" — incidence has been unmeasurable. `self_recovered` splits stalls that cleared
@@ -1451,6 +1450,7 @@ export const eventSchemas = {
   daemon_lifecycle: daemonLifecycleSchema,
   daemon_audit_eligibility: daemonAuditEligibilitySchema,
   runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
+  remote_outbound_budget_close: remoteOutboundBudgetCloseSchema,
 
   codex_trust_grant: codexTrustGrantSchema,
 

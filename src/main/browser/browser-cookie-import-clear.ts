@@ -84,10 +84,7 @@ export async function withCookieClearLock<T>(owner: object, run: () => Promise<T
   }
 }
 
-function removableCookieEntries(
-  cookies: readonly Cookie[],
-  requireAddressable = false
-): { cookie: Cookie; url: string }[] {
+function removableCookieEntries(cookies: readonly Cookie[]): { cookie: Cookie; url: string }[] {
   const removable: { cookie: Cookie; url: string }[] = []
   for (const cookie of cookies) {
     if (isNonTransplantableCookieDomain(cookie.domain ?? '')) {
@@ -96,10 +93,7 @@ function removableCookieEntries(
     const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
     const url = domain ? cookieRemovalUrl(cookie, domain) : null
     if (!url) {
-      if (requireAddressable) {
-        throw new Error('Could not clear existing cookies; the session was left unchanged')
-      }
-      continue
+      throw new Error('Could not clear existing cookies; the session was left unchanged')
     }
     removable.push({ cookie, url })
   }
@@ -160,12 +154,18 @@ export async function removeTransplantableCookies(
       return
     }
 
-    const initialRemovable = removableCookieEntries(initialCookies, true)
+    const initialRemovable = removableCookieEntries(initialCookies)
     if (initialRemovable.length === 0) {
       return
     }
     const identities = await targetSession.snapshotClearIdentities(initialRemovable)
     assertClearIdentitiesCoverRemovable(initialRemovable, identities)
+    // Why (STA-4170): fixing the removal plan here, beside the identities that can undo it, is what
+    // keeps the two sets equal. Re-reading the jar in the fallback widened the removal set past the
+    // restore set, so a cookie that arrived mid-clear — a login the user had just completed — was
+    // deleted with nothing able to put it back. Removing an already-deleted cookie is a harmless
+    // no-op, so the stale plan costs nothing; only its narrowness matters.
+    const removalGroups = [...groupRemovableCookies(initialRemovable).values()]
 
     try {
       // Why (STA-4065): excludeOrigins keeps the google.com family, including partitioned
@@ -179,10 +179,8 @@ export async function removeTransplantableCookies(
       // Why: a rejected bulk clear can still have emptied part of the jar.
     }
 
-    const existingCookies = await store.get({})
-    const removableGroups = groupRemovableCookies(removableCookieEntries(existingCookies))
     const results = await mapSettledWithConcurrency(
-      [...removableGroups.values()],
+      removalGroups,
       COOKIE_CLEAR_CONCURRENCY,
       async (group) => {
         // Why: identical removal coordinates must stay ordered instead of racing.

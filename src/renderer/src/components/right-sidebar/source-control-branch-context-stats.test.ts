@@ -6,7 +6,7 @@ import {
   shouldShowSourceControlBranchContextChrome,
   shouldShowSourceControlBranchContextRow
 } from './source-control-branch-context-stats'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 
 const readySummary: GitBranchCompareSummary = {
   baseRef: 'origin/main',

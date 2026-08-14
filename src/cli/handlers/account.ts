@@ -23,7 +23,10 @@ import {
 } from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../shared/managed-account-types'
 import {
   type InteractiveLoginSession,
   withInteractiveLoginCleanup

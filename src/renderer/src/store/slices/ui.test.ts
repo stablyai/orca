@@ -6,15 +6,13 @@ import {
   getDefaultUIState,
   getWorktreeCardModeProperties
 } from '../../../../shared/constants'
-import type {
-  GitHubWorkItem,
-  JiraIssue,
-  LinearIssue,
-  PersistedUIState,
-  Repo,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { JiraIssue } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'

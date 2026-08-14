@@ -1,12 +1,9 @@
 import { getRepoExecutionHostId } from './execution-host'
-import { githubRepoIdentityKey, isDefaultGitHubHost } from './github-repository-identity-key'
-import type {
-  Project,
-  ProjectHostSetup,
-  ProjectProviderIdentity,
-  Repo,
-  WorktreeMeta
-} from './types'
+import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
+import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
+import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
+import type { Repo } from './repo-types'
+import type { WorktreeMeta } from './worktree/meta-types'
 
 type ProjectAccumulator = {
   project: Project
@@ -118,11 +115,6 @@ function getProjectId(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
   return getProjectIdentityKey(repo)
-}
-
-function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
 }
 
 function isGitHubRemoteHost(host: string): boolean {

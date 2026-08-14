@@ -5,7 +5,7 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
-import type { JiraConnectionStatus } from '../../../../shared/types'
+import type { JiraConnectionStatus } from '../../../../shared/jira-types'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
 export type JiraSourceConnection = {

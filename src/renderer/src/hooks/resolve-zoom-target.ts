@@ -54,4 +54,4 @@ export function resolveZoomTarget(args: {
   }
   return 'ui'
 }
-import type { TopLevelView } from '../../../shared/types'
+import type { TopLevelView } from '../../../shared/ui-chrome-types'

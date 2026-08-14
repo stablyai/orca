@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
+  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
   applyWorkspaceCleanupPolicy,
   canQueueWorkspaceCleanupCandidate,
   canSelectWorkspaceCleanupCandidate,
@@ -22,6 +23,16 @@ import {
   type WorkspaceCleanupScanResult
 } from '../../../../shared/workspace-cleanup'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { hydrateWorkspaceCleanupScanFromCache } from './workspace-cleanup-cache-hydration'
+import {
+  getInFlightWorkspaceCleanupScan,
+  hasInFlightWorkspaceCleanupScan,
+  normalizeWorkspaceCleanupScanError,
+  registerInFlightWorkspaceCleanupScan,
+  releaseInFlightWorkspaceCleanupScan,
+  supersedeInFlightWorkspaceCleanupScans,
+  throwIfWorkspaceCleanupScanSuperseded
+} from './workspace-cleanup-broad-scan-registry'
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { translate } from '@/i18n/i18n'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
@@ -42,6 +53,7 @@ export type WorkspaceCleanupRemoveOptions = {
   // Why: rows are removed long after the confirm click; the confirm-time
   // candidate records how much git risk the user actually approved.
   approvedCandidates?: readonly WorkspaceCleanupCandidate[]
+  snapshotPruneBatchId?: string
 }
 
 type WorkspaceCleanupViewedCandidate = {
@@ -58,6 +70,8 @@ export type WorkspaceCleanupSlice = {
   workspaceCleanupDismissals: Record<string, WorkspaceCleanupDismissal>
   workspaceCleanupViewedCandidates: Record<string, WorkspaceCleanupViewedCandidate>
   scanWorkspaceCleanup: (args?: WorkspaceCleanupScanArgs) => Promise<WorkspaceCleanupScanResult>
+  /** Stale-while-revalidate seed; true when the persisted snapshot filled an empty slice. */
+  hydrateWorkspaceCleanupFromCache: () => Promise<boolean>
   markWorkspaceCleanupCandidateViewed: (candidate: WorkspaceCleanupCandidate) => void
   dismissWorkspaceCleanupCandidates: (
     candidates: readonly WorkspaceCleanupCandidate[]
@@ -74,23 +88,27 @@ type EnrichOptions = {
 }
 
 type WorkspaceCleanupEnrichmentCacheEntry = {
+  /** Fast path: same candidate object + unchanged local-state token = hit without stringify. */
+  candidateRef: WorkspaceCleanupCandidate
   inputSignature: string
   localSignature: string
   candidate: WorkspaceCleanupCandidate
 }
 
+type WorkspaceCleanupEnrichmentProjection = {
+  openFilesByWorktreeId: Map<string, AppState['openFiles']>
+  retainedDoneAgentPaneKeysByWorktreeId: Map<string, string[]>
+  agentStatusesByTabId: Map<string, AgentStatusEntry[]>
+}
+
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
-const WORKSPACE_CLEANUP_PREFLIGHT_CONCURRENCY = 4
+export const WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY = 8
 // Why: dirty-files/unpushed-commits are concrete known work at risk; unknown-base
 // and git-status-error only mean "couldn't verify". A row approved while
 // unverifiable must still fail if real work becomes visible before removal.
 const WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS = ['dirty-files', 'unpushed-commits'] as const
 
-let inFlightWorkspaceCleanupScan: {
-  key: string
-  promise: Promise<WorkspaceCleanupScanResult>
-} | null = null
 let latestWorkspaceCleanupScanToken = 0
 let finalizedWorkspaceCleanupScanToken = 0
 let workspaceCleanupProgressQueue: {
@@ -99,6 +117,7 @@ let workspaceCleanupProgressQueue: {
 } | null = null
 let workspaceCleanupEnrichmentCache: {
   scanToken: number
+  localToken: readonly unknown[] | null
   entries: Map<string, WorkspaceCleanupEnrichmentCacheEntry>
 } | null = null
 // Why: cleanup progress can append thousands of rows; keep one scan-local
@@ -113,13 +132,10 @@ let workspaceCleanupProgressCandidateIndex: {
 const SHELL_PROCESS_NAMES = new Set([
   'bash',
   'cmd',
-  'cmd.exe',
   'fish',
   'nu',
   'powershell',
-  'powershell.exe',
   'pwsh',
-  'pwsh.exe',
   'sh',
   'zsh'
 ])
@@ -151,7 +167,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   workspaceCleanupViewedCandidates: {},
 
   scanWorkspaceCleanup: async (args) => {
-    if (args?.worktreeId !== undefined) {
+    if (args?.worktreeId !== undefined || args?.worktreeIds !== undefined) {
       const scan = await window.api.workspaceCleanup.scan(args)
       const enriched = await enrichWorkspaceCleanupCandidates(scan.candidates, get(), {
         applyDismissals: false
@@ -160,27 +176,42 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     }
 
     const scanArgs = {
+      // Why: the dialog renders one flat list of every workspace, so a broad
+      // scan must not stop at the 30-day-idle suggestions.
+      includeAllWorkspaces: true,
       ...args,
       skipGitWorktreeIds: [
         ...new Set([
           ...(args?.skipGitWorktreeIds ?? []),
           ...getInitialWorkspaceCleanupGitDeferrals(get())
         ])
-      ]
+      ],
+      // Broad scan identity belongs to this store request; caller-provided IDs
+      // are reserved for focused scans and can collide across refresh variants.
+      scanId: crypto.randomUUID()
     }
     const scanKey = getWorkspaceCleanupScanKey(scanArgs)
 
-    if (inFlightWorkspaceCleanupScan?.key === scanKey) {
+    const existingInFlight = getInFlightWorkspaceCleanupScan(scanKey)
+    if (existingInFlight) {
       set({ workspaceCleanupLoading: true, workspaceCleanupError: null })
       try {
-        return await inFlightWorkspaceCleanupScan.promise
+        return await existingInFlight
       } finally {
-        if (!inFlightWorkspaceCleanupScan) {
+        if (!hasInFlightWorkspaceCleanupScan(scanKey)) {
           set({ workspaceCleanupLoading: false })
         }
       }
     }
 
+    // Why: a different scan key (git deferrals track live tab/agent state) must
+    // not leave the previous fleet scan running concurrently in main — cancel
+    // and supersede it instead of racing it. Legacy suggestion-only and
+    // full-workspace scans are separate modes and never supersede each other.
+    supersedeInFlightWorkspaceCleanupScans(
+      window.api.workspaceCleanup.cancelScan,
+      (key) => getWorkspaceCleanupScanKeyMode(key) === (scanArgs.includeAllWorkspaces === true)
+    )
     set({
       workspaceCleanupLoading: true,
       workspaceCleanupProgress: null,
@@ -189,38 +220,45 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     const scanToken = ++latestWorkspaceCleanupScanToken
     finalizedWorkspaceCleanupScanToken = 0
     workspaceCleanupProgressQueue = null
-    workspaceCleanupEnrichmentCache = { scanToken, entries: new Map() }
+    workspaceCleanupEnrichmentCache = { scanToken, localToken: null, entries: new Map() }
     workspaceCleanupProgressCandidateIndex = null
     const promise = (async () => {
-      const scan = await window.api.workspaceCleanup.scan(scanArgs, (progress) => {
-        enqueueWorkspaceCleanupProgress(progress, scanToken, get, set)
-      })
-      const enriched = await enrichWorkspaceCleanupCandidatesForScan(
-        scan.candidates,
-        get(),
-        scanToken
-      )
-      const result = { ...scan, candidates: enriched }
-      if (scanToken === latestWorkspaceCleanupScanToken) {
-        finalizedWorkspaceCleanupScanToken = scanToken
-        workspaceCleanupEnrichmentCache = null
-        workspaceCleanupProgressCandidateIndex = null
-        set({
-          workspaceCleanupScan: result,
-          workspaceCleanupProgress: {
-            scanId: get().workspaceCleanupProgress?.scanId ?? scanArgs.scanId ?? '',
-            scannedAt: result.scannedAt,
-            scannedWorktreeCount: result.candidates.length,
-            totalWorktreeCount: result.candidates.length,
-            candidates: result.candidates,
-            errors: result.errors
-          },
-          workspaceCleanupLoading: false
+      try {
+        const scan = await window.api.workspaceCleanup.scan(scanArgs, (progress) => {
+          enqueueWorkspaceCleanupProgress(progress, scanToken, get, set)
         })
+        throwIfWorkspaceCleanupScanSuperseded(scanArgs.scanId)
+        await drainWorkspaceCleanupProgressQueue(scanToken)
+        const enriched = await enrichWorkspaceCleanupCandidatesForScan(
+          scan.candidates,
+          get(),
+          scanToken
+        )
+        throwIfWorkspaceCleanupScanSuperseded(scanArgs.scanId)
+        const result = { ...scan, candidates: enriched }
+        if (scanToken === latestWorkspaceCleanupScanToken) {
+          finalizedWorkspaceCleanupScanToken = scanToken
+          workspaceCleanupEnrichmentCache = null
+          workspaceCleanupProgressCandidateIndex = null
+          set({
+            workspaceCleanupScan: result,
+            workspaceCleanupProgress: {
+              scanId: get().workspaceCleanupProgress?.scanId ?? scanArgs.scanId,
+              scannedAt: result.scannedAt,
+              scannedWorktreeCount: result.candidates.length,
+              totalWorktreeCount: result.candidates.length,
+              candidates: result.candidates,
+              errors: result.errors
+            },
+            workspaceCleanupLoading: false
+          })
+        }
+        return result
+      } catch (error) {
+        throw normalizeWorkspaceCleanupScanError(scanArgs.scanId, error)
       }
-      return result
     })()
-    inFlightWorkspaceCleanupScan = { key: scanKey, promise }
+    registerInFlightWorkspaceCleanupScan(scanKey, scanArgs.scanId, promise)
 
     try {
       return await promise
@@ -231,18 +269,33 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       }
       throw error
     } finally {
-      if (inFlightWorkspaceCleanupScan?.promise === promise) {
-        inFlightWorkspaceCleanupScan = null
-      }
+      releaseInFlightWorkspaceCleanupScan(scanKey, scanArgs.scanId, promise)
     }
   },
 
+  hydrateWorkspaceCleanupFromCache: () =>
+    hydrateWorkspaceCleanupScanFromCache({
+      // Why: loading covers an in-flight broad scan whose progress may not have
+      // reached the store yet; the cache must never clobber either.
+      hasLiveScanState: () => get().workspaceCleanupScan !== null || get().workspaceCleanupLoading,
+      enrich: (candidates) => enrichWorkspaceCleanupCandidates(candidates, get()),
+      apply: (scan) => set({ workspaceCleanupScan: scan })
+    }),
+
   markWorkspaceCleanupCandidateViewed: (candidate) => {
+    const now = Date.now()
     set((state) => ({
       workspaceCleanupViewedCandidates: {
-        ...state.workspaceCleanupViewedCandidates,
+        // Why: entries expire for policy after VIEWED_FROM_CLEANUP_MS anyway;
+        // pruning them on write keeps this record from growing for the
+        // lifetime of the process.
+        ...Object.fromEntries(
+          Object.entries(state.workspaceCleanupViewedCandidates).filter(
+            ([, viewed]) => now - viewed.viewedAt <= VIEWED_FROM_CLEANUP_MS
+          )
+        ),
         [candidate.worktreeId]: {
-          viewedAt: Date.now(),
+          viewedAt: now,
           fingerprint: candidate.fingerprint,
           wasSuggested: candidate.tier === 'ready' && canSelectWorkspaceCleanupCandidate(candidate)
         }
@@ -307,15 +360,10 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       (options?.approvedCandidates ?? []).map((candidate) => [candidate.worktreeId, candidate])
     )
 
-    const preflights = await mapWithConcurrency(
+    const preflights = await preflightWorkspaceCleanupCandidates(
       worktreeIds,
-      WORKSPACE_CLEANUP_PREFLIGHT_CONCURRENCY,
-      (worktreeId) =>
-        preflightWorkspaceCleanupCandidate(
-          worktreeId,
-          get,
-          approvedCandidatesByWorktreeId.get(worktreeId)
-        )
+      get,
+      approvedCandidatesByWorktreeId
     )
     const candidatesToRemove: WorkspaceCleanupCandidate[] = []
 
@@ -335,7 +383,12 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
         shouldForceWorkspaceCleanupRemoval(candidate),
         // Why: cleanup reports outcomes in its own summary toasts; per-row
         // preserved-branch warnings would stack one toast per removed row.
-        { suppressPreservedBranchToast: true }
+        {
+          suppressPreservedBranchToast: true,
+          ...(options?.snapshotPruneBatchId
+            ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
+            : {})
+        }
       )
       if (result.ok) {
         removedIds.push(candidate.worktreeId)
@@ -367,8 +420,23 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
                 (candidate) => !removedIdSet.has(candidate.worktreeId)
               )
             }
-          : state.workspaceCleanupScan
+          : state.workspaceCleanupScan,
+        // Why: dismissals and viewed marks for removed worktrees are dead
+        // weight in the store and in every persisted-dismissals write.
+        workspaceCleanupDismissals: pruneWorkspaceCleanupRecord(
+          state.workspaceCleanupDismissals,
+          removedIdSet
+        ),
+        workspaceCleanupViewedCandidates: pruneWorkspaceCleanupRecord(
+          state.workspaceCleanupViewedCandidates,
+          removedIdSet
+        )
       }))
+      void window.api.workspaceCleanup
+        .dismiss({ dismissals: [], removedWorktreeIds: removedIds })
+        .catch((error: unknown) => {
+          console.warn('Failed to prune persisted cleanup dismissals', error)
+        })
     }
 
     return {
@@ -381,14 +449,23 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
 
 function getWorkspaceCleanupScanKey(args: WorkspaceCleanupScanArgs): string {
   return JSON.stringify({
+    includeAllWorkspaces: args.includeAllWorkspaces === true,
     skipGitWorktreeIds: [...new Set(args.skipGitWorktreeIds ?? [])].sort()
   })
+}
+
+function getWorkspaceCleanupScanKeyMode(key: string): boolean {
+  try {
+    return (JSON.parse(key) as { includeAllWorkspaces?: boolean }).includeAllWorkspaces === true
+  } catch {
+    return false
+  }
 }
 
 function invalidateWorkspaceCleanupScanProgress(): void {
   latestWorkspaceCleanupScanToken += 1
   finalizedWorkspaceCleanupScanToken = 0
-  inFlightWorkspaceCleanupScan = null
+  supersedeInFlightWorkspaceCleanupScans(window.api.workspaceCleanup.cancelScan)
   workspaceCleanupProgressQueue = null
   workspaceCleanupEnrichmentCache = null
   workspaceCleanupProgressCandidateIndex = null
@@ -422,6 +499,17 @@ function enqueueWorkspaceCleanupProgress(
   workspaceCleanupProgressQueue = { scanToken, promise }
 }
 
+// Why: IPC final follows progress immediately; drain it to share cache and concurrency cap.
+async function drainWorkspaceCleanupProgressQueue(scanToken: number): Promise<void> {
+  while (workspaceCleanupProgressQueue?.scanToken === scanToken) {
+    const queuedProgress = workspaceCleanupProgressQueue.promise
+    await queuedProgress
+    if (workspaceCleanupProgressQueue?.promise === queuedProgress) {
+      return
+    }
+  }
+}
+
 async function applyWorkspaceCleanupProgress(
   progress: WorkspaceCleanupScanProgress,
   scanToken: number,
@@ -438,11 +526,13 @@ async function applyWorkspaceCleanupProgress(
     return
   }
   const state = getState()
+  // Why: a cached snapshot (or the previous settled scan) may already fill the
+  // list; streamed rows reconcile into it by worktreeId so a refresh never
+  // clears and rebuilds what the user is reading.
   const previousCandidates =
-    progress.candidateMode === 'append' &&
     state.workspaceCleanupProgress?.scanId === progress.scanId
       ? state.workspaceCleanupProgress.candidates
-      : []
+      : (state.workspaceCleanupScan?.candidates ?? [])
   const enrichedProgressCandidates = await enrichWorkspaceCleanupCandidatesForScan(
     progress.candidates,
     state,
@@ -467,20 +557,32 @@ async function applyWorkspaceCleanupProgress(
     workspaceCleanupProgressCandidateIndex = null
     return
   }
+  const dismissalsAtEnrichment = state.workspaceCleanupDismissals
   setState((state) => {
     if (
       state.workspaceCleanupProgress?.scanId === progress.scanId &&
       state.workspaceCleanupProgress.scannedWorktreeCount > progress.scannedWorktreeCount
     ) {
-      return {}
+      // Why: `return state` is Zustand's real no-op; a fresh `{}` would still
+      // sweep every subscriber.
+      return state
     }
+    // Why: a dismissal committed while this frame's enrichment awaited must
+    // not be clobbered by candidates derived from the pre-await snapshot.
+    const finalCandidates =
+      state.workspaceCleanupDismissals === dismissalsAtEnrichment
+        ? candidates
+        : candidates.map((candidate) => applyDismissal(candidate, state.workspaceCleanupDismissals))
     return {
       workspaceCleanupScan: {
-        scannedAt: progress.scannedAt,
-        candidates,
+        // Why: mid-refresh the list still mixes in rows from the previous
+        // snapshot; the honest "as of" time stays the snapshot's until the new
+        // scan settles and removes vanished rows.
+        scannedAt: state.workspaceCleanupScan?.scannedAt ?? progress.scannedAt,
+        candidates: finalCandidates,
         errors: progress.errors
       },
-      workspaceCleanupProgress: { ...progress, candidates }
+      workspaceCleanupProgress: { ...progress, candidates: finalCandidates }
     }
   })
 }
@@ -491,13 +593,41 @@ async function enrichWorkspaceCleanupCandidatesForScan(
   scanToken: number
 ): Promise<WorkspaceCleanupCandidate[]> {
   if (workspaceCleanupEnrichmentCache?.scanToken !== scanToken) {
-    workspaceCleanupEnrichmentCache = { scanToken, entries: new Map() }
+    workspaceCleanupEnrichmentCache = { scanToken, localToken: null, entries: new Map() }
   }
-  return enrichWorkspaceCleanupCandidatesWithCache(
-    candidates,
-    state,
-    workspaceCleanupEnrichmentCache.entries
-  )
+  const cache = workspaceCleanupEnrichmentCache
+  const localToken = buildWorkspaceCleanupLocalStateToken(state)
+  const localStateUnchanged =
+    cache.localToken !== null &&
+    cache.localToken.length === localToken.length &&
+    cache.localToken.every((value, index) => value === localToken[index])
+  cache.localToken = localToken
+  return enrichWorkspaceCleanupCandidatesWithCache(candidates, state, cache.entries, {
+    localStateUnchanged
+  })
+}
+
+/**
+ * Identity token over every state slice the local signature projects — a
+ * strict superset of getWorkspaceCleanupLocalStateSignature's inputs, so an
+ * unchanged token guarantees an unchanged signature without stringifying.
+ */
+function buildWorkspaceCleanupLocalStateToken(state: AppState): readonly unknown[] {
+  return [
+    state.activeWorktreeId,
+    state.tabsByWorktree,
+    state.ptyIdsByTabId,
+    state.runtimePaneTitlesByTabId,
+    state.terminalLayoutsByTabId,
+    state.openFiles,
+    state.editorDrafts,
+    state.browserTabsByWorktree,
+    state.retainedAgentsByPaneKey,
+    state.agentStatusByPaneKey,
+    state.lastVisitedAtByWorktreeId,
+    state.workspaceCleanupViewedCandidates,
+    state.workspaceCleanupDismissals
+  ]
 }
 
 function mergeWorkspaceCleanupProgressCandidates({
@@ -511,11 +641,8 @@ function mergeWorkspaceCleanupProgressCandidates({
   progress: WorkspaceCleanupScanProgress
   scanToken: number
 }): WorkspaceCleanupCandidate[] {
-  if (progress.candidateMode !== 'append') {
-    workspaceCleanupProgressCandidateIndex = null
-    return [...nextCandidates]
-  }
-
+  // Why: snapshot-mode ticks also merge — replacing would drop the
+  // stale-while-revalidate rows this scan has not re-reported yet.
   if (nextCandidates.length === 0) {
     return previousCandidates as WorkspaceCleanupCandidate[]
   }
@@ -581,12 +708,16 @@ function getInitialWorkspaceCleanupGitDeferrals(state: AppState): string[] {
   }
 
   const openEditorWorktreeIds = new Set(state.openFiles.map((file) => file.worktreeId))
+  const agentStatusesByTabId = buildWorkspaceCleanupAgentStatusIndex(state)
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     const tabIds = new Set(tabs.map((tab) => tab.id))
     if (tabs.some((tab) => (state.ptyIdsByTabId[tab.id]?.length ?? 0) > 0)) {
       ids.add(worktreeId)
     }
-    if (hasFreshLiveAgent(state, tabIds) || hasWorkingTitleAgent(state, tabs)) {
+    if (
+      hasFreshIndexedLiveAgent(agentStatusesByTabId, tabIds) ||
+      hasWorkingTitleAgent(state, tabs)
+    ) {
       ids.add(worktreeId)
     }
   }
@@ -618,8 +749,9 @@ export async function enrichWorkspaceCleanupCandidates(
   state: AppState,
   options: EnrichOptions = {}
 ): Promise<WorkspaceCleanupCandidate[]> {
-  return Promise.all(
-    candidates.map((candidate) => enrichWorkspaceCleanupCandidate(candidate, state, options))
+  const projection = buildWorkspaceCleanupEnrichmentProjection(candidates, state)
+  return mapWithConcurrency(candidates, WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY, (candidate) =>
+    enrichWorkspaceCleanupCandidate(candidate, state, projection, options)
   )
 }
 
@@ -627,30 +759,80 @@ async function enrichWorkspaceCleanupCandidatesWithCache(
   candidates: readonly WorkspaceCleanupCandidate[],
   state: AppState,
   cache: Map<string, WorkspaceCleanupEnrichmentCacheEntry>,
-  options: EnrichOptions = {}
+  options: EnrichOptions & { localStateUnchanged?: boolean } = {}
 ): Promise<WorkspaceCleanupCandidate[]> {
-  return Promise.all(
-    candidates.map(async (candidate) => {
+  const projection = buildWorkspaceCleanupEnrichmentProjection(candidates, state)
+  return mapWithConcurrency(
+    candidates,
+    WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY,
+    async (candidate) => {
+      const cached = cache.get(candidate.worktreeId)
+      if (options.localStateUnchanged === true && cached?.candidateRef === candidate) {
+        return cached.candidate
+      }
       const inputSignature = getWorkspaceCleanupCandidateInputSignature(candidate)
       const localSignature = getWorkspaceCleanupLocalStateSignature(
         candidate.worktreeId,
         state,
+        projection,
         options
       )
-      const cached = cache.get(candidate.worktreeId)
       if (cached?.inputSignature === inputSignature && cached.localSignature === localSignature) {
+        cached.candidateRef = candidate
         return cached.candidate
       }
 
-      const enriched = await enrichWorkspaceCleanupCandidate(candidate, state, options)
+      const enriched = await enrichWorkspaceCleanupCandidate(candidate, state, projection, options)
       cache.set(candidate.worktreeId, {
+        candidateRef: candidate,
         inputSignature,
         localSignature,
         candidate: enriched
       })
       return enriched
-    })
+    }
   )
+}
+
+function buildWorkspaceCleanupEnrichmentProjection(
+  candidates: readonly WorkspaceCleanupCandidate[],
+  state: AppState
+): WorkspaceCleanupEnrichmentProjection {
+  const worktreeIds = new Set(candidates.map((candidate) => candidate.worktreeId))
+  const tabIds = new Set<string>()
+  for (const worktreeId of worktreeIds) {
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+      tabIds.add(tab.id)
+    }
+  }
+
+  const openFilesByWorktreeId = new Map<string, AppState['openFiles']>()
+  for (const file of state.openFiles) {
+    if (!worktreeIds.has(file.worktreeId)) {
+      continue
+    }
+    const files = openFilesByWorktreeId.get(file.worktreeId) ?? []
+    files.push(file)
+    openFilesByWorktreeId.set(file.worktreeId, files)
+  }
+
+  const retainedDoneAgentPaneKeysByWorktreeId = new Map<string, string[]>()
+  for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
+    if (!worktreeIds.has(retained.worktreeId) || retained.entry.state !== 'done') {
+      continue
+    }
+    const paneKeys = retainedDoneAgentPaneKeysByWorktreeId.get(retained.worktreeId) ?? []
+    paneKeys.push(paneKey)
+    retainedDoneAgentPaneKeysByWorktreeId.set(retained.worktreeId, paneKeys)
+  }
+
+  const agentStatusesByTabId = buildWorkspaceCleanupAgentStatusIndex(state, tabIds)
+
+  return {
+    openFilesByWorktreeId,
+    retainedDoneAgentPaneKeysByWorktreeId,
+    agentStatusesByTabId
+  }
 }
 
 function getWorkspaceCleanupCandidateInputSignature(candidate: WorkspaceCleanupCandidate): string {
@@ -669,24 +851,22 @@ function getWorkspaceCleanupCandidateInputSignature(candidate: WorkspaceCleanupC
 function getWorkspaceCleanupLocalStateSignature(
   worktreeId: string,
   state: AppState,
+  projection: WorkspaceCleanupEnrichmentProjection,
   options: EnrichOptions
 ): string {
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   const tabIds = tabs.map((tab) => tab.id)
   const tabIdSet = new Set(tabIds)
-  const openFiles = state.openFiles
-    .filter((file) => file.worktreeId === worktreeId)
-    .map((file) => ({
-      id: file.id,
-      isDirty: file.isDirty,
-      hasDraft: state.editorDrafts[file.id] !== undefined
-    }))
-  const retainedDoneAgentPaneKeys = Object.entries(state.retainedAgentsByPaneKey)
-    .filter(([, entry]) => entry.worktreeId === worktreeId && entry.entry.state === 'done')
-    .map(([paneKey]) => paneKey)
-    .sort()
-  const agentStatuses = Object.values(state.agentStatusByPaneKey)
-    .filter((entry) => tabIdSet.has(getPaneKeyTabId(entry.paneKey)))
+  const openFiles = (projection.openFilesByWorktreeId.get(worktreeId) ?? []).map((file) => ({
+    id: file.id,
+    isDirty: file.isDirty,
+    hasDraft: state.editorDrafts[file.id] !== undefined
+  }))
+  const retainedDoneAgentPaneKeys = [
+    ...(projection.retainedDoneAgentPaneKeysByWorktreeId.get(worktreeId) ?? [])
+  ].sort()
+  const agentStatuses = [...tabIdSet]
+    .flatMap((tabId) => projection.agentStatusesByTabId.get(tabId) ?? [])
     .map((entry) => ({
       paneKey: entry.paneKey,
       state: entry.state,
@@ -726,19 +906,19 @@ function getWorkspaceCleanupLocalStateSignature(
 async function enrichWorkspaceCleanupCandidate(
   candidate: WorkspaceCleanupCandidate,
   state: AppState,
+  projection: WorkspaceCleanupEnrichmentProjection,
   options: EnrichOptions
 ): Promise<WorkspaceCleanupCandidate> {
   const tabs = state.tabsByWorktree[candidate.worktreeId] ?? []
   const tabIds = new Set(tabs.map((tab) => tab.id))
-  const openFiles = state.openFiles.filter((file) => file.worktreeId === candidate.worktreeId)
+  const openFiles = projection.openFilesByWorktreeId.get(candidate.worktreeId) ?? []
   const dirtyEditorBuffers = openFiles.filter(
     (file) => file.isDirty || state.editorDrafts[file.id] !== undefined
   )
   const cleanEditorTabCount = openFiles.length - dirtyEditorBuffers.length
   const browserTabCount = (state.browserTabsByWorktree[candidate.worktreeId] ?? []).length
-  const retainedDoneAgentCount = Object.values(state.retainedAgentsByPaneKey).filter(
-    (entry) => entry.worktreeId === candidate.worktreeId && entry.entry.state === 'done'
-  ).length
+  const retainedDoneAgentCount =
+    projection.retainedDoneAgentPaneKeysByWorktreeId.get(candidate.worktreeId)?.length ?? 0
   const blockers = candidate.blockers.filter((blocker) => blocker !== 'dismissed')
   const preserveCleanupInspection = shouldPreserveCleanupInspection(candidate, state)
 
@@ -748,7 +928,7 @@ async function enrichWorkspaceCleanupCandidate(
   if (dirtyEditorBuffers.length > 0) {
     blockers.push('dirty-editor-buffer')
   }
-  if (hasFreshLiveAgent(state, tabIds)) {
+  if (hasFreshIndexedLiveAgent(projection.agentStatusesByTabId, tabIds)) {
     blockers.push('live-agent')
   }
   if (hasWorkingTitleAgent(state, tabs)) {
@@ -816,18 +996,56 @@ function applyDismissal(
   })
 }
 
-async function preflightWorkspaceCleanupCandidate(
-  worktreeId: string,
-  getState: () => AppState,
-  approvedCandidate?: WorkspaceCleanupCandidate
-): Promise<
+type WorkspaceCleanupPreflightResult =
   | { ok: true; candidate: WorkspaceCleanupCandidate }
   | { ok: false; failure: WorkspaceCleanupFailure }
-> {
-  const scan = await window.api.workspaceCleanup.scan({ worktreeId })
-  const [candidate] = await enrichWorkspaceCleanupCandidates(scan.candidates, getState(), {
-    applyDismissals: false
-  })
+
+function pruneWorkspaceCleanupRecord<T>(
+  record: Record<string, T>,
+  removedIds: ReadonlySet<string>
+): Record<string, T> {
+  if (!Object.keys(record).some((id) => removedIds.has(id))) {
+    return record
+  }
+  return Object.fromEntries(Object.entries(record).filter(([id]) => !removedIds.has(id)))
+}
+
+async function preflightWorkspaceCleanupCandidates(
+  worktreeIds: readonly string[],
+  getState: () => AppState,
+  approvedCandidatesByWorktreeId: ReadonlyMap<string, WorkspaceCleanupCandidate>
+): Promise<WorkspaceCleanupPreflightResult[]> {
+  // Why: one batched scan per chunk replaces a git worktree-list + activity
+  // read per row; chunks stay under main's silent target truncation limit.
+  const candidatesByWorktreeId = new Map<string, WorkspaceCleanupCandidate>()
+  for (let start = 0; start < worktreeIds.length; start += WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT) {
+    const chunk = worktreeIds.slice(start, start + WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT)
+    const scan = await window.api.workspaceCleanup.scan({
+      worktreeIds: [...chunk],
+      scanId: crypto.randomUUID(),
+      refreshActivity: true
+    })
+    const enriched = await enrichWorkspaceCleanupCandidates(scan.candidates, getState(), {
+      applyDismissals: false
+    })
+    for (const candidate of enriched) {
+      candidatesByWorktreeId.set(candidate.worktreeId, candidate)
+    }
+  }
+  return worktreeIds.map((worktreeId) =>
+    evaluateWorkspaceCleanupPreflight(
+      worktreeId,
+      candidatesByWorktreeId.get(worktreeId),
+      approvedCandidatesByWorktreeId.get(worktreeId)
+    )
+  )
+}
+
+function evaluateWorkspaceCleanupPreflight(
+  worktreeId: string,
+  candidate: WorkspaceCleanupCandidate | undefined,
+  approvedCandidate?: WorkspaceCleanupCandidate
+): WorkspaceCleanupPreflightResult {
   if (!candidate) {
     return {
       ok: false,
@@ -883,14 +1101,39 @@ async function preflightWorkspaceCleanupCandidate(
   return { ok: true, candidate }
 }
 
-function hasFreshLiveAgent(state: AppState, tabIds: Set<string>): boolean {
+function buildWorkspaceCleanupAgentStatusIndex(
+  state: AppState,
+  includedTabIds?: ReadonlySet<string>
+): Map<string, AgentStatusEntry[]> {
+  const agentStatusesByTabId = new Map<string, AgentStatusEntry[]>()
+  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+    const tabId = getPaneKeyTabId(entry.paneKey)
+    if (includedTabIds && !includedTabIds.has(tabId)) {
+      continue
+    }
+    const entries = agentStatusesByTabId.get(tabId) ?? []
+    entries.push(entry)
+    agentStatusesByTabId.set(tabId, entries)
+  }
+  return agentStatusesByTabId
+}
+
+function hasFreshIndexedLiveAgent(
+  agentStatusesByTabId: ReadonlyMap<string, readonly AgentStatusEntry[]>,
+  tabIds: Set<string>
+): boolean {
   const now = Date.now()
-  return Object.values(state.agentStatusByPaneKey).some(
-    (entry) =>
-      tabIds.has(getPaneKeyTabId(entry.paneKey)) &&
-      isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) &&
-      (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
-  )
+  for (const tabId of tabIds) {
+    for (const entry of agentStatusesByTabId.get(tabId) ?? []) {
+      if (
+        isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) &&
+        (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
+      ) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 function hasWorkingTitleAgent(state: AppState, tabs: { id: string; title: string }[]): boolean {
@@ -991,5 +1234,6 @@ function normalizeProcessName(value: string | null): string | null {
   }
   const normalizedPath = value.replace(/\\/g, '/')
   const name = normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1).toLowerCase()
-  return name.replace(/\.exe$/i, '.exe')
+  // Why: Windows reports `claude.exe`/`cmd.exe`; the name sets hold bare names.
+  return name.replace(/\.exe$/, '')
 }

@@ -7,7 +7,7 @@ import {
 } from './recent-workspace-tab-rows'
 import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
 import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
-import type { TabGroup } from '../../../shared/types'
+import type { TabGroup } from '../../../shared/tab-types'
 
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-2222-4333-8444-555555555555'

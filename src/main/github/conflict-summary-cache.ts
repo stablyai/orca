@@ -1,4 +1,4 @@
-import type { PRConflictSummary } from '../../shared/types'
+import type { PRConflictSummary } from '../../shared/github/pull-request-types'
 
 // Why 60s: the hottest coordinator cadences that re-derive a CONFLICTING PR
 // (10s mergeability-pending, 2.5s manual-pending) previously each ran a

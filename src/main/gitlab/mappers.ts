@@ -1,10 +1,5 @@
-import type {
-  CheckStatus,
-  GitLabIssueInfo,
-  GitLabWorkItem,
-  MRInfo,
-  MRState
-} from '../../shared/types'
+import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
 import {
   mapGitLabPipelineJobStatusToCheckStatus,
   mapGitLabPipelineJobStatusToConclusion

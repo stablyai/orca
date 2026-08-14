@@ -330,6 +330,38 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('validates additive source settings at the remote RPC boundary', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({ id: 'repo-1', path: '/srv/repo' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: {
+          customWorktreeVisibilitySources: [
+            { id: 'team', rootPath: ' /srv/team ' },
+            { id: 'relative', rootPath: '../team' }
+          ],
+          worktreeVisibilitySourcePreferences: {
+            builtIn: { claude: 'show', gsd: 'bad' },
+            custom: { team: 'hide' }
+          }
+        }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team' }],
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show' },
+        custom: { team: 'hide' }
+      }
+    })
+  })
+
   it('persists resolved GitHub upstream metadata updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

@@ -10,7 +10,10 @@ import {
   type MutableRefObject
 } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,

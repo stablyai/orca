@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitHubPRStack } from '../../../../shared/types'
+import type { GitHubPRStack } from '../../../../shared/github/pull-request-types'
 import { GitHubPRStackMap } from './GitHubPRStackMap'
 
 const stack: GitHubPRStack = {

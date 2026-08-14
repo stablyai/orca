@@ -2,7 +2,7 @@
 import { act, StrictMode, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

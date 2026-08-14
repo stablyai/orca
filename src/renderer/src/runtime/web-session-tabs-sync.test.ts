@@ -20,13 +20,9 @@ import {
   recordWebSessionReorderIntent,
   resetWebSessionReorderIntentForTests
 } from './web-session-reorder-intent'
-import type {
-  BrowserPage,
-  BrowserWorkspace,
-  Tab,
-  TabGroupLayoutNode,
-  TerminalTab
-} from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Tab, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OpenFile } from '../store/slices/editor'
 import {
   confirmWebAgentSessionHandoffAfterCreate,

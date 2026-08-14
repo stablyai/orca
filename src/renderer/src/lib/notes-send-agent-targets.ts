@@ -2,7 +2,7 @@ import type { AgentType } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { resolveTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import {
   resolveRuntimePaneTitleLeafResolution,

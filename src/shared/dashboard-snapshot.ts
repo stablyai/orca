@@ -1,7 +1,7 @@
 import type { AgentType } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 /**
  * Serializable contract for the pop-out agent dashboard. The main renderer owns

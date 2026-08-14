@@ -2859,7 +2859,7 @@
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
           },
-          "TerminalPaneDisconnectedBanner": {
+          "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
@@ -3136,7 +3136,7 @@
             "67c4ecda49": "Fuerza el cierre de este terminal. Cualquier trabajo sin guardar en el panel se perderá. Esto no se puede deshacer.",
             "4bb076fa89": "Terminar",
             "996295bff2": "terminal huérfano",
-            "92924a14e3": "Revisar espacios de trabajo inactivos ({{value0}})",
+            "92924a14e3": "Limpiar espacios de trabajo",
             "27a74f91f0": "No hay nada ejecutándose ahora mismo",
             "1b24a32d3a": "Memoria",
             "298f4be7f2": "CPU",
@@ -4672,8 +4672,12 @@
         "WorktreeVisibilityHelpPopover": {
           "c41f2d7e90": "¿Qué worktrees se ocultan de forma predeterminada?",
           "8db4e19a26": "Este ajuste nunca oculta los worktrees creados mediante Orca.",
-          "54a7c2f183": "En los repositorios recién añadidos, los worktrees creados manualmente o con otra herramienta se ocultan de forma predeterminada para evitar elementos inesperados en la barra lateral.",
-          "b9e0d43675": "«Mostrar siempre» incluye los worktrees ajenos a Orca actuales y futuros, incluidos los worktrees de agentes en .claude/worktrees/* y .gsd-workspaces/*. Cuando está desactivado, usa «Mostrar» abajo para añadir uno individualmente."
+          "ec1e6a10fb": "Los demás worktrees empiezan ocultos para evitar saturar inesperadamente la barra lateral.",
+          "1c68c9cf77": "Activa una fuente para mostrar todos sus worktrees actuales y futuros, o muestra worktrees individuales abajo."
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "Muestra uno sin activar su fuente.",
+          "showWorktree": "Mostrar {{value0}} en {{value1}}"
         },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Worktrees que no son de Orca",
@@ -4687,10 +4691,38 @@
           "b8d24e61f5": "No se pudieron listar los worktrees de este repositorio.",
           "c5e70a93b1": "Reintentar",
           "7d21c5e848": "Worktrees ocultos ({{value0}})",
-          "9b53f7a160": "Elige qué worktrees ocultos mostrar de forma individual.",
           "2f80cd4b97": "Mostrando…",
           "e64b81d3a9": "Mostrar",
-          "d40d436fc2": "No se pudo actualizar la visibilidad de los worktrees. Inténtalo de nuevo."
+          "d40d436fc2": "No se pudo actualizar la visibilidad de los worktrees. Inténtalo de nuevo.",
+          "unsupportedHost": "Este host no admite la visibilidad de worktrees específica de cada fuente. Actualiza Orca en el host para cambiar esta opción.",
+          "search": "Buscar worktrees ocultos",
+          "searchPlaceholder": "Buscar en {{value0}} worktrees…",
+          "noMatches": "No hay worktrees coincidentes",
+          "allShown": "Todos los worktrees detectados se muestran",
+          "noneFound": "No se encontraron worktrees ajenos a Orca",
+          "tryDifferentSearch": "Prueba con otro nombre o ruta.",
+          "disableSource": "Desactiva una fuente para gestionar sus worktrees individualmente.",
+          "appearWhenDetected": "Los worktrees nuevos aparecerán aquí cuando Orca los detecte."
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "Otras ubicaciones",
+          "custom": "Ubicación personalizada",
+          "otherPath": "Fuera de las fuentes listadas",
+          "invalidPath": "Introduce una ruta absoluta para este host.",
+          "duplicatePath": "Esta ubicación ya está en la lista.",
+          "limit": "Elimina una ubicación personalizada antes de añadir otra.",
+          "sources": "Fuentes",
+          "sourcesDescription": "Las fuentes activadas incluyen los worktrees actuales y futuros en la barra lateral.",
+          "found": "Encontrados: {{value0}}",
+          "remove": "Eliminar {{value0}}",
+          "removeLocation": "Eliminar ubicación personalizada",
+          "toggle": "Mostrar los worktrees actuales y futuros de {{value0}}",
+          "addLocation": "Añadir ubicación",
+          "worktreeRoot": "Raíz de worktrees",
+          "add": "Añadir",
+          "rootHelp": "Orca reconocerá los worktrees dentro de esta carpeta."
         },
         "add": {
           "repo": {
@@ -5007,14 +5039,7 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Ocultar worktrees externos permanentemente para {{value0}}",
-          "d9f7b2a14c": "Contraer worktrees nuevos creados externamente para {{value0}}",
-          "e2c4a8d91f": "Expandir worktrees nuevos creados externamente para {{value0}}",
-          "7c4e9b2a81": "Nuevos worktrees creados externamente",
           "5e1b8d3f62": "Ocultar worktrees externos permanentemente",
-          "4d7a1c9e53": "Estos worktrees se crearon fuera de Orca.",
-          "8b3f2e1d74": "Importar",
-          "1c9e7a4b28": "Mantener ocultos",
-          "6f2d8c1e95": "Importar todo",
           "c3e8a1f4b2": "No volver a mostrar"
         },
         "newExternalWorktreesInboxActions": {
@@ -14300,6 +14325,7 @@
           "high": "Alto",
           "xhigh": "Muy alto",
           "max": "Máximo",
+          "ultra": "Supremo",
           "on": "Activado",
           "off": "Desactivado"
         },
@@ -14438,14 +14464,12 @@
     },
     "map": {
       "host": {
-        "all": "Todos los hosts",
         "local": "Local",
         "ssh": "SSH",
         "wsl": "WSL",
         "remote": "Remoto"
       },
       "liveContainmentMap": "Mapa de contención en vivo",
-      "hostFilter": "Filtro de host",
       "empty": "Ningún agente coincide con los filtros actuales.",
       "canvasLabel": "Mapa anidado de proyectos, espacios de trabajo y agentes",
       "zoomOut": "Alejar",

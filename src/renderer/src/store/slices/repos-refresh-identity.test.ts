@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Project, Repo } from '../../../../shared/types'
+import type { Project } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 import { getRepoHostIdentityForParts } from './repo-host-identity'
 import { createTestStore } from './store-test-helpers'
@@ -227,6 +228,57 @@ describe('repo catalog refresh identity', () => {
     expect(store.getState().projects).not.toBe(projects)
     expect(store.getState().projects).toHaveLength(1)
     expect(store.getState().projectHostSetups).toHaveLength(1)
+  })
+
+  it('keeps a project owned only through a repo on another host', async () => {
+    // Why: no setup row names this project, so the refreshing host can only be ruled out from the
+    // project's own source repos. Feeding the host-id resolvers anything but this project's repo
+    // slice prunes it on a local refresh.
+    const sshRepo: Repo = { ...secondRepo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
+    mockRepos(repo, sshRepo)
+    const store = createTestStore()
+    await store.getState().fetchRepos()
+    const sshOwned: Project = {
+      id: 'ssh-owned',
+      displayName: 'SSH Owned',
+      badgeColor: '#000000',
+      sourceRepoIds: [sshRepo.id],
+      createdAt: 1,
+      updatedAt: 1
+    }
+    store.setState({
+      projects: [...store.getState().projects, sshOwned],
+      projectHostSetups: []
+    })
+
+    await store.getState().fetchRepos()
+
+    expect(store.getState().projects.map((project) => project.id)).toContain('ssh-owned')
+  })
+
+  it('keeps a project whose repo id is cloned onto a second host', async () => {
+    // Why: both rows share `repo.id`, so the project's repo slice must carry every duplicate —
+    // keeping only the first drops the remote host and the local refresh prunes the project.
+    const sshRepo: Repo = { ...repo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
+    mockRepos(repo, sshRepo)
+    const store = createTestStore()
+    await store.getState().fetchRepos()
+    const dualHostOwned: Project = {
+      id: 'dual-host-owned',
+      displayName: 'Dual Host Owned',
+      badgeColor: '#000000',
+      sourceRepoIds: [repo.id],
+      createdAt: 1,
+      updatedAt: 1
+    }
+    store.setState({
+      projects: [...store.getState().projects, dualHostOwned],
+      projectHostSetups: []
+    })
+
+    await store.getState().fetchRepos()
+
+    expect(store.getState().projects.map((project) => project.id)).toContain('dual-host-owned')
   })
 
   it('adds a project and its setup when a repo appears', async () => {

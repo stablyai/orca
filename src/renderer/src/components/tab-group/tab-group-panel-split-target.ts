@@ -1,5 +1,5 @@
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
-import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { isPaneColumnSplitDropNoOp } from '../../store/slices/pane-column-split-drop-no-op'
 import {
   resolvePaneColumnEdgeZone,

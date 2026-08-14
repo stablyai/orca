@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import {
   SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
   type SkillFreshnessInstallation,

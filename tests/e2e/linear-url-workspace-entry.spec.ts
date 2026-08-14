@@ -1,7 +1,7 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import type { LinearIssue } from '../../src/shared/types'
+import type { LinearIssue } from '../../src/shared/linear/issue-types'
 
 const LINEAR_URL =
   'https://linear.app/stably/issue/STA-4084/restore-osc-133-shell-integration-when-an-exec-in-user-rc-files-strips'

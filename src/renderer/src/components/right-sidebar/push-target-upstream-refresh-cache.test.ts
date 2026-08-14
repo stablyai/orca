@@ -10,7 +10,8 @@ import {
   invalidateAutomaticPushTargetUpstreamStatusCache,
   storeCachedAutomaticPushTargetUpstreamStatus
 } from './push-target-upstream-refresh-cache'
-import type { GitPushTarget, GitStatusResult, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 const pushTarget: GitPushTarget = {
   remoteName: 'fork',

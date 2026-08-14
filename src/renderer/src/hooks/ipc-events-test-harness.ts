@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 
 export type CreateTerminalRequest = {
   requestId?: string

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { DiffComment, FolderWorkspace, ProjectGroup } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
