@@ -228,6 +228,49 @@ describe('Antigravity language-server discovery', () => {
     )
   })
 
+  it('reports the total discovery deadline as a timeout', async () => {
+    const homePath = await mkdtemp(join(tmpdir(), 'orca-antigravity-timeout-'))
+    const logDirectory = getAntigravityCliLogDirectory(homePath)
+    let markStarted: (() => void) | undefined
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.write('{')
+      const keepAlive = setInterval(() => response.write(' '), 100)
+      response.on('close', () => clearInterval(keepAlive))
+      markStarted?.()
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Expected a TCP listener')
+    }
+
+    try {
+      await mkdir(logDirectory, { recursive: true })
+      await writeFile(
+        join(logDirectory, 'cli-20260714_123131.log'),
+        `Language server listening on random port at ${address.port} for HTTP`
+      )
+      const resultPromise = fetchAntigravityRateLimits({
+        homePath,
+        appDataPath: join(homePath, 'app-data')
+      })
+      await started
+
+      await expect(resultPromise).resolves.toMatchObject({
+        status: 'error',
+        error: 'Antigravity usage lookup timed out',
+        usageMetadata: { failureKind: 'usage-unavailable' }
+      })
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      await rm(homePath, { recursive: true, force: true })
+    }
+  }, 10_000)
+
   it('aborts an in-flight loopback request', async () => {
     const homePath = await mkdtemp(join(tmpdir(), 'orca-antigravity-abort-'))
     const logDirectory = getAntigravityCliLogDirectory(homePath)

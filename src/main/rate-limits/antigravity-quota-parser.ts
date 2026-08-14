@@ -24,6 +24,7 @@ type ParsedQuotaBucket = {
   resetTime: string | null
 }
 
+/** Accepts the response envelopes emitted by current and earlier AGY runtimes. */
 function quotaGroups(value: unknown): unknown[] | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -33,6 +34,7 @@ function quotaGroups(value: unknown): unknown[] | null {
   return Array.isArray(groups) ? groups : null
 }
 
+/** Rejects malformed quota entries before they can affect UI percentages. */
 function parseQuotaBucket(value: unknown): ParsedQuotaBucket | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -55,6 +57,7 @@ function parseQuotaBucket(value: unknown): ParsedQuotaBucket | null {
   }
 }
 
+/** Keeps only known identities and the safest value for duplicate entries. */
 function collectQuotaBuckets(groups: unknown[]): Map<string, ParsedQuotaBucket> {
   const buckets = new Map<string, ParsedQuotaBucket>()
   for (const value of groups) {
@@ -80,6 +83,7 @@ function collectQuotaBuckets(groups: unknown[]): Map<string, ParsedQuotaBucket> 
   return buckets
 }
 
+/** Normalizes AGY fractions and reset timestamps into Orca's shared model. */
 function toRateLimitBucket(bucket: ParsedQuotaBucket): RateLimitBucket {
   const spec = ANTIGRAVITY_BUCKET_SPECS[bucket.bucketId]!
   const remainingFraction = Math.min(1, Math.max(0, bucket.remainingFraction))
@@ -93,6 +97,7 @@ function toRateLimitBucket(bucket: ParsedQuotaBucket): RateLimitBucket {
   }
 }
 
+/** Derives compatibility summaries without discarding the four detailed buckets. */
 function mostConstrainedWindow(
   buckets: RateLimitBucket[],
   windowMinutes: number

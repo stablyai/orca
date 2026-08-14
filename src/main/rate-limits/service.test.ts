@@ -1451,6 +1451,23 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.session?.usedPercent).toBe(40)
   })
 
+  it('keeps Antigravity usage when Gemini usage is unavailable', async () => {
+    const service = new RateLimitService()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(unavailableProvider('gemini'))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce(
+      okProvider('antigravity', 35, Date.now())
+    )
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.gemini?.status).toBe('unavailable')
+    expect(state.antigravity?.status).toBe('ok')
+    expect(state.antigravity?.session?.usedPercent).toBe(35)
+  })
+
   it('passes the resolved Kimi home into each fetch cycle', async () => {
     const service = new RateLimitService()
     const home = {

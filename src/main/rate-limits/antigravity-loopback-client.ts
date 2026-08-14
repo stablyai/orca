@@ -29,6 +29,7 @@ export class AntigravityLoopbackResponseError extends Error {
   }
 }
 
+/** Rejects untrusted log-derived values outside the TCP port range. */
 function validPort(value: string | undefined): number | null {
   const port = Number(value)
   return Number.isInteger(port) && port > 0 && port <= 65_535 ? port : null
@@ -71,9 +72,55 @@ export function parseAntigravityLanguageServerPort(log: string): number | null {
   return parseAntigravityCliServerPorts(log).https
 }
 
+/** Extracts the assigned JSON object without depending on surrounding script formatting. */
+function extractAppConfigJson(html: string): string | null {
+  const assignment = /window\.__APP_CONFIG__\s*=\s*/.exec(html)
+  if (!assignment) {
+    return null
+  }
+  const start = assignment.index + assignment[0].length
+  if (html[start] !== '{') {
+    return null
+  }
+  const scriptEndPattern = /<\/script\s*>/gi
+  scriptEndPattern.lastIndex = start
+  const end = scriptEndPattern.exec(html)?.index ?? html.length
+  let depth = 0
+  let escaped = false
+  let inString = false
+
+  for (let index = start; index < end; index += 1) {
+    const character = html[index]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (character === '\\') {
+        escaped = true
+      } else if (character === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (character === '"') {
+      inString = true
+    } else if (character === '{') {
+      depth += 1
+    } else if (character === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return html.slice(start, index + 1)
+      }
+      if (depth < 0) {
+        return null
+      }
+    }
+  }
+  return null
+}
+
 /** Accepts CSRF configuration only from a page identifying Antigravity. */
 export function parseAntigravityAppConfig(html: string): AntigravityAppConfig | null {
-  const configJson = html.match(/window\.__APP_CONFIG__\s*=\s*(\{.*?\});<\/script>/s)?.[1]
+  const configJson = extractAppConfigJson(html)
   if (!configJson) {
     return null
   }
@@ -185,6 +232,7 @@ export function requestAntigravityLoopbackPage(
   })
 }
 
+/** Marks loopback data so downstream telemetry cannot mistake it for OAuth usage. */
 function withLiveSessionMetadata(limits: ProviderRateLimits): ProviderRateLimits {
   return {
     ...limits,

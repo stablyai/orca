@@ -20,6 +20,7 @@ const CLI_LOG_LIMIT = 12
 const ENDPOINT_ATTEMPT_LIMIT = 8
 const FETCH_TIMEOUT_MS = 6_000
 const LOG_TAIL_LIMIT_BYTES = 128 * 1024
+const FETCH_TIMEOUT_MESSAGE = 'Antigravity usage lookup timed out'
 
 type FetchAttempt = {
   discovered: boolean
@@ -34,6 +35,7 @@ export type AntigravityUsageFetchOptions = {
   platform?: NodeJS.Platform
 }
 
+/** Bounds discovery reads so stale logs cannot cause unbounded allocation. */
 async function readLogTail(filePath: string, signal: AbortSignal): Promise<string> {
   signal.throwIfAborted()
   const handle = await open(filePath, 'r')
@@ -55,14 +57,15 @@ async function readLogTail(filePath: string, signal: AbortSignal): Promise<strin
   }
 }
 
+/** Tries newest CLI runtimes first so older processes cannot replace the active account. */
 async function fetchFromCliLogs(homePath: string, signal: AbortSignal): Promise<FetchAttempt> {
+  const logDirectory = getAntigravityCliLogDirectory(homePath)
   let entries: Dirent[]
   try {
-    entries = await readdir(getAntigravityCliLogDirectory(homePath), { withFileTypes: true })
+    entries = await readdir(logDirectory, { withFileTypes: true })
   } catch {
     return { discovered: false, answered: false, limits: null }
   }
-  const logDirectory = getAntigravityCliLogDirectory(homePath)
   const logNames = entries
     .filter((entry) => entry.isFile() && /^cli-.*\.log$/i.test(entry.name))
     .map((entry) => entry.name)
@@ -117,6 +120,7 @@ async function fetchFromCliLogs(homePath: string, signal: AbortSignal): Promise<
   return { discovered, answered: false, limits: null }
 }
 
+/** Falls back to the desktop runtime only when no newer CLI runtime answered. */
 async function fetchFromDesktopApp(
   platform: NodeJS.Platform,
   homePath: string,
@@ -162,6 +166,7 @@ async function fetchFromDesktopApp(
   }
 }
 
+/** Clears stale quota windows while retaining a machine-readable failure reason. */
 function emptyResult(
   status: 'error' | 'unavailable',
   error: string,
@@ -189,7 +194,11 @@ export async function fetchAntigravityRateLimits(
   options: AntigravityUsageFetchOptions = {}
 ): Promise<ProviderRateLimits> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  let timedOut = false
+  const timeout = setTimeout(() => {
+    timedOut = true
+    controller.abort(new Error(FETCH_TIMEOUT_MESSAGE))
+  }, FETCH_TIMEOUT_MS)
   const onAbort = (): void => controller.abort(options.signal?.reason)
   options.signal?.addEventListener('abort', onAbort, { once: true })
   if (options.signal?.aborted) {
@@ -234,7 +243,11 @@ export async function fetchAntigravityRateLimits(
     }
     return emptyResult(
       'error',
-      error instanceof Error ? error.message : 'Unknown Antigravity usage error',
+      timedOut
+        ? FETCH_TIMEOUT_MESSAGE
+        : error instanceof Error
+          ? error.message
+          : 'Unknown Antigravity usage error',
       'usage-unavailable'
     )
   } finally {
