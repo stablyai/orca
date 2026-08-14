@@ -7,6 +7,7 @@ import {
 import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
+export const RECIPE_JSON_MAX_BUFFER_BYTES = 1024 * 1024
 
 export function waitForRecipeJson(child: ChildProcess): Promise<number> {
   return new Promise((resolveWait, reject) => {
@@ -56,8 +57,24 @@ export function waitForRecipeJson(child: ChildProcess): Promise<number> {
       finish()
     }
     const stdoutDecoder = new StringDecoder('utf8')
+    const rejectIfBufferExceeded = (): boolean => {
+      if (Buffer.byteLength(output, 'utf8') <= RECIPE_JSON_MAX_BUFFER_BYTES) {
+        return false
+      }
+      finish(
+        new RuntimeClientError(
+          'runtime_serve_failed',
+          `Orca serve recipe JSON exceeded the ${RECIPE_JSON_MAX_BUFFER_BYTES} byte buffer before a complete line.`
+        )
+      )
+      child.kill('SIGTERM')
+      return true
+    }
     const onData = (chunk: Buffer | string): void => {
       output += typeof chunk === 'string' ? chunk : stdoutDecoder.write(chunk)
+      if (rejectIfBufferExceeded()) {
+        return
+      }
       while (!settled) {
         const newlineIndex = output.indexOf('\n')
         if (newlineIndex === -1) {
@@ -76,6 +93,9 @@ export function waitForRecipeJson(child: ChildProcess): Promise<number> {
         return
       }
       output += stdoutDecoder.end()
+      if (rejectIfBufferExceeded()) {
+        return
+      }
       if (output.trim()) {
         processRecipeOutputLine(output)
       }

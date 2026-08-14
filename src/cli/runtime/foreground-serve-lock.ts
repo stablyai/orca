@@ -1,8 +1,9 @@
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const LOCK_FILE_NAME = 'orca-serve.lock'
-const ACQUIRE_ATTEMPTS = 3
+const LOCK_DIR_NAME = 'orca-serve.lock'
+const OWNER_FILE_NAME = 'owner.json'
+const ACQUIRE_ATTEMPTS = 5
 
 export type ForegroundServeLock = {
   path: string
@@ -15,7 +16,11 @@ type LockRecord = {
 }
 
 export function getForegroundServeLockPath(userDataPath: string): string {
-  return join(userDataPath, LOCK_FILE_NAME)
+  return join(userDataPath, LOCK_DIR_NAME)
+}
+
+export function getForegroundServeLockOwnerPath(userDataPath: string): string {
+  return join(getForegroundServeLockPath(userDataPath), OWNER_FILE_NAME)
 }
 
 export async function acquireForegroundServeLock(
@@ -23,36 +28,57 @@ export async function acquireForegroundServeLock(
   pid = process.pid
 ): Promise<ForegroundServeLock | null> {
   await mkdir(userDataPath, { recursive: true })
-  const path = getForegroundServeLockPath(userDataPath)
+  const lockDir = getForegroundServeLockPath(userDataPath)
+  const ownerPath = join(lockDir, OWNER_FILE_NAME)
 
   for (let attempt = 0; attempt < ACQUIRE_ATTEMPTS; attempt += 1) {
     try {
-      await writeFile(path, serializeLock({ pid, startedAt: Date.now() }), {
+      await mkdir(lockDir)
+      await writeFile(ownerPath, serializeLock({ pid, startedAt: Date.now() }), {
         encoding: 'utf8',
-        flag: 'wx',
         mode: 0o600
       })
-      return { path, pid }
+      return { path: lockDir, pid }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') {
+        continue
+      }
+      if (code !== 'EEXIST') {
         throw error
       }
-      const existing = await readLockRecord(path)
+      const existing = await readLockRecord(ownerPath)
       if (existing && isLockOwnerAlive(existing.pid)) {
         return null
       }
-      await unlink(path).catch(() => undefined)
+      // Why: a peer may have mkdir'd but not yet written owner.json. Wait
+      // before treating a missing record as stale, so we do not rename a
+      // successor's new lock aside.
+      if (!existing && attempt < ACQUIRE_ATTEMPTS - 1) {
+        await yieldEventLoop()
+        continue
+      }
+      const staleDir = `${lockDir}.stale.${pid}.${attempt}`
+      try {
+        await rename(lockDir, staleDir)
+      } catch (renameError) {
+        if ((renameError as NodeJS.ErrnoException).code === 'ENOENT') {
+          continue
+        }
+        throw renameError
+      }
+      await rm(staleDir, { recursive: true, force: true }).catch(() => undefined)
     }
   }
   return null
 }
 
 export async function releaseForegroundServeLock(lock: ForegroundServeLock): Promise<void> {
-  const existing = await readLockRecord(lock.path)
+  const existing = await readLockRecord(join(lock.path, OWNER_FILE_NAME))
   if (existing?.pid !== lock.pid) {
     return
   }
-  await unlink(lock.path).catch(() => undefined)
+  await rm(lock.path, { recursive: true, force: true }).catch(() => undefined)
 }
 
 function serializeLock(record: LockRecord): string {
@@ -83,4 +109,10 @@ function isLockOwnerAlive(pid: number): boolean {
     // we do not steal a lock from another session.
     return (error as NodeJS.ErrnoException).code === 'EPERM'
   }
+}
+
+function yieldEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    setImmediate(resolve)
+  })
 }

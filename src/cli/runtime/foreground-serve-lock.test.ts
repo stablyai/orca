@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   acquireForegroundServeLock,
+  getForegroundServeLockOwnerPath,
   getForegroundServeLockPath,
   releaseForegroundServeLock
 } from './foreground-serve-lock'
@@ -20,8 +21,26 @@ afterEach(() =>
   Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true })))
 )
 
+async function writeStaleLock(userDataPath: string, pid: number): Promise<void> {
+  const lockDir = getForegroundServeLockPath(userDataPath)
+  await mkdir(lockDir, { recursive: true })
+  await writeFile(join(lockDir, 'owner.json'), `${JSON.stringify({ pid, startedAt: 1 })}\n`, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
+}
+
+async function readOwnerPid(userDataPath: string): Promise<number> {
+  const record = JSON.parse(
+    await readFile(getForegroundServeLockOwnerPath(userDataPath), 'utf8')
+  ) as {
+    pid: number
+  }
+  return record.pid
+}
+
 describe('acquireForegroundServeLock', () => {
-  it('creates an exclusive lock file for the userData profile', async () => {
+  it('creates an exclusive lock directory for the userData profile', async () => {
     const userDataPath = await isolatedUserData()
 
     const lock = await acquireForegroundServeLock(userDataPath)
@@ -30,8 +49,7 @@ describe('acquireForegroundServeLock', () => {
       path: getForegroundServeLockPath(userDataPath),
       pid: process.pid
     })
-    const record = JSON.parse(await readFile(lock!.path, 'utf8')) as { pid: number }
-    expect(record.pid).toBe(process.pid)
+    expect(await readOwnerPid(userDataPath)).toBe(process.pid)
   })
 
   it('returns null when another live process already holds the lock', async () => {
@@ -59,16 +77,29 @@ describe('acquireForegroundServeLock', () => {
 
   it('reclaims a lock whose owner pid is dead', async () => {
     const userDataPath = await isolatedUserData()
-    await mkdir(userDataPath, { recursive: true })
-    await writeFile(
-      getForegroundServeLockPath(userDataPath),
-      `${JSON.stringify({ pid: findUnusedPid(), startedAt: 1 })}\n`,
-      { encoding: 'utf8', mode: 0o600 }
-    )
+    await writeStaleLock(userDataPath, findUnusedPid())
 
     const lock = await acquireForegroundServeLock(userDataPath)
 
     expect(lock?.pid).toBe(process.pid)
+    expect(await readOwnerPid(userDataPath)).toBe(process.pid)
+  })
+
+  it('lets only one of two stale-lock reclaimers win', async () => {
+    const userDataPath = await isolatedUserData()
+    await writeStaleLock(userDataPath, findUnusedPid())
+
+    const [first, second] = await Promise.all([
+      acquireForegroundServeLock(userDataPath),
+      acquireForegroundServeLock(userDataPath)
+    ])
+
+    const winners = [first, second].filter((lock) => lock !== null)
+    const losers = [first, second].filter((lock) => lock === null)
+    expect(winners).toHaveLength(1)
+    expect(losers).toHaveLength(1)
+    expect(winners[0]?.pid).toBe(process.pid)
+    expect(await readOwnerPid(userDataPath)).toBe(process.pid)
   })
 })
 
@@ -85,15 +116,14 @@ describe('releaseForegroundServeLock', () => {
     })
   })
 
-  it('does not unlink a lock owned by a different pid', async () => {
+  it('does not remove a lock owned by a different pid', async () => {
     const userDataPath = await isolatedUserData()
     const lock = await acquireForegroundServeLock(userDataPath)
     expect(lock).not.toBeNull()
 
     await releaseForegroundServeLock({ path: lock!.path, pid: lock!.pid + 1 })
 
-    const record = JSON.parse(await readFile(lock!.path, 'utf8')) as { pid: number }
-    expect(record.pid).toBe(process.pid)
+    expect(await readOwnerPid(userDataPath)).toBe(process.pid)
   })
 })
 
