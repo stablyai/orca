@@ -10,7 +10,6 @@ type NavigationProbe = {
 }
 
 declare global {
-  // eslint-disable-next-line no-var -- main-process probe exists only for this isolated Electron run
   var __blockedNavigationProbe: NavigationProbe | undefined
 }
 
