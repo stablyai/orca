@@ -127,6 +127,25 @@ describe('routedGitLab local vs remote transport', () => {
     )
   })
 
+  it('bounds the local IPC branch with a timeout so a hung glab call cannot spin forever', async () => {
+    vi.useFakeTimers()
+    try {
+      gl.workItemDetails.mockImplementationOnce(() => new Promise<never>(() => {}))
+      const pending = routedGitLab.workItemDetails({
+        repoPath: '/repo',
+        repoId: 'repo-1',
+        sourceContext: gitlabContext(LOCAL_EXECUTION_HOST_ID),
+        iid: 2,
+        type: 'issue'
+      })
+      const assertion = expect(pending).rejects.toThrow(/timed out/i)
+      await vi.advanceTimersByTimeAsync(30_000)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('relays workItemDetails to the runtime host with an id selector', async () => {
     await routedGitLab.workItemDetails({
       repoPath: '/repo',
