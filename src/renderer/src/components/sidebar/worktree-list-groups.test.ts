@@ -64,7 +64,13 @@ const worktree: Worktree = {
 const repoMap = new Map([[repo.id, repo]])
 
 function readWorktreeListSource(): string {
-  return readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+  return [
+    './WorktreeList.tsx',
+    './WorktreeListSectionHeader.tsx',
+    './worktree-list-section-header-model.ts'
+  ]
+    .map((path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8'))
+    .join('\n')
 }
 
 const remoteRepo: Repo = {

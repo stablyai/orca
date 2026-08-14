@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 function readWorktreeListSource(): string {
-  return readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+  return ['./WorktreeList.tsx', './WorktreeListSectionHeader.tsx']
+    .map((path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8'))
+    .join('\n')
 }
 
 describe('Project Group header drag DOM source', () => {
