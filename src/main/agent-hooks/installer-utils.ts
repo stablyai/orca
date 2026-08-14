@@ -20,6 +20,7 @@ import { writeRollingFileBackup } from '../rolling-file-backup'
 export type HookCommandConfig = {
   type: 'command'
   command: string
+  args?: string[]
   timeout?: number
   async?: boolean
   statusMessage?: string
@@ -151,16 +152,6 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
-export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
-
-export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
-  const bashPath = scriptPath.replaceAll('\\', '/')
-  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly; unsafe paths stay encoded.
-  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
-    ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
-    : wrapWindowsHookCommand(scriptPath)
-}
-
 /**
  * Extra form lines inserted before the final `payload@-` line (each should end with ` ^`).
  * Used by Grok to attach `grokHome` without fragile string replace on the shared template.
@@ -215,7 +206,8 @@ export function removeManagedCommands(
     const directManagedKeys = directCommandKeys.filter((key) => isManagedCommand(definition[key]))
     const hasNestedHooks = Array.isArray(definition.hooks)
     const hasManagedNestedHook =
-      hasNestedHooks && definition.hooks!.some((hook) => isManagedCommand(hook.command))
+      hasNestedHooks &&
+      definition.hooks!.some((hook) => hookHasManagedCommand(hook, isManagedCommand))
 
     if (directManagedKeys.length === 0 && !hasManagedNestedHook) {
       return [definition]
@@ -227,7 +219,9 @@ export function removeManagedCommands(
     }
 
     if (hasManagedNestedHook) {
-      const filteredHooks = definition.hooks!.filter((hook) => !isManagedCommand(hook.command))
+      const filteredHooks = definition.hooks!.filter(
+        (hook) => !hookHasManagedCommand(hook, isManagedCommand)
+      )
       if (filteredHooks.length > 0) {
         nextDefinition.hooks = filteredHooks
       } else {
@@ -246,6 +240,11 @@ export function removeManagedCommands(
   })
 }
 
+function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
+  const args = Array.isArray(hook.args) ? hook.args : []
+  return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
+}
+
 export function hookDefinitionHasManagedCommand(
   definition: HookDefinition,
   isManagedCommand: (command: string | undefined) => boolean
@@ -255,7 +254,7 @@ export function hookDefinitionHasManagedCommand(
     isManagedCommand(definition.bash) ||
     isManagedCommand(definition.powershell) ||
     (Array.isArray(definition.hooks) &&
-      definition.hooks.some((hook) => isManagedCommand(hook.command)))
+      definition.hooks.some((hook) => hookHasManagedCommand(hook, isManagedCommand)))
   )
 }
 
@@ -317,7 +316,9 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
 export function writeHooksJson(
   configPath: string,
   config: HooksConfig,
-  options?: { preserveMode?: boolean }
+  // Why: `serialized` lets a JSONC config (Devin) supply text edited in place, so the
+  // atomic write + rolling backup below stay shared instead of being reimplemented.
+  options?: { preserveMode?: boolean; serialized?: string }
 ): void {
   const writePath = resolveHooksJsonWritePath(configPath)
   const dir = dirname(writePath)
@@ -326,7 +327,7 @@ export function writeHooksJson(
   // Why: temp+rename leaves the original untouched on a crash/disk-full mid-write.
   // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  const serialized = `${JSON.stringify(config, null, 2)}\n`
+  const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
   const existingMode =
     options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
 

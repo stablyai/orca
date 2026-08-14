@@ -29,6 +29,22 @@ export function prepareQuickOpenFiles(files: readonly string[]): QuickOpenIndexe
   })
 }
 
+const preparedQuickOpenFiles = new WeakMap<readonly string[], QuickOpenIndexedFile[]>()
+
+// Why: keystroke-driven callers re-classify on every character, but the index
+// only changes when the file list array itself is replaced.
+export function getPreparedQuickOpenFiles(
+  files: readonly string[]
+): readonly QuickOpenIndexedFile[] {
+  const cached = preparedQuickOpenFiles.get(files)
+  if (cached) {
+    return cached
+  }
+  const prepared = prepareQuickOpenFiles(files)
+  preparedQuickOpenFiles.set(files, prepared)
+  return prepared
+}
+
 export function isQuickOpenQueryTooLarge(
   query: string,
   maxBytes = QUICK_OPEN_QUERY_MAX_BYTES

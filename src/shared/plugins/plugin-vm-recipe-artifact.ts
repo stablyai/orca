@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ORCA_VM_RECIPE_ID_PATTERN, ORCA_VM_RECIPE_ID_RULE } from '../orca-yaml'
-import type { OrcaVmRecipe } from '../types'
+import type { OrcaVmRecipe } from '../orca-yaml-hook-types'
 
 const recipeCommandSchema = z
   .string()
@@ -15,6 +15,7 @@ const pluginVmRecipeArtifactSchema = z
     id: z.string().regex(ORCA_VM_RECIPE_ID_PATTERN, ORCA_VM_RECIPE_ID_RULE),
     name: z.string().trim().min(1).max(128),
     description: z.string().trim().min(1).max(1024).optional(),
+    checkoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
     create: recipeCommandSchema,
     suspend: recipeCommandSchema.optional(),
     resume: recipeCommandSchema.optional(),
@@ -43,6 +44,7 @@ export function parsePluginVmRecipeArtifact(raw: string): OrcaVmRecipe {
     id: parsed.id,
     name: parsed.name,
     create: parsed.create,
+    ...(parsed.checkoutMode ? { checkoutMode: parsed.checkoutMode } : {}),
     ...(parsed.description ? { description: parsed.description } : {}),
     ...(parsed.suspend ? { suspend: parsed.suspend } : {}),
     ...(parsed.resume ? { resume: parsed.resume } : {}),

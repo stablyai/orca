@@ -1,4 +1,5 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { wslGatedReaddir, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { join } from 'node:path'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
@@ -26,7 +27,7 @@ export async function parseOpenCodeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
   if (!record) {
     return null
   }
@@ -47,8 +48,13 @@ export async function parseOpenCodeSessionFile(
 async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<string, unknown>[]> {
   let entries
   try {
-    entries = await readdir(messageDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(messageDir, 'scan')
+  } catch (error) {
+    // A session with no message dir yet is empty; a gate refusal is not — an
+    // empty transcript would otherwise be cached under the session's mtime.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return []
   }
   const messages: { name: string; createdMs: number; message: Record<string, unknown> }[] = []
@@ -59,11 +65,15 @@ async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<s
     let message: Record<string, unknown> | null = null
     try {
       message = asRecord(
-        JSON.parse(await readFile(join(messageDir, entry.name), 'utf-8')) as unknown
+        JSON.parse(await wslGatedReadFile(join(messageDir, entry.name), 'utf-8', 'scan')) as unknown
       )
-    } catch {
+    } catch (error) {
       // A live OpenCode process can leave a half-written file; skip it rather
-      // than discard the whole session.
+      // than discard the whole session. A refused read is not a bad file — the
+      // partial transcript it would produce must not become the cached answer.
+      if (error instanceof WslTranscriptFsError) {
+        throw error
+      }
       continue
     }
     if (!message) {

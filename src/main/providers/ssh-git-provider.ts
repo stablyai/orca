@@ -5,19 +5,19 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { GitProviderStatusOptions, IGitProvider } from './types'
 import type {
-  GitStatusResult,
-  GitDiffResult,
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type {
   GitConflictOperation,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitPushTarget,
   GitStagingArea,
-  GitUpstreamStatus,
-  GitWorktreeInfo,
-  RemoveWorktreeResult
-} from '../../shared/types'
+  GitStatusResult,
+  GitUpstreamStatus
+} from '../../shared/git-status-types'
+import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
@@ -41,6 +41,7 @@ type NonInteractiveExecQueueEntry = {
 }
 
 const NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS = 5_000
+const ABSENT_BRANCH_DIFF_HEAD_OID = { absent: true } as const
 
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -658,9 +659,14 @@ export class SshGitProvider implements IGitProvider {
   async getBranchDiff(
     worktreePath: string,
     baseRef: string,
-    options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
+    options?: { includePatch?: boolean; filePath?: string; oldPath?: string; headOid?: string }
   ): Promise<GitDiffResult[]> {
     const keyOptions = options ?? {}
+    const { headOid: rawHeadOid, ...relayOptions } = keyOptions
+    // Why: compare snapshots type headOid as `string | null`, so collapse an
+    // unpinned null to absent instead of putting a field on the wire that a
+    // pinned-OID relay must reject.
+    const headOid = rawHeadOid == null ? undefined : rawHeadOid
     return this.gitDiffReadDedupe.run(
       stableInFlightKey([
         'branchDiff',
@@ -668,13 +674,15 @@ export class SshGitProvider implements IGitProvider {
         baseRef,
         keyOptions.includePatch ?? null,
         keyOptions.filePath ?? null,
-        keyOptions.oldPath ?? null
+        keyOptions.oldPath ?? null,
+        headOid === undefined ? ABSENT_BRANCH_DIFF_HEAD_OID : headOid
       ]),
       async () =>
         (await requestGitStreamable(this.mux, 'git.branchDiff', {
           worktreePath,
           baseRef,
-          ...options
+          ...relayOptions,
+          ...(headOid === undefined ? {} : { headOid })
         })) as GitDiffResult[]
     ) as Promise<GitDiffResult[]>
   }

@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
-import type { LinuxPackageInstallRecovery } from '../shared/types'
+import type { LinuxPackageInstallRecovery } from '../shared/update-status-types'
 import type * as RecoveryModule from './linux-package-update-recovery'
 
 const { showItemInFolderMock, getPackageTypeMock, buildCommandMock, hashPasses } = vi.hoisted(

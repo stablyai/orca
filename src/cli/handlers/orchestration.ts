@@ -8,6 +8,7 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
+import { requireWorkerDoneSettlement } from './orchestration-worker-settlement'
 import { getTerminalHandle } from '../selectors'
 import {
   clampOrchestrationAskTimeoutMs,
@@ -90,14 +91,16 @@ const WORKER_TERMINAL_LIST_STATES = [
   'released'
 ] as const
 
-type LifecycleSendRejection = {
-  action: 'rejected'
-  code: string
-  reason: string
-}
+type LifecycleSendResult =
+  | {
+      action: 'completed' | 'failed'
+      authority?: 'run_home' | 'worker_server_legacy'
+    }
+  | { action: 'settled'; outcome: 'succeeded' | 'failed'; duplicate?: boolean }
+  | { action: 'rejected'; code: string; reason: string }
 
 type OrchestrationSendResult =
-  | { message: { id: string }; lifecycle?: LifecycleSendRejection }
+  | { message: { id: string; run_id?: string }; lifecycle?: LifecycleSendResult }
   | { messages: { id: string }[]; recipients: number }
   | {
       relay: {
@@ -107,7 +110,7 @@ type OrchestrationSendResult =
         destination?: 'run_home' | 'worker'
         accepted: true
       }
-      lifecycle?: { action: 'completed' | 'failed' }
+      lifecycle?: LifecycleSendResult
     }
 
 function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
@@ -579,6 +582,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
       senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      waitForLifecycleSettlement: type === 'worker_done' ? true : undefined,
       devMode: isDevCliInvocation()
     }
     const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
@@ -589,15 +593,12 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       sendParams,
       dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined
     )
-    if ('message' in result.result && result.result.lifecycle?.action === 'rejected') {
-      // Why: a rejected lifecycle signal isn't completion; non-zero exit stops workers from treating it as such.
-      process.exitCode = 1
+    await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)
+    if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
+      throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
     printResult(result, json, (r) => {
       if ('message' in r) {
-        if (r.lifecycle?.action === 'rejected') {
-          return `Rejected ${r.message.id}: ${r.lifecycle.reason}`
-        }
         return `Sent ${r.message.id}`
       }
       if ('relay' in r) {
@@ -956,6 +957,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       state: string
       processAction: string
       lastError?: string
+      warning?: string
     }>(client, flags, 'orchestration.workerStop', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
@@ -966,7 +968,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       result,
       json,
       (value) =>
-        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}`
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}`
     )
   },
 

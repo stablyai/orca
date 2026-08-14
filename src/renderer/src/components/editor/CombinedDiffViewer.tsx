@@ -13,7 +13,7 @@ import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
-import { openFilePreviewToSide } from '@/lib/file-preview'
+import { openFilePreviewToSide, useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 import { canOpenDiffSectionPreviewToSide } from './diff-section-preview'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { getCombinedDiffSectionConnectionId } from './combined-diff-section-connection'
@@ -42,12 +42,9 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { OpenFile } from '@/store/slices/editor'
-import type {
-  DiffComment,
-  GitBranchChangeEntry,
-  GitDiffResult,
-  GitStatusEntry
-} from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { GitBranchChangeEntry, GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2, WrapText } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
@@ -247,6 +244,7 @@ export default function CombinedDiffViewer({
     selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
+  const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -1182,10 +1180,7 @@ export default function CombinedDiffViewer({
       if (!detail || detail.worktreeId !== file.worktreeId) {
         return
       }
-      const hasRuntimeOwnerFilter = Object.prototype.hasOwnProperty.call(
-        detail,
-        'runtimeEnvironmentId'
-      )
+      const hasRuntimeOwnerFilter = Object.hasOwn(detail, 'runtimeEnvironmentId')
       const targetRuntimeOwner = detail.runtimeEnvironmentId?.trim() || null
       const fileRuntimeOwner = file.runtimeEnvironmentId?.trim() || null
       if (hasRuntimeOwnerFilter && targetRuntimeOwner !== fileRuntimeOwner) {
@@ -1294,7 +1289,10 @@ export default function CombinedDiffViewer({
         !canOpenDiffSectionPreviewToSide({
           path: section.path,
           status: section.status,
-          isCommitSurface: isCommitMode
+          isCommitSurface: isCommitMode,
+          canOpenWorkspaceFileBrowser: canOpenWorkspaceFileBrowserForPath(
+            joinPath(file.filePath, section.path)
+          )
         })
       ) {
         return
@@ -1316,7 +1314,14 @@ export default function CombinedDiffViewer({
         sourceGroupId
       })
     },
-    [activeGroupId, file.filePath, file.id, file.worktreeId, isCommitMode]
+    [
+      activeGroupId,
+      canOpenWorkspaceFileBrowserForPath,
+      file.filePath,
+      file.id,
+      file.worktreeId,
+      isCommitMode
+    ]
   )
 
   const handleSectionSave = useCallback(
@@ -2063,7 +2068,10 @@ export default function CombinedDiffViewer({
                           canOpenDiffSectionPreviewToSide({
                             path: section.path,
                             status: section.status,
-                            isCommitSurface: isCommitMode
+                            isCommitSurface: isCommitMode,
+                            canOpenWorkspaceFileBrowser: canOpenWorkspaceFileBrowserForPath(
+                              joinPath(file.filePath, section.path)
+                            )
                           })
                             ? openSectionPreview
                             : undefined

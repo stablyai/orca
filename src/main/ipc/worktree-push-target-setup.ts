@@ -4,7 +4,7 @@
 // remote-reuse / unique-naming / fetch behavior is unit-testable without a real
 // repo. The store-aware ownership decision stays with the caller via a predicate.
 
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { GitRemoteExec } from './worktree-push-target-cleanup'
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 const mocks = vi.hoisted(() => ({
   toastLoading: vi.fn(() => 'toast-1'),

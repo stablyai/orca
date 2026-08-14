@@ -16,7 +16,9 @@ import {
 } from './web-e2ee'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import { createWebRuntimeUnauthorizedError } from './web-runtime-client-error'
 import { withReconnectJitter } from '../../../shared/reconnect-jitter'
@@ -461,7 +463,9 @@ export class WebRuntimeClient {
             deviceToken: this.pairing.deviceToken,
             clientCapabilities: [
               SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-              AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+              AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+              WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+              WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
             ]
           })
           return

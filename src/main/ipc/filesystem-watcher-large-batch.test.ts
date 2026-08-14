@@ -32,13 +32,13 @@ import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesyste
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import type { FsChangedPayload } from '../../shared/types'
+import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import {
   WATCH_BATCH_MAX_WAIT_MS,
   WATCH_BATCH_TRAILING_MS
 } from '../../shared/filesystem-watch-batch-window'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 describe('local filesystem watcher large batches', () => {
   const handlers: HandlerMap = {}

@@ -108,19 +108,19 @@ describe('startParkedTerminalByteWatcher', () => {
 
   async function startWatcher(
     overrides: Partial<ParkedTerminalByteWatcherOptions> = {}
-  ): Promise<{ dispose: () => void; sendInput: ReturnType<typeof vi.fn> }> {
+  ): Promise<{ dispose: () => void; ptyWrite: ReturnType<typeof vi.fn> }> {
     const { startParkedTerminalByteWatcher } = await import('./parked-terminal-byte-watcher')
-    const sendInput = vi.fn()
+    const ptyWrite = vi.fn()
+    ;(window as unknown as { api: { pty: Record<string, unknown> } }).api.pty.write = ptyWrite
     const dispose = startParkedTerminalByteWatcher({
       ptyId: PTY_ID,
       tabId: TAB_ID,
       worktreeId: WORKTREE_ID,
       leafId: LEAF_ID,
       paneId: PANE_ID,
-      sendInput,
       ...overrides
     })
-    return { dispose, sendInput }
+    return { dispose, ptyWrite }
   }
 
   beforeEach(() => {
@@ -175,14 +175,25 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  it('drops the bare cursor-agent native title before it reaches the store', async () => {
+  // Why: a hookless Cursor pane has no other identity, so the literal reaches the store
+  // once (#10258); its redraw repeats must not stomp a synthesized Cursor title.
+  it('stores the bare cursor-agent native title once, then keeps the synthetic title', async () => {
     const { dispose } = await startWatcher()
 
     emit('\x1b]0;Cursor Agent\x07')
+    emit('\x1b]0;Cursor Agent\x07')
+    emit('\x1b]0;⠋ Cursor Agent\x07')
+    emit('\x1b]0;Cursor Agent\x07')
     flushSideEffects()
 
-    expect(mockStoreState.setRuntimePaneTitle).not.toHaveBeenCalled()
-    expect(mockStoreState.updateTabTitle).not.toHaveBeenCalled()
+    expect(mockStoreState.setRuntimePaneTitle.mock.calls).toEqual([
+      [TAB_ID, PANE_ID, 'Cursor Agent'],
+      [TAB_ID, PANE_ID, '⠋ Cursor Agent']
+    ])
+    expect(mockStoreState.updateTabTitle.mock.calls).toEqual([
+      [TAB_ID, 'Cursor Agent'],
+      [TAB_ID, '⠋ Cursor Agent']
+    ])
     dispose()
   })
 
@@ -349,29 +360,18 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  it('answers a DECSET 2031 subscribe split across chunks via sendInput', async () => {
-    const { dispose, sendInput } = await startWatcher()
+  // Regression pin (#9993): DECSET 2031 subscribes to future color changes — it is not a
+  // query (that is CSI ?996n). A parked tab has no view to answer with and any reply lands
+  // after fish withdrew the mode, painting `?997;1n` at the prompt.
+  it('never writes a color-scheme reply for a DECSET 2031 subscribe', async () => {
+    const { dispose, ptyWrite } = await startWatcher()
 
     emit('\x1b[?20')
-    expect(sendInput).not.toHaveBeenCalled()
-
     emit('31h')
-    expect(sendInput).toHaveBeenCalledTimes(1)
-    // theme=system + prefers-dark → dark reply per terminal-color-scheme-protocol.
-    expect(sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
-
     emit('\x1b[?2031l')
-    expect(sendInput).toHaveBeenCalledTimes(1)
+
+    expect(ptyWrite).not.toHaveBeenCalled()
     dispose()
-  })
-
-  it('stops answering DECSET 2031 after dispose', async () => {
-    const { dispose, sendInput } = await startWatcher()
-
-    dispose()
-    emit('\x1b[?2031h')
-
-    expect(sendInput).not.toHaveBeenCalled()
   })
 
   it('observes GitHub PR links across chunk boundaries', async () => {
@@ -597,8 +597,7 @@ describe('startParkedTerminalByteWatcher', () => {
   //
   // With the kill switch on, the watcher must not register byte parsers —
   // main is the single byte parser and the watcher's policy block consumes
-  // pty:sideEffect facts instead. The byte sidecar stays ONLY for the 2031
-  // reply (query authority never moves to main); PR links arrive as facts.
+  // pty:sideEffect facts instead; PR links arrive as facts.
   describe('with main side-effect authority on', () => {
     function enableMainAuthority(): void {
       mockStoreState.settings = {
@@ -864,19 +863,15 @@ describe('startParkedTerminalByteWatcher', () => {
       dispose()
     })
 
-    it('answers DECSET 2031 from the main 2031-subscribe fact, never the byte scan', async () => {
-      // Why: with the hidden-delivery gate on (default), parked PTY bytes are
-      // dropped in main — the fact is the only 2031 signal, and the byte
-      // sidecar must NOT exist (its registration would re-enable delivery).
+    it('stays silent on a main 2031-subscribe fact', async () => {
+      // Regression pin (#9993): the fact records a subscription for theme-flip
+      // pushes; a parked watcher must never answer it.
       enableMainAuthority()
-      const { dispose, sendInput } = await startWatcher()
+      const { dispose, ptyWrite } = await startWatcher()
 
       emit('\x1b[?2031h')
-      expect(sendInput).not.toHaveBeenCalled()
-
       await dispatchFacts([{ kind: '2031-subscribe' }])
-      expect(sendInput).toHaveBeenCalledTimes(1)
-      expect(sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+      expect(ptyWrite).not.toHaveBeenCalled()
 
       // Why: pr-link facts arrive on the channel; byte-scanning here too
       // would observe every link twice.
@@ -901,7 +896,7 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(setHiddenRendererPty).toHaveBeenLastCalledWith(PTY_ID, false)
     })
 
-    it('keeps the byte 2031 responder and no hidden bit when the gate kill switch is off', async () => {
+    it('sets no hidden bit and stays silent on 2031 when the gate kill switch is off', async () => {
       enableMainAuthority()
       mockStoreState.settings = {
         ...mockStoreState.settings,
@@ -911,20 +906,14 @@ describe('startParkedTerminalByteWatcher', () => {
       ;(
         window as unknown as { api: { pty: Record<string, unknown> } }
       ).api.pty.setHiddenRendererPty = setHiddenRendererPty
-      const { dispose, sendInput } = await startWatcher()
+      const { dispose, ptyWrite } = await startWatcher()
 
-      // Gate off — bytes keep flowing, so the split-chunk byte scan answers.
+      // Gate off — bytes keep flowing, and they still elicit nothing (#9993).
       emit('\x1b[?20')
-      expect(sendInput).not.toHaveBeenCalled()
       emit('31h')
-      expect(sendInput).toHaveBeenCalledTimes(1)
-      expect(sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
-
-      // Why: a 2031-subscribe fact must not double-fire the reply in byte
-      // mode — exactly one responder owns the answer at any time.
       await dispatchFacts([{ kind: '2031-subscribe' }])
-      expect(sendInput).toHaveBeenCalledTimes(1)
 
+      expect(ptyWrite).not.toHaveBeenCalled()
       expect(setHiddenRendererPty).not.toHaveBeenCalled()
       dispose()
     })

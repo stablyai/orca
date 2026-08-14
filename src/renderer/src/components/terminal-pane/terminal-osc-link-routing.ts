@@ -2,16 +2,32 @@ import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from '../../../../shared/terminal-file-url-target'
-import { openDetectedFilePath } from './terminal-file-open-routing'
-import { isTerminalLinkActivation } from './terminal-link-activation'
 import {
-  openTerminalHttpLink,
+  isTerminalLinkActionActivation,
+  isTerminalLinkDirectActivation
+} from './terminal-link-activation'
+import {
+  handleTerminalHttpLink,
+  type TerminalHttpLinkActionDestinations,
   type TerminalLinkRoutingPreferenceRequester
 } from './terminal-url-link-hit-testing'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { TerminalLinkActionContext } from './terminal-link-action-request'
+import { handleTerminalFileLink } from './terminal-file-link-actions'
 
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
-  Partial<Pick<MouseEvent, 'button' | 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
+  Partial<
+    Pick<
+      MouseEvent,
+      | 'altKey'
+      | 'button'
+      | 'clientX'
+      | 'clientY'
+      | 'shiftKey'
+      | 'preventDefault'
+      | 'stopPropagation'
+    >
+  >
 
 function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
   if (!event) {
@@ -22,30 +38,35 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
   }
   // Why: desktop xterm links must not open while the user is just placing the
   // cursor or selecting text. Mobile URL taps use a separate WebView path.
-  return isTerminalLinkActivation(event)
+  return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
 }
 
 export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
   deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
-    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>> & {
+    Partial<
+      Pick<
+        LinkHandlerDeps,
+        'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro'
+      >
+    > & {
       sourceOwner?: HttpLinkSourceOwner
       requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+      linkActionContext?: TerminalLinkActionContext | null
+      actionDestinations?: TerminalHttpLinkActionDestinations
     }
 ): boolean {
   if (!isDesktopOscLinkActivation(event)) {
     return false
   }
-  // Why: xterm renders OSC 8 links as clickable anchors. Orca must suppress
-  // default anchor navigation so link-routing settings can choose the target.
-  // Note: we intentionally do NOT stopPropagation here — xterm's
-  // SelectionService listens for mouseup on ownerDocument to clear the
-  // pending drag-select state initiated by the mousedown of the same click.
-  // Stopping propagation leaves SelectionService's mousemove/mouseup handlers
-  // attached, so returning focus to the terminal and moving the mouse (even
-  // without holding a button) extends a selection until the next click/Esc.
-  event?.preventDefault?.()
+  const finish = (handled: boolean): boolean => {
+    if (handled) {
+      // Why: prevent anchor navigation without blocking xterm's document-level selection cleanup.
+      event?.preventDefault?.()
+    }
+    return handled
+  }
 
   const openDetectedPathLink = (): boolean => {
     const resolved = resolveTerminalFileLinkText(
@@ -56,11 +77,17 @@ export function handleOscLink(
     if (!resolved) {
       return false
     }
-    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
-      ...deps,
-      openWithSystemDefault: Boolean(event?.shiftKey)
-    })
-    return true
+    return finish(
+      handleTerminalFileLink(
+        resolved.absolutePath,
+        resolved.line,
+        resolved.column,
+        event as MouseEvent,
+        deps,
+        deps.linkActionContext,
+        rawText
+      )
+    )
   }
 
   if (
@@ -81,17 +108,20 @@ export function handleOscLink(
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-    openTerminalHttpLink(parsed.toString(), {
-      worktreeId: deps.worktreeId,
-      sourceOwner:
-        deps.sourceOwner ??
-        (deps.runtimeEnvironmentId
-          ? { kind: 'runtime', runtimeEnvironmentId: deps.runtimeEnvironmentId }
-          : { kind: 'local' }),
-      modifierHeld: Boolean(event?.shiftKey),
-      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
-    })
-    return true
+    return finish(
+      handleTerminalHttpLink(parsed.toString(), event as MouseEvent, {
+        worktreeId: deps.worktreeId,
+        sourceOwner:
+          deps.sourceOwner ??
+          (deps.runtimeEnvironmentId
+            ? { kind: 'runtime', runtimeEnvironmentId: deps.runtimeEnvironmentId }
+            : { kind: 'local' }),
+        requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
+        linkActionContext: deps.linkActionContext,
+        actionDestinations: deps.actionDestinations,
+        actionDestination: rawText
+      })
+    )
   }
 
   if (parsed.protocol === 'file:') {
@@ -108,11 +138,17 @@ export function handleOscLink(
     if (!resolved) {
       return false
     }
-    openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, {
-      ...deps,
-      openWithSystemDefault: Boolean(event?.shiftKey)
-    })
-    return true
+    return finish(
+      handleTerminalFileLink(
+        resolved.filePath,
+        resolved.line,
+        resolved.column,
+        event as MouseEvent,
+        deps,
+        deps.linkActionContext,
+        rawText
+      )
+    )
   }
   return false
 }

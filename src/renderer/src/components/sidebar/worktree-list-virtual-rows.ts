@@ -5,6 +5,7 @@ import { getLineageGroupKey, PINNED_GROUP_KEY } from './worktree-list-groups'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 export const HOST_HEADER_ROW_HEIGHT = 32
+export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 6
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 const PENDING_CREATION_ROW_HEIGHT = 56
@@ -20,7 +21,7 @@ export function getRenderRowKey(row: RenderRow): string {
     return `host:${row.hostId}`
   }
   if (row.type === 'header') {
-    return `hdr:${row.key}`
+    return row.hostId ? `hdr:${row.hostId}:${row.key}` : `hdr:${row.key}`
   }
   if (row.type === 'lineage-group') {
     return `lineage-group:${row.key}`

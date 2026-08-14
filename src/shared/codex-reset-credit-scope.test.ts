@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProviderRateLimits } from './rate-limit-types'
-import type { CodexManagedAccountSummary } from './types'
+import type { CodexManagedAccountSummary } from './managed-account-types'
 import { buildCodexResetCreditExpectedScope } from './codex-reset-credit-scope'
 
 const account: CodexManagedAccountSummary = {

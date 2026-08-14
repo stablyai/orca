@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DASHBOARD_MAX_LAUNCH_WORKTREES } from '../../../../shared/dashboard-snapshot'
 import type { DashboardCard, DashboardWorkspace } from '../../../../shared/dashboard-snapshot'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildDashboardWorktreeLaunchOptions } from './dashboard-worktree-launch-options'
 
@@ -94,8 +96,22 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
     const options = buildDashboardWorktreeLaunchOptions(
       state({
         repos: [
-          { id: 'repo-ssh', connectionId: 'ssh-1' },
-          { id: 'repo-runtime', executionHostId: 'runtime:hub-1' }
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'repo-ssh',
+            badgeColor: 'blue',
+            addedAt: 1,
+            connectionId: 'ssh-1'
+          },
+          {
+            id: 'repo-runtime',
+            path: '/repo-runtime',
+            displayName: 'repo-runtime',
+            badgeColor: 'blue',
+            addedAt: 1,
+            executionHostId: 'runtime:hub-1'
+          }
         ] as LaunchState['repos'],
         worktreesByRepo: {
           'repo-ssh': [{ id: 'ssh-worktree', repoId: 'repo-ssh' }],
@@ -119,9 +135,13 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
     const options = buildDashboardWorktreeLaunchOptions(
       state({
         folderWorkspaces: [
-          { id: 'folder-1', projectGroupId: 'group-1', connectionId: 'ssh-folder' }
-        ] as LaunchState['folderWorkspaces'],
-        projectGroups: [{ id: 'group-1' }] as LaunchState['projectGroups'],
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            connectionId: 'ssh-folder'
+          } as FolderWorkspace
+        ],
+        projectGroups: [{ id: 'group-1' } as ProjectGroup],
         remoteDetectedAgentIds: { 'ssh-folder': ['goose'] }
       }),
       [card({ repoId: 'folder-workspace:group-1', worktreeId })]

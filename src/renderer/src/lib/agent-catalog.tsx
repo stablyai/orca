@@ -1,7 +1,7 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   AgentLetterIcon,
@@ -126,6 +126,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     // Why: no faviconDomain — omp renders the hand-authored OmpIcon glyph, so a
     // favicon fallback would never be reached.
     homepageUrl: 'https://omp.sh'
+  },
+  {
+    id: 'prime-agent',
+    label: translate('auto.lib.agent.catalog.d443a47995', 'Prime Agent'),
+    cmd: 'prime-agent',
+    faviconDomain: 'primeintellect.ai',
+    homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
   },
   {
     id: 'gemini',

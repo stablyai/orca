@@ -24,13 +24,11 @@ import {
 } from '../linear/projects'
 import { listTeams, getTeamStates, getTeamLabels, getTeamMembers } from '../linear/teams'
 import type { LinearListFilter } from '../linear/issues'
-import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
-import { optionalParsedLinearIssueAttributeFilter } from '../../shared/linear-issue-attribute-filter'
-import type {
-  LinearCustomViewModel,
-  LinearIssueUpdate,
-  LinearWorkspaceSelection
-} from '../../shared/types'
+import { clampLinearIssueListLimit } from '../../shared/linear/issue-read-limits'
+import { optionalParsedLinearIssueAttributeFilter } from '../../shared/linear/issue-attribute-filter'
+import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'
+import type { LinearCustomViewModel } from '../../shared/linear/project-types'
+import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
 
 const VALID_FILTERS = new Set<LinearListFilter>(['assigned', 'created', 'all', 'completed'])
 

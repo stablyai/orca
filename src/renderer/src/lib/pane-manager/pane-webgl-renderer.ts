@@ -9,6 +9,7 @@ import {
 } from './terminal-webgl-auto-policy'
 import { safeFit, safeFitAndThen } from './pane-fit'
 import { setPaneFitWebglAttachHook } from './pane-fit-webgl-attach-signal'
+import { repairPaneWebglCanvasDprMismatch } from './terminal-canvas-dpr-repair'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -22,6 +23,7 @@ let suggestedRendererType: 'dom' | undefined
 
 type ReleasableWebglContext = {
   getExtension(name: 'WEBGL_lose_context'): WEBGL_lose_context | null
+  isContextLost?: () => boolean
 }
 
 type XtermWebglAddonInternals = {
@@ -71,6 +73,15 @@ export function cancelPendingWebglRefresh(pane: ManagedPaneInternal): void {
     globalThis.cancelAnimationFrame(pane.pendingWebglRefreshRafId)
   }
   pane.pendingWebglRefreshRafId = null
+}
+
+export function isPaneWebglContextLost(pane: ManagedPaneInternal): boolean {
+  try {
+    const renderer = (pane.webglAddon as unknown as XtermWebglAddonInternals | null)?._renderer
+    return renderer?._gl?.isContextLost?.() === true
+  } catch {
+    return true
+  }
 }
 
 export function disposeWebgl(
@@ -192,7 +203,13 @@ export function attachWebglAfterFitIfMissing(pane: ManagedPaneInternal): void {
   }
 }
 
-setPaneFitWebglAttachHook(attachWebglAfterFitIfMissing)
+setPaneFitWebglAttachHook((pane) => {
+  attachWebglAfterFitIfMissing(pane)
+  // Why here too: a fit proves the pane has a live box, which is the earliest
+  // safe moment to catch a canvas whose backing store still reflects a
+  // devicePixelRatio from before a hidden-time display change.
+  repairPaneWebglCanvasDprMismatch(pane)
+})
 
 export function attachWebgl(pane: ManagedPaneInternal): void {
   if (

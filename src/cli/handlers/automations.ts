@@ -13,7 +13,8 @@ import {
   type TaskSourceContext,
   type WorkspaceRunContext
 } from '../../shared/task-source-context'
-import type { ProjectHostSetup, TuiAgent } from '../../shared/types'
+import type { ProjectHostSetup } from '../../shared/project-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS

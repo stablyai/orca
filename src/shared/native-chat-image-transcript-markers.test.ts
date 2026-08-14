@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from './native-chat-types'
-import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
+import {
+  isImageSourceUserTurn,
+  normalizeImageTranscriptMessages,
+  normalizeNativeChatUserText,
+  normalizedNativeChatUserMessageText,
+  stripImagePromptMarker
+} from './native-chat-image-transcript-markers'
 
 function userText(id: string, text: string): NativeChatMessage {
   return {
@@ -23,6 +29,91 @@ describe('normalizeImageTranscriptMessages', () => {
       { type: 'image-ref', path: '/tmp/orca-paste-1-2.png' },
       { type: 'text', text: 'describe this' }
     ])
+  })
+
+  it('merges a source turn into a prompt with a trailing image marker', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
+      userText('b', 'describe this[Image #1]')
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/orca-paste-1-2.png' },
+      { type: 'text', text: 'describe this' }
+    ])
+  })
+
+  it('folds and strips markers in later text blocks', () => {
+    const prompt: NativeChatMessage = {
+      ...userText('prompt', 'unused'),
+      blocks: [
+        { type: 'text', text: 'describe' },
+        { type: 'image-ref', path: '/tmp/existing.png' },
+        { type: 'text', text: '[Image #1] this' }
+      ]
+    }
+    const out = normalizeImageTranscriptMessages([
+      userText('source', '[Image: source: /tmp/a.png]'),
+      prompt
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'text', text: 'describe' },
+      { type: 'image-ref', path: '/tmp/existing.png' },
+      { type: 'text', text: 'this' }
+    ])
+  })
+
+  it.each([
+    ['[Image #1] describe this', 'describe this'],
+    ['[Image #1]\t  describe this', 'describe this'],
+    [' \t[Image #1] describe this', 'describe this'],
+    ['describe this [Image #1]', 'describe this'],
+    ['describe this  \t[Image #1]', 'describe this'],
+    ['describe this [Image #1]\t  ', 'describe this'],
+    ['describe [Image #1] this', 'describe  this'],
+    ['describe  [Image #1]\t this', 'describe  \t this'],
+    ['describe[Image #1]\t  this', 'describe\t  this'],
+    ['describe\n[Image #1]\nthis', 'describe\n\nthis'],
+    ['com[Image #1]pare this', 'compare this'],
+    ['[Image #1] [Image #2]', ''],
+    ['literal [Image #x] text', 'literal [Image #x] text']
+  ])('strips image prompt markers anywhere in text', (text, expected) => {
+    expect(stripImagePromptMarker(text)).toBe(expected)
+  })
+
+  it('returns long marker-free whitespace without regex backtracking', () => {
+    const text = ' '.repeat(50_000)
+    expect(stripImagePromptMarker(text)).toBe(text)
+  })
+
+  it('shares marker-aware text matching across multiple text blocks', () => {
+    const message: NativeChatMessage = {
+      ...userText('prompt', 'unused'),
+      blocks: [
+        { type: 'text', text: 'look' },
+        { type: 'image-ref', path: '/tmp/a.png' },
+        { type: 'text', text: '[Image #1]   here' }
+      ]
+    }
+
+    expect(normalizeNativeChatUserText(' look [Image #1]   here ')).toBe('look here')
+    expect(normalizedNativeChatUserMessageText(message)).toBe('look here')
+  })
+
+  it('recognizes only sole-text image-source user turns', () => {
+    const source = userText('source', '[Image: source: /tmp/a.png]')
+    expect(isImageSourceUserTurn(source)).toBe(true)
+    expect(isImageSourceUserTurn({ ...source, role: 'assistant' })).toBe(false)
+    expect(
+      isImageSourceUserTurn({
+        ...source,
+        blocks: [...source.blocks, { type: 'text', text: 'caption' }]
+      })
+    ).toBe(false)
   })
 
   it('converts a lone [Image: source] turn (no prompt) into an image-ref instead of raw text', () => {
@@ -82,8 +173,31 @@ describe('normalizeImageTranscriptMessages', () => {
   })
 
   it('leaves ordinary user text untouched', () => {
-    const out = normalizeImageTranscriptMessages([userText('a', 'how about this')])
-    expect(out[0]!.blocks).toEqual([{ type: 'text', text: 'how about this' }])
+    const message = userText('a', 'how about this')
+    const messages = [message]
+    const out = normalizeImageTranscriptMessages(messages)
+    expect(out).toBe(messages)
+    expect(out[0]).toBe(message)
+    expect(out[0]!.blocks).toBe(message.blocks)
+  })
+
+  it('removes a whitespace-only first text block', () => {
+    const out = normalizeImageTranscriptMessages([userText('a', '   ')])
+
+    expect(out[0]?.blocks).toEqual([])
+  })
+
+  it('preserves unaffected rows when another row needs normalization', () => {
+    const before = userText('before', 'keep this row')
+    const marker = userText('marker', '[Image: source: /tmp/image.png]')
+    const after = userText('after', 'keep this row too')
+    const messages = [before, marker, after]
+
+    const out = normalizeImageTranscriptMessages(messages)
+
+    expect(out).not.toBe(messages)
+    expect(out[0]).toBe(before)
+    expect(out[2]).toBe(after)
   })
 
   it('leaves assistant messages untouched', () => {

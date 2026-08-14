@@ -11,7 +11,10 @@ import type { SshConnection, SshConnectionCallbacks } from '../ssh/ssh-connectio
 import { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
-import type { SshAiVaultRelayListParams } from '../../shared/ssh-ai-vault-relay'
+import type {
+  SshAiVaultRelayListParams,
+  SshAiVaultRelayTitleParams
+} from '../../shared/ssh-ai-vault-relay'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type {
   DetectedPort,
@@ -174,7 +177,7 @@ export async function requestActiveSshAiVaultSessionList(
   targetId: string,
   params: SshAiVaultRelayListParams,
   options: { signal?: AbortSignal; timeoutMs?: number } = {}
-): Promise<unknown | null> {
+): Promise<unknown> {
   if (isRuntimeOwnedSshTargetId(targetId)) {
     return null
   }
@@ -183,6 +186,21 @@ export async function requestActiveSshAiVaultSessionList(
     throw new Error('SSH relay is not ready')
   }
   return session.requestAiVaultSessionList(params, options)
+}
+
+export async function requestActiveSshAiVaultSessionTitles(
+  targetId: string,
+  params: SshAiVaultRelayTitleParams,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {}
+): Promise<unknown> {
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    return null
+  }
+  const session = activeSessions.get(targetId)
+  if (!session) {
+    throw new Error('SSH relay is not ready')
+  }
+  return session.requestAiVaultSessionTitles(params, options)
 }
 
 function runTargetLifecycle(targetId: string, operation: () => Promise<void>): Promise<void> {

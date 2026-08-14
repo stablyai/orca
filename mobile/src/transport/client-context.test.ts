@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from './types'
@@ -20,7 +20,12 @@ vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
 
-import { RpcClientProvider, useCloseHost, useForceReconnect, useHostClient } from './client-context'
+import {
+  RpcClientProvider,
+  useDisconnectHostClient,
+  useForceReconnect,
+  useHostClient
+} from './client-context'
 import { useAllHostClients } from './use-all-host-clients'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
 
@@ -67,42 +72,25 @@ const HOST = {
 
 type Harness = {
   readonly hook: ReturnType<typeof useHostClient>
-  readonly closeHost: (hostId: string) => void
+  readonly disconnectHost: (hostId: string) => void
   readonly unmount: () => void
-}
-
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => spy.mockRestore()
 }
 
 async function renderHarness(hostId: string): Promise<Harness> {
   let hook: ReturnType<typeof useHostClient> | null = null
-  let closeHost: ((hostId: string) => void) | null = null
+  let disconnectHost: ((hostId: string) => void) | null = null
   let renderer: ReactTestRenderer | null = null
 
   function Probe(): null {
     hook = useHostClient(hostId)
-    closeHost = useCloseHost()
+    disconnectHost = useDisconnectHostClient()
     return null
   }
 
-  const restore = suppressReactTestRendererDeprecationWarning()
-  try {
-    await act(async () => {
-      renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-    })
-  } finally {
-    restore()
-  }
-  if (!hook || !closeHost || !renderer) {
+  await act(async () => {
+    renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+  })
+  if (!hook || !disconnectHost || !renderer) {
     throw new Error('harness did not render')
   }
   const mounted = renderer as ReactTestRenderer
@@ -113,18 +101,17 @@ async function renderHarness(hostId: string): Promise<Harness> {
       }
       return hook
     },
-    closeHost: (id) => {
-      if (!closeHost) {
-        throw new Error('closeHost not rendered')
+    disconnectHost: (id) => {
+      if (!disconnectHost) {
+        throw new Error('disconnectHost not rendered')
       }
-      closeHost(id)
+      disconnectHost(id)
     },
     unmount: () => mounted.unmount()
   }
 }
 
 beforeEach(() => {
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true
   connectMock.mockReset()
   loadHostsMock.mockReset()
 })
@@ -149,7 +136,6 @@ describe('useHostClient', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -169,7 +155,6 @@ describe('useHostClient', () => {
       expect(selectedState).toBe('disconnected')
       expect(connectMock).toHaveBeenCalledTimes(2)
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })
@@ -188,7 +173,6 @@ describe('useHostClient', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -211,7 +195,6 @@ describe('useHostClient', () => {
       })
       expect(stateByRenderTick.get(2)).toBe('connecting')
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })
@@ -225,17 +208,51 @@ describe('useHostClient', () => {
     expect(harness.hook.client).not.toBeNull()
     expect(harness.hook.state).toBe('connected')
 
-    // Regression (STA-1511): closeHost deletes the entry; before the fix the
+    // Regression (STA-1511): disconnect deletes the entry; before the fix the
     // hook kept handing out the closed client, so mounted screens kept
     // driving requests that could never resolve.
     await act(async () => {
-      harness.closeHost(HOST.id)
+      harness.disconnectHost(HOST.id)
     })
     expect(fake.closeMock).toHaveBeenCalled()
     expect(harness.hook.client).toBeNull()
     expect(harness.hook.state).toBe('disconnected')
 
     harness.unmount()
+  })
+
+  it('closes an ownerless reconnect after disconnect retires a mounted owner', async () => {
+    const initialClient = makeFakeClient('connected')
+    const replacementClient = makeFakeClient('connected')
+    connectMock.mockReturnValueOnce(initialClient).mockReturnValueOnce(replacementClient)
+    loadHostsMock.mockResolvedValue([HOST])
+    let disconnectHost: ((hostId: string) => void) | null = null
+    let reconnectHost: ((hostId: string) => Promise<void>) | null = null
+
+    function Probe(): null {
+      useAllHostClients([HOST.id], { closeUnusedOnRelease: true })
+      disconnectHost = useDisconnectHostClient()
+      reconnectHost = useForceReconnect()
+      return null
+    }
+    function App({ visible }: { visible: boolean }) {
+      return createElement(RpcClientProvider, null, visible ? createElement(Probe) : null)
+    }
+
+    let renderer: { update(element: ReactElement): void; unmount(): void } | null = null
+    await act(async () => {
+      renderer = create(createElement(App, { visible: true }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      disconnectHost?.(HOST.id)
+      await reconnectHost?.(HOST.id)
+    })
+    act(() => renderer?.update(createElement(App, { visible: false })))
+
+    expect(initialClient.closeMock).toHaveBeenCalledOnce()
+    expect(replacementClient.closeMock).toHaveBeenCalledOnce()
+    act(() => renderer?.unmount())
   })
 
   it('reports disconnected instead of hanging when the host id is unknown', async () => {
@@ -263,7 +280,6 @@ describe('useHostClient', () => {
       states.push(useHostClient(HOST.id).state)
       return null
     }
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       act(() => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -277,7 +293,6 @@ describe('useHostClient', () => {
       expect(states.at(-1)).toBe('connecting')
       expect(states).not.toContain('disconnected')
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })
@@ -296,7 +311,6 @@ describe('useHostClient', () => {
       states.push(useHostClient(HOST.id).state)
       return null
     }
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -311,7 +325,6 @@ describe('useHostClient', () => {
       expect(states.at(-1)).toBe('connecting')
       expect(states).not.toContain('disconnected')
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })
@@ -325,28 +338,23 @@ describe('useHostClient', () => {
     connectMock.mockReturnValue(fake)
     loadHostsMock.mockReturnValue(hostLookup)
 
-    let closeHost: ((hostId: string) => void) | null = null
+    let disconnectHost: ((hostId: string) => void) | null = null
     let renderer: ReactTestRenderer | null = null
     function Probe(): null {
-      closeHost = useCloseHost()
+      disconnectHost = useDisconnectHostClient()
       useHostClient(HOST.id)
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
-    try {
-      act(() => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-      })
-    } finally {
-      restore()
-    }
+    act(() => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+    })
     expect(loadHostsMock).toHaveBeenCalledOnce()
-    if (!closeHost || !resolveHosts || !renderer) {
+    if (!disconnectHost || !resolveHosts || !renderer) {
       throw new Error('pending-open harness did not initialize')
     }
 
-    act(() => closeHost?.(HOST.id))
+    act(() => disconnectHost?.(HOST.id))
     await act(async () => {
       resolveHosts?.([HOST])
       await hostLookup
@@ -370,14 +378,9 @@ describe('useHostClient', () => {
       useHostClient(HOST.id)
       return null
     }
-    const restore = suppressReactTestRendererDeprecationWarning()
-    try {
-      act(() => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-      })
-    } finally {
-      restore()
-    }
+    act(() => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+    })
     expect(loadHostsMock).toHaveBeenCalledOnce()
     act(() => renderer?.unmount())
     await act(async () => {
@@ -401,7 +404,6 @@ describe('useAllHostClients', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -410,7 +412,6 @@ describe('useAllHostClients', () => {
       expect(connectMock).toHaveBeenCalledOnce()
       expect(connectMock).toHaveBeenCalledWith(host2, expect.any(Function))
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })
@@ -433,7 +434,6 @@ describe('useAllHostClients', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -446,7 +446,6 @@ describe('useAllHostClients', () => {
         'host-997'
       ])
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })
@@ -477,7 +476,6 @@ describe('useAllHostClients', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(
@@ -504,7 +502,6 @@ describe('useAllHostClients', () => {
       expect(clients.get('host-c')?.closeMock).toHaveBeenCalledOnce()
       expect(clients.get('host-d')?.closeMock).not.toHaveBeenCalled()
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })
@@ -520,7 +517,6 @@ describe('useAllHostClients', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -528,7 +524,6 @@ describe('useAllHostClients', () => {
       })
       expect(connectMock).toHaveBeenCalledTimes(2)
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })
@@ -545,7 +540,6 @@ describe('useAllHostClients', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -559,7 +553,6 @@ describe('useAllHostClients', () => {
       })
       expect(connectMock).toHaveBeenCalledOnce()
     } finally {
-      restore()
       act(() => renderer?.unmount())
     }
   })

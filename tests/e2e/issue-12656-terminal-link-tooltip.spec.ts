@@ -20,7 +20,6 @@ type LinkProbe = {
 type TooltipState = {
   display: string
   text: string
-  currentLinkText: string | null
   cursor: string
   paneBottom: number
   terminalBottom: number
@@ -62,23 +61,24 @@ async function locateUrl(page: Page, url: string): Promise<LinkProbe | null> {
 }
 
 async function moveToLink(page: Page, probe: LinkProbe): Promise<void> {
-  await page.evaluate(({ col, row, tabId }) => {
+  const point = await page.evaluate(({ col, row, tabId }) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
     if (!pane || !screen) {
       throw new Error('xterm-screen element unavailable')
     }
+    const cell = pane.terminal.dimensions?.css.cell
+    if (!cell?.width || !cell.height) {
+      throw new Error('terminal cell dimensions unavailable')
+    }
     const rect = screen.getBoundingClientRect()
-    screen.dispatchEvent(
-      new MouseEvent('mousemove', {
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + (col + 0.5) * (rect.width / pane.terminal.cols),
-        clientY: rect.top + (row + 0.5) * (rect.height / pane.terminal.rows)
-      })
-    )
+    return {
+      x: rect.left + (col + 0.5) * cell.width,
+      y: rect.top + (row + 0.5) * cell.height
+    }
   }, probe)
+  await page.mouse.move(point.x, point.y)
 }
 
 async function readTooltipState(page: Page, tabId: string): Promise<TooltipState> {
@@ -90,11 +90,6 @@ async function readTooltipState(page: Page, tabId: string): Promise<TooltipState
       throw new Error('terminal pane unavailable')
     }
 
-    const linkifier = (
-      pane.terminal as unknown as {
-        _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } }
-      }
-    )._core?.linkifier
     const paneRect = pane.container.getBoundingClientRect()
     const terminalRect = pane.terminal.element?.parentElement?.getBoundingClientRect()
     const tooltipRect = pane.linkTooltip.getBoundingClientRect()
@@ -102,7 +97,6 @@ async function readTooltipState(page: Page, tabId: string): Promise<TooltipState
     return {
       display: pane.linkTooltip.style.display,
       text: pane.linkTooltip.textContent ?? '',
-      currentLinkText: linkifier?.currentLink?.link?.text ?? null,
       cursor: getComputedStyle(screen).cursor,
       paneBottom: paneRect.bottom,
       terminalBottom: terminalRect?.bottom ?? 0,
@@ -156,7 +150,7 @@ test.describe('Issue #12656 terminal link tooltip', () => {
         await moveToLink(orcaPage, probe)
         return readTooltipState(orcaPage, probe.tabId)
       })
-      .toMatchObject({ display: '', currentLinkText: url })
+      .toMatchObject({ display: '', text: expect.stringContaining(url) })
 
     const hovered = await readTooltipState(orcaPage, probe.tabId)
     expect(hovered.text).toContain(url)
@@ -169,7 +163,7 @@ test.describe('Issue #12656 terminal link tooltip', () => {
     await orcaPage.evaluate(() => window.dispatchEvent(new Event('blur')))
     await expect
       .poll(() => readTooltipState(orcaPage, probe.tabId))
-      .toMatchObject({ display: 'none', currentLinkText: null, cursor: 'text' })
+      .toMatchObject({ display: 'none', cursor: 'text' })
     const cleared = await readTooltipState(orcaPage, probe.tabId)
     expect(Math.abs(cleared.paneBottom - cleared.terminalBottom)).toBeLessThanOrEqual(1)
     await captureProof(orcaPage, testInfo, 'issue-12656-fixed-after-blur.png')

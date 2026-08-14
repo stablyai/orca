@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Separator } from '../ui/separator'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'

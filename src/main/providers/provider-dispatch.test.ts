@@ -62,6 +62,7 @@ import {
   unregisterSshPtyProvider
 } from '../ipc/pty'
 import type { IPtyProvider } from './types'
+import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../pty/legacy-terminal-shim-dir'
 
 describe('PTY provider dispatch', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -147,6 +148,7 @@ describe('PTY provider dispatch', () => {
     const sshSpawnArgs = vi.mocked(mockSshProvider.spawn).mock.calls.at(-1)![0]
     expect([...(sshSpawnArgs.envToDelete ?? [])].sort()).toEqual(
       [
+        ...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS,
         'CLAUDE_CODE_CHILD_SESSION',
         'CLAUDE_CODE_SESSION_ID',
         'CLAUDE_CODE_BRIDGE_SESSION_ID'

@@ -7,7 +7,7 @@ import {
   getFolderWorkspacePathStatusTitle
 } from '@/lib/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../shared/folder-workspace-path-status'
-import type { ProjectGroup } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 
 export function useFolderWorkspaceComposerPathStatus(
   projectGroup: ProjectGroup | null,

@@ -10,10 +10,16 @@ export type PtySlaveLineDisciplineEcho = 'echoing' | 'quiet' | 'unknown'
 
 export type PtySlaveEchoProbe = () => Promise<PtySlaveLineDisciplineEcho>
 
+export type PtySlaveLineEditorState = 'line-editor' | 'other' | 'unknown'
+
+export type PtySlaveLineEditorProbe = () => Promise<PtySlaveLineEditorState>
+
 const STTY_TIMEOUT_MS = 2_000
 // `stty -a` prints the lflags as a space-separated list where a disabled flag is
 // prefixed with `-`, so `echo` and `-echo` are the two tokens that matter.
 const ECHO_FLAG = /(?:^|\s)(-?)echo(?:\s|$)/
+const ICANON_FLAG = /(?:^|\s)(-?)icanon(?:\s|$)/
+const LNEXT_UNDEFINED = /(?:^|[;\s])lnext\s*=\s*<undef>(?:;|\s|$)/
 
 function sttyArgs(ptsName: string, platform: NodeJS.Platform): readonly string[] {
   // BSD/macOS take `-f`; Linux (GNU coreutils) takes `-F`.
@@ -30,7 +36,18 @@ function parseEchoFlag(sttyOutput: string): PtySlaveLineDisciplineEcho {
   return match[1] === '-' ? 'quiet' : 'echoing'
 }
 
-type SttyProbeResult = { state: PtySlaveLineDisciplineEcho; permanent: boolean }
+function parseLineEditorState(sttyOutput: string): PtySlaveLineEditorState {
+  const echo = ECHO_FLAG.exec(sttyOutput)
+  const icanon = ICANON_FLAG.exec(sttyOutput)
+  if (!echo || !icanon) {
+    return 'unknown'
+  }
+  return echo[1] === '-' && icanon[1] === '-' && LNEXT_UNDEFINED.test(sttyOutput)
+    ? 'line-editor'
+    : 'other'
+}
+
+type SttyProbeResult = { stdout: string | null; permanent: boolean }
 
 /**
  * A spawn that never ran (`stty` absent) or a device that answered non-zero (reaped,
@@ -54,8 +71,8 @@ function runStty(ptsName: string, platform: NodeJS.Platform): Promise<SttyProbeR
       (error, stdout) => {
         resolve(
           error
-            ? { state: 'unknown', permanent: isPermanentSttyFailure(error) }
-            : { state: parseEchoFlag(stdout), permanent: false }
+            ? { stdout: null, permanent: isPermanentSttyFailure(error) }
+            : { stdout, permanent: false }
         )
       }
     )
@@ -83,6 +100,21 @@ export function createPtySlaveEchoProbe(
   ptsName: string | undefined,
   platform: NodeJS.Platform = process.platform
 ): PtySlaveEchoProbe | undefined {
+  return createSttyProbe(ptsName, platform, parseEchoFlag)
+}
+
+export function createPtySlaveLineEditorProbe(
+  ptsName: string | undefined,
+  platform: NodeJS.Platform = process.platform
+): PtySlaveLineEditorProbe | undefined {
+  return createSttyProbe(ptsName, platform, parseLineEditorState)
+}
+
+function createSttyProbe<T extends string>(
+  ptsName: string | undefined,
+  platform: NodeJS.Platform,
+  parse: (output: string) => T | 'unknown'
+): (() => Promise<T | 'unknown'>) | undefined {
   if (platform === 'win32' || !ptsName) {
     return undefined
   }
@@ -91,12 +123,16 @@ export function createPtySlaveEchoProbe(
   // attempt. A successful probe is never cached, because the bit is what changes, and a
   // transient failure is not latched at all (see isPermanentSttyFailure).
   let unavailable = false
+  let inFlight: Promise<SttyProbeResult> | null = null
   return async () => {
     if (unavailable) {
       return 'unknown'
     }
-    const result = await runStty(ptsName, platform)
+    inFlight ??= runStty(ptsName, platform).finally(() => {
+      inFlight = null
+    })
+    const result = await inFlight
     unavailable = result.permanent
-    return result.state
+    return result.stdout === null ? 'unknown' : parse(result.stdout)
   }
 }

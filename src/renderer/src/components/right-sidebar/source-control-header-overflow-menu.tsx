@@ -1,6 +1,6 @@
 import React from 'react'
 import { List, ListTree, MessageSquare, MoreHorizontal, RefreshCw, Settings2 } from 'lucide-react'
-import type { SourceControlViewMode } from '../../../../shared/types'
+import type { SourceControlViewMode } from '../../../../shared/ui-chrome-types'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {

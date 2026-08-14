@@ -1,6 +1,6 @@
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
@@ -9,7 +9,11 @@ function providerSessionEqual(
   left: AgentProviderSessionMetadata | undefined,
   right: AgentProviderSessionMetadata | undefined
 ): boolean {
-  return left?.key === right?.key && left?.id === right?.id
+  return (
+    left?.key === right?.key &&
+    left?.id === right?.id &&
+    left?.transcriptPath === right?.transcriptPath
+  )
 }
 
 function relevantRecordEqual<T>(
@@ -148,12 +152,6 @@ function requestOwnersEqual(current: AppState, previous: AppState): boolean {
     const currentHost = getExecutionHostIdForWorktree(current, worktreeId)
     const previousHost = getExecutionHostIdForWorktree(previous, worktreeId)
     if (currentHost !== previousHost) {
-      return false
-    }
-    const currentPath = current.getKnownWorktreeById(worktreeId, currentHost)?.path?.trim() || null
-    const previousPath =
-      previous.getKnownWorktreeById(worktreeId, previousHost)?.path?.trim() || null
-    if (currentPath !== previousPath) {
       return false
     }
   }

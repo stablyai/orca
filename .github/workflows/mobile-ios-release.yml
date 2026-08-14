@@ -30,6 +30,11 @@ jobs:
     # (@MainActor isolation). Xcode 16.x (macos-15) can't even parse it
     # ("unknown attribute 'MainActor'"), so we need Xcode 26.x → macos-26.
     runs-on: macos-26
+    # Archive + upload is ~30–40m when healthy; 90m leaves margin for setup.
+    timeout-minutes: 90
+    outputs:
+      release_version: ${{ steps.release_metadata.outputs.version }}
+      build_number: ${{ steps.release_metadata.outputs.build_number }}
 
     defaults:
       run:
@@ -76,6 +81,10 @@ jobs:
           FASTLANE_HIDE_CHANGELOG: '1'
         run: bundle exec fastlane ios prepare_release_version version:"$MOBILE_IOS_RELEASE_VERSION" bump_patch:"$MOBILE_IOS_BUMP_PATCH_VERSION"
 
+      - name: Capture release metadata
+        id: release_metadata
+        run: node -e 'const fs = require("node:fs"); const { expo } = require("./app.json"); fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${expo.version}\nbuild_number=${expo.ios.buildNumber}\n`)'
+
       - name: Expo prebuild
         run: npx expo prebuild --platform ios --no-install
 
@@ -119,11 +128,10 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          TESTFLIGHT_CHANGELOG: ${{ github.event.inputs.testflight_changelog }}
           # Keep fastlane non-interactive and quiet about analytics in CI.
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'
-        run: bundle exec fastlane ios release
+        run: bundle exec fastlane ios build_and_upload
 
       - name: Upload .ipa artifact
         if: always()
@@ -132,3 +140,44 @@ jobs:
           name: orca-mobile-ipa
           path: mobile/build/*.ipa
           if-no-files-found: ignore
+
+  ios-distribute:
+    name: Distribute to external TestFlight testers
+    needs: ios-build
+    runs-on: ubuntu-latest
+    # Fastlane's processing wait fails after 20m; this outer bound leaves setup
+    # margin without allowing App Store Connect polling to hang for hours.
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Ruby and fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+
+      - name: Wait for processing and distribute to peeps
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          TESTFLIGHT_CHANGELOG: ${{ github.event.inputs.testflight_changelog }}
+          MOBILE_IOS_RELEASE_VERSION: ${{ needs.ios-build.outputs.release_version }}
+          MOBILE_IOS_BUILD_NUMBER: ${{ needs.ios-build.outputs.build_number }}
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+        run: |
+          if ! bundle exec fastlane ios distribute_testflight \
+            version:"$MOBILE_IOS_RELEASE_VERSION" \
+            build_number:"$MOBILE_IOS_BUILD_NUMBER"; then
+            echo "::error::TestFlight $MOBILE_IOS_RELEASE_VERSION ($MOBILE_IOS_BUILD_NUMBER) was uploaded but not distributed to peeps. If App Store Connect is still processing it, rerun only this failed job after the build becomes Ready; otherwise inspect the Fastlane error above."
+            exit 1
+          fi

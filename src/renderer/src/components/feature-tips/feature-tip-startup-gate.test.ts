@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultOnboardingState, getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import type { GlobalSettings, OnboardingState } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { getFeatureTipsAppOpenDecision, isCliFeatureTipCompleted } from './feature-tip-startup-gate'
 
 const existingUserOnboarding: OnboardingState = {

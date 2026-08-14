@@ -1,4 +1,6 @@
-import type { Worktree, Repo, TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   AgentStatusEntry,
   MigrationUnsupportedPtyEntry

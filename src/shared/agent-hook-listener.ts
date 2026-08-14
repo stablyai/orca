@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: canonical transport-agnostic listener; parser, normalizer, per-CLI extractors, and endpoint writer share invariants that must not drift between Orca's main process and the relay. */
 
-// Why: extracted from src/main/agent-hooks/server.ts so the relay can host the pipeline without Electron (Node builtins only). See docs/design/agent-status-over-ssh.md §3.
+// Why: extracted from src/main/agent-hooks/server.ts so the relay can host the same pipeline without Electron — this file must stay on Node builtins and other shared/ modules, or the relay bundle breaks.
 import type { IncomingMessage } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -27,12 +27,14 @@ import {
 import { normalizeOptionalField } from './agent-status-field-normalization'
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import {
+  claudeRosterHasRestoredSnapshotSubagent,
+  claudeRosterHasRuntimeWorkingSubagent,
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
-  reapRestoredClaudeSubagentsWithoutLiveAgent,
+  reapUnconfirmedRestoredClaudeSubagents,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
@@ -85,8 +87,12 @@ const AGENT_HOOK_JSON_STRUCTURE_LIMITS = {
 } as const
 
 function parseAgentHookJson(content: string): unknown {
-  assertJsonTextStructureWithinLimits(content, AGENT_HOOK_JSON_STRUCTURE_LIMITS)
-  return JSON.parse(content) as unknown
+  // Why: Cursor on Windows writes UTF-8-with-BOM to the hook's stdin and `JSON.parse` rejects U+FEFF,
+  // so the whole event was dropped. Strip exactly one leading BOM — not a trim — to keep every other
+  // malformed payload rejected as before.
+  const normalizedContent = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+  assertJsonTextStructureWithinLimits(normalizedContent, AGENT_HOOK_JSON_STRUCTURE_LIMITS)
+  return JSON.parse(normalizedContent) as unknown
 }
 
 /** Bound the warn-once Sets so a client varying `version`/`env` per request can't grow them unbounded. */
@@ -129,6 +135,8 @@ export type HookListenerState = {
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
   /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `interrupted` persists so the eventual done still carries it. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
+  /** One-normalization provenance marker for a status backed only by restored child state. */
+  claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
@@ -146,6 +154,8 @@ export type ClaudeLeadTurnState = {
   interrupted?: true
   /** Subagent that induced the wait; only its next tool activity may clear it, so other children's churn can't dismiss a pending human-input card. */
   waitingAgentId?: string
+  /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
+  waitingToolUseId?: string
   /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
   stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
 }
@@ -166,6 +176,7 @@ export function createHookListenerState(): HookListenerState {
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
+    claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
     claudeActiveSessionCronPaneKeys: new Set(),
     codexSubagentRosterByPaneKey: new Map(),
@@ -182,6 +193,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
+  state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -228,6 +240,7 @@ export function movePaneCacheState(
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
@@ -272,6 +285,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
+  state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
   state.claudeRunningNonAgentTaskPaneKeys.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
   state.codexSubagentRosterByPaneKey.clear()
@@ -317,10 +331,13 @@ export type AgentHookEventPayload = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
-  /** SSH connection the event arrived on, or null for local (only ingestRemote stamps it; the HTTP path can't know the mux). See docs/design/agent-status-over-ssh.md §5. */
+  /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
+   *  in-flight events from a superseded connection after an SSH reconnect. */
   connectionId: string | null
   /** True when the event carried prompt text directly, not the listener's cached prompt from an earlier event in the pane. */
   hasExplicitPrompt?: boolean
+  /** The emitted nonterminal state is backed only by child state restored from disk. */
+  restoredUnconfirmed?: true
   /** Stable per-turn key to distinguish duplicate hook delivery from a same-text prompt rerun (when the source exposes enough context). */
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
@@ -836,7 +853,7 @@ function readString(record: Record<string, unknown>, key: string): string | unde
 }
 
 function hasOwnField(record: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(record, key)
+  return Object.hasOwn(record, key)
 }
 
 function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]): boolean {
@@ -2039,7 +2056,7 @@ function extractCopilotToolFields(
 function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp'
+  agentKind: 'pi' | 'omp' | 'prime-agent'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -2426,6 +2443,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
     case 'omp':
+    case 'prime-agent':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
@@ -2520,6 +2538,7 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
     case 'omp':
+    case 'prime-agent':
       return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
@@ -2590,17 +2609,39 @@ function normalizeClaudeSubagentLifecycleEvent(
   if (!lifecycleId) {
     return null
   }
-  const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
+  const cachedLead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const ownsUnbackedWait =
+    cachedLead?.state === 'waiting' &&
+    cachedLead.stateBeforeWait === undefined &&
+    cachedLead.waitingAgentId !== undefined &&
+    (eventName === 'TeammateIdle'
+      ? claudeTeammateIdMatchesName(cachedLead.waitingAgentId, lifecycleId)
+      : cachedLead.waitingAgentId === lifecycleId)
+  const hasCachedLeadEvidence = cachedLead !== undefined && !ownsUnbackedWait
+  let roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  let endedChildWork = false
+  let endedRuntimeChildWork = false
   if (eventName === 'TeammateIdle') {
     const teammateName = lifecycleId
     // Why: on claude 2.1.21x teammates are turn-based — TeammateIdle means "turn over, awaiting mail", not finished. The row parks as idle (confirmed teammate) instead of leaving, so the sidebar keeps showing resumable children.
-    idleClaudeTeammateByName(roster, teammateName)
+    if (roster) {
+      let wasWorking = false
+      for (const [id, tracked] of roster) {
+        if (tracked.state === 'working' && claudeTeammateIdMatchesName(id, teammateName)) {
+          wasWorking = true
+          endedRuntimeChildWork ||= tracked.restoredFromSnapshot !== true
+        }
+      }
+      idleClaudeTeammateByName(roster, teammateName)
+      endedChildWork = wasWorking
+    }
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
     )
   } else {
     const agentId = lifecycleId
     if (eventName === 'SubagentStart') {
+      roster = getOrCreateClaudeSubagentRoster(state, paneKey)
       upsertWorkingClaudeSubagent(
         roster,
         agentId,
@@ -2608,13 +2649,37 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      // Why: one-shot stops are true finishes (row removed); teammate-shaped stops are turn ends on 2.1.21x — the row parks idle and a later SubagentStart revives it.
-      stopClaudeSubagent(roster, agentId)
+      if (roster) {
+        const tracked = roster.get(agentId)
+        const wasWorking = tracked?.state === 'working'
+        endedRuntimeChildWork = wasWorking && tracked.restoredFromSnapshot !== true
+        // Why: one-shot stops are true finishes (row removed); teammate-shaped stops are turn ends on 2.1.21x — the row parks idle and a later SubagentStart revives it.
+        stopClaudeSubagent(roster, agentId)
+        endedChildWork = wasWorking && roster.get(agentId)?.state !== 'working'
+      }
       // Why: a blocked child that dies without another tool event would pin its permission/question wait on the pane forever — nothing else references that agent again.
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
   }
-  return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+  const workingChildEvidence = claudeRosterHasRuntimeWorkingSubagent(roster)
+  const hasUnconfirmedChild = claudeRosterHasRestoredSnapshotSubagent(roster)
+  if (roster?.size === 0) {
+    state.claudeSubagentRosterByPaneKey.delete(paneKey)
+  }
+  if (
+    !hasCachedLeadEvidence &&
+    endedChildWork &&
+    !workingChildEvidence &&
+    (hasUnconfirmedChild || !endedRuntimeChildWork)
+  ) {
+    // Why: a restored-only ending proves no lead boundary, and an unmatched restored sibling proves no current liveness; persist the roster transition without publishing fresh work or completion.
+    state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
+  }
+  return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+    workingChildEvidence,
+    endedChildWork,
+    endedRuntimeChildWork
+  })
 }
 
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
@@ -2662,7 +2727,7 @@ export function reapRestoredClaudeSubagentsForDeadPane(
   paneKey: string
 ): boolean {
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  if (!roster || !reapRestoredClaudeSubagentsWithoutLiveAgent(roster)) {
+  if (!roster || !reapUnconfirmedRestoredClaudeSubagents(roster)) {
     return false
   }
   if (roster.size === 0) {
@@ -2671,7 +2736,7 @@ export function reapRestoredClaudeSubagentsForDeadPane(
   return true
 }
 
-/** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state; without a stash, fall back to 'working' (a transient spinner beats a permanently stuck card). */
+/** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state. */
 function clearClaudePendingWaitForAgent(
   state: HookListenerState,
   paneKey: string,
@@ -2706,16 +2771,31 @@ export function clearClaudeAnsweredQuestionWait(
   return effectiveState === restored.state ? restored : { state: effectiveState }
 }
 
-/** Re-emit the lead's cached state on child activity — gated up to 'working' while a child works — without touching the lead's tool/prompt caches, so a live card or permission wait survives child churn. */
-function buildClaudeChildDrivenStatusPayload(
+/** Re-emit the cached lead state without touching its tool/prompt caches; child churn and parallel completions must not dismiss live cards. */
+function buildClaudeCachedLeadStatusPayload(
   state: HookListenerState,
   eventName: unknown,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  evidence: {
+    workingChildEvidence?: boolean
+    endedChildWork?: boolean
+    endedRuntimeChildWork?: boolean
+  } = {}
 ): ParsedAgentStatusPayload | null {
-  // Why: default 'working' — a spawn proves activity even before the lead's first state-bearing event (e.g. Orca restarted mid-session).
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
-  const leadState = lead?.state ?? 'working'
+  let leadState = lead?.state
+  if (!leadState) {
+    if (evidence.workingChildEvidence || evidence.endedRuntimeChildWork) {
+      // Why: ending a current-runtime child wakes its parent; only a cached lead boundary can prove the whole pane completed.
+      leadState = 'working'
+    } else if (evidence.endedChildWork) {
+      // Why: a restored child ending proves only that child ended; persist its roster transition as unconfirmed working, never as lead completion.
+      leadState = 'working'
+    } else {
+      return null
+    }
+  }
   return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
     stateName: resolveClaudePaneState(state, paneKey, {
       state: leadState,
@@ -2788,10 +2868,13 @@ function normalizeClaudeEvent(
     return null
   }
 
-  // Why: Claude's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest; its Notification hook isn't registered) while blocked on a human answer.
-  // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
-  const isAskUserQuestion =
-    eventName === 'PreToolUse' && isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
+  // Why: Claude normally emits PreToolUse while AskUserQuestion is blocked; newer builds can also report it as PermissionRequest.
+  // Treat the PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
+  const eventToolName = readString(hookPayload, 'tool_name')
+  const isAskUserQuestionWait =
+    (eventName === 'PreToolUse' || eventName === 'PermissionRequest') &&
+    isAskUserQuestionTool(eventToolName)
+  const isAskUserQuestion = eventName === 'PreToolUse' && isAskUserQuestionWait
   // Why: /compact can take minutes and does not emit Stop. PreCompact marks the pane busy;
   // PostCompact clears it so a finished compact cannot leave a sticky working spinner (#11352).
   const reportedStateName =
@@ -2830,6 +2913,20 @@ function normalizeClaudeEvent(
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   }
 
+  const eventToolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
+  const previousTool = state.lastToolByPaneKey.get(paneKey)
+  const isParallelSiblingCompletionDuringQuestion =
+    eventAgentId === undefined &&
+    previousLead?.state === 'waiting' &&
+    isAskUserQuestionTool(previousTool?.toolName) &&
+    (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
+    previousLead.waitingToolUseId !== undefined &&
+    eventToolUseId !== undefined &&
+    eventToolUseId !== previousLead.waitingToolUseId
+  if (isParallelSiblingCompletionDuringQuestion) {
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+  }
+
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
   // Two exceptions take the full path below: waiting-inducing events (a child needs human attention on this pane) and the blocked child's own next tool event (approval granted — clear the wait as for the lead).
   const isWaitingInducing = reportedStateName === 'waiting'
@@ -2851,7 +2948,19 @@ function normalizeClaudeEvent(
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
     if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
-      return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+        workingChildEvidence: true
+      })
+    }
+    const isParallelSiblingCompletionDuringChildQuestion =
+      (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
+      lead.waitingToolUseId !== undefined &&
+      eventToolUseId !== undefined &&
+      eventToolUseId !== lead.waitingToolUseId
+    if (isParallelSiblingCompletionDuringChildQuestion) {
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+        workingChildEvidence: true
+      })
     }
     // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
@@ -2866,7 +2975,11 @@ function normalizeClaudeEvent(
 
   // Why: lead events never carry agent_id; even a child missed by lifecycle tracking cannot own the lead turn or its background-work evidence.
   if (eventAgentId && !isWaitingInducing) {
-    return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+      workingChildEvidence: claudeRosterHasRuntimeWorkingSubagent(
+        state.claudeSubagentRosterByPaneKey.get(paneKey)
+      )
+    })
   }
 
   if (isTurnBoundary && eventAgentId === undefined) {
@@ -2891,10 +3004,12 @@ function normalizeClaudeEvent(
             ...(previousLead.interrupted ? { interrupted: true as const } : {})
           }
       : undefined
+  const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
   state.claudeLeadStateByPaneKey.set(paneKey, {
     state: reportedStateName,
     ...(interrupted ? { interrupted } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
+    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
     ...(stateBeforeWait ? { stateBeforeWait } : {})
   })
 
@@ -2907,6 +3022,19 @@ function normalizeClaudeEvent(
     state: reportedStateName,
     interrupted
   })
+  const effectiveRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  if (
+    isTurnBoundary &&
+    eventAgentId === undefined &&
+    effectiveState === 'working' &&
+    claudeRosterHasRestoredSnapshotSubagent(effectiveRoster) &&
+    !claudeRosterHasRuntimeWorkingSubagent(effectiveRoster) &&
+    !state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) &&
+    !state.claudeActiveSessionCronPaneKeys.has(paneKey)
+  ) {
+    // Why: a legacy or partial Stop confirms the lead boundary, not a child restored from disk; keep the child-only gate eligible for reconciliation.
+    state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
+  }
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
@@ -3799,25 +3927,26 @@ function normalizeCopilotEvent(
 
 function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp',
+  agentType: 'pi' | 'omp' | 'prime-agent',
   eventName: unknown,
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  if (agentType === 'pi' && eventName === 'session_start') {
+  if (agentType !== 'omp' && eventName === 'session_start') {
     // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
 
-  // Why: gate on the event's own tool_name (not a merged snapshot) so a stale cached ask_user_question can't re-enter blocked.
-  const isPiAskUserQuestion =
-    agentType === 'pi' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
+  // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
+  const toolName = readString(hookPayload, 'tool_name')
+  const isPiCompatibleAsk =
+    ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
+      (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 
-  const stateName = isPiAskUserQuestion
+  const stateName = isPiCompatibleAsk
     ? 'blocked'
     : eventName === 'before_agent_start' ||
         eventName === 'agent_start' ||
@@ -4145,6 +4274,9 @@ export function normalizeHookPayload(
   const launchToken = readStringField(record, 'launchToken')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
+  if (source === 'claude') {
+    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+  }
   let promptInteractionKey: string | undefined
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
@@ -4269,6 +4401,16 @@ export function normalizeHookPayload(
         hookPayloadRecord
       )
       break
+    case 'prime-agent':
+      payload = normalizePiCompatibleEvent(
+        state,
+        'prime-agent',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
     case 'droid':
       payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -4316,15 +4458,18 @@ export function normalizeHookPayload(
       break
   }
 
-  // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
   const providerSessionOnly =
-    source === 'pi' && eventName === 'session_start' && providerSession !== null
-  // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
+    (source === 'pi' || source === 'prime-agent') &&
+    eventName === 'session_start' &&
+    providerSession !== null
+  // Why: transcript session_start carries resume identity while idle; receivers discard the placeholder row.
   const transportPayload =
     payload ??
     (providerSessionOnly
-      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'pi' })
+      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
       : null)
+  const restoredUnconfirmed =
+    source === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   return transportPayload
     ? {
         paneKey,
@@ -4332,7 +4477,9 @@ export function normalizeHookPayload(
         launchToken,
         tabId,
         worktreeId,
+        // Why: normalization is transport-agnostic — only ingestRemote knows the mux identity to stamp here.
         connectionId: null,
+        ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         hasExplicitPrompt:
           source === 'amp'
             ? hasExplicitPromptForSource(source, eventName, promptText, hookPayloadRecord)
@@ -4379,6 +4526,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',
+  '/hook/prime-agent': 'prime-agent',
   '/hook/droid': 'droid',
   '/hook/command-code': 'command-code',
   '/hook/grok': 'grok',

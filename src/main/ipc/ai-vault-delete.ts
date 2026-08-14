@@ -5,6 +5,7 @@ import {
 } from '../ai-vault/cached-session-list'
 import { deleteAiVaultSessionFile } from '../ai-vault/session-delete'
 import { invalidateSessionParseCacheEntry } from '../ai-vault/session-scanner-parse-cache'
+import { invalidateAiVaultBackgroundCache } from '../ai-vault/session-scanner-background'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
   AiVaultDeleteSessionArgs,
@@ -15,6 +16,7 @@ import type {
 // invalidation is injected rather than reached into from here.
 type AiVaultDeleteDeps = {
   invalidateMultiHostListCache: () => void
+  invalidateBackgroundCache?: (paths: string[]) => Promise<void>
 }
 
 // Binds the delete orchestration to the caller's cache-invalidation seam.
@@ -36,6 +38,7 @@ export async function deleteAiVaultSession(
   const wslHomeDirs = await getAiVaultWslHomeDirs()
   const result = await deleteAiVaultSessionFile({
     agent: args?.agent as AiVaultAgent,
+    sessionId: args?.sessionId,
     filePath: args?.filePath ?? '',
     executionHostId: args?.executionHostId,
     wslHomeDirs
@@ -51,6 +54,11 @@ export async function deleteAiVaultSession(
     // what the renderer echoes back as filePath), so invalidate with that exact
     // key — resolve() could normalise it away from the stored key and miss.
     invalidateSessionParseCacheEntry(args?.filePath ?? '')
+    await (deps.invalidateBackgroundCache ?? invalidateAiVaultBackgroundCache)([
+      args?.filePath ?? ''
+    ]).catch((error) => {
+      console.warn('[ai-vault] background cache invalidation failed:', error)
+    })
   }
 
   return result

@@ -7,7 +7,7 @@ import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { PaneCwdMap } from './resolve-split-cwd'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 import { pasteTerminalText } from './terminal-bracketed-paste'
@@ -89,6 +89,7 @@ type TerminalMenuState = {
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
+  onSelectAll: () => void
   onCopyTerminalId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
   onPaste: () => Promise<void>
@@ -100,7 +101,7 @@ type TerminalMenuState = {
   onForkAgentSession: () => Promise<void>
   onContinueAgentSessionInNewSession: () => void
   onCopyAgentSessionContext: () => Promise<void>
-  onQuickCommand: (command: TerminalQuickCommand) => void
+  onQuickCommand: (command: TerminalQuickCommand, historyId: string) => void
   onToggleExpand: () => void
   onSetTitle: () => void
   onClearPaneTitle: () => void
@@ -170,6 +171,14 @@ export function useTerminalPaneContextMenu({
       // typing works (see #592).
       focus: () => pane.terminal.focus()
     })
+  }
+
+  const onSelectAll = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      pane.terminal.selectAll()
+      pane.terminal.focus()
+    }
   }
 
   const onCopyPaneId = async (): Promise<void> => {
@@ -450,9 +459,9 @@ export function useTerminalPaneContextMenu({
     await copyAgentSessionContextFromPane(pane)
   }
 
-  const onQuickCommand = (command: TerminalQuickCommand): void => {
+  const onQuickCommand = (command: TerminalQuickCommand, historyId: string): void => {
     if (isTerminalAgentQuickCommand(command)) {
-      runQuickCommandInNewTab({ command, worktreeId, groupId })
+      runQuickCommandInNewTab({ command, worktreeId, groupId, historyId })
       return
     }
 
@@ -588,6 +597,7 @@ export function useTerminalPaneContextMenu({
     onContextMenuCapture,
     onPaneTitleContextMenu,
     onCopy,
+    onSelectAll,
     onCopyTerminalId,
     onCopyPaneId,
     onPaste,

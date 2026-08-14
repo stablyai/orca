@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { PersistedTrustedOrcaHooks } from '../../../shared/types'
+import type { PersistedTrustedOrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
   __resetTrustPromptChainForTests,
   ensureHooksConfirmed,
@@ -291,7 +291,10 @@ describe('ensureHooksConfirmed', () => {
       repos: [
         {
           id: 'repo-1',
+          path: '/repo-1',
           displayName: 'Repo One',
+          badgeColor: 'blue',
+          addedAt: 1,
           hookSettings: {
             mode: 'auto',
             commandSourcePolicy: 'local-only',
@@ -318,7 +321,10 @@ describe('ensureHooksConfirmed', () => {
       repos: [
         {
           id: 'repo-1',
+          path: '/repo-1',
           displayName: 'Repo One',
+          badgeColor: 'blue',
+          addedAt: 1,
           hookSettings: {
             mode: 'auto',
             scripts: { setup: 'echo local', archive: '' }

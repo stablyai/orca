@@ -4,7 +4,7 @@ import type {
   OrcaHooks,
   OrcaVmRecipe,
   OrcaVmRecipeDiagnostic
-} from './types'
+} from './orca-yaml-hook-types'
 import {
   isOrcaYamlFieldWithinLimit,
   isOrcaYamlTextWithinLimit,
@@ -164,6 +164,15 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
       }
       seenIds.add(id)
       const description = asTrimmedString(record.description)
+      const checkoutMode = asTrimmedString(record.checkoutMode)
+      if (checkoutMode && checkoutMode !== 'orca-worktree' && checkoutMode !== 'provisioned-root') {
+        diagnostics.push({
+          index,
+          field: 'checkoutMode',
+          message: `Recipe "${id}" checkoutMode must be "orca-worktree" or "provisioned-root".`
+        })
+        return null
+      }
       const suspend = asTrimmedString(record.suspend)
       const resume = asTrimmedString(record.resume)
       const destroyValue = asTrimmedString(record.destroy) ?? asTrimmedString(record.cleanup)
@@ -172,6 +181,7 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
         id,
         name,
         create,
+        ...(checkoutMode ? { checkoutMode } : {}),
         ...(description ? { description } : {}),
         ...(suspend ? { suspend } : {}),
         ...(resume ? { resume } : {}),

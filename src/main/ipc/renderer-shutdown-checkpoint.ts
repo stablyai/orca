@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
-import type { PersistedUIState, WorkspaceSessionState } from '../../shared/types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { Store } from '../persistence'
 
 const RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL = 'app:stage-before-unload-sync'

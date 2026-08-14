@@ -6,7 +6,8 @@ import { waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { i18n } from '../../i18n/i18n'
 import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   openAutomationsPage: vi.fn(),
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
+  openArtifactsPage: vi.fn(),
   openModal: vi.fn(),
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
@@ -90,6 +92,7 @@ import SidebarNav, {
   shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
   shouldShowAutomationsButton,
+  shouldShowArtifactsButton,
   shouldShowMobileButton,
   shouldShowSetupGuideEntry
 } from './SidebarNav'
@@ -131,6 +134,7 @@ function setSidebarState({
     openAutomationsPage: mocks.openAutomationsPage,
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
+    openArtifactsPage: mocks.openArtifactsPage,
     openModal: mocks.openModal,
     updateSettings: mocks.updateSettings,
     preflightStatus: { glab: { installed: false } },
@@ -294,6 +298,37 @@ describe('SidebarNav', () => {
   it('shows the Mobile entry by default for older settings', () => {
     expect(shouldShowMobileButton(null)).toBe(true)
     expect(shouldShowMobileButton({})).toBe(true)
+  })
+
+  it('hides the Artifacts entry by default for older settings', () => {
+    expect(shouldShowArtifactsButton(null)).toBe(false)
+    expect(shouldShowArtifactsButton({})).toBe(false)
+    expect(shouldShowArtifactsButton({ showArtifactsButton: true })).toBe(true)
+    expect(shouldShowArtifactsButton({ showArtifactsButton: false })).toBe(false)
+  })
+
+  it('opens Artifacts from the sidebar', async () => {
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: true }
+    })
+    const container = await renderSidebarNav()
+
+    await clickButton(getButtonByText(container, 'Artifacts'))
+
+    expect(mocks.openArtifactsPage).toHaveBeenCalledOnce()
+  })
+
+  it('hides Artifacts from its context menu', async () => {
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: true }
+    })
+    const container = await renderSidebarNav()
+    const row = getButtonByText(container, 'Artifacts')
+    const menu = row.closest('[data-testid="context-menu"]')
+
+    await clickButton(getHideButton(menu as Element))
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showArtifactsButton: false })
   })
 
   it('hides the Mobile entry when the sidebar setting is off', () => {

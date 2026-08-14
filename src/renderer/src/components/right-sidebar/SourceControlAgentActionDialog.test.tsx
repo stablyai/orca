@@ -6,7 +6,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 const mocks = vi.hoisted(() => ({
   ensureDetectedAgents: vi.fn(),

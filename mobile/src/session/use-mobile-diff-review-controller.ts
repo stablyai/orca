@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FlatList } from 'react-native'
-import type { DiffComment } from '../../../src/shared/types'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { getWorktreeLabel } from './worktree-label'

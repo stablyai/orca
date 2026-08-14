@@ -10,7 +10,7 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../../../shared/hosted-review-refs'
-import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/git-status-types'
 import { summarizeCommitFailure } from './commit-failure-summary'
 import { getStageAllPaths } from './discard-all-sequence'
 

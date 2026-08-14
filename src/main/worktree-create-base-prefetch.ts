@@ -1,12 +1,12 @@
 import { isFolderRepo } from '../shared/repo-kind'
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import { hasLocalCommitObject, isFullGitObjectId } from './git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from './git/worktree-base-ref-probe'
 import { getBaseRefDefault } from './git/repo'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { prefetchRemoteWorktreeCreateBase } from './ipc/worktree-remote'
 import { resolveWorktreeCreateBase } from './worktree-create-base'
-import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
 
 type RemoteTrackingBaseForPrefetch = {
   remote: string

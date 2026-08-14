@@ -118,6 +118,58 @@ describe('install-electron-package-binary', () => {
     }
   })
 
+  it('retries HTTP/2 stream refusal Electron download failures', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir, {
+        downloadFailures: 1,
+        downloadErrorCode: 'ERR_HTTP2_STREAM_ERROR'
+      })
+      writeFakeExtractor(projectDir, { createExecutable: true })
+
+      const result = runInstallScript(projectDir, {
+        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(
+        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
+      ).toHaveLength(2)
+      expect(result.stderr).toContain(
+        'Transient Electron download failure (ERR_HTTP2_STREAM_ERROR)'
+      )
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('retries Electron download HTTP 503 failures from Fetch Response.status', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir, {
+        downloadFailures: 1,
+        downloadHttpStatus: 503
+      })
+      writeFakeExtractor(projectDir, { createExecutable: true })
+
+      const result = runInstallScript(projectDir, {
+        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(
+        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
+      ).toHaveLength(2)
+      expect(result.stderr).toContain('Transient Electron download failure (HTTP 503)')
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
   it('fails after exhausting transient Electron download retries', () => {
     const projectDir = mkTempProject()
 
@@ -279,7 +331,12 @@ module.exports = path.join(__dirname, 'dist', fs.readFileSync(pathFile, 'utf8'))
 
 function writeFakeElectronGet(
   projectDir,
-  { downloadNeverSettles = false, downloadFailures = 0, downloadErrorCode = 'ECONNRESET' } = {}
+  {
+    downloadNeverSettles = false,
+    downloadFailures = 0,
+    downloadErrorCode = 'ECONNRESET',
+    downloadHttpStatus = null
+  } = {}
 ) {
   const getDir = join(projectDir, 'node_modules', 'electron', 'node_modules', '@electron', 'get')
   mkdirSync(getDir, { recursive: true })
@@ -299,6 +356,11 @@ exports.downloadArtifact = async function downloadArtifact(details) {
     return new Promise(() => {})
   }
   if (downloadAttempt <= ${JSON.stringify(downloadFailures)}) {
+    if (${JSON.stringify(downloadHttpStatus)} != null) {
+      const error = new Error('Response code ' + ${JSON.stringify(downloadHttpStatus)})
+      error.response = { status: ${JSON.stringify(downloadHttpStatus)} }
+      throw error
+    }
     const cause = Object.assign(new Error('download failed'), {
       code: ${JSON.stringify(downloadErrorCode)}
     })

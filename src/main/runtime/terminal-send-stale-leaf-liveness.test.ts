@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 // STA repro (silent-send incident): `orca terminal send` to a leaf whose ptyId
 // no provider in this process owns was a silent no-op reported as success —
@@ -266,6 +266,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>
         rows.filter((row) => row.to_handle === handle && row.read === 0 && !row.delivered_at),
+      getUndeliveredUnreadMailboxHandles: () => [toHandle()],
       getActiveCoordinatorRun: () => null,
       getCurrentRunForPane: () => undefined,
       // Consulted by onPtyExit's dispatch-failure path.

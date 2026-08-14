@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PRCheckDetail } from '../../../shared/types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
 import { loadGitLabJobLogDetails } from './gitlab-job-trace-client'
 
 const callRuntimeRpc = vi.hoisted(() => vi.fn())

@@ -40,7 +40,8 @@ describe('files.resolveTerminalPath RPC', () => {
       '/repo',
       undefined,
       'term-1',
-      false
+      false,
+      null
     )
     expect(response).toMatchObject({
       ok: true,
@@ -67,7 +68,30 @@ describe('files.resolveTerminalPath RPC', () => {
       null,
       undefined,
       null,
-      true
+      true,
+      null
+    )
+  })
+
+  it('forwards optional native-chat provenance', async () => {
+    const { runtime, dispatcher } = createDispatcher()
+
+    await dispatcher.dispatch(
+      makeRequest('files.resolveTerminalPath', {
+        worktree: 'id:wt-1',
+        pathText: '/outside/result.html',
+        nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
+      })
+    )
+
+    expect(runtime.resolveTerminalPath).toHaveBeenLastCalledWith(
+      'id:wt-1',
+      '/outside/result.html',
+      null,
+      undefined,
+      null,
+      false,
+      { tabId: 'tab-1', sessionId: 'session-1' }
     )
   })
 })

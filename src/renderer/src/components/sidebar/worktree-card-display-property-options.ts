@@ -1,4 +1,4 @@
-import type { WorktreeCardProperty } from '../../../../shared/types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 
 export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [

@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
-import type { Repo } from '../shared/types'
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree-id'
+import type { Repo } from '../shared/repo-types'
+import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree/id'
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Store } from './persistence'
 

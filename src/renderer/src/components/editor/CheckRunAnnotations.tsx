@@ -1,7 +1,7 @@
 import React from 'react'
 import { ExternalLink } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { PRCheckAnnotation } from '../../../../shared/types'
+import type { PRCheckAnnotation } from '../../../../shared/github/check-types'
 import {
   cancelAnnotationRevealFrame,
   getOpenableAnnotationLine,

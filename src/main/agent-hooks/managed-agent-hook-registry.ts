@@ -16,6 +16,7 @@ import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
 export type ManagedAgentHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
@@ -34,6 +35,27 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
   ['kimi', () => kimiHookService.install()]
+]
+
+// Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
+// user-wide agent config keeps invoking after the CLI falls off PATH. Amp and Hermes write
+// provider-native plugin code into their own config dirs with their own install lifecycles,
+// not shared launchers, so they are deliberately absent. Enforced by the coverage test in
+// managed-hook-script-refresh.test.ts: a new installer that writes a launcher without adding
+// a refresher here fails that test.
+export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScriptRefresher[] = [
+  ['claude', () => claudeHookService.refreshManagedScripts()],
+  ['openclaude', () => openClaudeHookService.refreshManagedScripts()],
+  ['codex', () => codexHookService.refreshManagedScripts()],
+  ['gemini', () => geminiHookService.refreshManagedScripts()],
+  ['antigravity', () => antigravityHookService.refreshManagedScripts()],
+  ['cursor', () => cursorHookService.refreshManagedScripts()],
+  ['droid', () => droidHookService.refreshManagedScripts()],
+  ['command-code', () => commandCodeHookService.refreshManagedScripts()],
+  ['grok', () => grokHookService.refreshManagedScripts()],
+  ['copilot', () => copilotHookService.refreshManagedScripts()],
+  ['devin', () => devinHookService.refreshManagedScripts()],
+  ['kimi', () => kimiHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [

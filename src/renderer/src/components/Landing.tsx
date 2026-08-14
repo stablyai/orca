@@ -3,7 +3,7 @@ import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import {
   dismissPreflightIssue,
   githubProjectKeys,
@@ -149,7 +149,7 @@ function PreflightBanner({
   repos
 }: {
   issues: PreflightIssue[]
-  repos: Repo[]
+  repos: readonly Repo[]
 }): React.JSX.Element | null {
   // Why: keying the seed on the current GitHub project set means adding a new
   // GitHub project (which changes the key) re-evaluates dismissals, so a lapsed

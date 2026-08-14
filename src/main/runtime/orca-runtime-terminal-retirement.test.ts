@@ -5,7 +5,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from './mobile-session-terminal-persistence-retirement'
 import { OrcaRuntimeService } from './orca-runtime'
 
