@@ -187,6 +187,23 @@
         }
       }
     },
+    "relay": {
+      "fsHandler": {
+        "fileTooLarge": "ファイルが大きすぎます：{{actualSize}}MB が {{maxSize}}MB の制限を超えています"
+      }
+    },
+    "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "ファイルが大きすぎます：{{actualSize}}MB が {{maxSize}}MB の制限を超えています"
+        }
+      }
+    },
+    "shared": {
+      "nodeBoundedFileReader": {
+        "fileTooLarge": "ファイルが大きすぎます：{{actualSize}}MB が {{maxSize}}MB の制限を超えています"
+      }
+    },
     "store": {
       "slices": {
         "browser": {

@@ -1,5 +1,6 @@
 import { closeSync, fstatSync, openSync, readSync, type Stats } from 'node:fs'
 import { open } from 'node:fs/promises'
+import { translateMain } from '../main/i18n/main-i18n'
 
 const MIN_GROWTH_BYTES = 64 * 1024
 
@@ -8,8 +9,14 @@ export class NodeFileReadTooLargeError extends Error {
     readonly observedBytes: number,
     readonly maxBytes: number
   ) {
+    const actualSize = (observedBytes / 1024 / 1024).toFixed(1)
+    const maxSize = maxBytes / 1024 / 1024
     super(
-      `File too large: ${(observedBytes / 1024 / 1024).toFixed(1)}MB exceeds ${maxBytes / 1024 / 1024}MB limit`
+      translateMain(
+        'auto.shared.nodeBoundedFileReader.fileTooLarge',
+        `File too large: ${actualSize}MB exceeds ${maxSize}MB limit`,
+        { actualSize, maxSize }
+      )
     )
     this.name = 'NodeFileReadTooLargeError'
   }

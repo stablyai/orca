@@ -187,6 +187,23 @@
         }
       }
     },
+    "relay": {
+      "fsHandler": {
+        "fileTooLarge": "Archivo demasiado grande: {{actualSize}}MB excede el límite de {{maxSize}}MB"
+      }
+    },
+    "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "Archivo demasiado grande: {{actualSize}}MB excede el límite de {{maxSize}}MB"
+        }
+      }
+    },
+    "shared": {
+      "nodeBoundedFileReader": {
+        "fileTooLarge": "Archivo demasiado grande: {{actualSize}}MB excede el límite de {{maxSize}}MB"
+      }
+    },
     "store": {
       "slices": {
         "browser": {

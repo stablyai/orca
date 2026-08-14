@@ -448,6 +448,23 @@
         }
       }
     },
+    "relay": {
+      "fsHandler": {
+        "fileTooLarge": "文件过大：{{actualSize}}MB 超出 {{maxSize}}MB 限制"
+      }
+    },
+    "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "文件过大：{{actualSize}}MB 超出 {{maxSize}}MB 限制"
+        }
+      }
+    },
+    "shared": {
+      "nodeBoundedFileReader": {
+        "fileTooLarge": "文件过大：{{actualSize}}MB 超出 {{maxSize}}MB 限制"
+      }
+    },
     "store": {
       "slices": {
         "browser": {

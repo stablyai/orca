@@ -12,6 +12,7 @@ import {
   isBinaryBuffer,
   isBinaryFilePrefix
 } from './fs-handler-utils'
+import { translateMain } from '../main/i18n/main-i18n'
 
 export async function readRelayFileContent(filePath: string) {
   const stats = await stat(filePath)
@@ -82,8 +83,14 @@ export async function readRelayFileStreamMetadata(
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
   const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
+    const actualSize = (stats.size / 1024 / 1024).toFixed(1)
+    const maxSize = sizeLimit / 1024 / 1024
     throw new Error(
-      `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
+      translateMain(
+        'auto.relay.fsHandler.fileTooLarge',
+        `File too large: ${actualSize}MB exceeds ${maxSize}MB limit`,
+        { actualSize, maxSize }
+      )
     )
   }
 

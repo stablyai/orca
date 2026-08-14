@@ -448,6 +448,23 @@
         }
       }
     },
+    "relay": {
+      "fsHandler": {
+        "fileTooLarge": "File too large: {{actualSize}}MB exceeds {{maxSize}}MB limit"
+      }
+    },
+    "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "File too large: {{actualSize}}MB exceeds {{maxSize}}MB limit"
+        }
+      }
+    },
+    "shared": {
+      "nodeBoundedFileReader": {
+        "fileTooLarge": "File too large: {{actualSize}}MB exceeds {{maxSize}}MB limit"
+      }
+    },
     "store": {
       "slices": {
         "browser": {

@@ -28,6 +28,7 @@ import type {
   Repo,
   TuiAgent
 } from '../../shared/types'
+import { translateMain } from '../i18n/main-i18n'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -175,14 +176,26 @@ async function readLocalLogSnapshot(filePath: string): Promise<{
   try {
     const stats = await handle.stat()
     if (stats.size > MAX_TEXT_FILE_SIZE) {
+      const actualSize = (stats.size / 1024 / 1024).toFixed(1)
+      const maxSize = MAX_TEXT_FILE_SIZE / 1024 / 1024
       throw new Error(
-        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
+        translateMain(
+          'auto.main.ipc.filesystem.fileTooLarge',
+          `File too large: ${actualSize}MB exceeds ${maxSize}MB limit`,
+          { actualSize, maxSize }
+        )
       )
     }
     const buffer = await handle.readFile()
     if (buffer.byteLength > MAX_TEXT_FILE_SIZE) {
+      const actualSize = (buffer.byteLength / 1024 / 1024).toFixed(1)
+      const maxSize = MAX_TEXT_FILE_SIZE / 1024 / 1024
       throw new Error(
-        `File too large: ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
+        translateMain(
+          'auto.main.ipc.filesystem.fileTooLarge',
+          `File too large: ${actualSize}MB exceeds ${maxSize}MB limit`,
+          { actualSize, maxSize }
+        )
       )
     }
     if (isBinaryBuffer(buffer)) {
@@ -603,8 +616,14 @@ export function registerFilesystemHandlers(
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
       const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
       if (stats.size > sizeLimit) {
+        const actualSize = (stats.size / 1024 / 1024).toFixed(1)
+        const maxSize = sizeLimit / 1024 / 1024
         throw new Error(
-          `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
+          translateMain(
+            'auto.main.ipc.filesystem.fileTooLarge',
+            `File too large: ${actualSize}MB exceeds ${maxSize}MB limit`,
+            { actualSize, maxSize }
+          )
         )
       }
 

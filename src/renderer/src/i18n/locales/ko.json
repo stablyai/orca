@@ -187,6 +187,23 @@
         }
       }
     },
+    "relay": {
+      "fsHandler": {
+        "fileTooLarge": "파일이 너무 큽니다: {{actualSize}}MB가 {{maxSize}}MB 제한을 초과합니다"
+      }
+    },
+    "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "파일이 너무 큽니다: {{actualSize}}MB가 {{maxSize}}MB 제한을 초과합니다"
+        }
+      }
+    },
+    "shared": {
+      "nodeBoundedFileReader": {
+        "fileTooLarge": "파일이 너무 큽니다: {{actualSize}}MB가 {{maxSize}}MB 제한을 초과합니다"
+      }
+    },
     "store": {
       "slices": {
         "browser": {
