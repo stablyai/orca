@@ -87,7 +87,45 @@ describe('reuseEqualCatalogRows', () => {
   // Without the cap this walks the whole bucket, so a 64-row bucket costs 64
   // deep compares per incoming row. Counting reads keeps the guard deterministic
   // — a wall-clock assertion would be flaky on shared CI runners.
-  it('caps the deep compares for one id instead of scanning the whole bucket', () => {
+  // The cap this replaced gave up matches past its window. The index does not:
+  // a match at the far end of a large bucket is reused again.
+  it('reuses a match at the far end of a large duplicate-id bucket', () => {
+    const bucketSize = 64
+    const current = Array.from({ length: bucketSize }, (_, index) => ({
+      id: 'dup',
+      marker: `previous-${index}`
+    }))
+
+    const reconciled = reuseEqualCatalogRows(current, [{ id: 'dup', marker: 'previous-63' }])
+
+    expect(reconciled[0]).toBe(current[63])
+  })
+
+  it('consumes each previous row at most once across a large bucket', () => {
+    const current = Array.from({ length: 32 }, () => ({ id: 'dup', marker: 'same' }))
+
+    const reconciled = reuseEqualCatalogRows(current, [
+      { id: 'dup', marker: 'same' },
+      { id: 'dup', marker: 'same' }
+    ])
+
+    expect(reconciled[0]).toBe(current[0])
+    expect(reconciled[1]).toBe(current[1])
+    expect(reconciled[0]).not.toBe(reconciled[1])
+  })
+
+  it('still matches when a large bucket cannot be fingerprinted', () => {
+    // JSON.stringify throws on BigInt, so the index cannot be built and this
+    // falls back to the capped scan rather than crashing or losing the match.
+    const row = (marker: string): Record<string, unknown> => ({ id: 'dup', marker, size: 1n })
+    const current = Array.from({ length: 16 }, (_, index) => row(`previous-${index}`))
+
+    const reconciled = reuseEqualCatalogRows(current as never, [row('previous-0')] as never)
+
+    expect(reconciled[0]).toBe(current[0])
+  })
+
+  it('keeps the deep compares off the whole bucket', () => {
     const bucketSize = 64
     const current = Array.from({ length: bucketSize }, (_, index) => ({
       id: 'dup',
