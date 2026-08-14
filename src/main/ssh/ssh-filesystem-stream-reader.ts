@@ -35,6 +35,10 @@ export class StreamProtocolError extends Error {
   }
 }
 
+// Why: exceeding a cap the caller itself set is a size verdict, not a protocol fault — callers
+// translate it into their own too-large error rather than leaking the raw stream message.
+export class FileReadCapExceededError extends StreamProtocolError {}
+
 export async function readFileViaStream(
   mux: SshChannelMultiplexer,
   filePath: string,
@@ -310,7 +314,7 @@ export async function readFileViaStream(
         if (metadata.totalSize < 0 || metadata.totalSize > cap) {
           streamIdRef.current = metadata.streamId
           fail(
-            new StreamProtocolError(
+            new FileReadCapExceededError(
               `Reported totalSize ${metadata.totalSize} exceeds client cap ${cap}`
             )
           )

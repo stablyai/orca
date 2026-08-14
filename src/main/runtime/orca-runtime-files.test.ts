@@ -2,6 +2,7 @@
    authorization, and watcher lifecycle fixtures; splitting would duplicate the
    setup that makes cross-command filesystem behavior comparable. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FileReadCapExceededError, StreamProtocolError } from '../ssh/ssh-filesystem-stream-reader'
 import { EventEmitter } from 'node:events'
 import { link, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -2765,6 +2766,38 @@ describe('RuntimeFileCommands', () => {
 
       await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt', 128)).rejects.toThrow(
         'file_too_large'
+      )
+    })
+
+    // Why: without translation the reader's raw "exceeds client cap" string reaches the client as a
+    // generic runtime_error, which neither the desktop nor the mobile preview arm recognizes.
+    it('translates an over-cap stream read into file_too_large', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1024 }),
+        readFile: vi
+          .fn()
+          .mockRejectedValue(
+            new FileReadCapExceededError('Reported totalSize 900000 exceeds client cap 524288')
+          )
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
+        'file_too_large'
+      )
+    })
+
+    it('leaves a genuine stream protocol failure unmasked', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1024 }),
+        readFile: vi.fn().mockRejectedValue(new StreamProtocolError('Malformed chunk for stream 4'))
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
+        'Malformed chunk'
       )
     })
 
