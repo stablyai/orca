@@ -318,6 +318,10 @@ import {
 import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from './crash-reporting/process-gone-recorder'
 import { resolveExpectedTeardownScope } from './crash-reporting/expected-teardown-state'
 import {
+  clearRendererRecoveryReloadIssued,
+  noteRendererRecoveryReloadIssued
+} from './crash-reporting/renderer-recovery-crash-outcome'
+import {
   advanceSyntheticTitleSpinnerEntries,
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
@@ -751,6 +755,11 @@ function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
 
 function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
   expectedRendererReload.mark(webContentsId, durationMs)
+  // Why here and not at each call site: every caller is a manual main-window
+  // reload, so the next bootstrap is the user's retry and a stalled recovery
+  // reload must not claim it. Three call sites each repeated this and a fourth
+  // (app:reload) was missed; at the definition a new site cannot forget it.
+  clearRendererRecoveryReloadIssued()
 }
 
 function clearExpectedRendererReload(webContentsId?: number): void {
@@ -1344,6 +1353,9 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         expectedTeardown: getExpectedTeardownScope(webContentsId, false)
       }),
     onRendererRecoveryExhausted: ({ details, recentRecoveryCount }) => {
+      // Why: the pending arm belongs to a reload that never brought the renderer
+      // back, so the user's retry below must not resolve these as auto-recovered.
+      clearRendererRecoveryReloadIssued()
       recordDurableCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
         reason: details.reason,
         exitCode: details.exitCode ?? null,
@@ -1364,6 +1376,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     // Why: the recovery reload re-fires did-finish-load; flag it so the local-PTY orphan sweep skips that reload (#5787).
     onBeforeRecoveryReload: (webContentsId) => {
       markRecoveryReloadInFlight(webContentsId)
+      // Why: arm the outcome check before the reload so a crash this heals never prompts the user.
+      noteRendererRecoveryReloadIssued()
       recordDurableCrashBreadcrumb('renderer_recovery_reload')
     }
   })
@@ -1613,6 +1627,9 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     }
   })
   logStartupMilestone('load-start')
+  // Why: this window replaces a torn-down one, so any arm still pending belongs to
+  // a recovery reload that died with it — this bootstrap is a fresh window, not it.
+  clearRendererRecoveryReloadIssued()
   loadMainWindow(window)
   return window
 }

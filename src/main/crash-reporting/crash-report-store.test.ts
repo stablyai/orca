@@ -48,6 +48,7 @@ function input(reason = 'crashed'): CrashReportCreateInput {
 }
 
 afterEach(async () => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   grantDirAclAsyncMock.mockReset()
   grantDirAclAsyncMock.mockResolvedValue(undefined)
@@ -108,6 +109,44 @@ describe('CrashReportStore', () => {
 
     await expect(store.dismiss(renderer.id)).resolves.toMatchObject({ status: 'dismissed' })
     await expect(store.getLatestPending()).resolves.toBeNull()
+  })
+
+  it('never sweeps a React error-boundary report, even when it matches the crash event', async () => {
+    const { store } = await createStore()
+    // Same reason/exitCode as the process crash: the guard must not depend on
+    // the boundary reason literal staying distinct from Electron's exit reasons.
+    const boundary = await store.record({ ...input(), processType: 'react-render' })
+    await store.record(input())
+
+    await store.markRendererCrashesAutoRecovered(Date.parse(boundary.createdAt) - 1_000)
+
+    await expect(store.getLatestPending()).resolves.toMatchObject({
+      id: boundary.id,
+      status: 'pending'
+    })
+  })
+
+  it('never sweeps a renderer crash the auto-recovery cutoff excluded', async () => {
+    const { store } = await createStore()
+    // Why fake Date: the sweep matches within 5s of an anchor, so the two
+    // records must sit on either side of the cutoff by construction.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const startedAtMs = Date.parse('2026-08-01T00:00:00.000Z')
+    vi.setSystemTime(startedAtMs)
+    const stale = await store.record(input())
+    vi.setSystemTime(startedAtMs + 4_000)
+    const anchor = await store.record(input())
+
+    // The reload was armed 6s after the stale crash, so only the anchor is in scope.
+    await store.markRendererCrashesAutoRecovered(startedAtMs + 1_000)
+
+    const reports = await store.listRecent()
+    expect(reports).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: anchor.id, status: 'dismissed' }),
+        expect.objectContaining({ id: stale.id, status: 'pending' })
+      ])
+    )
   })
 
   it('dismisses sibling pending records after one crash report is sent', async () => {

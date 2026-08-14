@@ -33,6 +33,10 @@ import {
   isClipboardTextWriteTooLargeError
 } from '../../shared/clipboard-text'
 import { formatCrashReportCopyText } from '../crash-reporting/crash-report-copy-text'
+import {
+  RENDERER_BOOTSTRAP_RENDERED_BREADCRUMB,
+  resolveRecoveredRendererCrashReports
+} from '../crash-reporting/renderer-recovery-crash-outcome'
 import { TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB } from '../../shared/terminal-webgl-diagnostics'
 
 const inFlightSubmissions = new Set<string>()
@@ -430,6 +434,11 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     (_event, args?: { name?: unknown; data?: unknown }) => {
       if (!args || typeof args.name !== 'string') {
         return
+      }
+      if (args.name === RENDERER_BOOTSTRAP_RENDERED_BREADCRUMB) {
+        // Why: the recovered renderer asks for the startup prompt right after
+        // this breadcrumb, so the healed crash must be resolved first.
+        resolveRecoveredRendererCrashReports(store)
       }
       const data = sanitizeRendererBreadcrumbData(args.data)
       if (COALESCED_RENDERER_BREADCRUMB_NAMES.has(args.name)) {

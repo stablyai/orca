@@ -126,6 +126,65 @@ export class CrashReportStore {
     return this.transitionPending(id, 'dismissed')
   }
 
+  /**
+   * Resolve pending renderer crashes that an auto-recovery reload healed.
+   *
+   * Why: `dismissed` keeps the record sendable from Help > Report Crash while
+   * taking it out of the startup prompt; the detail flag preserves the reason.
+   */
+  async markRendererCrashesAutoRecovered(notBeforeMs: number): Promise<CrashReportRecord[]> {
+    return this.withWrite(async (reports) => {
+      const resolved: CrashReportRecord[] = []
+      const nextReports = reports.map((report) => {
+        // Why: `source: 'renderer'` also covers React error-boundary reports
+        // (processType 'react-render'), which the recovery reload did not cause
+        // and must keep prompting on their own evidence.
+        if (
+          report.status !== 'pending' ||
+          report.source !== 'renderer' ||
+          report.processType !== 'renderer'
+        ) {
+          return report
+        }
+        const createdAtMs = Date.parse(report.createdAt)
+        if (!Number.isFinite(createdAtMs) || createdAtMs < notBeforeMs) {
+          return report
+        }
+        const recovered: CrashReportRecord = {
+          ...report,
+          status: 'dismissed',
+          details: { ...report.details, rendererAutoRecovered: true }
+        }
+        resolved.push(recovered)
+        return recovered
+      })
+      if (resolved.length === 0) {
+        return { reports: nextReports, result: resolved }
+      }
+      // Why: one kill burst can emit a Utility/GPU exit alongside the renderer's.
+      // dismiss() already sweeps those siblings; without the same sweep here the
+      // healed crash still reaches the user, just wearing the sibling's report.
+      const anchors = [...resolved]
+      const sweptReports = nextReports.map((report) => {
+        // Why: no renderer-sourced report is a burst sibling. The anchor pass
+        // already ruled on the renderer process, and relation matching (which
+        // ignores processType and reaches 5s either side of an anchor) would
+        // otherwise re-admit the older crashes `notBeforeMs` just excluded, or
+        // an error-boundary report that no reload caused.
+        if (report.status !== 'pending' || report.source === 'renderer') {
+          return report
+        }
+        if (!anchors.some((anchor) => isRelatedCrashEvent(anchor, report))) {
+          return report
+        }
+        const swept: CrashReportRecord = { ...report, status: 'dismissed' }
+        resolved.push(swept)
+        return swept
+      })
+      return { reports: sweptReports, result: resolved }
+    })
+  }
+
   async formatDiagnosticText(id: string, notes?: string): Promise<string | null> {
     const reports = await this.readReports()
     const report = reports.find((candidate) => candidate.id === id)
