@@ -55,6 +55,17 @@ describe('runtime renderer notification sender', () => {
     expect(fixture.onFailure).not.toHaveBeenCalled()
   })
 
+  it('resumes when a provisional main-frame reload is cancelled', () => {
+    const fixture = createSender()
+
+    fixture.sender.onMainFrameReloadStarted()
+    expect(fixture.sender.send('repos:changed')).toBe(false)
+    fixture.sender.onMainFrameReloadCancelled()
+
+    expect(fixture.sender.send('repos:changed')).toBe(true)
+    expect(fixture.send).toHaveBeenCalledOnce()
+  })
+
   it('treats an absent or destroyed renderer as unavailable without throwing', () => {
     const missingWindow = createSender({ windowDestroyed: true })
     const missingWebContents = createSender({ webContentsDestroyed: true })

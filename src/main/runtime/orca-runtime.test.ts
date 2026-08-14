@@ -2490,6 +2490,38 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 
+  it('restores a surviving renderer only for the current cancelled reload', () => {
+    const runtime = createRuntime()
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+    const supersededRevision = runtime.markRendererReloading(TEST_WINDOW_ID)
+    const currentRevision = runtime.markRendererReloading(TEST_WINDOW_ID)
+    if (supersededRevision === null || currentRevision === null) {
+      throw new Error('expected active renderer reload revisions')
+    }
+
+    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, supersededRevision)).toBe(false)
+    expect(runtime.getStatus().graphStatus).toBe('reloading')
+    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, currentRevision)).toBe(true)
+    expect(runtime.getStatus().graphStatus).toBe('ready')
+  })
+
+  it('restores headless authority when desktop promotion navigation is cancelled', () => {
+    const runtime = createRuntime()
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    const revision = runtime.markRendererReloading(TEST_WINDOW_ID)
+    if (revision === null) {
+      throw new Error('expected active promotion reload revision')
+    }
+
+    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, revision)).toBe(false)
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
+      graphStatus: 'ready'
+    })
+  })
+
   it('drops back to unavailable and clears authority when the window disappears', () => {
     const runtime = createRuntime()
 

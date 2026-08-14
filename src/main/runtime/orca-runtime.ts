@@ -28643,33 +28643,34 @@ export class OrcaRuntimeService {
     return false
   }
 
-  markRendererReloading(windowId: number): void {
+  markRendererReloading(windowId: number): number | null {
     if (
       windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
       this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
       this.headlessGraphFallbackAvailable
     ) {
       this.attachWindow(windowId)
-      return
+      return this.authoritativeWindowId === windowId
+        ? this.graphReloadLifecycle.getActiveRevision()
+        : null
     }
     if (windowId !== this.authoritativeWindowId) {
-      return
+      return null
     }
     if (this.graphStatus === 'reloading') {
-      this.graphReloadLifecycle.begin(windowId)
-      return
+      return this.graphReloadLifecycle.begin(windowId)
     }
     if (this.graphStatus !== 'ready') {
-      return
+      return null
     }
-    this.beginGraphReload(windowId)
+    return this.beginGraphReload(windowId)
   }
 
-  private beginGraphReload(windowId: number): void {
+  private beginGraphReload(windowId: number): number {
     // Why: a renderer reload tears down the live graph, so live handles must go stale immediately, not be reused against the rebuild.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
-    this.graphReloadLifecycle.begin(windowId)
+    const revision = this.graphReloadLifecycle.begin(windowId)
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
     this.handles.clear()
@@ -28677,6 +28678,25 @@ export class OrcaRuntimeService {
     // Why: handleByPtyId (pre-allocated CLI handles) survives reloads so CLI agents keep control; adoptPreAllocatedHandle re-links on the new graph.
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
+    return revision
+  }
+
+  markRendererReloadCancelled(windowId: number, revision: number): boolean {
+    if (
+      windowId !== this.authoritativeWindowId ||
+      this.graphStatus !== 'reloading' ||
+      !this.graphReloadLifecycle.settle(revision, 'cancelled')
+    ) {
+      return false
+    }
+    if (this.shouldRestoreHeadlessGraph(windowId)) {
+      this.restoreHeadlessGraphAuthority()
+      return false
+    }
+    this.graphStatus = 'ready'
+    this.setTerminalSideEffectConsumerAvailable(true)
+    this.refreshWritableFlags()
+    return true
   }
 
   markGraphReady(windowId: number): void {

@@ -63,3 +63,44 @@ test('blocked navigation preserves the renderer document and graph authority', a
       authoritativeWindowId: before.authoritativeWindowId
     })
 })
+
+test('cancelled renderer reload restores the surviving graph authority', async ({
+  electronApp,
+  orcaPage
+}) => {
+  await waitForSessionReady(orcaPage)
+  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  const client = new RuntimeClient(userDataDir, 30_000, null, null)
+  const before = (await client.call<RuntimeStatus>('status.get')).result
+  await orcaPage.evaluate(() => {
+    ;(window as unknown as { __cancelledReloadCanary: string }).__cancelledReloadCanary = 'alive'
+  })
+
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    const contents = BrowserWindow.getAllWindows()[0]!.webContents
+    const url = new URL(contents.getURL())
+    url.searchParams.set('cancelled-reload', '1')
+    contents.once('will-navigate', (event) => event.preventDefault())
+    void contents.executeJavaScript(`window.location.assign(${JSON.stringify(url.href)})`)
+  })
+
+  await expect
+    .poll(async () => {
+      const status = (await client.call<RuntimeStatus>('status.get')).result
+      return {
+        graphStatus: status.graphStatus,
+        rendererGraphEpoch: status.rendererGraphEpoch,
+        authoritativeWindowId: status.authoritativeWindowId
+      }
+    })
+    .toEqual({
+      graphStatus: 'ready',
+      rendererGraphEpoch: before.rendererGraphEpoch + 1,
+      authoritativeWindowId: before.authoritativeWindowId
+    })
+  expect(
+    await orcaPage.evaluate(
+      () => (window as unknown as { __cancelledReloadCanary?: string }).__cancelledReloadCanary
+    )
+  ).toBe('alive')
+})

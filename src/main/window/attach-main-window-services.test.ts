@@ -121,6 +121,7 @@ type MainWindowStub = {
   once: MockFn
   webContents: {
     id?: number
+    getURL: MockFn
     isDestroyed?: MockFn
     isLoadingMainFrame: MockFn
     on: MockFn
@@ -137,6 +138,7 @@ type RuntimeStub = {
   attachWindow: MockFn
   setNotifier: MockFn
   markRendererReloading: MockFn
+  markRendererReloadCancelled: MockFn
   markGraphReloadFailed: MockFn
   markGraphUnavailable: MockFn
 }
@@ -151,6 +153,7 @@ function createMainWindow(
     once: vi.fn(),
     webContents: {
       id: 1,
+      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
       isDestroyed: vi.fn(() => false),
       isLoadingMainFrame: vi.fn(() => true),
       on: vi.fn(),
@@ -175,6 +178,7 @@ function createRuntime(): RuntimeStub {
     attachWindow: vi.fn(),
     setNotifier: vi.fn(),
     markRendererReloading: vi.fn(),
+    markRendererReloadCancelled: vi.fn(),
     markGraphReloadFailed: vi.fn(),
     markGraphUnavailable: vi.fn()
   }

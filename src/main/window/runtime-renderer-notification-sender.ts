@@ -13,6 +13,7 @@ export function createRuntimeRendererNotificationSender(args: {
 }): {
   send: (channel: string, ...values: unknown[]) => boolean
   onMainFrameReloadStarted: () => void
+  onMainFrameReloadCancelled: () => void
   onMainFrameLoadFinished: () => void
   onRendererProcessGone: () => void
   close: () => void
@@ -53,6 +54,13 @@ export function createRuntimeRendererNotificationSender(args: {
         return
       }
       available = false
+      warningEmitted = false
+    },
+    onMainFrameReloadCancelled: () => {
+      if (closed) {
+        return
+      }
+      available = true
       warningEmitted = false
     },
     onMainFrameLoadFinished: () => {

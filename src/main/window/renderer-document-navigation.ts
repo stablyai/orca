@@ -22,12 +22,46 @@ function isRendererDocumentNavigation(currentUrl: string, nextUrl: string): bool
 
 export function registerRendererDocumentNavigation(
   webContents: Pick<WebContents, 'getURL' | 'on'>,
-  onStarted: () => void
+  onStarted: () => (() => void) | void
 ): void {
+  const pendingCancellations: { url: string; cancel: () => void }[] = []
+  const cancelPending = (url: string): void => {
+    const index = pendingCancellations.findIndex((pending) => pending.url === url)
+    if (index !== -1) {
+      pendingCancellations.splice(index, 1)[0]?.cancel()
+    }
+  }
   // Why: did-start-loading also fires for blocked external links whose renderer document survives.
   webContents.on('did-start-navigation', (_event, url, isSameDocument, isMainFrame) => {
     if (isMainFrame && !isSameDocument && isRendererDocumentNavigation(webContents.getURL(), url)) {
-      onStarted()
+      const cancel = onStarted()
+      if (cancel) {
+        pendingCancellations.push({ url, cancel })
+      }
+    }
+  })
+  webContents.on(
+    'did-fail-provisional-load',
+    (_event, _errorCode, _errorDescription, validatedUrl, isMainFrame) => {
+      if (!isMainFrame) {
+        return
+      }
+      cancelPending(validatedUrl)
+    }
+  )
+  webContents.on('will-navigate', (event, url, _sameDocument, isMainFrame) => {
+    if (!isMainFrame) {
+      return
+    }
+    queueMicrotask(() => {
+      if (event.defaultPrevented) {
+        cancelPending(url)
+      }
+    })
+  })
+  webContents.on('did-frame-navigate', (_event, _url, _code, _status, isMainFrame) => {
+    if (isMainFrame) {
+      pendingCancellations.length = 0
     }
   })
 }
