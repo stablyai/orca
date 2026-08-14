@@ -96,6 +96,24 @@ describe('android emulator environment', () => {
     )
   })
 
+  // Why: shells export empty overrides all the time (`export X=$UNSET`), and a
+  // nullish fallback would hand the emulator the relative path './avd'.
+  it('Given empty AVD overrides When resolving Then they fall through to the home default', () => {
+    // Given / When / Then
+    expect(
+      resolveAndroidAvdHome(
+        environment({
+          env: { ANDROID_AVD_HOME: '', ANDROID_EMULATOR_HOME: '', ANDROID_USER_HOME: '' }
+        })
+      )
+    ).toBe(path.join(path.sep, 'home', 'dev', '.android', 'avd'))
+    expect(
+      resolveAndroidAvdHome(
+        environment({ env: { ANDROID_EMULATOR_HOME: '', ANDROID_USER_HOME: '/user/.android' } })
+      )
+    ).toBe(path.join('/user/.android', 'avd'))
+  })
+
   it('Given a Windows SDK When resolving tool paths Then binaries and wrappers get their own suffix', () => {
     // Given
     const win = environment({ platform: 'win32', env: { ANDROID_HOME: 'C:\\sdk' } })

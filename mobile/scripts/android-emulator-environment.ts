@@ -51,11 +51,13 @@ export function resolveAndroidAvdHome({ env, homeDir }: AndroidEnvironment): str
   if (env.ANDROID_AVD_HOME) {
     return env.ANDROID_AVD_HOME
   }
+  // Why: an exported-but-empty override must fall through, not resolve to the
+  // relative './avd' that `??` would produce.
   const androidHome =
-    env.ANDROID_EMULATOR_HOME ??
-    env.ANDROID_USER_HOME ??
-    (env.XDG_CONFIG_HOME ? path.join(env.XDG_CONFIG_HOME, '.android') : null)
-  return path.join(androidHome ?? path.join(homeDir, '.android'), 'avd')
+    env.ANDROID_EMULATOR_HOME ||
+    env.ANDROID_USER_HOME ||
+    (env.XDG_CONFIG_HOME ? path.join(env.XDG_CONFIG_HOME, '.android') : '')
+  return path.join(androidHome || path.join(homeDir, '.android'), 'avd')
 }
 
 export function resolveAndroidToolPath(environment: AndroidEnvironment, tool: AndroidTool): string {
