@@ -8,6 +8,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
+import { agentEntryCompletionAt } from '../../../shared/agent-completion-time'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -53,7 +54,8 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   clearWebSessionFocusIntent,
   clearWebSessionFocusIntentsForOwner,
-  peekWebSessionFocusIntent
+  peekWebSessionFocusIntent,
+  resolveWebSessionVisibleTabId
 } from './web-session-focus-intent'
 import {
   clearWebSessionCloseIntentsForOwner,
@@ -95,6 +97,14 @@ import {
   installWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionSpec
 } from './window-visibility-subscription-parking'
+import {
+  clearWebSessionBrowserPlacementsForEnvironment,
+  clearWebSessionBrowserPlacementsForWorktree,
+  isWebSessionBrowserPlacementGroupReserved,
+  peekWebSessionBrowserPlacementGroup,
+  resetWebSessionBrowserPlacementsForTests
+} from './web-session-browser-placement'
+import { suppressE2eWebRuntimeBrowserSnapshot } from './web-runtime-browser-creation-e2e-fault'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -175,6 +185,7 @@ type MirroredBrowserTab = {
   remotePageId: string
   unifiedTab: Tab
   hostTabId: string
+  clientGroupId?: string
 }
 
 type MirroredEditorTab = {
@@ -639,6 +650,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
+  resetWebSessionBrowserPlacementsForTests()
   resetWebSessionTerminalParkAuthorityForTests()
 }
 
@@ -683,6 +695,7 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
   clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
   clearWebSessionTerminalParkAuthorityForWorktree(environmentId, worktreeId)
   clearHostSessionTabIdMappings(environmentId, worktreeId)
+  clearWebSessionBrowserPlacementsForWorktree(environmentId, worktreeId)
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
@@ -736,6 +749,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(trimmedEnvironmentId)
   }
   clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
+  clearWebSessionBrowserPlacementsForEnvironment(trimmedEnvironmentId)
   clearWebSessionTerminalParkAuthorityForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
 }
@@ -1288,12 +1302,17 @@ function buildMirroredAgentStatusPatch(
       existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
     const entryFreshnessChanged =
       !!existing && isAgentStatusFresh(existing, now) !== isAgentStatusFresh(entry, now)
+    const doneAttentionChanged =
+      existing?.state === 'done' &&
+      entry.state === 'done' &&
+      agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
     const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
       !isAgentStatusFresh(existing, now) ||
       entryFreshnessChanged ||
       entryAttributionChanged ||
+      doneAttentionChanged ||
       isMirroredCommandCodeTurnBump(existing, entry)
     aggregateRelevantChange = aggregateRelevantChange || entrySortRelevantChange
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
@@ -1498,6 +1517,10 @@ function buildMirroredBrowserTabs(
   sortOffset: number,
   now: number
 ): MirroredBrowserTab[] {
+  const renderedGroupIds = collectLayoutGroupIds(state.layoutByWorktree[snapshot.worktree])
+  const clientGroupIds = new Set(
+    (state.groupsByWorktree[snapshot.worktree] ?? []).map((group) => group.id)
+  )
   return snapshot.tabs.filter(isReadyBrowserTab).map((tab, index) => {
     const existing = findBrowserWorkspaceForRemotePage(
       state,
@@ -1508,7 +1531,22 @@ function buildMirroredBrowserTabs(
     const workspaceId = existing?.workspace.id ?? tab.browserWorkspaceId
     const pageId = existing?.page.id ?? tab.browserPageId
     const createdAt = existing?.page.createdAt ?? now + sortOffset + index
-    const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
+    const recordedClientGroupId = peekWebSessionBrowserPlacementGroup({
+      environmentId,
+      worktreeId: snapshot.worktree,
+      remotePageId: tab.browserPageId
+    })
+    const hostGroupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
+    const existingClientGroupId =
+      existing?.unifiedTab?.groupId !== hostGroupId ? existing?.unifiedTab?.groupId : undefined
+    const preferredClientGroupId = recordedClientGroupId ?? existingClientGroupId
+    const clientGroupId =
+      preferredClientGroupId &&
+      clientGroupIds.has(preferredClientGroupId) &&
+      (renderedGroupIds.size === 0 || renderedGroupIds.has(preferredClientGroupId))
+        ? preferredClientGroupId
+        : undefined
+    const groupId = clientGroupId ?? hostGroupId
     const title = tab.title.trim() || 'Browser'
     const nextPage: BrowserPage = {
       id: pageId,
@@ -1550,7 +1588,8 @@ function buildMirroredBrowserTabs(
       certificateFailure: tab.certificateFailure ?? null,
       remotePageId: tab.browserPageId,
       unifiedTab: buildBrowserUnifiedTab(workspace, tab, existing?.unifiedTab ?? null, groupId),
-      hostTabId: tab.id
+      hostTabId: tab.id,
+      ...(clientGroupId ? { clientGroupId } : {})
     }
   })
 }
@@ -1740,6 +1779,46 @@ function updateHostSessionTabIdMappings(args: {
   }
 }
 
+function retainClientPlacedMirroredTabs(args: {
+  groups: readonly TabGroup[]
+  mirroredUnifiedIds: ReadonlySet<string>
+  validUnifiedTabIds: ReadonlySet<string>
+  clientGroupIdByLocalTabId: ReadonlyMap<string, string>
+  nextActiveUnifiedTabId: string | null
+}): TabGroup[] {
+  return args.groups.map((group) => {
+    const retainedTabOrder = group.tabOrder.filter(
+      (tabId) =>
+        args.validUnifiedTabIds.has(tabId) &&
+        (!args.mirroredUnifiedIds.has(tabId) ||
+          args.clientGroupIdByLocalTabId.get(tabId) === group.id)
+    )
+    const placedTabIds = [...args.clientGroupIdByLocalTabId]
+      .filter(
+        ([tabId, groupId]) =>
+          groupId === group.id &&
+          args.validUnifiedTabIds.has(tabId) &&
+          !retainedTabOrder.includes(tabId)
+      )
+      .map(([tabId]) => tabId)
+    const tabOrder = [...retainedTabOrder, ...placedTabIds]
+    const activeTabId =
+      args.nextActiveUnifiedTabId && tabOrder.includes(args.nextActiveUnifiedTabId)
+        ? args.nextActiveUnifiedTabId
+        : group.activeTabId && tabOrder.includes(group.activeTabId)
+          ? group.activeTabId
+          : (tabOrder[0] ?? null)
+    return {
+      ...group,
+      tabOrder,
+      activeTabId,
+      recentTabIds: activeTabId
+        ? pushRecentTabId(sanitizeRecentTabIds(group.recentTabIds, tabOrder), activeTabId)
+        : []
+    }
+  })
+}
+
 function buildMirroredHostGroups({
   currentGroups,
   hostGroups,
@@ -1749,7 +1828,8 @@ function buildMirroredHostGroups({
   now,
   validUnifiedTabIds,
   environmentId,
-  worktreeId
+  worktreeId,
+  clientGroupIdByLocalTabId
 }: {
   currentGroups: readonly TabGroup[]
   hostGroups: readonly RuntimeMobileSessionTabGroup[]
@@ -1760,16 +1840,14 @@ function buildMirroredHostGroups({
   validUnifiedTabIds: ReadonlySet<string>
   environmentId: string
   worktreeId: string
+  clientGroupIdByLocalTabId: ReadonlyMap<string, string>
 }): TabGroup[] | null {
-  const strippedGroups = currentGroups.map((group) => {
-    const tabOrder = group.tabOrder.filter(
-      (tabId) => validUnifiedTabIds.has(tabId) && !mirroredUnifiedIds.has(tabId)
-    )
-    return {
-      ...group,
-      tabOrder,
-      recentTabIds: sanitizeRecentTabIds(group.recentTabIds, tabOrder)
-    }
+  const strippedGroups = retainClientPlacedMirroredTabs({
+    groups: currentGroups,
+    mirroredUnifiedIds,
+    validUnifiedTabIds,
+    clientGroupIdByLocalTabId,
+    nextActiveUnifiedTabId
   })
   const groupsById = new Map(strippedGroups.map((group) => [group.id, group]))
   const orderedGroups: TabGroup[] = []
@@ -1779,7 +1857,12 @@ function buildMirroredHostGroups({
     const existing = groupsById.get(hostGroup.id)
     const localHostOrder = hostGroup.tabOrder
       .map((tabId) => hostToLocalTabId.get(tabId))
-      .filter((tabId): tabId is string => tabId !== undefined && validUnifiedTabIds.has(tabId))
+      .filter(
+        (tabId): tabId is string =>
+          tabId !== undefined &&
+          validUnifiedTabIds.has(tabId) &&
+          !clientGroupIdByLocalTabId.has(tabId)
+      )
     const hostTabOrder = [
       ...(existing?.tabOrder.filter((tabId) => !localHostOrder.includes(tabId)) ?? []),
       ...localHostOrder
@@ -1821,7 +1904,11 @@ function buildMirroredHostGroups({
   }
 
   for (const group of strippedGroups) {
-    if (!seen.has(group.id) && group.tabOrder.length > 0) {
+    if (
+      !seen.has(group.id) &&
+      (group.tabOrder.length > 0 ||
+        isWebSessionBrowserPlacementGroupReserved({ worktreeId, groupId: group.id }))
+    ) {
       orderedGroups.push(group)
     }
   }
@@ -2235,42 +2322,6 @@ function toVisibleTabType(tab: Tab): WebSessionTabsSyncState['activeTabType'] {
   return 'editor'
 }
 
-function findCurrentVisibleUnifiedTabId(args: {
-  state: WebSessionTabsSyncState
-  worktreeId: string
-  nextUnifiedTabs: readonly Tab[] | null
-}): string | null {
-  const { state, worktreeId, nextUnifiedTabs } = args
-  if (!nextUnifiedTabs) {
-    return null
-  }
-  const currentVisibleType =
-    state.activeTabTypeByWorktree[worktreeId] ??
-    (state.activeWorktreeId === worktreeId ? state.activeTabType : null)
-  if (currentVisibleType === 'terminal') {
-    const terminalTabId = state.activeTabIdByWorktree[worktreeId]
-    return terminalTabId && nextUnifiedTabs.some((tab) => tab.id === terminalTabId)
-      ? terminalTabId
-      : null
-  }
-  if (currentVisibleType === 'browser') {
-    const browserWorkspaceId = state.activeBrowserTabIdByWorktree[worktreeId]
-    return (
-      nextUnifiedTabs.find(
-        (tab) => tab.contentType === 'browser' && tab.entityId === browserWorkspaceId
-      )?.id ?? null
-    )
-  }
-  if (currentVisibleType === 'editor') {
-    const fileId = state.activeFileIdByWorktree[worktreeId]
-    return (
-      nextUnifiedTabs.find((tab) => tab.contentType === 'editor' && tab.entityId === fileId)?.id ??
-      null
-    )
-  }
-  return null
-}
-
 function applyWebSessionTabsSnapshotWithContext(
   state: WebSessionTabsSyncState,
   rawSnapshot: RuntimeMobileSessionTabsResult,
@@ -2278,6 +2329,9 @@ function applyWebSessionTabsSnapshotWithContext(
   now = Date.now(),
   batchContext?: WebSessionTabsBatchContext
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  if (suppressE2eWebRuntimeBrowserSnapshot(rawSnapshot)) {
+    return state
+  }
   const worktreeId = rawSnapshot.worktree
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return state
@@ -2310,7 +2364,7 @@ function applyWebSessionTabsSnapshotWithContext(
   // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntent = peekWebSessionFocusIntent({ environmentId }, worktreeId)
   const focusIntentHostTabId = focusIntent?.hostTabId ?? null
-  const callerFocusIntentTab =
+  const matchingFocusIntentTab =
     focusIntentHostTabId === null
       ? null
       : focusIntent?.leafId
@@ -2326,13 +2380,21 @@ function applyWebSessionTabsSnapshotWithContext(
               (tab.type === 'terminal' && tab.parentTabId === focusIntentHostTabId) ||
               (tab.type === 'browser' && tab.browserPageId === focusIntentHostTabId)
           ) ?? null)
+  const expectedCurrentLocalTabId = focusIntent?.expectedCurrentLocalTabId
+  const currentVisibleLocalTabId = resolveWebSessionVisibleTabId(state, worktreeId)
+  const callerFocusIntentTab =
+    matchingFocusIntentTab &&
+    (expectedCurrentLocalTabId === undefined ||
+      expectedCurrentLocalTabId === currentVisibleLocalTabId)
+      ? matchingFocusIntentTab
+      : null
   const followIntentTab =
     snapshot.navigationIntent === 'follow'
       ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
       : null
   const navigationIntentTab = callerFocusIntentTab ?? followIntentTab
   const honorSnapshotActiveFocus = navigationIntentTab !== null
-  if (callerFocusIntentTab) {
+  if (matchingFocusIntentTab) {
     clearWebSessionFocusIntent({ environmentId }, worktreeId)
   }
   const currentTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
@@ -2650,11 +2712,11 @@ function applyWebSessionTabsSnapshotWithContext(
       ? (activeMirroredEditorFileId ?? mirroredEditorTabs[0]?.file.id)
       : mirroredEditorTabs[0]?.file.id) ??
     null
-  const currentVisibleUnifiedTabId = findCurrentVisibleUnifiedTabId({
+  const currentVisibleUnifiedTabId = resolveWebSessionVisibleTabId(
     state,
     worktreeId,
-    nextUnifiedTabs
-  })
+    nextUnifiedTabs ?? []
+  )
   // Why: a client-initiated activation also drives the visible unified tab, overriding the sticky current-visible tab.
   const intentUnifiedTabId = honorSnapshotActiveFocus
     ? navigationIntentTab?.type === 'browser'
@@ -2696,6 +2758,11 @@ function applyWebSessionTabsSnapshotWithContext(
   })
 
   const currentGroups = state.groupsByWorktree[worktreeId] ?? []
+  const clientGroupIdByLocalTabId = new Map(
+    mirroredBrowserTabs.flatMap((entry) =>
+      entry.clientGroupId ? [[entry.unifiedTab.id, entry.clientGroupId]] : []
+    )
+  )
   const nextGroups = (() => {
     if (!nextUnifiedTabs || nextUnifiedTabs.length === 0) {
       return null
@@ -2710,21 +2777,17 @@ function applyWebSessionTabsSnapshotWithContext(
         now,
         validUnifiedTabIds,
         environmentId,
-        worktreeId
+        worktreeId,
+        clientGroupIdByLocalTabId
       })
     }
-    const strippedGroups = currentGroups.map((group) => ({
-      ...group,
-      tabOrder: group.tabOrder.filter(
-        (tabId) => validUnifiedTabIds.has(tabId) && !mirroredUnifiedIds.has(tabId)
-      ),
-      recentTabIds: sanitizeRecentTabIds(
-        group.recentTabIds,
-        group.tabOrder.filter(
-          (tabId) => validUnifiedTabIds.has(tabId) && !mirroredUnifiedIds.has(tabId)
-        )
-      )
-    }))
+    const strippedGroups = retainClientPlacedMirroredTabs({
+      groups: currentGroups,
+      mirroredUnifiedIds,
+      validUnifiedTabIds,
+      clientGroupIdByLocalTabId,
+      nextActiveUnifiedTabId
+    })
     const target = strippedGroups.find((group) => group.id === targetGroupId) ?? {
       id: targetGroupId,
       worktreeId,
@@ -2734,7 +2797,9 @@ function applyWebSessionTabsSnapshotWithContext(
     }
     const targetOrder = [
       ...target.tabOrder.filter((tabId) => validUnifiedTabIds.has(tabId)),
-      ...mirroredUnifiedTabs.map((tab) => tab.id)
+      ...mirroredUnifiedTabs
+        .filter((tab) => !clientGroupIdByLocalTabId.has(tab.id))
+        .map((tab) => tab.id)
     ]
     const targetActiveTabId =
       nextActiveUnifiedTabId && targetOrder.includes(nextActiveUnifiedTabId)
@@ -2754,7 +2819,15 @@ function applyWebSessionTabsSnapshotWithContext(
     const merged = strippedGroups.some((group) => group.id === targetGroupId)
       ? strippedGroups.map((group) => (group.id === targetGroupId ? updatedTarget : group))
       : [...strippedGroups, updatedTarget]
-    return merged.filter((group) => group.id === targetGroupId || group.tabOrder.length > 0)
+    return merged.filter(
+      (group) =>
+        group.id === targetGroupId ||
+        group.tabOrder.length > 0 ||
+        isWebSessionBrowserPlacementGroupReserved({
+          worktreeId,
+          groupId: group.id
+        })
+    )
   })()
 
   const nextTabBarOrder = (() => {
@@ -3360,8 +3433,7 @@ export function applyWebSessionTabsStorePatch(
   let mirroredAgentStatusChanged = false
   useAppStore.setState((state) => {
     const patch = buildPatch(state)
-    mirroredAgentStatusChanged =
-      patch !== state && Object.prototype.hasOwnProperty.call(patch, 'agentStatusByPaneKey')
+    mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     return patch
   })
   // Why: paired-web snapshots bypass setAgentStatus, so arm the stale-boundary timer explicitly like local hook events do.

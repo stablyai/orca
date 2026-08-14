@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
+import { hasClientEnvironmentFooter } from '../../../../shared/client-environment-info'
+
 const SSH_PREFIX = 'SSH connection is not active'
 // Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
 const SSH_CONNECT_FAILURE_PREFIX = 'SSH connection failed'
@@ -14,9 +18,16 @@ const STALE_DAEMON_CWD_MARKERS = [
 ]
 // Thrown by ipc/pty.ts when a persisted pane owner can't be proven alive or dead (STA-3536).
 const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
+// Why one source: the test and replace forms must match the same token, and a lone /g regex carries
+// lastIndex state across .test() calls. Capture the leading boundary so replacement can restore it.
+const TERMINAL_HOST_GONE_SOURCE = '(^|[^a-z0-9_])terminal_host_gone(?=$|[^a-z0-9_])'
+const TERMINAL_HOST_GONE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE)
+const TERMINAL_HOST_GONE_REPLACE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE, 'g')
+const LEGACY_TERMINAL_HOST_GONE_PATTERN =
+  /(^|[^a-z])connect (?:ENOENT|ECONNREFUSED) [^\r\n]*orca-terminal-host-v[^\r\n]*/i
 
 function isSshError(error: string): boolean {
-  return error.startsWith(SSH_PREFIX) || error.includes(SSH_RELAY_LOST_MARKER)
+  return isSshReconnectOwnedTerminalError(error)
 }
 
 /** A single error line the SSH reconnect banner already covers — hide instead of stacking under/over it. */
@@ -44,18 +55,46 @@ export function shouldOfferDaemonRestart(error: string): boolean {
   )
 }
 
-/** Swaps the raw pane-owner-unverified code for copy a user can act on. */
-export function humanizeTerminalError(error: string): string {
-  if (!error.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
-    return error
-  }
-  return error.replace(
-    PANE_OWNER_UNVERIFIED_MARKER,
-    translate(
-      'auto.components.terminal.pane.TerminalErrorToast.7ee11bc0db',
-      "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
+export function isExplainedTerminalError(error: string): boolean {
+  return error
+    .split('\n')
+    .some(
+      (line) =>
+        TERMINAL_HOST_GONE_PATTERN.test(line) || LEGACY_TERMINAL_HOST_GONE_PATTERN.test(line)
     )
+}
+
+/** Swaps raw daemon-boundary codes for copy a user can act on. */
+export function humanizeTerminalError(error: string): string {
+  let humanized = error
+  if (humanized.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
+    humanized = humanized.replace(
+      PANE_OWNER_UNVERIFIED_MARKER,
+      translate(
+        'auto.components.terminal.pane.TerminalErrorToast.7ee11bc0db',
+        "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
+      )
+    )
+  }
+  if (!isExplainedTerminalError(humanized)) {
+    return humanized
+  }
+  const explanation = translate(
+    'auto.components.terminal.pane.TerminalErrorToast.e16012e31e',
+    'The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.'
   )
+  return humanized
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(TERMINAL_HOST_GONE_REPLACE_PATTERN, (_match, prefix: string) =>
+          prefix.concat(explanation)
+        )
+        .replace(LEGACY_TERMINAL_HOST_GONE_PATTERN, (_match, prefix: string) =>
+          prefix.concat(explanation)
+        )
+    )
+    .join('\n')
 }
 
 export function TerminalErrorToast({
@@ -69,7 +108,31 @@ export function TerminalErrorToast({
 }): React.JSX.Element {
   const ssh = isSshError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+  // Restart cannot recover a session after its owning daemon exits.
+  const showIssueLink = !ssh && !showDaemonRestart && !isExplainedTerminalError(error)
   const displayError = humanizeTerminalError(error)
+  const [environmentFooter, setEnvironmentFooter] = useState<{
+    error: string
+    footer: string
+  } | null>(null)
+
+  // Why: a select-all copy should carry details loaded asynchronously from preload.
+  useEffect(() => {
+    if (ssh || hasClientEnvironmentFooter(displayError)) {
+      return
+    }
+    let cancelled = false
+    void resolveClientEnvironmentFooter().then((footer) => {
+      if (!cancelled) {
+        setEnvironmentFooter({ error: displayError, footer })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [displayError, ssh])
+
+  const footer = environmentFooter?.error === displayError ? environmentFooter.footer : ''
 
   return (
     <div
@@ -101,7 +164,7 @@ export function TerminalErrorToast({
                 'Restart the terminal daemon from here to clear stale daemon state.'
               )}
             </>
-          ) : !ssh ? (
+          ) : showIssueLink ? (
             <>
               {'\n'}
               {translate(
@@ -120,6 +183,7 @@ export function TerminalErrorToast({
               .
             </>
           ) : null}
+          {!ssh && footer ? `\n\n${footer}` : null}
         </span>
         {showDaemonRestart ? (
           <button

@@ -61,7 +61,7 @@ describe('claude agent teams shim env', () => {
       expect(plan).toMatchObject({
         command: "claude --teammate-mode auto 'hello'",
         env: expect.objectContaining({ TMUX_PANE: '%1' }),
-        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+        envToDelete: ['TERM_PROGRAM']
       })
       expect(capturedShimBin).toBe(cliPath)
     }

@@ -15,13 +15,17 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import { getPosixPrimeAgentShellWrapper } from '../pty/prime-agent-shell-wrapper'
+import {
+  getFishCodexShellLaunchPreflight,
+  getPosixCodexShellLaunchPreflight
+} from '../pty/codex-shell-launch-preflight'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
   getFishShellReadyInitCommand,
   getZshEnvTemplate,
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
+  SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
   getZshStartupFileSourceBlock
 } from '../shell-templates'
 export {
@@ -93,6 +97,7 @@ function resolveOriginalZshenvSourceDir(): string {
 
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
+${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -109,14 +114,6 @@ fi
 # Why: preserve bash's normal login-shell contract. Many users already source
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-__orca_restore_attribution_path
 __orca_restore_agent_teams_path() {
   [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -130,9 +127,9 @@ __orca_restore_agent_teams_path
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
-${getPosixPrimeAgentShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+${getPosixCodexShellLaunchPreflight()}
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command (e.g. an interrupted Claude/Codex CLI)
 # exits — mirrors the zsh wrapper. Without this, bash users (default on most
@@ -226,14 +223,6 @@ ${getZshStartupFileSourceBlock({
   interactiveOnly: true,
   skipWhenHomeIsCurrentZdotdir: true
 })}
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-[[ ! -o login ]] && __orca_restore_attribution_path
 __orca_restore_agent_teams_path() {
   [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -247,9 +236,9 @@ if [[ ! -o login ]]; then
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
   ${getPosixOmpShellWrapper()}
-  ${getPosixPrimeAgentShellWrapper()}
   # Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
   [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+  ${getPosixCodexShellLaunchPreflight()}
 fi
 __orca_osc133_precmd() {
   local exit_code=$?
@@ -288,14 +277,6 @@ ${getZshStartupFileSourceBlock({ fileName: '.zprofile' })}
   const zshRc = getZshShellReadyRcfileContent()
   const zshLogin = `# Orca zsh shell-ready wrapper
 ${getZshStartupFileSourceBlock({ fileName: '.zlogin', interactiveOnly: true })}
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-__orca_restore_attribution_path
 __orca_restore_agent_teams_path() {
   [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -308,8 +289,8 @@ __orca_restore_agent_teams_path
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
-${getPosixPrimeAgentShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+${getPosixCodexShellLaunchPreflight()}
 ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
 ${getZshFinalZdotdirRestoreBlock()}
 `
@@ -372,7 +353,8 @@ function getWrappedShellLaunchConfig(
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
         ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
-        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0',
+        ORCA_SHELL_STARTUP_IDENTITY: options.emitReadyMarker ? '1' : '0'
       },
       supportsReadyMarker: options.emitReadyMarker
     }
@@ -383,7 +365,8 @@ function getWrappedShellLaunchConfig(
     return {
       args: ['--rcfile', `${getShellReadyWrapperRoot()}/bash/rcfile`],
       env: {
-        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0',
+        ORCA_SHELL_STARTUP_IDENTITY: options.emitReadyMarker ? '1' : '0'
       },
       supportsReadyMarker: options.emitReadyMarker
     }
@@ -402,10 +385,14 @@ function getWrappedShellLaunchConfig(
     }
   }
 
-  // Why: mirrors daemon/shell-ready.ts; attribution-only fish stays unwrapped.
+  // Why: mirrors daemon/shell-ready.ts; markerless fish stays unwrapped.
   if (shellName === 'fish' && options.emitReadyMarker) {
     return {
-      args: ['-l', '-C', getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED)],
+      args: [
+        '-l',
+        '-C',
+        `${getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED)}\n${getFishCodexShellLaunchPreflight()}`
+      ],
       env: { ORCA_SHELL_READY_MARKER: '1' },
       supportsReadyMarker: true
     }
@@ -422,7 +409,7 @@ export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchCo
   return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: true })
 }
 
-export function getAttributionShellLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
+export function getMarkerlessShellLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
   return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: false })
 }
 
@@ -433,7 +420,7 @@ export function writeStartupCommandWhenShellReady(
   proc: pty.IPty,
   startupCommand: string,
   onExit: (cleanup: () => void) => void,
-  // Why: only Orca-wrapped bash/zsh have bracketed-paste active; other shells use the raw path to avoid echoing the ESC[200~ markers.
+  // Why: only shells with bracketed-paste active (see isBracketedPasteSafeShell) accept the wrapper; others use the raw path so ESC[200~ isn't echoed.
   options: { bracketedPasteSafe?: boolean } = {}
 ): void {
   let sent = false

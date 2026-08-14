@@ -37,6 +37,7 @@ vi.mock('./web-runtime-session', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
@@ -179,7 +180,7 @@ function seedRemoteMirrorState(): void {
   const runtimeEnvironments = [
     { id: ENV_A, createdAt: 100, pairingRevision: REVISION_A },
     { id: ENV_B, createdAt: 200, pairingRevision: REVISION_B }
-  ] as AppState['runtimeEnvironments']
+  ] as PublicKnownRuntimeEnvironment[]
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
   useAppStore.setState(
     {

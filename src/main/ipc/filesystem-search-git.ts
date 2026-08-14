@@ -7,7 +7,7 @@ import {
   ingestGitGrepLine,
   SEARCH_TIMEOUT_MS
 } from '../../shared/text-search'
-import { gitSpawn } from '../git/runner'
+import { gitSpawnAfterWindowsEnvironmentReady } from '../git/runner'
 import {
   isWslLinkedWorktreeGitRoutingCandidate,
   prepareWslLinkedWorktreeGitRouting
@@ -29,18 +29,18 @@ export async function searchWithGitGrep(
   if (isWslLinkedWorktreeGitRoutingCandidate(rootPath, localGitOptions.wslDistro)) {
     await prepareWslLinkedWorktreeGitRouting(rootPath, localGitOptions.wslDistro)
   }
+  const gitArgs = buildGitGrepArgs(args.query, args)
+  const child = await gitSpawnAfterWindowsEnvironmentReady(gitArgs, {
+    cwd: rootPath,
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
   return new Promise((resolve) => {
-    const gitArgs = buildGitGrepArgs(args.query, args)
     const matchRegex = buildSubmatchRegex(args.query, args)
     const acc = createAccumulator()
     let stdoutBuffer = ''
     let done = false
 
-    const child = gitSpawn(gitArgs, {
-      cwd: rootPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
     let killTimeout: ReturnType<typeof setTimeout>
 
     function resolveOnce(): void {

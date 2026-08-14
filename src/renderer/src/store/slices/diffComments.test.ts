@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment, Worktree } from '../../../../shared/types'
@@ -751,5 +751,85 @@ describe('bulk clear diff comments', () => {
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)).toBe(laterComments)
     errSpy.mockRestore()
+  })
+})
+
+describe('worktree diff comment rollback convergence', () => {
+  let errSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    errSpy.mockRestore()
+  })
+
+  function addNote(store: ReturnType<typeof createTestStore>, body: string, lineNumber: number) {
+    return store.getState().addDiffComment({
+      worktreeId: WT,
+      filePath: 'src/foo.ts',
+      lineNumber,
+      body,
+      side: 'modified'
+    })
+  }
+
+  it('converges to the pre-burst list when two consecutive writes fail', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' })]
+    seed(store, comments)
+    updateMeta.mockRejectedValue(new Error('disk full'))
+
+    await expect(Promise.all([addNote(store, 'A', 11), addNote(store, 'B', 12)])).resolves.toEqual([
+      null,
+      null
+    ])
+    expect(updateMeta).toHaveBeenCalledTimes(2)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+  })
+
+  it('converges a mixed-mutator failing burst and still reports the delete failure', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' }), makeComment({ id: 'c2' })]
+    seed(store, comments)
+    updateMeta.mockRejectedValue(new Error('disk full'))
+
+    const removed = store.getState().deleteDiffComment(WT, 'c1')
+    const marked = store.getState().markDiffCommentsSent(WT, ['c2'], 3000)
+
+    // Why: deleteDiffComment has no boolean contract, so its absent return must not hide the failure.
+    await expect(removed).resolves.toBeUndefined()
+    await expect(marked).resolves.toBe(false)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(errSpy).toHaveBeenCalled()
+  })
+
+  it('converges on the runtime branch when two consecutive writes fail', async () => {
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    const comments = [makeComment({ id: 'c1' })]
+    seed(store, comments, { hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' })
+    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime unreachable'))
+
+    await expect(Promise.all([addNote(store, 'A', 11), addNote(store, 'B', 12)])).resolves.toEqual([
+      null,
+      null
+    ])
+    expect(updateMeta).not.toHaveBeenCalled()
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
   })
 })

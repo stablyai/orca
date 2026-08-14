@@ -7,7 +7,7 @@ import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import { mapRemoteScanBatches } from './remote-session-scan-batching'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import { recordRemoteSessionScanIssue } from './remote-session-scan-issues'
+import { recordSessionScanIssue } from './session-scan-issues'
 import type {
   RemoteScannerContext,
   RemoteSessionCandidate,
@@ -124,7 +124,7 @@ function recordRemoteDirectoryIssue(
   err: unknown
 ): void {
   if (!isMissingRemoteSessionPathError(err)) {
-    recordRemoteSessionScanIssue(issues, {
+    recordSessionScanIssue(issues, {
       executionHostId,
       agent: source.agent,
       kind: 'host',

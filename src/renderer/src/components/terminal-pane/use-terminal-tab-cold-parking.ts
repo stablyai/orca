@@ -13,8 +13,7 @@ import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal
 import { getTerminalTabColdParkRecheckDelayMs } from './terminal-cold-park-recheck-deadlines'
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
-  selectColdParkedTerminalTabs,
-  type TerminalTabColdParkCandidate
+  selectColdParkedTerminalTabs
 } from './terminal-hidden-view-parking'
 import { selectPairedRuntimeParkingEnvironmentIds } from './terminal-park-pty-restore-eligibility'
 import { useTerminalParkWorktreeOwner } from './terminal-park-worktree-owner'
@@ -28,6 +27,8 @@ import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exe
 import { useTerminalForceParkExemptTabIds } from './use-terminal-force-park-exempt-tabs'
 import { useTerminalParkAuthorityRevisionKey } from './terminal-park-authority-revision'
 import { selectRenderedParkedTerminalTabIds } from './terminal-rendered-parked-tab-ids'
+import { createTerminalTabActivationOrder } from './terminal-tab-activation-order'
+import { buildTerminalTabColdParkCandidates } from './terminal-tab-park-candidates'
 import {
   getTerminalParkingAssignmentsKey,
   getTerminalParkingInputsKey,
@@ -53,6 +54,7 @@ export function useTerminalTabColdParking(args: {
   terminalTabs: readonly TerminalTab[]
   assignments: ReadonlyMap<string, TerminalOverlayTabAssignment>
   isWorktreeActive: boolean
+  activeTerminalTabId: string | null
   /** Worktree-level park verdict from Terminal.tsx. */
   coldParkTerminalPanes: boolean
   /** Retention-budget force-park (C1 slice B): unlike ordinary parks, the
@@ -72,6 +74,7 @@ export function useTerminalTabColdParking(args: {
     terminalTabs,
     assignments,
     isWorktreeActive,
+    activeTerminalTabId,
     coldParkTerminalPanes,
     isForceParked = false,
     shouldMeasureHiddenWorktree,
@@ -117,6 +120,8 @@ export function useTerminalTabColdParking(args: {
     [sleepingAgentSessionsByPaneKey, worktreeId]
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
+  // Why: view switches hide every tab at once, so the park clock cannot rank them.
+  const terminalTabActivationOrderRef = useRef(createTerminalTabActivationOrder())
   // Why (shared measure-clock contract with Terminal.tsx): tab hiddenSince
   // survives a background-measure window so per-tab park deadlines stay in
   // sync with the worktree retention/TTL clock, and a post-measure cool-down
@@ -163,6 +168,7 @@ export function useTerminalTabColdParking(args: {
         terminalTabHiddenSinceRef.current.delete(tabId)
       }
     }
+    terminalTabActivationOrderRef.current.retainTabIds(currentTerminalTabIds)
 
     // Why: measure end starts the re-park cool-down (worktree measure-clock
     // contract) — hiddenSince is preserved through the window, so without the
@@ -183,32 +189,23 @@ export function useTerminalTabColdParking(args: {
     }
 
     const activeLeafIds = terminalParkActiveLeafKey.split('\u0000')
-    const candidates: TerminalTabColdParkCandidate[] = terminalTabs.map((terminalTab, index) => {
-      const assignment = assignments.get(terminalTab.id)
-      const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-      const hasActivityTerminalPortal = portalTabIds.has(terminalTab.id)
-      // Why measuring preserves the clock: the startup probe still needs
-      // mounted panes (selection + render veto below), but deleting
-      // hiddenSince would restart the hysteresis AND desync per-tab deadlines
-      // from the worktree retention/TTL clock on every ~3s probe.
-      if (isVisible || hasActivityTerminalPortal) {
-        terminalTabHiddenSinceRef.current.delete(terminalTab.id)
-      } else if (
-        !shouldMeasureHiddenWorktree &&
-        !terminalTabHiddenSinceRef.current.has(terminalTab.id)
-      ) {
-        terminalTabHiddenSinceRef.current.set(terminalTab.id, nowMs)
-      }
-      return {
-        id: terminalTab.id,
-        ptyId: terminalTab.ptyId,
-        activeLeafId: activeLeafIds[index] || null,
-        pendingActivationSpawn: terminalTab.pendingActivationSpawn,
-        isVisible,
-        hasActivityTerminalPortal,
-        hiddenSinceMs: terminalTabHiddenSinceRef.current.get(terminalTab.id) ?? null
-      }
-    })
+    // Why the leaf id is attached out here rather than inside the builder: the park-owner
+    // check is its only reader, and the leaf key is this hook's own store subscription.
+    // The builder maps terminalTabs in order, so the index stays aligned with the key.
+    const candidates = buildTerminalTabColdParkCandidates({
+      terminalTabs,
+      assignments,
+      isWorktreeActive,
+      activeTerminalTabId,
+      portalTabIds,
+      shouldMeasureHiddenWorktree,
+      hiddenSinceByTabId: terminalTabHiddenSinceRef.current,
+      activationOrder: terminalTabActivationOrderRef.current,
+      nowMs
+    }).map((candidate, index) => ({
+      ...candidate,
+      activeLeafId: activeLeafIds[index] || null
+    }))
 
     const nextColdParkedTerminalTabIds = selectColdParkedTerminalTabs({
       worktreeId,
@@ -264,6 +261,7 @@ export function useTerminalTabColdParking(args: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- semantic keys own the tab and assignment dependencies.
   }, [
     activityTerminalPortals,
+    activeTerminalTabId,
     isWorktreeActive,
     pendingStartupByTabId,
     runtimeStatusByEnvironmentId,

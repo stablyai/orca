@@ -7,6 +7,7 @@ import {
   toHostReadableTranscriptPath,
   wslCodexSessionsDirs
 } from './host-readable-transcript-path'
+import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 const DEBIAN_HOME = '\\\\wsl.localhost\\Debian\\home\\other'
@@ -107,6 +108,38 @@ describe('toHostReadableTranscriptPath', () => {
         listWslHomeDirs: async () => [UBUNTU_HOME]
       })
     ).resolves.toBeNull()
+  })
+
+  it('prefers a later distro hit over an earlier gate refusal', async () => {
+    // Guest path under Debian's $HOME so the refusing Debian probe ranks first.
+    await expect(
+      toHostReadableTranscriptPath('/home/other/x.jsonl', {
+        platform: 'win32',
+        pathExists: async (candidate) => {
+          if (candidate.includes('Debian')) {
+            throw new WslTranscriptFsError('timeout', 'slow share')
+          }
+          return candidate.includes('Ubuntu')
+        },
+        listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
+      })
+    ).resolves.toBe('\\\\wsl.localhost\\Ubuntu\\home\\other\\x.jsonl')
+  })
+
+  it('reports unavailability, not a miss, when a refused distro was never probed', async () => {
+    const refusal = new WslTranscriptFsError('timeout', 'slow share')
+    await expect(
+      toHostReadableTranscriptPath('/home/other/x.jsonl', {
+        platform: 'win32',
+        pathExists: async (candidate) => {
+          if (candidate.includes('Debian')) {
+            throw refusal
+          }
+          return false
+        },
+        listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
+      })
+    ).rejects.toBe(refusal)
   })
 
   it('does not translate guest paths off Windows', async () => {

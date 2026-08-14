@@ -106,6 +106,13 @@ import {
 import { buildExternalAutomationListEntries } from './external-automation-list-entries'
 import { shouldCloseDetailForLostSelection } from './automation-detail-selection'
 import { useAutomationListSearch } from './use-automation-list-search'
+import { useAutomationListView } from './use-automation-list-view'
+import {
+  EMPTY_AUTOMATION_LIST_FILTER,
+  nextAutomationListSort,
+  type AutomationListFilter,
+  type AutomationListSort
+} from './automation-list-view'
 import { AutomationDeleteDialog, ExternalAutomationDeleteDialog } from './AutomationDeleteDialogs'
 import { AutomationsListPanel } from './AutomationsListPanel'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
@@ -173,6 +180,8 @@ export default function AutomationsPage(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [listSearchQuery, setListSearchQuery] = useState('')
+  const [listFilter, setListFilter] = useState<AutomationListFilter>(EMPTY_AUTOMATION_LIST_FILTER)
+  const [listSort, setListSort] = useState<AutomationListSort | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createTarget, setCreateTarget] = useState<AutomationCreateTarget>('orca')
   const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null)
@@ -273,13 +282,27 @@ export default function AutomationsPage(): React.JSX.Element {
     isListSearchActive,
     filteredAutomations,
     filteredExternalAutomationEntries,
-    hasListItems,
-    hasFilteredListItems
+    hasListItems
   } = useAutomationListSearch({
     listSearchQuery,
     automations,
     externalAutomationEntries,
     repoMap,
+    selectedId,
+    selectedExternalKey,
+    selectAutomationId,
+    selectExternalKey
+  })
+  const {
+    visibleItems,
+    isListFilterActive,
+    hasVisibleListItems: hasFilteredListItems
+  } = useAutomationListView({
+    automations: filteredAutomations,
+    externalEntries: filteredExternalAutomationEntries,
+    runs,
+    filter: listFilter,
+    sort: listSort,
     selectedId,
     selectedExternalKey,
     selectAutomationId,
@@ -355,7 +378,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const loadAutomationYamlHooksForRepo = useCallback(
     async (repoId: string): Promise<OrcaHooks | null> => {
       const key = getAutomationHooksCacheKey(repoId)
-      if (Object.prototype.hasOwnProperty.call(automationYamlHooksByRepoKey, key)) {
+      if (Object.hasOwn(automationYamlHooksByRepoKey, key)) {
         return automationYamlHooksByRepoKey[key] ?? null
       }
       const existingPromise = automationHookCheckPromisesRef.current.get(key)
@@ -376,7 +399,7 @@ export default function AutomationsPage(): React.JSX.Element {
         return hooks
       }
       setAutomationYamlHooksByRepoKey((current) =>
-        Object.prototype.hasOwnProperty.call(current, key) ? current : { ...current, [key]: hooks }
+        Object.hasOwn(current, key) ? current : { ...current, [key]: hooks }
       )
       return hooks
     },
@@ -2015,11 +2038,15 @@ export default function AutomationsPage(): React.JSX.Element {
           hasListItems={hasListItems}
           hasFilteredListItems={hasFilteredListItems}
           isListSearchActive={isListSearchActive}
+          isListFilterActive={isListFilterActive}
           listSearchQuery={listSearchQuery}
           isListSearchQueryTooLarge={isListSearchQueryTooLarge}
           onListSearchQueryChange={setListSearchQuery}
-          filteredAutomations={filteredAutomations}
-          filteredExternalAutomationEntries={filteredExternalAutomationEntries}
+          visibleItems={visibleItems}
+          listFilter={listFilter}
+          onListFilterChange={setListFilter}
+          listSort={listSort}
+          onListSort={(field) => setListSort((current) => nextAutomationListSort(current, field))}
           selectedId={selectedId}
           selectedExternalKey={selectedExternalKey}
           runs={runs}

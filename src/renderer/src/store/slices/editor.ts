@@ -10,7 +10,10 @@ import {
 import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import {
+  areLocalWindowsWslPathAliases,
+  isPathInsideOrEqual
+} from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import {
   buildCheckRunDetailsTabId,
@@ -107,6 +110,7 @@ import {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { sanitizeRecentTabIds } from './tab-group-state'
+import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 
 export type {
   ActiveRightSidebarTab,
@@ -1027,6 +1031,23 @@ function isSameEditorOwner(
   )
 }
 
+function canReuseLocalWslAlias(
+  state: AppState,
+  existing: OpenFile,
+  file: Pick<OpenFile, 'filePath' | 'worktreeId' | 'runtimeEnvironmentId' | 'externalSshTargetId'>,
+  runtimeEnvironmentId: string | null | undefined
+): boolean {
+  return (
+    isLocalWindowsDesktopClient() &&
+    runtimeOwnerKey(runtimeEnvironmentId) === null &&
+    !existing.externalSshTargetId?.trim() &&
+    !file.externalSshTargetId?.trim() &&
+    areLocalWindowsWslPathAliases(existing.filePath, file.filePath) &&
+    getConnectionIdForFileFromState(state, file.worktreeId, file.filePath) === null &&
+    getConnectionIdForFileFromState(state, existing.worktreeId, existing.filePath) === null
+  )
+}
+
 export function buildOwnedEditorFileId(
   filePath: string,
   worktreeId: string,
@@ -1745,9 +1766,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
       const existing = s.openFiles.find(
         (f) =>
-          f.filePath === file.filePath &&
           matchesEditorMode(f, reusableOpenFileModes) &&
-          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
+          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId) &&
+          (f.filePath === file.filePath || canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId))
       )
       // Why: a snapshot's reopenId can be a stale shape — the same path is bare in whichever worktree opened it first and namespaced elsewhere — so honoring it while this owner's tab is already open would strand activeFileId and the unified tab on an id no OpenFile has.
       const id = existing
@@ -4142,7 +4163,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Why: session-local conflict tracking (Resolved-locally) lives only in the renderer; main returns raw git status, so the renderer owns conflictStatusSource.
   setGitStatus: (worktreeId, status) =>
     set((s) => {
-      const hadStatusEntry = Object.prototype.hasOwnProperty.call(s.gitStatusByWorktree, worktreeId)
+      const hadStatusEntry = Object.hasOwn(s.gitStatusByWorktree, worktreeId)
       const prevEntries = s.gitStatusByWorktree[worktreeId] ?? []
       const prevOperation = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
       const currentTracked = { ...s.trackedConflictPathsByWorktree[worktreeId] }

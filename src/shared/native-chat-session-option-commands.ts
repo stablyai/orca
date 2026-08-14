@@ -22,7 +22,7 @@ export function parseBuiltSessionOptionCommand(
   const marker = '__orca_session_option_value__'
   const template = build(marker)
   const markerIndex = template.indexOf(marker)
-  if (markerIndex < 0) {
+  if (markerIndex === -1) {
     return null
   }
   const prefix = template.slice(0, markerIndex)

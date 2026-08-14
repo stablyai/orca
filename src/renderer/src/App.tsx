@@ -85,7 +85,7 @@ import {
 } from '@/lib/floating-workspace-terminal-actions'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
-import { OPEN_WORKSPACE_BOARD_EVENT } from './components/sidebar/useWorkspaceBoardPanel'
+import { TOGGLE_WORKSPACE_BOARD_EVENT } from './components/sidebar/useWorkspaceBoardPanel'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
@@ -116,7 +116,10 @@ import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { MacosTccPromptNoticeHost } from './hooks/MacosTccPromptNoticeHost'
 import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
-import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
+import {
+  isIntentionalAppRestartInProgress,
+  registerUpdaterBeforeUnloadBypass
+} from './lib/updater-beforeunload'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
@@ -338,7 +341,6 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
-const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('./components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
@@ -963,6 +965,10 @@ function App(): React.JSX.Element {
               // Why: disconnected SSH repos hydrate from local metadata; only runtime-owned repos use placeholders.
               parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
           )
+          // Why: worktree refresh can spawn host Git; wait for main's shell-PATH generation fence first.
+          await timeRendererStartupStep('first-window-services-await', () =>
+            window.api.app.awaitFirstWindowStartupServices()
+          )
           await timeRendererStartupStep('fetch-hydration-worktrees', () =>
             mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY, (repo) =>
               actions.fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
@@ -1095,10 +1101,7 @@ function App(): React.JSX.Element {
             logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
           }
 
-          // Why: main overlaps daemon/hook startup with hydration, but restored terminals need those services ready before they spawn/reconnect PTYs.
-          await timeRendererStartupStep('first-window-services-await', () =>
-            window.api.app.awaitFirstWindowStartupServices()
-          )
+          // first-window-services-await already fenced worktree hydration; terminal recovery reuses that ready state.
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
@@ -1346,9 +1349,26 @@ function App(): React.JSX.Element {
       // into the store via Zustand setters. The earlier read is only for the
       // gating flags and would miss those updates.
       const freshState = useAppStore.getState()
-      const sessionSnapshots = shouldCaptureSession
-        ? buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)
-        : []
+      let sessionSnapshots: ReturnType<typeof buildWorkspaceSessionHostSnapshots> = []
+      try {
+        sessionSnapshots = shouldCaptureSession
+          ? buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)
+          : []
+      } catch (error) {
+        // Why: dirty drafts exist only in the full session snapshot.
+        if (
+          !isIntentionalAppRestartInProgress() ||
+          freshState.openFiles.some((file) => file.isDirty)
+        ) {
+          throw error
+        }
+        console.error('[app] Full renderer session snapshot failed; using durable session', error)
+        window.api.app.stageBeforeUnloadSync({
+          sessions: [],
+          ui: buildActiveViewUnloadPatch(freshState)
+        })
+        return
+      }
       window.api.app.stageBeforeUnloadSync({
         sessions: sessionSnapshots,
         ui: buildActiveViewUnloadPatch(freshState)
@@ -1415,7 +1435,9 @@ function App(): React.JSX.Element {
         hideWorkspacesFromOtherDevices,
         alwaysShowDefaultBranchWorkspace,
         showDotfilesByWorktree,
-        filterRepoIds,
+        // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to
+        // main, which owns a mutable array — copy at the boundary rather than widening the wire type.
+        filterRepoIds: [...filterRepoIds],
         // Why (#9002): activeView is deliberately NOT included here. It used to
         // ride this same 150ms writer (#8265), which meant every top-level view
         // switch scheduled a full durable-state save. The narrow preference
@@ -1475,18 +1497,17 @@ function App(): React.JSX.Element {
     } else if (settings.theme === 'light') {
       applyDocumentTheme('light')
       return undefined
-    } else {
-      // system
-      const mq = window.matchMedia('(prefers-color-scheme: dark)')
-      applyDocumentTheme('system')
-      const handler = (): void => {
-        applyDocumentTheme('system')
-        // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
-        scheduleRuntimeGraphSync()
-      }
-      mq.addEventListener('change', handler)
-      return () => mq.removeEventListener('change', handler)
     }
+    // system
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    applyDocumentTheme('system')
+    const handler = (): void => {
+      applyDocumentTheme('system')
+      // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
+      scheduleRuntimeGraphSync()
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
   }, [settings])
 
   useEffect(() => {
@@ -1532,10 +1553,7 @@ function App(): React.JSX.Element {
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
   const showSidebar =
-    activeView !== 'settings' &&
-    activeView !== 'activity' &&
-    activeView !== 'space' &&
-    activeView !== 'skills'
+    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
   // Tasks/Landing show the full titlebar only when the sidebar is collapsed; open, they mirror workspace view (creation suppresses it).
   const stackedSidebarOpen =
     !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
@@ -1708,7 +1726,7 @@ function App(): React.JSX.Element {
             }
             return claim('workspace.openBoard', () => {
               useAppStore.getState().setSidebarOpen(true)
-              window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
+              window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
             })
           }
         ],
@@ -2402,7 +2420,6 @@ function App(): React.JSX.Element {
                               )}
                             >
                               {activeView === 'settings' ? <Settings /> : null}
-                              {activeView === 'skills' ? <SkillsPage /> : null}
                               {activeView === 'artifacts' ? <ArtifactsPage /> : null}
                               {activeView === 'tasks' ? <TaskPage /> : null}
                               {activeView === 'automations' ? <AutomationsPage /> : null}

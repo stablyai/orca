@@ -563,6 +563,14 @@
               "64555d0014": "No se encontró ninguna rama base"
             }
           }
+        },
+        "browser": {
+          "tab": {
+            "open": {
+              "urlFailed": "No se pudo abrir la URL.",
+              "searchFailed": "No se pudo buscar con {{value0}}."
+            }
+          }
         }
       },
       "worktree": {
@@ -778,7 +786,7 @@
         "a9fb10afca": "Terminal",
         "5235c215ca": "Elige qué proveedores de tareas aparecen en la página Tareas y en la barra lateral.",
         "85f4fd7710": "Fuentes de tareas",
-        "ab4b21b58e": "Nombres de ramas, refs base, atribución y Git AI Author.",
+        "ab4b21b58e": "Nombres de rama, refs base y Git AI Author.",
         "09607cb0fe": "Git y Source Control",
         "33a5e1d597": "Conecta GitHub, GitLab, Linear y servicios de hosting de código.",
         "2b043783ef": "Integraciones",
@@ -2991,7 +2999,9 @@
             "2c38630a01": "El espacio de trabajo ya no existe",
             "4f0d9a71c2": "La pestaña ya no existe",
             "d7d496a451": "La página del navegador ya no existe",
-            "7726ce9970": "La pestaña del emulador móvil ya no existe"
+            "7726ce9970": "La pestaña del emulador móvil ya no existe",
+            "chooseAction": "Elige una acción.",
+            "searchProvider": "Buscar con {{value0}}"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Comando",
@@ -3837,34 +3847,6 @@
         }
       },
       "skills": {
-        "SkillsPage": {
-          "cb142070b4": "Actualizar",
-          "984405683f": "Plugin",
-          "4d177feabd": "Incluido",
-          "aa59462502": "Repositorio",
-          "571c5818c1": "Inicio",
-          "0bc1379f4c": "Todas las fuentes",
-          "38e0951c3a": "Agent Skills",
-          "fb6bf60b52": "Claude",
-          "426be2aac6": "Codex",
-          "39b6998ddb": "Todos los proveedores",
-          "a68dee6a32": "Buscar skills",
-          "e46e162e2e": "de",
-          "b088e0785d": "Beta",
-          "f43ad6edf3": "Skills",
-          "7e828fb2c6": "Volver",
-          "ea72d6185b": "No se pudieron escanear los skills",
-          "dc4c3328ee": "Mostrar archivo",
-          "9963dff6d3": "No se encontró ninguna descripción.",
-          "995fde8337": "No se pudo mostrar el archivo del skill",
-          "ab5b777350": "Se comprobaron las carpetas de skills del home, del repositorio, incluidas y de plugins.",
-          "08a321a984": "Ajusta la búsqueda o los filtros.",
-          "4acd6d68ec": "No se encontraron skills",
-          "6a62a0168c": "No hay coincidencias",
-          "cd7893fbc1": "Escaneando skills",
-          "35b9a724a0": "Disponible",
-          "0c74e7ff34": "Instalado"
-        },
         "SkillFreshnessNudge": {
           "titleOne": "Una skill de Orca instalada está desactualizada",
           "titleMany": "{{value0}} skills de Orca instaladas están desactualizadas",
@@ -4687,14 +4669,60 @@
           "bff3bdd00c": "Cambiar nombre del espacio de trabajo",
           "8df295a78d": "No se pudo cambiar el nombre del espacio de trabajo."
         },
+        "WorktreeVisibilityHelpPopover": {
+          "c41f2d7e90": "¿Qué worktrees se ocultan de forma predeterminada?",
+          "8db4e19a26": "Este ajuste nunca oculta los worktrees creados mediante Orca.",
+          "ec1e6a10fb": "Los demás worktrees empiezan ocultos para evitar saturar inesperadamente la barra lateral.",
+          "1c68c9cf77": "Activa una fuente para mostrar todos sus worktrees actuales y futuros, o muestra worktrees individuales abajo."
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "Muestra uno sin activar su fuente.",
+          "showWorktree": "Mostrar {{value0}} en {{value1}}"
+        },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Worktrees que no son de Orca",
-          "f1f71b9f02": "Importar",
+          "f1f71b9f02": "Mostrar siempre",
           "759371df43": "Ocultar",
-          "25ddf19920": "{{value0}} disponible para importar",
+          "25ddf19920": "{{value0}} oculto actualmente",
           "8372e4bbd9": "{{value0}} mostrado actualmente",
           "5d02a5647f": "Oculto de la barra lateral",
-          "3e045d4cb8": "Mostrado en la barra lateral"
+          "3e045d4cb8": "Mostrado en la barra lateral",
+          "a3f19c07d2": "Comprobando…",
+          "b8d24e61f5": "No se pudieron listar los worktrees de este repositorio.",
+          "c5e70a93b1": "Reintentar",
+          "7d21c5e848": "Worktrees ocultos ({{value0}})",
+          "2f80cd4b97": "Mostrando…",
+          "e64b81d3a9": "Mostrar",
+          "d40d436fc2": "No se pudo actualizar la visibilidad de los worktrees. Inténtalo de nuevo.",
+          "unsupportedHost": "Este host no admite la visibilidad de worktrees específica de cada fuente. Actualiza Orca en el host para cambiar esta opción.",
+          "search": "Buscar worktrees ocultos",
+          "searchPlaceholder": "Buscar en {{value0}} worktrees…",
+          "noMatches": "No hay worktrees coincidentes",
+          "allShown": "Todos los worktrees detectados se muestran",
+          "noneFound": "No se encontraron worktrees ajenos a Orca",
+          "tryDifferentSearch": "Prueba con otro nombre o ruta.",
+          "disableSource": "Desactiva una fuente para gestionar sus worktrees individualmente.",
+          "appearWhenDetected": "Los worktrees nuevos aparecerán aquí cuando Orca los detecte."
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "Otras ubicaciones",
+          "custom": "Ubicación personalizada",
+          "otherPath": "Fuera de las fuentes listadas",
+          "invalidPath": "Introduce una ruta absoluta para este host.",
+          "duplicatePath": "Esta ubicación ya está en la lista.",
+          "limit": "Elimina una ubicación personalizada antes de añadir otra.",
+          "sources": "Fuentes",
+          "sourcesDescription": "Las fuentes activadas incluyen los worktrees actuales y futuros en la barra lateral.",
+          "found": "Encontrados: {{value0}}",
+          "remove": "Eliminar {{value0}}",
+          "removeLocation": "Eliminar ubicación personalizada",
+          "toggle": "Mostrar los worktrees actuales y futuros de {{value0}}",
+          "addLocation": "Añadir ubicación",
+          "worktreeRoot": "Raíz de worktrees",
+          "add": "Añadir",
+          "rootHelp": "Orca reconocerá los worktrees dentro de esta carpeta."
         },
         "add": {
           "repo": {
@@ -5011,14 +5039,7 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Ocultar worktrees externos permanentemente para {{value0}}",
-          "d9f7b2a14c": "Contraer worktrees nuevos creados externamente para {{value0}}",
-          "e2c4a8d91f": "Expandir worktrees nuevos creados externamente para {{value0}}",
-          "7c4e9b2a81": "Nuevos worktrees creados externamente",
           "5e1b8d3f62": "Ocultar worktrees externos permanentemente",
-          "4d7a1c9e53": "Estos worktrees se crearon fuera de Orca.",
-          "8b3f2e1d74": "Importar",
-          "1c9e7a4b28": "Mantener ocultos",
-          "6f2d8c1e95": "Importar todo",
           "c3e8a1f4b2": "No volver a mostrar"
         },
         "newExternalWorktreesInboxActions": {
@@ -5969,14 +5990,6 @@
           "808f9a726e": "No se aplicará ningún prefijo"
         },
         "GitPane": {
-          "d2eede4c54": "Agrega la atribución de Orca a commits, PR e issues.",
-          "e02ea23a32": "Atribución de Orca",
-          "e71ce09c42": "orca",
-          "b9b5771bb1": "atribución",
-          "b5f534717a": "coautor",
-          "9838c921ed": "coautor",
-          "afada55042": "issue",
-          "b4ef5428a7": "pr",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Encabezados actuales de límite de tasa REST de GitLab CLI cuando estén disponibles.",
@@ -6865,7 +6878,7 @@
           "3de4bbb841": "Terminal",
           "dd72ed437a": "Elige qué proveedores de tareas aparecen en la página Tareas y en la barra lateral.",
           "11faa2f7dd": "Fuentes de tareas",
-          "cfa34f4465": "Nombres de rama, refs base, atribución y Git AI Author.",
+          "cfa34f4465": "Nombres de rama, refs base y Git AI Author.",
           "70100f94c7": "Git y control de código fuente",
           "b07041697f": "Conecta GitHub, GitLab, Linear y servicios de alojamiento de código fuente.",
           "c9ca101a3b": "Integraciones",
@@ -8243,16 +8256,8 @@
         },
         "git": {
           "search": {
-            "61eab13403": "orca",
-            "1b93c1143c": "atribución",
-            "8461c908ae": "coautor",
-            "61f9f5d1fc": "coautor",
-            "af0a144bfb": "issue",
-            "6bdea421bb": "PR",
             "16f53f7323": "gh",
             "d088806071": "github",
-            "118c23484b": "Agrega la atribución de Orca a commits, PR e issues.",
-            "bc7d9f69ce": "Atribución de Orca",
             "40f9b815fd": "presupuesto API",
             "b7e52124c7": "límite de tasa",
             "ead733645f": "glab",
@@ -10149,7 +10154,7 @@
             "653c105ecc": "Más acciones de PR",
             "f316a8ca2b": "No hay comentarios sin resolver seleccionados.",
             "d00ebdc402": "Resolver comentarios de {{value0}} con IA",
-            "ed3f79c031": "Revisa el prompt antes de iniciar un agente. Una vez entregado el prompt, Orca responde a los comentarios seleccionados y resuelve los hilos en el host cuando es posible.",
+            "5eb2163b6b": "Revisa el prompt antes de iniciar un agente. Una vez entregado el prompt, Orca resuelve los hilos seleccionados en el host y responde a los comentarios que no puede resolver.",
             "f273f2271c": "Agente iniciado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.{{value4}}",
             "aa95b81a3a": "Agente iniciado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.",
             "495b2f8c4b": "Agente iniciado, pero no se pudieron resolver ni responder los comentarios seleccionados.",
@@ -10163,7 +10168,8 @@
               "pending": "Syncing…",
               "branch": "Sync Branch"
             },
-            "7e4b2a19c0": "No se pudo resolver el PR de GitHub para responder."
+            "7e4b2a19c0": "No se pudo resolver el PR de GitHub para responder.",
+            "430f1a62d4": "No se pudo resolver el hilo seleccionado en el host."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancelar",
@@ -13636,9 +13642,7 @@
           "33741dd973": "Volver a carreras"
         },
         "AutomationSchedulePicker": {
-          "22359b186a": "mañana o tarde",
           "9e677335b0": "Minuto",
-          "6b802ecc99": "Hora",
           "d90981f766": "Tiempo",
           "6b914c5fbb": "Día",
           "233b8c94b6": "Cadencia",
@@ -13647,6 +13651,11 @@
           "57e83307d0": "Días laborables",
           "837d902bba": "Semanal",
           "ddba78647e": "Cron personalizado"
+        },
+        "AutomationTimeField": {
+          "39ec1383f6": "mañana o tarde",
+          "32a5e4e35e": "Minuto",
+          "aa593eb5e2": "Hora"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reutilizar",
@@ -14316,6 +14325,7 @@
           "high": "Alto",
           "xhigh": "Muy alto",
           "max": "Máximo",
+          "ultra": "Supremo",
           "on": "Activado",
           "off": "Desactivado"
         },
@@ -14454,14 +14464,12 @@
     },
     "map": {
       "host": {
-        "all": "Todos los hosts",
         "local": "Local",
         "ssh": "SSH",
         "wsl": "WSL",
         "remote": "Remoto"
       },
       "liveContainmentMap": "Mapa de contención en vivo",
-      "hostFilter": "Filtro de host",
       "empty": "Ningún agente coincide con los filtros actuales.",
       "canvasLabel": "Mapa anidado de proyectos, espacios de trabajo y agentes",
       "zoomOut": "Alejar",

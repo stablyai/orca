@@ -100,11 +100,24 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     return entries
   }, [groupActiveTabById, unifiedTabs])
 
+  const activeTerminalTabId = useMemo(() => {
+    if (!activeGroupId) {
+      return null
+    }
+    for (const [terminalTabId, assignment] of assignments) {
+      if (assignment.groupId === activeGroupId && assignment.isActiveInGroup) {
+        return terminalTabId
+      }
+    }
+    return null
+  }, [activeGroupId, assignments])
+
   const parkedTerminalTabIds = useTerminalTabColdParking({
     worktreeId,
     terminalTabs,
     assignments,
     isWorktreeActive,
+    activeTerminalTabId,
     coldParkTerminalPanes,
     isForceParked,
     shouldMeasureHiddenWorktree,

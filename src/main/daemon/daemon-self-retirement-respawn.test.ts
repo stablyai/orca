@@ -213,17 +213,52 @@ describe('daemon self-retirement respawn', () => {
     expect(respawn).not.toHaveBeenCalled()
   })
 
-  it('does not treat an initial missing token as respawn authority', async () => {
+  it('does not respawn a listening daemon whose token is absent', async () => {
+    await startServer()
+    rmSync(tokenPath)
     const respawn = vi.fn(async () => {})
     const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
 
-    await expect(adapter.spawn({ sessionId: 'missing', cols: 80, rows: 24 })).rejects.toMatchObject(
-      {
-        code: 'ENOENT'
-      }
-    )
+    await expect(
+      adapter.spawn({ sessionId: 'startup-window', cols: 80, rows: 24 })
+    ).rejects.toThrow(/Invalid token/i)
 
     expect(respawn).not.toHaveBeenCalled()
+    adapter.dispose()
+  })
+
+  it('does not let stale disconnect evidence authorize respawning a listening daemon', async () => {
+    const original = await startServer()
+    const respawn = vi.fn(async () => {})
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+    await adapter.listProcesses()
+    const client = (
+      adapter as unknown as {
+        client: { hasObservedAuthenticatedDisconnect(): boolean }
+      }
+    ).client
+
+    await original.shutdown()
+    await waitFor(() => client.hasObservedAuthenticatedDisconnect())
+    await startServer()
+    rmSync(tokenPath)
+
+    await expect(
+      adapter.spawn({ sessionId: 'replacement-startup-window', cols: 80, rows: 24 })
+    ).rejects.toThrow(/Invalid token/i)
+
+    expect(respawn).not.toHaveBeenCalled()
+    adapter.dispose()
+  })
+
+  it('respawns when nothing is accepting on the endpoint', async () => {
+    const respawn = vi.fn(async () => {})
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+
+    // Fails after the respawn attempt because the mock respawn starts no replacement.
+    await expect(adapter.spawn({ sessionId: 'missing', cols: 80, rows: 24 })).rejects.toThrow()
+
+    expect(respawn).toHaveBeenCalledTimes(1)
     adapter.dispose()
   })
 })

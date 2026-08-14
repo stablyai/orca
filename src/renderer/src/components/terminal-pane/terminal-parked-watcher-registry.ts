@@ -58,10 +58,10 @@ export function terminalWatcherLiveWorkspaceIds(workspaceIds: Iterable<string>):
 }
 
 /**
- * Whether this tab is parked right now — the reveal remount's own mount effect
- * runs before the host effect that disposes the watcher (child effects first),
- * so a pane reading this at connect time can tell a park-reveal from an
- * in-place reattach. Empty entries are pinned-close tombstones, not live parks.
+ * Whether this tab is parked right now — the reveal remount renders before the
+ * host effect that disposes the watcher, so a pane reading this at render time
+ * can tell a park-reveal from an in-place reattach. Empty entries are
+ * pinned-close tombstones, not live parks.
  */
 export function isTerminalTabParked(tabId: string): boolean {
   return (parkedWatchersByTabId.get(tabId)?.disposersByPtyId.size ?? 0) > 0

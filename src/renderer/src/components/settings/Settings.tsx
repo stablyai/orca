@@ -1464,7 +1464,7 @@ function Settings(): React.JSX.Element {
                   )}
                   description={translate(
                     'auto.components.settings.Settings.cfa34f4465',
-                    'Branch naming, base refs, attribution, and Git AI Author.'
+                    'Branch naming, base refs, and Git AI Author.'
                   )}
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedSourceControlAiPromptChanges}

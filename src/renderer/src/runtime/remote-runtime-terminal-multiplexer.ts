@@ -14,6 +14,7 @@ import {
   parseTerminalSnapshotUnavailableReason,
   type TerminalSnapshotUnavailableReason
 } from '../../../shared/terminal-snapshot-unavailability'
+import { parseTerminalKittyKeyboardFlags } from '../../../shared/terminal-kitty-keyboard-flags'
 import { e2eConfig, e2eDisableRemoteTerminalStallRecovery } from '@/lib/e2e-config'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
@@ -60,7 +61,14 @@ type TerminalMultiplexEvent =
 
 export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onData: (data: string, meta?: { seq?: number; rawLength?: number; transformed?: boolean }) => void
-  onSnapshot: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
+  onSnapshot: (
+    data: string,
+    meta?: {
+      pendingEscapeTailAnsi?: string
+      seq?: number
+      kittyKeyboardFlags?: number
+    }
+  ) => void
   onSubscribed?: () => void
   onOutputPauseCapability?: () => void
   onEnd?: () => void
@@ -84,6 +92,10 @@ export type RemoteRuntimeSnapshotImage = {
   seq?: number
   source?: 'headless' | 'renderer'
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags the HOST proved at this image's own `seq`. Absent
+   *  from any host that predates the field — the pane tracker then stays
+   *  unproven and commits raw text instead of guessing zero. */
+  kittyKeyboardFlags?: number
 }
 
 /** Transient causes the host itself reported: a request reached it and it declined to serialize now. */
@@ -197,6 +209,7 @@ type RemoteRuntimeSnapshotInfo = {
   rows?: number
   seq?: number
   source?: 'headless' | 'renderer'
+  kittyKeyboardFlags?: number
   requestId?: number
   truncated?: boolean
   unavailable?: TerminalSnapshotUnavailableReason
@@ -879,13 +892,16 @@ class RemoteRuntimeTerminalMultiplexer {
               rows: info?.rows ?? 24,
               seq: info?.seq,
               source: info?.source,
+              kittyKeyboardFlags: info?.kittyKeyboardFlags,
               pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
             }
           })
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
           stream.callbacks.onSnapshot(data ?? '', {
-            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
+            seq: info?.seq,
+            kittyKeyboardFlags: info?.kittyKeyboardFlags
           })
         } else if (target === 'recovery') {
           // Why: a server-pushed recovery snapshot replaces terminal state
@@ -893,7 +909,9 @@ class RemoteRuntimeTerminalMultiplexer {
           // An empty snapshot is still applied so stale dropped output does
           // not linger on a terminal the model says is blank.
           stream.callbacks.onSnapshot(`\x1b[2J\x1b[3J\x1b[H${data ?? ''}`, {
-            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
+            seq: info?.seq,
+            kittyKeyboardFlags: info?.kittyKeyboardFlags
           })
         }
       } else if (matchesPendingRequest) {
@@ -1529,6 +1547,7 @@ function decodeSnapshotInfo(
     truncated?: unknown
     unavailable?: unknown
     pendingEscapeTailAnsi?: unknown
+    kittyKeyboardFlags?: unknown
   }>(payload)
   if (!raw) {
     return null
@@ -1538,6 +1557,8 @@ function decodeSnapshotInfo(
     rows: typeof raw.rows === 'number' ? raw.rows : undefined,
     seq: typeof raw.seq === 'number' ? raw.seq : undefined,
     source: raw.source === 'headless' || raw.source === 'renderer' ? raw.source : undefined,
+    // Negative, fractional, and unsafe values are treated as absent, never clamped.
+    kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(raw.kittyKeyboardFlags),
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
     truncated: raw.truncated === true,
     unavailable: parseTerminalSnapshotUnavailableReason(raw.unavailable),

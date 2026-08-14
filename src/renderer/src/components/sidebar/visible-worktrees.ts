@@ -26,19 +26,9 @@ import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceFromOtherDevice
 } from './workspace-creator-visibility'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
 
-/**
- * Whether a worktree represents the repo's default-branch row that the
- * "Hide Default Branch Workspace" setting targets. Folder-mode projects are
- * main worktrees with branch === '' and are intentionally preserved.
- *
- * Why a shared helper: this predicate gates visibility in both the sidebar
- * pipeline (computeVisibleWorktreeIds) and the Cmd+J jump palette. Keeping
- * the definition in one place prevents the two surfaces from drifting.
- */
-export function isDefaultBranchWorkspace(worktree: Worktree): boolean {
-  return worktree.isMainWorktree && worktree.branch.trim() !== ''
-}
+export { isDefaultBranchWorkspace } from './default-branch-workspace'
 
 /**
  * Whether the "Hide sleeping" sweep must keep this row (#8873).
@@ -186,7 +176,7 @@ export function computeVisibleWorktreeIds(
   worktreesByRepo: Record<string, Worktree[]>,
   sortedIds: string[],
   opts: {
-    filterRepoIds: string[]
+    filterRepoIds: readonly string[]
     showSleepingWorkspaces: boolean
     tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
     ptyIdsByTabId: Record<string, string[]> | null

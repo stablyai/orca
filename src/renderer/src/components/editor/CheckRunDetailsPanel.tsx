@@ -27,8 +27,8 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
 }
 
 type CheckStatusLike = {
-  status: PRCheckDetail['status'] | string | null | undefined
-  conclusion: PRCheckDetail['conclusion'] | string | null | undefined
+  status: PRCheckDetail['status'] | (string & {}) | null | undefined
+  conclusion: PRCheckDetail['conclusion'] | (string & {}) | null | undefined
 }
 
 function getCheckStatusLabel(check: CheckStatusLike): string {

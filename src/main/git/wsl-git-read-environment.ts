@@ -26,7 +26,7 @@ function parseProbe(stdout: string): WslGitReadEnvironment | null {
   const gitPath = fields[markerIndex + 2] ?? ''
   const home = fields[markerIndex + 3] ?? ''
   if (
-    markerIndex < 0 ||
+    markerIndex === -1 ||
     !path.includes('/') ||
     path.length > 32_768 ||
     !gitPath.startsWith('/') ||

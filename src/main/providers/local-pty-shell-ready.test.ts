@@ -380,10 +380,10 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps attribution-only fish spawns unwrapped', async () => {
-    const { getAttributionShellLaunchConfig } = await importFreshLocalPtyShellReady()
+  it('keeps markerless fish spawns unwrapped', async () => {
+    const { getMarkerlessShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
-    const config = getAttributionShellLaunchConfig('/opt/homebrew/bin/fish')
+    const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
     expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
   })
@@ -485,6 +485,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
     const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
     expectZdotdirSourceContext(zprofile, '.zprofile')
@@ -526,8 +527,6 @@ describePosix('local PTY shell-ready launch config', () => {
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
-    const primeWrapperLine =
-      'command prime-agent --extension "${ORCA_PRIME_AGENT_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
@@ -549,9 +548,12 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
-    expect(zshrc).toContain(primeWrapperLine)
-    expect(zlogin).toContain(primeWrapperLine)
-    expect(bashRc).toContain(primeWrapperLine)
+    for (const wrapperFile of [zshrc, zlogin, bashRc]) {
+      expect(wrapperFile).not.toContain('prime-agent()')
+      expect(wrapperFile).not.toContain('__orca_prime_agent')
+      expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+      expect(wrapperFile).not.toContain('command prime-agent --extension')
+    }
   })
 
   // Why: issue #2422 — without OSC 133 C/D markers, bash sessions kept the worktree spinner "working" ~30min after the agent exited.
@@ -814,8 +816,6 @@ path=(/custom/bin $path)
       }
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
-      // Why: this test isolates zsh top-level path scoping, not attribution shim ordering.
-      delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
 
       const result = spawnSync(
@@ -854,7 +854,6 @@ path=(/custom/bin $path)
         }
         delete cleanEnv.ZDOTDIR
         delete cleanEnv.ORCA_ORIG_ZDOTDIR
-        delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
         delete cleanEnv.USER_ZSHRC_LOADED
         cleanEnv.ZDOTDIR = join(movedUserData, 'shell-ready', 'zsh')
 
@@ -902,7 +901,6 @@ path=(/custom/bin $path)
         }
         delete cleanEnv.ZDOTDIR
         delete cleanEnv.ORCA_ORIG_ZDOTDIR
-        delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
         delete cleanEnv.USER_ZSHRC_LOADED
         cleanEnv.ZDOTDIR = join(nonAsciiUserData, 'shell-ready', 'zsh')
 

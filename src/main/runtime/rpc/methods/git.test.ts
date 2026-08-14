@@ -530,7 +530,6 @@ describe('git RPC methods', () => {
         worktree: 'id:wt-1',
         commitMessageAi,
         agentCmdOverrides,
-        enableGitHubAttribution: true,
         commitMessageDiscoveryHostKey: 'runtime:env-1'
       })
     )
@@ -538,7 +537,6 @@ describe('git RPC methods', () => {
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1', {
       commitMessageAi,
       agentCmdOverrides,
-      enableGitHubAttribution: true,
       commitMessageDiscoveryHostKey: 'runtime:env-1'
     })
   })

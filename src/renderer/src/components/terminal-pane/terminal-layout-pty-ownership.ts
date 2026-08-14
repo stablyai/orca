@@ -105,7 +105,7 @@ function coalesceLeafRecord(
       continue
     }
     const retainedLeafId = resolveRetainedLeafId(removedLeafId, retainedLeafIdByRemovedLeafId)
-    if (!Object.prototype.hasOwnProperty.call(retained, retainedLeafId)) {
+    if (!Object.hasOwn(retained, retainedLeafId)) {
       retained[retainedLeafId] = value
     }
   }
@@ -113,7 +113,7 @@ function coalesceLeafRecord(
 }
 
 function hasLeafRecordValue(source: Record<string, string> | undefined, leafId: string): boolean {
-  return Boolean(source && Object.prototype.hasOwnProperty.call(source, leafId))
+  return Boolean(source && Object.hasOwn(source, leafId))
 }
 
 function coalesceScrollbackRecords(
@@ -225,7 +225,7 @@ function resolveOwnedActiveLeafId(
   ptyIdsByLeafId: Record<string, string> | undefined
 ): string | null {
   const hasBinding = (leafId: string): boolean =>
-    Boolean(ptyIdsByLeafId && Object.prototype.hasOwnProperty.call(ptyIdsByLeafId, leafId))
+    Boolean(ptyIdsByLeafId && Object.hasOwn(ptyIdsByLeafId, leafId))
   if (rootLeafIds.length === 0) {
     const boundLeafIds = Object.keys(ptyIdsByLeafId ?? {})
     if (activeLeafId) {

@@ -182,6 +182,7 @@ export type FederatedDispatchRow = {
   remote_worktree_id: string | null
   remote_terminal_handle: string | null
   to_home_imported_sequence: number
+  to_home_acknowledged_sequence: number
   created_at: string
   updated_at: string
 }

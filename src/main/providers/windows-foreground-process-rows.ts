@@ -112,7 +112,7 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
       continue
     }
     const eq = line.indexOf('=')
-    if (eq < 0) {
+    if (eq === -1) {
       continue
     }
     const key = line.slice(0, eq)

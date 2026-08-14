@@ -3,7 +3,7 @@ import path from 'node:path'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
 const {
   handleMock,
   showSaveDialogMock,

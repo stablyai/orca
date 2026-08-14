@@ -40,6 +40,7 @@ import {
 } from './stale-runtime-host-rows'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
+import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../components/terminal-pane/terminal-parked-watcher-registry'
 import {
@@ -133,6 +134,7 @@ import type {
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { catalogRowsEqual, reuseEqualCatalogRows } from './worktree-catalog-reconciliation'
+import { reuseEqualRecordMap } from './repo-identity-reconcile'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list UI hydration parity used before `worktree.detectedList` existed.
@@ -861,6 +863,7 @@ function getFolderWorkspaceMetaUpdates(
     | 'createdWithAgent'
     | 'pendingFirstAgentMessageRename'
     | 'firstAgentMessageRenameError'
+    | 'diffComments'
   >
 > {
   const next: Partial<
@@ -878,6 +881,7 @@ function getFolderWorkspaceMetaUpdates(
       | 'createdWithAgent'
       | 'pendingFirstAgentMessageRename'
       | 'firstAgentMessageRenameError'
+      | 'diffComments'
     >
   > = {}
   if (updates.displayName !== undefined) {
@@ -918,6 +922,9 @@ function getFolderWorkspaceMetaUpdates(
   }
   if (updates.firstAgentMessageRenameError !== undefined) {
     next.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
+  }
+  if (updates.diffComments !== undefined) {
+    next.diffComments = updates.diffComments
   }
   return next
 }
@@ -1385,8 +1392,8 @@ async function listWorktreeLineageForRuntime(
   settings: AppState['settings'],
   options: BackgroundRuntimeRefreshOptions = {}
 ): Promise<{
-  worktreeLineageById: Record<string, WorktreeLineage>
-  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
+  workspaceLineageByChildKey: Readonly<Record<string, WorkspaceLineage>>
 }> {
   const target = getActiveRuntimeTarget(settings)
   type LineageListResponse = {
@@ -1394,8 +1401,7 @@ async function listWorktreeLineageForRuntime(
     workspaceLineage?: Record<string, WorkspaceLineage>
   }
   const normalizeLineageResponse = (value: Record<string, WorktreeLineage> | LineageListResponse) =>
-    Object.prototype.hasOwnProperty.call(value, 'lineage') ||
-    Object.prototype.hasOwnProperty.call(value, 'workspaceLineage')
+    Object.hasOwn(value, 'lineage') || Object.hasOwn(value, 'workspaceLineage')
       ? {
           worktreeLineageById: (value as LineageListResponse).lineage ?? {},
           workspaceLineageByChildKey: (value as LineageListResponse).workspaceLineage ?? {}
@@ -1566,21 +1572,38 @@ function applyWorktreeLineageUpdate(
   })
 }
 
+function applyHostLineageRefresh(
+  set: Parameters<StateCreator<AppState>>[0],
+  hostId: ExecutionHostId,
+  lineage: {
+    worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
+    workspaceLineageByChildKey: Readonly<Record<string, WorkspaceLineage>>
+  }
+): void {
+  set((s) => {
+    const worktreeLineageById = mergeLineageForHost(s, hostId, lineage.worktreeLineageById)
+    const workspaceLineageByChildKey = mergeWorkspaceLineageForHost(
+      s,
+      hostId,
+      lineage.workspaceLineageByChildKey
+    )
+    if (
+      worktreeLineageById === s.worktreeLineageById &&
+      workspaceLineageByChildKey === s.workspaceLineageByChildKey
+    ) {
+      return s
+    }
+    return { worktreeLineageById, workspaceLineageByChildKey }
+  })
+}
+
 async function refreshWorktreeLineageForSettings(
   settings: AppState['settings'],
   set: Parameters<StateCreator<AppState>>[0],
   options: BackgroundRuntimeRefreshOptions = {}
 ): Promise<void> {
   const lineage = await listWorktreeLineageForRuntime(settings, options)
-  const hostId = getSettingsFocusedExecutionHostId(settings)
-  set((s) => ({
-    worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
-    workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
-      s,
-      hostId,
-      lineage.workspaceLineageByChildKey
-    )
-  }))
+  applyHostLineageRefresh(set, getSettingsFocusedExecutionHostId(settings), lineage)
 }
 
 async function refreshRemoteWorktreeLineageBestEffort(
@@ -1594,15 +1617,7 @@ async function refreshRemoteWorktreeLineageBestEffort(
     const lineage = await listWorktreeLineageForRuntime(settings, {
       reuseRecentCompatibilityFailure: true
     })
-    const hostId = getSettingsFocusedExecutionHostId(settings)
-    set((s) => ({
-      worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
-      workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
-        s,
-        hostId,
-        lineage.workspaceLineageByChildKey
-      )
-    }))
+    applyHostLineageRefresh(set, getSettingsFocusedExecutionHostId(settings), lineage)
   } catch (err) {
     // Why: lineage is supplemental, so a remote timeout here must not discard a successful worktree refresh.
     console.error('Failed to fetch worktree lineage:', err)
@@ -1634,15 +1649,18 @@ function mergeLineageForHost(
     'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'worktreeLineageById'
   >,
   hostId: ExecutionHostId,
-  lineage: Record<string, WorktreeLineage>
-): Record<string, WorktreeLineage> {
+  lineage: Readonly<Record<string, WorktreeLineage>>
+): Readonly<Record<string, WorktreeLineage>> {
   const next: Record<string, WorktreeLineage> = {}
   for (const [worktreeId, existing] of Object.entries(state.worktreeLineageById)) {
     if (getWorktreeHostId(state, worktreeId) !== hostId) {
       next[worktreeId] = existing
     }
   }
-  return { ...next, ...lineage }
+  for (const [worktreeId, incoming] of Object.entries(lineage)) {
+    next[worktreeId] = incoming
+  }
+  return reuseEqualRecordMap(state.worktreeLineageById, next)
 }
 
 function mergeWorkspaceLineageForHost(
@@ -1655,8 +1673,8 @@ function mergeWorkspaceLineageForHost(
     | 'workspaceLineageByChildKey'
   >,
   hostId: ExecutionHostId,
-  lineage: Record<string, WorkspaceLineage>
-): Record<string, WorkspaceLineage> {
+  lineage: Readonly<Record<string, WorkspaceLineage>>
+): Readonly<Record<string, WorkspaceLineage>> {
   const next: Record<string, WorkspaceLineage> = {}
   for (const [childKey, existing] of Object.entries(state.workspaceLineageByChildKey)) {
     const childScope = parseWorkspaceKey(existing.childWorkspaceKey)
@@ -1667,7 +1685,10 @@ function mergeWorkspaceLineageForHost(
       next[childKey] = existing
     }
   }
-  return { ...next, ...lineage }
+  for (const [childKey, incoming] of Object.entries(lineage)) {
+    next[childKey] = incoming
+  }
+  return reuseEqualRecordMap(state.workspaceLineageByChildKey, next)
 }
 
 async function persistWorktreeMeta(
@@ -2144,15 +2165,11 @@ function getHostedReviewLinkForMetaRefresh(
   existingWorktree: Worktree | undefined,
   key: HostedReviewLinkKey
 ): number | null {
-  return Object.prototype.hasOwnProperty.call(updates, key)
-    ? (updates[key] ?? null)
-    : (existingWorktree?.[key] ?? null)
+  return Object.hasOwn(updates, key) ? (updates[key] ?? null) : (existingWorktree?.[key] ?? null)
 }
 
 function hasExplicitPushTargetClear(updates: Partial<WorktreeMeta>): boolean {
-  return (
-    Object.prototype.hasOwnProperty.call(updates, 'pushTarget') && updates.pushTarget === undefined
-  )
+  return Object.hasOwn(updates, 'pushTarget') && updates.pushTarget === undefined
 }
 
 type RuntimeWorktreeMetaUpdates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
@@ -3911,6 +3928,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const linkedWorkItem = options?.linkedWorkItem
     const linkedTaskSourceContext = options?.linkedTaskSourceContext
     const startupDraft = options?.startupDraft
+    const provisionedRoot = options?.provisionedRoot
     try {
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         const candidateName = getClientWorktreeCreateCandidate(name, attempt)
@@ -3975,8 +3993,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               'Update the remote runtime to link Jira'
             )
           }
-          const result =
-            target.kind === 'local'
+          if (provisionedRoot && target.kind !== 'local') {
+            throw new Error('Provisioned-root recipes currently require a direct SSH connection.')
+          }
+          const result = provisionedRoot
+            ? await window.api.worktrees.adoptProvisionedRoot({
+                ...createArgs,
+                ...provisionedRoot
+              })
+            : target.kind === 'local'
               ? await window.api.worktrees.create(createArgs)
               : await callRuntimeRpc<Awaited<ReturnType<typeof window.api.worktrees.create>>>(
                   target,
@@ -4134,40 +4159,38 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   removePendingWorktreeCreation: (creationId, options) => {
+    let removedEntry: AppState['pendingWorktreeCreations'][string] | undefined
     set((s) => {
       const entry = s.pendingWorktreeCreations[creationId]
       if (!entry) {
         return {}
       }
-      const cleanupVm = options?.cleanupVm ?? true
-      if (
-        cleanupVm &&
-        entry.phase === 'provisioning-vm' &&
-        typeof window !== 'undefined' &&
-        window.api?.ephemeralVm?.cancelProvision
-      ) {
-        void window.api.ephemeralVm.cancelProvision({ provisionId: creationId }).catch(() => {
-          // Best effort: dismissing the pending surface shouldn't block on a finished or unreachable provisioning process.
-        })
-      }
-      if (
-        cleanupVm &&
-        entry.request.ephemeralVmRuntimeId &&
-        typeof window !== 'undefined' &&
-        window.api?.ephemeralVm?.cleanup
-      ) {
-        void window.api.ephemeralVm
-          .cleanup({ runtimeId: entry.request.ephemeralVmRuntimeId })
-          .catch(() => {
-            // Best effort: cancellation shouldn't block on provider cleanup; Settings still exposes retry/manual cleanup.
-          })
-      }
+      removedEntry = entry
       const { [creationId]: _removed, ...rest } = s.pendingWorktreeCreations
       return {
         pendingWorktreeCreations: rest,
         // Why: only clear the active surface if it pointed here, so dismissing a background creation doesn't yank the user away.
         ...(s.activePendingCreationId === creationId ? { activePendingCreationId: null } : {})
       }
+    })
+    if (!removedEntry || options?.cleanupVm === false || typeof window === 'undefined') {
+      return
+    }
+    if (removedEntry.phase === 'provisioning-vm' && window.api?.ephemeralVm?.cancelProvision) {
+      void window.api.ephemeralVm
+        .cancelProvision({ provisionId: creationId })
+        .catch(() => undefined)
+    }
+    if (!removedEntry.request.ephemeralVmRuntimeId || !window.api?.ephemeralVm?.cleanup) {
+      return
+    }
+    void cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
+      deleteProjectHostSetup: (setupId) => get().deleteProjectHostSetup({ setupId }),
+      cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
+      reportSetupError: (error) =>
+        console.error('Failed to remove cancelled provisioned-root project setup:', error),
+      reportRuntimeError: (error) =>
+        console.error('Failed to clean up cancelled ephemeral VM runtime:', error)
     })
   },
 
@@ -5557,7 +5580,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set((s) => {
       for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
         const index = tabs.findIndex((tab) => tab.id === tabId)
-        if (index < 0) {
+        if (index === -1) {
           continue
         }
         const tab = tabs[index]
@@ -6080,7 +6103,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const reposChanged = survivingRepos.length !== s.repos.length
 
       // Why: a repoId-less setup on the removed host can still split a surviving project group, so drop every setup it owns.
-      const survivingSetups: AppState['projectHostSetups'] = []
+      const survivingSetups: ProjectHostSetup[] = []
       for (const setup of s.projectHostSetups) {
         if (isRemovedRuntimeHostId(setup.hostId, removed)) {
           if (setup.repoId) {

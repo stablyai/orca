@@ -115,6 +115,13 @@
       "port": "Port",
       "pr": "PR"
     },
+    "linearIssue": {
+      "createLabel": "Create worktree from Linear issue {{value0}}: {{value1}}",
+      "pendingLabel": "Create worktree from Linear issue {{value0}}",
+      "loadingLabel": "Loading Linear issue {{value0}}",
+      "createHint": "Create worktree from Linear issue",
+      "loadingHint": "Loading Linear issue…"
+    },
     "renderCapOverflow": "{{value0}} more — scroll or keep typing to narrow",
     "filter": {
       "emptyTitle": "No results match the active filter",
@@ -141,6 +148,10 @@
       "clearProjects": "Clear projects",
       "back": "Back",
       "ariaActive": "Filter: {{value0}} active."
+    },
+    "taskUrl": {
+      "loadingHint": "Loading {{value0}}…",
+      "createHint": "Create worktree from {{value0}}"
     }
   },
   "auto": {
@@ -644,6 +655,14 @@
               "64555d0014": "No base branch found"
             }
           }
+        },
+        "browser": {
+          "tab": {
+            "open": {
+              "urlFailed": "Unable to open URL.",
+              "searchFailed": "Unable to search with {{value0}}."
+            }
+          }
         }
       },
       "worktree": {
@@ -698,7 +717,8 @@
         "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
       },
       "ephemeralVmWorkspaceTarget": {
-        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
+        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime.",
+        "provisionedRootRequiresSsh": "Provisioned-root recipes currently require a direct SSH connection."
       },
       "blocked": {
         "notification": {
@@ -748,7 +768,8 @@
           "import": {
             "toast": {
               "restartFallbackUnavailableNone": "None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.",
-              "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again."
+              "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.",
+              "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google."
             }
           }
         }
@@ -769,6 +790,9 @@
             "additionalErrors": "{{count}} additional images could not be attached."
           }
         }
+      },
+      "ephemeralVmWorktreeCreation": {
+        "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
       }
     },
     "hooks": {
@@ -859,7 +883,7 @@
         "a9fb10afca": "Terminal",
         "5235c215ca": "Choose which task providers appear in the Tasks page and sidebar.",
         "85f4fd7710": "Task Sources",
-        "ab4b21b58e": "Branch naming, base refs, attribution, and Git AI Author.",
+        "ab4b21b58e": "Branch naming, base refs, and Git AI Author.",
         "09607cb0fe": "Git & Source Control",
         "33a5e1d597": "Connect GitHub, GitLab, Linear, and source-hosting services.",
         "2b043783ef": "Integrations",
@@ -901,7 +925,8 @@
         "artifactsTitle": "Artifacts",
         "artifactsDescription": "Share HTML and Markdown files with your team and manage their public links.",
         "automationsTitle": "Automations",
-        "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar."
+        "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -914,9 +939,19 @@
         "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
         "openSettings": "Open Settings",
         "dismiss": "Don't show again"
+      },
+      "useMacTccAttributionSeveredNotice": {
+        "title": "macOS permissions may not reach Orca terminals",
+        "description": "Running Orca terminals are hosted by a daemon started by a previous Orca installation. macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions to them. Restart the daemon from Manage Sessions to restore access. This will close all running Orca terminals.",
+        "openManageSessions": "Open Manage Sessions",
+        "dismiss": "Dismiss"
       }
     },
     "components": {
+      "BrowserCookieImportDisclosure": {
+        "title": "Google logins aren't imported",
+        "description": "Sign in to Google directly in Orca."
+      },
       "CodexRestartChip": {
         "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
         "c72a5fb234": "Restart",
@@ -2113,7 +2148,9 @@
         "pluginCommandFailed": "Could not run the plugin command.",
         "recentChatsTerminalsHeader": "Recent Chats & Terminals",
         "27f10cca63": "Search chats, terminals, worktrees, settings, and actions...",
-        "2770f02910": "Search chats, terminals, worktrees, settings, and actions"
+        "2770f02910": "Search chats, terminals, worktrees, settings, and actions",
+        "paletteOpenTabBranch": "Branch name",
+        "paletteOpenTabWorkspace": "Workspace name"
       },
       "github": {
         "pr": {
@@ -2837,7 +2874,8 @@
             "a7e2fd2699": "file an issue",
             "5c8ce20be6": "If this persists, please",
             "cc6d997c65": "Restart the terminal daemon from here to clear stale daemon state.",
-            "7ee11bc0db": "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
+            "7ee11bc0db": "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry.",
+            "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue."
           },
           "TerminalPane": {
             "ac112e9036": "Remove title",
@@ -2856,7 +2894,11 @@
             "openTaskTerminal": "Open task terminal",
             "systemBrowser": "System Browser",
             "orcaBrowser": "Orca Browser",
-            "terminalLinkSettings": "Terminal link settings"
+            "terminalLinkSettings": "Terminal link settings",
+            "copyLink": "Copy link",
+            "copied": "Copied",
+            "copiedLink": "Copied link",
+            "copyLinkFailed": "Failed to copy link"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
@@ -3122,7 +3164,9 @@
             "2c38630a01": "Workspace no longer exists",
             "4f0d9a71c2": "Tab no longer exists",
             "d7d496a451": "Browser page no longer exists",
-            "7726ce9970": "Mobile emulator tab no longer exists"
+            "7726ce9970": "Mobile emulator tab no longer exists",
+            "chooseAction": "Choose an action.",
+            "searchProvider": "Search {{value0}}"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Command",
@@ -3996,34 +4040,6 @@
         }
       },
       "skills": {
-        "SkillsPage": {
-          "cb142070b4": "Refresh",
-          "984405683f": "Plugin",
-          "4d177feabd": "Bundled",
-          "aa59462502": "Repository",
-          "571c5818c1": "Home",
-          "0bc1379f4c": "All sources",
-          "38e0951c3a": "Agent Skills",
-          "fb6bf60b52": "Claude",
-          "426be2aac6": "Codex",
-          "39b6998ddb": "All providers",
-          "a68dee6a32": "Search skills",
-          "e46e162e2e": "from",
-          "b088e0785d": "Beta",
-          "f43ad6edf3": "Skills",
-          "7e828fb2c6": "Back",
-          "ea72d6185b": "Could not scan skills",
-          "dc4c3328ee": "Reveal file",
-          "9963dff6d3": "No description found.",
-          "995fde8337": "Could not reveal skill file",
-          "ab5b777350": "Checked home, repository, bundled, and plugin skill folders.",
-          "08a321a984": "Adjust the search or filters.",
-          "4acd6d68ec": "No skills found",
-          "6a62a0168c": "No matches",
-          "cd7893fbc1": "Scanning skills",
-          "35b9a724a0": "Available",
-          "0c74e7ff34": "Installed"
-        },
         "SkillFreshnessNudge": {
           "titleOne": "An installed Orca skill is out of date",
           "titleMany": "{{value0}} installed Orca skills are out of date",
@@ -4879,14 +4895,40 @@
           "bff3bdd00c": "Rename workspace",
           "8df295a78d": "Failed to rename workspace."
         },
+        "WorktreeVisibilityHelpPopover": {
+          "c41f2d7e90": "Which worktrees are hidden by default?",
+          "8db4e19a26": "This setting never hides worktrees created through Orca.",
+          "ec1e6a10fb": "Other worktrees start hidden to avoid unexpected sidebar clutter.",
+          "1c68c9cf77": "Enable a source for all current and future worktrees, or show individual worktrees below."
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "Show one without enabling its source.",
+          "showWorktree": "Show {{value0}} at {{value1}}"
+        },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Non-Orca worktrees",
-          "f1f71b9f02": "Import",
+          "f1f71b9f02": "Always show",
           "759371df43": "Hide",
-          "25ddf19920": "{{value0}} available to import",
+          "25ddf19920": "{{value0}} currently hidden",
           "8372e4bbd9": "{{value0}} currently shown",
           "5d02a5647f": "Hidden from sidebar",
-          "3e045d4cb8": "Shown in sidebar"
+          "3e045d4cb8": "Shown in sidebar",
+          "a3f19c07d2": "Checking…",
+          "b8d24e61f5": "Could not list this repo's worktrees.",
+          "c5e70a93b1": "Try again",
+          "7d21c5e848": "Hidden worktrees ({{value0}})",
+          "2f80cd4b97": "Showing…",
+          "e64b81d3a9": "Show",
+          "d40d436fc2": "Could not update worktree visibility. Try again.",
+          "unsupportedHost": "This host doesn't support source-specific worktree visibility. Update Orca on the host to change this setting.",
+          "search": "Search hidden worktrees",
+          "searchPlaceholder": "Search {{value0}} worktrees…",
+          "noMatches": "No matching worktrees",
+          "allShown": "All discovered worktrees are shown",
+          "noneFound": "No non-Orca worktrees found",
+          "tryDifferentSearch": "Try a different name or path.",
+          "disableSource": "Disable a source to manage its worktrees individually.",
+          "appearWhenDetected": "New worktrees will appear here when Orca detects them."
         },
         "add": {
           "repo": {
@@ -5183,14 +5225,11 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Hide external worktrees permanently for {{value0}}",
-          "d9f7b2a14c": "Collapse new externally-created worktrees for {{value0}}",
-          "e2c4a8d91f": "Expand new externally-created worktrees for {{value0}}",
-          "7c4e9b2a81": "New externally-created worktrees",
           "5e1b8d3f62": "Hide external worktrees permanently",
-          "4d7a1c9e53": "These worktrees were created outside of Orca.",
-          "8b3f2e1d74": "Import",
-          "1c9e7a4b28": "Keep hidden",
-          "6f2d8c1e95": "Import all",
+          "2a6f31d8c7": "hidden worktree",
+          "5b90e4a2f6": "hidden worktrees",
+          "7f18c5b0d3": "Review {{value0}} hidden worktree in {{value1}}",
+          "4e2b7a9c05": "Review {{value0}} hidden worktrees in {{value1}}",
           "c3e8a1f4b2": "Don't show again"
         },
         "newExternalWorktreesInboxActions": {
@@ -5381,6 +5420,29 @@
           "a0f9863597": "Force Delete {{count}} Branches",
           "a0f9863597_one": "Force Delete {{count}} Branch",
           "a0f9863597_other": "Force Delete {{count}} Branches"
+        },
+        "WorktreeListScrollToTopButton": {
+          "jumpToTop": "Jump to top"
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "Other locations",
+          "custom": "Custom location",
+          "otherPath": "Outside listed sources",
+          "invalidPath": "Enter an absolute path for this host.",
+          "duplicatePath": "This location is already listed.",
+          "limit": "Remove a custom location before adding another.",
+          "sources": "Sources",
+          "sourcesDescription": "Enabled sources include current and future worktrees in the sidebar.",
+          "found": "{{value0}} found",
+          "remove": "Remove {{value0}}",
+          "removeLocation": "Remove custom location",
+          "toggle": "Show current and future worktrees from {{value0}}",
+          "addLocation": "Add location",
+          "worktreeRoot": "Worktree root",
+          "add": "Add",
+          "rootHelp": "Orca will recognize worktrees beneath this folder."
         }
       },
       "shared": {
@@ -6319,14 +6381,6 @@
           "808f9a726e": "No prefix will be applied"
         },
         "GitPane": {
-          "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
-          "e02ea23a32": "Orca Attribution",
-          "e71ce09c42": "orca",
-          "b9b5771bb1": "attribution",
-          "b5f534717a": "coauthored",
-          "9838c921ed": "co-author",
-          "afada55042": "issue",
-          "b4ef5428a7": "pr",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Current GitLab CLI REST rate-limit headers when available.",
@@ -6761,6 +6815,12 @@
           "77410e0566": "Privacy policy",
           "8bfdd23a88": "Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.",
           "afec8b03be": "ci"
+        },
+        "QuickCommandsList": {
+          "noSearchMatches": "No commands match this search."
+        },
+        "QuickCommandsToolbar": {
+          "searchLabel": "Search commands"
         },
         "QuickCommandsPane": {
           "8764c6e9e4": "Remove {{value0}}",
@@ -7233,7 +7293,7 @@
           "3de4bbb841": "Terminal",
           "dd72ed437a": "Choose which task providers appear in the Tasks page and sidebar.",
           "11faa2f7dd": "Task Sources",
-          "cfa34f4465": "Branch naming, base refs, attribution, and Git AI Author.",
+          "cfa34f4465": "Branch naming, base refs, and Git AI Author.",
           "70100f94c7": "Git & Source Control",
           "b07041697f": "Connect GitHub, GitLab, Linear, and source-hosting services.",
           "c9ca101a3b": "Integrations",
@@ -7576,6 +7636,10 @@
           "16c471ee03": "on",
           "typographyAdvanced": "Typography",
           "dimUnfocusedPanes": "Dim unfocused panes."
+        },
+        "TerminalAdvancedTypographyControls": {
+          "f5fa1a08f1": "Bold Font Weight",
+          "0e0d1ee15a": "Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged."
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -8619,16 +8683,8 @@
         },
         "git": {
           "search": {
-            "61eab13403": "orca",
-            "1b93c1143c": "attribution",
-            "8461c908ae": "coauthored",
-            "61f9f5d1fc": "co-author",
-            "af0a144bfb": "issue",
-            "6bdea421bb": "pr",
             "16f53f7323": "gh",
             "d088806071": "github",
-            "118c23484b": "Add Orca attribution to commits, PRs, and issues.",
-            "bc7d9f69ce": "Orca Attribution",
             "40f9b815fd": "api budget",
             "b7e52124c7": "rate limit",
             "ead733645f": "glab",
@@ -8733,7 +8789,9 @@
             "41ccade05c": "gh",
             "b79c21bd42": "github",
             "7166b9090c": "GitHub authentication via the gh CLI.",
-            "f16e41cc72": "GitHub Integration"
+            "f16e41cc72": "GitHub Integration",
+            "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
+            "af5ae87847": "access token"
           }
         },
         "jira": {
@@ -10586,6 +10644,51 @@
           "on": "On",
           "auto": "Agent",
           "off": "Off"
+        },
+        "bitbucket": {
+          "credentials": {
+            "dialog": {
+              "connectFailed": "Connection failed",
+              "title": "Connect Bitbucket",
+              "description": "Use a Bitbucket Cloud credential to browse pull requests and build statuses. Orca verifies it before saving.",
+              "remoteRuntime": "Bitbucket credentials saved here are stored on this local machine only. Set ORCA_BITBUCKET_* environment variables on the remote runtime instead.",
+              "environmentManaged": "Bitbucket is already configured through ORCA_BITBUCKET_* environment variables, which take precedence. Unset them to save a credential in Orca.",
+              "authModeLabel": "Bitbucket authentication method",
+              "modeBasic": "Email & API token",
+              "modeToken": "Access token",
+              "accessToken": "Access token",
+              "accessTokenPlaceholder": "Repository, project, or workspace access token",
+              "email": "Atlassian account email",
+              "emailPlaceholder": "you@example.com",
+              "apiToken": "API token",
+              "apiTokenPlaceholder": "Atlassian API token",
+              "baseUrl": "API base URL (optional)",
+              "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
+              "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
+              "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
+              "docsLink": "Bitbucket API token docs",
+              "storageNote": "Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.",
+              "cancel": "Cancel",
+              "verifying": "Verifying...",
+              "connect": "Connect"
+            }
+          },
+          "integration": {
+            "card": {
+              "description": "Pull requests and build statuses for Bitbucket Cloud.",
+              "edit": "Edit credentials",
+              "connect": "Connect",
+              "accountUnknown": "Bitbucket Cloud",
+              "authModeToken": "Access token",
+              "authModeBasic": "Email & API token",
+              "disconnect": "Disconnect Bitbucket",
+              "envManaged": "Configured via environment variables. Unset the ORCA_BITBUCKET_* variables to manage this credential in Orca.",
+              "storedAuthFailed": "The saved Bitbucket credential could not authenticate. Edit it, or check that the token still has pull request access.",
+              "storedCredential": "Saved in Orca on this machine. ORCA_BITBUCKET_* environment variables take precedence when set.",
+              "notConfigured": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.",
+              "disconnectFailed": "Could not remove the saved Bitbucket credential."
+            }
+          }
         }
       },
       "right": {
@@ -10629,7 +10732,7 @@
             "653c105ecc": "More PR actions",
             "f316a8ca2b": "No unresolved comments selected.",
             "d00ebdc402": "Resolve {{value0}} Comments With AI",
-            "ed3f79c031": "Review the prompt before starting an agent. After the prompt is delivered, Orca replies to the selected comments and resolves host threads when possible.",
+            "5eb2163b6b": "Review the prompt before starting an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.",
             "f273f2271c": "Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.{{value4}}",
             "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.",
             "495b2f8c4b": "Started the agent, but could not resolve or reply on the selected comments.",
@@ -10644,6 +10747,7 @@
               "branch": "Sync Branch"
             },
             "7e4b2a19c0": "Could not resolve the GitHub PR to reply on.",
+            "430f1a62d4": "Could not resolve the selected thread on the host.",
             "updateReactionFailed": "Failed to update reaction."
           },
           "CreatePullRequestDialog": {
@@ -10720,7 +10824,8 @@
             "f9d7ca753d": "Copy Paths",
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
-            "1d8e182c32": "View File"
+            "1d8e182c32": "View File",
+            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -11682,6 +11787,17 @@
                   }
                 }
               }
+            },
+            "hosted": {
+              "review": {
+                "button": {
+                  "label": {
+                    "96ae7358e0": "Push & Create PR in stack",
+                    "8e8149a0bf": "Create draft PR in stack",
+                    "8df1a05952": "Create PR in stack"
+                  }
+                }
+              }
             }
           },
           "AiVaultPanel": {
@@ -11999,6 +12115,17 @@
             "e3ee2daa32": "Stack #{{value0}}",
             "cb440931b7": "{{value0}} of {{value1}} · {{value2}}",
             "525259fa17": "Stack details are temporarily unavailable."
+          },
+          "CreateHostedReviewBasePicker": {
+            "205ef284fa": "Base branch",
+            "bb4b41d563": "from {{value0}}",
+            "5a9315b61a": "No branches match “{{value0}}”. Press Enter to use it anyway.",
+            "da4d57c9c2": "Leave empty to use {{value0}}."
+          },
+          "CreateHostedReviewComposerFields": {
+            "90cabf6cfc": "Stack this PR above #{{value0}}",
+            "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
+            "29732f2fb0": "new PR"
           }
         }
       },
@@ -12283,7 +12410,8 @@
             "searchJira": "Search Jira issues or paste an issue URL",
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
-            "emoji": "Emoji"
+            "emoji": "Emoji",
+            "loadingLinearIssue": "Loading Linear issue…"
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
@@ -14259,9 +14387,7 @@
           "33741dd973": "Back to runs"
         },
         "AutomationSchedulePicker": {
-          "22359b186a": "AM or PM",
           "9e677335b0": "Minute",
-          "6b802ecc99": "Hour",
           "d90981f766": "Time",
           "6b914c5fbb": "Day",
           "233b8c94b6": "Cadence",
@@ -14270,6 +14396,11 @@
           "57e83307d0": "Weekdays",
           "837d902bba": "Weekly",
           "ddba78647e": "Custom cron"
+        },
+        "AutomationTimeField": {
+          "39ec1383f6": "AM or PM",
+          "32a5e4e35e": "Minute",
+          "aa593eb5e2": "Hour"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reuse",
@@ -14369,7 +14500,9 @@
           "tableStatus": "Status",
           "tableActions": "Actions",
           "newAutomation": "New Automation",
-          "rowActions": "Automation actions"
+          "rowActions": "Automation actions",
+          "tableLastRun": "Last run",
+          "noListMatches": "No automations match."
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "Loading automations"
@@ -14463,6 +14596,14 @@
               "name": "Hourly maintenance check",
               "prompt": "Check for stuck work, stale generated files, failing validation, and anything that needs human attention. Report only actionable issues."
             }
+          },
+          "list": {
+            "last": {
+              "run": {
+                "done": "Done",
+                "failed": "Failed"
+              }
+            }
           }
         },
         "external": {
@@ -14495,6 +14636,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "Automation actions"
+        },
+        "AutomationListFilterMenu": {
+          "removeFilter": "Remove {{value0}} filter",
+          "failed": "Failed",
+          "succeeded": "Succeeded",
+          "neverRan": "Never ran",
+          "filters": "Filters",
+          "all": "All",
+          "clear": "Clear filters"
+        },
+        "AutomationListSortHeader": {
+          "sortedAscending": "{{value0}}, sorted ascending",
+          "sortedDescending": "{{value0}}, sorted descending"
         }
       },
       "agent": {
@@ -15087,6 +15241,7 @@
           "high": "High",
           "xhigh": "Extra high",
           "max": "Max",
+          "ultra": "Ultra",
           "on": "On",
           "off": "Off"
         }
@@ -15212,7 +15367,6 @@
     },
     "map": {
       "host": {
-        "all": "All hosts",
         "local": "Local",
         "ssh": "SSH",
         "wsl": "WSL",
@@ -15220,13 +15374,31 @@
       },
       "filters": {
         "showStates": "Agent states",
-        "canvasSummary": "{{shown}} of {{total}} agents shown",
         "agentlessWorkspaces": "Workspaces without agents",
         "orchestrationLinks": "Orchestration links",
-        "workspaceVisibility": "Map content"
+        "orchestrationLinksHidden": "Orchestration links hidden",
+        "workspaceVisibility": "Map content",
+        "title": "Map controls",
+        "reset": "Reset",
+        "ofTotalAgents": "of {{total}} agents shown",
+        "quickViews": "Quick views",
+        "agents": "Agents",
+        "time": "Time",
+        "lifespan": "Session lifespan",
+        "sinceMessage": "Since last message",
+        "timeInState": "Time in current state",
+        "timeMinimum": "{{label}} minimum",
+        "timeMaximum": "{{label}} maximum",
+        "timeAny": "any",
+        "timeRangeCount": "{{count}} ranges",
+        "resetRanges": "Reset ranges",
+        "summaryAll": "All",
+        "summaryCount": "{{shown}} of {{total}}",
+        "summarySelected": "{{count}} selected",
+        "workspace": "Workspace",
+        "stateChip": "State: {{states}}"
       },
       "liveContainmentMap": "Live containment map",
-      "hostFilter": "Host filter",
       "empty": "No agents match the current filters.",
       "canvasLabel": "Nested project, workspace, and agent map",
       "zoomOut": "Zoom out",
@@ -15245,7 +15417,20 @@
       "agentCount": "{{count}} agents",
       "agentCount_one": "{{count}} agent",
       "agentCount_other": "{{count}} agents",
-      "noWorkspaceAgents": "No agents in this workspace."
+      "noWorkspaceAgents": "No agents in this workspace.",
+      "status": {
+        "doneSeen": "Done, seen"
+      },
+      "quickView": {
+        "everything": "Everything",
+        "attention": "Needs me",
+        "stuck": "Stuck",
+        "unread": "Unread",
+        "recent": "Last 30 min",
+        "longRunning": "Long runners",
+        "stale": "Stale > 3d",
+        "orchestration": "Orchestration"
+      }
     },
     "placeholder": {
       "title": "Agent dashboard",
@@ -15308,7 +15493,8 @@
       "project": "Project",
       "workspaceStatus": "Workspace status",
       "reviewStatus": "PR / MR status",
-      "clearAll": "Clear all filters"
+      "clearAll": "Clear all filters",
+      "removeChip": "Remove {{filter}}"
     },
     "search": {
       "placeholder": "Search worktree, project, or agent…",
@@ -15316,7 +15502,13 @@
       "clear": "Clear search",
       "results": "{{shown}} of {{total}} shown"
     },
-    "settingsLabel": "Agent Dashboard settings"
+    "settingsLabel": "Agent Dashboard settings",
+    "host": {
+      "sshNamed": "SSH host · {{host}}",
+      "ssh": "SSH host",
+      "remoteNamed": "Remote Orca host · {{host}}",
+      "remote": "Remote Orca host"
+    }
   },
   "dashboard": {
     "sidebar": {

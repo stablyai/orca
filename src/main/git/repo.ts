@@ -932,7 +932,7 @@ export function parseAndFilterSearchRefDetails(
       .filter((line) => line.length > 0)
       .map((line) => {
         const nul = line.indexOf('\0')
-        if (nul < 0) {
+        if (nul === -1) {
           // Why: no NUL means an unexpected %(refname) format; drop it rather than hand callers an unusable "short" ref.
           return null
         }

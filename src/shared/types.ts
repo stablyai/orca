@@ -111,6 +111,18 @@ export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type { ForkSyncMode, GitForkSyncExpectedUpstream, GitForkSyncResult } from './git-fork-sync'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
+export type BuiltInWorktreeVisibilitySourceId = 'claude' | 'gsd'
+
+export type CustomWorktreeVisibilitySource = {
+  id: string
+  rootPath: string
+}
+
+export type WorktreeVisibilitySourcePreferences = {
+  builtIn?: Partial<Record<BuiltInWorktreeVisibilitySourceId, ExternalWorktreeVisibility>>
+  custom?: Record<string, ExternalWorktreeVisibility>
+}
+
 export type ProjectProviderIdentity = {
   provider: 'github'
   owner: string
@@ -289,6 +301,12 @@ export type Repo = {
   externalWorktreeInboxBaselinePaths?: string[]
   /** External worktree paths explicitly imported while global visibility stays hide. */
   importedExternalWorktreePaths?: string[]
+  /** Opt-in repo policy for coding-agent scratch worktrees; absent means hide. */
+  agentWorktreeVisibility?: ExternalWorktreeVisibility
+  /** User-defined roots classified independently from ordinary external worktrees. */
+  customWorktreeVisibilitySources?: CustomWorktreeVisibilitySource[]
+  /** Per-source visibility; absent built-ins inherit the legacy agent policy. */
+  worktreeVisibilitySourcePreferences?: WorktreeVisibilitySourcePreferences
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
   /** Paths (relative to the primary checkout) that should be APFS clone-copied
@@ -357,6 +375,7 @@ export type FolderWorkspace = {
   lastActivityAt: number
   createdAt: number
   updatedAt: number
+  diffComments?: DiffComment[]
 }
 
 export type WorkspaceLinkedItem = {
@@ -499,6 +518,8 @@ export type Worktree = {
   creatorProvenance?: WorkspaceCreatorProvenance
   /** Host-specific setup used to create/run this workspace. */
   projectHostSetupId?: string
+  /** Checkout ownership for a recipe-provisioned main workspace. */
+  ephemeralVmCheckoutMode?: EphemeralVmCheckoutMode
   displayName: string
   comment: string
   linkedIssue: number | null
@@ -631,6 +652,8 @@ export type WorktreeMeta = {
   hostId?: ExecutionHostId
   /** See Worktree.projectHostSetupId. Persisted for project-first workspace ownership. */
   projectHostSetupId?: string
+  /** See Worktree.ephemeralVmCheckoutMode. */
+  ephemeralVmCheckoutMode?: EphemeralVmCheckoutMode
   /** See Worktree.creatorProvenance. */
   creatorProvenance?: WorkspaceCreatorProvenance
   displayName: string
@@ -704,6 +727,10 @@ export type DetectedWorktree = Worktree & {
   ownership: WorktreeOwnership
   selectedCheckout: boolean
   visible: boolean
+  /** Optional additive source identity; older hosts omit it. */
+  visibilitySource?:
+    | { kind: 'built-in'; id: BuiltInWorktreeVisibilitySourceId }
+    | { kind: 'custom'; id: string }
 }
 
 export type DetectedWorktreeListResult = {
@@ -1079,6 +1106,7 @@ export type BrowserCookieImportSummary = {
   totalCookies: number
   importedCookies: number
   skippedCookies: number
+  googleCookiesSkipped?: number
   domains: string[]
   warning?: {
     code: 'restart-fallback-unavailable'
@@ -1497,8 +1525,8 @@ export type PRCheckJob = {
 
 export type PRCheckRunDetails = {
   name: string
-  status: PRCheckDetail['status'] | string | null
-  conclusion: PRCheckDetail['conclusion'] | string | null
+  status: PRCheckDetail['status'] | (string & {}) | null
+  conclusion: PRCheckDetail['conclusion'] | (string & {}) | null
   url: string | null
   detailsUrl: string | null
   startedAt: string | null
@@ -1749,7 +1777,7 @@ export type LinearWorkspace = LinearViewer & {
   credentialRevision?: number
 }
 
-export type LinearWorkspaceSelection = string | 'all'
+export type LinearWorkspaceSelection = (string & {}) | 'all'
 export type LinearWorkspaceSelector = LinearWorkspaceSelection | undefined
 export type LinearConcreteWorkspaceId = string
 
@@ -2194,10 +2222,13 @@ export type OrcaDefaultTabTemplate = {
   command?: string
 }
 
+export type EphemeralVmCheckoutMode = 'orca-worktree' | 'provisioned-root'
+
 export type OrcaVmRecipe = {
   id: string
   name: string
   create: string
+  checkoutMode?: EphemeralVmCheckoutMode
   description?: string
   suspend?: string
   resume?: string
@@ -2335,6 +2366,12 @@ export type CreateWorktreeArgs = {
   creationId?: string
   /** Authorizes the host to mint system-owned automation provenance. */
   automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
+}
+
+export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
+  runtimeId: string
+  executionHostId: ExecutionHostId
+  expectedPath: string
 }
 
 export type CreateWorktreeResult = {
@@ -2795,7 +2832,6 @@ export type GlobalSettings = {
   autoRenameBranchFromWorkDefaultedOn?: boolean
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
-  enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
@@ -2828,6 +2864,7 @@ export type GlobalSettings = {
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
+  terminalFontWeightBold: number
   terminalLineHeight: number
   terminalScrollSensitivity: number
   terminalFastScrollSensitivity: number
@@ -3423,7 +3460,6 @@ export type TopLevelView =
   | 'activity'
   | 'automations'
   | 'space'
-  | 'skills'
   | 'artifacts'
   | 'mobile'
 
@@ -3691,6 +3727,14 @@ export type PersistedState = {
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   folderWorkspaces: FolderWorkspace[]
+  /** Folder-workspace review notes, keyed by FolderWorkspace.id. Top-level, NOT nested in
+   *  folderWorkspaces[]: normalizeFolderWorkspaces rebuilds each record field-by-field, so an
+   *  older build drops nested fields, while unknown top-level keys round-trip untouched.
+   *
+   *  WRITE-ONLY PROJECTION. FolderWorkspace.diffComments is the single in-memory home; load()
+   *  hydrates from this key and then deletes it from Store state, and buildStateToSave() is the
+   *  only producer of it. Never read Store.state.folderWorkspaceDiffComments outside load(). */
+  folderWorkspaceDiffComments?: Record<string, DiffComment[]>
   /** Sparse-checkout presets keyed by repoId. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
   /** Per paired device last tab selection by worktree; keeps mobile navigation across host restarts. */

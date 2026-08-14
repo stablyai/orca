@@ -129,14 +129,13 @@ describe('onboarding feature setup runner', () => {
     )
   })
 
-  it('wraps the copied command for a WSL runtime', () => {
+  it('keeps the copied command valid for the WSL target shell', () => {
     const text = buildOnboardingFeatureSetupClipboardText(
       { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
       { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
     )
 
-    expect(text).toContain("wsl.exe -d 'Ubuntu'")
-    expect(text).not.toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
+    expect(text).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
   })
 
   it('leaves the copied command bare for a host runtime', () => {

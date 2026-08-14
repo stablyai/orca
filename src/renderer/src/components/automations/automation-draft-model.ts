@@ -17,8 +17,8 @@ export function formatTimeInput(hour: number, minute: number): string {
 export function parseDraftTime(time: string): { hour: number; minute: number } {
   const [rawHour, rawMinute] = time.split(':').map((part) => Number(part))
   return {
-    hour: Number.isFinite(rawHour) ? rawHour : 9,
-    minute: Number.isFinite(rawMinute) ? rawMinute : 0
+    hour: Number.isInteger(rawHour) && rawHour >= 0 && rawHour <= 23 ? rawHour : 9,
+    minute: Number.isInteger(rawMinute) && rawMinute >= 0 && rawMinute <= 59 ? rawMinute : 0
   }
 }
 

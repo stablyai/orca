@@ -5,6 +5,7 @@ import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
+  SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
   getZshStartupFileSourceBlock
 } from '../main/shell-templates'
 
@@ -84,6 +85,7 @@ function ensureOverlayRestoreWrappers(root: string): void {
   const bashDir = join(root, 'bash')
 
   const zshEnv = `# Orca relay zsh overlay wrapper
+${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 case "\${ORCA_ORIG_ZDOTDIR%/}" in
   */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
@@ -133,6 +135,7 @@ ${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HO
 ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
 `
   const bashRc = `# Orca relay bash overlay wrapper
+${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -264,10 +267,15 @@ export function getRelayShellLaunchConfig(
   shellPath: string,
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform,
-  options: { emitReadyMarker?: boolean; terminalWindowsWslDistro?: string | null } = {}
+  options: {
+    emitReadyMarker?: boolean
+    emitStartupIdentity?: boolean
+    terminalWindowsWslDistro?: string | null
+  } = {}
 ): RelayShellLaunchConfig {
   const shellName = shellBasename(shellPath)
   const emitReadyMarker = options.emitReadyMarker === true
+  const emitStartupIdentity = options.emitStartupIdentity === true
   if (platform === 'win32') {
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
@@ -283,9 +291,9 @@ export function getRelayShellLaunchConfig(
   if (shellName !== 'zsh' && shellName !== 'bash') {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }
-  // Why: preserve plain zsh startup fast path; only force wrappers when
-  // shell-ready or overlay env restoration is requested.
-  if (shellName === 'zsh' && !hasOverlayRestoreEnv(env) && !emitReadyMarker) {
+  // Why: preserve plain zsh startup fast path unless markers or overlay restoration are requested.
+  const requiresZshWrapper = hasOverlayRestoreEnv(env) || emitReadyMarker || emitStartupIdentity
+  if (shellName === 'zsh' && !requiresZshWrapper) {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }
 
@@ -298,13 +306,17 @@ export function getRelayShellLaunchConfig(
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(env),
         ZDOTDIR: join(root, 'zsh'),
-        ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {})
+        ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}),
+        ...(emitStartupIdentity ? { ORCA_SHELL_STARTUP_IDENTITY: '1' } : {})
       }
     }
   }
 
   return {
     args: ['--rcfile', join(root, 'bash', 'rcfile')],
-    env: emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}
+    env: {
+      ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}),
+      ...(emitStartupIdentity ? { ORCA_SHELL_STARTUP_IDENTITY: '1' } : {})
+    }
   }
 }

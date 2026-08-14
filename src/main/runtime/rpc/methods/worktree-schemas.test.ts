@@ -109,14 +109,14 @@ describe('worktree RPC schemas', () => {
     const parsed = WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', displayName: '' })
 
     expect(parsed.displayName).toBe('')
-    expect(Object.prototype.hasOwnProperty.call(parsed, 'displayName')).toBe(true)
+    expect(Object.hasOwn(parsed, 'displayName')).toBe(true)
   })
 
   it('still omits a display name that was never sent', () => {
     const parsed = WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', comment: 'note' })
 
     expect(parsed.displayName).toBeUndefined()
-    expect(Object.prototype.hasOwnProperty.call(parsed, 'displayName')).toBe(false)
+    expect(Object.hasOwn(parsed, 'displayName')).toBe(false)
   })
 
   it('ignores a non-string display name rather than persisting it', () => {

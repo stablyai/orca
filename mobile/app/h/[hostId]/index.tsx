@@ -25,7 +25,7 @@ import { loadHosts, updateLastConnected } from '../../../src/transport/host-stor
 import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
-  useCloseHost,
+  useForgetHostClient,
   useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
@@ -148,7 +148,7 @@ export function HostScreen({
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
-  const closeHostClient = useCloseHost()
+  const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
@@ -636,14 +636,14 @@ export function HostScreen({
       return
     }
     try {
-      await removeHostAndCloseClient(hostId, closeHostClient)
+      await removeHostAndCloseClient(hostId, forgetHostClient)
       leaveHost()
     } catch {
       // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
       setConfirmRemoveHost(true)
       Alert.alert('Could not remove host', 'Please try again.')
     }
-  }, [hostId, leaveHost, closeHostClient])
+  }, [hostId, leaveHost, forgetHostClient])
 
   const navigateFromHostList = useCallback(
     (target: string) => {

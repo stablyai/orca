@@ -5,6 +5,7 @@ import {
   accessSync,
   chmodSync,
   constants as fsConstants,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -141,7 +142,7 @@ function readGeneratedScripts(home, minMtime) {
     const body = readFileSync(path, 'utf8')
     const captureIndex = body.indexOf('payload=$(cat)')
     const firstExitIndex = body.indexOf('exit 0')
-    if (captureIndex < 0 || firstExitIndex <= captureIndex) {
+    if (captureIndex === -1 || firstExitIndex <= captureIndex) {
       throw new Error([fileName, ' can exit before capturing stdin'].join(''))
     }
     return { body, fileName, path, source }
@@ -311,43 +312,37 @@ async function verifyForwarding(scripts, home, payload) {
   }
 }
 
-// Why: rewrite from the path embedded in the installed command, not a
-// reconstructed join(home, ...). That way missing/failing-script cases cannot
-// silently re-run the real script if the install layout changes.
-function rewriteLauncherScriptPath(command, nextPath) {
-  const match = /if \[ -f '([^']+)'/.exec(command)
-  if (!match) {
-    throw new Error('Installed launcher command did not reference a quoted script path')
-  }
-  return command.replaceAll(match[1], nextPath)
-}
-
 async function verifyInstalledLauncher(home, payload) {
   const settingsPath = join(home, '.claude', 'settings.json')
   const settings = JSON.parse(readFileSync(settingsPath, 'utf8'))
   const command = findStrings(settings).find(
     (value) => value.includes('claude-hook.sh') && value.includes('if [ -f ')
   )
-  if (!command || !command.includes('] && [ -r ') || !command.includes('else cat >/dev/null')) {
+  if (
+    !command ||
+    !command.includes('"$HOME/.orca/agent-hooks/claude-hook.sh"') ||
+    !command.includes('] && [ -r ') ||
+    !command.includes('else { command -p cat')
+  ) {
     throw new Error('Electron did not install the guarded Claude launcher')
   }
   const scratch = mkdtempSync(join(tmpdir(), 'orca-hook-launcher-'))
   try {
-    const missingPath = join(scratch, 'missing-hook.sh')
     const missingResult = await runShell(
-      rewriteLauncherScriptPath(command, missingPath),
+      command,
       payload,
-      withoutOrcaEnvironment({ HOME: home })
+      withoutOrcaEnvironment({ HOME: scratch })
     )
     assertSuccessfulWrite(missingResult, 'installed missing-script launcher')
 
-    const failingPath = join(scratch, 'failing-hook.sh')
+    const failingPath = join(scratch, '.orca', 'agent-hooks', 'claude-hook.sh')
+    mkdirSync(join(scratch, '.orca', 'agent-hooks'), { recursive: true })
     writeFileSync(failingPath, '#!/bin/sh\ncat >/dev/null\nexit 7\n', 'utf8')
     chmodSync(failingPath, 0o755)
     const failingResult = await runShell(
-      rewriteLauncherScriptPath(command, failingPath),
+      command,
       payload,
-      withoutOrcaEnvironment({ HOME: home })
+      withoutOrcaEnvironment({ HOME: scratch })
     )
     if (failingResult.exitCode !== 7 || failingResult.stdinErrors.length > 0) {
       throw new Error('Installed launcher did not preserve a running script failure')
