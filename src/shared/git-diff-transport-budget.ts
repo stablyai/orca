@@ -1,4 +1,4 @@
-import type { GitDiffResult } from './types'
+import type { GitDiffResult } from './git-diff-compare-types'
 import { remoteRpcResultExceedsContentBudget } from './remote-rpc-content-budget'
 
 export const GIT_DIFF_TOO_LARGE_CODE = 'diff_too_large'

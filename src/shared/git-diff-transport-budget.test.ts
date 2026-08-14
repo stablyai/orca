@@ -2,7 +2,7 @@
 // binary-buffer.ts sniffs only for NUL, so control-dense content is classified as text; these
 // fixtures pin every branch of the measurement to native JSON.stringify.
 import { describe, expect, it } from 'vitest'
-import type { GitDiffResult } from './types'
+import type { GitDiffResult } from './git-diff-compare-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime-memory-limits'
 import {
   assertGitDiffWithinTransportBudget,

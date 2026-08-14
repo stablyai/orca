@@ -2,7 +2,8 @@
 // an SSH host forwards its provider's payload verbatim, so an older relay cannot be relied on to clamp it.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
-import type { GitDiffResult, GlobalSettings } from '../../shared/types'
+import type { GitDiffResult } from '../../shared/git-diff-compare-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as GitStatusModule from '../git/status'
 import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
 

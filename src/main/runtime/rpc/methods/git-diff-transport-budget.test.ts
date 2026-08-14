@@ -6,7 +6,8 @@ import {
   remoteRpcContentBudget
 } from '../../../../shared/remote-rpc-content-budget'
 import { assertGitDiffWithinTransportBudget } from '../../../../shared/git-diff-transport-budget'
-import type { GitDiffResult, GlobalSettings } from '../../../../shared/types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from '../../orca-runtime-git'
 import type { RpcRequest, RpcResponse } from '../core'
