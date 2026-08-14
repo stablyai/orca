@@ -68,6 +68,7 @@ import {
 
 type CreateBrowserTabOptions = {
   activate?: boolean
+  browserPageId?: string
   title?: string
   sessionProfileId?: string | null
   sessionPartition?: string | null
@@ -598,7 +599,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   createBrowserTab: (worktreeId, url, options) => {
     assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
-    const workspaceId = createBrowserUuid()
+    const workspaceId = options?.browserPageId ?? createBrowserUuid()
+    if (
+      findWorkspace(get().browserTabsByWorktree, workspaceId) ||
+      findPage(get().browserPagesByWorkspace, workspaceId)
+    ) {
+      throw new Error(`Browser page ${workspaceId} already exists`)
+    }
     const page = buildBrowserPage(
       workspaceId,
       worktreeId,

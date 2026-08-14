@@ -1294,6 +1294,7 @@ export class RuntimeBrowserCommands {
   async browserTabCreate(params: {
     url?: string
     worktree?: string
+    page?: string
     profileId?: string
     waitForRegistration?: boolean
     activate?: boolean
@@ -1322,7 +1323,8 @@ export class RuntimeBrowserCommands {
         worktreeId,
         params.profileId,
         params.activate,
-        params.targetGroupId
+        params.targetGroupId,
+        params.page
       )
     }
     const { browserPageId } = await this.createBrowserTabInRenderer(
@@ -1330,7 +1332,8 @@ export class RuntimeBrowserCommands {
       worktreeId,
       params.profileId,
       params.profileId ? sessionPartition : undefined,
-      params.activate
+      params.activate,
+      params.page
     )
 
     // Why: the webview must mount and register before the tab is operable, so wait here (returning the ID anyway on timeout).
@@ -1351,9 +1354,16 @@ export class RuntimeBrowserCommands {
 
     // Why: the webview loads about:blank first; route navigation through the bridge so its registered owner remains authoritative.
     if (url && url !== 'about:blank') {
-      try {
+      const navigate = async (): Promise<void> => {
         const result = await bridge.goto(url, worktreeId, browserPageId)
         this.notifyRendererNavigation(browserPageId, result.url, result.title)
+      }
+      if (params.waitForRegistration === true) {
+        void navigate().catch(() => {})
+        return { browserPageId }
+      }
+      try {
+        await navigate()
       } catch {
         // Tab exists but navigation failed — caller can retry with explicit goto
       }
@@ -1596,13 +1606,6 @@ export class RuntimeBrowserCommands {
 
     let tabId: string | null = null
     if (typeof params.page === 'string' && params.page.length > 0) {
-      if (!bridge.getRegisteredTabs(worktreeId).has(params.page)) {
-        const scope = worktreeId ? ' in this worktree' : ''
-        throw new BrowserError(
-          'browser_tab_not_found',
-          `Browser page ${params.page} was not found${scope}`
-        )
-      }
       tabId = params.page
     } else if (params.index !== undefined) {
       const tabs = bridge.getRegisteredTabs(worktreeId)
@@ -1645,7 +1648,7 @@ export class RuntimeBrowserCommands {
 
       const handler = (
         _event: Electron.IpcMainEvent,
-        reply: { requestId: string; error?: string }
+        reply: { requestId: string; error?: string; code?: 'browser_tab_not_found' }
       ): void => {
         if (reply.requestId !== requestId) {
           return
@@ -1653,7 +1656,11 @@ export class RuntimeBrowserCommands {
         clearTimeout(timer)
         ipcMain.removeListener('browser:tabCloseReply', handler)
         if (reply.error) {
-          reject(new Error(reply.error))
+          reject(
+            reply.code === 'browser_tab_not_found'
+              ? new BrowserError('browser_tab_not_found', reply.error)
+              : new Error(reply.error)
+          )
         } else {
           resolve()
         }
@@ -1706,9 +1713,15 @@ export class RuntimeBrowserCommands {
     worktreeId?: string,
     profileId?: string,
     activate?: boolean,
-    targetGroupId?: string
+    targetGroupId?: string,
+    requestedPageId?: string
   ): Promise<{ browserPageId: string }> {
-    const { browserPageId } = await offscreen.createTab({ url, worktreeId, profileId })
+    const { browserPageId } = await offscreen.createTab({
+      url,
+      worktreeId,
+      profileId,
+      ...(requestedPageId ? { browserPageId: requestedPageId } : {})
+    })
     const bridge = this.host.getAgentBrowserBridge()
     const wcId = bridge?.getRegisteredTabs(worktreeId).get(browserPageId)
     if (bridge && wcId != null) {
@@ -1726,7 +1739,8 @@ export class RuntimeBrowserCommands {
     worktreeId: string | undefined,
     profileId: string | undefined,
     sessionPartition: string | undefined,
-    activate?: boolean
+    activate?: boolean,
+    requestedPageId?: string
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
@@ -1757,6 +1771,7 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
+        ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
         // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
         sessionProfileId: profileId,
         sessionPartition,

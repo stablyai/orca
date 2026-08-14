@@ -2316,6 +2316,7 @@ export function useIpcEvents(): void {
           // Agent/automation opens stay in the background (activate:false) in the active browser group.
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
+            browserPageId: data.browserPageId,
             targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
             sessionPartition: data.sessionPartition,
@@ -2483,6 +2484,7 @@ export function useIpcEvents(): void {
           if (explicitTargetId) {
             window.api.ui.replyTabClose({
               requestId: data.requestId,
+              code: 'browser_tab_not_found',
               error: translate(
                 'auto.hooks.useIpcEvents.0e3cf53060',
                 'Browser tab {{value0}} not found',

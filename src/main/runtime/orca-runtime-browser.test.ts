@@ -329,6 +329,56 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     )
   })
 
+  it('returns the renderer page identity before navigation settles', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const navigation = deferred<{ title: string; url: string }>()
+    const webContents = { send: vi.fn() }
+    webContents.send = vi.fn((_channel: string, data: { requestId: string }) => {
+      const handler = ipcMainOnMock.mock.calls.find(
+        ([eventName]) => eventName === 'browser:tabCreateReply'
+      )?.[1] as
+        | ((event: unknown, reply: { requestId: string; browserPageId?: string }) => void)
+        | undefined
+      handler?.({ sender: webContents } as never, {
+        requestId: data.requestId,
+        browserPageId: 'page-slow-navigation'
+      })
+    })
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map([['page-slow-navigation', 101]])),
+      goto: vi.fn(() => navigation.promise),
+      setActiveTab: vi.fn()
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
+        getAuthoritativeWindow: vi.fn(() => ({ webContents }) as never)
+      })
+    )
+
+    let created: { browserPageId: string } | null = null
+    const creation = commands
+      .browserTabCreate({
+        worktree: 'id:wt-1',
+        url: 'https://example.com/slow',
+        waitForRegistration: true
+      })
+      .then((result) => {
+        created = result
+        return result
+      })
+    await vi.waitFor(() => expect(bridge.goto).toHaveBeenCalledOnce())
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    try {
+      expect(created).toEqual({ browserPageId: 'page-slow-navigation' })
+    } finally {
+      navigation.resolve({ title: 'Slow page', url: 'https://example.com/slow' })
+      await creation
+    }
+  })
+
   it('rejects unknown explicit profile ids before requesting a renderer tab', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const send = vi.fn()

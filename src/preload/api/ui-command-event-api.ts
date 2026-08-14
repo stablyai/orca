@@ -63,6 +63,7 @@ export type UiCommandEventApi = {
       requestId: string
       url: string
       worktreeId?: string
+      browserPageId?: string
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
@@ -81,7 +82,11 @@ export type UiCommandEventApi = {
   onRequestTabClose: (
     callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
   ) => () => void
-  replyTabClose: (reply: { requestId: string; error?: string }) => void
+  replyTabClose: (reply: {
+    requestId: string
+    error?: string
+    code?: 'browser_tab_not_found'
+  }) => void
   onNewTerminalTab: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: () => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
