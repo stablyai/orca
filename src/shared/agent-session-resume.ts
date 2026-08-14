@@ -1,6 +1,6 @@
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export const RESUMABLE_TUI_AGENTS = [
   'claude',
@@ -13,7 +13,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'droid',
   'grok',
   'devin',
-  'omp'
+  'omp',
+  'prime-agent'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -60,6 +61,14 @@ export type SleepingAgentSessionRecord = {
    *  so only the pane's own cold-restore path may consume them — activation
    *  launching a tab too would duplicate a warm-reattached session (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
+  /** Prevents provider-session relaunch while main reconciles a durable
+   *  orchestration assignment against authoritative PTY inventory. */
+  automaticResumeBlockedBy?: 'legacy-orchestration-worker'
+  /** Set on a finished pane captured by an explicit workspace sleep. Its
+   *  `--resume` is issued by the pane's own cold restore when its tab is
+   *  opened, so a mobile wake must not background-mount every such tab and
+   *  respawn the whole workspace the user just slept (#11598). */
+  restoreOnTabOpenOnly?: boolean
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
@@ -154,7 +163,7 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.
- *  Pi's file path is identity; other agents resume by their provider id. */
+ *  Pi-family transcript resumes use file identity; other agents use provider ids. */
 export function agentProviderSessionsEqual(
   agent: string | undefined,
   left: AgentProviderSessionMetadata | undefined,
@@ -166,7 +175,7 @@ export function agentProviderSessionsEqual(
   return (
     left.key === right.key &&
     left.id === right.id &&
-    (agent !== 'pi' || left.transcriptPath === right.transcriptPath)
+    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
   )
 }
 
@@ -200,7 +209,8 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
     }
-    case 'pi': {
+    case 'pi':
+    case 'prime-agent': {
       const id = readSessionId(payload, ['session_id'])
       const providerSession = id
         ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
@@ -249,6 +259,10 @@ export function getAgentResumeArgv(
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
+        : null
+    case 'prime-agent':
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['prime-agent', '--resume', providerSession.transcriptPath]
         : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null

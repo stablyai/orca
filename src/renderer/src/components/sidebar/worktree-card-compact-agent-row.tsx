@@ -218,7 +218,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       {model && (
         <span
           className={cn(
-            'max-w-24 shrink-0 truncate font-mono text-[10px]',
+            'min-w-0 max-w-24 truncate font-mono text-[10px]',
             isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
           title={model}
@@ -255,7 +255,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     <div
       draggable={false}
       className={cn(
-        'compact-agent-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
+        'compact-agent-row group/compact-agent-row min-w-0 overflow-hidden cursor-pointer rounded-sm px-1 text-[11px] leading-none',
         'text-muted-foreground worktree-agent-row-hover',
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',

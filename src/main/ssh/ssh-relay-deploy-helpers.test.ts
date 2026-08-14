@@ -9,13 +9,17 @@ import {
   RELAY_EXIT_CODE_VERSION_MISMATCH
 } from './ssh-relay-version-mismatch-error'
 
-function createMockChannel(): ClientChannel {
+type MockChannel = ClientChannel & {
+  stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
+}
+
+function createMockChannel(): MockChannel {
   return Object.assign(new EventEmitter(), {
     stderr: Object.assign(new EventEmitter(), { resume: vi.fn() }),
-    stdin: { write: vi.fn() },
+    stdin: Object.assign(new EventEmitter(), { write: vi.fn(() => true) }),
     close: vi.fn(),
     resume: vi.fn()
-  }) as unknown as ClientChannel
+  }) as unknown as MockChannel
 }
 
 // execCommand only rejects with Error; narrow the caught reason (its resolve
@@ -204,6 +208,35 @@ describe('waitForSentinel', () => {
     expect(Buffer.concat(chunks)).toEqual(postSentinelPayload)
     expect(channel.close).not.toHaveBeenCalled()
   })
+
+  it.each(['ssh2 channel', 'system-SSH child stdio'])(
+    'forwards write(false), callback settlement, and drain for a %s',
+    async (shape) => {
+      const channel = createMockChannel()
+      if (shape.startsWith('system')) {
+        Object.assign(channel, { _process: new EventEmitter() })
+      }
+      const callback = vi.fn()
+      const drain = vi.fn()
+      channel.stdin.write.mockImplementation((...args: unknown[]) => {
+        const onWritten = args.find((arg) => typeof arg === 'function') as (
+          error?: Error | null
+        ) => void
+        onWritten(null)
+        return false
+      })
+      const transportPromise = waitForSentinel(channel)
+      channel.emit('data', Buffer.from(RELAY_SENTINEL))
+      const transport = await transportPromise
+
+      transport.onDrain?.(drain)
+      expect(transport.write(Buffer.from('frame'), callback)).toBe(false)
+      expect(callback).toHaveBeenCalledWith({ ok: true })
+      channel.stdin.emit('drain')
+      expect(drain).toHaveBeenCalledOnce()
+      expect(transport.supportsWriteSettlement).toBe(true)
+    }
+  )
 })
 
 describe('execCommand', () => {

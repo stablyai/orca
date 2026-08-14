@@ -1,12 +1,15 @@
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
+  SetupDecision
+} from '../../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
+import type {
   GitPushTarget,
-  SetupDecision,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus,
-  WorktreeStartupLaunch
-} from '../../../shared/types'
+  WorkspaceLinkedItem,
+  WorkspaceStatus
+} from '../../../shared/worktree/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
@@ -32,6 +35,8 @@ export type WorktreeCreationRequest = {
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null
+  linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedTaskSourceContext?: TaskSourceContext | null
   /** Host/setup where the new workspace should run. Duplicates repoId by design:
    *  repoId keeps old create APIs working, while this records the project-first
    *  host intent for retry, diagnostics, and future metadata writes. */
@@ -42,12 +47,15 @@ export type WorktreeCreationRequest = {
   /** Runtime environment created from the VM's pairing code. Used to refresh
    *  live status immediately after the workspace takes ownership. */
   ephemeralVmRuntimeEnvironmentId?: string
+  /** Checkout ownership selected by the provisioned recipe. */
+  ephemeralVmCheckoutMode?: 'orca-worktree' | 'provisioned-root'
   /** Recipe to provision before creating the worktree. Kept serializable so
    *  retry can rerun the recipe after a failed create. */
   ephemeralVmRecipe?: {
     sourceRepoId: string
     recipeId: string
     projectId: string
+    checkoutMode?: 'orca-worktree' | 'provisioned-root'
   }
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
@@ -118,6 +126,29 @@ export type PendingWorktreeCreation = {
   error?: string
   provisioningLog?: string
   request: WorktreeCreationRequest
+}
+
+export function findPendingLinkedWorkItemCreationId(
+  pendingCreations: Readonly<Record<string, PendingWorktreeCreation>>,
+  request: Pick<
+    WorktreeCreationRequest,
+    'repoId' | 'linkedIssue' | 'linkedPR' | 'workspaceRunContext'
+  >
+): string | null {
+  if (request.linkedIssue == null && request.linkedPR == null) {
+    return null
+  }
+  const hostId = request.workspaceRunContext?.hostId ?? null
+  const match = Object.values(pendingCreations).find((entry) => {
+    const pending = entry.request
+    return (
+      pending.repoId === request.repoId &&
+      pending.linkedIssue === request.linkedIssue &&
+      pending.linkedPR === request.linkedPR &&
+      (pending.workspaceRunContext?.hostId ?? null) === hostId
+    )
+  })
+  return match?.creationId ?? null
 }
 
 /** Human-readable progress line for an in-flight create, shared by the in-frame

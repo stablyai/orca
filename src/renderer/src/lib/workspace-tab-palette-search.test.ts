@@ -4,7 +4,9 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { OpenFile } from '@/store/slices/editor'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import type { Tab, TabGroup, TerminalTab, Worktree } from '../../../shared/types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-tab-palette-search'
 
 const WT_ROOT = path.join('tmp', 'wt-1')
@@ -131,7 +133,7 @@ function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorksp
 }
 
 describe('workspace-tab-palette-search', () => {
-  it('uses terminal tab title precedence and honors generated-title disabling', () => {
+  it('uses the same title precedence as the tab strip and honors generated-title disabling', () => {
     const enabledEntries = buildEntries({
       tabsByWorktree: {
         'wt-1': [
@@ -143,6 +145,7 @@ describe('workspace-tab-palette-search', () => {
         ]
       }
     })
+    // customTitle on the terminal record is merged into the unified resolve path.
     expect(searchWorkspaceTabs(enabledEntries, 'custom')[0]?.title).toBe('Custom Title')
 
     const disabledEntries = buildEntries({
@@ -154,6 +157,10 @@ describe('workspace-tab-palette-search', () => {
             generatedTitle: 'Generated Label'
           })
         ]
+      },
+      // Empty unified label so the live terminal title is the visible fallback.
+      unifiedTabsByWorktree: {
+        'wt-1': [makeUnifiedTab({ label: '' })]
       }
     })
     expect(searchWorkspaceTabs(disabledEntries, 'generated')).toHaveLength(0)
@@ -169,6 +176,22 @@ describe('workspace-tab-palette-search', () => {
     })
 
     expect(searchWorkspaceTabs(entries, 'fallback')[0]?.title).toBe('Fallback Terminal')
+  })
+
+  // The tab strip shows the unified label; tabsByWorktree can lag on a default
+  // "Terminal N" while the label already has the live OSC agent title.
+  it('indexes the unified label when the terminal record title is stale', () => {
+    const entries = buildEntries({
+      tabsByWorktree: {
+        'wt-1': [makeTerminalTab({ title: 'Terminal 9', defaultTitle: 'Terminal 9' })]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [makeUnifiedTab({ label: '✳ Claude Code' })]
+      }
+    })
+
+    expect(searchWorkspaceTabs(entries, 'claude')[0]?.title).toBe('✳ Claude Code')
+    expect(searchWorkspaceTabs(entries, 'terminal 9')).toHaveLength(0)
   })
 
   it('indexes editor-family tabs through existing editor labels and paths', () => {
@@ -437,5 +460,67 @@ describe('workspace-tab-palette-search', () => {
       'terminal-sibling',
       'terminal-other'
     ])
+  })
+
+  it('falls back to the branch label when a cleared display name left it undefined', () => {
+    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
+    // so the store-level display-name corruption reaches here too.
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: 'refs/heads/feature/workspace-tab-search'
+    })
+    const entries = buildEntries({ worktrees: [cleared] })
+
+    expect(searchWorkspaceTabs(entries, 'workspace-tab-search')[0]).toMatchObject({
+      worktreeName: 'feature/workspace-tab-search',
+      worktreeRange: {
+        start: 'feature/'.length,
+        end: 'feature/workspace-tab-search'.length
+      }
+    })
+  })
+
+  it('lists a branch-less row on the empty query without throwing', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string,
+      path: path.join('repos', 'design-review')
+    })
+    const entries = buildEntries({ worktrees: [cleared] })
+
+    expect(searchWorkspaceTabs(entries, '')[0]).toMatchObject({
+      worktreeName: 'design-review',
+      worktreeRange: null
+    })
+  })
+
+  it('omits the fixed Terminal tab secondary on terminals', () => {
+    const entries = buildEntries()
+    const emptyQuery = searchWorkspaceTabs(entries, '')[0]
+    expect(emptyQuery).toMatchObject({
+      contentType: 'terminal',
+      secondaryText: '',
+      secondaryRange: null
+    })
+    expect(entries[0]?.secondarySearchTexts).toEqual([])
+  })
+
+  it('still finds terminals via type aliases without showing a secondary', () => {
+    const entries = buildEntries()
+    // Title is agent-named so the hit has to come from the type alias, not the title.
+    const renamed = entries.map((entry, index) =>
+      index === 0 ? { ...entry, title: 'Fix login race', titleSearchText: 'Fix login race' } : entry
+    )
+    const hit = searchWorkspaceTabs(renamed, 'terminal')[0]
+    expect(hit).toMatchObject({
+      contentType: 'terminal',
+      title: 'Fix login race',
+      secondaryText: '',
+      secondaryRange: null,
+      typeAliasMatch: {
+        text: 'terminal tab',
+        range: { start: 0, end: 8 }
+      }
+    })
   })
 })

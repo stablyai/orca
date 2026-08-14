@@ -20,13 +20,11 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
-import type {
-  Repo,
-  TerminalTab,
-  Worktree,
-  WorktreeCardProperty,
-  WorktreeLineage
-} from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { clearWorktreeAgentExpansionStateForTests } from './worktree-card-agents-expansion-state'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -143,10 +141,6 @@ vi.mock('./CacheTimer', () => ({
 }))
 
 // NOTE: intentionally NOT mocking ./WorktreeCardAgents — we render the real one.
-
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
-}))
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,

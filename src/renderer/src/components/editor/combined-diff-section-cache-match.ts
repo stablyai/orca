@@ -1,4 +1,5 @@
-import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import type { CombinedDiffFileTreeMode } from './combined-diff-file-tree-model'
 import { getCombinedDiffFileTreeSectionKey } from './combined-diff-file-tree-model'
 import type { DiffSection } from './diff-section-types'

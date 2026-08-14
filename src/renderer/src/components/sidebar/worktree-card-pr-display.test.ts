@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree

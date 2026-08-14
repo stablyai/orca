@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   foldToolMessages,
   pairToolBlocks,
   splitNativeChatBlocks
-} from './mobile-native-chat-blocks'
+} from '../../../src/shared/native-chat-tool-fold'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 function msg(
   role: NativeChatMessage['role'],

@@ -21,7 +21,13 @@ import {
   type RuntimeOrchestrationEnvelope,
   type RuntimeRpcResponse
 } from './runtime-rpc-envelope'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
+import type { RuntimeStatus } from './runtime-types'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+} from './protocol-version'
 // Re-export so existing value importers of `RemoteRuntimeClientError` are
 // unaffected; the class lives in a ws-free module so type-only consumers
 // (and mobile's typecheck) don't compile this file's Node-only deps.
@@ -79,12 +85,41 @@ export type RemoteRuntimeSubscriptionCallbacks<TResult = unknown> = {
   onClose?: () => void
 }
 
-export async function sendRemoteRuntimeRequest<TResult>(
+export function sendRemoteRuntimeRequest<TResult>(
   pairing: PairingOffer,
   method: string,
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope
+): Promise<RuntimeRpcResponse<TResult>> {
+  return sendRemoteRuntimeRequestOnSocket(pairing, method, params, timeoutMs, envelope)
+}
+
+export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
+  pairing: PairingOffer,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  validateStatus: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
+  envelope?: RuntimeOrchestrationEnvelope
+): Promise<RuntimeRpcResponse<TResult>> {
+  return sendRemoteRuntimeRequestOnSocket(
+    pairing,
+    method,
+    params,
+    timeoutMs,
+    envelope,
+    validateStatus
+  )
+}
+
+async function sendRemoteRuntimeRequestOnSocket<TResult>(
+  pairing: PairingOffer,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope,
+  validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RemoteRuntimeClientError(
@@ -93,25 +128,38 @@ export async function sendRemoteRuntimeRequest<TResult>(
     )
   }
   const requestId = randomUUID()
+  const statusRequestId = validateStatus ? randomUUID() : null
+  const serializedStatusRequest = statusRequestId
+    ? serializeRemoteRuntimePayload({
+        id: statusRequestId,
+        deviceToken: pairing.deviceToken,
+        method: 'status.get'
+      })
+    : null
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
-    clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    clientCapabilities: [
+      SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+    ]
   })
   const pendingRequest = {
     preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
-      serializeRemoteRuntimePayload({
-        id: requestId,
+      serializeRemoteRuntimeRpcRequest({
+        requestId,
         deviceToken: pairing.deviceToken,
         method,
         params,
-        orchestrationCapability: envelope?.orchestrationCapability,
-        orchestrationContractVersion: envelope?.orchestrationContractVersion,
-        orchestrationRequestId: envelope?.orchestrationRequestId
+        envelope
       })
     )
   }
   let serializedRequest = takeRemoteRuntimePreparedRequest(pendingRequest)
+  let awaitingRequestId = statusRequestId ?? requestId
+  let awaitingStatus = statusRequestId !== null
   return await new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
     const keyPair = generateKeyPair()
     const serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
@@ -119,6 +167,12 @@ export async function sendRemoteRuntimeRequest<TResult>(
     let state: HandshakeState = 'awaiting_ready'
     let settled = false
     let ws: WebSocket | null = null
+    const getPairingStage = (): 'connect' | 'host-identity' | 'runtime' =>
+      state === 'awaiting_ready'
+        ? 'connect'
+        : state === 'awaiting_authenticated'
+          ? 'host-identity'
+          : 'runtime'
 
     const cleanupSocketListeners = (): void => {
       const socket = ws
@@ -143,7 +197,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
         ok: false,
         error: new RemoteRuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the remote Orca runtime to respond.'
+          'Timed out waiting for the remote Orca runtime to respond.',
+          { pairingStage: getPairingStage() }
         )
       })
     }
@@ -208,7 +263,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
         ok: false,
         error: new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          'Could not connect to the remote Orca runtime.'
+          'Could not connect to the remote Orca runtime.',
+          { pairingStage: getPairingStage() }
         )
       })
     }
@@ -219,7 +275,11 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            formatRemoteRuntimeCloseMessage(code, reason)
+            formatRemoteRuntimeCloseMessage(code, reason),
+            {
+              pairingStage: getPairingStage(),
+              closeCode: code
+            }
           )
         })
       }
@@ -234,7 +294,10 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an unexpected binary frame.'
+            'Remote Orca runtime returned an unexpected binary frame.',
+            {
+              pairingStage: state === 'awaiting_ready' ? 'host-identity' : getPairingStage()
+            }
           )
         })
         return
@@ -252,7 +315,10 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an undecryptable frame.'
+            'Remote Orca runtime returned an undecryptable frame.',
+            {
+              pairingStage: state === 'awaiting_authenticated' ? 'host-identity' : getPairingStage()
+            }
           )
         })
         return
@@ -280,7 +346,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid E2EE handshake frame.'
+            'Remote Orca runtime returned an invalid E2EE handshake frame.',
+            { pairingStage: 'host-identity' }
           )
         })
         return
@@ -294,7 +361,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an unexpected E2EE handshake frame.'
+            'Remote Orca runtime returned an unexpected E2EE handshake frame.',
+            { pairingStage: 'host-identity' }
           )
         })
         return
@@ -312,7 +380,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid E2EE auth frame.'
+            'Remote Orca runtime returned an invalid E2EE auth frame.',
+            { pairingStage: 'host-identity' }
           )
         })
         return
@@ -329,12 +398,21 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             code,
-            'Remote Orca runtime rejected the pairing token.'
+            'Remote Orca runtime rejected the pairing token.',
+            { pairingStage: code === 'unauthorized' ? 'access-grant' : 'host-identity' }
           )
         })
         return
       }
       state = 'ready'
+      if (serializedStatusRequest) {
+        ws?.send(encrypt(serializedStatusRequest, sharedKey))
+        return
+      }
+      sendRequestedRpc()
+    }
+
+    function sendRequestedRpc(): void {
       const request = serializedRequest
       serializedRequest = null
       if (request === null) {
@@ -359,7 +437,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid response frame.'
+            'Remote Orca runtime returned an invalid response frame.',
+            { pairingStage: 'runtime' }
           )
         })
         return
@@ -374,22 +453,43 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid response frame.'
+            'Remote Orca runtime returned an invalid response frame.',
+            { pairingStage: 'runtime' }
           )
         })
         return
       }
-      const response = parsed.data as RuntimeRpcResponse<TResult>
-      if (response.id !== requestId) {
+      if (parsed.data.id !== awaitingRequestId) {
         finish({
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned a mismatched response id.'
+            'Remote Orca runtime returned a mismatched response id.',
+            { pairingStage: 'runtime' }
           )
         })
         return
       }
+      if (awaitingStatus && validateStatus) {
+        try {
+          validateStatus(parsed.data as RuntimeRpcResponse<RuntimeStatus>)
+        } catch (error) {
+          finish({
+            ok: false,
+            error:
+              error instanceof Error
+                ? error
+                : new RemoteRuntimeClientError('runtime_error', String(error))
+          })
+          return
+        }
+        awaitingStatus = false
+        awaitingRequestId = requestId
+        refreshTimeout()
+        sendRequestedRpc()
+        return
+      }
+      const response = parsed.data as RuntimeRpcResponse<TResult>
       finish({ ok: true, response })
     }
   }).finally(() => releaseRemoteRuntimePreparedRequest(pendingRequest))
@@ -413,7 +513,12 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
-    clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    clientCapabilities: [
+      SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+    ]
   })
   return await new Promise((resolve, reject) => {
     const keyPair = generateKeyPair()

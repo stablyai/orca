@@ -14,6 +14,7 @@ import {
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import { PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES } from './pty-input-write-queue'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
@@ -95,6 +96,24 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('threads provider command ownership through the spawn IPC', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      command: 'printf ready',
+      commandDelivery: 'provider'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(window.api.pty.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'printf ready',
+        commandDelivery: 'provider'
+      })
+    )
+    transport.disconnect()
+  })
+
   it('routes a rejected daemon write to the owning transport recovery callback', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const recovery = vi.fn()
@@ -107,6 +126,29 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('routes a thrown renderer write to the owning transport recovery callback', async () => {
+    const failure = new Error('ipc write failed')
+    vi.mocked(window.api.pty.write).mockImplementation(() => {
+      throw failure
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const recovery = vi.fn()
+      const transport = createIpcPtyTransport({})
+      await transport.connect({ url: '', callbacks: { onWriteUnavailable: recovery } })
+
+      expect(transport.sendInput('input')).toBe(true)
+      expect(transport.sendInput('later-input')).toBe(false)
+
+      expect(recovery).toHaveBeenCalledOnce()
+      expect(warn).toHaveBeenCalledWith('[pty-input-write-queue] drain failed:', failure)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('does not create a second kill authority when a mounted pane detaches', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
@@ -116,6 +158,43 @@ describe('createIpcPtyTransport', () => {
     transport.detach?.()
 
     expect(kill).not.toHaveBeenCalled()
+  })
+
+  // Why: retained gauges would inflate every later high-water profile.
+  it.each(['detach', 'destroy'] as const)(
+    'drops its side-effect gauge from the census on %s',
+    async (teardown) => {
+      await import('./pty-side-effect-pending-census')
+      const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+
+      const transport = createIpcPtyTransport({})
+      await transport.connect({ url: '', callbacks: {} })
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+      transport[teardown]?.()
+
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+    }
+  )
+
+  // Why: teardown that already failed is exactly when a stranded gauge would pin the processor.
+  it('drops its side-effect gauge even when destroy throws mid-disconnect', async () => {
+    await import('./pty-side-effect-pending-census')
+    const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+    kill.mockImplementationOnce(() => {
+      throw new Error('ipc channel closed')
+    })
+
+    expect(() => transport.destroy?.()).toThrow('ipc channel closed')
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
   })
 
   it('retires an adopted PTY when recovery disconnects before a replacement spawn', async () => {
@@ -131,6 +210,41 @@ describe('createIpcPtyTransport', () => {
     expect(kill).toHaveBeenCalledWith('empty-reattach')
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
+  })
+
+  it('announces a daemon adoption before publishing its buffered PTY data', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'adopted-pty', isReattach: true })
+    const order: string[] = []
+    const transport = createIpcPtyTransport({})
+    const connecting = transport.connect({
+      url: '',
+      callbacks: {
+        onReattachDetermined: () => order.push('adopt'),
+        onData: () => order.push('data')
+      }
+    })
+    onData?.({ id: 'adopted-pty', data: 'buffered' })
+    await connecting
+
+    expect(order).toEqual(['adopt', 'data'])
+  })
+
+  it('does not reannounce an explicit reattach already owned by its caller', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'restored-pty', isReattach: true })
+    const onReattachDetermined = vi.fn()
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({
+      url: '',
+      sessionId: 'restored-pty',
+      callbacks: { onReattachDetermined }
+    })
+
+    expect(onReattachDetermined).not.toHaveBeenCalled()
   })
 
   it('forwards requested environment deletions to the PTY spawn', async () => {
@@ -729,7 +843,8 @@ describe('createIpcPtyTransport', () => {
       await vi.runOnlyPendingTimersAsync()
 
       expect(vi.getTimerCount()).toBe(0)
-      expect(onTitleChange).not.toHaveBeenCalled()
+      // Why: the literal is the pane's identity once (#10258); the redraw repeats stay ignored.
+      expect(onTitleChange.mock.calls).toEqual([['Cursor Agent', 'Cursor Agent']])
     } finally {
       vi.useRealTimers()
     }
@@ -892,6 +1007,104 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
+  it('bounds the deferred side-effect queue under a stalled drain, keeping the newest title and a pending bell', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onBell = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onBell })
+      const callbacks = { onData: vi.fn() }
+      const total = MAX_PENDING_PTY_SIDE_EFFECTS * 4
+
+      // Why: the bell is queued first so the cap must evict it — the latch has to survive onto a newer entry.
+      processor.processData('\x07', callbacks)
+      for (let i = 0; i < total / 2; i++) {
+        processor.processData(`\x1b]0;cap-title-${i}\x07`, callbacks)
+      }
+      // Why: a paused drain (background shutdown window) must not disable the bound either.
+      processor.pausePendingSideEffects()
+      for (let i = total / 2; i < total; i++) {
+        processor.processData(`\x1b]0;cap-title-${i}\x07`, callbacks)
+      }
+
+      expect(onTitleChange).not.toHaveBeenCalled()
+      processor.flushPendingSideEffects()
+
+      // Why: exactly the cap survives — every older title was evicted, never applied.
+      expect(onTitleChange).toHaveBeenCalledTimes(MAX_PENDING_PTY_SIDE_EFFECTS)
+      expect(onTitleChange).toHaveBeenLastCalledWith(
+        `cap-title-${total - 1}`,
+        `cap-title-${total - 1}`
+      )
+      expect(onBell).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('collapses evicted agent-status payloads onto the survivor, keeping the newest', async () => {
+    vi.useFakeTimers()
+    try {
+      const {
+        createPtyOutputProcessor,
+        MAX_PENDING_PTY_SIDE_EFFECTS,
+        MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY
+      } = await import('./pty-transport')
+      const onAgentStatus = vi.fn()
+      const processor = createPtyOutputProcessor({ onAgentStatus })
+      const callbacks = { onData: vi.fn() }
+      const total = MAX_PENDING_PTY_SIDE_EFFECTS * 2
+
+      for (let i = 0; i < total; i++) {
+        processor.processData(
+          `\x1b]9999;{"state":"working","prompt":"cap-status-${i}"}\x07`,
+          callbacks
+        )
+      }
+      processor.flushPendingSideEffects()
+
+      const delivered = onAgentStatus.mock.calls.map(([payload]) => payload.prompt)
+      expect(delivered.length).toBeLessThanOrEqual(
+        MAX_PENDING_PTY_SIDE_EFFECTS + MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY
+      )
+      expect(delivered.at(-1)).toBe(`cap-status-${total - 1}`)
+      // Why: eviction collapse must preserve chronological delivery order.
+      expect(delivered).toEqual(
+        [...delivered].sort((a, b) => Number(a.slice(11)) - Number(b.slice(11)))
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('delivers every side effect in order when the queue stays below the cap', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onBell = vi.fn()
+      const onAgentStatus = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onBell, onAgentStatus })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x07', callbacks)
+      for (let i = 0; i < 100; i++) {
+        processor.processData(`\x1b]0;under-cap-${i}\x07`, callbacks)
+      }
+      processor.processData('\x1b]9999;{"state":"done","prompt":"done"}\x07', callbacks)
+      await vi.runAllTimersAsync()
+
+      expect(onBell).toHaveBeenCalledTimes(1)
+      expect(onTitleChange).toHaveBeenCalledTimes(100)
+      expect(onTitleChange).toHaveBeenLastCalledWith('under-cap-99', 'under-cap-99')
+      expect(onAgentStatus).toHaveBeenCalledWith({ state: 'done', prompt: 'done' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('still runs stale-title detection when an OSC status chunk has no title', async () => {
     vi.useFakeTimers()
     try {
@@ -956,6 +1169,36 @@ describe('createIpcPtyTransport', () => {
 
       expect(window.api.pty.write).toHaveBeenCalledTimes(2)
       expect(window.api.pty.write).toHaveBeenNthCalledWith(2, 'pty-1', 'tail')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds immediate cooked replies without shedding ordinary-path lookalikes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({})
+      const first = '\x1b[?10000;1n'
+      const ordinary = '\x1b]10;user-ordinary-marker\x1b\\'
+      const replies = Array.from({ length: 10_000 }, (_, index) => `\x1b[?${index};1n`)
+
+      await transport.connect({ url: '', callbacks: {} })
+      expect(transport.sendInputImmediate(first)).toBe(true)
+      expect(transport.sendInput(ordinary)).toBe(true)
+      for (const reply of replies) {
+        expect(transport.sendInputImmediate(reply)).toBe(true)
+      }
+
+      await vi.runAllTimersAsync()
+
+      expect(vi.mocked(window.api.pty.write).mock.calls).toEqual([
+        ['pty-1', first],
+        ['pty-1', ordinary],
+        ...replies
+          .slice(-PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES)
+          .map((reply) => ['pty-1', reply])
+      ])
     } finally {
       vi.useRealTimers()
     }
@@ -1538,7 +1781,7 @@ describe('createIpcPtyTransport', () => {
     expect(writeMock).not.toHaveBeenCalled()
   })
 
-  it('preserves snapshot dimensions when reattaching', async () => {
+  it('preserves snapshot dimensions and split alt-frame strings when reattaching', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi.fn().mockResolvedValue({
       id: 'pty-reattach',
@@ -1546,7 +1789,10 @@ describe('createIpcPtyTransport', () => {
       launchAgent: 'droid',
       snapshot: 'snapshot data',
       snapshotCols: 132,
-      snapshotRows: 43
+      snapshotRows: 43,
+      snapshotPrefixAnsi: 'history and modes',
+      snapshotFrameAnsi: 'visual frame',
+      snapshotFrameRestoreAnsi: 'live state'
     })
 
     ;(globalThis as { window: typeof window }).window = {
@@ -1586,6 +1832,9 @@ describe('createIpcPtyTransport', () => {
       snapshot: 'snapshot data',
       snapshotCols: 132,
       snapshotRows: 43,
+      snapshotPrefixAnsi: 'history and modes',
+      snapshotFrameAnsi: 'visual frame',
+      snapshotFrameRestoreAnsi: 'live state',
       isAlternateScreen: undefined,
       coldRestore: undefined,
       replay: undefined,
@@ -2416,6 +2665,83 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onReplayData).toHaveBeenCalledWith('hello')
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
+  })
+
+  it('reports a host stable-pane adoption as reattach without fresh-spawn ownership', async () => {
+    runtimeCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'term-original',
+          worktreeId: 'repo1::/remote/wt',
+          title: 'Original',
+          surface: 'background',
+          isReattach: true
+        }
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const onPtySpawn = vi.fn()
+    const onReattachDetermined = vi.fn()
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      onPtySpawn
+    })
+
+    const result = await transport.connect({
+      url: '',
+      callbacks: { onReattachDetermined }
+    })
+
+    expect(result).toEqual({
+      id: 'remote:env-1@@term-original',
+      replay: '',
+      isReattach: true
+    })
+    expect(onReattachDetermined).toHaveBeenCalledOnce()
+    expect(onPtySpawn).not.toHaveBeenCalled()
+  })
+
+  it('does not close an adopted stable-pane owner when create resolves after destroy', async () => {
+    let resolveCreate!: (value: unknown) => void
+    runtimeCall.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve
+        })
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    const connecting = transport.connect({ url: '', callbacks: {} })
+    transport.destroy?.()
+    resolveCreate({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'term-original',
+          worktreeId: 'repo1::/remote/wt',
+          title: 'Original',
+          surface: 'background',
+          isReattach: true
+        }
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await connecting
+
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.close' })
+    )
   })
 
   it('suspends passive remote output until host sleep is cancelled', async () => {

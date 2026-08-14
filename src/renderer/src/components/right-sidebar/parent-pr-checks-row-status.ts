@@ -1,4 +1,4 @@
-import type { CheckStatus } from '../../../../shared/types'
+import type { CheckStatus } from '../../../../shared/github/pull-request-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { translate } from '@/i18n/i18n'
 import type {

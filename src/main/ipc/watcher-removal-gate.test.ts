@@ -6,7 +6,7 @@ import {
   TerminalRemovalInProgressError,
   WatcherRemovalInProgressError
 } from './watcher-removal-gate'
-import { isWorktreeRemovalFenceError } from '../../shared/worktree-removal-fence-error'
+import { isWorktreeRemovalFenceError } from '../../shared/worktree/removal-fence-error'
 
 describe('watcher removal gate', () => {
   it('waits for an existing install and rejects later equivalent-path installs', async () => {
@@ -27,6 +27,47 @@ describe('watcher removal gate', () => {
 
     const finishLaterInstall = beginWatcherInstall('C:/repo')
     finishLaterInstall()
+  })
+
+  it('drops abandoned install fences so a later removal is not fenced by a wedged install', async () => {
+    beginWatcherInstall('/repo/nested')
+    const removal = acquireWatcherRemovalGate('/repo')
+    let ready = false
+    void removal.ready.then(() => {
+      ready = true
+    })
+    await Promise.resolve()
+    expect(ready).toBe(false)
+
+    removal.abandonPendingInstalls()
+    await removal.ready
+    removal.release()
+
+    const retry = acquireWatcherRemovalGate('/repo')
+    await retry.ready
+    retry.release()
+  })
+
+  it('keeps a fresh install fenced after an unrelated install was abandoned', async () => {
+    const wedged = beginWatcherInstall('/repo')
+    const removal = acquireWatcherRemovalGate('/repo')
+    removal.abandonPendingInstalls()
+    removal.release()
+    // Why: a late finishInstall from the abandoned slot must not release a newer install's fence.
+    const finishFresh = beginWatcherInstall('/repo')
+    wedged()
+
+    const retry = acquireWatcherRemovalGate('/repo')
+    let ready = false
+    void retry.ready.then(() => {
+      ready = true
+    })
+    await Promise.resolve()
+    expect(ready).toBe(false)
+
+    finishFresh()
+    await retry.ready
+    retry.release()
   })
 
   it('scopes identical roots to their execution host', async () => {

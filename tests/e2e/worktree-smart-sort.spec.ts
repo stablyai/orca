@@ -1,6 +1,6 @@
 import { test, expect } from './helpers/orca-app'
 import type { Page } from '@stablyai/playwright-test'
-import type { TerminalPaneLayoutNode } from '../../src/shared/types'
+import type { TerminalPaneLayoutNode } from '../../src/shared/terminal-tab-types'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
 

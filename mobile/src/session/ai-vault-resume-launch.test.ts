@@ -5,11 +5,11 @@ import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
-  readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {

@@ -20,7 +20,6 @@ export type DiscoveredSkill = {
   directoryPath: string
   skillFilePath: string
   installed: boolean
-  fileCount: number
   updatedAt: number | null
 }
 
@@ -51,6 +50,9 @@ export type SkillDiscoveryTarget = {
    *  when the caller (e.g. a remote client) cannot supply `projectRuntime`. */
   worktreeId?: string | null
   projectRuntime?: ProjectExecutionRuntimeResolution
+  /** Bypass the host's shared scans because the caller knows disk just changed.
+   *  Optional so an older host simply ignores it and scans as it always did. */
+  refresh?: boolean
 }
 
 const ResolvedProjectRuntimeSchema = z.object({
@@ -100,7 +102,8 @@ export const SkillDiscoveryTargetSchema: z.ZodType<SkillDiscoveryTarget> = z.obj
   worktreeId: z.string().nullable().optional(),
   projectRuntime: z
     .discriminatedUnion('status', [ResolvedProjectRuntimeSchema, RepairProjectRuntimeSchema])
-    .optional()
+    .optional(),
+  refresh: z.boolean().optional()
 })
 
 export type SkillFrontmatterSummary = {

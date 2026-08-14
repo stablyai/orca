@@ -95,6 +95,34 @@ describe('prunePendingSends', () => {
     expect(next).toEqual([])
   })
 
+  it('drops an attachment pending send once a trailing-marker prompt advances', () => {
+    const pending = [
+      { ...pendingOf('p1', 'what do you see'), imagePaths: ['/Users/me/Downloads/3d.png'] }
+    ]
+    const next = prunePendingSends(pending, [
+      userMessage('m1', 'what do you see[Image #1]'),
+      assistantMessage('m2', 'an image')
+    ])
+    expect(next).toEqual([])
+  })
+
+  it('drops a pending send represented by multiple marker-bearing text blocks', () => {
+    const prompt: NativeChatMessage = {
+      ...userMessage('m1', 'unused'),
+      blocks: [
+        { type: 'text', text: 'what do' },
+        { type: 'image-ref', path: '/tmp/a.png' },
+        { type: 'text', text: '[Image #1] you see' }
+      ]
+    }
+    const next = prunePendingSends(
+      [pendingOf('p1', 'what do you see')],
+      [prompt, assistantMessage('m2', 'an image')]
+    )
+
+    expect(next).toEqual([])
+  })
+
   it('drops an attachment-only pending send once its image turn advances', () => {
     const pending = [{ ...pendingOf('p1', ''), imagePaths: ['/tmp/first.png', '/tmp/second.png'] }]
     const transcript = [
@@ -173,6 +201,17 @@ describe('prunePendingSends', () => {
 })
 
 describe('pendingSendsAsMessages', () => {
+  it('returns the empty input without reading existing history', () => {
+    const pending: NativeChatPendingSend[] = []
+    const unreadableHistory = new Proxy([] as NativeChatMessage[], {
+      get: () => {
+        throw new Error('existing history was read')
+      }
+    })
+
+    expect(pendingSendsAsMessages(pending, unreadableHistory)).toEqual([])
+  })
+
   it('maps pending sends to prefixed scrape-source user messages sorted by sentAt', () => {
     const messages = pendingSendsAsMessages([{ id: 'p1', text: 'queued text', sentAt: 42 }])
     expect(messages).toEqual([

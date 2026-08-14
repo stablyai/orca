@@ -1,16 +1,18 @@
 /* eslint-disable max-lines */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState, getWorktreeCardModeProperties } from '../../../../shared/constants'
-import type {
-  GitHubWorkItem,
-  JiraIssue,
-  LinearIssue,
-  PersistedUIState,
-  Repo,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import {
+  getDefaultSettings,
+  getDefaultUIState,
+  getWorktreeCardModeProperties
+} from '../../../../shared/constants'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { JiraIssue } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
@@ -23,6 +25,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
+import { getRepoHostIdentityForParts } from './repo-host-identity'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -720,6 +723,33 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().showSleepingWorkspaces).toBe(true)
   })
 
+  it('defaults the default-branch sleeping exemption to on', () => {
+    expect(getDefaultUIState().alwaysShowDefaultBranchWorkspace).toBe(true)
+    expect(createUIStore().getState().alwaysShowDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('treats a legacy profile with no default-branch exemption key as opted in', () => {
+    // Why: profiles written before #8873 are exactly the ones showing the bug,
+    // so an absent key must hydrate to on rather than silently re-hiding main.
+    const store = createUIStore()
+    const legacy = makePersistedUI()
+    delete (legacy as Partial<PersistedUIState>).alwaysShowDefaultBranchWorkspace
+
+    store.getState().hydratePersistedUI(legacy, 'startup')
+
+    expect(store.getState().alwaysShowDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('preserves an explicit default-branch exemption opt-out on hydration', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ alwaysShowDefaultBranchWorkspace: false }), 'startup')
+
+    expect(store.getState().alwaysShowDefaultBranchWorkspace).toBe(false)
+  })
+
   it('defaults workspace host scope to all hosts', () => {
     expect(getDefaultUIState().workspaceHostScope).toBe('all')
     expect(createUIStore().getState().workspaceHostScope).toBe('all')
@@ -753,6 +783,26 @@ describe('createUISlice hydratePersistedUI', () => {
         ...makePersistedUI(),
         activeView: undefined as unknown as PersistedUIState['activeView']
       },
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  // Why: the Skills page was removed after being unreachable since #4535, so a
+  // profile written before then can still carry `activeView: 'skills'` on disk.
+  // Dropping it from TopLevelView is what demotes it — this pins that the removal
+  // is a migration and not a blank main surface on next launch.
+  it('demotes a persisted skills view to terminal now that the page is gone', () => {
+    const store = createUIStore()
+    // Why: the default is already 'terminal', so seed a different view first —
+    // otherwise this passes whether hydration demoted the value or never ran.
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'skills' as unknown as PersistedUIState['activeView']
+      }),
       'startup'
     )
 
@@ -860,7 +910,9 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('preserves persisted repo filters until repos are loaded', () => {
     const store = createUIStore()
-    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('remote-repo', 'runtime:env-1')
+    )
 
     store.getState().hydratePersistedUI(
       makePersistedUI({
@@ -882,8 +934,12 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('validates persisted repo filters when repos are already loaded', () => {
     const store = createUIStore()
-    const localDismissalKey = getSetupScriptPromptDismissalKey('local-repo')
-    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    const localDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('local-repo', 'local')
+    )
+    const staleDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('stale-repo', 'local')
+    )
     store.setState({
       repos: [
         { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
@@ -1641,6 +1697,23 @@ describe('createUISlice hydratePersistedUI', () => {
     })
   })
 
+  // Why: the Linear issue view is device-local now. A host that still holds one from
+  // an older build must not reintroduce the key the strict ui.set schema rejects.
+  it('ignores a stale host-persisted Linear issue view during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          linearQuery: 'label:bug',
+          linearIssueView: { viewMode: 'board', groupBy: 'assignee' }
+        } as unknown as PersistedUIState['taskResumeState']
+      })
+    )
+
+    expect(store.getState().taskResumeState).toEqual({ linearQuery: 'label:bug' })
+  })
+
   it('restores acknowledgedAgentsByPaneKey from persisted UI state', () => {
     const now = 1_700_000_000_000
     vi.useFakeTimers()
@@ -1920,6 +1993,28 @@ describe('createUISlice hydratePersistedUI', () => {
 })
 
 describe('createUISlice settings navigation', () => {
+  it('accepts a host-qualified setup guide target', () => {
+    const store = createUIStore()
+    store.getState().openSettingsTarget({ pane: 'setup-guide', repoId: null, hostId: 'ssh:host-1' })
+    expect(store.getState().settingsNavigationTarget).toEqual({
+      pane: 'setup-guide',
+      repoId: null,
+      hostId: 'ssh:host-1'
+    })
+  })
+
+  it('rejects malformed settings targets before storing them', () => {
+    const store = createUIStore()
+    const openSettingsTarget = store.getState().openSettingsTarget as unknown as (
+      target: unknown
+    ) => void
+
+    expect(() =>
+      openSettingsTarget({ pane: 'repo', repoId: 'repo-1', hostId: 'invalid' })
+    ).toThrowError('openSettingsTarget received an invalid navigation target')
+    expect(store.getState().settingsNavigationTarget).toBeNull()
+  })
+
   it('prefetches the restored default task source when provider settings drifted', () => {
     const store = createUIStore()
     const prefetchWorkItems = vi.fn()
@@ -2137,6 +2232,53 @@ describe('createUISlice new workspace draft', () => {
       number: 42,
       title: 'Legacy issue',
       url: 'https://github.com/acme/repo/issues/42'
+    })
+  })
+
+  it('preserves serializable Jira identity and bound source context in drafts', () => {
+    const store = createUIStore()
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'orca-123-link-jira',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        provider: 'jira',
+        type: 'issue',
+        number: 0,
+        title: 'ORCA-123 Link Jira',
+        url: 'https://company.atlassian.net/browse/ORCA-123',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext,
+      agent: 'claude',
+      linkedIssue: '',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft).toMatchObject({
+      linkedWorkItem: {
+        provider: 'jira',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext
     })
   })
 })
@@ -3342,6 +3484,31 @@ describe('createUISlice space navigation', () => {
     store.getState().closeSpacePage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('returns to the originating view after closing Artifacts', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openArtifactsPage()
+
+    expect(store.getState().activeView).toBe('artifacts')
+    expect(store.getState().previousViewBeforeArtifacts).toBe('tasks')
+
+    store.getState().closeArtifactsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('opens and restores Artifacts when its sidebar shortcut is hidden', () => {
+    const store = createUIStore()
+    store.setState({ settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: false } })
+
+    store.getState().openArtifactsPage()
+    expect(store.getState().activeView).toBe('artifacts')
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
+    expect(store.getState().activeView).toBe('artifacts')
   })
 })
 

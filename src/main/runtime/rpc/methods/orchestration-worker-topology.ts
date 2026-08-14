@@ -1,4 +1,5 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 
@@ -36,16 +37,40 @@ export type WorkerSetupReceipt = {
     | 'not_applicable'
 }
 
+export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHandle: string) {
+  const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
+  const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
+  const processIncarnation =
+    authority?.processIncarnation ?? runtime.getTerminalProcessIncarnation(terminalHandle)
+  if (!paneKey || !processIncarnation) {
+    throw new Error('stable_pane_required')
+  }
+  return {
+    paneKey,
+    processIncarnation,
+    ...(authority?.launchTokenHash ? { launchTokenHash: authority.launchTokenHash } : {}),
+    ...(authority?.hostScope ? { hostScope: JSON.stringify(authority.hostScope) } : {})
+  }
+}
+
 export async function createExistingWorktreeWorkerTerminal(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
   agent: TuiAgent
+  launchPreferences?: AgentLaunchPreferences
   taskId: string
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    command: args.agent,
-    title: `worker-${args.taskId}`
+    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
+    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
+    // configured launcher instead of executing the raw id.
+    startupAgent: args.agent,
+    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+    title: `worker-${args.taskId}`,
+    // Why: dispatching a worker is background work; it must not pull the sidebar
+    // to the worker's workspace while the user is reading somewhere else.
+    surfaceOwner: false
   })
   args.effects.push({
     kind: 'terminal',
@@ -95,6 +120,7 @@ export async function createWorkerWorktree(args: {
     from: string
   }
   agent: TuiAgent
+  launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
@@ -110,12 +136,14 @@ export async function createWorkerWorktree(args: {
     baseBranch: params.baseBranch,
     displayName: params.displayName,
     comment: params.comment,
-    runHooks: setupDecision === 'run',
+    // setupDecision runs setup without the legacy runHooks activation side effect.
+    runHooks: false,
     setupDecision,
     awaitTerminalProvisioning: true,
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
     startupAgent: args.agent,
+    ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
     activate: false,
     lineage: {
       parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
@@ -147,7 +175,9 @@ export async function createWorkerWorktree(args: {
   if (!terminalHandle) {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
   }
-  const listed = await runtime.listTerminals(`id:${created.worktree.id}`)
+  const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
+    includeVisualLayouts: false
+  })
   const setupTerminalHandle = created.setupReceipt?.terminalHandle
   for (const terminal of listed.terminals) {
     effects.push({

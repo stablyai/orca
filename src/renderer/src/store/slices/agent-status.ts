@@ -26,13 +26,13 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
+import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { readLastTerminalInputAt } from '@/lib/terminal-input-activity-coalescing'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -47,6 +47,7 @@ import {
   transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
+import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
 
 /** Snapshot of a finished/vanished agent status entry, kept so the dashboard and sidebar hover
  *  keep showing the completion until the user clicks the worktree. `worktreeId` is stamped at
@@ -107,6 +108,65 @@ type AgentLaunchConfigRegistryEntry = {
   identity: AgentLaunchConfigRegistrationMetadata
 }
 
+export type AgentStatusPayload = ParsedAgentStatusPayload & {
+  orchestration?: AgentStatusOrchestrationContext
+  promptInteractionKey?: string
+  restoredUnconfirmed?: boolean
+}
+
+export type AgentStatusTiming = { updatedAt?: number; stateStartedAt?: number }
+
+export type AgentStatusRouting = {
+  tabId?: string
+  worktreeId?: string
+  terminalHandle?: string
+  connectionId?: string | null
+}
+
+export type AgentStatusMetadata = {
+  providerSession?: AgentProviderSessionMetadata
+  launchConfig?: SleepingAgentLaunchConfig
+  launchToken?: string
+}
+
+export type AgentStatusUpdate = {
+  kind?: 'status'
+  paneKey: string
+  payload: AgentStatusPayload
+  terminalTitle?: string
+  timing?: AgentStatusTiming
+  routing?: AgentStatusRouting
+  metadata?: AgentStatusMetadata
+}
+
+export type AgentProviderSessionTiming = { updatedAt?: number }
+
+export type AgentProviderSessionRouting = {
+  tabId?: string
+  worktreeId?: string
+  connectionId?: string | null
+}
+
+export type AgentProviderSessionRecordMetadata = { launchToken?: string }
+
+export type AgentProviderSessionUpdate = {
+  kind: 'providerSession'
+  paneKey: string
+  agent: ResumableTuiAgent
+  providerSession: AgentProviderSessionMetadata
+  timing?: AgentProviderSessionTiming
+  routing?: AgentProviderSessionRouting
+  metadata?: AgentProviderSessionRecordMetadata
+}
+
+export type AgentStatusBatchUpdate = AgentStatusUpdate | AgentProviderSessionUpdate
+
+export type AgentStatusBatchTransaction = {
+  getState: () => AppState
+  apply: (update: AgentStatusBatchUpdate) => boolean
+  afterCommit: (effect: () => void) => void
+}
+
 export type AgentStatusSlice = {
   /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -140,7 +200,10 @@ export type AgentStatusSlice = {
   /** Exact pane authorities retired while sibling panes in the tab stay live. */
   recentlyRetiredAgentStatusPaneKeys: Record<string, true>
 
-  retireAgentPaneAuthority: (paneKey: string) => void
+  retireAgentPaneAuthority: (
+    paneKey: string,
+    options?: { preserveSleepingAgentSession?: boolean }
+  ) => void
   transferAgentPaneAuthority: (args: {
     fromPaneKey: string
     toPaneKey: string
@@ -150,33 +213,30 @@ export type AgentStatusSlice = {
   /** Update or insert an agent status entry from a status payload. */
   setAgentStatus: (
     paneKey: string,
-    payload: ParsedAgentStatusPayload & {
-      orchestration?: AgentStatusOrchestrationContext
-      promptInteractionKey?: string
-    },
+    payload: AgentStatusPayload,
     terminalTitle?: string,
-    timing?: { updatedAt?: number; stateStartedAt?: number },
-    routing?: {
-      tabId?: string
-      worktreeId?: string
-      terminalHandle?: string
-      connectionId?: string | null
-    },
-    metadata?: {
-      providerSession?: AgentProviderSessionMetadata
-      launchConfig?: SleepingAgentLaunchConfig
-      launchToken?: string
-    }
+    timing?: AgentStatusTiming,
+    routing?: AgentStatusRouting,
+    metadata?: AgentStatusMetadata
   ) => void
+
+  /** Apply ordered status updates as one status publication (generated titles and tab
+   *  titles still publish after it — three total, not 2N). */
+  setAgentStatuses: (updates: readonly AgentStatusBatchUpdate[]) => boolean[]
+
+  /** Fold caller-derived updates against exact staged state, committing one status publication. */
+  transactAgentStatuses: <Result>(
+    operation: (transaction: AgentStatusBatchTransaction) => Result
+  ) => Result
 
   /** Record resume identity without creating a visible turn-status row. */
   recordAgentProviderSession: (
     paneKey: string,
     agent: ResumableTuiAgent,
     providerSession: AgentProviderSessionMetadata,
-    timing?: { updatedAt?: number },
-    routing?: { tabId?: string; worktreeId?: string; connectionId?: string | null },
-    metadata?: { launchToken?: string }
+    timing?: AgentProviderSessionTiming,
+    routing?: AgentProviderSessionRouting,
+    metadata?: AgentProviderSessionRecordMetadata
   ) => void
 
   registerAgentLaunchConfig: (
@@ -233,6 +293,7 @@ export type AgentStatusSlice = {
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
+  setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 
@@ -575,39 +636,64 @@ function normalizeSleepingAgentSessionCollectOptions(
     : (options as CollectSleepingAgentSessionRecordsOptions)
 }
 
-function isValidManualSleepLiveAgentEntry(
-  state: AppState,
-  entry: AgentStatusEntry,
-  capturedAt: number
-): boolean {
-  if (entry.interrupted === true || entry.state === 'done') {
-    return false
-  }
-  const lastInputAt = readLastTerminalInputAt(state.lastTerminalInputAtByPaneKey, entry.paneKey)
-  if (
-    typeof lastInputAt === 'number' &&
-    Number.isFinite(lastInputAt) &&
-    lastInputAt > entry.updatedAt
-  ) {
-    return false
-  }
-  return isExplicitAgentStatusFresh(entry, capturedAt, AGENT_STATUS_STALE_AFTER_MS)
-}
-
 function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
   return entry.state === 'done' && entry.interrupted !== true
+}
+
+// Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive
+// record's tab. Sleeping a workspace must not become "one phone tap respawns all of it" — the pane
+// issues its own `--resume` cold restore when its tab is opened instead (#11598).
+function markManualSleepLazyRestore(record: SleepingAgentSessionRecord): void {
+  if (record.state === 'done') {
+    record.restoreOnTabOpenOnly = true
+  }
+}
+
+// Why: `live`/legacy rows are provisional checkpoints a fresh capture supersedes; an explicit
+// sleep or quit capture is the pane's only resume handle once its live row is gone.
+function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
+  return record.origin === 'worktree-sleep' || record.origin === 'quit'
+}
+
+// Why: manual sleep kills the pty either way, so the record carries resume identity, not the dead
+// turn's interrupt flag — and an explicitly slept workspace is never stale at wake, so a row the
+// user is deliberately sleeping must not trip the wake-side staleness discard. `state` is preserved
+// so a done pane wakes lazily in place instead of spawning a new tab.
+function manualSleepCaptureEntry(entry: AgentStatusEntry, capturedAt: number): AgentStatusEntry {
+  return { ...entry, updatedAt: capturedAt, interrupted: false }
+}
+
+// Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a deliberately
+// blocked worker must not become auto-resumable at wake.
+function carryOverAutomaticResumeBlock(
+  record: SleepingAgentSessionRecord,
+  previous: SleepingAgentSessionRecord | undefined
+): void {
+  if (
+    previous?.automaticResumeBlockedBy === 'legacy-orchestration-worker' &&
+    previous.agent === record.agent &&
+    agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
+  ) {
+    record.automaticResumeBlockedBy = previous.automaticResumeBlockedBy
+  }
 }
 
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   records: Record<string, SleepingAgentSessionRecord>,
   worktreeId: string,
-  paneKeys?: readonly string[]
+  paneKeys?: readonly string[],
+  replacements?: Readonly<Record<string, SleepingAgentSessionRecord>>
 ): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
   let next = records
   let changed = false
   for (const [paneKey, record] of Object.entries(records)) {
     if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
+      continue
+    }
+    // Why: a repeat sleep must not delete a durable record this capture cannot re-derive — the
+    // pane was never woken, so it has no live status row to rebuild it from (#11598).
+    if (!replacements?.[paneKey] && isDurableSleepingCapture(record)) {
       continue
     }
     if (next === records) {
@@ -637,6 +723,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     : undefined
   const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
   const records: Record<string, SleepingAgentSessionRecord> = {}
+  const promotedLiveRecoveryPaneKeys = new Set<string>()
 
   if (isManualWorktreeSleep) {
     for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
@@ -660,6 +747,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
         updatedAt: capturedAt,
         origin: 'worktree-sleep'
       }
+      promotedLiveRecoveryPaneKeys.add(existing.paneKey)
     }
   }
 
@@ -673,9 +761,16 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (retained.worktreeId !== worktreeId) {
       continue
     }
+    // Why: the promoted checkpoint carries recovery identity (transcript, connection) a retained
+    // turn row lacks, so it must not be overwritten by a re-derived record.
+    if (promotedLiveRecoveryPaneKeys.has(retained.entry.paneKey)) {
+      continue
+    }
     const record = sleepingRecordFromEntry({
       state,
-      entry: retained.entry,
+      entry: isManualWorktreeSleep
+        ? manualSleepCaptureEntry(retained.entry, capturedAt)
+        : retained.entry,
       worktreeId,
       tab: retained.tab,
       capturedAt,
@@ -683,6 +778,13 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       origin
     })
     if (record) {
+      if (isManualWorktreeSleep) {
+        markManualSleepLazyRestore(record)
+        carryOverAutomaticResumeBlock(
+          record,
+          state.sleepingAgentSessionsByPaneKey[retained.entry.paneKey]
+        )
+      }
       records[record.paneKey] = record
     }
   }
@@ -691,12 +793,14 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
       continue
     }
+    // Why: the promoted checkpoint carries recovery identity (transcript, connection) the live
+    // turn row lacks, so it must not be overwritten by a re-derived record.
+    if (promotedLiveRecoveryPaneKeys.has(paneKey)) {
+      continue
+    }
     const belongsToWorktree =
       entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
     if (!belongsToWorktree) {
-      continue
-    }
-    if (isManualWorktreeSleep && !isValidManualSleepLiveAgentEntry(state, entry, capturedAt)) {
       continue
     }
     if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
@@ -704,13 +808,17 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     }
     const record = sleepingRecordFromEntry({
       state,
-      entry,
+      entry: isManualWorktreeSleep ? manualSleepCaptureEntry(entry, capturedAt) : entry,
       worktreeId,
       capturedAt,
       launchConfig: getLaunchConfigForEntry(state, entry),
       origin
     })
     if (record) {
+      if (isManualWorktreeSleep) {
+        markManualSleepLazyRestore(record)
+        carryOverAutomaticResumeBlock(record, state.sleepingAgentSessionsByPaneKey[paneKey])
+      }
       records[record.paneKey] = record
     }
   }
@@ -1086,6 +1194,7 @@ function orchestrationContextsEqual(
   return (
     a.taskId === b.taskId &&
     a.dispatchId === b.dispatchId &&
+    a.dispatchStatus === b.dispatchStatus &&
     a.taskTitle === b.taskTitle &&
     a.displayName === b.displayName &&
     a.parentTerminalHandle === b.parentTerminalHandle &&
@@ -1118,6 +1227,9 @@ function mergeCurrentOrchestrationContext(
     existing.taskId === current.taskId && existing.dispatchId === current.dispatchId
   if (!sameDispatch) {
     return current
+  }
+  if (current.dispatchStatus !== undefined) {
+    return orchestrationContextsEqual(existing, current) ? existing : current
   }
   const merged = { ...existing, ...current }
   return orchestrationContextsEqual(existing, merged) ? existing : merged
@@ -1156,10 +1268,143 @@ function collectWorktreeIdsForConnection(state: AppState, connectionId: string):
   return onConnection
 }
 
+/** Slices that only the fold touched, so the batch commits as a MERGE.
+ *  Why: the fold runs against a snapshot taken at transaction start. Committing that
+ *  snapshot wholesale (zustand REPLACE) would silently revert any write that landed on
+ *  the real store meanwhile — and it can, because a batched action reaching another
+ *  slice's setter through `get()` bypasses the shadowed `set` entirely
+ *  (setRuntimeAgentOrchestrationByPaneKey → setGeneratedTabTitleFromAgentPrompt does this).
+ *  A merge keeps the single publication while confining conflicts to keys this fold wrote. */
+function buildAgentStatusBatchPatch(
+  initialState: AppState,
+  nextState: AppState
+): Partial<AppState> {
+  const patch: Record<string, unknown> = {}
+  for (const key of Object.keys(nextState) as (keyof AppState)[]) {
+    if (!Object.is(nextState[key], initialState[key])) {
+      patch[key as string] = nextState[key]
+    }
+  }
+  return patch as Partial<AppState>
+}
+
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
-  set,
-  get
+  storeSet,
+  storeGet
 ) => {
+  type AgentStatusStateUpdate =
+    | AppState
+    | Partial<AppState>
+    | ((state: AppState) => AppState | Partial<AppState>)
+
+  let batchedAgentStatusState: AppState | null = null
+  let batchedAgentStatusEffects: (() => void)[] | null = null
+  let batchedGeneratedTabTitleUpdates: GeneratedTabTitleUpdate[] | null = null
+  let batchedAgentStatusFreshnessRequested = false
+  const get = (): AppState => batchedAgentStatusState ?? storeGet()
+  // Deliberately narrower than zustand's `set`: no `replace` parameter, so no call site in
+  // this slice can compile into a REPLACE the batch commit is unable to express.
+  const set = (update: AgentStatusStateUpdate): void => {
+    if (batchedAgentStatusState === null) {
+      storeSet(update, false)
+      return
+    }
+    const nextState = typeof update === 'function' ? update(batchedAgentStatusState) : update
+    if (Object.is(nextState, batchedAgentStatusState)) {
+      return
+    }
+    batchedAgentStatusState = Object.assign({}, batchedAgentStatusState, nextState)
+  }
+  const runAfterAgentStatusCommit = (effect: () => void): void => {
+    if (batchedAgentStatusEffects) {
+      batchedAgentStatusEffects.push(effect)
+      return
+    }
+    effect()
+  }
+  const applyGeneratedTabTitleUpdate = (update: GeneratedTabTitleUpdate): void => {
+    if (batchedGeneratedTabTitleUpdates) {
+      batchedGeneratedTabTitleUpdates.push(update)
+      return
+    }
+    if (update.options) {
+      get().setGeneratedTabTitleFromAgentPrompt(update.paneKey, update.prompt, update.options)
+    } else {
+      get().setGeneratedTabTitleFromAgentPrompt(update.paneKey, update.prompt)
+    }
+  }
+  const applyBatchedAgentStatusUpdate = (update: AgentStatusBatchUpdate): boolean => {
+    const stateBeforeUpdate = batchedAgentStatusState
+    if (!stateBeforeUpdate) {
+      return false
+    }
+    if (update.kind === 'providerSession') {
+      get().recordAgentProviderSession(
+        update.paneKey,
+        update.agent,
+        update.providerSession,
+        update.timing,
+        update.routing,
+        update.metadata
+      )
+    } else {
+      get().setAgentStatus(
+        update.paneKey,
+        update.payload,
+        update.terminalTitle,
+        update.timing,
+        update.routing,
+        update.metadata
+      )
+    }
+    return batchedAgentStatusState !== stateBeforeUpdate
+  }
+  const batchTransaction: AgentStatusBatchTransaction = {
+    getState: get,
+    apply: applyBatchedAgentStatusUpdate,
+    afterCommit: runAfterAgentStatusCommit
+  }
+  const transactAgentStatuses = <Result>(
+    operation: (transaction: AgentStatusBatchTransaction) => Result
+  ): Result => {
+    if (batchedAgentStatusState) {
+      return operation(batchTransaction)
+    }
+    const initialState = storeGet()
+    batchedAgentStatusState = initialState
+    batchedAgentStatusEffects = []
+    batchedGeneratedTabTitleUpdates = []
+    try {
+      const result = operation(batchTransaction)
+      const nextState = batchedAgentStatusState
+      const effects = batchedAgentStatusEffects
+      const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
+      const freshnessRequested = batchedAgentStatusFreshnessRequested
+      batchedAgentStatusState = null
+      batchedAgentStatusEffects = null
+      batchedGeneratedTabTitleUpdates = null
+      batchedAgentStatusFreshnessRequested = false
+      if (nextState !== initialState) {
+        storeSet(buildAgentStatusBatchPatch(initialState, nextState), false)
+      }
+      if (generatedTabTitleUpdates.length > 0) {
+        storeGet().setGeneratedTabTitlesFromAgentPrompts(generatedTabTitleUpdates)
+      }
+      if (freshnessRequested) {
+        queueMicrotask(() => freshness.schedule())
+      }
+      for (const effect of effects) {
+        effect()
+      }
+      return result
+    } finally {
+      batchedAgentStatusState = null
+      batchedAgentStatusEffects = null
+      batchedGeneratedTabTitleUpdates = null
+      batchedAgentStatusFreshnessRequested = false
+    }
+  }
+
   // Why: scheduler is process-lifetime-scoped (no dispose) because the store is a
   // module-level singleton with no teardown lifecycle anywhere in the codebase.
   const freshness = createFreshnessScheduler({
@@ -1173,6 +1418,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }))
     }
   })
+  const requestAgentStatusFreshness = (acceptedInBatch: boolean): void => {
+    if (batchedAgentStatusState !== null) {
+      batchedAgentStatusFreshnessRequested ||= acceptedInBatch
+      return
+    }
+    queueMicrotask(() => freshness.schedule())
+  }
 
   const clearSleepingAgentSessionsByPaneKey = (paneKeys: readonly string[]): void => {
     if (paneKeys.length === 0) {
@@ -1223,7 +1475,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     recentlyRetiredAgentStatusPaneKeys: {},
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
-    retireAgentPaneAuthority: (paneKey) => {
+    retireAgentPaneAuthority: (paneKey, options) => {
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
       const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
       const retiredPaneKeySet = new Set(retiredPaneKeys)
@@ -1251,10 +1503,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             retiredPaneKeySet
           ),
           retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
-          sleepingAgentSessionsByPaneKey: removePaneKeys(
-            s.sleepingAgentSessionsByPaneKey,
-            retiredPaneKeySet
-          ),
+          sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
+            ? s.sleepingAgentSessionsByPaneKey
+            : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
           agentLaunchConfigByPaneKey: removePaneKeys(
             s.agentLaunchConfigByPaneKey,
             retiredPaneKeySet
@@ -1303,69 +1554,55 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       const to = transfer.ownerPaneKey
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
-      set((s) => {
-        // Plant a one-shot suppressor on the source key so useRetainedAgentsSync —
-        // which only sees `from` vanish, not the migration — can't resurrect a ghost row.
-        const movedSuppressors = movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
-        // Guard on fromWasLive: a suppressor is consumed only on a live→gone transition, else it leaks.
-        const fromWasLive = from in s.agentStatusByPaneKey
-        const retentionSuppressedPaneKeys: Record<string, true> =
-          fromWasLive && !(from in movedSuppressors)
-            ? { ...movedSuppressors, [from]: true }
-            : movedSuppressors
-        return {
-          agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
+      set((s) => ({
+        agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
+          ...entry,
+          paneKey: to,
+          tabId: targetTabId
+        })),
+        // Why: retention/sidebar consumers gate on the epoch; a moved live row is a
+        // pane-key change they must observe, not a silent remap.
+        ...(from in s.agentStatusByPaneKey
+          ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
+          : {}),
+        runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
+          s.runtimeAgentOrchestrationByPaneKey,
+          from,
+          to
+        ),
+        retainedAgentsByPaneKey: movePaneKeyedRecord(
+          s.retainedAgentsByPaneKey,
+          from,
+          to,
+          (retained) => ({
+            ...retained,
+            entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
+            tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
+          })
+        ),
+        sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
+          s.sleepingAgentSessionsByPaneKey,
+          from,
+          to,
+          (record) => ({ ...record, paneKey: to, tabId: targetTabId })
+        ),
+        agentLaunchConfigByPaneKey: movePaneKeyedRecord(
+          s.agentLaunchConfigByPaneKey,
+          from,
+          to,
+          (entry) => ({
             ...entry,
-            paneKey: to,
-            tabId: targetTabId
-          })),
-          runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
-            s.runtimeAgentOrchestrationByPaneKey,
-            from,
-            to
-          ),
-          retainedAgentsByPaneKey: movePaneKeyedRecord(
-            s.retainedAgentsByPaneKey,
-            from,
-            to,
-            (retained) => ({
-              ...retained,
-              entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
-              tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
-            })
-          ),
-          sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-            s.sleepingAgentSessionsByPaneKey,
-            from,
-            to,
-            (record) => ({ ...record, paneKey: to, tabId: targetTabId })
-          ),
-          agentLaunchConfigByPaneKey: movePaneKeyedRecord(
-            s.agentLaunchConfigByPaneKey,
-            from,
-            to,
-            (entry) => ({
-              ...entry,
-              identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
-            })
-          ),
-          acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
-          paneForegroundAgentByPaneKey: movePaneKeyedRecord(
-            s.paneForegroundAgentByPaneKey,
-            from,
-            to
-          ),
-          unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
-          unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
-          lastTerminalInputAtByPaneKey: movePaneKeyedRecord(
-            s.lastTerminalInputAtByPaneKey,
-            from,
-            to
-          ),
-          cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
-          retentionSuppressedPaneKeys
-        }
-      })
+            identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
+          })
+        ),
+        acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
+        paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
+        unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
+        unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
+        lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
+        cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
+        retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
+      }))
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.transferPaneAuthority?.({
           fromPaneKey: from,
@@ -1584,12 +1821,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           existingProviderSession: existingRecord?.providerSession,
           providerSessionChanged: false
         })
+        const existingRecordMatchesProviderSession =
+          existingRecord?.agent === agent &&
+          agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
         const launchConfig =
           (registryMatches ? registryEntry?.launchConfig : undefined) ??
-          (existingRecord?.agent === agent &&
-          agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
-            ? existingRecord.launchConfig
-            : undefined)
+          (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
         const record: SleepingAgentSessionRecord = {
           paneKey,
           ...(tabId ? { tabId } : {}),
@@ -1612,6 +1849,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               ? { connectionId: existingRecord.connectionId }
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
+          ...(existingRecordMatchesProviderSession &&
+          existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
+            ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' }
+            : {}),
           origin: 'live'
         }
         removedLiveStatus = existingStatus !== undefined
@@ -1662,7 +1903,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
       })
       if (removedLiveStatus) {
-        queueMicrotask(() => freshness.schedule())
+        requestAgentStatusFreshness(true)
       }
     },
 
@@ -1695,8 +1936,26 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
         // Rolling log of state transitions for the dashboard's activity blocks; push only on
         // real state changes to avoid dupes from prompt-only pings within the same state.
+        // A session-boundary 'done' (idle connect, STA-3386) is not a turn event — keep it
+        // out of history so activity feeds and unread counts never surface it. The inverse
+        // also holds: a boundary landing on a REAL done (resume//clear right after a finish)
+        // must push that completion into history, or the finished timestamp and unread badge
+        // lose the turn the moment the flag overwrites the live entry.
         let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
-        if (existing && existing.state !== payload.state) {
+        // Why: a batched burst can fold a whole done→working turn into one publication, so a
+        // completion-reactive subscriber never sees `lastAssistantMessage` while state is `done`.
+        // One slot per entry, not one per history row — 20 transcripts per live status OOMs (#9872).
+        let lastCompletedAssistantMessage = existing?.lastCompletedAssistantMessage
+        const boundaryLandsOnRealDone =
+          existing?.state === 'done' &&
+          existing.sessionBoundary !== true &&
+          payload.state === 'done' &&
+          payload.sessionBoundary === true
+        if (
+          existing &&
+          (existing.state !== payload.state || boundaryLandsOnRealDone) &&
+          !(existing.state === 'done' && existing.sessionBoundary === true)
+        ) {
           history = [
             ...history,
             {
@@ -1711,6 +1970,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           if (history.length > AGENT_STATE_HISTORY_MAX) {
             history = history.slice(history.length - AGENT_STATE_HISTORY_MAX)
           }
+          if (existing.state === 'done') {
+            // The push above just moved this completion out of the live entry; a done that
+            // carried no message must clear the slot, or a stale prior turn leaks forward.
+            lastCompletedAssistantMessage = existing.lastAssistantMessage
+          }
         }
 
         const identity = resolveAgentStatusIdentity({
@@ -1718,7 +1982,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             ? {
                 agentType: existing.agentType,
                 state: existing.state,
-                updatedAt: existing.updatedAt
+                updatedAt: existing.updatedAt,
+                restoredUnconfirmed: existing.restoredUnconfirmed
               }
             : undefined,
           incoming: payload.agentType,
@@ -1776,10 +2041,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const orchestration =
           payloadMergedOrchestration ?? runtimeMergedOrchestration ?? completedFallbackOrchestration
         // Why: waiting/blocked are still the same resumable turn; child permission hooks omit the root session id.
+        // Completing a turn does not end the provider session either — the TUI stays alive and resumable at its
+        // prompt — so `done` must carry the id through, including done→done (OSC 9999 repaints and reconnect
+        // snapshot replays both re-deliver a metadata-less `done` onto an already-done row). Without that, every
+        // surface keyed on the id — mobile Chat UI transcripts, the resumable recovery anchor below — loses the
+        // session while the agent sits idle, which is precisely when it is read (#10630). Only a new turn
+        // (done→working) still drops it, so a reused pane cannot inherit a finished session.
         const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
-          existing.state !== 'done' &&
-          payload.state !== 'done'
+          (existing.state !== 'done' || payload.state === 'done')
         const providerSession =
           metadata?.providerSession ??
           (canReuseExistingProviderSession ? existing.providerSession : undefined)
@@ -1869,6 +2139,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // card; parseAgentStatusPayload clears it on tool/state change.
           interactivePrompt: payload.interactivePrompt,
           lastAssistantMessage: payload.lastAssistantMessage,
+          ...(lastCompletedAssistantMessage ? { lastCompletedAssistantMessage } : {}),
           // Why: reused panes can start non-orchestrated work; only final done rows keep the
           // previous lineage fallback so completed children stay grouped.
           orchestration,
@@ -1878,12 +2149,27 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
+          ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
-          interrupted: payload.interrupted
+          interrupted: payload.interrupted,
+          // Why: done→done repaints (OSC 9999, reconnect snapshot replays) re-deliver a
+          // metadata-less `done`; preserving the flag there keeps completion-reactive
+          // consumers from treating the still-idle session as newly finished. Turn evidence
+          // (an assistant message or a changed prompt) proves a REAL completion — never
+          // carry the flag over one, or a genuine finish could be silently suppressed.
+          sessionBoundary:
+            payload.sessionBoundary ??
+            (existing?.state === 'done' &&
+            payload.state === 'done' &&
+            payload.lastAssistantMessage === undefined &&
+            payload.prompt === existing.prompt
+              ? existing.sessionBoundary
+              : undefined)
         }
         generatedTitleEntry.current = entry
         if (
           isAgentCompletionState(entry.state) &&
+          entry.sessionBoundary !== true &&
           existing !== undefined &&
           !isAgentCompletionState(existing.state)
         ) {
@@ -1903,13 +2189,18 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           !!existing &&
           existing.state === payload.state &&
           entry.stateStartedAt !== existing.stateStartedAt
+        const sameStateDoneAttentionChanged =
+          existing?.state === 'done' &&
+          entry.state === 'done' &&
+          agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
         const sortRelevantChange =
           !existing ||
           existing.state !== payload.state ||
           !wasFresh ||
           attributionChanged ||
           commandCodeNewTurn ||
-          sameStateStateStartedAtChanged
+          sameStateStateStartedAtChanged ||
+          sameStateDoneAttentionChanged
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
           entry.state === 'done' &&
@@ -1989,8 +2280,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           }
         }
         // Why: launch tokens can outlive an Orca-started TUI in the shell; once the session is done they must no longer authorize config reuse.
+        // A session-boundary done is the session CONNECTING (STA-3386) — deleting here would strip
+        // the pane's registered-launch-agent identity evidence the moment a resumed TUI sits idle.
         if (
-          (providerSessionChanged || entry.state === 'done') &&
+          (providerSessionChanged || (entry.state === 'done' && entry.sessionBoundary !== true)) &&
           paneKey in s.agentLaunchConfigByPaneKey
         ) {
           nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
@@ -2076,21 +2369,32 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             ? getAgentRowGeneratedTitleText(entryForGeneratedTitle)
             : entryForGeneratedTitle.prompt
         if (shouldReplaceGeneratedTitle) {
-          get().setGeneratedTabTitleFromAgentPrompt(paneKey, generatedTitlePrompt, {
-            replaceExistingGeneratedTitle: true
+          applyGeneratedTabTitleUpdate({
+            paneKey,
+            prompt: generatedTitlePrompt,
+            options: {
+              replaceExistingGeneratedTitle: true
+            }
           })
         } else {
-          get().setGeneratedTabTitleFromAgentPrompt(paneKey, generatedTitlePrompt)
+          applyGeneratedTabTitleUpdate({ paneKey, prompt: generatedTitlePrompt })
         }
       }
-      // Why: schedule via queueMicrotask after set so the timer reads the updated map without re-entering the store during set.
-      queueMicrotask(() => freshness.schedule())
+      // Why: batches coalesce accepted updates; standalone calls keep their existing deferred scheduling.
+      requestAgentStatusFreshness(generatedTitleEntry.current !== null)
       if (completionRefreshWorktreeId) {
         const worktreeId = completionRefreshWorktreeId
         // Why: agents can create a PR via `gh pr create`, bypassing Orca's flow and leaving a stale "no PR" cache entry in place.
         queueMicrotask(() => get().refreshGitHubForWorktreeIfStale(worktreeId))
       }
     },
+
+    setAgentStatuses: (updates) =>
+      updates.length === 0
+        ? []
+        : transactAgentStatuses((transaction) => updates.map(transaction.apply)),
+
+    transactAgentStatuses,
 
     setMigrationUnsupportedPty: (entry) => {
       set((s) => {
@@ -2740,7 +3044,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const replaced = removeSleepingRecordsReplacedByManualWorktreeSleep(
           s.sleepingAgentSessionsByPaneKey,
           worktreeId,
-          paneKeys
+          paneKeys,
+          records
         )
         const next: Record<string, SleepingAgentSessionRecord> = { ...replaced.records }
         let changed = replaced.changed
@@ -2814,6 +3119,31 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
     clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
     clearSleepingAgentSessionsByPaneKey,
+    setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
+      set((s) => {
+        const current = s.sleepingAgentSessionsByPaneKey[paneKey]
+        if (
+          !current ||
+          (blocked
+            ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
+            : current.automaticResumeBlockedBy === undefined)
+        ) {
+          return s
+        }
+        const next = { ...current }
+        if (blocked) {
+          next.automaticResumeBlockedBy = 'legacy-orchestration-worker'
+        } else {
+          delete next.automaticResumeBlockedBy
+        }
+        return {
+          sleepingAgentSessionsByPaneKey: {
+            ...s.sleepingAgentSessionsByPaneKey,
+            [paneKey]: next
+          }
+        }
+      })
+    },
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {

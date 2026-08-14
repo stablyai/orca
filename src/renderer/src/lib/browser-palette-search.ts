@@ -1,6 +1,9 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
-import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 
 export type SearchableBrowserPage = {
@@ -42,7 +45,7 @@ export function isBrowserPaletteQueryTooLarge(
 }
 
 function compareText(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' })
+  return compareBaseSensitivityLocaleText(a, b)
 }
 
 export function isBlankBrowserUrl(url: string): boolean {
@@ -125,6 +128,8 @@ export function searchBrowserPages(
     const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
     const title = entry.page.title || formattedUrl
     const fallbackSecondaryText = formattedUrl
+    // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
+    const worktreeName = resolveWorktreeDisplayName(entry.worktree)
     const baseResult = {
       pageId: entry.page.id,
       workspaceId: entry.workspace.id,
@@ -132,7 +137,7 @@ export function searchBrowserPages(
       title,
       workspaceLabel: entry.workspace.label ?? null,
       repoName: entry.repoName,
-      worktreeName: entry.worktree.displayName,
+      worktreeName,
       isCurrentPage: entry.isCurrentPage,
       isCurrentWorktree: entry.isCurrentWorktree
     }
@@ -234,7 +239,7 @@ export function searchBrowserPages(
       continue
     }
 
-    const worktreeRange = findRange(entry.worktree.displayName, trimmedQuery)
+    const worktreeRange = findRange(worktreeName, trimmedQuery)
     if (worktreeRange) {
       results.push({
         ...baseResult,

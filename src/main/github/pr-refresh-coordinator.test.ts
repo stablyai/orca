@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: coordinator tests cover queueing, coalescing,
 request timestamps, and follow-up scheduling against shared module state. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitHubPRRefreshCandidate, PRInfo } from '../../shared/types'
+import type { GitHubPRRefreshCandidate } from '../../shared/github/pull-request-refresh-types'
+import type { PRInfo } from '../../shared/github/pull-request-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 
 const {
@@ -649,18 +650,9 @@ describe('pr-refresh-coordinator', () => {
       'graphql',
       executionOptions
     )
-    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(
-      testCase.repository,
-      'core',
-      1,
-      executionOptions
-    )
-    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(
-      testCase.repository,
-      'graphql',
-      1,
-      executionOptions
-    )
+    // Why (#11532): the lookup itself debits the snapshot now, so every caller
+    // is accounted for; the coordinator must not double-charge on top.
+    expect(noteRepositoryRateLimitSpendMock).not.toHaveBeenCalled()
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 

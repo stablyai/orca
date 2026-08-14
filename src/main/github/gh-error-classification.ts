@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../shared/types'
+import type { ClassifiedError } from '../../shared/classified-error'
 
 // Why: gh CLI surfaces API errors as unstructured stderr. Map known
 // patterns to typed errors so callers can show user-friendly messages.
@@ -54,4 +54,12 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
     unknown: `Failed to load issues: ${trimmed}`
   }
   return { type: c.type, message: readMessages[c.type] }
+}
+
+// Why: PR-side list failures need the same read-op classification — pagination
+// decisions key on the type, and swallowing them made failures look like
+// end-of-data (#11485).
+export function classifyListPrsError(stderr: string): ClassifiedError {
+  const c = classifyGhError(stderr)
+  return { type: c.type, message: `Failed to load pull requests: ${stderr.trim()}` }
 }

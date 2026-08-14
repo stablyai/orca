@@ -1,5 +1,6 @@
 import { normalizeExecutionHostId } from './execution-host'
-import type { Repo, ProjectGroup, ProjectGroupCreatedFrom } from './types'
+import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
+import type { Repo } from './repo-types'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
 

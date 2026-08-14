@@ -16,7 +16,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
     zh: '显示 Orca Mobile 按钮',
-    ja: 'Orca モバイル ボタンを表示'
+    ja: 'Orca Mobile ボタンを表示'
   },
   'menu.toggleLeftSidebar': {
     ko: '왼쪽 사이드바 표시/숨기기',
@@ -162,24 +162,25 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'クローズ'
   },
   'auto.components.GitHubItemDialog.dc1ca081a8': {
-    ko: '진행 중',
-    zh: '进行中',
+    ko: '열림',
+    zh: '开放',
     ja: 'オープン'
   },
   'auto.components.tab.bar.TabBarCreateEntry.b27864279e': {
     ko: '에이전트 실행',
     zh: '启动代理',
-    ja: 'エージェントを起動'
+    ja: 'Agent を起動'
   },
   'auto.components.sidebar.SidebarNav.c39ab10000': {
     ko: 'Linear 작업 열기',
     zh: '打开 Linear 任务',
     ja: 'Linear タスクを開く'
   },
+  // Onboarding pill beside Orca Mobile: "New" marks a new feature, not a create action.
   'auto.components.sidebar.SidebarNav.c86d83b5c3': {
-    ko: '새로 만들기',
-    zh: '新建',
-    ja: '新規'
+    ko: '신규',
+    zh: '新功能',
+    ja: '新機能'
   },
   'auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b': {
     ko: 'Discord',
@@ -311,11 +312,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '显示中',
     ja: '表示中'
   },
-  'auto.components.skills.SkillsPage.a68dee6a32': {
-    ko: '스킬 검색',
-    zh: '搜索技能',
-    ja: 'スキルを検索'
-  },
   'auto.components.editor.RichMarkdownSlashMenu.550189b06c': {
     ko: '블록 검색',
     zh: '搜索块',
@@ -342,7 +338,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'settings.appearance.statusBar.kimiToggleDescription': {
     ko: '활성 워크스페이스의 Kimi 구독 사용량을 표시합니다.',
     zh: '显示当前工作区的 Kimi 订阅使用情况。',
-    ja: 'Kimi サブスクリプション'
+    ja: 'アクティブなワークスペースの Kimi サブスクリプション使用状況を表示します。'
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
     ko: '주머니 속의 워크스페이스.',
@@ -432,17 +428,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.AgentsPane.9bccf48906': {
     ko: '에이전트 위치',
     zh: '代理位置',
-    ja: 'エージェントの場所'
-  },
-  'auto.components.skills.SkillsPage.38e0951c3a': {
-    ko: '에이전트 스킬',
-    zh: '代理技能',
-    ja: 'エージェントのスキル'
+    ja: 'Agent の場所'
   },
   'auto.components.sidebar.SidebarNav.e518f544b1': {
     ko: '감지된 에이전트 없음',
     zh: '未检测到代理',
-    ja: 'エージェントが検出されません'
+    ja: 'Agent が検出されません'
   },
   'auto.components.onboarding.OnboardingFlow.04ae28d8ca': {
     ko: '몇 시간 내내 보고 싶은 테마를 선택하세요.',
@@ -477,7 +468,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.ExperimentalPane.0277901cf7': {
     ko: '완료된 에이전트, 차단 질문, 읽지 않은 상태 및 작업 트리 생성 이벤트에 대한 스레드 작업 트리 피드가 있는 에이전트 항목을 왼쪽 사이드바에 추가합니다. 실험적 — 이벤트 모델과 UI가 변경될 수 있습니다.',
     zh: '将代理条目添加到左侧边栏，其中包含已完成代理、阻塞待办、未读状态和工作树创建事件的线程工作树提要。实验性——事件模型和 UI 可能会改变。',
-    ja: '完了したエージェント、ブロック中の質問、未読状態、ワークツリー作成イベントのスレッドワークツリーフィード付きエージェント項目を左サイドバーに追加します。実験的 — イベントモデルと UI は変更される場合があります。'
+    ja: '完了した Agent、ブロック中の質問、未読状態、ワークツリー作成イベントのスレッドワークツリーフィード付き Agent 項目を左サイドバーに追加します。実験的 — イベントモデルと UI は変更される場合があります。'
   },
   'auto.lib.fix.checks.agent.launch.9f00d7df0c': {
     ko: '검사 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
@@ -487,7 +478,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.TaskPage.d0e3c8f933': {
     ko: '일치하는 GitHub 작업이 없습니다',
     zh: '没有匹配的 GitHub 工作项',
-    ja: '一致する GitHub 作業がありません'
+    ja: '一致する GitHub の作業はありません'
   },
   'auto.components.TaskPage.2af3ab5c58': {
     ko: 'Linear에서 열 팀을 하나 선택하세요',
@@ -512,7 +503,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.IntegrationsPane.33ae9730a8': {
     ko: 'Linear 액세스를 추가해 이슈를 탐색하고 연결합니다.',
     zh: '添加 Linear 访问以浏览和链接议题。',
-    ja: 'Linear アクセスを追加してイシューを参照し、リンクします。'
+    ja: 'Linear アクセスを追加して、Issue を閲覧およびリンクします。'
   },
   'auto.components.GitHubItemDialog.3ab6ac0fc8': {
     ko: '선택한 GitHub 이슈 또는 PR을 미리보기하고 편집합니다.',

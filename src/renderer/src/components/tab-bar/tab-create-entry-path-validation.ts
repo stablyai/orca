@@ -3,18 +3,6 @@ import { isAbsolutePathLike } from '../editor/editor-panel-file-mode'
 
 export type TabEntryLocalPlatform = 'posix' | 'windows'
 
-function hasPathSeparator(query: string): boolean {
-  return /[\\/]/.test(query)
-}
-
-function hasFilenameExtension(query: string): boolean {
-  return /(?:^|[\\/])[^\\/]+\.[^\\/]+$/.test(query.trim())
-}
-
-export function isLikelyNewFileIntent(query: string): boolean {
-  return hasPathSeparator(query) || hasFilenameExtension(query)
-}
-
 export function isTabEntryAbsolutePathLike(query: string): boolean {
   return isAbsolutePathLike(query.trim())
 }

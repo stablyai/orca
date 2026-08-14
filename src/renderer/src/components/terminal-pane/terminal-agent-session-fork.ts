@@ -11,7 +11,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -36,9 +36,7 @@ function buildForkWorkspaceName(sourceName: string): string {
 }
 
 function resolveTuiAgent(value: string | null | undefined): TuiAgent | null {
-  return value && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
-    ? (value as TuiAgent)
-    : null
+  return value && Object.hasOwn(TUI_AGENT_CONFIG, value) ? (value as TuiAgent) : null
 }
 
 function getUsableForkBase(
@@ -65,7 +63,7 @@ function getUsableForkBase(
 
 async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boolean> {
   try {
-    await window.api.ui.writeClipboardText(prompt)
+    await window.api.ui.writeTerminalClipboardText(prompt)
     toast.message(
       translate(
         'auto.components.terminal.pane.terminal.agent.session.fork.c00421d320',
@@ -189,7 +187,7 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
     return false
   }
   try {
-    await window.api.ui.writeClipboardText(transcript)
+    await window.api.ui.writeTerminalClipboardText(transcript)
     toast.message(
       translate(
         'auto.components.terminal.pane.terminal.agent.session.fork.373a3103e7',

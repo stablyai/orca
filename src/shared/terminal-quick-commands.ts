@@ -5,7 +5,7 @@ import type {
   TerminalQuickCommand,
   TerminalQuickCommandAction,
   TerminalQuickCommandScope
-} from './types'
+} from './terminal-quick-command-types'
 
 export const MAX_QUICK_COMMANDS = 40
 export const MAX_QUICK_COMMAND_ID_LENGTH = 80

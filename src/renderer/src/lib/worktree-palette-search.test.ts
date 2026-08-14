@@ -4,7 +4,8 @@ import {
   WORKTREE_PALETTE_QUERY_MAX_BYTES,
   isWorktreePaletteQueryTooLarge
 } from './worktree-palette-query-bounds'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -139,6 +140,63 @@ describe('worktree-palette-search', () => {
     expect(query.length).toBe(WORKTREE_PALETTE_QUERY_MAX_BYTES)
     expect(isWorktreePaletteQueryTooLarge(query)).toBe(true)
     expect(searchWorktrees([makeWorktree()], query, repoMap, null, null)).toEqual([])
+  })
+
+  it('falls back to branch text when a cleared display name left it undefined', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: 'refs/heads/feature/worktree-jump'
+    })
+
+    expect(() => searchWorktrees([cleared], 'jump', repoMap, null, null)).not.toThrow()
+    // Highlight range indexes the branch-derived label the palette actually renders.
+    expect(searchWorktrees([cleared], 'jump', repoMap, null, null)[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      matchedField: 'displayName',
+      displayNameRange: { start: 'feature/worktree-'.length, end: 'feature/worktree-jump'.length }
+    })
+  })
+
+  it('falls back to the folder name when both display name and branch are missing', () => {
+    const folderWorkspace = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: '',
+      path: '/tmp/design-review'
+    })
+
+    expect(searchWorktrees([folderWorkspace], 'design', repoMap, null, null)[0]).toMatchObject({
+      matchedField: 'displayName',
+      displayNameRange: { start: 0, end: 6 }
+    })
+  })
+
+  it('survives a cleared display name on composite repo/branch queries', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string
+    })
+
+    expect(() => searchWorktrees([cleared], 'orca/jump', repoMap, null, null)).not.toThrow()
+  })
+
+  it('still lists a branch-less row on the empty query, which renders every row', () => {
+    // Why: the empty query short-circuits before any branch read, so the row reaches the
+    // render loop untouched — the label resolution there has to be guarded too.
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string
+    })
+
+    expect(searchWorktrees([cleared], '', repoMap, null, null)).toEqual([
+      {
+        worktreeId: 'wt-1',
+        matchedField: null,
+        displayNameRange: null,
+        branchRange: null,
+        repoRange: null,
+        supportingText: null
+      }
+    ])
   })
 
   it('returns a truncated comment snippet with the highlighted match range', () => {
@@ -481,6 +539,75 @@ describe('worktree-palette-search', () => {
       text: 'Issue #304',
       matchRange: { start: 7, end: 10 }
     })
+  })
+
+  it('matches a pasted GitHub issue URL to the linked worktree instead of the URL text', () => {
+    const results = searchWorktrees(
+      [
+        makeWorktree({ id: 'wt-issue', linkedIssue: 14198 }),
+        makeWorktree({ id: 'wt-other', linkedIssue: 7, displayName: 'github.com' })
+      ],
+      'https://github.com/stablyai/orca/issues/14198',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        worktreeId: 'wt-issue',
+        matchedField: 'issue',
+        supportingText: {
+          labelKind: 'issue',
+          text: 'Issue #14198',
+          matchRange: { start: 0, end: 'Issue #14198'.length }
+        }
+      })
+    ])
+  })
+
+  it('matches a pasted GitHub pull URL to the linked worktree', () => {
+    const results = searchWorktrees(
+      [
+        makeWorktree({
+          id: 'wt-pr',
+          linkedPR: 12789,
+          linkedWorkItem: {
+            provider: 'github',
+            type: 'pr',
+            number: 12789,
+            title: 'Perf',
+            url: 'https://github.com/stablyai/orca/pull/12789'
+          }
+        }),
+        makeWorktree({ id: 'wt-issue', linkedIssue: 12789 })
+      ],
+      'https://github.com/stablyai/orca/pull/12789',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results.map((result) => result.worktreeId)).toEqual(['wt-pr'])
+  })
+
+  it('matches a pasted Linear issue URL to the linked worktree', () => {
+    const results = searchWorktrees(
+      [
+        makeWorktree({
+          id: 'wt-linear',
+          linkedLinearIssue: 'STA-4052',
+          linkedLinearIssueOrganizationUrlKey: 'stably'
+        }),
+        makeWorktree({ id: 'wt-name', displayName: 'linear.app' })
+      ],
+      'https://linear.app/stably/issue/STA-4052/agent-terminals-disappearing-randomly',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results.map((result) => result.worktreeId)).toEqual(['wt-linear'])
   })
 
   it('matches workspace ports by port number before issue and PR numbers', () => {

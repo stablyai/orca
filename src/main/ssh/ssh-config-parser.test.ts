@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
+import { searchSshConfigHosts } from './ssh-config-host-picker'
+
+const sshConfigHostsToSummaries = (
+  hosts: Parameters<typeof searchSshConfigHosts>[0],
+  targets: Parameters<typeof searchSshConfigHosts>[1]
+) => searchSshConfigHosts(hosts, targets).hosts
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
@@ -195,6 +201,51 @@ Host disabled
 
     expect(hosts[0].gssapiAuthentication).toBe(true)
     expect(hosts[1].gssapiAuthentication).toBe(false)
+  })
+
+  it('keeps the first value for repeated single-valued options like OpenSSH', () => {
+    const hosts = parseSshConfig(`
+Host repeated
+  HostName first.example.com
+  HostName second.example.com
+  User first-user
+  User second-user
+  Port 2201
+  Port 2202
+  IdentityAgent ~/.ssh/first-agent.sock
+  IdentityAgent ~/.ssh/second-agent.sock
+  IdentitiesOnly yes
+  IdentitiesOnly no
+  ProxyCommand ssh -W %h:%p first-bastion
+  ProxyCommand ssh -W %h:%p second-bastion
+  ProxyUseFdpass yes
+  ProxyUseFdpass no
+  ProxyJump first-jump
+  ProxyJump second-jump
+
+Host repeated-disabled
+  IdentitiesOnly no
+  IdentitiesOnly yes
+  ProxyUseFdpass no
+  ProxyUseFdpass yes
+`)
+
+    expect(hosts[0]).toEqual({
+      host: 'repeated',
+      hostname: 'first.example.com',
+      user: 'first-user',
+      port: 2201,
+      identityAgent: testHomePath('.ssh', 'first-agent.sock'),
+      identitiesOnly: true,
+      proxyCommand: 'ssh -W %h:%p first-bastion',
+      proxyUseFdpass: true,
+      proxyJump: 'first-jump'
+    })
+    expect(hosts[1]).toEqual({
+      host: 'repeated-disabled',
+      identitiesOnly: false,
+      proxyUseFdpass: false
+    })
   })
 
   it('parses ProxyCommand, ProxyUseFdpass, and ProxyJump', () => {
@@ -412,6 +463,60 @@ describe('sshConfigHostsToTargets', () => {
       host: 'first.example.com',
       username: 'first'
     })
+  })
+})
+
+describe('sshConfigHostsToSummaries', () => {
+  it('maps hosts for the picker and flags aliases already in Orca', () => {
+    const hosts = [
+      {
+        host: 'staging',
+        hostname: 'staging.internal',
+        user: 'ubuntu',
+        port: 22,
+        identityFile: '/home/me/.ssh/staging'
+      },
+      { host: 'prod', hostname: 'prod.example', user: 'ops', port: 2222, proxyJump: 'bastion' }
+    ]
+    const summaries = sshConfigHostsToSummaries(hosts, [
+      { label: 'staging', configHost: 'staging' }
+    ])
+    expect(summaries).toEqual([
+      {
+        alias: 'staging',
+        hostname: 'staging.internal',
+        port: 22,
+        username: 'ubuntu',
+        identityFile: '/home/me/.ssh/staging',
+        alreadyInOrca: true
+      },
+      {
+        alias: 'prod',
+        hostname: 'prod.example',
+        port: 2222,
+        username: 'ops',
+        jumpHost: 'bastion',
+        alreadyInOrca: false
+      }
+    ])
+  })
+
+  it('de-dupes aliases and defaults missing fields', () => {
+    const hosts = [
+      { host: 'box' },
+      { host: 'box', hostname: 'second.example' },
+      { host: 'other', user: 'me' }
+    ]
+    const summaries = sshConfigHostsToSummaries(hosts, [])
+    expect(summaries).toHaveLength(2)
+    expect(summaries[0]).toEqual({
+      alias: 'box',
+      hostname: 'box',
+      port: 22,
+      username: '',
+      alreadyInOrca: false
+    })
+    expect(summaries[1].alias).toBe('other')
   })
 })
 

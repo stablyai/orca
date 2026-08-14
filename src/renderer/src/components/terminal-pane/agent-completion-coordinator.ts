@@ -810,6 +810,13 @@ export function createAgentCompletionCoordinator(
       dispatchAttention(payload)
       return
     }
+    if (payload.state === 'done' && payload.sessionBoundary === true) {
+      // Why: a session-boundary 'done' is an idle session connecting (resume/launch/clear,
+      // STA-3386), not a completed turn — record the activity/evidence above but never
+      // complete. Pending timers stay untouched: a quiet-window done from a real prior
+      // turn must still fire.
+      return
+    }
     if (isCompletionHookState(payload.state)) {
       // Why: the turn is ending, so a debounced attention from an earlier pause must not fire after completion.
       clearPendingCodexAttention()

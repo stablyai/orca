@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 
 // Why: remote runtime hosts are not SSH connections, but their launch surfaces
@@ -33,10 +33,6 @@ function isRuntimeMethodNotFoundError(error: unknown): boolean {
 
 export function _getRuntimeDetectPromiseCountForTest(): number {
   return runtimeDetectPromises.size
-}
-
-export function _getRuntimeRefreshPromiseCountForTest(): number {
-  return runtimeRefreshPromises.size
 }
 
 export const createRuntimeDetectedAgentsSlice: StateCreator<

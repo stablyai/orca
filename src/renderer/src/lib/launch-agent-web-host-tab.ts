@@ -2,11 +2,13 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   createWebRuntimeAgentSessionTerminal,
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft,
   createWebRuntimeSessionTerminal,
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { Tab, TuiAgent } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
@@ -128,6 +130,15 @@ export function launchAgentInWebHostTab(args: {
       submitPrompt: submitPastedPrompt,
       forcePromptPaste: promptDelivery === 'submit-after-ready'
     }).then(handleCreation)
+  }
+  if (hasPrompt && promptDelivery === 'draft') {
+    // Why: the draft rode in on the launch command, so no paste runs and
+    // nothing else seeds the chat-composer copy for this host class.
+    return createWebRuntimeAgentSessionTerminalWithLaunchDraft({
+      ...launch,
+      agent,
+      launchDraft: prompt
+    }).then((outcome) => handleCreation({ outcome, promptDelivered: outcome.status === 'created' }))
   }
   return createWebRuntimeSessionTerminal(launch).then((outcome) =>
     handleCreation({ outcome, promptDelivered: outcome.status === 'created' && hasPrompt })

@@ -1,10 +1,5 @@
-import type {
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
-  WorkspaceSessionState,
-  WorkspaceVisibleTabType
-} from './types'
+import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 export type WorkspaceSessionTerminalTabCloseResult = {
   session: WorkspaceSessionState
@@ -265,6 +260,7 @@ export function closeTerminalTabInWorkspaceSession(
     if (!hasSurface) {
       next.activeWorktreeId = null
       next.activeWorkspaceKey = null
+      next.activeWorkspaceExecutionHostId = null
     }
   }
   if ((next.tabsByWorktree[worktreeId]?.length ?? 0) === 0) {

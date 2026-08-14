@@ -1,5 +1,5 @@
 import { ghExecFileAsync } from '../git/runner'
-import type { GitHubOwnerRepo } from '../../shared/types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -47,11 +47,6 @@ function runtimeCacheKey(repoPath: string, wslDistro?: string): string {
 export function _resetGitHubHostAuthCache(): void {
   hostAuthCache.clear()
   hostAuthInFlight.clear()
-}
-
-/** @internal - exposed for cache-bound tests only */
-export function _getGitHubHostAuthCacheSize(): number {
-  return hostAuthCache.size
 }
 
 function pruneHostAuthCache(now: number): void {

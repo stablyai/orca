@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as GitStatusModule from '../git/status'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type * as PullRequestContextModule from '../text-generation/pull-request-context'
@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   generatePullRequestFieldsFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
   resolveHostedReviewBodyForGeneration: vi.fn(),
+  loadPullRequestLinkedIssue: vi.fn(),
   getSshGitProvider: vi.fn(),
   getStatus: vi.fn()
 }))
@@ -58,6 +59,10 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 
 vi.mock('../source-control/pull-request-template', () => ({
   resolveHostedReviewBodyForGeneration: mocks.resolveHostedReviewBodyForGeneration
+}))
+
+vi.mock('../source-control/pull-request-linked-issue', () => ({
+  loadPullRequestLinkedIssue: mocks.loadPullRequestLinkedIssue
 }))
 
 const tempDirs: string[] = []
@@ -101,6 +106,8 @@ describe('RuntimeGitCommands', () => {
     mocks.resolveCommitMessageSettings.mockReset()
     mocks.resolveHostedReviewBodyForGeneration.mockReset()
     mocks.resolveHostedReviewBodyForGeneration.mockImplementation(async ({ body }) => body)
+    mocks.loadPullRequestLinkedIssue.mockReset()
+    mocks.loadPullRequestLinkedIssue.mockResolvedValue(null)
     mocks.getSshGitProvider.mockReset()
     mocks.getStatus.mockReset()
     mocks.checkoutBranch.mockReset()
@@ -311,8 +318,7 @@ describe('RuntimeGitCommands', () => {
       getRuntimeSettings: () =>
         ({
           commitMessageAi: { enabled: true, agentId: 'codex' },
-          agentCmdOverrides: {},
-          enableGitHubAttribution: false
+          agentCmdOverrides: {}
         }) as GlobalSettings,
       getCommitMessageAgentEnvironment: () => ({
         prepareForCodexLaunch: () => '/managed/codex-home'
@@ -367,8 +373,7 @@ describe('RuntimeGitCommands', () => {
       getRuntimeSettings: () =>
         ({
           commitMessageAi: { enabled: true, agentId: 'codex' },
-          agentCmdOverrides: {},
-          enableGitHubAttribution: false
+          agentCmdOverrides: {}
         }) as GlobalSettings,
       getCommitMessageAgentEnvironment: () => ({
         prepareForCodexLaunch

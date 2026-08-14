@@ -2,6 +2,7 @@
 // Keeping the envelope contract here avoids making those clients import each
 // other just to validate the shared RPC frame shape.
 import { z } from 'zod'
+import type { OrchestrationCompatibilityEvidence } from './orchestration-compatibility-evidence'
 
 // Why: clients and runtimes update independently; strip additive envelope
 // fields while continuing to validate every known discriminator and field.
@@ -78,6 +79,8 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationCapability?: string
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  compatibilityInvocationId?: string
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
 }
 
 export type RuntimeRpcKeepaliveFrame = z.infer<typeof Keepalive>

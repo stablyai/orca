@@ -83,7 +83,39 @@ export type SkillFreshnessInstallation = {
   observedPackageDigest: string | null
   /** Git tree sha of the observed bytes; lets the post-run verdict match disk against the updater's lock. */
   observedGitTreeSha?: string | null
+  /**
+   * The same hash over only the files the current bundle lists. Carried beside the
+   * whole-folder hash, not in place of it, so a folder holding an agent CLI's sidecar
+   * can still match the lock without blinding the check to an upstream revision that
+   * added a file. Absent from hosts older than this field.
+   */
+  observedOfficialGitTreeSha?: string | null
   errorCategory: string | null
+}
+
+// A scope whose contents belong to someone other than the user: a project's own checkout,
+// or a plugin's bundled copy. Orca's global update never writes here, so the owner's
+// content is not the user's drift — which is why ownership outranks byte status when
+// labelling a location.
+const OWNER_MANAGED_SKILL_SCOPES: ReadonlySet<SkillInstallationTopology> = new Set([
+  'repo-scope',
+  'plugin-cache'
+])
+
+export function isOwnerManagedSkillScope(topology: SkillInstallationTopology): boolean {
+  return OWNER_MANAGED_SKILL_SCOPES.has(topology)
+}
+
+// Why: Orca's updater only ever passes --global, so a copy a project owns is not
+// something Orca can act on — it has no remedy by design. Reporting it as global drift
+// produced an amber badge no user action could clear, over a copy their own repo
+// legitimately owns. Stated by scope rather than by byte status on purpose: an outdated
+// or unreadable project copy is just as far outside the global updater's reach as an
+// unrecognized one.
+export function skillPlacementParticipatesInGlobalFreshness(
+  installation: SkillFreshnessInstallation
+): boolean {
+  return installation.topology !== 'repo-scope'
 }
 
 /**
@@ -92,11 +124,13 @@ export type SkillFreshnessInstallation = {
  * Shared so the badge and the review dialog cannot disagree about what counts: the
  * badge points at the dialog for the explanation, so a copy that turns the badge
  * amber must also produce a row there. An out-of-date copy the command converges is
- * ordinary work, not a problem, and a plugin's own copy of a same-named skill is the
- * vendor's business rather than the user's drift.
+ * ordinary work, not a problem; a plugin's own copy of a same-named skill is the vendor's
+ * business rather than the user's drift, and a project's own copy is outside the reach of
+ * the only update Orca runs.
  */
 export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstallation): boolean {
   return (
+    skillPlacementParticipatesInGlobalFreshness(installation) &&
     installation.status !== 'current' &&
     // Why: 'newer-known' is recognized official content ahead of this build — the
     // updater's own install or a newer release's bytes. There is nothing to fix and

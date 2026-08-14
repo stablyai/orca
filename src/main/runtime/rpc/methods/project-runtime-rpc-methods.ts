@@ -2,9 +2,18 @@ import { z } from 'zod'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
+import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
+
+const ProjectProviderIdentity = z.object({
+  provider: z.literal('github'),
+  owner: requiredString('Missing project owner'),
+  repo: requiredString('Missing project repository'),
+  host: OptionalString
+})
 
 const ProjectHostSetupExistingFolder = z.object({
   projectId: requiredString('Missing project ID'),
+  projectProviderIdentity: ProjectProviderIdentity.optional(),
   hostId: requiredString('Missing host ID').transform((value, ctx) => {
     const hostId = normalizeExecutionHostId(value)
     if (!hostId) {
@@ -21,6 +30,7 @@ const ProjectHostSetupExistingFolder = z.object({
 
 const ProjectHostSetupClone = z.object({
   projectId: requiredString('Missing project ID'),
+  projectProviderIdentity: ProjectProviderIdentity.optional(),
   hostId: requiredString('Missing host ID').transform((value, ctx) => {
     const hostId = normalizeExecutionHostId(value)
     if (!hostId) {
@@ -120,29 +130,41 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'projectHostSetup.setupExistingFolder',
     params: ProjectHostSetupExistingFolder,
-    handler: async (params, { runtime }) => ({
-      result: await runtime.setupProjectExistingFolder(params)
+    handler: async (params, context) => ({
+      result: projectRepoResultVisibilityForClient(
+        await context.runtime.setupProjectExistingFolder(params),
+        context
+      )
     })
   }),
   defineMethod({
     name: 'projectHostSetup.clone',
     params: ProjectHostSetupClone,
-    handler: async (params, { runtime }) => ({
-      result: await runtime.setupProjectClone(params)
+    handler: async (params, context) => ({
+      result: projectRepoResultVisibilityForClient(
+        await context.runtime.setupProjectClone(params),
+        context
+      )
     })
   }),
   defineMethod({
     name: 'projectHostSetup.update',
     params: ProjectHostSetupUpdate,
-    handler: (params, { runtime }) => ({
-      result: runtime.updateProjectHostSetup(params)
+    handler: (params, context) => ({
+      result: projectRepoResultVisibilityForClient(
+        context.runtime.updateProjectHostSetup(params),
+        context
+      )
     })
   }),
   defineMethod({
     name: 'projectHostSetup.delete',
     params: ProjectHostSetupDelete,
-    handler: (params, { runtime }) => ({
-      result: runtime.deleteProjectHostSetup(params)
+    handler: (params, context) => ({
+      result: projectRepoResultVisibilityForClient(
+        context.runtime.deleteProjectHostSetup(params),
+        context
+      )
     })
   })
 ]

@@ -14,6 +14,11 @@ type BrowserPageViewport = {
 
 const browserPageViewports = new Map<string, BrowserPageViewport>()
 
+// Why: React measures the chrome only on mount, but shells are rebuilt without a
+// re-measure (guest recovery/replacement, profile switch, slot remount). Remembering
+// the inset keeps geometry a property of attaching a guest, not of the first mount.
+const browserPageChromeInsetHeights = new Map<string, number>()
+
 const slotRootListeners = new Map<string, Set<() => void>>()
 
 function notifySlotRootListeners(workspaceTabId: string): void {
@@ -65,11 +70,16 @@ export function ensureBrowserPageViewport(
   browserPageId: string,
   workspaceTabId: string
 ): BrowserPageViewport | null {
+  const root = slotViewportRoots.get(workspaceTabId)
   const existing = browserPageViewports.get(browserPageId)
   if (existing) {
-    return existing
+    if (!root || existing.shell.parentElement === root) {
+      return existing
+    }
+    // Why: a remounted slot strands this shell after Electron destroys its detached guest (STA-3228).
+    existing.shell.remove()
+    browserPageViewports.delete(browserPageId)
   }
-  const root = slotViewportRoots.get(workspaceTabId)
   if (!root) {
     return null
   }
@@ -83,6 +93,10 @@ export function ensureBrowserPageViewport(
   const chromeInset = document.createElement('div')
   chromeInset.dataset.browserPageChromeInset = ''
   chromeInset.className = 'shrink-0'
+  const rememberedInsetHeight = browserPageChromeInsetHeights.get(browserPageId)
+  if (rememberedInsetHeight !== undefined) {
+    chromeInset.style.height = `${rememberedInsetHeight}px`
+  }
 
   const container = document.createElement('div')
   container.dataset.browserPageContainer = ''
@@ -136,11 +150,13 @@ export function applyBrowserPageViewportLayout(
 }
 
 export function syncBrowserPageChromeInset(browserPageId: string, heightPx: number): void {
+  const insetHeight = Math.max(0, heightPx)
+  browserPageChromeInsetHeights.set(browserPageId, insetHeight)
   const viewport = browserPageViewports.get(browserPageId)
   if (!viewport) {
     return
   }
-  viewport.chromeInset.style.height = `${Math.max(0, heightPx)}px`
+  viewport.chromeInset.style.height = `${insetHeight}px`
 }
 
 export function parkBrowserPageViewport(browserPageId: string): void {

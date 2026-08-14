@@ -1,4 +1,5 @@
-import type { GitPushTarget, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { HostedReviewState } from '../../../../shared/hosted-review'
 import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
 import { getPublishTargetDisplayName } from '../../../../shared/git-publish-target-status'

@@ -6,7 +6,7 @@
  *   pnpm bench:multi-workspace-typing [-- --panes 8 --rate-kbps 512 \
  *     --keys 48 --cadence-ms 250 --cpu-workers 4 --label before-fix]
  *
- * Results land in tools/benchmarks/results/multi-workspace-typing-*.json.
+ * Results land in tests/tools/benchmarks/results/multi-workspace-typing-*.json.
  * Run once per build/config with distinct --label values, then diff the
  * totalMs/inputHalfMs/echoHalfMs percentiles.
  */

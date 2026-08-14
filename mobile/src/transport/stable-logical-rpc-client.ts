@@ -1,5 +1,11 @@
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
+import {
+  forwardMigrationDialState,
+  type MigrationDialStateForwarder
+} from './migration-dial-state-forwarder'
+import { waitForAuthenticated } from './replacement-session-authentication'
+import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -31,9 +37,19 @@ type PendingRequest = {
 }
 
 export type StableLogicalRpcClient = RpcClient & {
-  migrateTo(session: RpcClient, path: MobileConnectionPath, timeoutMs?: number): Promise<void>
+  migrateTo(
+    session: RpcClient,
+    path: MobileConnectionPath,
+    timeoutMs?: number,
+    // Checked after the replacement authenticates, before the swap — lets a racing
+    // caller withdraw when another path won while this dial was in flight.
+    shouldAbort?: () => boolean
+  ): Promise<void>
   suspendActiveSession(): void
   getActivePath(): MobileConnectionPath
+  // Non-null only while a migration dial is publishing its own phases — the path the
+  // user is waiting on, which the still-bound active path can't name.
+  getPendingPath(): MobileConnectionPath | null
   getGeneration(): number
 }
 
@@ -43,6 +59,7 @@ export function createStableLogicalRpcClient(
 ): StableLogicalRpcClient {
   let activeSession = initialSession
   let activePath = initialPath
+  let pendingPath: MobileConnectionPath | null = null
   let generation = 1
   let closed = false
   let suspended = false
@@ -68,22 +85,24 @@ export function createStableLogicalRpcClient(
       return new Promise<RpcResponse>((resolve, reject) => {
         const pending = { reject }
         pendingRequests.add(pending)
-        void session.sendRequest(method, params, options).then(
-          (response) => {
-            pendingRequests.delete(pending)
-            if (closed) {
-              reject(new Error('Client closed'))
-            } else if (requestGeneration !== generation) {
-              reject(new LogicalClientCutoverError())
-            } else {
-              resolve(response)
+        void session
+          .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
+          .then(
+            (response) => {
+              pendingRequests.delete(pending)
+              if (closed) {
+                reject(new Error('Client closed'))
+              } else if (requestGeneration !== generation) {
+                reject(new LogicalClientCutoverError())
+              } else {
+                resolve(response)
+              }
+            },
+            (error: unknown) => {
+              pendingRequests.delete(pending)
+              reject(error)
             }
-          },
-          (error: unknown) => {
-            pendingRequests.delete(pending)
-            reject(error)
-          }
-        )
+          )
       })
     },
 
@@ -138,9 +157,9 @@ export function createStableLogicalRpcClient(
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
     },
-    notifyForeground: () => {
+    notifyForeground: (reason) => {
       if (!suspended) {
-        activeSession.notifyForeground()
+        activeSession.notifyForeground(reason)
       }
     },
     close() {
@@ -179,21 +198,45 @@ export function createStableLogicalRpcClient(
       publishState('disconnected')
     },
 
-    async migrateTo(nextSession, path, timeoutMs = 12_000) {
+    async migrateTo(nextSession, path, timeoutMs = 12_000, shouldAbort) {
       if (closed) {
         nextSession.close()
         throw new Error('Client closed')
       }
+      // Why: naming the dial is independent of narrating it. The dominant relay case
+      // (direct dial fails) sits in 'reconnecting' — already amber, so forwarding adds
+      // nothing, but the user still has no idea relay is what's being tried.
+      if (suspended || state !== 'connected') {
+        pendingPath = path
+      }
+      const forwarder = forwardMigrationDialState({
+        session: nextSession,
+        snapshot: () => ({ state, suspended }),
+        // Why: close() during the dial already published 'disconnected'; a late
+        // forwarded phase must not resurrect a closed client's dot.
+        publish: (next) => {
+          if (!closed) {
+            publishState(next)
+          }
+        }
+      })
       try {
         await waitForAuthenticated(nextSession, timeoutMs)
+        if (closed) {
+          throw new Error('Client closed')
+        }
+        // Why: cutting over anyway would close a live winner and strand the user
+        // on the slower path (the happy-eyeballs race is first-authenticated-wins).
+        if (shouldAbort?.()) {
+          throw new Error('migration superseded')
+        }
       } catch (error) {
+        endDialForwarding(forwarder, true)
         nextSession.close()
         throw error
       }
-      if (closed) {
-        nextSession.close()
-        throw new Error('Client closed')
-      }
+      // Why: unbind before bindActiveState so the replacement has exactly one publisher.
+      endDialForwarding(forwarder, false)
       const previous = activeSession
       const previousStateUnsubscribe = activeStateUnsubscribe
       const nextGeneration = generation + 1
@@ -223,10 +266,23 @@ export function createStableLogicalRpcClient(
     },
 
     getActivePath: () => activePath,
+    // Why: a previous session that recovers mid-dial makes the pending path a lie —
+    // once we're connected the user is no longer waiting on anything.
+    getPendingPath: () => (state === 'connected' ? null : pendingPath),
     getGeneration: () => generation
   }
 
   return logical
+
+  function endDialForwarding(forwarder: MigrationDialStateForwarder, failed: boolean): void {
+    forwarder.stop()
+    pendingPath = null
+    // Why: only walk back phases we published ourselves — a 'connected' here came from
+    // the still-live previous session and outranks the dead dial.
+    if (failed && forwarder.forwarded() && state !== 'connected') {
+      publishState('disconnected')
+    }
+  }
 
   function attachSubscription(
     record: SubscriptionRecord,
@@ -262,38 +318,4 @@ export function createStableLogicalRpcClient(
       listener(next)
     }
   }
-}
-
-function waitForAuthenticated(session: RpcClient, timeoutMs: number): Promise<void> {
-  if (session.getState() === 'connected') {
-    return Promise.resolve()
-  }
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
-    const unsubscribe = session.onStateChange((state) => {
-      if (state === 'connected') {
-        finish()
-        resolve()
-      } else if (state === 'auth-failed' || state === 'disconnected') {
-        finish()
-        reject(new Error(`replacement session ${state}`))
-      }
-    })
-    timer = setTimeout(() => {
-      finish()
-      reject(new Error('replacement session authentication timed out'))
-    }, timeoutMs)
-
-    function finish(): void {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      unsubscribe()
-    }
-  })
 }

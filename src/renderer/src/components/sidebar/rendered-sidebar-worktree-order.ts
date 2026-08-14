@@ -1,4 +1,4 @@
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {

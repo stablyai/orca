@@ -1,9 +1,8 @@
-import { stripImagePromptMarker } from '../../../../shared/native-chat-image-transcript-markers'
 import {
-  isImageRefBlock,
-  isTextBlock,
-  type NativeChatMessage
-} from '../../../../shared/native-chat-types'
+  normalizeNativeChatUserText,
+  normalizedNativeChatUserMessageText
+} from '../../../../shared/native-chat-image-transcript-markers'
+import { isImageRefBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
 
 export type NativeChatPendingOccurrence = {
   text: string
@@ -16,7 +15,7 @@ export type NativeChatPendingOccurrence = {
 }
 
 export function normalizeNativeChatPendingText(text: string): string {
-  return stripImagePromptMarker(text).trim().replace(/\s+/g, ' ')
+  return normalizeNativeChatUserText(text)
 }
 
 export function nativeChatPendingContentKey(
@@ -34,15 +33,15 @@ function nativeChatUserMessageContentKey(message: NativeChatMessage): string | n
   if (message.role !== 'user') {
     return null
   }
-  const text = message.blocks
-    .filter(isTextBlock)
-    .map((block) => block.text)
-    .join(' ')
+  const text = normalizedNativeChatUserMessageText(message) ?? ''
+  if (text) {
+    return `text:${text}`
+  }
   const imagePaths = message.blocks
     .filter(isImageRefBlock)
     .map((block) => block.path)
     .filter((path): path is string => Boolean(path))
-  const key = nativeChatPendingContentKey({ text, imagePaths })
+  const key = nativeChatPendingContentKey({ text: '', imagePaths })
   return key === 'empty' ? null : key
 }
 
@@ -80,19 +79,6 @@ export function advancedNativeChatUserContentCounts(
   return advanced
 }
 
-function nativeChatUserMessageNormalizedText(message: NativeChatMessage): string | null {
-  if (message.role !== 'user') {
-    return null
-  }
-  const text = normalizeNativeChatPendingText(
-    message.blocks
-      .filter(isTextBlock)
-      .map((block) => block.text)
-      .join(' ')
-  )
-  return text.length > 0 ? text : null
-}
-
 /** User texts that already have a later non-user turn (ready to prune echoes). */
 export function advancedNativeChatUserTexts(
   messages: readonly NativeChatMessage[]
@@ -101,7 +87,7 @@ export function advancedNativeChatUserTexts(
   const waiting: string[] = []
   for (const message of messages) {
     if (message.role === 'user') {
-      const text = nativeChatUserMessageNormalizedText(message)
+      const text = normalizedNativeChatUserMessageText(message)
       if (text) {
         waiting.push(text)
       }
@@ -119,7 +105,7 @@ export function matchingNativeChatUserTexts(
 ): readonly string[] {
   const texts: string[] = []
   for (const message of messages) {
-    const text = nativeChatUserMessageNormalizedText(message)
+    const text = normalizedNativeChatUserMessageText(message)
     if (text) {
       texts.push(text)
     }
@@ -191,7 +177,7 @@ export function selectPendingIndicesRepresentedByUserTexts(
       }
       represented.add(entry.index)
       const at = remaining.findIndex((candidate) => candidate.index === entry.index)
-      if (at >= 0) {
+      if (at !== -1) {
         remaining.splice(at, 1)
       }
     }

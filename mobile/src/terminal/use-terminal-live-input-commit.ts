@@ -22,6 +22,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabType: TTabType | null | undefined
   readonly activeSessionTabTypeRef: RefObject<TTabType | null>
+  readonly connected: boolean
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
@@ -45,6 +46,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   activeHandleRef,
   activeSessionTabType,
   activeSessionTabTypeRef,
+  connected,
   liveInputRef,
   liveInputTerminalHandles,
   liveInputTerminalHandlesRef,
@@ -67,6 +69,13 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
+
+  useEffect(() => {
+    // Why: what reached the PTY is unknowable across an outage — stale mirror state corrupts the first post-reconnect send.
+    if (!connected) {
+      clearPendingLiveInputCommit()
+    }
+  }, [connected, clearPendingLiveInputCommit])
 
   useEffect(() => {
     const pendingHandle = pendingLiveInputHandleRef.current

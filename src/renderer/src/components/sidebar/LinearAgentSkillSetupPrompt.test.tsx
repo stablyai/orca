@@ -68,11 +68,8 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
   buildSkillCommandForRuntime: (
     command: string,
-    runtime: { runtime: string; wslDistro?: string | null }
-  ) =>
-    runtime.runtime === 'wsl'
-      ? `wsl.exe${runtime.wslDistro ? ` -d '${runtime.wslDistro}'` : ''} -- bash -lc '${command}'`
-      : command,
+    _runtime: { runtime: string; wslDistro?: string | null }
+  ) => command,
   ensureWslCliAvailableForAgentSkillTerminal: mocks.ensureWslCli,
   getWslCliDistroRequest: (runtime?: { runtime: string; wslDistro?: string | null }) =>
     runtime?.runtime === 'wsl' && runtime.wslDistro?.trim()
@@ -147,6 +144,9 @@ async function renderPrompt(
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
   })
+  if (props.surface === 'modal') {
+    await import('./LinearAgentSkillSetupDialog')
+  }
   await act(async () => {})
   return container
 }
@@ -178,6 +178,7 @@ function findBodyButton(label: string): HTMLButtonElement | undefined {
 }
 
 async function settleRender(): Promise<void> {
+  await import('./LinearAgentSkillSetupDialog')
   await act(async () => {})
   await act(async () => {})
 }
@@ -253,12 +254,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const unlinked = await renderPrompt({ linked: false, remote: false })
     expect(unlinked.textContent).not.toContain('Set up Linear agent skill')
 
-    await act(async () => {
-      root?.unmount()
-    })
-    root = null
-    unlinked.remove()
-    container = null
+    await unmountPrompt()
 
     const ready = await renderPrompt({ linked: true, remote: false })
     expect(ready.textContent).not.toContain('Set up Linear agent skill')
@@ -343,13 +339,14 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await settleRender()
 
-    expect(document.body.textContent).toContain("wsl.exe -d 'Fedora' -- bash -lc 'npx skills add")
+    expect(document.body.textContent).toContain('npx skills add')
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
-        installedCommand:
-          "wsl.exe -d 'Fedora' -- bash -lc 'npx skills update orca-linear --global'",
+        installedCommand: 'npx skills update orca-linear --global',
         terminalShellOverride: 'powershell.exe',
+        terminalRuntime: expect.objectContaining({ runtime: 'wsl', wslDistro: 'Fedora' }),
         getPrerequisiteStatus: expect.any(Function)
       })
     )
@@ -425,7 +422,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
   })
 
-  it('opens the terminal setup panel in a dialog only after the user asks to set up', async () => {
+  it('keeps the prompt usable and loads the lazy setup dialog only when requested', async () => {
     const rendered = await renderPrompt({ linked: true, remote: false })
 
     expect(document.body.querySelector('[data-testid="linear-skill-inline-panel"]')).toBeNull()
@@ -436,6 +433,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await settleRender()
 
     expect(document.body.querySelector('[data-testid="linear-skill-inline-panel"]')).not.toBeNull()
     expect(document.body.textContent).toContain('orca-linear')
@@ -891,7 +889,10 @@ describe('LinearAgentSkillSetupPrompt', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await settleRender()
-    expect(mocks.panelProps.at(-1)?.command).toContain("wsl.exe -d 'Ubuntu'")
+    expect(mocks.panelProps.at(-1)?.command).toContain('npx skills add')
+    expect(mocks.panelProps.at(-1)?.terminalRuntime).toEqual(
+      expect.objectContaining({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    )
   })
 
   it('uses remote-safe success copy for remote workspaces', async () => {

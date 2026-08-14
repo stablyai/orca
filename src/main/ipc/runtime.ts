@@ -2,9 +2,9 @@ import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeBrowserDriverState,
+  RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
-  RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
@@ -28,10 +28,18 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
-    (event, graph: RuntimeSyncWindowGraph): RuntimeSyncWindowGraphResult => {
+    (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
+      }
+      if (event.senderFrame !== event.sender.mainFrame) {
+        // Why: a disposed main frame can leave an invoke queued after its
+        // replacement starts. It must not settle the replacement generation.
+        throw new Error('Runtime graph sync must originate from the current main frame')
+      }
+      if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
+        throw new Error('Runtime graph sync requires a renderer generation')
       }
       return runtime.syncWindowGraph(window.id, graph)
     }

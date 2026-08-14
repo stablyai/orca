@@ -6,13 +6,18 @@ import {
 } from '../../../../shared/execution-host'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
-  isPathInsideOrEqual,
-  normalizeRuntimePathForComparison,
-  normalizeRuntimePathSeparators
+  createNormalizedPathInsideOrEqualMatcher,
+  normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import type { AiVaultSessionProject } from '../../../../shared/ai-vault-session-filters'
+import {
+  folderGroupKey,
+  folderLabel,
+  type AiVaultSessionProject
+} from '../../../../shared/ai-vault-session-filters'
 
 // Why: the plain project descriptor moved to /shared (so the lifted filter core
 // stays renderer-free). Re-export it here for renderer import parity.
@@ -31,6 +36,8 @@ type SessionProjectCandidate = {
   hostKey: ExecutionHostId
   projectId: string | null
   repoId: string | null
+  // Precomputed so a 500-session pass doesn't re-normalize every root per session.
+  ownsNormalizedCwd: (normalizedCwd: string) => boolean
 }
 
 type ProjectResolverArgs = {
@@ -50,6 +57,31 @@ export function buildAiVaultProjectContext({
   activeWorktree,
   sessions
 }: ProjectResolverArgs): AiVaultProjectContext {
+  const setupByRepoId = buildSetupByRepoId(projectHostSetupProjection.setups)
+
+  return {
+    activeProjectKey: resolveActiveProjectKey(activeRepo, activeWorktree, setupByRepoId),
+    activeRepoId: activeRepo?.id ?? activeWorktree?.repoId ?? null,
+    projectLabelByKey: buildProjectLabelByKey(repos, projectHostSetupProjection),
+    sessionProjectById: buildAiVaultSessionProjectById({
+      repos,
+      worktrees,
+      projectHostSetupProjection,
+      sessions
+    })
+  }
+}
+
+/**
+ * Session→project attribution never reads the active repo/worktree — exposed
+ * separately so memoizing callers don't rebuild the map on worktree switches.
+ */
+export function buildAiVaultSessionProjectById({
+  repos,
+  worktrees,
+  projectHostSetupProjection,
+  sessions
+}: Omit<ProjectResolverArgs, 'activeRepo' | 'activeWorktree'>): Map<string, AiVaultSessionProject> {
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   const setupByRepoId = buildSetupByRepoId(projectHostSetupProjection.setups)
   const projectLabelByKey = buildProjectLabelByKey(repos, projectHostSetupProjection)
@@ -60,20 +92,13 @@ export function buildAiVaultProjectContext({
     setupByRepoId
   )
   const sessionProjectById = new Map<string, AiVaultSessionProject>()
-
   for (const session of sessions) {
     sessionProjectById.set(
       session.id,
       resolveSessionProject(session, candidates, projectLabelByKey)
     )
   }
-
-  return {
-    activeProjectKey: resolveActiveProjectKey(activeRepo, activeWorktree, setupByRepoId),
-    activeRepoId: activeRepo?.id ?? activeWorktree?.repoId ?? null,
-    projectLabelByKey,
-    sessionProjectById
-  }
+  return sessionProjectById
 }
 
 export function toAiVaultProjectKey(
@@ -145,17 +170,19 @@ function buildProjectCandidates(
     }
     const repo = repoById.get(worktree.repoId)
     const setup = setupByRepoId.get(worktree.repoId)
-    candidates.push({
-      source: 'worktree',
-      normalizedPath: normalizeRuntimePathForComparison(worktree.path),
-      hostKey: resolveCandidateHostId(
-        worktree.hostId,
-        setup?.hostId,
-        repo ? getRepoExecutionHostId(repo) : null
-      ),
-      projectId: worktree.projectId ?? setup?.projectId ?? null,
-      repoId: worktree.repoId
-    })
+    candidates.push(
+      makeProjectCandidate({
+        source: 'worktree',
+        path: worktree.path,
+        hostKey: resolveCandidateHostId(
+          worktree.hostId,
+          setup?.hostId,
+          repo ? getRepoExecutionHostId(repo) : null
+        ),
+        projectId: worktree.projectId ?? setup?.projectId ?? null,
+        repoId: worktree.repoId
+      })
+    )
   }
 
   for (const setup of projection.setups) {
@@ -167,13 +194,15 @@ function buildProjectCandidates(
     if (!hasCandidatePath(setup.path)) {
       continue
     }
-    candidates.push({
-      source: 'setup',
-      normalizedPath: normalizeRuntimePathForComparison(setup.path),
-      hostKey: resolveCandidateHostId(setup.hostId, getRepoExecutionHostId(setup)),
-      projectId: setup.projectId,
-      repoId: setup.repoId || null
-    })
+    candidates.push(
+      makeProjectCandidate({
+        source: 'setup',
+        path: setup.path,
+        hostKey: resolveCandidateHostId(setup.hostId, getRepoExecutionHostId(setup)),
+        projectId: setup.projectId,
+        repoId: setup.repoId || null
+      })
+    )
   }
 
   for (const repo of repoById.values()) {
@@ -183,16 +212,30 @@ function buildProjectCandidates(
     if (!hasCandidatePath(repo.path)) {
       continue
     }
-    candidates.push({
-      source: 'setup',
-      normalizedPath: normalizeRuntimePathForComparison(repo.path),
-      hostKey: getRepoExecutionHostId(repo),
-      projectId: null,
-      repoId: repo.id
-    })
+    candidates.push(
+      makeProjectCandidate({
+        source: 'setup',
+        path: repo.path,
+        hostKey: getRepoExecutionHostId(repo),
+        projectId: null,
+        repoId: repo.id
+      })
+    )
   }
 
   return candidates
+}
+
+function makeProjectCandidate(
+  fields: Omit<SessionProjectCandidate, 'normalizedPath' | 'ownsNormalizedCwd'> & { path: string }
+): SessionProjectCandidate {
+  const { path, ...rest } = fields
+  const normalizedPath = normalizeRuntimePathForComparison(path)
+  return {
+    ...rest,
+    normalizedPath,
+    ownsNormalizedCwd: createNormalizedPathInsideOrEqualMatcher(normalizedPath)
+  }
 }
 
 function resolveCandidateHostId(
@@ -221,9 +264,8 @@ function resolveSessionProject(
     return { kind: 'unknown', key: 'unknown', label: '' }
   }
 
-  const matches = candidates.filter((candidate) =>
-    isPathInsideOrEqual(candidate.normalizedPath, cwd)
-  )
+  const normalizedCwd = normalizeRuntimePathForComparison(cwd)
+  const matches = candidates.filter((candidate) => candidate.ownsNormalizedCwd(normalizedCwd))
   const sessionHostId = normalizeExecutionHostId(session.executionHostId)
   const hostMatches = sessionHostId
     ? matches.filter((candidate) => candidate.hostKey === sessionHostId)
@@ -271,20 +313,11 @@ function compareCandidates(left: SessionProjectCandidate, right: SessionProjectC
 }
 
 function folderProject(cwd: string): AiVaultSessionProject {
-  const normalizedPath = normalizeRuntimePathForComparison(cwd)
   return {
     kind: 'folder',
-    key: `folder:${normalizedPath}`,
-    label: compactFolderLabel(cwd)
+    key: folderGroupKey(cwd),
+    label: folderLabel(cwd)
   }
-}
-
-function compactFolderLabel(pathValue: string): string {
-  const parts = normalizeRuntimePathSeparators(pathValue).split('/').filter(Boolean)
-  if (parts.length >= 2) {
-    return parts.slice(-2).join('/')
-  }
-  return parts[0] ?? pathValue
 }
 
 function resolveActiveProjectKey(

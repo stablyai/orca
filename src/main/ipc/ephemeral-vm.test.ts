@@ -6,7 +6,7 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 
-const handlers = new Map<string, (_event: unknown, args: never) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
 const {
   handleMock,
   removeHandlerMock,
@@ -545,12 +545,65 @@ describe('registerEphemeralVmHandlers', () => {
 
     const cleaned = (await handlers.get('ephemeralVm:cleanup')?.(null, {
       runtimeId: provisioned.runtime.id
-    } as never)) as { status?: string; connectionMode?: string; sshTargetId?: string }
+    } as never)) as {
+      status?: string
+      cleanupLastError?: string
+      connectionMode?: string
+      sshTargetId?: string
+    }
 
     expect(cleaned).toEqual(expect.objectContaining({ status: 'cleanup_failed' }))
+    expect(cleaned.cleanupLastError).toBeTruthy()
     expect(removeRuntimeOwnedSshTargetMock).toHaveBeenCalledWith('runtime-ssh-orca-instance-1')
     expect(cleaned.connectionMode).toBeUndefined()
     expect(cleaned.sshTargetId).toBeUndefined()
+  })
+
+  it('retries hidden SSH teardown without rerunning completed provider cleanup', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    upsertEphemeralVmRuntime(userDataPath, {
+      id: 'runtime-cleanup-retry',
+      recipeId: 'cloud-sandbox',
+      repoId: 'repo-1',
+      status: 'cleanup_failed',
+      cleanupStatus: 'succeeded',
+      connectionMode: 'ssh',
+      sshTargetId: 'runtime-ssh-cleanup-retry',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        connection: {
+          type: 'ssh',
+          projectRoot: '/workspace/repo',
+          target: { label: 'VM', host: 'host', port: 22, username: 'orca' }
+        }
+      }
+    })
+    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    removeRuntimeOwnedSshTargetMock.mockRejectedValueOnce(new Error('store unavailable'))
+
+    const failed = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: 'runtime-cleanup-retry'
+    } as never)
+    expect(failed).toMatchObject({
+      status: 'cleanup_failed',
+      cleanupStatus: 'succeeded',
+      sshTargetId: 'runtime-ssh-cleanup-retry'
+    })
+
+    removeRuntimeOwnedSshTargetMock.mockResolvedValue(undefined)
+    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: 'runtime-cleanup-retry'
+    } as never)
+    expect(cleaned).toMatchObject({
+      status: 'cleaned',
+      cleanupStatus: 'succeeded',
+      sshTargetId: undefined
+    })
+    expect(removeRuntimeOwnedSshTargetMock).toHaveBeenCalledTimes(2)
   })
 
   it('runs suspend and resume for an attached ephemeral VM workspace', async () => {

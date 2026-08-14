@@ -1,6 +1,6 @@
 import React from 'react'
 import { FileExplorerViewSwitch } from './FileExplorerViewSwitch'
-import type { RightSidebarExplorerView } from '../../../../shared/types'
+import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
 
 type FileExplorerQueryStripProps = {
   view: RightSidebarExplorerView

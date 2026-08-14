@@ -47,6 +47,11 @@ export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 // eslint-disable-next-line no-control-regex -- intentional unicode range
 export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 
+// Why: Claude Code 2.1.228 swapped its busy title spinner from braille to
+// quarter circles (#13889), which read as "no agent" and looked like an exit.
+// Reserve the whole quarter-circle block so a later frame addition cannot regress this.
+export const QUARTER_CIRCLE_SPINNER_RE = /[\u25d0-\u25d3]/g
+
 export function isGeminiTerminalTitle(title: string): boolean {
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
@@ -81,6 +86,25 @@ export function containsBrailleSpinner(title: string): boolean {
     }
   }
   return false
+}
+
+export function containsQuarterCircleSpinner(title: string): boolean {
+  for (const char of title) {
+    const codePoint = char.codePointAt(0)
+    if (codePoint !== undefined && codePoint >= 0x25d0 && codePoint <= 0x25d3) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Any spinner frame glyph an agent animates its OSC title with. Use this for
+ * generic "something is running" checks; agent-specific frame shapes (Grok,
+ * Pi, synthetic Cursor) stay pinned to their own glyph set.
+ */
+export function containsAgentSpinnerGlyph(title: string): boolean {
+  return containsBrailleSpinner(title) || containsQuarterCircleSpinner(title)
 }
 
 export function containsLegacyAgentName(title: string): boolean {
@@ -129,4 +153,11 @@ export function isCursorAgentTitle(title: string | null | undefined): boolean {
   // Why: display labels can mention Cursor in another agent's task text. Only
   // treat the controlled synthetic Cursor spinner title as Cursor identity.
   return /^[\u2800-\u28ff] Cursor Agent$/u.test(trimmed)
+}
+
+// Why: cursor-agent re-emits its bare native title every redraw, which would stomp
+// Orca's hook-synthesized spinner state, but only once a Cursor-owned title already
+// owns the pane. A hookless Cursor pane still needs the literal once, for identity.
+export function shouldSuppressCursorNativeTitle(lastEmittedTitle: string | null): boolean {
+  return lastEmittedTitle !== null && isCursorAgentTitle(lastEmittedTitle)
 }

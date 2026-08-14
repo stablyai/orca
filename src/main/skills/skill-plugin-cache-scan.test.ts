@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { isSkillScanIssueNeedingAttention } from '../../shared/skill-freshness'
 import {
   MAXIMUM_PLUGIN_SCAN_ATTENTION_ISSUES,
+  MAXIMUM_PLUGIN_SCAN_DEPTH,
   MAXIMUM_PLUGIN_SCAN_ISSUES,
   scanKnownPluginSkillCandidates
 } from './skill-plugin-cache-scan'
@@ -29,10 +30,120 @@ describe('plugin skill candidate scan', () => {
       })
     )
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), 1)
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), {
+      maximumCandidates: 1
+    })
 
     expect(result.candidates).toHaveLength(1)
     expect(result.issues).toEqual([{ path: root, reason: 'candidate-limit', errorCode: null }])
+  })
+
+  it('stops at the entry budget and reports the truncation at the scan root', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-entry-limit-'))
+    temporaryDirectories.push(root)
+    await Promise.all(
+      ['one', 'two'].map(async (vendor) => {
+        await mkdir(join(root, vendor, 'orca-cli'), { recursive: true })
+        await writeFile(join(root, vendor, 'orca-cli', 'SKILL.md'), '# Orca CLI\n')
+      })
+    )
+
+    // Budget: the root's two vendor dirents, one's, and its skill's — so the count is
+    // crossed inside 'two', not at the root. That is what pins the issue to the scan
+    // root the dialog can name rather than whichever directory happened to cross it.
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), {
+      maximumEntries: 4
+    })
+
+    // Why: the second vendor's skill goes unseen. The issue is all that stops the dialog
+    // reporting all-clear over a scan that never reached it.
+    expect(result.candidates).toEqual([{ name: 'orca-cli', path: join(root, 'one', 'orca-cli') }])
+    expect(result.issues).toEqual([{ path: root, reason: 'entry-limit', errorCode: null }])
+  })
+
+  it('stops walking the directory whose read crossed the entry budget', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-entry-limit-stop-'))
+    temporaryDirectories.push(root)
+    // Why: read off the depth bound rather than hardcoded. The deepest directory has to
+    // sit exactly at it, so its children are the first thing a walk that failed to stop
+    // would reject on depth — one level shallower and the mutant walks them silently.
+    const segments = Array.from(
+      { length: MAXIMUM_PLUGIN_SCAN_DEPTH },
+      (_, index) => `level-${index}`
+    )
+    await Promise.all(
+      ['a', 'b'].map((name) => mkdir(join(root, ...segments, name), { recursive: true }))
+    )
+
+    // Budget: one dirent per level down to the deepest directory, plus the first of its
+    // two children — so the count is crossed on the second, with the first already read.
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), {
+      maximumEntries: segments.length + 1
+    })
+
+    // Why: the entries already read before the bound must not still be descended. A scan
+    // that keeps walking reports the leftovers as depth-truncated, which is a coverage
+    // failure the walk never observed — exactly the kind of unaccountable claim #10918 was.
+    expect(result.candidates).toEqual([])
+    expect(result.issues).toEqual([{ path: root, reason: 'entry-limit', errorCode: null }])
+  })
+
+  // Why: a declared root costs a resolve before it can be rejected, and a root that does
+  // not exist reads no dirent at all — so the dirent guard never sees a manifest that
+  // spends the whole scan on missing paths. Only the resolve guard bounds that, and only
+  // this shape lets its threshold be read off the entry count instead of assumed.
+  async function createManifestWithMissingSkillRoots(): Promise<{
+    root: string
+    candidate: string
+  }> {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-entry-limit-declared-'))
+    temporaryDirectories.push(root)
+    // Why: the manifest sits under a vendor directory, not at the scan root, so the
+    // directory whose declared roots cross the budget is not the root the issue names.
+    const packageRoot = join(root, 'vendor')
+    const candidate = join(packageRoot, 'a-skills', 'orca-cli')
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(candidate, { recursive: true })
+    await writeFile(
+      join(packageRoot, '.codex-plugin', 'plugin.json'),
+      '{"skills":["./a-skills","./missing-one","./missing-two"]}\n'
+    )
+    await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
+    return { root, candidate }
+  }
+
+  // Why: the scan reads exactly eight entries here — the root's dirent, the vendor's two,
+  // a-skills' and its skill's, then one resolve per declared root. Both budgets below are
+  // stated against that count so each guard's threshold is asserted, not just its firing.
+  const DECLARED_ROOT_SCAN_ENTRIES = 8
+
+  it('stops at the entry budget while resolving declared skill roots', async () => {
+    const { root, candidate } = await createManifestWithMissingSkillRoots()
+
+    // Why: one short of the full count, so only the last declared root's resolve crosses
+    // it. A guard that admitted that root would run the scan to completion and report
+    // nothing, which is what makes the issue below an assertion on the threshold.
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), {
+      maximumEntries: DECLARED_ROOT_SCAN_ENTRIES - 1
+    })
+
+    // Why: the declared root that exists was fully walked, so the bound is being crossed by
+    // a resolve of the roots after it — not by the dirent loop stopping the scan early.
+    expect(result.candidates).toEqual([{ name: 'orca-cli', path: candidate }])
+    expect(result.issues).toEqual([{ path: root, reason: 'entry-limit', errorCode: null }])
+  })
+
+  it('resolves the last declared skill root when the entry budget is exactly spent', async () => {
+    const { root, candidate } = await createManifestWithMissingSkillRoots()
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), {
+      maximumEntries: DECLARED_ROOT_SCAN_ENTRIES
+    })
+
+    // Why: a budget the scan fits inside is not a truncation. Firing one entry early would
+    // pin the same unclearable attention #10918 did, on a scan that missed nothing.
+    expect(result.candidates).toEqual([{ name: 'orca-cli', path: candidate }])
+    expect(result.issues).toEqual([])
   })
 
   it('completes a real-shaped Codex cache without reporting coverage issues', async () => {
@@ -99,6 +210,48 @@ describe('plugin skill candidate scan', () => {
     // surface as a coverage issue the user is asked to act on.
     expect(result).toEqual({ candidates: [], issues: [] })
   })
+
+  // Why this exists: the bound below is a deliberate tradeoff, and only the miss side of
+  // it was covered. Descending further would spend the entry budget on vendor payload —
+  // the cost that caused the false-attention root collapse in #10865 — while missing a
+  // copy only ever costs a Details row, because a plugin-cache placement is not
+  // convergeable by any update command. So the failure direction is silence, which is the
+  // safe one. Pinning BOTH sides means raising or lowering the bound has to be deliberate
+  // rather than an accident of refactoring. See #11454.
+  it.each([
+    [0, true],
+    [1, true],
+    [2, true],
+    [3, false],
+    [4, false]
+  ])(
+    'finds a nested skill %i level(s) below a package: %s',
+    async (intermediateDepth, expectFound) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-plugin-nested-depth-'))
+      temporaryDirectories.push(root)
+      const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
+      const hostSkill = join(packageRoot, 'skills', 'host-skill')
+      await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+      await mkdir(hostSkill, { recursive: true })
+      await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
+      await writeFile(join(hostSkill, 'SKILL.md'), '# Host skill\n')
+
+      let parent = hostSkill
+      for (let level = 1; level <= intermediateDepth; level += 1) {
+        parent = join(parent, `nested-${level}`)
+      }
+      const candidate = join(parent, 'orca-cli')
+      await mkdir(candidate, { recursive: true })
+      await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
+
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+      expect(result.candidates).toEqual(expectFound ? [{ name: 'orca-cli', path: candidate }] : [])
+      // Why: pruned payload must never surface as a coverage issue either way — that is
+      // what keeps an ordinary large plugin cache from reporting a permanent problem.
+      expect(result.issues).toEqual([])
+    }
+  )
 
   it('reports a depth-truncated subtree as scan coverage instead of a skill candidate', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-skill-depth-'))
@@ -554,7 +707,9 @@ describe('plugin skill candidate scan', () => {
       })
     )
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), 1)
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), {
+      maximumCandidates: 1
+    })
 
     // Why: the deep trees above exist to spend the display budget, so assert it is full —
     // otherwise this passes with budget to spare and stops covering the case it is named

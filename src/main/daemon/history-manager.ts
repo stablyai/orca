@@ -1,15 +1,18 @@
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync, existsSync, rmSync, unlinkSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
 import {
   fingerprintTerminalHistorySession,
   hasTerminalHistoryRecoveryProtection,
   quarantineTerminalHistorySession,
-  removeTerminalHistoryQuarantines,
   type ActiveHistoryRecoveryFreeze,
   type HistoryRecoveryFreeze
 } from './terminal-history-recovery-quarantine'
+import {
+  removeTerminalHistorySessionTrees,
+  schedulePendingSessionTreeRemovals
+} from './terminal-history-session-tombstone'
 import { TerminalHistorySessionWriter } from './terminal-history-session-writer'
 import {
   readTerminalHistoryMetaFromDir,
@@ -43,6 +46,8 @@ export class HistoryManager {
   ) {
     this.onWriteError = opts?.onWriteError
     this.checkpointMaxBytes = opts?.checkpointMaxBytes ?? TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+    // Why: a quit between tombstone and reclaim leaves the tree on disk; nothing else rescans the queue.
+    schedulePendingSessionTreeRemovals(this.basePath)
   }
 
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
@@ -220,13 +225,18 @@ export class HistoryManager {
   }
 
   // Full checkpoints are rare (clean disconnect, pending-buffer overflow, log cap); the 5s tick appends increments instead.
-  checkpoint(sessionId: string, snapshot: TerminalSnapshot): Promise<HistoryCheckpointResult> {
-    return this.mutations.track(sessionId, this.checkpointUntracked(sessionId, snapshot))
+  checkpoint(
+    sessionId: string,
+    snapshot: TerminalSnapshot,
+    opts?: { pendingOutputSeq?: number }
+  ): Promise<HistoryCheckpointResult> {
+    return this.mutations.track(sessionId, this.checkpointUntracked(sessionId, snapshot, opts))
   }
 
   private async checkpointUntracked(
     sessionId: string,
-    snapshot: TerminalSnapshot
+    snapshot: TerminalSnapshot,
+    opts?: { pendingOutputSeq?: number }
   ): Promise<HistoryCheckpointResult> {
     if (this.disabledSessions.has(sessionId)) {
       return 'unavailable'
@@ -238,8 +248,8 @@ export class HistoryManager {
 
     try {
       // Why: tmp+rename is atomic (corrupt checkpoint > stale); async so a sync ~MB write can't stall IPC (worse under Windows AV).
-      // The adapter's checkpointInFlight guard serializes checkpoints, so concurrent async writes can't collide on the fixed .tmp path.
-      const checkpoint = await writer.checkpoint(snapshot)
+      // The adapter's per-session checkpoint queue prevents concurrent writes from colliding on the fixed .tmp path.
+      const checkpoint = await writer.checkpoint(snapshot, opts)
       if (checkpoint.result === 'retryable') {
         this.onWriteError?.(sessionId, checkpoint.error)
       }
@@ -270,16 +280,11 @@ export class HistoryManager {
   async removeSession(sessionId: string): Promise<void> {
     this.writers.delete(sessionId)
     this.disabledSessions.delete(sessionId)
-    const activeFreeze = this.recoveryFreezes.get(sessionId)
-    if (activeFreeze) {
-      this.recoveryFreezes.delete(sessionId)
-    }
+    this.recoveryFreezes.delete(sessionId)
     await this.mutations.wait(sessionId)
-    rmSync(join(this.basePath, getHistorySessionDirName(sessionId)), {
-      recursive: true,
-      force: true
-    })
-    removeTerminalHistoryQuarantines(this.basePath, sessionId)
+    // Why tombstoned: writer handles are closed by here, so the trees only have to become unreachable —
+    // they reach hundreds of MB and every terminal a worktree delete tears down awaits this.
+    await removeTerminalHistorySessionTrees(this.basePath, sessionId)
   }
 
   isSessionDisabled(sessionId: string): boolean {

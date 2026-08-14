@@ -13,7 +13,7 @@ on:
     branches:
       - Jinwoo-H/windows-update-survival
     paths:
-      - 'tools/daemon-relocation-spike/**'
+      - 'tests/tools/daemon-relocation-spike/**'
       - '.github/workflows/daemon-relocation-spike.yml'
   workflow_dispatch: {}
 
@@ -76,7 +76,7 @@ jobs:
             # --keep-work-dir so the per-tier daemon stdout/stderr logs survive
             # for the artifact upload (the spike otherwise removes work-dir),
             # which is what diagnoses a tier that fails to reach ready.
-            node tools/daemon-relocation-spike/spike.mjs `
+            node tests/tools/daemon-relocation-spike/spike.mjs `
               --app-dir dist/win-unpacked `
               --work-dir "$work" `
               --tier $tier `

@@ -17,14 +17,21 @@ import path from 'node:path'
 import os from 'node:os'
 import { prepareDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
 
+export const E2E_TEST_REPO_PATH_FILE_ENV = 'ORCA_E2E_TEST_REPO_PATH_FILE'
 /** Temp file where the test repo path is stored for the fixture to read. */
-export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
+export const TEST_REPO_PATH_FILE =
+  process.env[E2E_TEST_REPO_PATH_FILE_ENV] ??
+  path.join(os.tmpdir(), `orca-e2e-test-repo-path-${randomUUID()}.txt`)
 const ELECTRON_E2E_BUILD_TIMEOUT_MS = 300_000
+const CLI_E2E_BUILD_TIMEOUT_MS = 120_000
 const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
+  // Why: workers and teardown need this run's path, never another concurrent run's.
+  process.env[E2E_TEST_REPO_PATH_FILE_ENV] = TEST_REPO_PATH_FILE
   const root = process.cwd()
   const outMain = path.join(root, 'out', 'main', 'index.js')
+  const outCli = path.join(root, 'out', 'cli', 'index.js')
   const outWeb = path.join(root, 'out', 'web', 'web-index.html')
 
   // ── 1. Build the Electron app ──────────────────────────────────────
@@ -43,6 +50,17 @@ export default function globalSetup(): void {
       timeout: ELECTRON_E2E_BUILD_TIMEOUT_MS
     })
     console.error('[e2e] Build complete.')
+  }
+  if (process.env.SKIP_BUILD && existsSync(outCli)) {
+    console.error('[e2e] SKIP_BUILD set and out/cli/index.js exists — skipping CLI build')
+  } else {
+    console.error('[e2e] Building bundled CLI...')
+    execSync('pnpm run build:cli', {
+      cwd: root,
+      stdio: 'inherit',
+      timeout: CLI_E2E_BUILD_TIMEOUT_MS
+    })
+    console.error('[e2e] CLI build complete.')
   }
   if (process.env.ORCA_E2E_WEB_CLIENT === '1') {
     if (process.env.SKIP_BUILD && existsSync(outWeb)) {

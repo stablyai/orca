@@ -29,6 +29,22 @@ describe('Claude hook roster retention', () => {
     expect(state.claudeSubagentRosterByPaneKey.size).toBe(0)
   })
 
+  it('does not retain rosters for unknown child endings across unique panes', () => {
+    const state = createHookListenerState()
+    for (let index = 0; index <= MAX_AGENT_HOOK_STATUS_CACHE_PANES; index += 1) {
+      const paneKey = makePaneKey(`unknown-stop-${index}`, LEAF_ID)
+      expect(
+        claudeEvent(state, paneKey, {
+          hook_event_name: 'SubagentStop',
+          agent_id: 'a0000000000000001'
+        })
+      ).toBeNull()
+    }
+
+    expect(state.lastStatusByPaneKey.size).toBe(0)
+    expect(state.claudeSubagentRosterByPaneKey.size).toBe(0)
+  })
+
   it('preserves ordinary teammate lifecycle updates', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('valid-lifecycle', LEAF_ID)

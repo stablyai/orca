@@ -28,6 +28,7 @@ import {
 import { readFileViaStream } from '../main/ssh/ssh-filesystem-stream-reader'
 
 import { RelayDispatcher } from './dispatcher'
+import type { SinkWriteSettlement } from './dispatcher'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { STREAM_CHUNK_SIZE } from './protocol'
@@ -95,7 +96,10 @@ function createHarness(opts: { congested: boolean }): Harness {
     onClose: () => {}
   }
 
-  const outQueue: Buffer[] = []
+  const outQueue: {
+    data: Buffer
+    settle: (result: SinkWriteSettlement) => void
+  }[] = []
   let queuedBytes = 0
   const drainWaiters = new Set<() => void>()
   const fireDrainIfIdle = (): void => {
@@ -109,8 +113,8 @@ function createHarness(opts: { congested: boolean }): Harness {
   }
 
   const dispatcher = new RelayDispatcher(
-    (data: Buffer) => {
-      outQueue.push(data)
+    (data: Buffer, settle) => {
+      outQueue.push({ data, settle })
       queuedBytes += data.length
       if (!opts.congested) {
         return true
@@ -118,6 +122,9 @@ function createHarness(opts: { congested: boolean }): Harness {
       return queuedBytes < SINK_HIGH_WATER_MARK
     },
     {
+      supportsWriteCallback: true,
+      writableLength: () => queuedBytes,
+      writableHighWaterMark: () => SINK_HIGH_WATER_MARK,
       waitWriteDrain: (cb: () => void) => {
         drainWaiters.add(cb)
         fireDrainIfIdle()
@@ -128,11 +135,12 @@ function createHarness(opts: { congested: boolean }): Harness {
 
   const deliverAll = (): void => {
     while (outQueue.length > 0) {
-      const buf = outQueue.shift()!
-      queuedBytes -= buf.length
+      const { data, settle } = outQueue.shift()!
+      queuedBytes -= data.length
       for (const cb of clientDataCallbacks) {
-        cb(buf)
+        cb(data)
       }
+      settle({ ok: true })
     }
     fireDrainIfIdle()
   }
@@ -207,7 +215,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
 
       // The echo must not sit behind an unbounded chunk backlog: at most one
       // in-flight bulk frame (the write that saturated the sink) plus slack.
-      expect(queuedBytesAheadOfEcho).toBeLessThan(2 * FRAMED_CHUNK_BYTES)
+      expect(queuedBytesAheadOfEcho).toBeLessThan(FRAMED_CHUNK_BYTES)
 
       // Un-congest: the stream must still complete with intact content.
       harness.startAutoDeliver()
