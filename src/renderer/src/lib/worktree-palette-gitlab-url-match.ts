@@ -1,3 +1,9 @@
+import { foldComparableGitLabHost } from '../../../shared/git-remote-host-alias'
+import {
+  matchGitRemoteKeyParts,
+  splitGitRemoteKey,
+  type GitRemoteKeyParts
+} from '../../../shared/git-remote-identity'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import {
   parseGitLabIssueOrMRLink,
@@ -7,15 +13,21 @@ import type { Repo, Worktree } from '../../../shared/types'
 
 export type GitLabIssueOrMRLink = NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
 
-/** Same shape as `GitRemoteIdentity.canonicalKey`: lowercased host (no port) + normalized project path. */
+/** Host + project path, matching how `GitRemoteIdentity.canonicalKey` is built. */
+function gitLabProjectKeyParts(slug: ProjectSlug): GitRemoteKeyParts {
+  return {
+    host: foldComparableGitLabHost(slug.host.replace(/:\d+$/, '')),
+    tail: slug.path
+      .replace(/^\/+/, '')
+      .replace(/\/+$/, '')
+      .replace(/\.git$/i, '')
+      .toLowerCase()
+  }
+}
+
 function gitLabProjectKey(slug: ProjectSlug): string {
-  const host = slug.host.replace(/:\d+$/, '').toLowerCase()
-  const path = slug.path
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '')
-    .replace(/\.git$/i, '')
-    .toLowerCase()
-  return `${host}/${path}`
+  const { host, tail } = gitLabProjectKeyParts(slug)
+  return `${host}/${tail}`
 }
 
 function gitLabLinksEqual(left: GitLabIssueOrMRLink, right: GitLabIssueOrMRLink): boolean {
@@ -29,16 +41,18 @@ function gitLabLinksEqual(left: GitLabIssueOrMRLink, right: GitLabIssueOrMRLink)
 /** Tri-state like `repoMatchesGitHubSlug`: `'unknown'` stays permissive for forks and host aliases. */
 function repoMatchesGitLabSlug(repo: Repo | undefined, slug: ProjectSlug): boolean | 'unknown' {
   const identity = repo?.gitRemoteIdentity
-  if (!identity?.canonicalKey) {
+  const identityParts = splitGitRemoteKey(identity?.canonicalKey, foldComparableGitLabHost)
+  if (!identityParts) {
     return 'unknown'
   }
-  if (identity.canonicalKey.replace(/\/+$/, '').toLowerCase() === gitLabProjectKey(slug)) {
-    return true
+  const verdict = matchGitRemoteKeyParts(identityParts, gitLabProjectKeyParts(slug))
+  if (verdict !== false) {
+    return verdict
   }
   // Why not false: identity keeps one remote, chosen when the repo was added and never re-probed.
   // An `upstream` pick means a fork's `origin` existed and is invisible here, so rejecting would
   // drop MR URLs from the fork itself. A stale snapshot can still misjudge a renamed project.
-  return identity.remoteName === 'upstream' ? 'unknown' : false
+  return identity?.remoteName === 'upstream' ? 'unknown' : false
 }
 
 export function worktreeMatchesGitLabUrl(

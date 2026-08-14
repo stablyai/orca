@@ -2875,7 +2875,8 @@
             "5c8ce20be6": "If this persists, please",
             "cc6d997c65": "Restart the terminal daemon from here to clear stale daemon state.",
             "7ee11bc0db": "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry.",
-            "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue."
+            "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.",
+            "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
           },
           "TerminalPane": {
             "ac112e9036": "Remove title",

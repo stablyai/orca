@@ -29634,7 +29634,16 @@ export class OrcaRuntimeService {
     if (probe && reusable) {
       // Why await only here: this is the one branch whose decision needs the probe. A scan-bound
       // caller must never wait on it, or every cold read pays filesystem latency it cannot use.
-      const current = await withTimeout(probe, WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS, null)
+      const probed = await withTimeoutResult(probe, WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      if (!probed.ok) {
+        // Why log: expiry and "fingerprint unavailable" both surface as `null`, so a wedged mount is
+        // otherwise indistinguishable from a repo that simply cannot be fingerprinted.
+        console.warn('[worktree-scan] admin fingerprint probe expired; running a full scan', {
+          repoId: repo.id,
+          timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
+        })
+      }
+      const current = probed.ok ? probed.value : null
       if (current !== null && current === reusable.adminFingerprint) {
         return {
           result: reusable.result,
@@ -36049,6 +36058,8 @@ export const WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS = 5 * 60_000
 // Why so generous: a healthy but slow host (100+ linked worktrees, Windows Defender, cold dentry
 // cache, cloud placeholders) must still get to reuse its scan. Well under WORKTREE_LIST_TIMEOUT_MS,
 // and expiring yields `null` — the existing "cannot prove unchanged" sentinel, so a real scan runs.
+// Exceeding RESOLVED_WORKTREE_REPO_TIMEOUT_MS is deliberate, not a bug: the payoff is skipping a
+// `git worktree list` subprocess, not cutting this caller's latency — that caller is already capped.
 export const WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS = 10_000
 const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
 
