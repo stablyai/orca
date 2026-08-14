@@ -1,4 +1,6 @@
 import { getCodexSessionBackfillDate } from './codex-session-backfill-date'
+import { CodexSessionMigrationIgnoredLaunches } from './codex-session-migration-ignored-launches'
+import { CodexSessionMigrationRecentExits } from './codex-session-migration-recent-exits'
 import type {
   CodexSessionBackfillDate,
   CodexSessionBackfillOptions
@@ -9,11 +11,6 @@ type MigrationRun = (
   systemCodexHomePathOverride?: string
 ) => Promise<unknown>
 
-const EARLY_PTY_EXIT_RETENTION_MS = 60_000
-const MAX_EARLY_PTY_EXITS = 256
-
-type EarlyPtyExit = { sequence: number; recordedAt: number }
-
 export type CodexSessionMigrationScheduler = {
   beginLaunch(
     leaseId: string,
@@ -21,6 +18,7 @@ export type CodexSessionMigrationScheduler = {
     startedAt?: Date,
     startedSequence?: number
   ): void
+  ignoreLaunch(leaseId: string, startedSequence: number): void
   finishLaunch(leaseId: string, exitSequence?: number): void
   scheduleInitialRun(): void
   scheduleRun(fullScanRequired?: boolean): void
@@ -46,7 +44,10 @@ export function createCodexSessionMigrationScheduler(args: {
   let pendingFullScan = false
   let migrationTask: Promise<void> | null = null
   const activeLaunches = new Map<string, Date>()
-  const earlyPtyExits = new Map<string, EarlyPtyExit>()
+  // Why: non-shared reattach exits must not masquerade as exit-before-begin races for a reused id.
+  const ignoredLaunches = new CodexSessionMigrationIgnoredLaunches()
+  const ignoredPtyExits = new CodexSessionMigrationRecentExits()
+  const earlyPtyExits = new CodexSessionMigrationRecentExits()
   let activeRunStopObserved = false
   let rerunRequested = false
 
@@ -194,18 +195,38 @@ export function createCodexSessionMigrationScheduler(args: {
       if (args.isQuitting() || activeLaunches.has(leaseId)) {
         return
       }
-      if (consumeEarlyPtyExit(earlyPtyExits, leaseId, startedSequence)) {
+      if (earlyPtyExits.consumeAfter(leaseId, startedSequence)) {
         scheduleRun(true)
         return
       }
       activeLaunches.set(leaseId, startedAt)
       scheduleRun(fullScanRequired)
     },
+    ignoreLaunch(leaseId, startedSequence): void {
+      if (args.isQuitting() || ignoredLaunches.has(leaseId)) {
+        return
+      }
+      if (ignoredPtyExits.matchesAfter(leaseId, startedSequence)) {
+        return
+      }
+      const earlyExit = earlyPtyExits.consumeAfter(leaseId, startedSequence)
+      if (earlyExit) {
+        ignoredPtyExits.record(leaseId, earlyExit.sequence)
+        return
+      }
+      ignoredLaunches.add(leaseId)
+    },
     finishLaunch(leaseId, exitSequence): void {
+      if (ignoredLaunches.delete(leaseId)) {
+        if (exitSequence !== undefined) {
+          ignoredPtyExits.record(leaseId, exitSequence)
+        }
+        return
+      }
       const startedAt = activeLaunches.get(leaseId)
       if (!startedAt) {
         if (exitSequence !== undefined) {
-          recordEarlyPtyExit(earlyPtyExits, leaseId, exitSequence)
+          earlyPtyExits.record(leaseId, exitSequence)
         }
         return
       }
@@ -251,42 +272,6 @@ function compareBackfillDates(
   right: CodexSessionBackfillDate
 ): number {
   return left.join('-').localeCompare(right.join('-'))
-}
-
-function recordEarlyPtyExit(
-  exits: Map<string, EarlyPtyExit>,
-  leaseId: string,
-  sequence: number
-): void {
-  const now = Date.now()
-  for (const [id, exit] of exits) {
-    if (now - exit.recordedAt > EARLY_PTY_EXIT_RETENTION_MS) {
-      exits.delete(id)
-    }
-  }
-  exits.set(leaseId, { sequence, recordedAt: now })
-  while (exits.size > MAX_EARLY_PTY_EXITS) {
-    const oldestLeaseId = exits.keys().next().value
-    if (oldestLeaseId === undefined) {
-      break
-    }
-    exits.delete(oldestLeaseId)
-  }
-}
-
-function consumeEarlyPtyExit(
-  exits: Map<string, EarlyPtyExit>,
-  leaseId: string,
-  startedSequence: number | undefined
-): boolean {
-  const exit = exits.get(leaseId)
-  exits.delete(leaseId)
-  return (
-    exit !== undefined &&
-    startedSequence !== undefined &&
-    exit.sequence > startedSequence &&
-    Date.now() - exit.recordedAt <= EARLY_PTY_EXIT_RETENTION_MS
-  )
 }
 
 function isStoppedMigrationResult(result: unknown): boolean {

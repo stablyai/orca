@@ -2,7 +2,7 @@ import type { GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
 import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
-} from '../../shared/github-repository-identity-key'
+} from '../../shared/github/repository-identity-key'
 import {
   getOwnerRepoForRemote,
   ghRepoExecOptions,

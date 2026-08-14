@@ -193,6 +193,16 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
   })
 
+  it('applies regular and bold font weights independently', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalFontWeight: 400, terminalFontWeightBold: 800 })
+
+    expect(pane.terminal.options.fontWeight).toBe(400)
+    expect(pane.terminal.options.fontWeightBold).toBe(800)
+  })
+
   it('still assigns a fresh theme when composed values actually change', () => {
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')

@@ -29,11 +29,11 @@ import {
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
-import type { LinearIssueAttributeFilter } from '../../../shared/linear-issue-attribute-filter'
+import type { LinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
 import {
   canonicalizeLinearIssueAttributeFilter,
   isEmptyLinearIssueAttributeFilter
-} from '../../../shared/linear-issue-attribute-filter'
+} from '../../../shared/linear/issue-attribute-filter'
 import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 export type RuntimeLinearSettings =

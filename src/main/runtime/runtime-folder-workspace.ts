@@ -1,6 +1,7 @@
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import type { Repo, Worktree, WorktreeMeta } from '../../shared/types'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
+import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
 
 export function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
   return `${repo.id}::${repo.path}`
@@ -23,6 +24,7 @@ export function mergeRuntimeFolderWorkspace(
   worktreeId: string,
   meta: WorktreeMeta
 ): Worktree {
+  const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta.creatorProvenance)
   return {
     id: worktreeId,
     ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
@@ -32,6 +34,7 @@ export function mergeRuntimeFolderWorkspace(
     ...(meta.projectHostSetupId !== undefined
       ? { projectHostSetupId: meta.projectHostSetupId }
       : {}),
+    ...(creatorProvenance ? { creatorProvenance } : {}),
     path: repo.path,
     head: '',
     branch: '',

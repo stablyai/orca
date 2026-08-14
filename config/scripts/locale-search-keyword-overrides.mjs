@@ -164,7 +164,6 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     gitlab: 'GitLab',
     gitea: 'Gitea',
     oauth: 'OAuth',
-    attribution: '归因',
     skill: '技能',
     skills: '技能',
     phone: '手机',

@@ -24,7 +24,7 @@ import type {
   GitHubProjectRow,
   GitHubProjectUser,
   ListIssueTypesBySlugResult
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 

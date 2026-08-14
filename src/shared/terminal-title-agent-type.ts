@@ -4,7 +4,7 @@ import {
   HERMES_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { isCursorAgentTitle } from './agent-title-core'
+import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
@@ -96,7 +96,7 @@ export function isClaudeAgent(title: string): boolean {
   if (title.startsWith('. ') || title.startsWith('* ')) {
     return true
   }
-  if (containsBrailleSpinner(title)) {
+  if (containsAgentSpinnerGlyph(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
     return !isCursorAgentTitle(title) && !lower.includes('openclaude')
@@ -231,7 +231,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
 
 function hasGenericClaudeStatusPrefix(title: string): boolean {
   return (
-    containsBrailleSpinner(title) ||
+    containsAgentSpinnerGlyph(title) ||
     title.startsWith('✳ ') ||
     title === '✳' ||
     title.startsWith('. ') ||

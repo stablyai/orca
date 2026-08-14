@@ -84,7 +84,7 @@ import {
   type WorkspaceSpaceSortKey
 } from './workspace-space-presentation'
 import { translate } from '@/i18n/i18n'
-import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
+import type { WorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 
 const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--chart-2) 34%, var(--card))',

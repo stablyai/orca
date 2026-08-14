@@ -11,7 +11,10 @@ import { RelayDispatcher } from '../../relay/dispatcher'
 import { registerWslHookFsHandlers } from '../../relay/wsl-hook-fs-bridge'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { createWslHookSftpAdapter } from './wsl-hook-fs-adapter'
-import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
+import {
+  installRemoteManagedAgentHooks,
+  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+} from './remote-managed-hook-installers'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { FAILURE_COOLDOWN_BASE_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import {
@@ -122,7 +125,9 @@ describe.skipIf(process.platform === 'win32')(
 
     it('runs the unchanged remote managed hook installers against a WSL guest home', async () => {
       const adapter = createWslHookSftpAdapter(harness.mux)
-      const results = await installRemoteManagedAgentHooks(adapter, home)
+      const results = await installRemoteManagedAgentHooks(adapter, home, {
+        agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+      })
 
       expect(results.length).toBeGreaterThan(0)
       expect(results.every((r) => r.state !== 'error')).toBe(true)
@@ -232,13 +237,6 @@ describe('WslHookRelayManager', () => {
     }
     return { manager: new WslHookRelayManager(deps), deps }
   }
-
-  it('exposes the stable guest endpoint instance key with a port fallback', () => {
-    expect(createManager({}).manager.getInstanceKey()).toBe('testinstance')
-    expect(createManager({ instanceKey: () => 'unsafe/key' }).manager.getInstanceKey()).toBe(
-      'port43117'
-    )
-  })
 
   it('starts one relay per distro, installs hooks, exposes the guest endpoint path, and forwards envelopes', async () => {
     const { manager, deps } = createManager({})

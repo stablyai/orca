@@ -1,7 +1,7 @@
 import type { AppState } from '../types'
 import type { PRCheckDetail, GitHubOwnerRepo } from '../../../../shared/types'
 import { getGitHubPRCacheKey } from './github-cache-key'
-import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { derivePRCheckStatus } from '../../../../shared/pr-check-status'
 
 export function normalizeBranchName(branch: string): string {

@@ -61,8 +61,8 @@ type AutomationEditorDialogProps = {
   isSaving: boolean
   canSave: boolean
   createTarget: AutomationCreateTarget
-  repos: Repo[]
-  projectHostSetups: ProjectHostSetup[]
+  repos: readonly Repo[]
+  projectHostSetups: readonly ProjectHostSetup[]
   automationYamlHooksByRepoKey: Record<string, OrcaHooks | null>
   getAutomationHooksCacheKey: (repoId: string) => string
   repoMap: Map<string, Repo>

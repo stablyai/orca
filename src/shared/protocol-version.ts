@@ -32,9 +32,12 @@ export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-c
 export const ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY = 'orchestration.federation.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY =
   'orchestration.federation-control-mail.v1' as const
+export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY =
+  'orchestration.federation-lifecycle-settlement.v1' as const
 export const ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY =
   'orchestration.worker-launch-preferences.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
+export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
 export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
 export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
@@ -51,6 +54,7 @@ export const AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY = 'aiVault.session-title
 // offscreen backend). Advertised only when that backend is actually available, so
 // clients never fall back to a local desktop browser tab for a remote-owned page.
 export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as const
+export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
 export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
@@ -91,9 +95,10 @@ export const RUNTIME_CAPABILITIES = [
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  'browser.screencast.v1',
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1',
   'workspace-ports.v1',

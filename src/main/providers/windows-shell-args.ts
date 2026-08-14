@@ -131,7 +131,8 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
 
-function normalizeMsysDrivePath(cwd: string): string {
+/** Converts an MSYS drive spelling to the native cwd used by Windows terminal processes. */
+export function normalizeWindowsTerminalCwd(cwd: string): string {
   const match = cwd.match(/^\/([A-Za-z])(?:\/(.*))?$/)
   if (!match) {
     return cwd
@@ -161,8 +162,7 @@ export function resolveWindowsShellLaunchArgs(
   startupCommand?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
-  const nativeCwd = normalizeMsysDrivePath(cwd)
-  const isMsysDriveCwd = nativeCwd !== cwd
+  const nativeCwd = normalizeWindowsTerminalCwd(cwd)
 
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
@@ -210,7 +210,7 @@ export function resolveWindowsShellLaunchArgs(
         validationCwd: cwd
       }
     }
-    if (wslContext?.treatPosixCwdAsWsl && cwd.startsWith('/') && !isMsysDriveCwd) {
+    if (wslContext?.treatPosixCwdAsWsl && cwd.startsWith('/')) {
       return {
         shellArgs: buildWslShellArgs(cwd, wslContext.distro),
         effectiveCwd: defaultCwd,

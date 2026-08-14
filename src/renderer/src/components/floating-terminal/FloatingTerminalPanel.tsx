@@ -116,6 +116,7 @@ import { shouldRestoreMaximizedPanelBounds } from './floating-terminal-panel-res
 import { translate } from '@/i18n/i18n'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
 const NO_ACTIVITY_TERMINAL_PORTALS = []
 
@@ -271,6 +272,11 @@ export function FloatingTerminalPanel({
   const newMarkdownShortcut = useShortcutKeyDetails('tab.newMarkdown')
   const openMarkdownShortcut = useShortcutKeyDetails('tab.openMarkdown')
   const closeShortcut = useShortcutKeyDetails('tab.close')
+  const managedBrowserCreationEnabled = useAppStore(
+    (state) =>
+      getClientCreationActionPolicy(state, FLOATING_TERMINAL_WORKTREE_ID)['managed-browser']
+        .state === 'enabled'
+  )
 
   const [cwd, setCwd] = useState<string | null>(null)
   const [markdownCwd, setMarkdownCwd] = useState<string | null>(null)
@@ -389,6 +395,7 @@ export function FloatingTerminalPanel({
     terminalTabs: tabs,
     assignments: terminalAssignments,
     isWorktreeActive: open,
+    activeTerminalTabId: activeTerminalId,
     coldParkTerminalPanes: false,
     shouldMeasureHiddenWorktree: false,
     activityTerminalPortals: NO_ACTIVITY_TERMINAL_PORTALS
@@ -794,6 +801,14 @@ export function FloatingTerminalPanel({
   )
 
   const createFloatingBrowserTab = useCallback(() => {
+    const availability = getClientCreationActionPolicy(
+      useAppStore.getState(),
+      FLOATING_TERMINAL_WORKTREE_ID
+    )['managed-browser']
+    if (availability.state !== 'enabled') {
+      toast.error(availability.reason)
+      return
+    }
     const url = browserDefaultUrl ?? 'about:blank'
     createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
       title: translate(
@@ -1284,6 +1299,14 @@ export function FloatingTerminalPanel({
         if (resolution.action === 'tab.newTerminal') {
           createFloatingTerminalTab()
         } else if (resolution.action === 'tab.newBrowser') {
+          const availability = getClientCreationActionPolicy(
+            useAppStore.getState(),
+            FLOATING_TERMINAL_WORKTREE_ID
+          )['managed-browser']
+          if (availability.state !== 'enabled') {
+            toast.error(availability.reason)
+            return 'handled'
+          }
           createFloatingBrowserTab()
         } else if (resolution.action === 'tab.newMarkdown') {
           createFloatingMarkdownTab()
@@ -1947,6 +1970,7 @@ export function FloatingTerminalPanel({
                 <EditorPanel
                   activeFileId={activeEditorFile.id}
                   activeViewStateId={activeEditorUnifiedId}
+                  isVisible={open}
                   markdownAnnotationsEnabled={false}
                 />
               </Suspense>
@@ -1958,6 +1982,7 @@ export function FloatingTerminalPanel({
               onNewMarkdown={createFloatingMarkdownTab}
               onOpenMarkdown={openFloatingMarkdownTab}
               onNewBrowser={createFloatingBrowserTab}
+              showNewBrowser={managedBrowserCreationEnabled}
               onClose={() => onOpenChange(false)}
               onFocusPanel={focusPanelForShortcuts}
               newTerminalShortcut={newTerminalShortcut}
@@ -2100,6 +2125,7 @@ function FloatingTerminalEmptyState({
   onNewMarkdown,
   onOpenMarkdown,
   onNewBrowser,
+  showNewBrowser,
   onClose,
   onFocusPanel,
   newTerminalShortcut,
@@ -2112,6 +2138,7 @@ function FloatingTerminalEmptyState({
   onNewMarkdown: () => void
   onOpenMarkdown: () => void
   onNewBrowser: () => void
+  showNewBrowser: boolean
   onClose: () => void
   onFocusPanel: () => void
   newTerminalShortcut: ShortcutKeyComboDetails
@@ -2175,21 +2202,23 @@ function FloatingTerminalEmptyState({
           </span>
           <FloatingEmptyStateShortcut shortcut={openMarkdownShortcut} />
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
-          onClick={onNewBrowser}
-        >
-          <Globe className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.8b07759314',
-              'New Browser'
-            )}
-          </span>
-          <FloatingEmptyStateShortcut shortcut={newBrowserShortcut} />
-        </Button>
+        {showNewBrowser ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+            onClick={onNewBrowser}
+          >
+            <Globe className="size-3.5 opacity-90" />
+            <span className="truncate text-left leading-none">
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.8b07759314',
+                'New Browser'
+              )}
+            </span>
+            <FloatingEmptyStateShortcut shortcut={newBrowserShortcut} />
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"

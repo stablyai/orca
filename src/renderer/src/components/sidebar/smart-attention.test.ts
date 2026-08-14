@@ -195,6 +195,70 @@ describe('resolveAttention', () => {
     })
   })
 
+  it('drops a done pane out of Class 2 once the completion itself ages out', () => {
+    const justInside = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS,
+      updatedAt: NOW - 1_000
+    })
+    expect(resolveAttention([hookPane(justInside)], NOW)).toEqual({
+      cls: 2,
+      attentionTimestamp: NOW - AGENT_STATUS_STALE_AFTER_MS
+    })
+
+    const justOutside = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+      updatedAt: NOW - 1_000
+    })
+    expect(resolveAttention([hookPane(justOutside)], NOW)).toEqual(IDLE)
+  })
+
+  it('does not let same-state done writes extend Class 2 eligibility', () => {
+    // The captured regression: updatedAt was 3m04s newer than the completion, keeping a 32m-old
+    // "done" row above two spinners.
+    const entry = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      stateStartedAt: NOW - 32 * 60_000,
+      updatedAt: NOW - 29 * 60_000
+    })
+    expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
+  })
+
+  it('keeps an expired done pane from masking a live working sibling', () => {
+    const expiredDone = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000,
+      updatedAt: NOW - 1_000
+    })
+    const working = makeEntry({
+      paneKey: 't:2',
+      state: 'working',
+      stateStartedAt: NOW - 10_000,
+      updatedAt: NOW - 1_000
+    })
+    expect(resolveAttention(hookPanes([expiredDone, working]), NOW)).toEqual({
+      cls: 3,
+      attentionTimestamp: NOW - 10_000
+    })
+  })
+
+  it('ages out a session-boundary completion from its real completion time', () => {
+    const boundary = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      sessionBoundary: true,
+      stateStartedAt: NOW - 1_000,
+      updatedAt: NOW - 500,
+      stateHistory: [makeHistory('done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)]
+    })
+    expect(resolveAttention([hookPane(boundary)], NOW)).toEqual(IDLE)
+  })
+
   it('classifies a working pane with prior done as Class 3 with the prior timestamp', () => {
     const entry = makeEntry({
       paneKey: 't:1',

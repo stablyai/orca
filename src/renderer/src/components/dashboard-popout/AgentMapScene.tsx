@@ -13,8 +13,10 @@ import type {
 import { AGENT_MAP_LINEAGE_RELATION, shouldAggregateAgentMapWorktree } from './agent-map-layout'
 import { selectVisibleAgentMapLabels } from './agent-map-label-declutter'
 import { agentMapDirectLineageChevronPath } from './agent-map-lineage-chevron-path'
+import type { AgentMapFlareStatus } from './agent-map-node-metadata'
 import { AgentMapWorktreeLabel } from './AgentMapWorktreeLabel'
 import { AgentMapWorktreeRingNode } from './AgentMapWorktreeRingNode'
+import { DashboardHostBadge } from './DashboardHostBadge'
 
 type AgentMapSceneProps = {
   layout: AgentMapLayout
@@ -22,9 +24,13 @@ type AgentMapSceneProps = {
   zoom: number
   labelScale: number
   mapScale: number
+  /** Rings the pointer was pressed in; they stay lit for the whole pan drag. */
+  heldProjectId: string | null
+  heldWorktreeId: string | null
   selectedPaneKey: string | null
   allowAggregation: boolean
   showOrchestrationLinks: boolean
+  recentFlareStatuses: ReadonlyMap<string, AgentMapFlareStatus>
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   nodeRefs: MutableRefObject<Map<string, SVGGElement>>
   onSelectAgent: (card: DashboardCard) => void
@@ -63,9 +69,12 @@ export const AgentMapScene = memo(function AgentMapScene({
   zoom,
   labelScale,
   mapScale,
+  heldProjectId,
+  heldWorktreeId,
   selectedPaneKey,
   allowAggregation,
   showOrchestrationLinks,
+  recentFlareStatuses,
   launchableAgentsByWorktreeId,
   nodeRefs,
   onSelectAgent,
@@ -74,9 +83,16 @@ export const AgentMapScene = memo(function AgentMapScene({
   onOpenWorkspaceContextMenu,
   onAgentKeyDown
 }: AgentMapSceneProps): React.JSX.Element {
-  const [activeWorktreeId, setActiveWorktreeId] = useState<string | null>(null)
-  const handleLabelActiveChange = useCallback((worktreeId: string, active: boolean): void => {
-    setActiveWorktreeId((current) =>
+  const [hoveredWorktreeId, setHoveredWorktreeId] = useState<string | null>(null)
+  const [focusedWorktreeId, setFocusedWorktreeId] = useState<string | null>(null)
+  const activeWorktreeId = heldWorktreeId ?? hoveredWorktreeId ?? focusedWorktreeId
+  const handleLabelHoverChange = useCallback((worktreeId: string, active: boolean): void => {
+    setHoveredWorktreeId((current) =>
+      active ? worktreeId : current === worktreeId ? null : current
+    )
+  }, [])
+  const handleLabelFocusChange = useCallback((worktreeId: string, active: boolean): void => {
+    setFocusedWorktreeId((current) =>
       active ? worktreeId : current === worktreeId ? null : current
     )
   }, [])
@@ -84,6 +100,19 @@ export const AgentMapScene = memo(function AgentMapScene({
     () => selectVisibleAgentMapLabels(layout, labelScale, mapScale),
     [labelScale, layout, mapScale]
   )
+  const activeWorktree = useMemo(() => {
+    if (!activeWorktreeId) {
+      return null
+    }
+    for (const project of layout.projects) {
+      for (const worktree of project.worktrees) {
+        if (worktree.id === activeWorktreeId) {
+          return worktree
+        }
+      }
+    }
+    return null
+  }, [activeWorktreeId, layout])
   const visibleAgentsByPaneKey = useMemo(() => {
     const agents = new Map<string, VisibleAgentLocation>()
     for (const project of layout.projects) {
@@ -104,6 +133,13 @@ export const AgentMapScene = memo(function AgentMapScene({
       {layout.projects.map((project) => {
         const worktreesById = new Map(project.worktrees.map((worktree) => [worktree.id, worktree]))
         const projectLabelHalfWidth = project.radius * mapScale
+        const projectHostsById = new Map<string, AgentMapWorktreeRing>()
+        for (const worktree of project.worktrees) {
+          if (worktree.hostKind === 'ssh' || worktree.hostKind === 'remote') {
+            projectHostsById.set(`${worktree.hostKind}:${worktree.executionHostId ?? ''}`, worktree)
+          }
+        }
+        const projectHosts = [...projectHostsById.values()]
         const projectCountText = translate(
           'dashboardPopout.map.projectCount',
           '{{agents}} agents · {{workspaces}} workspaces',
@@ -125,7 +161,8 @@ export const AgentMapScene = memo(function AgentMapScene({
         return (
           <g
             key={project.id}
-            className={`agent-map-project-node${project.motionState ? ` is-${project.motionState}` : ''}`}
+            className={`agent-map-project-node${project.motionState ? ` is-${project.motionState}` : ''}${heldProjectId === project.id ? ' is-held' : ''}`}
+            data-agent-map-project-id={project.id}
             aria-hidden={project.motionState === 'exiting' || undefined}
           >
             <circle
@@ -180,32 +217,34 @@ export const AgentMapScene = memo(function AgentMapScene({
                 worktree={worktree}
                 zoom={zoom}
                 mapScale={mapScale}
+                held={heldWorktreeId === worktree.id}
                 selectedPaneKey={selectedPaneKey}
                 allowAggregation={allowAggregation}
                 showOrchestrationLinks={showOrchestrationLinks}
+                recentFlareStatuses={recentFlareStatuses}
                 launchableAgents={launchableAgentsByWorktreeId?.[worktree.worktreeId]}
                 nodeRefs={nodeRefs}
                 onSelectAgent={onSelectAgent}
                 onSpawnAgent={onSpawnAgent}
                 onOpenWorkspaceContextMenu={onOpenWorkspaceContextMenu}
-                onLabelActiveChange={handleLabelActiveChange}
+                onLabelHoverChange={handleLabelHoverChange}
+                onLabelFocusChange={handleLabelFocusChange}
                 onAgentKeyDown={onAgentKeyDown}
               />
             ))}
             <g className="agent-map-worktree-label-layer">
-              {project.worktrees.map((worktree) => (
-                <AgentMapWorktreeLabel
-                  key={worktree.id}
-                  worktree={worktree}
-                  visible={visibleLabels.worktreeIds.has(worktree.id)}
-                  active={
-                    activeWorktreeId === worktree.id &&
-                    visibleLabels.worktreeAgentSafeIds.has(worktree.id)
-                  }
-                  labelScale={labelScale}
-                  mapScale={mapScale}
-                />
-              ))}
+              {project.worktrees.map((worktree) =>
+                worktree.id === activeWorktreeId ? null : (
+                  <AgentMapWorktreeLabel
+                    key={worktree.id}
+                    worktree={worktree}
+                    visible={visibleLabels.worktreeIds.has(worktree.id)}
+                    active={false}
+                    labelScale={labelScale}
+                    mapScale={mapScale}
+                  />
+                )
+              )}
             </g>
             <g
               transform={`translate(${project.x} ${project.y - project.radius}) scale(${labelScale})`}
@@ -226,6 +265,16 @@ export const AgentMapScene = memo(function AgentMapScene({
                   <span className="agent-map-project-name min-w-0 truncate">
                     {project.name.toUpperCase()}
                   </span>
+                  {projectHosts.map((host) => (
+                    <DashboardHostBadge
+                      key={`${host.hostKind}:${host.executionHostId ?? ''}`}
+                      hostKind={host.hostKind}
+                      executionHostId={host.executionHostId}
+                      hostLabel={host.hostLabel}
+                      keyboardFocusable
+                      className="agent-map-project-host-badge"
+                    />
+                  ))}
                 </div>
               </foreignObject>
               {visibleLabels.projectCountIds.has(project.id) ? (
@@ -237,6 +286,19 @@ export const AgentMapScene = memo(function AgentMapScene({
           </g>
         )
       })}
+      {/* Drawn last so a hovered name clears every other project's rings, and
+       *  outside the declutter pass so it reads at any zoom. */}
+      {activeWorktree ? (
+        <g className="agent-map-worktree-hover-label-layer" data-agent-map-hover-label="">
+          <AgentMapWorktreeLabel
+            worktree={activeWorktree}
+            visible={visibleLabels.worktreeIds.has(activeWorktree.id)}
+            active
+            labelScale={labelScale}
+            mapScale={mapScale}
+          />
+        </g>
+      ) : null}
     </>
   )
 })

@@ -21,7 +21,7 @@ import { basename } from 'node:path'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import os from 'node:os'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines

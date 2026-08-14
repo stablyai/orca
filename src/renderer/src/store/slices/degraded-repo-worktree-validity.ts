@@ -5,7 +5,7 @@ import type {
   Worktree
 } from '../../../../shared/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
 type WorktreeValidityCatalog = {
   repos: readonly Pick<Repo, 'id'>[]

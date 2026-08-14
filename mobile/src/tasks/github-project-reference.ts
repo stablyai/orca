@@ -1,4 +1,4 @@
-import type { GitHubProjectIdentity } from '../../../src/shared/github-project-identity'
+import type { GitHubProjectIdentity } from '../../../src/shared/github/project-identity'
 
 export type GitHubProjectOwnerType = GitHubProjectIdentity['ownerType']
 export type GitHubProjectRef = GitHubProjectIdentity

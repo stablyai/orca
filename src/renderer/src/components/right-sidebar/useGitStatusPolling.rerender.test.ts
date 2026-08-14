@@ -217,7 +217,7 @@ describe('useGitStatusPolling rerender stability', () => {
     useAppStore.setState({
       repos: [{ ...repo, connectionId: 'ssh-1' }],
       sshConnectionStates: new Map([
-        ['ssh-1', { status: 'disconnected', error: null, reconnectAttempt: 0 }]
+        ['ssh-1', { targetId: 'ssh-1', status: 'disconnected', error: null, reconnectAttempt: 0 }]
       ])
     } as Partial<AppState>)
     await renderHook()

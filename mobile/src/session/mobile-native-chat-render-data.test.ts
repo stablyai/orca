@@ -92,8 +92,8 @@ describe('buildMobileNativeChatTransientData', () => {
   })
 
   it('folds transcript image marker turns into image-ref blocks (desktop parity)', () => {
-    // Claude records an attached image as `[Image: source: /path]` + an
-    // `[Image #1] `-prefixed caption turn; the fold must merge them into one
+    // Claude records an attached image as `[Image: source: /path]` plus a
+    // caption turn carrying `[Image #1]`; the fold must merge them into one
     // user turn with an image-ref block instead of showing raw marker text.
     const data = build(
       [
@@ -106,6 +106,20 @@ describe('buildMobileNativeChatTransientData', () => {
     )
     const merged = data.find((message) => message.role === 'user')
     expect(merged?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'text', text: 'look at this' }
+    ])
+  })
+
+  it('folds a trailing-marker image echo into one user bubble', () => {
+    const data = build(
+      [user('u1', '[Image: source: /tmp/a.png]'), user('u2', 'look at this[Image #1]')],
+      null,
+      []
+    )
+
+    expect(data).toHaveLength(1)
+    expect(data[0]?.blocks).toEqual([
       { type: 'image-ref', path: '/tmp/a.png' },
       { type: 'text', text: 'look at this' }
     ])

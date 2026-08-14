@@ -67,6 +67,8 @@ export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
 export type RuntimeStatus = {
   runtimeId: string
+  /** Authenticated requester identity. Missing for in-process callers and older hosts. */
+  pairedDeviceId?: string
   rendererGraphEpoch: number
   graphStatus: RuntimeGraphStatus
   authoritativeWindowId: number | null
@@ -402,11 +404,18 @@ export type RuntimeTerminalPathOpenTarget =
       provider: 'local' | 'ssh'
       absolutePath: string
       grantId: string
+      /** Present when the exact-path grant permits preview/read but not mutation. */
+      readOnly?: true
     }
   | {
       kind: 'unsupported'
       reason: string
     }
+
+export type RuntimeNativeChatFileContext = {
+  tabId: string
+  sessionId: string
+}
 
 /** Result of resolving a file path tapped in the mobile terminal against the
  *  selected or sibling workspace root (+ optional cwd). relativePath is null
@@ -774,6 +783,7 @@ export type RuntimeWorktreePsSummary = {
   manualOrder?: number
   lastActivityAt?: number
   createdAt?: number
+  creatorProvenance?: Worktree['creatorProvenance']
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null

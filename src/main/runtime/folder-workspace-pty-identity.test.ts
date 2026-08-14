@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../shared/types'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import { OrcaRuntimeService } from './orca-runtime'
 
 // Folder projects back several workspaces with ONE directory; only the
@@ -132,6 +132,126 @@ describe('folder workspaces sharing one directory', () => {
     )
 
     expect([...(inventory?.livePtyIds ?? [])]).toEqual([PTY_B])
+  })
+
+  it('keeps the first resolved worktree when normalized identities collide', async () => {
+    const firstId = `${ROOT_ID}/duplicate/`
+    const equivalentId = `${ROOT_ID}/duplicate`
+    const laterId = `${ROOT_ID}/later`
+    const internals = createRuntimeInternals({
+      sessions: [
+        { id: 'later-owner-pty', worktreeId: laterId, cwd: FOLDER_PATH, title: 'shell' },
+        { id: 'duplicate-owner-pty', worktreeId: equivalentId, cwd: FOLDER_PATH, title: 'shell' }
+      ]
+    })
+    const resolvedWorktrees = [firstId, equivalentId, laterId].map((id) =>
+      internals.buildResolvedWorktreeFromId(id)
+    )
+
+    await internals.refreshPtyWorktreeRecordsWithControllerInventory(resolvedWorktrees)
+
+    expect(internals.ptysById.get('duplicate-owner-pty')?.worktreeId).toBe(firstId)
+  })
+
+  it('stops indexing after a sparse owner match', async () => {
+    const ownerId = `${ROOT_ID}/first`
+    const internals = createRuntimeInternals({
+      sessions: [{ id: 'sparse-owner-pty', worktreeId: ownerId, cwd: FOLDER_PATH, title: 'shell' }]
+    })
+    let identityReads = 0
+    const resolvedWorktrees = [ownerId, `${ROOT_ID}/unused-a`, `${ROOT_ID}/unused-b`].map((id) => {
+      const worktree = internals.buildResolvedWorktreeFromId(id)
+      if (!worktree || typeof worktree !== 'object') {
+        throw new Error(`Failed to resolve ${id}`)
+      }
+      return Object.defineProperty(worktree, 'id', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          identityReads += 1
+          return id
+        }
+      })
+    })
+
+    await internals.refreshPtyWorktreeRecordsWithControllerInventory(resolvedWorktrees)
+
+    expect(internals.ptysById.get('sparse-owner-pty')?.worktreeId).toBe(ownerId)
+    expect(identityReads).toBe(2)
+  })
+
+  it('keeps parsed and raw identity domains distinct', async () => {
+    const parsedId = `${ROOT_ID}/collision`
+    const rawId = `${REPO_ID}\0${FOLDER_PATH}/collision`
+    const internals = createRuntimeInternals({
+      sessions: [{ id: 'raw-owner-pty', worktreeId: rawId, cwd: FOLDER_PATH, title: 'shell' }]
+    })
+    const parsedWorktree = internals.buildResolvedWorktreeFromId(parsedId)
+    if (!parsedWorktree || typeof parsedWorktree !== 'object') {
+      throw new Error(`Failed to resolve ${parsedId}`)
+    }
+    const rawWorktree = { ...parsedWorktree, id: rawId }
+
+    await internals.refreshPtyWorktreeRecordsWithControllerInventory([parsedWorktree, rawWorktree])
+
+    expect(internals.ptysById.get('raw-owner-pty')?.worktreeId).toBe(rawId)
+  })
+
+  it('bounds provider and persisted worktree resolution to linear identity reads', async () => {
+    const worktreeCount = 128
+    const worktreeIds = Array.from(
+      { length: worktreeCount },
+      (_, index) => `${ROOT_ID}/worktree-${index}`
+    )
+    const persistedSession: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: Object.fromEntries(
+        worktreeIds.map((worktreeId, index) => [
+          worktreeId,
+          [
+            {
+              id: `indexed-tab-${index}`,
+              ptyId: `indexed-pty-${index}`,
+              worktreeId,
+              title: 'shell'
+            }
+          ]
+        ])
+      ) as never
+    }
+    const internals = createRuntimeInternals({
+      session: persistedSession,
+      sessions: worktreeIds.map((worktreeId, index) => ({
+        id: `indexed-pty-${index}`,
+        worktreeId,
+        cwd: `${FOLDER_PATH}/worktree-${index}`,
+        title: 'shell'
+      }))
+    })
+    let identityReads = 0
+    const resolvedWorktrees = worktreeIds.map((id) => {
+      const worktree = internals.buildResolvedWorktreeFromId(id)
+      if (!worktree || typeof worktree !== 'object') {
+        throw new Error(`Failed to resolve ${id}`)
+      }
+      return Object.defineProperty(worktree, 'id', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          identityReads += 1
+          return id
+        }
+      })
+    })
+
+    await internals.refreshPtyWorktreeRecordsWithControllerInventory(resolvedWorktrees)
+
+    expect(internals.ptysById.size).toBe(worktreeCount)
+    expect(internals.ptysById.get('indexed-pty-0')?.worktreeId).toBe(worktreeIds[0])
+    expect(internals.ptysById.get(`indexed-pty-${worktreeCount - 1}`)?.worktreeId).toBe(
+      worktreeIds[worktreeCount - 1]
+    )
+    expect(identityReads).toBe(worktreeCount * 2)
   })
 
   it('reports live PTYs per workspace instance and for the folder root separately', () => {

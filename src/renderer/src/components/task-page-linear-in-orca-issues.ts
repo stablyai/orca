@@ -1,5 +1,5 @@
 import type { LinearIssue, LinearWorkspace, Worktree } from '../../../shared/types'
-import { parseLinearIssueInput } from '../../../shared/linear-links'
+import { parseLinearIssueInput } from '../../../shared/linear/links'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
@@ -101,7 +101,7 @@ export function collectLinkedLinearIssueRefsFromWorktrees(
         (candidate.sourceContext ? getTaskSourceCacheScope(candidate.sourceContext) : '') ===
           sourceScope
     )
-    if ((workspaceId || organizationUrlKey) && unscopedIndex >= 0) {
+    if ((workspaceId || organizationUrlKey) && unscopedIndex !== -1) {
       existing[unscopedIndex] = ref
     } else if (!workspaceId && !organizationUrlKey) {
       const hasSameSourceScope = existing.some(

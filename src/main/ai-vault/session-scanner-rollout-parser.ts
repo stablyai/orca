@@ -1,7 +1,7 @@
-import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import {
   cloneSessionAccumulator,
   createAccumulator,
@@ -55,7 +55,7 @@ export async function parseRolloutSessionFile(args: {
   executionHostId?: ExecutionHostId
 }): Promise<AiVaultSession | null> {
   const lines = createInterface({
-    input: createReadStream(args.file.path, { encoding: 'utf-8' }),
+    input: openTranscriptReadStream(args.file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
   return parseRolloutSessionLines({

@@ -25,6 +25,7 @@ export type TerminalLinkActionRequester = (request: TerminalLinkActionRequest) =
 export type TerminalLinkActionContext = {
   paneId: number
   pointerGesture: TerminalLinkPointerGesture
+  claimPtyMouse: () => boolean
   request: TerminalLinkActionRequester
   focusTerminal: () => void
 }
@@ -55,6 +56,9 @@ export function requestTerminalLinkAction(
     return false
   }
 
+  if (!context.claimPtyMouse()) {
+    return false
+  }
   event.preventDefault()
   context.request({
     ...details,

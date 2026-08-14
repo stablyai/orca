@@ -10,7 +10,7 @@ export type ScoredProjectOption = {
 
 function substringHits(text: string, query: string): number[] | null {
   const at = text.toLowerCase().indexOf(query)
-  return at < 0 ? null : Array.from({ length: query.length }, (_, offset) => at + offset)
+  return at === -1 ? null : Array.from({ length: query.length }, (_, offset) => at + offset)
 }
 
 /**
@@ -27,7 +27,7 @@ function nameHitsFor(name: string, query: string): number[] | null {
   let cursor = 0
   for (const char of query) {
     const found = haystack.indexOf(char, cursor)
-    if (found < 0) {
+    if (found === -1) {
       return null
     }
     hits.push(found)
@@ -60,7 +60,7 @@ export function rankProjectOptions(
   const scored: ScoredProjectOption[] = []
   for (const option of options) {
     const recentAt = recentIds.indexOf(option.id)
-    const recency = recentAt < 0 ? 0 : 32 - recentAt * 4
+    const recency = recentAt === -1 ? 0 : 32 - recentAt * 4
     if (query.length === 0) {
       scored.push({ option, score: recency, nameHits: [], detailHits: [] })
       continue

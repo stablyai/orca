@@ -100,7 +100,7 @@ export function nextReviewIndexAfterMarkReviewed({
   const wrappedIndex = filteredQueue.findIndex(
     (item) => item.key !== currentItemKey && !item.isReviewed
   )
-  const targetIndex = nextIndex >= 0 ? nextIndex : wrappedIndex >= 0 ? wrappedIndex : null
+  const targetIndex = nextIndex !== -1 ? nextIndex : wrappedIndex !== -1 ? wrappedIndex : null
   if (targetIndex === null) {
     return null
   }

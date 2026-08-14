@@ -4,6 +4,7 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   commandSeparator,
+  isPosixStartupShell,
   quoteStartupArg,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
@@ -98,7 +99,7 @@ function buildResumeShellCommandForShell(args: {
   shell: Exclude<AgentStartupShell, 'cmd'>
 }): string {
   const { cwd, codexHome, shell } = args
-  if (shell === 'posix') {
+  if (isPosixStartupShell(shell)) {
     // Why: git-bash on a Windows host runs a POSIX shell, so reuse the same
     // inline-env + `cd '<cwd>'` prefix as the non-Windows path.
     const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''

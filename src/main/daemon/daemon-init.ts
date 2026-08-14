@@ -949,7 +949,9 @@ export async function initDaemonPtyProvider(
       socketPath: info.socketPath,
       tokenPath: info.tokenPath,
       pidPath: getDaemonPidPath(runtimeDir),
-      profileScope: runtimeDir
+      profileScope: runtimeDir,
+      runtimeDir,
+      packagedAppVersion: app.isPackaged ? app.getVersion() : null
     })
     releaseDaemonAdoptionLease(newSpawner.getHandle())
     await abortedStartupAdapter.disconnectOnly()
@@ -961,6 +963,8 @@ export async function initDaemonPtyProvider(
     tokenPath: info.tokenPath,
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: app.isPackaged ? app.getVersion() : null,
     historyPath: getHistoryDir(),
     // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async (reason: DaemonRespawnReason) => {
@@ -975,9 +979,9 @@ export async function initDaemonPtyProvider(
         if (!restartInFlight) {
           trackDaemonRetired('died_respawn')
         }
-      } else if (reason === 'unhealthy_resolver') {
+      } else if (reason === 'unhealthy_resolver' || reason === 'severed_tcc_attribution') {
         // Must reach the launcher below without an await in between; see the consume site.
-        attributedReplaceReason = 'unhealthy_resolver'
+        attributedReplaceReason = reason
       }
       newSpawner.resetHandle()
       await newSpawner.ensureRunning()
@@ -1196,6 +1200,8 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     tokenPath: info.tokenPath,
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: app.isPackaged ? app.getVersion() : null,
     historyPath: getHistoryDir(),
     respawn: async (reason: DaemonRespawnReason) => {
       // Why: attribute rather than emit — the launcher below is the one that completes the
@@ -1209,9 +1215,9 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
         if (!restartInFlight) {
           trackDaemonRetired('died_respawn')
         }
-      } else if (reason === 'unhealthy_resolver') {
+      } else if (reason === 'unhealthy_resolver' || reason === 'severed_tcc_attribution') {
         // Must reach the launcher below without an await in between; see the consume site.
-        attributedReplaceReason = 'unhealthy_resolver'
+        attributedReplaceReason = reason
       }
       currentSpawner.resetHandle()
       await currentSpawner.ensureRunning()
@@ -1414,6 +1420,8 @@ export async function createLegacyDaemonAdapters(
         tokenPath,
         pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
         profileScope: runtimeDir,
+        runtimeDir,
+        packagedAppVersion: app.isPackaged ? app.getVersion() : null,
         protocolVersion,
         historyPath
       })

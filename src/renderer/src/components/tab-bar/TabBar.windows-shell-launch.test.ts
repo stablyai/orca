@@ -35,8 +35,11 @@ const appStoreSnapshot: {
   unifiedTabsByWorktree: Record<string, unknown[]>
   activeGroupIdByWorktree: Record<string, string>
   detectedAgentIds: string[] | null
+  localDetectedAgentIdsByContext: Record<string, string[] | null>
   remoteDetectedAgentIds: Record<string, string[]>
   isDetectingAgents: boolean
+  isDetectingLocalAgentsByContext: Record<string, boolean>
+  isRefreshingLocalAgentsByContext: Record<string, boolean>
   isDetectingRemoteAgents: Record<string, boolean>
 } = {
   activeRepoId: null,
@@ -51,8 +54,11 @@ const appStoreSnapshot: {
   unifiedTabsByWorktree: {},
   activeGroupIdByWorktree: {},
   detectedAgentIds: null,
+  localDetectedAgentIdsByContext: {},
   remoteDetectedAgentIds: {},
   isDetectingAgents: false,
+  isDetectingLocalAgentsByContext: {},
+  isRefreshingLocalAgentsByContext: {},
   isDetectingRemoteAgents: {}
 }
 const pinTabMock: (tabId: string) => void = vi.fn()
@@ -73,8 +79,11 @@ const useAppStoreMock = vi.fn(
       unifiedTabsByWorktree: Record<string, unknown[]>
       activeGroupIdByWorktree: Record<string, string>
       detectedAgentIds: string[] | null
+      localDetectedAgentIdsByContext: Record<string, string[] | null>
       remoteDetectedAgentIds: Record<string, string[]>
       isDetectingAgents: boolean
+      isDetectingLocalAgentsByContext: Record<string, boolean>
+      isRefreshingLocalAgentsByContext: Record<string, boolean>
       isDetectingRemoteAgents: Record<string, boolean>
       pinTab: typeof pinTabMock
       unpinTab: typeof unpinTabMock
@@ -99,8 +108,11 @@ const useAppStoreMock = vi.fn(
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
       detectedAgentIds: appStoreSnapshot.detectedAgentIds,
+      localDetectedAgentIdsByContext: appStoreSnapshot.localDetectedAgentIdsByContext,
       remoteDetectedAgentIds: appStoreSnapshot.remoteDetectedAgentIds,
       isDetectingAgents: appStoreSnapshot.isDetectingAgents,
+      isDetectingLocalAgentsByContext: appStoreSnapshot.isDetectingLocalAgentsByContext,
+      isRefreshingLocalAgentsByContext: appStoreSnapshot.isRefreshingLocalAgentsByContext,
       isDetectingRemoteAgents: appStoreSnapshot.isDetectingRemoteAgents,
       pinTab: pinTabMock,
       unpinTab: unpinTabMock,
@@ -168,8 +180,11 @@ useAppStoreExport.getState = vi.fn(() => ({
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
   detectedAgentIds: appStoreSnapshot.detectedAgentIds,
+  localDetectedAgentIdsByContext: appStoreSnapshot.localDetectedAgentIdsByContext,
   remoteDetectedAgentIds: appStoreSnapshot.remoteDetectedAgentIds,
   isDetectingAgents: appStoreSnapshot.isDetectingAgents,
+  isDetectingLocalAgentsByContext: appStoreSnapshot.isDetectingLocalAgentsByContext,
+  isRefreshingLocalAgentsByContext: appStoreSnapshot.isRefreshingLocalAgentsByContext,
   isDetectingRemoteAgents: appStoreSnapshot.isDetectingRemoteAgents,
   pinTab: pinTabMock,
   unpinTab: unpinTabMock,
@@ -348,6 +363,9 @@ describe('TabBar PowerShell launch wiring', () => {
     appStoreSnapshot.worktreesByRepo = {}
     appStoreSnapshot.unifiedTabsByWorktree = {}
     appStoreSnapshot.activeGroupIdByWorktree = {}
+    appStoreSnapshot.localDetectedAgentIdsByContext = {}
+    appStoreSnapshot.isDetectingLocalAgentsByContext = {}
+    appStoreSnapshot.isRefreshingLocalAgentsByContext = {}
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
   })
 

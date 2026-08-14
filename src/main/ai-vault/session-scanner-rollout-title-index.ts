@@ -1,7 +1,8 @@
-import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
+import { resolveRuntimePath } from '../../shared/cross-platform-path'
+import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { extractString, normalizeTitleText, parseJsonObject } from './session-scanner-values'
 
 const SESSION_INDEX_FILE = 'session_index.jsonl'
@@ -14,6 +15,10 @@ type SessionIndexTitleCacheEntry = {
 
 const sessionIndexTitleCache = new Map<string, Promise<SessionIndexTitleCacheEntry>>()
 
+function sessionIndexCacheKey(indexPath: string): string {
+  return resolveRuntimePath(process.cwd(), indexPath)
+}
+
 export function resetRolloutSessionIndexTitleCacheForTests(): void {
   sessionIndexTitleCache.clear()
 }
@@ -23,7 +28,7 @@ export function _getRolloutSessionIndexTitleCacheSizeForTest(): number {
 }
 
 export function _hasRolloutSessionIndexTitleCacheEntryForTest(indexPath: string): boolean {
-  return sessionIndexTitleCache.has(resolve(indexPath))
+  return sessionIndexTitleCache.has(sessionIndexCacheKey(indexPath))
 }
 
 export function _storeRolloutSessionIndexTitleCacheEntryForTest(
@@ -32,7 +37,7 @@ export function _storeRolloutSessionIndexTitleCacheEntryForTest(
   titles: Promise<Map<string, string>>
 ): void {
   storeSessionIndexTitleCacheEntry(
-    resolve(indexPath),
+    sessionIndexCacheKey(indexPath),
     titles.then((resolvedTitles) => ({ signature, titles: resolvedTitles }))
   )
 }
@@ -41,7 +46,7 @@ export function _readCachedRolloutSessionIndexTitlesForTest(
   indexPath: string,
   signature: string
 ): Promise<Map<string, string> | undefined> {
-  return readCachedSessionIndexTitles(resolve(indexPath), signature)
+  return readCachedSessionIndexTitles(sessionIndexCacheKey(indexPath), signature)
 }
 
 export async function readRolloutSessionIndexTitle(args: {
@@ -53,9 +58,8 @@ export async function readRolloutSessionIndexTitle(args: {
   if (!home) {
     return null
   }
-  return (
-    (await readSessionIndexTitles(resolve(home, SESSION_INDEX_FILE))).get(args.sessionId) ?? null
-  )
+  const indexPath = resolveRuntimePath(home, SESSION_INDEX_FILE)
+  return (await readSessionIndexTitles(indexPath)).get(args.sessionId) ?? null
 }
 
 function sessionHomeFromRolloutPath(sessionFilePath: string): string | null {
@@ -72,7 +76,7 @@ function sessionHomeFromRolloutPath(sessionFilePath: string): string | null {
 async function readSessionIndexTitles(indexPath: string): Promise<Map<string, string>> {
   let signature: string
   try {
-    const indexStat = await stat(indexPath)
+    const indexStat = await wslGatedStat(indexPath, 'scan')
     signature = `${indexStat.size}:${indexStat.mtimeMs}`
   } catch {
     return new Map()
@@ -83,10 +87,12 @@ async function readSessionIndexTitles(indexPath: string): Promise<Map<string, st
     return cachedTitles
   }
 
-  const pending = readSessionIndexTitlesFromDisk(indexPath).then((titles) => ({
-    signature,
-    titles
-  }))
+  const pending = readSessionIndexTitlesFromDisk(indexPath).then(({ titles, refused }) => {
+    if (refused && sessionIndexTitleCache.get(indexPath) === pending) {
+      sessionIndexTitleCache.delete(indexPath)
+    }
+    return { signature, titles }
+  })
   storeSessionIndexTitleCacheEntry(indexPath, pending)
   return (await pending).titles
 }
@@ -124,11 +130,13 @@ function storeSessionIndexTitleCacheEntry(
   }
 }
 
-async function readSessionIndexTitlesFromDisk(indexPath: string): Promise<Map<string, string>> {
+async function readSessionIndexTitlesFromDisk(
+  indexPath: string
+): Promise<{ titles: Map<string, string>; refused: boolean }> {
   const titleBySessionId = new Map<string, string>()
   try {
     const lines = createInterface({
-      input: createReadStream(indexPath, { encoding: 'utf-8' }),
+      input: openTranscriptReadStream(indexPath, { encoding: 'utf-8' }, 'scan'),
       crlfDelay: Infinity
     })
     for await (const line of lines) {
@@ -142,8 +150,9 @@ async function readSessionIndexTitlesFromDisk(indexPath: string): Promise<Map<st
         titleBySessionId.set(sessionId, title)
       }
     }
-  } catch {
+  } catch (error) {
     // Session indexes are optional; raw rollout transcripts remain usable.
+    return { titles: titleBySessionId, refused: error instanceof WslTranscriptFsError }
   }
-  return titleBySessionId
+  return { titles: titleBySessionId, refused: false }
 }
