@@ -34866,6 +34866,90 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('does not re-arm repair when immediate delivery precedes the deferred restore scan', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      db.insertMessage({ from: 'term_worker', to: terminal.handle, subject: 'pointed on arrival' })
+
+      const scanMailboxes = vi.spyOn(db, 'getUndeliveredUnreadMailboxHandles')
+      const readPending = vi.spyOn(db, 'getUndeliveredUnreadMessages')
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
+
+      const readsAfterImmediatePush = readPending.mock.calls.length
+      await vi.advanceTimersByTimeAsync(2_500)
+      expect(scanMailboxes).toHaveBeenCalledTimes(1)
+      expect(readPending.mock.calls.length).toBe(readsAfterImmediatePush)
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('spreads restored repairs instead of scanning and firing them on one deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      // Why write=false: a landed pointer arms a delivery flight that parks the next handle's
+      // repair, which would hide whether the repairs were actually spread.
+      const write = vi.fn().mockReturnValue(false)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      const runIds = ['run_restored_a', 'run_restored_b', 'run_restored_c']
+      for (const id of runIds) {
+        db.setRun({ id, coordinator_handle: terminal.handle })
+        db.insertMessage({ from: 'term_worker', to: `run:${id}`, subject: `pending ${id}` })
+      }
+
+      const scanMailboxes = vi.spyOn(db, 'getUndeliveredUnreadMailboxHandles')
+      const readPending = vi.spyOn(db, 'getUndeliveredUnreadMessages')
+      setInMemoryOrchestrationMessages(runtime, db)
+      expect(scanMailboxes).not.toHaveBeenCalled()
+
+      const repairedHandles = (): string[] =>
+        readPending.mock.calls
+          .map(([handle]) => handle)
+          .filter((handle) => handle.startsWith('run:'))
+
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(scanMailboxes).toHaveBeenCalledTimes(1)
+      expect(repairedHandles()).toEqual(['run:run_restored_a'])
+
+      await vi.advanceTimersByTimeAsync(600)
+      expect(repairedHandles()).toEqual(runIds.map((id) => `run:${id}`))
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('stops a pending repoint after its database closes', async () => {
     vi.useFakeTimers()
     try {

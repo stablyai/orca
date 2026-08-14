@@ -2905,6 +2905,8 @@ export class OrcaRuntimeService {
   private readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
     this.repointPendingMessagesForHandle(handle)
   )
+  private restoredMessageRepointScanTimer: ReturnType<typeof setTimeout> | null = null
+  private restoredMessageRepointScanRetiredHandles: Set<string> | null = null
   private syntheticTerminalHandles = new Set<string>()
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
@@ -32320,13 +32322,38 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why deferred: the pending-mailbox scan reads the whole message table, and running it inline
+  // makes the first orchestration-db access on startup pay for it.
   private scheduleRestoredMessageRepoints(): void {
-    const handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
-    for (const handle of handles) {
-      if (!handle.startsWith('dispatch:')) {
-        this.mailPointerRepointScheduler.schedule(handle)
-      }
+    if (this.restoredMessageRepointScanTimer) {
+      clearTimeout(this.restoredMessageRepointScanTimer)
     }
+    const db = this._orchestrationDb
+    const retiredHandles = new Set<string>()
+    this.restoredMessageRepointScanRetiredHandles = retiredHandles
+    const timer = setTimeout(() => {
+      this.restoredMessageRepointScanTimer = null
+      this.restoredMessageRepointScanRetiredHandles = null
+      if (this._orchestrationDb !== db) {
+        return
+      }
+      try {
+        this.mailPointerRepointScheduler.scheduleStaggered(
+          (db?.getUndeliveredUnreadMailboxHandles?.() ?? []).filter(
+            (handle) => !handle.startsWith('dispatch:') && !retiredHandles.has(handle)
+          )
+        )
+      } catch {
+        // A runtime- or test-owned database can close before this deferred scan runs.
+      }
+    }, 0)
+    timer.unref?.()
+    this.restoredMessageRepointScanTimer = timer
+  }
+
+  private retireMessageRepoint(handle: string): void {
+    this.mailPointerRepointScheduler.cancel(handle)
+    this.restoredMessageRepointScanRetiredHandles?.add(handle)
   }
 
   private repointPendingMessagesForHandle(handle: string): void {
@@ -33093,7 +33120,13 @@ export class OrcaRuntimeService {
         !options.reservedTypes?.has(message.type) &&
         !messageTypeHasLiveWaiter(waiters, message.type)
     )
+    // Why: rows withheld for a waiter still need the repair if that waiter wakes without
+    // consuming them, so only a batch covering every pending row retires the retry.
+    const coversEveryPendingRow = unread.length === pending.length
     if (unread.length === 0) {
+      if (pending.length === 0) {
+        this.retireMessageRepoint(mailboxHandle)
+      }
       return
     }
 
@@ -33192,6 +33225,9 @@ export class OrcaRuntimeService {
         pointedIdsAfterWrite.add(message.id)
       }
       this.pointedMessageIdsByHandle.set(mailboxHandle, pointedIdsAfterWrite)
+      if (coversEveryPendingRow) {
+        this.retireMessageRepoint(mailboxHandle)
+      }
 
       const tabTitle = this.tabs.get(leaf.tabId)?.title
       if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
