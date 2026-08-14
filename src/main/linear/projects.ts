@@ -15,7 +15,7 @@ import type {
 import {
   LINEAR_ISSUE_API_PAGE_SIZE_MAX,
   clampLinearIssueListLimit
-} from '../../shared/linear-issue-read-limits'
+} from '../../shared/linear/issue-read-limits'
 import {
   acquire,
   clearToken,

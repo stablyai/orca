@@ -29,7 +29,7 @@ import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-ov
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { OrcaHooks, Repo } from '../../../../shared/types'
-import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
+import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
 import {
   buildAutomationRrule,
   isValidAutomationCronSchedule,

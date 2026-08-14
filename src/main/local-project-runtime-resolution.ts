@@ -10,7 +10,7 @@ import {
   hasCachedWslAvailability,
   hasCachedWslDistros
 } from './wsl'
-import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 
 function canResolveProjectRuntimeForRepo(store: Store): boolean {

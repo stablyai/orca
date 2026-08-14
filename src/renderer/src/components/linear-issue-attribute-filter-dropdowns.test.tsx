@@ -9,7 +9,7 @@ import {
   countLinearIssueAttributeFilters,
   linearIssueAttributeFilterPillLabels
 } from './linear-issue-attribute-filter-sections'
-import type { LinearIssueAttributeFilter } from '../../../shared/linear-issue-attribute-filter'
+import type { LinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
 import LinearIssueAttributeFilterDropdowns from './linear-issue-attribute-filter-dropdowns'
 
 const metadataMocks = vi.hoisted(() => ({

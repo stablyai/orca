@@ -1,5 +1,5 @@
 import type { GitWorktreeInfo, RemoveWorktreeResult } from '../shared/types'
-import { assertWorktreeUnlockedForRemoval } from '../shared/worktree-removal'
+import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
 import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { gitExecFileAsync } from './git/runner'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'

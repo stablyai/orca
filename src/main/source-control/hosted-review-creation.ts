@@ -21,7 +21,7 @@ import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creati
 import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-request-creation'
 import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
 import { getRepoSlug } from '../github/client'
-import { isDefaultGitHubHost } from '../../shared/github-repository-identity-key'
+import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { acquire, ghExecFileAsync, gitExecFileAsync, release } from '../github/gh-utils'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import type { GitUpstreamStatus } from '../../shared/types'

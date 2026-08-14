@@ -3,7 +3,7 @@ import {
   findLinearIssueWorkspaceLookupIds,
   isLinearIssueUrlResolutionMatch,
   type LinearIssueUrlIntent
-} from '../../../shared/linear-links'
+} from '../../../shared/linear/links'
 import type { LinearConnectionStatus, LinearIssue } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 

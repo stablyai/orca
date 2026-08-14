@@ -1,5 +1,5 @@
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
   isPathInsideOrEqual,
   isRuntimePathAbsolute,

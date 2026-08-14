@@ -1,4 +1,4 @@
-import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear-links'
+import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear/links'
 import type { FolderWorkspaceLinkedTask, JiraIssue, LinearIssue } from '../types'
 import {
   getLinkedWorkItemSuggestedName,
