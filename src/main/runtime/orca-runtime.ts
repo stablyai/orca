@@ -36057,14 +36057,19 @@ const WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS = 5 * 60_000
 // stamp, so a real scan still runs on this interval even while the probe reports "unchanged".
 export const WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS = 5 * 60_000
 export const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
-// Why a slice of RESOLVED_WORKTREE_REPO_TIMEOUT_MS and not a generous absolute: this wait runs
-// *inside* that budget, so outlasting it buys the caller nothing — it has already given up and
-// restored persisted rows — while converting a reusable scan into a full-budget stall that repeats
-// on every TTL expiry. What is left of the budget covers the fallback `git worktree list`, so a
-// probe that expires still returns fresh rows. Expiring yields `null`, the existing "cannot prove
-// unchanged" sentinel. A healthy but slow host (100+ linked worktrees, Windows Defender, cold
-// dentry cache, cloud placeholders) still fits: the probe is subprocess-free stats, not Git.
-export const WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS = 2000
+// Why reserved rather than spent on the probe: when the probe expires the caller still has to run
+// `git worktree list` and answer inside the same budget, so the fallback needs its own room. Sized
+// for a healthy Git on a busy host, well above the tens of milliseconds a warm list costs.
+const WORKTREE_SCAN_FALLBACK_ALLOWANCE_MS = 1500
+// Why derived from the caller's budget instead of a generous absolute: this wait runs *inside*
+// RESOLVED_WORKTREE_REPO_TIMEOUT_MS, so outlasting it buys nothing — the caller has already given up
+// and restored persisted rows — while turning a reusable scan into a full-budget stall that repeats
+// on every TTL expiry. Subtracting keeps that invariant true by construction if either side moves.
+// Why not smaller: the probe reads a subset of what the fallback scan reads, so a probe too slow to
+// fit is a scan that will not fit either — waiting is strictly better right up to the budget.
+// Expiring yields `null`, the existing "cannot prove unchanged" sentinel, so a real scan runs.
+export const WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS =
+  RESOLVED_WORKTREE_REPO_TIMEOUT_MS - WORKTREE_SCAN_FALLBACK_ALLOWANCE_MS
 
 export function resolveWorktreeScanCacheTtlMs(repo: Pick<Repo, 'path' | 'connectionId'>): number {
   return !repo.connectionId && isAgentScratchRepoRootPath(repo.path)

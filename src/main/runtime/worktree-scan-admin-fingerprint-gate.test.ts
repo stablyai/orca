@@ -50,6 +50,10 @@ const WORKTREE_PATH = '/Users/me/dev/app-feature'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 const MAIN_WORKTREE_ID = `${REPO_ID}::${REPO_PATH}`
 const SCAN_TTL_MS = 30_000
+// A busy host (100+ linked worktrees, Defender, cold dentry cache, cloud placeholders) can spend
+// seconds in pure stat time. Reuse has to survive that, or trimming the probe's deadline to fit the
+// caller budget just trades a repeating stall for a repeating `git worktree list`.
+const SLOW_BUT_HEALTHY_PROBE_MS = 3_000
 
 function makeMeta(overrides: Record<string, unknown> = {}) {
   return {
@@ -469,6 +473,28 @@ describe('worktree scan admin-fingerprint gate', () => {
     expect(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS).toBeLessThan(
       RESOLVED_WORKTREE_REPO_TIMEOUT_MS
     )
+  })
+
+  it('still reuses the scan when a slow probe answers inside its deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+      await list()
+      expect(scanCount()).toBe(1)
+
+      const releaseSlowProbe = stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const second = list()
+
+      // Deliberately an absolute figure, not one derived from the deadline: this is the lower end of
+      // the band, and a self-referential advance would still pass however far the deadline is cut.
+      await vi.advanceTimersByTimeAsync(SLOW_BUT_HEALTHY_PROBE_MS)
+      releaseSlowProbe('fp-1')
+      await second
+      expect(scanCount()).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('still returns scanned rows within the per-repo budget when the probe stalls', async () => {
