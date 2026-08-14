@@ -136,8 +136,12 @@ export function adoptOrphanedWorkspaceSessionPartition(
     }
     const sourceLayout = source.terminalLayoutsByTabId[tabId]
     const sourceWorkspaceKey = sourceWorkspaceKeyByTabId.get(tabId)
+    // Why sourceFieldAuthority: a grafted key keeps base's own rows, so their layout
+    // and remote-session entries merge per pane instead of being replaced wholesale;
+    // grafted strays have no base-side entry and still take source's copy through
+    // the merge fallback.
     terminalLayoutsByTabId[tabId] =
-      sourceWorkspaceKey && sourceAuthority.has(sourceWorkspaceKey)
+      sourceWorkspaceKey && sourceFieldAuthority.has(sourceWorkspaceKey)
         ? (sourceLayout ?? terminalLayoutsByTabId[tabId])
         : (mergeTerminalLayout(
             terminalLayoutsByTabId[tabId],
@@ -147,7 +151,7 @@ export function adoptOrphanedWorkspaceSessionPartition(
           ) ?? terminalLayoutsByTabId[tabId])
     if (
       source.remoteSessionIdsByTabId?.[tabId] !== undefined &&
-      ((sourceWorkspaceKey && sourceAuthority.has(sourceWorkspaceKey)) ||
+      ((sourceWorkspaceKey && sourceFieldAuthority.has(sourceWorkspaceKey)) ||
         remoteSessionIdsByTabId[tabId] === undefined ||
         sourcePaneAuthoritativeTabIds.has(tabId))
     ) {

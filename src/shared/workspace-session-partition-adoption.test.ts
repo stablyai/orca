@@ -530,6 +530,93 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
     ).not.toContain('tab-1')
   })
 
+  it('merges a grafted key per pane: base row and layout survive, source bindings adopt', () => {
+    const keptLeaf = '33333333-3333-4333-8333-333333333333'
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('kept-dormant')] },
+      terminalLayoutsByTabId: {
+        'kept-dormant': {
+          root: { type: 'leaf', leafId: keptLeaf },
+          activeLeafId: keptLeaf,
+          expandedLeafId: null,
+          titlesByLeafId: { [keptLeaf]: 'base-title' }
+        }
+      },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 162 }
+    })
+    const source = session({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          // Why the shared-id shape: the renderer wipes its persisted bindings on every
+          // disconnect while the runtime partition keeps the live ones, so a base row
+          // without a binding whose source copy is bound is the routine live topology.
+          // The pane-level merge adopts the binding onto the kept row; the row itself
+          // and leaf state the source does not bind stay base's.
+          tab('kept-dormant', WORKTREE_ID, 'ssh:one@@pty-50'),
+          tab('tab-1', WORKTREE_ID, 'ssh:one@@pty-51')
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'kept-dormant': {
+          root: { type: 'leaf', leafId: keptLeaf },
+          activeLeafId: keptLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [keptLeaf]: 'ssh:one@@pty-50' }
+        },
+        'tab-1': layout('ssh:one@@pty-51')
+      }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'kept-dormant',
+      'tab-1'
+    ])
+    const keptLayout = adoption.session.terminalLayoutsByTabId['kept-dormant']
+    expect(keptLayout?.ptyIdsByLeafId?.[keptLeaf]).toBe('ssh:one@@pty-50')
+    expect(keptLayout?.root).toEqual({ type: 'leaf', leafId: keptLeaf })
+    expect(
+      adoption.session.tabsByWorktree[WORKTREE_ID]?.find((entry) => entry.id === 'kept-dormant')
+        ?.ptyId
+    ).toBe('ssh:one@@pty-50')
+  })
+
+  it('keeps a base-kept tab leaf untouched when the source copy does not bind it', () => {
+    const keptLeaf = '44444444-4444-4444-8444-444444444444'
+    const baseLayout = {
+      root: { type: 'leaf' as const, leafId: keptLeaf },
+      activeLeafId: keptLeaf,
+      expandedLeafId: null,
+      titlesByLeafId: { [keptLeaf]: 'base-title' }
+    }
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('kept-dormant')] },
+      terminalLayoutsByTabId: { 'kept-dormant': baseLayout },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 162 }
+    })
+    const source = session({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [tab('kept-dormant'), tab('tab-1', WORKTREE_ID, 'ssh:one@@pty-52')]
+      },
+      terminalLayoutsByTabId: {
+        'kept-dormant': {
+          root: { type: 'leaf', leafId: keptLeaf },
+          activeLeafId: keptLeaf,
+          expandedLeafId: null,
+          titlesByLeafId: { [keptLeaf]: 'source-title-should-not-win' }
+        },
+        'tab-1': layout('ssh:one@@pty-52')
+      }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(
+      adoption.session.terminalLayoutsByTabId['kept-dormant']?.titlesByLeafId?.[keptLeaf]
+    ).toBe('base-title')
+  })
+
   it('keeps a close-emptied worktree closed against a stale pty-bound partition copy', () => {
     const base = session({
       tabsByWorktree: { [WORKTREE_ID]: [] },
