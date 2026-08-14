@@ -6,13 +6,13 @@ const WEBSOCKET_CONNECT_TIMEOUT_MS = 1_000
 
 export type ServeRuntimeHealth =
   | { healthy: true; runtimeId: string }
+  | { healthy: false; reason: 'graph_not_ready'; runtimeId: string }
   | {
       healthy: false
       reason:
         | 'metadata_missing'
         | 'runtime_unreachable'
         | 'runtime_changed'
-        | 'graph_not_ready'
         | 'websocket_missing'
         | 'websocket_unreachable'
     }
@@ -49,7 +49,7 @@ export async function probeServeRuntimeHealth(
     return { healthy: false, reason: 'websocket_unreachable' }
   }
   if (status.result.graph.state !== 'ready') {
-    return { healthy: false, reason: 'graph_not_ready' }
+    return { healthy: false, reason: 'graph_not_ready', runtimeId: metadata.runtimeId }
   }
   if (status.result.runtime.state !== 'ready') {
     return { healthy: false, reason: 'runtime_unreachable' }

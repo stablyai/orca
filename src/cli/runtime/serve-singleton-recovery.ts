@@ -107,10 +107,14 @@ export async function recoverStaleServeSingleton(
       suffix,
       confirmedOwner.lockTarget,
       `${localHostname}-${process.pid}`,
+      () => !isProcessAlive(confirmedOwner.pid),
       options.createRecoveryGuardLink ?? symlink
     )
     if (quarantine.state === 'owner_changed') {
       return { state: 'not-recoverable', reason: 'owner_changed' }
+    }
+    if (quarantine.state === 'owner_process_alive') {
+      return { state: 'not-recoverable', reason: 'owner_process_alive' }
     }
     if (quarantine.state === 'failed') {
       return {

@@ -141,7 +141,11 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
 
     const result = await recoverStaleServeSingleton(root, {
       platform: 'linux',
-      probeHealth: async () => ({ healthy: false, reason: 'graph_not_ready' }),
+      probeHealth: async () => ({
+        healthy: false,
+        reason: 'graph_not_ready',
+        runtimeId: 'runtime-current'
+      }),
       isProcessAlive: () => true,
       wait: async () => undefined,
       quarantineSuffix: 'must-not-exist'
@@ -227,6 +231,40 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
     expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
     expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
     expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
+  })
+
+  it('restores the same-target owner when its pid becomes live under the recovery guard', async () => {
+    const ownerPid = 987_654
+    const root = await createProfile(ownerPid)
+    const lockPath = join(root, 'SingletonLock')
+    let ownerAlive = false
+    let livenessChecks = 0
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+      isProcessAlive: (pid) => {
+        if (pid !== ownerPid) {
+          return pid === process.pid
+        }
+        livenessChecks += 1
+        return ownerAlive
+      },
+      wait: async () => undefined,
+      quarantineSuffix: 'same-target-live',
+      createRecoveryGuardLink: async (target, path) => {
+        await symlink(target, path)
+        ownerAlive = true
+      }
+    })
+
+    expect(result).toEqual({ state: 'not-recoverable', reason: 'owner_process_alive' })
+    expect(livenessChecks).toBe(3)
+    expect(await readlink(lockPath)).toBe(`${hostname()}-${ownerPid}`)
+    expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonLock.same-target-live'))).toBe(false)
+    expect(await pathExists(join(root, 'SingletonRecoveryLock'))).toBe(false)
   })
 
   it('restores the stale owner when companion quarantine fails', async () => {

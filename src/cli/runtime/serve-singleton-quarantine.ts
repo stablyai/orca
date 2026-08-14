@@ -10,6 +10,7 @@ export const SINGLETON_ARTIFACT_NAMES = [
 export type SingletonQuarantineResult =
   | { state: 'quarantined'; paths: string[] }
   | { state: 'owner_changed' }
+  | { state: 'owner_process_alive' }
   | { state: 'failed'; errorCode?: string }
 
 type MovedArtifact = { source: string; target: string; name: string }
@@ -45,6 +46,7 @@ export async function quarantineSingletonArtifacts(
   suffix: string,
   expectedLockTarget: string,
   recoveryGuardTarget: string,
+  confirmExpectedOwnerDead: () => boolean,
   createGuardLink: (target: string, path: string) => Promise<void> = symlink
 ): Promise<SingletonQuarantineResult> {
   const lock = {
@@ -73,6 +75,11 @@ export async function quarantineSingletonArtifacts(
     return (error as NodeJS.ErrnoException).code === 'EEXIST'
       ? { state: 'owner_changed' }
       : quarantineFailure(error)
+  }
+
+  if (!confirmExpectedOwnerDead()) {
+    await restoreExpectedLock(lock, expectedLockTarget, recoveryGuardTarget)
+    return { state: 'owner_process_alive' }
   }
 
   const moved: MovedArtifact[] = [lock]

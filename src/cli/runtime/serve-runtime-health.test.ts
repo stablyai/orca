@@ -155,6 +155,10 @@ describe('serve runtime health', () => {
         getStatus: async () => status,
         connectWebSocket: async () => connect
       })
-    ).resolves.toEqual({ healthy: false, reason })
+    ).resolves.toEqual({
+      healthy: false,
+      reason,
+      ...(reason === 'graph_not_ready' ? { runtimeId: 'runtime-current' } : {})
+    })
   })
 })

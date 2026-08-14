@@ -125,7 +125,11 @@ export function waitForForegroundServeChild(
         scheduleHealthCheck(runtimeId)
         return
       }
-      if (!health.healthy && health.reason === 'graph_not_ready') {
+      if (
+        !health.healthy &&
+        health.reason === 'graph_not_ready' &&
+        health.runtimeId === runtimeId
+      ) {
         // A promoted serve may be windowless while its runtime remains healthy.
         consecutiveHealthFailures = 0
         scheduleHealthCheck(runtimeId)
@@ -136,7 +140,10 @@ export function waitForForegroundServeChild(
         scheduleHealthCheck(runtimeId)
         return
       }
-      healthFailureReason = health.healthy ? 'runtime_changed' : health.reason
+      healthFailureReason =
+        health.healthy || (health.reason === 'graph_not_ready' && health.runtimeId !== runtimeId)
+          ? 'runtime_changed'
+          : health.reason
       process.stderr.write(
         `[serve] runtime health failed ${consecutiveHealthFailures} consecutive checks (${healthFailureReason}); restarting main.\n`
       )
