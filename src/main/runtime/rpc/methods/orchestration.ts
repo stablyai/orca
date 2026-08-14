@@ -211,6 +211,7 @@ const DispatchParams = z.object({
 const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,
+  recoverCapability: OptionalBoolean,
   from: OptionalString,
   devMode: OptionalBoolean
 })
@@ -1363,7 +1364,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.dispatchShow',
     params: DispatchShowParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { runtime, orchestrationCompatibilityCallerAuthority }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
         throw new Error('Missing --task')
@@ -1376,18 +1377,55 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
         }
-        const workerHandle = ctx?.assignee_handle ?? 'worker'
+        const canRecover = Boolean(
+          params.recoverCapability &&
+          ctx &&
+          orchestrationCompatibilityCallerAuthority &&
+          db.isDispatchProcessCurrent({
+            dispatchId: ctx.id,
+            paneKey: orchestrationCompatibilityCallerAuthority.paneKey,
+            processIncarnation: orchestrationCompatibilityCallerAuthority.processIncarnation
+          })
+        )
+        const workerHandle =
+          canRecover && orchestrationCompatibilityCallerAuthority
+            ? orchestrationCompatibilityCallerAuthority.terminalHandle
+            : (ctx?.assignee_handle ?? 'worker')
+        const coordinatorHandle =
+          (ctx ? db.getRun(ctx.run_id)?.coordinator_handle : undefined) ??
+          params.from ??
+          'coordinator'
+        const cliCommand = ctx
+          ? runtime.getTerminalOrchestrationCliCommand(workerHandle)
+          : undefined
+        const dispatchCapability =
+          canRecover && ctx && orchestrationCompatibilityCallerAuthority
+            ? db.recoverDispatchCapability({
+                dispatchId: ctx.id,
+                callerPaneKey: orchestrationCompatibilityCallerAuthority.paneKey,
+                callerProcessIncarnation:
+                  orchestrationCompatibilityCallerAuthority.processIncarnation
+              })
+            : undefined
+        const recovery = params.recoverCapability
+          ? dispatchCapability
+            ? 'recovered'
+            : ctx?.status === 'dispatched' && params.from === ctx.assignee_handle
+              ? 'unavailable'
+              : 'inspection'
+          : 'not_requested'
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
           dispatchId: ctx?.id ?? 'ctx_preview',
           taskSpec: task.spec,
-          coordinatorHandle: params.from ?? 'coordinator',
+          coordinatorHandle,
           workerHandle,
+          dispatchCapability,
           devMode: params.devMode,
-          ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
+          ...(cliCommand ? { cliCommand } : {})
         })
-        return { dispatch: ctx ?? null, preamble }
+        return { dispatch: ctx ?? null, preamble, recovery }
       }
 
       return { dispatch: ctx ?? null }

@@ -24,6 +24,9 @@ import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeStatus, RuntimeTerminalRead } from '../../shared/runtime-types'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
+import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import { isEquivalentPaneKey } from '../../shared/stable-pane-id'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
   formatMessageReadOnlyTag,
@@ -394,7 +397,7 @@ function callMutation<TResult>(
   flags: Map<string, string | boolean>,
   method: string,
   params: unknown,
-  options?: { timeoutMs?: number; orchestrationCapability?: string }
+  options?: { timeoutMs?: number } & RuntimeOrchestrationEnvelope
 ) {
   const requestId = getOptionalStringFlag(flags, 'retry-request')
   if (!requestId) {
@@ -1183,19 +1186,68 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration dispatch-show': async ({ flags, client, cwd, json }) => {
     const showPreamble = flags.has('preamble') ? true : undefined
+    const claimedFrom = showPreamble
+      ? (getOptionalStringFlag(flags, 'from') ?? process.env.ORCA_TERMINAL_HANDLE)?.trim()
+      : undefined
     // Why: resolve --from so the previewed preamble embeds a real coordinator handle like an actual dispatch.
     const from = showPreamble
       ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
       : undefined
-    const result = await client.call<{
-      dispatch: { id: string; task_id: string; status: string } | null
+    const compatibilityEvidence = from
+      ? readOrchestrationCompatibilityEvidence({
+          ...process.env,
+          ORCA_TERMINAL_HANDLE: from
+        })
+      : undefined
+    const result = await callMutation<{
+      dispatch: {
+        id: string
+        task_id: string
+        status: string
+        assignee_handle?: string | null
+        assignee_pane_key?: string | null
+      } | null
       preamble?: string
-    }>('orchestration.dispatchShow', {
-      task: getRequiredStringFlag(flags, 'task'),
-      preamble: showPreamble,
-      from,
-      devMode: isDevCliInvocation()
-    })
+      recovery?: 'recovered' | 'unavailable' | 'inspection' | 'not_requested'
+    }>(
+      client,
+      flags,
+      'orchestration.dispatchShow',
+      {
+        task: getRequiredStringFlag(flags, 'task'),
+        preamble: showPreamble,
+        recoverCapability: showPreamble,
+        from,
+        devMode: isDevCliInvocation()
+      },
+      compatibilityEvidence
+        ? { orchestrationCompatibilityEvidence: compatibilityEvidence }
+        : undefined
+    )
+    if (
+      showPreamble &&
+      result.result.dispatch?.status === 'dispatched' &&
+      result.result.recovery !== 'recovered' &&
+      (result.result.recovery === 'unavailable' ||
+        Boolean(
+          result.result.dispatch.assignee_handle &&
+          (from === result.result.dispatch.assignee_handle ||
+            claimedFrom === result.result.dispatch.assignee_handle)
+        ) ||
+        Boolean(
+          compatibilityEvidence?.paneKey &&
+          result.result.dispatch.assignee_pane_key &&
+          isEquivalentPaneKey(
+            compatibilityEvidence.paneKey,
+            result.result.dispatch.assignee_pane_key
+          )
+        ))
+    ) {
+      throw new RuntimeClientError(
+        'dispatch_capability_unavailable',
+        'The active Dispatch preamble did not include usable lifecycle authority because this worker identity could not be verified. Run this command inside the exact assigned worker on a current Orca runtime; if it still fails there, ask the coordinator to redispatch the Task to a current process.'
+      )
+    }
     printResult(result, json, (r) => {
       if (r.preamble && showPreamble) {
         return r.preamble

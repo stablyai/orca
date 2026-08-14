@@ -2245,6 +2245,62 @@ describe('orchestration RPC methods', () => {
       )
     })
 
+    it('accepts one complete supervised Hermes prompt write for the exact process', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const rawSend = vi.spyOn(runtime, 'sendTerminal')
+      const taskSpec = 'HERMES_TASK_MARKER implement the lifecycle contract'
+      const task = db.createTask({ spec: taskSpec })
+
+      const started = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        worktree: 'id:repo::worktree',
+        agent: 'hermes'
+      })) as { dispatchId: string; state: string }
+      const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
+      const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
+
+      expect(started.state).toBe('ready')
+      expect(prompt).toContain(`=== TASK ===\n${taskSpec}`)
+      expect(prompt).toContain(`--task-id ${task.id} --dispatch-id ${started.dispatchId}`)
+      expect(prompt).not.toContain('[[…]]')
+      expect(capability).toBeDefined()
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({ startupAgent: 'hermes' })
+      )
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith('term_worker', prompt)
+      expect(rawSend).not.toHaveBeenCalled()
+      expect(db.getDispatchContextById(started.dispatchId)).toMatchObject({
+        assignee_handle: 'term_worker',
+        assignee_pane_key: 'tab_worker:leaf_worker',
+        process_incarnation: 'runtime_test:term_worker:1',
+        status: 'dispatched'
+      })
+
+      ctx = { runtime, orchestrationCapability: capability }
+      const settled = (await call('orchestration.send', {
+        from: 'term_worker',
+        type: 'worker_done',
+        subject: 'Hermes complete',
+        body: 'Implemented the contract. Verified the lifecycle. Nothing remains.',
+        payload: JSON.stringify({
+          taskId: task.id,
+          dispatchId: started.dispatchId,
+          outcome: 'succeeded'
+        })
+      })) as { lifecycle: { action: string } }
+
+      expect(settled.lifecycle.action).toBe('completed')
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(started.dispatchId)).toMatchObject({
+        status: 'completed',
+        capability_revoked_at: expect.any(String)
+      })
+    })
+
     it('applies and reports opaque per-invocation model preferences', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -2695,6 +2751,87 @@ describe('orchestration RPC methods', () => {
       expect(result.preamble).toContain(task.id)
       expect(result.preamble).toContain('term_coord')
       expect(result.dispatch?.task_id).toBe(task.id)
+    })
+
+    it('recovers an exact worker lifecycle command that settles once', async () => {
+      setup()
+      const workerPaneKey = 'tab_worker:leaf_worker'
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_worker' ? workerPaneKey : coordinatorPaneKey
+      )
+      const task = db.createTask({ spec: 'RECOVERY_TASK_MARKER finish the assigned work' })
+      const dispatch = db.createDispatchContext(
+        task.id,
+        'term_worker',
+        workerPaneKey,
+        undefined,
+        'runtime_test:term_worker:1'
+      )
+      db.mintDispatchCapability({
+        dispatchId: dispatch.id,
+        paneKey: workerPaneKey,
+        processIncarnation: 'runtime_test:term_worker:1'
+      })
+      const promptSend = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
+      const rawSend = vi.spyOn(runtime, 'sendTerminal')
+      vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockReturnValue({
+        hostScope: { kind: 'local', hostId: 'local' },
+        terminalHandle: 'term_worker',
+        paneKey: workerPaneKey,
+        processIncarnation: 'runtime_test:term_worker:1',
+        launchTokenHash: 'worker-launch-token-hash'
+      })
+      ctx = {
+        runtime,
+        orchestrationCompatibilityEvidence: {
+          terminalHandle: 'term_worker',
+          paneKey: workerPaneKey,
+          launchToken: 'worker-launch-token'
+        },
+        orchestrationCompatibilityCallerAuthority: {
+          hostScope: { kind: 'local', hostId: 'local' },
+          terminalHandle: 'term_worker',
+          paneKey: workerPaneKey,
+          processIncarnation: 'runtime_test:term_worker:1',
+          launchTokenHash: 'worker-launch-token-hash'
+        }
+      }
+
+      const recovered = (await call('orchestration.dispatchShow', {
+        task: task.id,
+        preamble: true,
+        recoverCapability: true,
+        from: 'term_worker'
+      })) as { preamble: string }
+      const capability = recovered.preamble.match(
+        /--dispatch-capability (dcap_[A-Za-z0-9_-]+)/
+      )?.[1]
+
+      expect(recovered.preamble).toContain('RECOVERY_TASK_MARKER finish the assigned work')
+      expect(recovered.preamble).toContain(`--dispatch-id ${dispatch.id}`)
+      expect(capability).toBeDefined()
+      expect(promptSend).not.toHaveBeenCalled()
+      expect(rawSend).not.toHaveBeenCalled()
+
+      ctx = { runtime, orchestrationCapability: capability }
+      const settled = (await call('orchestration.send', {
+        from: 'term_worker',
+        type: 'worker_done',
+        subject: 'Recovered completion',
+        body: 'Recovered authority. Finished the work. Nothing remains.',
+        payload: JSON.stringify({
+          taskId: task.id,
+          dispatchId: dispatch.id,
+          outcome: 'succeeded'
+        })
+      })) as { lifecycle: { action: string } }
+
+      expect(settled.lifecycle.action).toBe('completed')
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
+        status: 'completed',
+        capability_revoked_at: expect.any(String)
+      })
     })
 
     it('--preamble works when no dispatch exists yet', async () => {

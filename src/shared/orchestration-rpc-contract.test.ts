@@ -29,6 +29,7 @@ describe('orchestration RPC contract', () => {
     ['orchestration.check', { wait: true }],
     ['orchestration.check', { unread: true }],
     ['orchestration.check', { peek: true, ack: 'delivery_1' }],
+    ['orchestration.dispatchShow', { preamble: true, recoverCapability: true }],
     ['orchestration.run', {}],
     ['orchestration.runStop', {}]
   ])('classifies %s as a mutation', (method, params) => {
@@ -42,6 +43,7 @@ describe('orchestration RPC contract', () => {
     ['orchestration.inbox', {}],
     ['orchestration.taskList', {}],
     ['orchestration.dispatchShow', {}],
+    ['orchestration.dispatchShow', { preamble: true }],
     ['orchestration.gateList', {}],
     ['orchestration.workerShow', {}],
     ['orchestration.workerRead', {}],

@@ -44,6 +44,15 @@ export function parsePaneKey(
   return { tabId, leafId, stablePaneId: leafId }
 }
 
+export function isEquivalentPaneKey(left: string, right: string): boolean {
+  if (left === right) {
+    return true
+  }
+  const leftLeaf = parsePaneKey(left)?.leafId
+  const rightLeaf = parsePaneKey(right)?.leafId
+  return Boolean(leftLeaf && rightLeaf && leftLeaf === rightLeaf)
+}
+
 export function parseLegacyNumericPaneKey(
   paneKey: unknown
 ): { tabId: string; numericPaneId: string; paneKey: string } | null {

@@ -176,6 +176,59 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(requests[0]?.method).toBe('status.get')
   })
 
+  it('sends additive Dispatch recovery requests to an old local runtime', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: {
+              dispatch: {
+                id: 'ctx_1',
+                task_id: 'task_1',
+                status: 'dispatched',
+                assignee_handle: 'term_worker'
+              },
+              preamble: 'tokenless old-runtime preamble'
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 500)
+    for (const from of ['term_coordinator', 'term_worker']) {
+      await client.call('orchestration.dispatchShow', {
+        task: 'task_1',
+        preamble: true,
+        recoverCapability: true,
+        from
+      })
+    }
+
+    expect(requests).toHaveLength(2)
+    expect(requests.map((request) => request.method)).toEqual([
+      'orchestration.dispatchShow',
+      'orchestration.dispatchShow'
+    ])
+    expect(requests.every((request) => typeof request.orchestrationRequestId === 'string')).toBe(
+      true
+    )
+    expect(new Set(requests.map((request) => request.orchestrationRequestId)).size).toBe(2)
+  })
+
   it('returns the full RPC envelope for successful calls', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')

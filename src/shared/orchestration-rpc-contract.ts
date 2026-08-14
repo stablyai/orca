@@ -44,6 +44,10 @@ export function isRetiredOrchestrationMethod(method: string): boolean {
   return RETIRED_ORCHESTRATION_METHODS.has(method)
 }
 
+export function isDispatchCapabilityRecovery(method: string, params: unknown): boolean {
+  return method === 'orchestration.dispatchShow' && hasTrueProperty(params, 'recoverCapability')
+}
+
 export function isOrchestrationMutation(method: string, params: unknown): boolean {
   if (isRetiredOrchestrationMethod(method)) {
     return true
@@ -56,6 +60,9 @@ export function isOrchestrationMutation(method: string, params: unknown): boolea
   }
   if (method === 'orchestration.dispatch') {
     return !hasTrueProperty(params, 'dryRun')
+  }
+  if (method === 'orchestration.dispatchShow') {
+    return isDispatchCapabilityRecovery(method, params)
   }
   return ORCHESTRATION_MUTATION_METHODS.has(method)
 }

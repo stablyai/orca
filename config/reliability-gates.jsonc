@@ -11999,6 +11999,136 @@
         "Platform-named bundles are loaded on macOS locally; physical Linux and Windows evidence is not yet recorded."
       ],
       "demotionRule": "Demote if any shipped companion stops loading on Node 18, selected installers mutate outside the isolated home, or the CI lane no longer runs the built artifact with Node 18."
+    },
+    {
+      "id": "orchestration.dispatch-preamble-capability-recovery",
+      "title": "Assigned workers recover one usable lifecycle capability from Dispatch preambles",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "orchestration",
+      "layer": "cli-runtime-sqlite-lifecycle-contract",
+      "surfaces": [
+        "dispatch-show --preamble",
+        "Dispatch capability rotation",
+        "worker_done settlement",
+        "supervised Hermes prompt delivery"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "paired-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Deterministic CLI, runtime, and dispatcher tests cover the accepted Orca-to-Hermes prompt-write boundary, exact local assignee recovery through direct and streaming dispatcher transports, settlement, handle remint, normalized full-evidence secret-safe concurrent deduplication, repeat rotation, coordinator inspection, old-runtime and missing-attestation refusal including reminted workers, pre-rotation response preparation failure, claimed-handle mismatch, stale/pending/revoked/start-unknown/stopping authority, same-runtime legacy Dispatch inspection, and zero terminal reinjection. A synthetic stale SSH attachment test covers the deduplication identity contract, not a live SSH host. Hermes 0.15.2 was installed under an isolated temporary HOME, but the run stopped before prompt consumption because no provider credentials were configured. Live SSH, WSL, paired hosts, mixed-binary recovery, Linux, Windows, and authenticated Hermes consumption remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/12769",
+        "https://linear.app/stably/issue/STA-3539"
+      ],
+      "invariant": "An accepted supervised start must deliver the complete non-placeholder task and lifecycle preamble, including completion authority, to the exact assigned process incarnation. An active current-contract assignee may derive a fresh lifecycle command from dispatch-show --preamble and settle once; coordinators, claimed handles, stale processes, and legacy Dispatches must not rotate authority. Recovery persists only a capability hash and never writes to the terminal.",
+      "oracle": "Start a supervised Hermes worker through production runtime methods and require Orca to accept one agent-prompt write containing the task marker, Task, Dispatch, and capability, targeted to a Dispatch durably bound to the asserted pane and process incarnation, with no placeholder or raw terminal write; then settle worker_done. Independently create an active Dispatch, invoke dispatchShow as its exact attested worker through direct and streaming dispatch, extract the new capability, and settle Task and Dispatch exactly once. Require same-request concurrency to return one in-memory-deduplicated token without a durable secret, handle remint to emit the current sender and CLI, and repeat recovery to invalidate only the prior token while the newest remains valid. Require coordinator, claimed --from mismatch, stale/pending/revoked/start-unknown/stopping authority, and legacy Dispatch attempts to leave existing authority unchanged, with no prompt injection or raw terminal send.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-dispatch-preamble-recovery.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/cli/handlers/orchestration-dispatch-cli.test.ts src/shared/stable-pane-id.test.ts src/cli/runtime-client.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/runtime/rpc/orchestration-dispatch-preamble-recovery.test.ts",
+        "src/main/runtime/rpc/methods/orchestration.test.ts",
+        "src/cli/handlers/orchestration-dispatch-cli.test.ts",
+        "src/shared/stable-pane-id.test.ts",
+        "src/cli/runtime-client.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration.test.ts",
+          "assertions": [
+            "Orca accepts one complete non-placeholder agent-prompt write targeted at the supervised Hermes terminal's exact pane and process",
+            "a recovered lifecycle command contains fresh authority and settles its Task and Dispatch"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/orchestration-dispatch-preamble-recovery.test.ts",
+          "assertions": [
+            "direct and streaming requests recover only for the exact assigned worker and perform no terminal write",
+            "same-request concurrency is deduplicated by normalized full caller evidence without durable plaintext while later recovery invalidates only the prior capability",
+            "fallible response inputs resolve before rotation so preparation failure preserves existing authority",
+            "handle remint emits the current attested sender and host CLI",
+            "coordinator, claimed handle, stale/pending/revoked/start-unknown/stopping authority, and legacy Dispatch attempts cannot rotate authority"
+          ]
+        },
+        {
+          "file": "src/cli/handlers/orchestration-dispatch-cli.test.ts",
+          "assertions": [
+            "the CLI sends an explicit recovery mutation with reminted caller evidence",
+            "tokenless active-worker responses, including a reminted worker against an old runtime, fail actionably instead of printing unusable lifecycle commands"
+          ]
+        },
+        {
+          "file": "src/shared/stable-pane-id.test.ts",
+          "assertions": [
+            "tab-reminted pane keys compare by stable leaf identity without matching a different leaf"
+          ]
+        },
+        {
+          "file": "src/cli/runtime-client.test.ts",
+          "assertions": [
+            "additive recovery requests retain mutation IDs and reach an old local runtime without weakening other mutation preflights"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "result": "failed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-dispatch-preamble-recovery.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/cli/handlers/orchestration-dispatch-cli.test.ts src/shared/stable-pane-id.test.ts src/cli/runtime-client.test.ts --reporter=dot",
+          "durationSeconds": 3.25,
+          "summary": "Latest main 09ec516ae50b failed 27 tests while 184 controls passed with identical final test bytes: dispatchShow emitted no lifecycle capability, exact-worker settlement failed, reminted sender stayed stale, CLI recovery was absent, and unavailable recovery was not rejected."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "result": "failed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-dispatch-preamble-recovery.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/cli/handlers/orchestration-dispatch-cli.test.ts src/shared/stable-pane-id.test.ts src/cli/runtime-client.test.ts --reporter=dot",
+          "durationSeconds": 3.41,
+          "summary": "With the final candidate's causal recovery hook disabled and identical test bytes, 11 tests failed and 200 passed: recovered preambles had no capability, reminted commands kept the stale handle, concurrent recovery never reached rotation, and worker_done could not settle."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-dispatch-preamble-recovery.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/cli/handlers/orchestration-dispatch-cli.test.ts src/shared/stable-pane-id.test.ts src/cli/runtime-client.test.ts --reporter=dot",
+          "durationSeconds": 3.72,
+          "summary": "The candidate passed all 211 tests across the five focused files, including prompt-write acceptance, actionable CLI refusal and recovery outcomes, old-runtime request delivery, distinct retry IDs, stable-pane remint identity, scoped fresh and adopted-database preflights, pre-rotation fault handling, direct and streaming dispatch, settlement, host-bound secret-safe concurrent deduplication, handle remint, repeat rotation, and negative authority states."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused in-memory runtime, SQLite, dispatcher, and streaming contracts"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The oracle uses in-memory state and exact identities with no sleeps, polling, or elapsed-time assertions; CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Latest main 09ec516ae50b fails 27 tests while 184 controls pass with identical final test bytes. The final candidate passes all 211 focused tests. Disabling only the causal recovery hook fails 11 tests while 200 controls pass."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Recovery adds one existing indexed active-Dispatch authority preflight, one bounded SQLite transaction, and one constant-size random token/hash update only when an exact worker explicitly requests the preamble. It adds no polling, timer, subprocess, provider scan, network fanout, renderer work, retained plaintext secret, or terminal write."
+      },
+      "promotionCriteria": [
+        "Collect authenticated real-Hermes consumption evidence without a literal placeholder.",
+        "Collect live SSH or paired-host evidence plus Linux, Windows, and WSL CI coverage.",
+        "Collect 100 consecutive focused CI passes or 14 days of soak history."
+      ],
+      "knownGaps": [
+        "Hermes 0.15.2 stopped before prompt consumption because the isolated profile had no API key or provider; literal placeholder consumption is unverified and not claimed fixed.",
+        "Streaming dispatcher coverage is not a live paired host, SSH session, or remote version-skew deployment.",
+        "Mixed-binary recovery is refused for exact and pane-reminted assignees when an older runtime omits the additive recovery outcome; no old runtime can mint the new capability.",
+        "Physical Linux, Windows, and WSL execution remains uncollected."
+      ],
+      "demotionRule": "Keep experimental or demote if recovery can rotate for any caller other than the exact assigned pane and process, expose plaintext authority durably, write terminal input, invalidate authority without returning a replacement, or fail to settle once."
     }
   ]
 }

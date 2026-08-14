@@ -29,7 +29,8 @@ const COORDINATOR_PREFLIGHT_METHODS = new Set([
 
 const CURRENT_AUTHORITY_PREFLIGHT_METHODS = new Set([
   ...COORDINATOR_PREFLIGHT_METHODS,
-  'orchestration.ask'
+  'orchestration.ask',
+  'orchestration.dispatchShow'
 ])
 
 export type LegacyCompatibilityRoute =
@@ -65,7 +66,10 @@ export class OrchestrationLegacyCompatibility {
       return { handled: false }
     }
     const values = params as Record<string, unknown>
-    if (CURRENT_AUTHORITY_PREFLIGHT_METHODS.has(request.method)) {
+    if (
+      CURRENT_AUTHORITY_PREFLIGHT_METHODS.has(request.method) &&
+      (request.method !== 'orchestration.dispatchShow' || values.recoverCapability === true)
+    ) {
       const callerAuthority = this.resolveCurrentAuthority(request, values)
       if (callerAuthority) {
         return {
@@ -134,7 +138,13 @@ export class OrchestrationLegacyCompatibility {
   ): OrchestrationCompatibilityCallerAuthority | undefined {
     const db = this.runtime.getOrchestrationDb()
     const adoption = db.getLegacyAdoption()
-    if (!adoption || stringValue(params.run) || request.method === 'orchestration.runUse') {
+    const isDispatchRecovery =
+      request.method === 'orchestration.dispatchShow' && params.recoverCapability === true
+    if (
+      (!adoption && !isDispatchRecovery) ||
+      stringValue(params.run) ||
+      request.method === 'orchestration.runUse'
+    ) {
       return undefined
     }
     const evidence = request.orchestrationCompatibilityEvidence
@@ -166,6 +176,9 @@ export class OrchestrationLegacyCompatibility {
           remoteAttachment.dispatch_id
         ? caller
         : undefined
+    }
+    if (!adoption) {
+      return undefined
     }
     const boundRun = db.getCurrentRunForPane(evidence.paneKey)
     if (!boundRun) {

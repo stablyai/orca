@@ -39,7 +39,7 @@ import type {
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { isEquivalentPaneKey } from '../../../shared/stable-pane-id'
 import { OrchestrationError } from './orchestration-error'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import {
@@ -65,16 +65,6 @@ import {
   ensureMutationReceiptCapacity,
   migrateMutationReceiptCapacity
 } from './mutation-receipt-capacity'
-
-// Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
-function isEquivalentPaneKey(a: string, b: string): boolean {
-  if (a === b) {
-    return true
-  }
-  const aLeaf = parsePaneKey(a)?.leafId
-  const bLeaf = parsePaneKey(b)?.leafId
-  return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
-}
 
 function parseWorkerTerminalPriorOwnerIds(value: string): string[] | null {
   try {
@@ -6579,6 +6569,55 @@ export class OrchestrationDb {
         params.dispatchId
       )
     return capability
+  }
+
+  recoverDispatchCapability(params: {
+    dispatchId: string
+    callerPaneKey: string
+    callerProcessIncarnation: string
+  }): string {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const dispatch = this.getDispatchContextById(params.dispatchId)
+      const task = dispatch ? this.getTask(dispatch.task_id) : undefined
+      const worker = dispatch ? this.getWorkerDispatch(dispatch.id) : undefined
+      if (
+        !dispatch ||
+        dispatch.contract_version !== CURRENT_CONTRACT_VERSION ||
+        dispatch.status !== 'dispatched' ||
+        dispatch.capability_revoked_at !== null ||
+        task?.status !== 'dispatched' ||
+        (worker !== undefined && worker.state !== 'ready')
+      ) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Dispatch ${params.dispatchId} is not an active current-contract Dispatch.`
+        )
+      }
+      const assignedWorker =
+        dispatch.assignee_pane_key !== null &&
+        isEquivalentPaneKey(dispatch.assignee_pane_key, params.callerPaneKey) &&
+        dispatch.process_incarnation === params.callerProcessIncarnation
+      if (!assignedWorker) {
+        throw new OrchestrationError(
+          'dispatch_capability_invalid',
+          `Caller does not own lifecycle recovery for Dispatch ${params.dispatchId}.`
+        )
+      }
+      const capability = `dcap_${randomBytes(32).toString('base64url')}`
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET capability_hash = ?
+           WHERE id = ?`
+        )
+        .run(hashDispatchCapability(capability), params.dispatchId)
+      this.db.exec('COMMIT')
+      return capability
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   verifyDispatchCapability(params: {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isStablePaneId,
   isTerminalLeafId,
+  isEquivalentPaneKey,
   makePaneKey,
   parseLegacyNumericPaneKey,
   parsePaneKey
@@ -44,6 +45,13 @@ describe('stable pane ids', () => {
     expect(parsePaneKey(`tab:1:${LEAF_ID}`)).toBeNull()
     expect(parsePaneKey(`:${LEAF_ID}`)).toBeNull()
     expect(parsePaneKey('tab-1:')).toBeNull()
+  })
+
+  it('matches reminted pane keys by their stable leaf', () => {
+    expect(isEquivalentPaneKey(`tab-old:${LEAF_ID}`, `tab-new:${LEAF_ID}`)).toBe(true)
+    expect(
+      isEquivalentPaneKey(`tab-old:${LEAF_ID}`, 'tab-new:22222222-2222-4222-8222-222222222222')
+    ).toBe(false)
   })
 
   it('parses legacy numeric pane keys only for migration aliases', () => {
