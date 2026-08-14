@@ -191,4 +191,38 @@ describe('terminal close and handle incarnation continuity', () => {
       'terminal_handle_stale'
     )
   })
+
+  it('stales a retained handle after the renderer graph becomes unavailable', async () => {
+    const harness = createHarness()
+    const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+
+    harness.runtime.markGraphUnavailable(1)
+    harness.runtime.attachWindow(1)
+    harness.syncFixtureGraph()
+
+    const [after] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    expect(after.handle).not.toBe(before.handle)
+    await expect(harness.runtime.readTerminal(before.handle)).rejects.toThrow(
+      'terminal_handle_stale'
+    )
+  })
+
+  it('stales a renderer handle superseded by a preallocated handle', async () => {
+    const harness = createHarness()
+    const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    const preallocated = 'term_preallocated-close-continuity'
+
+    harness.runtime.registerPreAllocatedHandleForPty(PTY_ID, preallocated)
+    harness.syncFixtureGraph()
+
+    const [after] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    expect(after.handle).toBe(preallocated)
+    await expect(harness.runtime.readTerminal(preallocated)).resolves.toMatchObject({
+      handle: preallocated,
+      status: 'running'
+    })
+    await expect(harness.runtime.readTerminal(before.handle)).rejects.toThrow(
+      'terminal_handle_stale'
+    )
+  })
 })

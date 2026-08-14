@@ -28873,6 +28873,7 @@ export class OrcaRuntimeService {
     this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
     // Why: pre-allocated CLI handles must survive graph unavailability so they can be re-adopted on reconnect.
     this.rejectAllWaiters('terminal_handle_stale')
   }
@@ -28897,6 +28898,7 @@ export class OrcaRuntimeService {
     this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
   }
@@ -28916,6 +28918,7 @@ export class OrcaRuntimeService {
     this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
   }
@@ -32733,7 +32736,9 @@ export class OrcaRuntimeService {
   ): void {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     if (retained.leafKey !== leafKey) {
-      this.handleByLeafKey.delete(retained.leafKey)
+      if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
+        this.handleByLeafKey.delete(retained.leafKey)
+      }
       retained.leafKey = leafKey
     }
     this.handles.set(retained.handle, {
@@ -32755,10 +32760,19 @@ export class OrcaRuntimeService {
       return
     }
     this.handleByPtyIncarnation.delete(ptyId)
-    this.handleByLeafKey.delete(retained.leafKey)
+    if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
+      this.handleByLeafKey.delete(retained.leafKey)
+    }
     this.handles.delete(retained.handle)
     this.syntheticTerminalHandles.delete(retained.handle)
     this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
+  }
+
+  private clearPtyIncarnationHandles(): void {
+    for (const retained of this.handleByPtyIncarnation.values()) {
+      this.syntheticTerminalHandles.delete(retained.handle)
+    }
+    this.handleByPtyIncarnation.clear()
   }
 
   private reconcilePtyIncarnationHandles(): void {
