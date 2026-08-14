@@ -37,6 +37,11 @@ async function startHeldNavigationServer(): Promise<HeldNavigationServer> {
       )
       return
     }
+    if (!request.url?.startsWith('/hold')) {
+      response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+      response.end('not found')
+      return
+    }
     pending.add(response)
     response.once('close', () => pending.delete(response))
   })
@@ -244,10 +249,13 @@ test('returns a headed host page identity before owner-pinned navigation can tim
     )
     await expect.poll(fixture.pendingCount, { timeout: 30_000 }).toBe(1)
     const firstHostPageId = await expect
-      .poll(async () => {
-        const ids = await readHostBrowserPageIds(hostClient, worktreeId)
-        return ids.find((id) => !baselineHostPageIds.includes(id)) ?? null
-      })
+      .poll(
+        async () => {
+          const ids = await readHostBrowserPageIds(hostClient, worktreeId)
+          return ids.find((id) => !baselineHostPageIds.includes(id)) ?? null
+        },
+        { timeout: 30_000, message: 'host never registered the owner-pinned page' }
+      )
       .not.toBeNull()
       .then(async () => {
         const ids = await readHostBrowserPageIds(hostClient, worktreeId)
@@ -343,10 +351,13 @@ test('opens the held URL through the owner-pinned remote-pane link route @headfu
     await openLinkFromRemotePane(client.page, testInfo)
     await expect.poll(fixture.pendingCount, { timeout: 30_000 }).toBe(1)
     const createdPageId = await expect
-      .poll(async () => {
-        const ids = await readHostBrowserPageIds(hostClient, worktreeId)
-        return ids.find((id) => !baselineHostPageIds.includes(id)) ?? null
-      })
+      .poll(
+        async () => {
+          const ids = await readHostBrowserPageIds(hostClient, worktreeId)
+          return ids.find((id) => !baselineHostPageIds.includes(id)) ?? null
+        },
+        { timeout: 30_000, message: 'link route never registered a host page' }
+      )
       .not.toBeNull()
       .then(async () => {
         const ids = await readHostBrowserPageIds(hostClient, worktreeId)
