@@ -181,6 +181,32 @@ describe('fetchKimiRateLimits', () => {
     expect(fsState.readPaths).toEqual([hostCredentialsPath('/custom/kimi-home')])
   })
 
+  it('skips the usage request when the caller signal is already aborted', async () => {
+    fsState.credentials = freshCredentials()
+    const controller = new AbortController()
+    controller.abort()
+
+    const result = await fetchKimiRateLimits({ signal: controller.signal })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toMatch(/aborted/i)
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('passes the caller abort signal through to the usage request', async () => {
+    fsState.credentials = freshCredentials()
+    netFetchMock.mockImplementationOnce((_url, init?: RequestInit) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+      return jsonResponse(USAGE_RESPONSE)
+    })
+
+    const controller = new AbortController()
+    const result = await fetchKimiRateLimits({ signal: controller.signal })
+
+    expect(result.status).toBe('ok')
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores a blank KIMI_CODE_HOME instead of reading from the process cwd', async () => {
     vi.stubEnv('KIMI_CODE_HOME', '   ')
     fsState.credentials = freshCredentials()

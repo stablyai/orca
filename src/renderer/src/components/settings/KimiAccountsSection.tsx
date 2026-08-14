@@ -28,7 +28,11 @@ function errorMessage(error: unknown): string {
       .replace(/^Error occurred in handler for 'kimiAccounts:[^']+':\s*/i, '')
       .replace(/^Error invoking remote method 'kimiAccounts:[^']+':\s*/i, '')
       .replace(/^Error:\s*/i, '')
-      .trim() || 'Kimi account update failed.'
+      .trim() ||
+    translate(
+      'auto.components.settings.KimiAccountsSection.updateFailed',
+      'Kimi account update failed.'
+    )
   )
 }
 

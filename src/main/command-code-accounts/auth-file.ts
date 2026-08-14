@@ -34,7 +34,10 @@ export function readCommandCodeAuthFile(authPath: string): CommandCodeAuth {
   if (!info.isFile() || info.isSymbolicLink()) {
     throw new Error('Command Code auth.json must be a regular file, not a symbolic link.')
   }
-  if (info.size <= 0 || info.size > MAX_AUTH_FILE_BYTES) {
+  if (info.size <= 0) {
+    throw new Error('Command Code auth.json is empty.')
+  }
+  if (info.size > MAX_AUTH_FILE_BYTES) {
     throw new Error('Command Code auth.json exceeds the 1 MB safety limit.')
   }
   let parsed: unknown

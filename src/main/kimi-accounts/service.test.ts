@@ -114,15 +114,18 @@ describe('KimiAccountService', () => {
       chmodSync(sourceCredential, 0o400)
       const store = createStore()
 
-      await createService(store, root).addAccountFromHome(source, 'Work')
+      try {
+        await createService(store, root).addAccountFromHome(source, 'Work')
 
-      const managedHome = store.getSettings().kimiManagedAccounts![0].managedHomePath
-      expect(statSync(join(managedHome, 'credentials')).mode & 0o777).toBe(0o700)
-      expect(statSync(join(managedHome, 'credentials', 'kimi-code.json')).mode & 0o777).toBe(0o600)
-      expect(statSync(sourceCredentials).mode & 0o777).toBe(0o500)
-      expect(statSync(sourceCredential).mode & 0o777).toBe(0o400)
-      chmodSync(sourceCredentials, 0o700)
-      chmodSync(sourceCredential, 0o600)
+        const managedHome = store.getSettings().kimiManagedAccounts![0].managedHomePath
+        expect(statSync(join(managedHome, 'credentials')).mode & 0o777).toBe(0o700)
+        expect(statSync(join(managedHome, 'credentials', 'kimi-code.json')).mode & 0o777).toBe(0o600)
+        expect(statSync(sourceCredentials).mode & 0o777).toBe(0o500)
+        expect(statSync(sourceCredential).mode & 0o777).toBe(0o400)
+      } finally {
+        chmodSync(sourceCredentials, 0o700)
+        chmodSync(sourceCredential, 0o600)
+      }
     }
   )
 

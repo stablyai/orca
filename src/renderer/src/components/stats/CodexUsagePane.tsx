@@ -15,8 +15,9 @@ import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 import {
   codexUsageAccountFilterValue,
-  findCodexUsageAccountOption,
+  missingCodexUsageAccountOption,
   parseCodexUsageAccountFilter,
+  resolveCodexUsageAccountOption,
   shortCodexUsageAccountId
 } from './codex-usage-account-filter'
 
@@ -83,6 +84,8 @@ export function CodexUsagePane(): React.JSX.Element {
   const range = useAppStore((state) => state.codexUsageRange)
   const accountFilter = useAppStore((state) => state.codexUsageAccountFilter)
   const accountOptions = useAppStore((state) => state.codexUsageAccountOptions)
+  const missingAccountOption = missingCodexUsageAccountOption(accountOptions, accountFilter)
+  const selectedAccountOption = resolveCodexUsageAccountOption(accountOptions, accountFilter)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const setCodexUsageEnabled = useAppStore((state) => state.setCodexUsageEnabled)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
@@ -186,7 +189,15 @@ export function CodexUsagePane(): React.JSX.Element {
                   : { kind: option.kind }
               ),
               label: accountOptionLabel(option)
-            }))
+            })),
+            ...(missingAccountOption
+              ? [
+                  {
+                    value: codexUsageAccountFilterValue(accountFilter),
+                    label: accountOptionLabel(missingAccountOption)
+                  }
+                ]
+              : [])
           ]}
           onValueChange={(value) => {
             const nextFilter = parseCodexUsageAccountFilter(value)
@@ -206,19 +217,9 @@ export function CodexUsagePane(): React.JSX.Element {
       selectionSummary={
         <>
           {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} •{' '}
-          {accountFilter.kind === 'all'
+          {accountFilter.kind === 'all' || !selectedAccountOption
             ? translate('auto.components.stats.CodexUsagePane.accountAll', 'All accounts')
-            : accountOptionLabel(
-                findCodexUsageAccountOption(accountOptions, accountFilter) ??
-                  (accountFilter.kind === 'managed'
-                    ? {
-                        kind: 'managed',
-                        accountId: accountFilter.accountId,
-                        workspaceLabel: null,
-                        deleted: true
-                      }
-                    : { kind: accountFilter.kind })
-              )}{' '}
+            : accountOptionLabel(selectedAccountOption)}{' '}
           • {RANGE_LABELS[range]}
         </>
       }

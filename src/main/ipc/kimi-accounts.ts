@@ -1,16 +1,7 @@
 import { dialog, ipcMain, shell } from 'electron'
 import type { KimiAccountService } from '../kimi-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
-
-function isBoundedText(value: unknown, maxLength: number): value is string {
-  return (
-    typeof value === 'string' &&
-    value.trim().length > 0 &&
-    value.length <= maxLength &&
-    !value.includes('\u0000') &&
-    !/[\r\n]/.test(value)
-  )
-}
+import { isBoundedText } from './bounded-account-text'
 
 export function registerKimiAccountHandlers(
   kimiAccounts: KimiAccountService,

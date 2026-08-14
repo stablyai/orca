@@ -37,3 +37,29 @@ export function findCodexUsageAccountOption(
     ) ?? null
   )
 }
+
+export function missingCodexUsageAccountOption(
+  options: readonly CodexUsageAccountOption[],
+  filter: CodexUsageAccountFilter
+): CodexUsageAccountOption | null {
+  if (filter.kind === 'all' || findCodexUsageAccountOption(options, filter)) {
+    return null
+  }
+  return filter.kind === 'managed'
+    ? {
+        kind: 'managed',
+        accountId: filter.accountId,
+        workspaceLabel: null,
+        deleted: true
+      }
+    : { kind: filter.kind }
+}
+
+export function resolveCodexUsageAccountOption(
+  options: readonly CodexUsageAccountOption[],
+  filter: CodexUsageAccountFilter
+): CodexUsageAccountOption | null {
+  return (
+    findCodexUsageAccountOption(options, filter) ?? missingCodexUsageAccountOption(options, filter)
+  )
+}

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   codexUsageAccountFilterValue,
   findCodexUsageAccountOption,
+  missingCodexUsageAccountOption,
   parseCodexUsageAccountFilter,
+  resolveCodexUsageAccountOption,
   shortCodexUsageAccountId
 } from './codex-usage-account-filter'
 
@@ -37,5 +39,33 @@ describe('Codex usage account filter', () => {
       })
     ).toEqual(option)
     expect(shortCodexUsageAccountId(option.accountId)).toBe('12345678')
+  })
+
+  it('synthesizes a deleted option when the selected managed account is gone', () => {
+    const filter = { kind: 'managed' as const, accountId: 'missing-account' }
+    expect(missingCodexUsageAccountOption([], filter)).toEqual({
+      kind: 'managed',
+      accountId: 'missing-account',
+      workspaceLabel: null,
+      deleted: true
+    })
+    expect(resolveCodexUsageAccountOption([], filter)).toEqual({
+      kind: 'managed',
+      accountId: 'missing-account',
+      workspaceLabel: null,
+      deleted: true
+    })
+  })
+
+  it('does not synthesize an option when the selected account is still listed', () => {
+    const option = {
+      kind: 'managed' as const,
+      accountId: 'account-a',
+      workspaceLabel: 'Work',
+      deleted: false
+    }
+    const filter = { kind: 'managed' as const, accountId: 'account-a' }
+    expect(missingCodexUsageAccountOption([option], filter)).toBeNull()
+    expect(resolveCodexUsageAccountOption([option], filter)).toEqual(option)
   })
 })

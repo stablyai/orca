@@ -162,6 +162,16 @@ describe('CommandCodeAccountService', () => {
     ).rejects.toThrow(/symbolic link/i)
   })
 
+  it('rejects an empty auth file', async () => {
+    const root = tempRoot()
+    const source = createSourceHome(root)
+    writeFileSync(join(source, 'auth.json'), '')
+
+    await expect(
+      createService(createStore(), root).addAccountFromHome(source, 'Work')
+    ).rejects.toThrow(/empty/i)
+  })
+
   it.each([
     ['invalid JSON', '{'],
     ['missing API key', '{}'],

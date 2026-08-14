@@ -25,7 +25,11 @@ function errorMessage(error: unknown): string {
       .replace(/^Error occurred in handler for 'commandCodeAccounts:[^']+':\s*/i, '')
       .replace(/^Error invoking remote method 'commandCodeAccounts:[^']+':\s*/i, '')
       .replace(/^Error:\s*/i, '')
-      .trim() || 'Command Code account update failed.'
+      .trim() ||
+    translate(
+      'auto.components.settings.CommandCodeAccountsSection.updateFailed',
+      'Command Code account update failed.'
+    )
   )
 }
 

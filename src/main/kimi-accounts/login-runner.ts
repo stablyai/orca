@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
@@ -104,6 +105,7 @@ export function runKimiLogin(
     let settled = false
     let prompted = false
     let output = ''
+    const decoder = new StringDecoder('utf8')
     const timeout = setTimeout(() => {
       terminateLogin(child)
       settle(() => reject(new Error('Kimi sign-in took too long to finish.')))
@@ -125,7 +127,7 @@ export function runKimiLogin(
       complete()
     }
     const onData = (chunk: Buffer): void => {
-      output = retainRecentLoginOutput(`${output}${chunk.toString('utf-8')}`)
+      output = retainRecentLoginOutput(`${output}${decoder.write(chunk)}`)
       if (prompted) {
         return
       }

@@ -88,7 +88,10 @@ describe.each(['grok', 'gemini'] as const)('ManagedCliHomeAccountService: %s', (
       provider === 'grok'
         ? store.getSettings().grokManagedAccounts![0]
         : store.getSettings().geminiManagedAccounts![0]
-    expect(JSON.stringify(state)).not.toContain('secret')
+    const secretMarkers = provider === 'grok' ? ['grok-secret'] : ['access', 'refresh']
+    for (const marker of secretMarkers) {
+      expect(JSON.stringify(state)).not.toContain(marker)
+    }
     expect(
       readFileSync(join(stored.managedHomePath, '.orca-managed-provider-account'), 'utf-8')
     ).toBe(`${provider}:${stored.id}\n`)

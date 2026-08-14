@@ -281,11 +281,11 @@ export class RateLimitService {
 
   // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
   // providers' fetches are started; chaining keeps the no-resolver path immediate.
-  private fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
+  private fetchKimiWithResolvedHome(signal?: AbortSignal): Promise<ProviderRateLimits> {
     const pendingHome = this.kimiHomeResolver?.()
     return pendingHome
-      ? pendingHome.then((home) => fetchKimiRateLimits({ home }))
-      : fetchKimiRateLimits({ home: undefined })
+      ? pendingHome.then((home) => fetchKimiRateLimits({ home, signal }))
+      : fetchKimiRateLimits({ home: undefined, signal })
   }
 
   setClaudeAuthPreparationResolver(resolver: ClaudeAuthPreparationResolver): void {
@@ -804,7 +804,8 @@ export class RateLimitService {
         }
         try {
           const fresh = await fetchKimiRateLimits({
-            home: { runtime: 'host', wslDistro: null, path: account.managedHomePath }
+            home: { runtime: 'host', wslDistro: null, path: account.managedHomePath },
+            signal
           })
           if (
             signal.aborted ||
@@ -1818,7 +1819,7 @@ export class RateLimitService {
           workspaceIdOverride || undefined,
           this.networkProxySettingsResolver?.()
         ),
-        this.fetchKimiWithResolvedHome(),
+        this.fetchKimiWithResolvedHome(signal),
         miniMaxConfigResult.error
           ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
           : fetchMiniMaxRateLimits({

@@ -15,11 +15,21 @@ describe('assertProviderAccountRefForWorkspace', () => {
     ).not.toThrow()
   })
 
-  it('rejects a non-Codex agent or provider', () => {
+  it('rejects a non-Codex agent', () => {
     expect(() =>
       assertProviderAccountRefForWorkspace({
         agent: 'claude',
         providerAccountRef: { provider: 'codex', accountId: 'account-a', runtime: 'host' },
+        workspace: hostWorkspace
+      })
+    ).toThrow('agent_session_account_agent_mismatch')
+  })
+
+  it('rejects a Codex agent with a non-Codex provider', () => {
+    expect(() =>
+      assertProviderAccountRefForWorkspace({
+        agent: 'codex',
+        providerAccountRef: { provider: 'claude', accountId: 'account-a', runtime: 'host' },
         workspace: hostWorkspace
       })
     ).toThrow('agent_session_account_agent_mismatch')
@@ -31,6 +41,31 @@ describe('assertProviderAccountRefForWorkspace', () => {
         agent: 'codex',
         providerAccountRef: { provider: 'codex', accountId: 'account-a', runtime: 'host' },
         workspace: { path: '/home/ada/wt', connectionId: 'ssh-1' }
+      })
+    ).toThrow('agent_session_account_runtime_mismatch')
+  })
+
+  it('rejects a host account in a WSL workspace', () => {
+    expect(() =>
+      assertProviderAccountRefForWorkspace({
+        agent: 'codex',
+        providerAccountRef: { provider: 'codex', accountId: 'account-a', runtime: 'host' },
+        workspace: wslWorkspace
+      })
+    ).toThrow('agent_session_account_runtime_mismatch')
+  })
+
+  it('rejects a WSL account in a host workspace', () => {
+    expect(() =>
+      assertProviderAccountRefForWorkspace({
+        agent: 'codex',
+        providerAccountRef: {
+          provider: 'codex',
+          accountId: 'account-a',
+          runtime: 'wsl',
+          wslDistro: 'Ubuntu'
+        },
+        workspace: hostWorkspace
       })
     ).toThrow('agent_session_account_runtime_mismatch')
   })

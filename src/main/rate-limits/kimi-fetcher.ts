@@ -304,7 +304,11 @@ function result(
  */
 export async function fetchKimiRateLimits(options?: {
   home?: KimiHomeResolution
+  signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
+  if (options?.signal?.aborted) {
+    return result('error', 'Kimi usage request aborted')
+  }
   const home: KimiHomeResolution = options?.home ?? {
     runtime: 'host',
     wslDistro: null,
@@ -334,12 +338,19 @@ export async function fetchKimiRateLimits(options?: {
     })
   }
 
+  if (options?.signal?.aborted) {
+    return result('error', 'Kimi usage request aborted')
+  }
+
   try {
+    const requestSignal = options?.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(API_TIMEOUT_MS)])
+      : AbortSignal.timeout(API_TIMEOUT_MS)
     const res = await net.fetch(`${KIMI_BASE_URL.replace(/\/$/, '')}/usages`, {
       // Why: identical to the CLI's fetchManagedUsage — bearer token + Accept.
       // No extra User-Agent: the usages endpoint authenticates by token only.
       headers: { Authorization: `Bearer ${creds.access_token}`, Accept: 'application/json' },
-      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      signal: requestSignal
     })
     if (res.status === 401 || res.status === 403) {
       return result('error', `Kimi usage request unauthorized (HTTP ${res.status})`)

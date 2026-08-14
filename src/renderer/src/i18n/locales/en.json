@@ -10784,7 +10784,8 @@
           "f8e0f92e83": "Remove Kimi Account?",
           "b2767a4027": "Orca will delete only this managed copy of the Kimi config and credentials. The original home and the system default remain unchanged.",
           "6fe23e65cd": "Cancel",
-          "03ca5c8176": "Remove"
+          "03ca5c8176": "Remove",
+          "updateFailed": "Kimi account update failed."
         },
         "CommandCodeAccountsSection": {
           "provider": "Command Code",
@@ -10805,7 +10806,8 @@
           "removeTitle": "Remove Command Code Account?",
           "removeDescription": "Orca will delete only its managed auth.json copy. The original home and system default remain unchanged.",
           "cancel": "Cancel",
-          "remove": "Remove"
+          "remove": "Remove",
+          "updateFailed": "Command Code account update failed."
         },
         "ManagedCliHomeAccountsControl": {
           "updateFailed": "Provider account update failed.",
