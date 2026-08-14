@@ -2505,20 +2505,28 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 
-  it('keeps an earlier committed reload fenced when a later reload is cancelled', () => {
-    const runtime = createRuntime()
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-    const committedFence = runtime.markRendererReloading(TEST_WINDOW_ID)
-    const cancelledFence = runtime.markRendererReloading(TEST_WINDOW_ID)
-    if (committedFence === null || cancelledFence === null) {
-      throw new Error('expected active renderer reload fences')
-    }
+  it('keeps an earlier committed reload fenced when a later reload is cancelled', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createRuntime()
+      runtime.attachWindow(TEST_WINDOW_ID)
+      runtime.markGraphReady(TEST_WINDOW_ID)
+      const committedFence = runtime.markRendererReloading(TEST_WINDOW_ID)
+      const cancelledFence = runtime.markRendererReloading(TEST_WINDOW_ID)
+      if (committedFence === null || cancelledFence === null) {
+        throw new Error('expected active renderer reload fences')
+      }
 
-    expect(cancelledFence.recovery).toBe('reloading')
-    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, committedFence)).toBe(false)
-    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, cancelledFence)).toBe(false)
-    expect(runtime.getStatus().graphStatus).toBe('reloading')
+      expect(cancelledFence.recovery).toBe('reloading')
+      expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, committedFence)).toBe(false)
+      expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, cancelledFence)).toBe(false)
+      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS - 1)
+      expect(runtime.getStatus().graphStatus).toBe('reloading')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(runtime.getStatus().graphStatus).toBe('unavailable')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('restores headless authority when desktop promotion navigation is cancelled', () => {
