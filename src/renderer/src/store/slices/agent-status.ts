@@ -2115,9 +2115,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           updatedAt,
           stateStartedAt,
           agentType: identity.agentType,
-          model:
-            payload.model ??
-            (existing?.agentType === identity.agentType ? existing.model : undefined),
+          // Why: a nested child CLI inherits the pane key, and its model would
+          // mislabel the fenced parent identity long after the child exits.
+          model: identity.inheritedFromActivePane
+            ? existing?.model
+            : (payload.model ??
+              (existing?.agentType === identity.agentType ? existing.model : undefined)),
           paneKey,
           terminalHandle: statusTerminalHandle,
           worktreeId:

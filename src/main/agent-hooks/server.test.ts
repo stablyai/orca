@@ -8527,6 +8527,119 @@ describe('AgentHookServer ingestRemote', () => {
     }
   })
 
+  // Why: `claude` running `codex exec` fires codex hooks on the inherited pane key;
+  // the fenced row must keep the parent's model, not adopt the child's (STA-3754).
+  it('keeps the parent model through a nested hook and parent completion', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: {
+            state: 'working',
+            prompt: 'parent claude',
+            agentType: 'claude',
+            model: 'claude-fable-5'
+          }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_100)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: {
+            state: 'working',
+            prompt: 'nested codex',
+            agentType: 'codex',
+            model: 'gpt-5.6-sol'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          agentType: 'claude',
+          model: 'claude-fable-5'
+        })
+      ])
+
+      vi.setSystemTime(1_200)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'parent claude', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'done',
+          agentType: 'claude',
+          model: 'claude-fable-5'
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops the nested model when the fenced parent never reported one', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: { state: 'working', prompt: 'parent claude', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_100)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: {
+            state: 'working',
+            prompt: 'nested codex',
+            agentType: 'codex',
+            model: 'gpt-5.6-sol'
+          }
+        },
+        'conn-1'
+      )
+
+      const snapshot = server.getStatusSnapshot()[0]
+      expect(snapshot).toMatchObject({ agentType: 'claude' })
+      expect(snapshot?.model).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('ignores nested remote done while the parent pane agent is still active', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

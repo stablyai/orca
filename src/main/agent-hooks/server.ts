@@ -1234,7 +1234,27 @@ export class AgentHookServer {
               agentType: identity.agentType
             }
           }
-    const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    // Why: child hooks can report their own model, while later parent completion hooks may omit it.
+    const modelPreservingPayload = identity.inheritedFromActivePane
+      ? {
+          ...identityResolvedPayload,
+          payload: {
+            ...identityResolvedPayload.payload,
+            model: previous?.payload.model
+          }
+        }
+      : identityResolvedPayload.payload.model === undefined &&
+          previous?.payload.agentType === identity.agentType &&
+          previous.payload.model !== undefined
+        ? {
+            ...identityResolvedPayload,
+            payload: {
+              ...identityResolvedPayload.payload,
+              model: previous.payload.model
+            }
+          }
+        : identityResolvedPayload
+    const effectivePayload = attachClaudePermissionToolUseId(previous, modelPreservingPayload)
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       return previous
     }

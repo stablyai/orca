@@ -594,6 +594,61 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('codex')
   })
 
+  it('keeps the parent model when a nested hook reports a different model', () => {
+    // Why: `claude` running `codex exec` fires codex hooks on the same pane key;
+    // the fenced row must not relabel the Claude session with the codex model.
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus('tab-1:1', {
+      state: 'working',
+      prompt: 'parent claude',
+      agentType: 'claude',
+      model: 'claude-fable-5'
+    })
+    store.getState().setAgentStatus('tab-1:1', {
+      state: 'working',
+      prompt: 'nested codex',
+      agentType: 'codex',
+      model: 'gpt-5.6-sol'
+    })
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.agentType).toBe('claude')
+    expect(entry.model).toBe('claude-fable-5')
+  })
+
+  it('keeps the nested model out of the row after the parent turn completes', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'parent claude', agentType: 'claude', model: 'claude-fable-5' },
+        undefined,
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'nested codex', agentType: 'codex', model: 'gpt-5.6-sol' },
+        undefined,
+        { updatedAt: 1_100, stateStartedAt: 1_100 }
+      )
+    // Parent Stop hook: no model on Claude done events, so a leaked child model would stick.
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'done', prompt: 'parent claude', agentType: 'claude' },
+        undefined,
+        { updatedAt: 1_200, stateStartedAt: 1_200 }
+      )
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.state).toBe('done')
+    expect(entry.model).toBe('claude-fable-5')
+  })
+
   it('ignores nested done while the parent pane agent is still active', () => {
     vi.useFakeTimers()
     const store = createTestStore()
