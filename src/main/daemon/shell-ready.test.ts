@@ -622,6 +622,8 @@ describePosix('daemon shell-ready launch config', () => {
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
     const mimoRestoreLine =
       '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+    const kiloRestoreLine =
+      '[[ -n "${ORCA_KILO_CONFIG_DIR:-}" ]] && export KILO_CONFIG_DIR="${ORCA_KILO_CONFIG_DIR}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
@@ -632,6 +634,10 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshrc).toContain(mimoRestoreLine)
     expect(zlogin).toContain(mimoRestoreLine)
     expect(bashRc).toContain(mimoRestoreLine)
+    // Why: exact count — a replace_all that double-inserts still passes toContain.
+    for (const wrapperFile of [zshrc, zlogin, bashRc]) {
+      expect(wrapperFile.split(kiloRestoreLine).length - 1).toBe(1)
+    }
     expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')

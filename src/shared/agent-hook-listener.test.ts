@@ -118,6 +118,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/prime-agent')).toBe('prime-agent')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
+    expect(resolveHookSource('/hook/kilo')).toBe('kilo')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -1837,6 +1838,55 @@ describe('shared agent-hook-listener', () => {
     expect(message?.providerSession).toMatchObject({ key: 'session_id', id: 'mimo-session' })
     expect(tool?.payload).toMatchObject({ agentType: 'mimo-code', state: 'working' })
     expect(idle?.payload).toMatchObject({ agentType: 'mimo-code', state: 'done' })
+  })
+
+  it('normalizes Kilo OpenCode-compatible lifecycle events as kilo status', () => {
+    const message = normalizeHookPayload(
+      state,
+      'kilo',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'MessagePart',
+          sessionID: 'ses_kilo',
+          messageID: 'message-1',
+          role: 'user',
+          text: 'fix the regression'
+        }
+      },
+      'production'
+    )
+    const busy = normalizeHookPayload(
+      state,
+      'kilo',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SessionBusy',
+          sessionID: 'ses_kilo'
+        }
+      },
+      'production'
+    )
+    const idle = normalizeHookPayload(
+      state,
+      'kilo',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionIdle', sessionID: 'ses_kilo' }
+      },
+      'production'
+    )
+
+    expect(message?.payload).toMatchObject({
+      agentType: 'kilo',
+      state: 'working',
+      prompt: 'fix the regression'
+    })
+    expect(message?.promptInteractionKey).toBe('kilo-message-message-1')
+    expect(message?.providerSession).toMatchObject({ key: 'session_id', id: 'ses_kilo' })
+    expect(busy?.payload).toMatchObject({ agentType: 'kilo', state: 'working' })
+    expect(idle?.payload).toMatchObject({ agentType: 'kilo', state: 'done' })
   })
 
   it('maps Kimi AskUserQuestion PreToolUse to waiting, then back to working on answer', () => {

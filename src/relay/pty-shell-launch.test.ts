@@ -152,6 +152,10 @@ describe('getRelayShellLaunchConfig', () => {
       expect(zshrc).toContain(
         '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
       )
+      const kiloRestoreLine =
+        '[[ -n "${ORCA_KILO_CONFIG_DIR:-}" ]] && export KILO_CONFIG_DIR="${ORCA_KILO_CONFIG_DIR}"'
+      // Why: exact count — a replace_all that double-inserts still passes toContain.
+      expect(zshrc.split(kiloRestoreLine).length - 1).toBe(1)
     }
   )
 

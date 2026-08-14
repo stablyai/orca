@@ -10,6 +10,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'opencode',
   'pi',
   'mimo-code',
+  'kilo',
   'droid',
   'grok',
   'devin',
@@ -205,7 +206,10 @@ export function extractAgentProviderSession(
       return id ? { key: 'conversation_id', id } : null
     }
     case 'opencode':
-    case 'mimo-code': {
+    case 'mimo-code':
+    // Why: Kilo is an OpenCode fork; the shared status plugin posts sessionID like OpenCode.
+    // falls through
+    case 'kilo': {
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
     }
@@ -266,6 +270,10 @@ export function getAgentResumeArgv(
         : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null
+    case 'kilo':
+      // Why: Kilo resumes a specific session with `--session` (also accepts `-c`/`--continue` for
+      // latest-in-cwd only; id-based resume matches sleeping-agent records across workspaces).
+      return providerSession.key === 'session_id' ? ['kilo', '--session', id] : null
     case 'droid':
       return providerSession.key === 'session_id' ? ['droid', '--resume', id] : null
     case 'grok':

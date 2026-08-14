@@ -20,6 +20,10 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('prime-agent')).toBe(true)
   })
 
+  it('treats kilo as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('kilo')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -36,6 +40,7 @@ describe('agent session resume metadata', () => {
       { key: 'session_id', id: 'pi-session', transcriptPath: '/tmp/pi-session.jsonl' }
     ],
     ['mimo-code', { sessionID: 'mimo-session' }, { key: 'session_id', id: 'mimo-session' }],
+    ['kilo', { sessionID: 'ses_kilo' }, { key: 'session_id', id: 'ses_kilo' }],
     ['droid', { session_id: 'droid-session' }, { key: 'session_id', id: 'droid-session' }],
     ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }],
     ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }],
@@ -61,6 +66,7 @@ describe('agent session resume metadata', () => {
       ['pi', '--session', '/tmp/pi-session.jsonl']
     ],
     ['mimo-code', { key: 'session_id', id: 's1' }, ['mimo', '--session', 's1']],
+    ['kilo', { key: 'session_id', id: 'ses_1' }, ['kilo', '--session', 'ses_1']],
     ['droid', { key: 'session_id', id: 's1' }, ['droid', '--resume', 's1']],
     ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']],
     ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']],

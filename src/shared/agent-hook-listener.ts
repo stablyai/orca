@@ -2438,6 +2438,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'agent.start'
     case 'opencode':
     case 'mimo-code':
+    case 'kilo':
       return false
     case 'cursor':
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
@@ -2487,7 +2488,10 @@ function hasExplicitUserPrompt(
     return true
   }
   if (extractedPrompt.source === 'role_user_text') {
-    return (source === 'opencode' || source === 'mimo-code') && eventName === 'MessagePart'
+    return (
+      (source === 'opencode' || source === 'mimo-code' || source === 'kilo') &&
+      eventName === 'MessagePart'
+    )
   }
   if (extractedPrompt.text.length === 0) {
     return false
@@ -2533,6 +2537,7 @@ function extractToolFields(
       return extractAmpToolFields(eventName, hookPayload)
     case 'opencode':
     case 'mimo-code':
+    case 'kilo':
       return extractOpenCodeToolFields(eventName, hookPayload)
     case 'cursor':
       return extractCursorToolFields(eventName, hookPayload)
@@ -3766,7 +3771,7 @@ function normalizeCodexEvent(
 }
 
 function normalizeOpenCodeFamilyEvent(
-  source: 'opencode' | 'mimo-code',
+  source: 'opencode' | 'mimo-code' | 'kilo',
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
@@ -4360,13 +4365,19 @@ export function normalizeHookPayload(
       break
     case 'opencode':
     case 'mimo-code':
+    case 'kilo':
       if (extractedPrompt.source === 'role_user_text') {
         const messageId = readFirstString(hookPayloadRecord, [
           'messageID',
           'messageId',
           'message_id'
         ])
-        const prefix = source === 'mimo-code' ? 'mimo-code-message' : 'opencode-message'
+        const prefix =
+          source === 'mimo-code'
+            ? 'mimo-code-message'
+            : source === 'kilo'
+              ? 'kilo-message'
+              : 'opencode-message'
         promptInteractionKey = messageId ? `${prefix}-${messageId}` : undefined
       }
       payload = normalizeOpenCodeFamilyEvent(
@@ -4523,6 +4534,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/amp': 'amp',
   '/hook/opencode': 'opencode',
   '/hook/mimo-code': 'mimo-code',
+  '/hook/kilo': 'kilo',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',
