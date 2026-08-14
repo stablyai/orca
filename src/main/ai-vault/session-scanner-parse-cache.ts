@@ -78,6 +78,7 @@ function resumableStateFactoryFor(
     case 'hermes':
     case 'kimi':
     case 'opencode':
+    case 'opencode2':
     case 'rovo':
       return null
   }

@@ -32,7 +32,7 @@ describe('opencodeDiscoveries', () => {
     })
     const issues = []
 
-    await Promise.all(opencodeDiscoveries({}, [], 25, issues))
+    await opencodeDiscoveries({}, [], 25, issues)
 
     expect(discoverOpenCodeSessionsMock).toHaveBeenCalledWith({
       storageDir: join('/xdg/data', 'opencode', 'storage'),

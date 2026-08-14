@@ -22,6 +22,7 @@ export const AGENT_NAMES = [
   'gemini',
   'antigravity',
   'opencode',
+  'opencode2',
   'mimo',
   'openclaw',
   'aider',

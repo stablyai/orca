@@ -52,6 +52,7 @@ import {
 } from '../../shared/local-windows-terminal-runtime'
 import { applyTerminalGitCredentialPromptGuard } from './terminal-git-credential-guard'
 import { openCodeHookService } from '../opencode/hook-service'
+import { openCode2HookService } from '../opencode2/hook-service'
 import { mimoCodeHookService } from '../mimo/hook-service'
 import {
   getCommandTokenPathBasename,
@@ -307,6 +308,20 @@ const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
+}
+
+// Why: identifies an opencode2 launch from the spawn request (renderer/CLI
+// agent launches thread launchAgent) or the command itself (typed-in-shell
+// starts carry neither launchAgent nor telemetry).
+function isOpenCode2AgentLaunch(
+  launchAgent: TuiAgent | undefined,
+  command: string | null | undefined
+): boolean {
+  if (launchAgent === 'opencode2') {
+    return true
+  }
+  const firstToken = command?.trim().split(/\s+/)[0]
+  return firstToken === 'opencode2'
 }
 
 // Why: let consumers tear down paneKey-scoped state on PTY exit so their timers can't leak; a callback registry keeps the cross-module dependency narrow.
@@ -2057,6 +2072,7 @@ export function clearProviderPtyState(
   // node-pty process table. Centralizing provider cleanup avoids drift where a
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
+  openCode2HookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   // Why: SSH exit/teardown paths bypass pty.ts's local onExit but still must release Claude account-switch guards.
   markClaudePtyExited(id)
@@ -5343,6 +5359,28 @@ export function registerPtyHandlers(
         }
         // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
         const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
+        // Why: runtime/CLI spawns bypass pty:spawn — register the watcher here
+        // too so headless terminals attribute daemon sessions.
+        if (
+          !args.connectionId &&
+          paneKey &&
+          isOpenCode2AgentLaunch(
+            isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+            launchCommand
+          )
+        ) {
+          const registrationCwd = cwd?.trim()
+          if (registrationCwd) {
+            openCode2HookService.registerTerminal({
+              ptyId: result.id,
+              cwd: registrationCwd,
+              paneKey,
+              ...(typeof args.worktreeId === 'string' && args.worktreeId.length > 0
+                ? { worktreeId: args.worktreeId }
+                : {})
+            })
+          }
+        }
         const pendingSerializer = paneKey ? pendingByPaneKey.get(paneKey) : undefined
         const inheritRendererReadiness =
           result.isReattach === true &&
@@ -6949,6 +6987,27 @@ export function registerPtyHandlers(
         const rememberedPaneKey = validatedPaneKey
           ? rememberPaneKeyForPty(result.id, validatedPaneKey)
           : null
+        // Why: opencode2 sessions live in the shared service daemon, so the
+        // status watcher needs each opencode2 terminal's cwd + pane key for
+        // attribution (ADR 0003). Derived from launchAgent or the launch
+        // command so typed-in-shell starts register too.
+        if (
+          !args.connectionId &&
+          rememberedPaneKey &&
+          isOpenCode2AgentLaunch(args.launchAgent, launchCommand)
+        ) {
+          const registrationCwd = cwd?.trim()
+          if (registrationCwd) {
+            openCode2HookService.registerTerminal({
+              ptyId: result.id,
+              cwd: registrationCwd,
+              paneKey: rememberedPaneKey,
+              ...(typeof args.worktreeId === 'string' && args.worktreeId.length > 0
+                ? { worktreeId: args.worktreeId }
+                : {})
+            })
+          }
+        }
         if (legacySpawnPaneKey && migrationUnsupportedPaneKey) {
           agentHookServer.registerPaneKeyAlias(
             legacySpawnPaneKey.paneKey,

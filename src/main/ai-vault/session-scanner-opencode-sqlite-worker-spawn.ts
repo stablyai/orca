@@ -56,6 +56,15 @@ export function listOpenCodeSqliteSessionsViaWorker(args: {
   return getSharedClient().list(args)
 }
 
+/** List opencode2 session candidates (v2 channel-scoped schema) via the shared worker client. */
+export function listOpenCode2SqliteSessionsViaWorker(args: {
+  dbPaths: readonly string[]
+  limit: number
+  issues: AiVaultScanIssue[]
+}): Promise<SessionFileCandidate[]> {
+  return getSharedClient().list({ ...args, agent: 'opencode2' })
+}
+
 /**
  * Parse one OpenCode SQLite session through the shared worker client.
  * @param args.dbPath - Absolute path to the opencode.db file.
@@ -69,4 +78,13 @@ export function parseOpenCodeSqliteSessionViaWorker(args: {
   platform: NodeJS.Platform
 }): Promise<AiVaultSession | null> {
   return getSharedClient().parse(args)
+}
+
+/** Parse one opencode2 session (v2 channel-scoped schema) via the shared worker client. */
+export function parseOpenCode2SqliteSessionViaWorker(args: {
+  dbPath: string
+  sessionId: string
+  platform: NodeJS.Platform
+}): Promise<AiVaultSession | null> {
+  return getSharedClient().parse({ ...args, agent: 'opencode2' })
 }

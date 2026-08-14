@@ -58,13 +58,11 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
       dir === WSL_DATA_DIR ? stalls() : Promise.resolve([] as Dirent[])
     )
     const issues: AiVaultScanIssue[] = []
-    const discoveries = Promise.all(
-      opencodeDiscoveries(
-        { opencodeStorageDir: '/home/ada/.local/share/opencode/storage' },
-        [WSL_HOME],
-        10,
-        issues
-      )
+    const discoveries = opencodeDiscoveries(
+      { opencodeStorageDir: '/home/ada/.local/share/opencode/storage' },
+      [WSL_HOME],
+      10,
+      issues
     )
     // Two deadlines: the data-dir probe, then the storage scan that queued
     // behind it before the route was flagged stuck.
@@ -87,7 +85,7 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
     try {
       mocks.readdir.mockImplementation(stalls)
       const issues: AiVaultScanIssue[] = []
-      const discoveries = Promise.all(opencodeDiscoveries({}, [], 10, issues))
+      const discoveries = opencodeDiscoveries({}, [], 10, issues)
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS * 2 + 2)
 
       // The primary source is the one per-root containment cannot reach, so a

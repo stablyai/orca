@@ -1,28 +1,61 @@
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { resolveOpenCodeStorageDirectory } from '../opencode/opencode-data-directory'
 import { listOpenCodeDatabases } from '../opencode-usage/scanner'
 import { recordSessionScanIssue } from './session-scan-issues'
 import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
+import { listOpenCode2SqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 
-export function opencodeDiscoveries(
+// Why: opencode2's channel-scoped DBs share the v1 `opencode*.db` glob but not
+// its schema — split by basename so each discovery only sees its own store.
+
+function splitDatabasePaths(dbPaths: readonly string[]): {
+  v1Paths: string[]
+  v2Paths: string[]
+} {
+  const v1Paths: string[] = []
+  const v2Paths: string[] = []
+  for (const dbPath of dbPaths) {
+    if (isOpenCodeV2DatabaseName(basename(dbPath))) {
+      v2Paths.push(dbPath)
+    } else {
+      v1Paths.push(dbPath)
+    }
+  }
+  return { v1Paths, v2Paths }
+}
+
+export async function opencodeDiscoveries(
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[],
   limit: number,
   issues: AiVaultScanIssue[]
-): Promise<SessionFileDiscovery>[] {
+): Promise<SessionFileDiscovery[]> {
   const storageDirs = opencodeStorageDirs(options, wslHomeDirs)
-  return storageDirs.map(async (storageDir, index) =>
-    discoverOpenCodeSessions({
-      storageDir,
-      dbPaths: await opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index, issues),
-      limitPerAgent: limit,
-      issues
+  const discoveriesByDir = await Promise.all(
+    storageDirs.map(async (storageDir, index) => {
+      const paths = await opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index, issues)
+      const { v1Paths, v2Paths } = splitDatabasePaths(paths)
+      const v1 = await discoverOpenCodeSessions({
+        storageDir,
+        dbPaths: v1Paths,
+        limitPerAgent: limit,
+        issues
+      })
+      // Why: keep one discovery per dir for v1-only installs (existing callers
+      // count them); only add the opencode2 leg when v2 DBs actually exist.
+      if (v2Paths.length === 0) {
+        return [v1]
+      }
+      const v2 = await discoverOpenCode2Sessions(storageDir, v2Paths, limit, issues)
+      return [v1, v2]
     })
   )
+  return discoveriesByDir.flat()
 }
 
 function opencodeStorageDirs(
@@ -81,5 +114,19 @@ async function listOpenCodeDatabasesInDirectory(
       })
     }
     return []
+  }
+}
+
+async function discoverOpenCode2Sessions(
+  storageDir: string,
+  dbPaths: readonly string[],
+  limit: number,
+  issues: AiVaultScanIssue[]
+): Promise<SessionFileDiscovery> {
+  const files = await listOpenCode2SqliteSessionsViaWorker({ dbPaths, limit, issues })
+  return {
+    agent: 'opencode2' as const,
+    rootDir: storageDir,
+    files: files.map((candidate) => candidate.file)
   }
 }

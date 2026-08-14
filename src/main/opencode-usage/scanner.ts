@@ -2,6 +2,7 @@
 import { realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, posix, win32 } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
+import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
@@ -576,7 +577,11 @@ export async function scanOpenCodeUsageDatabases(
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
-  const dbPaths = await listOpenCodeDatabases()
+  // Why: the shared list also feeds ai-vault discovery, which routes v2 DBs to
+  // the opencode2 scanner; only the v1 usage parser must exclude them.
+  const dbPaths = (await listOpenCodeDatabases()).filter(
+    (dbPath) => !isOpenCodeV2DatabaseName(basename(dbPath))
+  )
   const previousByPath = new Map(
     previousProcessedDatabases.map((database) => [database.path, database])
   )

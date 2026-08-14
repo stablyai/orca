@@ -479,6 +479,38 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     ],
     defaultModelId: 'opencode/deepseek-v4-flash-free'
   },
+  // Why: opencode2 is the v2 beta binary (docs/adr/0001). Its `run` keeps
+  // `--model`/`--agent`, but the thinking variant moved inline as `model#variant`
+  // (v1's separate `--variant` flag is removed in v2).
+  opencode2: {
+    id: 'opencode2',
+    label: 'OpenCode 2',
+    binary: 'opencode2',
+    promptDelivery: 'stdin',
+    buildArgs: ({ model, thinkingLevel }) => [
+      'run',
+      '--model',
+      thinkingLevel ? `${model}#${thinkingLevel}` : model,
+      '--agent',
+      'build',
+      '--format',
+      'default'
+    ],
+    modelSource: 'dynamic',
+    modelDiscovery: { binary: 'opencode2', args: ['models'], parse: parseLineModels },
+    models: [
+      {
+        id: 'opencode/deepseek-v4-flash-free',
+        label: 'OpenCode DeepSeek V4 Flash Free'
+      },
+      {
+        id: 'opencode/gpt-5.4-mini',
+        label: 'OpenCode GPT 5.4 Mini',
+        ...withOpenAiThinking('gpt-5.4-mini')
+      }
+    ],
+    defaultModelId: 'opencode/deepseek-v4-flash-free'
+  },
   pi: {
     id: 'pi',
     label: 'Pi',

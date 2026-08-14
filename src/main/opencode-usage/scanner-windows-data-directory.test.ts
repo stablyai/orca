@@ -80,7 +80,7 @@ describe('OpenCode usage discovery on Windows', () => {
 
     const result = await scanOpenCodeUsageDatabases([], [])
     const issues = []
-    const [discovery] = await Promise.all(opencodeDiscoveries({}, [], 25, issues))
+    const [discovery] = await opencodeDiscoveries({}, [], 25, issues)
 
     expect(discovery?.files.map(({ path }) => path)).toEqual([`${databasePath}#windows-session`])
     expect(issues).toEqual([])

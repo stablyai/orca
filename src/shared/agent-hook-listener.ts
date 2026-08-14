@@ -2427,6 +2427,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'amp':
       return eventName === 'agent.start'
     case 'opencode':
+    case 'opencode2':
     case 'mimo-code':
       return false
     case 'cursor':
@@ -2522,6 +2523,7 @@ function extractToolFields(
     case 'amp':
       return extractAmpToolFields(eventName, hookPayload)
     case 'opencode':
+    case 'opencode2':
     case 'mimo-code':
       return extractOpenCodeToolFields(eventName, hookPayload)
     case 'cursor':
@@ -3674,7 +3676,7 @@ function normalizeCodexEvent(
 }
 
 function normalizeOpenCodeFamilyEvent(
-  source: 'opencode' | 'mimo-code',
+  source: 'opencode' | 'opencode2' | 'mimo-code',
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
@@ -4264,6 +4266,7 @@ export function normalizeHookPayload(
       payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'opencode':
+    case 'opencode2':
     case 'mimo-code':
       if (extractedPrompt.source === 'role_user_text') {
         const messageId = readFirstString(hookPayloadRecord, [

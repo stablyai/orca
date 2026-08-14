@@ -9,8 +9,33 @@ import {
   jsonLines,
   writeAntigravityScannerFixture,
   writeOmpScannerFixture,
+  writeOpenCode2SqliteFixture,
   writePrimeAgentScannerFixture
 } from './session-scanner-test-fixtures'
+
+// Why: the SQLite worker bundle does not exist in the test runtime; route the
+// v1/v2 worker calls to their synchronous implementations so scanning stays
+// end-to-end without spawning a real worker thread.
+vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
+  const v1List = await import('./session-scanner-opencode-sqlite-list')
+  const v1Parse = await import('./session-scanner-opencode-sqlite')
+  const v2List = await import('./session-scanner-opencode2-sqlite-list')
+  const v2Parse = await import('./session-scanner-opencode2-sqlite')
+  return {
+    listOpenCodeSqliteSessionsViaWorker: (
+      args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
+    ) => v1List.listOpenCodeSqliteSessions(args),
+    parseOpenCodeSqliteSessionViaWorker: (
+      args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
+    ) => v1Parse.parseOpenCodeSqliteSession(args),
+    listOpenCode2SqliteSessionsViaWorker: (
+      args: Parameters<typeof v2List.listOpenCode2SqliteSessions>[0]
+    ) => v2List.listOpenCode2SqliteSessions(args),
+    parseOpenCode2SqliteSessionViaWorker: (
+      args: Parameters<typeof v2Parse.parseOpenCode2SqliteSession>[0]
+    ) => v2Parse.parseOpenCode2SqliteSession(args)
+  }
+})
 
 let tempRoots: string[] = []
 
@@ -494,6 +519,10 @@ describe('scanAiVaultSessions', () => {
       })
     )
 
+    // Why: opencode2 (beta) sessions come from the channel-scoped SQLite DB
+    // (session_v2/session_message schema) alongside the v1 store.
+    roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
+
     await mkdir(join(roots.grokSessionsDir, encodeURIComponent('/tmp/grok'), 'grok-session'), {
       recursive: true
     })
@@ -720,6 +749,9 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('cursor')).toBe("cursor-agent --resume 'cursor-session'")
     expect(commandByAgent.get('opencode')).toBe(
       "cd '/tmp/opencode' && opencode --session 'opencode-session'"
+    )
+    expect(commandByAgent.get('opencode2')).toBe(
+      "cd '/tmp/opencode2' && opencode2 --session 'opencode2-session'"
     )
     expect(commandByAgent.get('grok')).toBe("cd '/tmp/grok' && grok --resume 'grok-session'")
     expect(commandByAgent.get('hermes')).toBe(
