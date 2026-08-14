@@ -156,6 +156,7 @@ export type RuntimeBrowserCommandHost = {
     browserPageId: string,
     targetGroupId?: string
   ): void
+  notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
 }
 
 export class RuntimeBrowserCommands {
@@ -357,6 +358,9 @@ export class RuntimeBrowserCommands {
     const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
     if (pageId) {
       this.notifyRendererNavigation(pageId, result.url, result.title)
+    }
+    if (!this.host.getAvailableAuthoritativeWindow() && target.worktreeId) {
+      this.host.notifyHeadlessBrowserSessionTabsChanged?.(target.worktreeId)
     }
     return result
   }
@@ -1357,6 +1361,9 @@ export class RuntimeBrowserCommands {
       const navigate = async (): Promise<void> => {
         const result = await bridge.goto(url, worktreeId, browserPageId)
         this.notifyRendererNavigation(browserPageId, result.url, result.title)
+        if (!this.host.getAvailableAuthoritativeWindow() && worktreeId) {
+          this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
+        }
       }
       if (params.waitForRegistration === true) {
         void navigate().catch(() => {})

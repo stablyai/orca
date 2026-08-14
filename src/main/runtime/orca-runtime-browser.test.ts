@@ -698,6 +698,34 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
     expect(setActiveTab).toHaveBeenCalledWith(202, 'wt-1')
   })
 
+  it('publishes a headless session snapshot after explicit navigation', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    const notifyHeadlessBrowserSessionTabsChanged = vi.fn()
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map([['page-offscreen', 202]])),
+      getActivePageId: vi.fn(() => 'page-offscreen'),
+      goto: vi.fn(async () => ({ title: 'Loaded', url: 'https://example.com/loaded' }))
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAvailableAuthoritativeWindow: vi.fn(() => null),
+        notifyHeadlessBrowserSessionTabsChanged
+      })
+    )
+
+    await expect(
+      commands.browserGoto({
+        worktree: 'id:wt-1',
+        page: 'page-offscreen',
+        url: 'https://example.com/loaded'
+      })
+    ).resolves.toEqual({ title: 'Loaded', url: 'https://example.com/loaded' })
+
+    expect(notifyHeadlessBrowserSessionTabsChanged).toHaveBeenCalledWith('wt-1')
+  })
+
   it('rejects tab creation when neither a renderer nor an offscreen backend is available', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const commands = new RuntimeBrowserCommands(

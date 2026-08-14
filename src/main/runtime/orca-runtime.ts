@@ -35540,7 +35540,9 @@ export class OrcaRuntimeService {
     getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
     getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
     // Why: bind directly, not a wrapper arrow — a hand-listed wrapper dropped targetGroupId, so a right-split browser landed in the left.
-    markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this)
+    markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
+    notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
+      this.notifyMobileSessionTabsChanged(worktreeId)
   })
 
   private readonly emulatorCommands = new RuntimeEmulatorCommands({
