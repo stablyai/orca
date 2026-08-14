@@ -71,6 +71,27 @@ describe('selectTabAgentTypesByTabId', () => {
     expect(selectNativeChatTabWideFallbackUnsafeTabsById(layouts)).toEqual({ 'tab-1': true })
   })
 
+  it('projects pane launch identity before the active leaf has a hook', () => {
+    expect(
+      selectTabAgentTypesByTabId(
+        {},
+        { 'tab-1': splitLayout('leaf-b') },
+        { 'tab-1:leaf-b': { identity: { agentType: 'codex' } } }
+      )
+    ).toEqual({ 'tab-1': 'codex' })
+  })
+
+  it('drops projected launch identity after active-leaf shell confirmation', () => {
+    expect(
+      selectTabAgentTypesByTabId(
+        {},
+        { 'tab-1': splitLayout('leaf-b') },
+        { 'tab-1:leaf-b': { identity: { agentType: 'codex' } } },
+        { 'tab-1:leaf-b': { agent: null, shellForeground: true } }
+      )
+    ).toEqual({})
+  })
+
   it('does not inherit a supported sibling when the active split leaf is a shell', () => {
     const projection = selectTabAgentTypesByTabId(
       {

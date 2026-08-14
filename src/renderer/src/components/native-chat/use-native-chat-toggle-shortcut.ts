@@ -11,28 +11,47 @@ import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from './native-chat-leaf-routing'
+import { resolveNativeChatPaneAgent } from './native-chat-pane-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+
+type PaneLaunchAgentState = Record<
+  string,
+  { identity: { agentType?: AgentType | null } } | undefined
+>
 
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,
   terminalLayout,
-  agentStatusByPaneKey
+  agentStatusByPaneKey,
+  agentLaunchConfigByPaneKey = {},
+  paneForegroundAgentByPaneKey = {}
 }: {
   terminalTabId: string
   terminalLayout?: TerminalLayoutSnapshot | null
   agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
+  agentLaunchConfigByPaneKey?: PaneLaunchAgentState
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry | undefined>
 }): AgentType | null {
   const activeLeafId = resolveNativeChatActiveLayoutLeafId(terminalLayout)
-  if (activeLeafId) {
-    return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null
-  }
-  if (!isNativeChatTabWideFallbackSafe(terminalLayout)) {
+  if (!activeLeafId && !isNativeChatTabWideFallbackSafe(terminalLayout)) {
     return null
   }
-  return (
-    Object.entries(agentStatusByPaneKey).find(([paneKey]) =>
-      paneKey.startsWith(`${terminalTabId}:`)
-    )?.[1].agentType ?? null
-  )
+  const prefix = `${terminalTabId}:`
+  const paneKey = activeLeafId
+    ? `${prefix}${activeLeafId}`
+    : ([
+        ...Object.keys(agentStatusByPaneKey),
+        ...Object.keys(agentLaunchConfigByPaneKey),
+        ...Object.keys(paneForegroundAgentByPaneKey)
+      ].find((key) => key.startsWith(prefix)) ?? null)
+  if (!paneKey) {
+    return null
+  }
+  return resolveNativeChatPaneAgent({
+    hookAgent: agentStatusByPaneKey[paneKey]?.agentType,
+    foreground: paneForegroundAgentByPaneKey[paneKey],
+    paneLaunchAgent: agentLaunchConfigByPaneKey[paneKey]?.identity.agentType
+  })
 }
 
 /** Toggles the active worktree's focused agent-terminal tab between the terminal
@@ -73,7 +92,9 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
         terminalTabId: tab.entityId,
         terminalLayout,
-        agentStatusByPaneKey: state.agentStatusByPaneKey
+        agentStatusByPaneKey: state.agentStatusByPaneKey,
+        agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey,
+        paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey
       })
       const titleFallbackAgent = tabWideFallbackSafe
         ? (resolveCommittedTitleAgentType(tab.label ?? '') ??

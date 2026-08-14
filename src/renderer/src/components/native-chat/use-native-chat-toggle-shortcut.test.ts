@@ -82,6 +82,43 @@ describe('resolveNativeChatToggleShortcutDetectedAgent', () => {
     ).toBe('codex')
   })
 
+  it('uses pane launch identity before the first hook', () => {
+    expect(
+      resolveNativeChatToggleShortcutDetectedAgent({
+        terminalTabId: 'tab-1',
+        terminalLayout: {
+          root: { type: 'leaf', leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null
+        },
+        agentStatusByPaneKey: {},
+        agentLaunchConfigByPaneKey: {
+          'tab-1:leaf-1': { identity: { agentType: 'codex' } }
+        }
+      })
+    ).toBe('codex')
+  })
+
+  it('rejects stale launch identity after shell confirmation', () => {
+    expect(
+      resolveNativeChatToggleShortcutDetectedAgent({
+        terminalTabId: 'tab-1',
+        terminalLayout: {
+          root: { type: 'leaf', leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null
+        },
+        agentStatusByPaneKey: {},
+        agentLaunchConfigByPaneKey: {
+          'tab-1:leaf-1': { identity: { agentType: 'codex' } }
+        },
+        paneForegroundAgentByPaneKey: {
+          'tab-1:leaf-1': { agent: null, shellForeground: true }
+        }
+      })
+    ).toBeNull()
+  })
+
   it('rejects a stale active leaf instead of reading its retained status', () => {
     expect(
       resolveNativeChatToggleShortcutDetectedAgent({

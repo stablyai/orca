@@ -4,6 +4,13 @@ import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from '../native-chat/native-chat-leaf-routing'
+import { resolveNativeChatPaneAgent } from '../native-chat/native-chat-pane-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+
+type PaneLaunchAgentState = Record<
+  string,
+  { identity: { agentType?: AgentType | null } } | undefined
+>
 
 type TabBarAgentProjectionSelectorDependencies = {
   onStatusEntryVisited?: (paneKey: string) => void
@@ -13,6 +20,8 @@ type TabBarAgentProjectionSelectorDependencies = {
 
 export type TabBarAgentProjectionState = {
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>
+  agentLaunchConfigByPaneKey?: PaneLaunchAgentState
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   settings?: { experimentalNativeChat?: boolean } | null
 }
@@ -24,6 +33,10 @@ export type TabBarAgentProjections = {
 }
 
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: Record<string, AgentStatusEntry> = Object.freeze({})
+const EMPTY_PANE_LAUNCH_AGENT_STATE: PaneLaunchAgentState = Object.freeze({})
+const EMPTY_PANE_FOREGROUND_AGENT_STATE: Record<string, PaneForegroundAgentEntry> = Object.freeze(
+  {}
+)
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: Record<string, TerminalLayoutSnapshot> = Object.freeze({})
 const EMPTY_TAB_AGENT_TYPES_BY_TAB_ID: Record<string, AgentType> = Object.freeze({})
 const EMPTY_UNSAFE_TABS_BY_ID: Record<string, true> = Object.freeze({})
@@ -49,6 +62,8 @@ function reuseRecordIfEqual<T>(
 
 function projectTabAgentTypesByTabId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  agentLaunchConfigByPaneKey: PaneLaunchAgentState,
+  paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>,
   dependencies?: TabBarAgentProjectionSelectorDependencies
 ): Record<string, AgentType> {
@@ -64,13 +79,25 @@ function projectTabAgentTypesByTabId(
     if (!activeLeafId) {
       continue
     }
-    const entry = agentStatusByPaneKey[`${tabId}:${activeLeafId}`]
-    if (entry?.agentType != null) {
-      byTabId[tabId] = entry.agentType
+    const paneKey = `${tabId}:${activeLeafId}`
+    const agent = resolveNativeChatPaneAgent({
+      hookAgent: agentStatusByPaneKey[paneKey]?.agentType,
+      foreground: paneForegroundAgentByPaneKey[paneKey],
+      paneLaunchAgent: agentLaunchConfigByPaneKey[paneKey]?.identity.agentType
+    })
+    if (agent) {
+      byTabId[tabId] = agent
     }
   }
-  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
-    dependencies?.onStatusEntryVisited?.(paneKey)
+  const paneKeys = new Set([
+    ...Object.keys(agentStatusByPaneKey),
+    ...Object.keys(agentLaunchConfigByPaneKey),
+    ...Object.keys(paneForegroundAgentByPaneKey)
+  ])
+  for (const paneKey of paneKeys) {
+    if (paneKey in agentStatusByPaneKey) {
+      dependencies?.onStatusEntryVisited?.(paneKey)
+    }
     const colon = paneKey.indexOf(':')
     if (colon <= 0) {
       continue
@@ -80,8 +107,13 @@ function projectTabAgentTypesByTabId(
       continue
     }
     claimed.add(tabId)
-    if (entry.agentType != null) {
-      byTabId[tabId] = entry.agentType
+    const agent = resolveNativeChatPaneAgent({
+      hookAgent: agentStatusByPaneKey[paneKey]?.agentType,
+      foreground: paneForegroundAgentByPaneKey[paneKey],
+      paneLaunchAgent: agentLaunchConfigByPaneKey[paneKey]?.identity.agentType
+    })
+    if (agent) {
+      byTabId[tabId] = agent
     }
   }
   return byTabId
@@ -120,9 +152,16 @@ function projectNativeChatTabWideFallbackUnsafeTabsById(
  */
 export function selectTabAgentTypesByTabId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
-  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {},
+  agentLaunchConfigByPaneKey: PaneLaunchAgentState = {},
+  paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry> = {}
 ): Record<string, AgentType> {
-  return projectTabAgentTypesByTabId(agentStatusByPaneKey, terminalLayoutsByTabId)
+  return projectTabAgentTypesByTabId(
+    agentStatusByPaneKey,
+    agentLaunchConfigByPaneKey,
+    paneForegroundAgentByPaneKey,
+    terminalLayoutsByTabId
+  )
 }
 
 export function selectNativeChatTabWideFallbackUnsafeTabsById(
@@ -135,6 +174,8 @@ export function createTabBarAgentProjectionSelector(
   dependencies?: TabBarAgentProjectionSelectorDependencies
 ): (state: TabBarAgentProjectionState) => TabBarAgentProjections {
   let cachedAgentStatusByPaneKey: Record<string, AgentStatusEntry> | null = null
+  let cachedAgentLaunchConfigByPaneKey: PaneLaunchAgentState | null = null
+  let cachedPaneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry> | null = null
   let cachedAgentTypeLayoutsByTabId: Record<string, TerminalLayoutSnapshot> | null = null
   let cachedAgentTypesByTabId = EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
   let cachedUnsafeLayoutsByTabId: Record<string, TerminalLayoutSnapshot> | null = null
@@ -145,6 +186,8 @@ export function createTabBarAgentProjectionSelector(
     if (state.settings?.experimentalNativeChat !== true) {
       if (cachedEnabledResult) {
         cachedAgentStatusByPaneKey = null
+        cachedAgentLaunchConfigByPaneKey = null
+        cachedPaneForegroundAgentByPaneKey = null
         cachedAgentTypeLayoutsByTabId = null
         cachedAgentTypesByTabId = EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
         cachedUnsafeLayoutsByTabId = null
@@ -155,13 +198,28 @@ export function createTabBarAgentProjectionSelector(
     }
 
     const statuses = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
+    const launchConfigs = state.agentLaunchConfigByPaneKey ?? EMPTY_PANE_LAUNCH_AGENT_STATE
+    const foregroundAgents = state.paneForegroundAgentByPaneKey ?? EMPTY_PANE_FOREGROUND_AGENT_STATE
     const layouts = state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID
-    if (statuses !== cachedAgentStatusByPaneKey || layouts !== cachedAgentTypeLayoutsByTabId) {
+    if (
+      statuses !== cachedAgentStatusByPaneKey ||
+      launchConfigs !== cachedAgentLaunchConfigByPaneKey ||
+      foregroundAgents !== cachedPaneForegroundAgentByPaneKey ||
+      layouts !== cachedAgentTypeLayoutsByTabId
+    ) {
       cachedAgentTypesByTabId = reuseRecordIfEqual(
         cachedAgentTypesByTabId,
-        projectTabAgentTypesByTabId(statuses, layouts, dependencies)
+        projectTabAgentTypesByTabId(
+          statuses,
+          launchConfigs,
+          foregroundAgents,
+          layouts,
+          dependencies
+        )
       )
       cachedAgentStatusByPaneKey = statuses
+      cachedAgentLaunchConfigByPaneKey = launchConfigs
+      cachedPaneForegroundAgentByPaneKey = foregroundAgents
       cachedAgentTypeLayoutsByTabId = layouts
     }
     if (layouts !== cachedUnsafeLayoutsByTabId) {

@@ -174,6 +174,7 @@ import {
   isTerminalQuickCommandComplete
 } from '../../../../shared/terminal-quick-commands'
 import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
@@ -195,6 +196,10 @@ import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
+import {
+  resolveNativeChatPaneAgent,
+  selectTerminalTabNativeChatPaneEvidence
+} from '../native-chat/native-chat-pane-agent'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import {
   updateTerminalRemoteRuntimeRecoveryUiState,
@@ -525,6 +530,13 @@ function TerminalPane(
   const tabAgentTypeByLeaf = useAppStore((store) =>
     selectTerminalTabAgentTypesByLeaf(store.agentStatusByPaneKey, tabId)
   )
+  const nativeChatPaneEvidenceByLeaf = useAppStore((store) =>
+    selectTerminalTabNativeChatPaneEvidence(
+      store.agentLaunchConfigByPaneKey,
+      store.paneForegroundAgentByPaneKey,
+      tabId
+    )
+  )
   const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
   const setTabViewMode = useAppStore((store) => store.setTabViewMode)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
@@ -586,34 +598,42 @@ function TerminalPane(
       unifiedTabLabel
     ]
   )
-  // Per-leaf: a split can mix supported/unsupported agents; the leaf's live agent is authoritative, tab-wide hints only fill in before hooks arrive.
-  const isChatEligibleForLeaf = useCallback(
-    (leafId: string | null): boolean => {
-      const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
-      const launchAgent = nativeChatLaunchAgentForLeaf({
+  const resolveNativeChatAgentForLeaf = useCallback(
+    (leafId: string | null) => {
+      const tabWideLaunchAgent = nativeChatLaunchAgentForLeaf({
         launchAgent: terminalTab?.launchAgent,
         launchAgentLeafId: getTabWideAgentHintLeafId(),
         leafId,
         leafIds: getNativeChatLeafIds()
       })
-      return canToggleNativeChat({
-        experimentalNativeChatEnabled: nativeChatEnabled,
-        contentType: 'terminal',
-        launchAgent: detectedAgent ? null : launchAgent,
-        detectedAgent,
-        resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
-        nativeChatTranscriptIsLocalReadable
+      const paneEvidence = leafId ? nativeChatPaneEvidenceByLeaf[leafId] : undefined
+      return resolveNativeChatPaneAgent({
+        hookAgent: leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null,
+        foreground: paneEvidence?.foreground,
+        paneLaunchAgent: paneEvidence?.paneLaunchAgent,
+        fallbackAgent: tabWideLaunchAgent ?? resolveTitleAgentForLeaf(leafId)
       })
     },
     [
-      tabAgentTypeByLeaf,
-      nativeChatEnabled,
-      nativeChatTranscriptIsLocalReadable,
-      terminalTab?.launchAgent,
       getNativeChatLeafIds,
       getTabWideAgentHintLeafId,
-      resolveTitleAgentForLeaf
+      nativeChatPaneEvidenceByLeaf,
+      resolveTitleAgentForLeaf,
+      tabAgentTypeByLeaf,
+      terminalTab?.launchAgent
     ]
+  )
+  // Per-leaf: a split can mix supported/unsupported agents; the leaf's live agent is authoritative, tab-wide hints only fill in before hooks arrive.
+  const isChatEligibleForLeaf = useCallback(
+    (leafId: string | null): boolean => {
+      return canToggleNativeChat({
+        experimentalNativeChatEnabled: nativeChatEnabled,
+        contentType: 'terminal',
+        detectedAgent: resolveNativeChatAgentForLeaf(leafId),
+        nativeChatTranscriptIsLocalReadable
+      })
+    },
+    [nativeChatEnabled, nativeChatTranscriptIsLocalReadable, resolveNativeChatAgentForLeaf]
   )
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
@@ -2891,30 +2911,14 @@ function TerminalPane(
   const chatPanePtyId = chatPane
     ? (paneTransportsRef.current.get(chatPane.id)?.getPtyId() ?? null)
     : null
-  const chatPaneResolvedAgent = chatPane ? resolveTitleAgentForLeaf(chatPane.leafId) : null
-  const chatPaneLaunchAgent = nativeChatLaunchAgentForLeaf({
-    launchAgent: terminalTab?.launchAgent,
-    launchAgentLeafId: getTabWideAgentHintLeafId(),
-    leafId: chatPane?.leafId ?? null,
-    leafIds: getNativeChatLeafIds()
-  })
+  const chatPaneAgentCandidate = chatPane ? resolveNativeChatAgentForLeaf(chatPane.leafId) : null
+  const chatPaneAgent = isTuiAgent(chatPaneAgentCandidate) ? chatPaneAgentCandidate : null
   const activePaneIsChatLeaf = Boolean(
     isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
   )
   // A split can host different agents, so continuation resolves the specific leaf before using tab-wide hints.
   const resolveAgentForLeaf = (leafId: string | null): string | null => {
-    const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
-    if (detectedAgent) {
-      return detectedAgent
-    }
-    return (
-      nativeChatLaunchAgentForLeaf({
-        launchAgent: terminalTab?.launchAgent,
-        launchAgentLeafId: getTabWideAgentHintLeafId(),
-        leafId,
-        leafIds: getNativeChatLeafIds()
-      }) ?? resolveTitleAgentForLeaf(leafId)
-    )
+    return resolveNativeChatAgentForLeaf(leafId)
   }
   const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(activePane?.leafId ?? null)
@@ -3045,8 +3049,7 @@ function TerminalPane(
                 isVisible={isRendererVisible}
                 paneKey={makePaneKey(tabId, chatPane.leafId)}
                 targetPtyId={chatPanePtyId}
-                launchAgent={chatPaneLaunchAgent}
-                resolvedAgent={chatPaneResolvedAgent}
+                launchAgent={chatPaneAgent}
                 onSwitchToTerminal={switchNativeChatToTerminal}
                 readTerminalScreen={readNativeChatTerminalScreen}
                 contextMenuActions={{
