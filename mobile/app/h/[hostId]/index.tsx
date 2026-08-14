@@ -25,7 +25,7 @@ import { loadHosts, updateLastConnected } from '../../../src/transport/host-stor
 import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
-  useCloseHost,
+  useForgetHostClient,
   useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
@@ -67,6 +67,7 @@ import { leaveHostRoute } from '../../../src/host-route-exit'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
 import {
   createInitialHostRouteActionState,
+  hostNewWorktreeSessionRoute,
   resolveHostRouteActionState,
   setHostRouteNewWorktreeVisible
 } from '../../../src/host-route-action-state'
@@ -147,7 +148,7 @@ export function HostScreen({
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
-  const closeHostClient = useCloseHost()
+  const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
@@ -635,14 +636,14 @@ export function HostScreen({
       return
     }
     try {
-      await removeHostAndCloseClient(hostId, closeHostClient)
+      await removeHostAndCloseClient(hostId, forgetHostClient)
       leaveHost()
     } catch {
       // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
       setConfirmRemoveHost(true)
       Alert.alert('Could not remove host', 'Please try again.')
     }
-  }, [hostId, leaveHost, closeHostClient])
+  }, [hostId, leaveHost, forgetHostClient])
 
   const navigateFromHostList = useCallback(
     (target: string) => {
@@ -1403,10 +1404,7 @@ export function HostScreen({
         }}
         onCreated={(worktreeId, worktreeName) => {
           void fetchWorktrees({ allowDuringModal: true })
-          const params = new URLSearchParams({ name: worktreeName, created: '1' })
-          navigateFromHostList(
-            `/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`
-          )
+          navigateFromHostList(hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName))
         }}
         onRouteVisibleChange={setShowNewWorktreeVisible}
       />

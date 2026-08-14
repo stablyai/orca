@@ -26,8 +26,14 @@ import { useMobilePairingAddressPreference } from './use-mobile-pairing-address-
 
 const LAN: MobileNetworkInterface = { name: 'en0', address: '192.168.1.24' }
 const OTHER: MobileNetworkInterface = { name: 'en1', address: '10.0.0.5' }
+const EXTERNAL_SWITCH: MobileNetworkInterface = {
+  name: 'vEthernet (Lab)',
+  address: '192.168.1.30',
+  hasDefaultRoute: true
+}
+const BRIDGE: MobileNetworkInterface = { name: 'docker0', address: '172.17.0.1' }
 
-function renderPreference() {
+function renderPreference(networkInterfaces: readonly MobileNetworkInterface[] = []) {
   mocks.holder.state = {
     settings: {},
     updateSettings: vi.fn().mockResolvedValue(undefined)
@@ -35,7 +41,7 @@ function renderPreference() {
   const onSelectionInvalidated = vi.fn()
   const { result } = renderHook(() =>
     useMobilePairingAddressPreference({
-      networkInterfaces: [],
+      networkInterfaces,
       onSelectionInvalidated
     })
   )
@@ -79,6 +85,37 @@ describe('useMobilePairingAddressPreference', () => {
     expect(onSelectionInvalidated).toHaveBeenCalledExactlyOnceWith({
       address: undefined,
       source: 'refresh'
+    })
+  })
+
+  it('invalidates an automatic vEthernet selection when route evidence becomes ambiguous', () => {
+    const { result, onSelectionInvalidated } = renderPreference()
+
+    act(() => result.current.selectAddressAfterRefresh([EXTERNAL_SWITCH]))
+    act(() =>
+      result.current.selectAddressAfterRefresh([{ ...EXTERNAL_SWITCH, hasDefaultRoute: undefined }])
+    )
+
+    expect(result.current.selectedAddress).toBeUndefined()
+    expect(onSelectionInvalidated).toHaveBeenCalledExactlyOnceWith({
+      address: undefined,
+      source: 'refresh'
+    })
+  })
+
+  it('keeps an explicitly selected bridge across refreshes', () => {
+    const { result, onSelectionInvalidated } = renderPreference([LAN, BRIDGE])
+
+    act(() => result.current.selectAddressAfterRefresh([LAN, BRIDGE]))
+    act(() => result.current.selectAddress(BRIDGE.address))
+    act(() => result.current.selectAddressAfterRefresh([LAN, BRIDGE]))
+    act(() => result.current.selectAddressAfterRefresh([]))
+
+    expect(result.current.selectedAddress).toBe(BRIDGE.address)
+    expect(result.current.selectedAddressIsCustom).toBe(false)
+    expect(onSelectionInvalidated).toHaveBeenCalledExactlyOnceWith({
+      address: BRIDGE.address,
+      source: 'user'
     })
   })
 })

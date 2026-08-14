@@ -13,6 +13,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import { waitForFederatedLifecycleSettlement } from '../../orchestration/federation-lifecycle-settlement'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import {
   ORCHESTRATION_LEGACY_RUN_ID,
@@ -28,7 +29,10 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
-import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import {
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+} from '../../../../shared/protocol-version'
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
@@ -86,6 +90,7 @@ const SendParams = z
     // Why: pane key is the remint-stable identity used to verify worker_done/heartbeat ownership; the from handle stays routing metadata.
     senderPaneKey: OptionalString,
     run: OptionalString,
+    waitForLifecycleSettlement: OptionalBoolean,
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
@@ -392,7 +397,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         orchestrationCapability,
         legacyCoordinatorRunId,
         revalidateLegacyCoordinator,
-        orchestrationCompatibilityCallerAuthority
+        orchestrationCompatibilityCallerAuthority,
+        signal
       }
     ) => {
       const db = runtime.getOrchestrationDb()
@@ -445,6 +451,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             'Remote worker_done requires outcome=succeeded|failed.'
           )
         }
+        const supportsLifecycleSettlement =
+          remoteAttachment.protocol_version >=
+          ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
         const relay = db.enqueueFederationRelay({
           dispatchId: remoteAttachment.dispatch_id,
           direction: 'to_home',
@@ -458,8 +467,31 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             threadId: params.threadId ?? null,
             payload: params.payload ?? null
           }),
-          settleRemoteOutcome: outcome
+          ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})
         })
+        const lifecycle =
+          outcome && supportsLifecycleSettlement
+            ? await waitForFederatedLifecycleSettlement(
+                runtime,
+                relay.dispatch_id,
+                relay.sequence,
+                {
+                  timeoutMs: 30_000,
+                  signal
+                }
+              )
+            : outcome
+              ? {
+                  action: outcome === 'succeeded' ? ('completed' as const) : ('failed' as const),
+                  authority: 'worker_server_legacy' as const
+                }
+              : undefined
+        if (outcome && supportsLifecycleSettlement && !lifecycle) {
+          throw new OrchestrationError(
+            'operation_unknown',
+            'worker_done was queued, but the Run-home runtime did not confirm settlement. Verify the Task and Dispatch before retrying.'
+          )
+        }
         return {
           relay: {
             messageId: relay.message_id,
@@ -468,9 +500,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             destination: 'run_home',
             accepted: true
           },
-          ...(outcome
-            ? { lifecycle: { action: outcome === 'succeeded' ? 'completed' : 'failed' } }
-            : {})
+          ...(lifecycle ? { lifecycle } : {})
         }
       }
       const routing = resolveMessageRun(runtime, {
@@ -628,6 +658,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             runtime.notifyMessageArrived(to, rejection.type)
             return { message: rejection, lifecycle: reconciled }
           }
+          runtime.notifyMessageArrived(to, msg.type)
+          return msg.type === 'worker_done'
+            ? { message: msg, lifecycle: reconciled }
+            : { message: msg }
         }
         runtime.notifyMessageArrived(to, msg.type)
         return { message: msg }
@@ -1527,10 +1561,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (params.all) {
+        runtime.stopOrchestrationFederationRelay()
         db.resetAll()
         return { reset: 'all' }
       }
       if (params.tasks) {
+        runtime.stopOrchestrationFederationRelay()
         db.resetTasks()
         return { reset: 'tasks' }
       }

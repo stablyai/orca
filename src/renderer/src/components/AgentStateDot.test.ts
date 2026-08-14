@@ -1,4 +1,6 @@
 import React from 'react'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { AgentStateDot, type AgentDotState } from './AgentStateDot'
@@ -17,6 +19,15 @@ function renderDotClassNames(state: AgentDotState): string[] {
 }
 
 describe('AgentStateDot', () => {
+  it('keeps the question glyph above the light-theme non-text contrast floor', () => {
+    const css = readFileSync(join(__dirname, '../assets/main.css'), 'utf8')
+    const lightTheme = css.match(/:root\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
+    const darkTheme = css.match(/\.dark\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
+
+    expect(lightTheme).toContain('--agent-question: var(--color-orange-600)')
+    expect(darkTheme).toContain('--agent-question: var(--color-orange-500)')
+  })
+
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
 
@@ -45,13 +56,14 @@ describe('AgentStateDot', () => {
   })
 
   it.each(['permission', 'waiting'] satisfies AgentDotState[])(
-    'renders %s as an amber question glyph',
+    'renders %s as the shared question glyph',
     (state) => {
       const markup = renderMarkup(state)
 
       expect(markup).toContain('lucide-message-circle-question-mark')
-      expect(markup).toContain('text-amber-500')
-      expect(markup).not.toContain('bg-amber-500')
+      // One token across sidebar, tabs, dashboard and map — never a raw hue.
+      expect(markup).toContain('text-agent-question')
+      expect(markup).not.toContain('text-amber-500')
       expect(markup).not.toContain('data-agent-spinner')
     }
   )

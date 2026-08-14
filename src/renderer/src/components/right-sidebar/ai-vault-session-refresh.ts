@@ -4,9 +4,15 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostScope } from '../../../../shared/execution-host'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  requestedExecutionHostScope,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
+import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
+import { applyPublishedAiVaultList, EMPTY_AI_VAULT_SESSIONS } from './ai-vault-session-identity'
 import {
   aiVaultSessionResultCacheKey,
   cacheAiVaultSessionResult,
@@ -14,21 +20,10 @@ import {
   resetAiVaultSessionResultCacheForTest
 } from './ai-vault-session-result-cache'
 
-// Panel entry and window refocus must show sessions started since the last
-// scan, so they bypass the main process's 15s cache — but a full scan parses
-// up to ~1000 transcripts, so bound forced scans to one per interval. Module
-// scope so the throttle survives panel remounts (the panel unmounts per tab).
-const FORCED_RESCAN_MIN_INTERVAL_MS = 5_000
+// In-app session creation bypasses the cache so the new session appears promptly.
+// Keep the budget at module scope so tab remounts cannot amplify full scans.
+const FORCED_RESCAN_MIN_INTERVAL_MS = 30_000
 let lastForcedRescanAt = 0
-
-function consumeForcedRescanBudget(): boolean {
-  const now = Date.now()
-  if (now - lastForcedRescanAt < FORCED_RESCAN_MIN_INTERVAL_MS) {
-    return false
-  }
-  lastForcedRescanAt = now
-  return true
-}
 
 export function resetAiVaultForcedRescanThrottleForTest(): void {
   lastForcedRescanAt = 0
@@ -41,6 +36,15 @@ export const isAiVaultScanCancellation = isAiVaultScanCancelledError
 
 type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDepth?: boolean }
 
+// Shares main's request resolver, so this is exactly the scope that fans out on
+// the desktop IPC path. Deliberately over-inclusive: the paired web transport
+// drops the scope and serves one host, so 'all' there costs a redundant
+// reconcile. Erring the other way would re-enable the stamp fast-path on a real
+// merge, which is the bug this guard exists to prevent.
+function isMergedAiVaultHostScope(scope: ExecutionHostScope): boolean {
+  return requestedExecutionHostScope(scope) === ALL_EXECUTION_HOSTS_SCOPE
+}
+
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
   executionHostScope: ExecutionHostScope,
@@ -50,10 +54,10 @@ export function useAiVaultSessionRefresh(
   loading: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
   scanResult: AiVaultListResult | null
-  sessions: AiVaultSession[]
+  sessions: readonly AiVaultSession[]
 } {
-  const [sessions, setSessions] = useState<AiVaultSession[]>([])
   const [scanResult, setScanResult] = useState<AiVaultListResult | null>(null)
+  const sessions = scanResult?.sessions ?? EMPTY_AI_VAULT_SESSIONS
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const requestTokenRef = useRef(crypto.randomUUID())
@@ -64,6 +68,7 @@ export function useAiVaultSessionRefresh(
   const pendingBackgroundRef = useRef(true)
   const lastAppliedScanRef = useRef<{ scopeKey: string; scannedAt: string } | null>(null)
   const mountedRef = useRef(true)
+  const publicationGateRef = useRef(new AiVaultSessionPublicationGate())
   const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths)}\n${sessionLimit}`
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
@@ -100,8 +105,9 @@ export function useAiVaultSessionRefresh(
         const scanKey = `${baseKey}\n${selectedLimit}`
         lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: cachedResult.scannedAt }
         setError(null)
-        setScanResult(cachedResult)
-        setSessions(cachedResult.sessions)
+        publicationGateRef.current.publish(cachedResult, (published) => {
+          applyPublishedAiVaultList(published, setScanResult)
+        })
         setLoading(false)
         return
       }
@@ -152,7 +158,13 @@ export function useAiVaultSessionRefresh(
         }
         // A cache hit returns the snapshot already on screen; skip the state
         // updates so refocus flips don't force pointless re-renders.
+        // Single-host results carry one scanner's stamp minted when that scan
+        // finished, so an equal stamp does mean equal content. An 'all' result
+        // is a merge of legs on independent clocks stamped with the newest leg,
+        // so a lagging host's leg can change while the merged stamp stands
+        // still — there, only the structural reconcile below may decide.
         if (
+          !isMergedAiVaultHostScope(hostScope) &&
           lastAppliedScanRef.current?.scopeKey === scanKey &&
           lastAppliedScanRef.current.scannedAt === result.scannedAt
         ) {
@@ -166,8 +178,11 @@ export function useAiVaultSessionRefresh(
           result,
           replaceHostEntries: args.force === true
         })
-        setScanResult(result)
-        setSessions(result.sessions)
+        publicationGateRef.current.publish(result, (published) => {
+          if (mountedRef.current && scanKey === currentScanScopeKey()) {
+            applyPublishedAiVaultList(published, setScanResult)
+          }
+        })
       } catch (err) {
         // A cancelled scan is not a failure: another caller's forced refresh
         // preempts the shared scan, and painting its abort would replace the
@@ -201,7 +216,7 @@ export function useAiVaultSessionRefresh(
     [currentScanScopeKey]
   )
 
-  // Forced rescans triggered by events (refocus, agent-session starts) run
+  // Forced rescans triggered by new agent sessions run
   // immediately when the throttle allows, otherwise once as soon as it frees
   // up — dropping the event would leave a just-started session invisible
   // until some unrelated later trigger.
@@ -218,16 +233,17 @@ export function useAiVaultSessionRefresh(
     }
     forcedRescanTimerRef.current = setTimeout(() => {
       forcedRescanTimerRef.current = null
-      lastForcedRescanAt = Date.now()
-      void refresh({ background: true, force: true })
+      requestForcedRescan()
     }, waitMs)
   }, [refresh])
 
   useEffect(() => {
     mountedRef.current = true
     const requestToken = requestTokenRef.current
+    const publicationGate = publicationGateRef.current
     return () => {
       mountedRef.current = false
+      publicationGate.cancel()
       refreshIdRef.current += 1
       refreshInFlightRef.current = false
       void window.api.aiVault.cancelListSessions({
@@ -240,33 +256,24 @@ export function useAiVaultSessionRefresh(
     }
   }, [])
 
-  // Remote scans can take long enough for normal tab navigation to feel stuck,
-  // so re-entering a remote panel uses its host/scope cache. Explicit refresh,
-  // app refocus and new in-app agent sessions still force a fresh scan.
+  // Panel entry reuses the renderer result first, then the host scan cache.
   useEffect(() => {
+    publicationGateRef.current.cancel()
     if (refreshInFlightRef.current) {
       void window.api.aiVault.cancelListSessions({
         requestToken: requestTokenRef.current
       })
     }
-    const refreshOnEntry = executionHostScope === LOCAL_EXECUTION_HOST_ID
-    const force = refreshOnEntry && consumeForcedRescanBudget()
-    void refresh({ force, reuseLoadedDepth: true })
-    if (refreshOnEntry && !force) {
-      requestForcedRescan()
-    }
-  }, [executionHostScope, refresh, requestForcedRescan, scanScopeKey])
+    void refresh({ force: false, reuseLoadedDepth: true })
+  }, [executionHostScope, refresh, scanScopeKey])
 
-  // Sessions started while the app was backgrounded should appear when the
-  // user returns, so refocus also bypasses the scan cache (throttled). OS
-  // refocus arrives via the main process — renderer DOM focus events don't
-  // fire on macOS app activation; visibilitychange covers minimize-restore.
+  // Refocus checks the shared host cache without forcing another transcript scan.
   useEffect(() => {
     const onRefocus = (): void => {
       if (document.visibilityState !== 'visible') {
         return
       }
-      requestForcedRescan()
+      void refresh({ background: true, force: false })
     }
     const unsubscribeWindowFocus = window.api.aiVault.onWindowFocused?.(onRefocus)
     document.addEventListener('visibilitychange', onRefocus)
@@ -274,7 +281,7 @@ export function useAiVaultSessionRefresh(
       unsubscribeWindowFocus?.()
       document.removeEventListener('visibilitychange', onRefocus)
     }
-  }, [requestForcedRescan])
+  }, [refresh])
 
   // Sessions started inside Orca never blur the window, so refocus alone
   // can't surface them. Agent hooks already report provider sessions; re-scan

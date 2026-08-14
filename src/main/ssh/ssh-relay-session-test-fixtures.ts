@@ -1,6 +1,5 @@
 import { vi, type Mock } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import type { SshConnection } from './ssh-connection'
 import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
@@ -22,12 +21,14 @@ export function createMockDeps(): SshRelaySessionTestDeps {
     upsertSshPtyConsumerRecovery: vi.fn(),
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
+    supersedeDuplicatePaneLeases: vi.fn().mockReturnValue(0),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),
     markSshRemotePtyLeasesForShutdown: vi.fn(),
     markSshRemotePtyLeasesAttachedAsync: vi.fn(),
-    persistPtyBinding: vi.fn()
+    markSshRemotePtyLeasesTerminatedAsync: vi.fn(),
+    persistPtyBinding: vi.fn().mockReturnValue(true)
   } as unknown as Store
   const mockPortForward = {
     removeAllForwards: vi.fn()
@@ -52,11 +53,5 @@ export function mockDeploySuccess(): void {
       onClose: vi.fn()
     },
     platform: 'linux-x64'
-  })
-}
-
-export function createMismatchedOwnerRecoveryError(): unknown {
-  return Object.assign(new Error('Owner recovery lease is stale'), {
-    code: PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR
   })
 }

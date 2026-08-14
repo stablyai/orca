@@ -32,6 +32,7 @@ import {
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
+import type { AgentStateHistoryEntry } from '../../../shared/agent-status-types'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 const activeReuseDispatchTabIds = new Set<string>()
@@ -52,6 +53,37 @@ function buildAutomationWorkspaceName(runTitle: string, scheduledFor: number): s
     .slice(0, 40)
   const stamp = new Date(scheduledFor).toISOString().replace(/[-:]/g, '').slice(0, 13)
   return `auto-${slug || 'run'}-${stamp}`
+}
+
+function agentStateHistoryEntriesEqual(
+  left: AgentStateHistoryEntry,
+  right: AgentStateHistoryEntry
+): boolean {
+  return (
+    left.state === right.state &&
+    left.prompt === right.prompt &&
+    left.startedAt === right.startedAt &&
+    left.interrupted === right.interrupted
+  )
+}
+
+function getAgentStateHistoryOverlap(
+  previous: AgentStateHistoryEntry[],
+  current: AgentStateHistoryEntry[]
+): number {
+  for (let overlap = Math.min(previous.length, current.length); overlap > 0; overlap -= 1) {
+    const previousOffset = previous.length - overlap
+    if (
+      current
+        .slice(0, overlap)
+        .every((entry, index) =>
+          agentStateHistoryEntriesEqual(entry, previous[previousOffset + index])
+        )
+    ) {
+      return overlap
+    }
+  }
+  return 0
 }
 
 export function useAutomationDispatchEvents(): void {
@@ -220,43 +252,43 @@ export function useAutomationDispatchEvents(): void {
           const automationWorkspaceCreateRequestId = createBrowserUuid()
           const createResult =
             automation.workspaceMode === 'new_per_run'
-              ? await useAppStore
-                  .getState()
-                  .createWorktree(
-                    runRepoId,
-                    buildAutomationWorkspaceName(run.title, run.scheduledFor),
-                    automation.baseBranch ?? undefined,
-                    automation.setupDecision ?? 'skip',
-                    undefined,
-                    'unknown',
-                    run.title,
-                    undefined,
-                    undefined,
-                    undefined,
-                    automation.agentId,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    {
-                      automationProvenanceRequest: {
-                        automationId: automation.id,
-                        automationRunId: run.id,
-                        dispatchToken,
-                        createRequestId: automationWorkspaceCreateRequestId
-                      }
+              ? await useAppStore.getState().createWorktree(
+                  runRepoId,
+                  buildAutomationWorkspaceName(run.title, run.scheduledFor),
+                  automation.baseBranch ?? undefined,
+                  automation.setupDecision ?? 'skip',
+                  undefined,
+                  'unknown',
+                  run.title,
+                  undefined,
+                  undefined,
+                  undefined,
+                  // Why: the automation session below owns the prompt-bearing
+                  // agent tab; createdWithAgent would reopen an empty fallback.
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  {
+                    automationProvenanceRequest: {
+                      automationId: automation.id,
+                      automationRunId: run.id,
+                      dispatchToken,
+                      createRequestId: automationWorkspaceCreateRequestId
                     }
-                  )
+                  }
+                )
               : null
           const worktree = createResult
             ? createResult.worktree
@@ -405,12 +437,41 @@ export function useAutomationDispatchEvents(): void {
             options?: { requireWorkingAfterStart?: boolean }
           ): void => {
             let sawWorkingAfterStart = false
+            let observedStateHistory: AgentStateHistoryEntry[] = []
             const checkCurrentStatus = (): void => {
               const { agentStatusByPaneKey } = useAppStore.getState()
               for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
                 if (paneKey !== targetPaneKey || entry.updatedAt < startedAfter) {
                   continue
                 }
+                const historyOverlap = getAgentStateHistoryOverlap(
+                  observedStateHistory,
+                  entry.stateHistory
+                )
+                // Why: sawWorkingAfterStart stays monotonic — a recreated entry
+                // (transport loss, PTY exit, cap eviction) arrives with an empty
+                // stateHistory, so clearing it here would strand reuseSession runs
+                // with nothing left to re-derive the working edge from.
+                for (const historicalState of entry.stateHistory.slice(historyOverlap)) {
+                  if (historicalState.startedAt < startedAfter) {
+                    continue
+                  }
+                  if (historicalState.state === 'working') {
+                    sawWorkingAfterStart = true
+                  }
+                  if (
+                    historicalState.state === 'done' &&
+                    (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
+                  ) {
+                    // Why: this `done` already rolled out of the live entry, so its output
+                    // survives only in the entry-level completed slot.
+                    latestAssistantMessage =
+                      entry.lastCompletedAssistantMessage?.trim() || latestAssistantMessage
+                    handleAgentDone()
+                    return
+                  }
+                }
+                observedStateHistory = [...entry.stateHistory]
                 if (entry.state === 'working') {
                   sawWorkingAfterStart = true
                 }

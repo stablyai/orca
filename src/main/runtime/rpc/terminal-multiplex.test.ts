@@ -444,6 +444,58 @@ function startSourceRangeOverflowHarness(options: {
 }
 
 describe('terminal multiplex RPC', () => {
+  it('keeps layout versions out of the output sequence domain', async () => {
+    let dataListener: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | undefined
+    const harness = startDesktopMultiplexSubscribe({
+      getLayout: vi.fn().mockReturnValue({ seq: 675 }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue({
+        data: 'restored terminal',
+        cols: 120,
+        rows: 40,
+        source: 'renderer'
+      }),
+      subscribeToTerminalData: vi.fn((_ptyId, listener) => {
+        dataListener = listener
+        return vi.fn()
+      })
+    })
+    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
+    sendDesktopMultiplexSubscribe(harness.handlers)
+    await vi.waitFor(() =>
+      expect(
+        harness.messages.some((message) => JSON.parse(message).result?.type === 'subscribed')
+      ).toBe(true)
+    )
+
+    const subscribed = harness.messages
+      .map((message) => JSON.parse(message).result)
+      .find((event) => event?.type === 'subscribed')
+    const snapshotStart = harness.binaryFrames
+      .map(decodeTerminalStreamFrame)
+      .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+    expect(subscribed.seq).toBe(675)
+    if (!snapshotStart) {
+      throw new Error('Missing multiplex snapshot start frame')
+    }
+    const snapshotPayload = decodeTerminalStreamJson(snapshotStart.payload)
+    expect(snapshotPayload).toMatchObject({ kind: 'scrollback' })
+    expect(snapshotPayload).not.toHaveProperty('seq')
+
+    harness.binaryFrames.splice(0)
+    dataListener?.('live', { seq: 4, rawLength: 4 })
+    await vi.waitFor(() =>
+      expect(
+        harness.binaryFrames.some((bytes) => {
+          const frame = decodeTerminalStreamFrame(bytes)
+          return frame?.opcode === TerminalStreamOpcode.Output && frame.seq === 4
+        })
+      ).toBe(true)
+    )
+
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
   it.each(['headless', 'renderer'] as const)(
     'commits a source-range replacement only after the %s snapshot publishes',
     async (source) => {

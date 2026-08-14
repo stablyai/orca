@@ -6,6 +6,7 @@ import { detectLanguage } from './language-detect'
 import type { AppState } from '@/store/types'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { translate } from '@/i18n/i18n'
+import { assertClientCreationActionAvailable } from './client-creation-action-policy'
 
 type FloatingWorkspaceTerminalStore = Pick<
   AppState,
@@ -38,6 +39,11 @@ export async function createFloatingWorkspaceTerminalTab(
 export async function createFloatingWorkspaceBrowserTab(
   store: FloatingWorkspaceBrowserStore
 ): Promise<BrowserTab | null> {
+  assertClientCreationActionAvailable(
+    store as AppState,
+    FLOATING_TERMINAL_WORKTREE_ID,
+    'managed-browser'
+  )
   const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
   const url = store.browserDefaultUrl ?? 'about:blank'
 

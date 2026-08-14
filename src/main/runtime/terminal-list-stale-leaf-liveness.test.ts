@@ -148,6 +148,23 @@ describe('listTerminals liveness truth for restored leaves', () => {
     })
   })
 
+  it('keeps a leaf connected when the snapshot missed it but provider liveness is unknown', async () => {
+    const runtime = makeRuntimeWithLeaf({
+      leafPtyId: 'pty-provider-disconnected',
+      controllerSessions: [],
+      hasPty: () => null
+    })
+
+    const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
+    expect(terminals).toHaveLength(1)
+    expect(terminals[0]).toMatchObject({
+      ptyId: 'pty-provider-disconnected',
+      connected: true,
+      writable: true
+    })
+  })
+
   it('does not demote remote-runtime-scoped leaves the local inventory never covers', async () => {
     const runtime = makeRuntimeWithLeaf({
       leafPtyId: 'remote:env-1@@term_abc',

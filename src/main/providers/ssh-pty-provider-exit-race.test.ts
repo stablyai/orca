@@ -170,3 +170,30 @@ it('returns a provisional source activation lease to reconnect authority', async
     deliveryToken: 'token-reconnect'
   })
 })
+
+it('fences a mismatched attach response before installing its source activation', async () => {
+  const response = {
+    incarnationId: 'incarnation-other',
+    sourceActivation: sourceActivation('incarnation-other')
+  }
+  const mux = {
+    request: vi.fn(async (method: string, _params, options) => {
+      if (method !== 'pty.attach') {
+        return undefined
+      }
+      options?.beforeResolve?.(response)
+      return response
+    }),
+    notify: vi.fn(),
+    onNotification: vi.fn(),
+    dispose: vi.fn(),
+    isDisposed: vi.fn().mockReturnValue(false)
+  }
+  const provider = new SshPtyProvider('conn-1', mux as never)
+
+  await expect(
+    provider.attachForReconnect('ssh:conn-1@@pty-1', undefined, 'incarnation-expected')
+  ).rejects.toThrow('SSH_PTY_IDENTITY_MISMATCH')
+
+  expect(mux.request).toHaveBeenCalledTimes(1)
+})

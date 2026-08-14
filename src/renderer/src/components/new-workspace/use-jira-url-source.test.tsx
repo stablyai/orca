@@ -50,7 +50,7 @@ function site(id: string, email = `${id}@example.com`): JiraSite {
 
 function status(
   sites: JiraSite[],
-  selectedSiteId: string | 'all' | null = null
+  selectedSiteId: (string & {}) | 'all' | null = null
 ): JiraConnectionStatus {
   return {
     connected: true,

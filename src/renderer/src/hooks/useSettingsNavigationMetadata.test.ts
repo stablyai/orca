@@ -39,11 +39,11 @@ describe('settings navigation metadata', () => {
       'orchestration',
       'computer-use',
       'voice',
+      'orca-account',
       'setup-guide',
       'general',
       'integrations',
-      'mobile',
-      'git'
+      'mobile'
     ])
   })
 
@@ -79,20 +79,62 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
+  it('places Automations and Artifacts first under Workflows', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const automations = sections.find((section) => section.id === 'automations')
+    const artifacts = sections.find((section) => section.id === 'artifacts')
+    const workflowIds = sections
+      .filter((section) => section.group === 'workflows')
+      .map((section) => section.id)
+
+    expect(automations?.group).toBe('workflows')
+    expect(automations?.searchEntries[0]?.title).toBe('Show Automations Button')
+    expect(artifacts?.group).toBe('workflows')
+    expect(artifacts?.badge).toBe('Beta')
+    expect(artifacts?.description).toBe(
+      'Share HTML and Markdown files with your team and manage their public links.'
+    )
+    expect(workflowIds.slice(0, 2)).toEqual(['automations', 'artifacts'])
+  })
+
+  it('places the Orca account in Set Up on desktop only', () => {
+    const desktopSections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const account = desktopSections.find((section) => section.id === 'orca-account')
+
+    expect(account?.group).toBe('setup')
+    expect(account?.searchEntries[0]?.title).toBe('Orca account')
+    expect(ids({ isWebClient: true })).not.toContain('orca-account')
+  })
+
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
-    expect(ids({ isWebClient: true }).slice(0, 7)).toEqual([
+    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
       'agents',
       'accounts',
       'orchestration',
       'setup-guide',
       'general',
-      'integrations',
-      'git'
+      'integrations'
     ])
   })
 
   it('keeps desktop-only Settings panes out of web metadata', () => {
-    const webIds = ids({ isWebClient: true })
+    const webSections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      repos: [repo]
+    })
+    const webIds = webSections.map((section) => section.id)
 
     expect(webIds).not.toContain('browser')
     expect(webIds).not.toContain('ssh')
@@ -102,6 +144,33 @@ describe('settings navigation metadata', () => {
     expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
     expect(webIds).toContain('repo-repo-1')
+    const floatingWorkspace = webSections.find((section) => section.id === 'floating-workspace')
+    expect(floatingWorkspace?.description).toBe('Global terminal and markdown tabs.')
+    expect(floatingWorkspace?.searchEntries.flatMap((entry) => entry.keywords)).not.toContain(
+      'browser'
+    )
+    const shortcuts = webSections.find((section) => section.id === 'shortcuts')
+    expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain('New browser tab')
+    expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'New mobile emulator tab'
+    )
+  })
+
+  it('keeps the Browser shortcut searchable for a capable web runtime', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      managedBrowserCreationEnabled: true,
+      mobileEmulatorCreationEnabled: false,
+      repos: [repo]
+    })
+    const shortcutTitles = sections
+      .find((section) => section.id === 'shortcuts')
+      ?.searchEntries.map((entry) => entry.title)
+
+    expect(shortcutTitles).toContain('New browser tab')
+    expect(shortcutTitles).not.toContain('New mobile emulator tab')
   })
 
   it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {

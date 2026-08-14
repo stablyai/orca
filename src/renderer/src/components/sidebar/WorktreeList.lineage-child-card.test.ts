@@ -201,10 +201,6 @@ vi.mock('./WorktreeTitleInlineRename', () => ({
     )
 }))
 
-vi.mock('./WorktreeActivityStatusIndicator', () => ({
-  WorktreeActivityStatusIndicator: () => React.createElement('span', { 'data-status-dot': true })
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),

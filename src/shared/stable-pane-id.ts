@@ -44,6 +44,18 @@ export function parsePaneKey(
   return { tabId, leafId, stablePaneId: leafId }
 }
 
+// Why: only the leaf UUID is remint-stable pane identity (the tab half changes on
+// pane break-out), while opaque legacy keys that do not parse have no safe
+// equivalence beyond exact equality.
+export function isEquivalentPaneKey(a: string, b: string): boolean {
+  if (a === b) {
+    return true
+  }
+  const aLeaf = parsePaneKey(a)?.leafId
+  const bLeaf = parsePaneKey(b)?.leafId
+  return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
+}
+
 export function parseLegacyNumericPaneKey(
   paneKey: unknown
 ): { tabId: string; numericPaneId: string; paneKey: string } | null {

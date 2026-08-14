@@ -9,17 +9,7 @@ import {
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from './claude-model-list-probe'
-
-function hasFlag(tokens: readonly string[], flags: readonly string[]): boolean {
-  return agentArgOptionTokens(tokens).some((token) =>
-    flags.some(
-      (flag) =>
-        token === flag ||
-        token.startsWith(`${flag}=`) ||
-        (flag.startsWith('-') && !flag.startsWith('--') && token.startsWith(flag))
-    )
-  )
-}
+import { hasFlag } from './agent-cli-flag-detection'
 
 function hasCodexEffortOverride(tokens: readonly string[]): boolean {
   if (hasFlag(tokens, ['--reasoning-effort'])) {
@@ -190,9 +180,8 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   }
 }
 
-// Why: `codex debug models` reports reasoning levels as a prefix ladder — each
-// model supports every level up to its own ceiling, so encode the ceiling.
-const CODEX_EFFORT_LADDER = [
+const CODEX_EFFORT_CHOICES = [
+  { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -201,24 +190,23 @@ const CODEX_EFFORT_LADDER = [
   { value: 'ultra', label: 'Ultra' }
 ]
 
+// Why: Codex can clamp higher values, so expose only each model's advertised levels.
 function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra', defaultValue = 'medium'): CatalogOption {
+  const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
   return {
     id: 'effort',
     label: 'Reasoning effort',
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: CODEX_EFFORT_LADDER.slice(
-        0,
-        CODEX_EFFORT_LADDER.findIndex((choice) => choice.value === ceiling) + 1
-      ),
+      choices: CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
       defaultValue
     },
     apply: {
       launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
       agentArgsOverride: hasCodexEffortOverride,
       removeAgentArgs: removeCodexEffortOverride,
-      midSession: { kind: 'agent-picker', command: '/model' }
+      midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
     }
   }
 }
@@ -242,13 +230,9 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     launchArgs: (value) => ['-m', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['-m', '--model']),
     removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['-m', '--model']),
-    // Codex accepts a model argument in its live /model command.
-    midSession: {
-      kind: 'command',
-      build: (value) => `/model ${String(value)}`,
-      pickerCommand: '/model'
-    }
+    // Codex classifies multi-character writes as pasted prose; type the bare
+    // command and let its own picker apply the account-supported model.
+    midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  // Why: an unseeded model's ceiling is unknown; offer the level set every Codex model shares.
   unknownModelOptions: [codexEffort('xhigh')]
 }

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import type * as NodeCrypto from 'node:crypto'
 import { SshRelaySession } from './ssh-relay-session'
+import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
 type MockMuxInstance = {
@@ -100,6 +101,9 @@ vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
 vi.mock('../ipc/pty', () => ({
+  resolvePaneShellTabId: vi.fn(() => undefined),
+  // Step F: the single pane->shell bind producer the relay now calls.
+  bindPaneShell: vi.fn(() => true),
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
   getSshPtyProvider: vi.fn(),
@@ -123,6 +127,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const {
+  bindPaneShell,
   registerSshPtyProvider,
   getSshPtyProvider,
   getPtyIdsForConnection,
@@ -376,11 +381,32 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
 
     const winningCliHandler = muxInstances[2]?.requestHandlers.get('orca.cli')
     expect(winningCliHandler).toBeDefined()
-    await winningCliHandler?.({ argv: ['status'], cwd: '/', env: {} })
+    await winningCliHandler?.({
+      argv: ['artifacts', 'share', 'report.html'],
+      cwd: '/srv/repo',
+      env: {},
+      stdin: '<h1>Remote</h1>',
+      artifactInput: {
+        sourceKey: '/srv/repo/report.html',
+        fileName: 'report.html',
+        contentType: 'text/html'
+      }
+    })
 
     expect(runtime.registerOrchestrationCompatibilitySshAttachment).toHaveBeenCalledWith(
       'target-1',
       winningIncarnation
+    )
+    expect(vi.mocked(runRemoteOrcaCli)).toHaveBeenCalledWith(
+      runtime,
+      expect.objectContaining({
+        stdin: '<h1>Remote</h1>',
+        artifactInput: {
+          sourceKey: '/srv/repo/report.html',
+          fileName: 'report.html',
+          contentType: 'text/html'
+        }
+      })
     )
     expect(randomUUID).toHaveBeenCalledTimes(3)
   })
@@ -413,16 +439,41 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId
     })
     expect(runtime.onPtySpawned).not.toHaveBeenCalled()
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith({
+    // Step F moved the observation point to the one bind producer; the intent is
+    // unchanged — exact incarnation proof, and mayCreate:false so reattach binds
+    // an existing pane and never grafts one back.
+    expect(bindPaneShell).toHaveBeenCalledWith({
+      store: expect.anything(),
       worktreeId: 'worktree-1',
       tabId: 'tab-1',
       leafId: INCARNATION_LEAF_ID,
       ptyId: APP_PTY_ID,
-      incarnationId
+      incarnationId,
+      mayCreate: false
     })
-    expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
+    expect(vi.mocked(bindPaneShell).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(mockStore.markSshRemotePtyLeasesAttachedAsync).mock.invocationCallOrder[0]!
     )
+  })
+
+  it('sends pane identity beside incarnation for relays that only understand the legacy fence', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const attachForReconnect = vi.fn().mockResolvedValue({ incarnationId: 'incarnation-lease' })
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      { ...detachedLease(), incarnationId: 'incarnation-lease' }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    expect(attachForReconnect).toHaveBeenCalledWith('pty-live', undefined, 'incarnation-lease', {
+      paneKey: `tab-1:${INCARNATION_LEAF_ID}`,
+      tabId: 'tab-1'
+    })
   })
 
   it('does not restore a PTY whose matching exit shares the attach reply batch', async () => {
@@ -467,7 +518,8 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     expect(runtime.registerPty).not.toHaveBeenCalled()
     expect(restorePtyIncarnation).toHaveBeenCalledWith(APP_PTY_ID, incarnationId)
     expect(setPtyOwnership).not.toHaveBeenCalled()
-    expect(mockStore.persistPtyBinding).not.toHaveBeenCalled()
+    // Step F: observed at the one bind producer, else this negative is vacuous.
+    expect(bindPaneShell).not.toHaveBeenCalled()
     expect(sourceActivationLease.rollback).toHaveBeenCalledOnce()
     expect(sourceActivationLease.commit).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
@@ -526,8 +578,14 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId: currentIncarnationId
     })
     expect(setPtyOwnership).toHaveBeenCalledWith(APP_PTY_ID, 'target-1')
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
-      expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId })
+    // Step F moved the observation point to the one bind producer; the asserted
+    // intent — exact incarnation proof, mayCreate:false — is unchanged.
+    expect(bindPaneShell).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ptyId: APP_PTY_ID,
+        incarnationId: currentIncarnationId,
+        mayCreate: false
+      })
     )
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
       id: APP_PTY_ID,
@@ -545,7 +603,9 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([detachedLease()] as ReturnType<
       typeof mockStore.getSshRemotePtyLeases
     >)
-    vi.mocked(mockStore.persistPtyBinding).mockImplementationOnce(() => {
+    // Step F: the durable write now happens inside the bind producer, so that is
+    // where the failure has to be injected.
+    vi.mocked(bindPaneShell).mockImplementationOnce(() => {
       throw new Error('disk full')
     })
     const runtime = { onPtySpawned: vi.fn(), registerPty: vi.fn() }

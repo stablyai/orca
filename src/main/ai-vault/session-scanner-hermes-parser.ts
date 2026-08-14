@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime } from './session-scanner-types'
@@ -26,7 +26,11 @@ export async function parseHermesSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  return parseHermesSessionContent(file, await readFile(file.path, 'utf-8'), platform)
+  return parseHermesSessionContent(
+    file,
+    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    platform
+  )
 }
 
 export async function parseHermesSessionContent(

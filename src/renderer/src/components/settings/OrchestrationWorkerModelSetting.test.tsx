@@ -69,7 +69,13 @@ describe('OrchestrationWorkerModelSetting', () => {
     }
 
     expect(effortChoices('gpt-account-model')).toEqual(['low', 'high'])
-    expect(effortChoices('gpt-unseeded-model')).toEqual(['low', 'medium', 'high', 'xhigh'])
+    expect(effortChoices('gpt-unseeded-model')).toEqual([
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh'
+    ])
   })
 
   it('keeps all three controls visible when no provider is selected', () => {

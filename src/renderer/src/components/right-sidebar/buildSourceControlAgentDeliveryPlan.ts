@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/types'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
-import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 
 type BuildSourceControlAgentDeliveryPlanArgs = {
   selectedAgent: TuiAgent | null
@@ -31,21 +31,24 @@ export function buildSourceControlAgentDeliveryPlan({
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
   }
+  const settings = useAppStore.getState().settings
   const result = planSourceControlAgentActionLaunch({
     agent: selectedAgent,
     commandInput,
     agentArgs,
     sessionOptions: selectedAgent
-      ? resolveNativeChatSessionOptionDefaults(
-          useAppStore.getState().settings?.nativeChatSessionOptions,
-          selectedAgent
-        )
+      ? resolveInitialNativeChatSessionOptions(settings, {
+          agent: selectedAgent,
+          promptDelivery,
+          launchDraftText: commandInput.trim(),
+          nativeChatTranscriptIsLocalReadable: !isRemote
+        })
       : undefined,
     promptDelivery,
     detectedAgents,
-    disabledAgents: useAppStore.getState().settings?.disabledTuiAgents,
-    cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides,
-    terminalWindowsShell: useAppStore.getState().settings?.terminalWindowsShell,
+    disabledAgents: settings?.disabledTuiAgents,
+    cmdOverrides: settings?.agentCmdOverrides,
+    terminalWindowsShell: settings?.terminalWindowsShell,
     platform: launchPlatform,
     isRemote
   })

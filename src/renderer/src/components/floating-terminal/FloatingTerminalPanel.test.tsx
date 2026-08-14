@@ -18,6 +18,7 @@ import {
   consumeFloatingTerminalOpenMaximizedIntent,
   requestFloatingTerminalOpenMaximized
 } from '@/lib/floating-terminal'
+import { FLOATING_TERMINAL_PANEL_VIEW_STATE_STORAGE_KEY } from './floating-terminal-panel-view-state'
 import {
   clearFloatingPanelReclaimIntent,
   consumeFloatingPanelReclaimIntent
@@ -1197,14 +1198,45 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     element = await renderPanel(true)
     expect(getPanelStyleBounds(element)).toEqual(getMaximizedFloatingTerminalBounds())
-    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+    // Why key-scoped rather than "no writes": maximize now persists panel view state under
+    // its own key. The invariant here is that the saved NORMAL bounds are never clobbered.
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      expect.anything()
+    )
 
     const restoredControls = findByTypeName(element, 'FloatingTerminalWindowControls')
     ;(restoredControls.props.onToggleMaximized as () => void)()
     element = await renderPanel(true)
 
     expect(getPanelStyleBounds(element)).toEqual(savedBounds)
-    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+    // Why key-scoped rather than "no writes": maximize now persists panel view state under
+    // its own key. The invariant here is that the saved NORMAL bounds are never clobbered.
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      expect.anything()
+    )
+  })
+
+  it('restores saved normal bounds after starting maximized', async () => {
+    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
+    getMockedLocalStorage().getItem.mockImplementation((key: string) => {
+      if (key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY) {
+        return JSON.stringify(savedBounds)
+      }
+      return key === FLOATING_TERMINAL_PANEL_VIEW_STATE_STORAGE_KEY
+        ? JSON.stringify({ open: true, maximized: true })
+        : null
+    })
+
+    let element = await renderPanel(true)
+    expect(getPanelStyleBounds(element)).toEqual(getMaximizedFloatingTerminalBounds())
+
+    const controls = findByTypeName(element, 'FloatingTerminalWindowControls')
+    ;(controls.props.onToggleMaximized as () => void)()
+    element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
   })
 
   it('restores committed normal bounds after maximizing from a skinny clamp', async () => {
@@ -1239,7 +1271,12 @@ describe('FloatingTerminalPanel close behavior', () => {
       width: 920,
       height: 560
     })
-    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+    // Why key-scoped rather than "no writes": maximize now persists panel view state under
+    // its own key. The invariant here is that the saved NORMAL bounds are never clobbered.
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      expect.anything()
+    )
   })
 
   it('does not bootstrap a terminal tab when the panel opens empty', async () => {
@@ -2481,6 +2518,16 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     expect(editorPanel.props.markdownAnnotationsEnabled).toBe(false)
     expect(editorPanel.props.activeFileId).toBe('notes')
+    expect(editorPanel.props.isVisible).toBe(true)
+  })
+
+  it('marks the retained floating editor hidden when the panel is closed', async () => {
+    setFloatingEditorTabs([makeFile({ id: 'notes' })])
+
+    const element = await renderPanel(false)
+    const editorPanel = findByProp(element, 'activeFileId')
+
+    expect(editorPanel.props.isVisible).toBe(false)
   })
 
   it('keeps the panel open when the explicit close action removes the last tab', async () => {

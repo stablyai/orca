@@ -7,7 +7,7 @@ import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-acti
 import { prStateBadge } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
 import { canEditPRTitle } from '../../session/pr-title-edit'
-import { openMobilePrUrl } from '../MobilePrComposeSheet'
+import { openMobilePrUrl } from '../mobile-pr-url'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
 

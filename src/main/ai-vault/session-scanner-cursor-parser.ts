@@ -1,5 +1,5 @@
 import { remoteSessionContentLines } from './remote-session-content-lines'
-import { createReadStream } from 'node:fs'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -33,7 +33,7 @@ export async function parseCursorSessionFile(
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
   return parseCursorSessionLines({ file, lines, platform })

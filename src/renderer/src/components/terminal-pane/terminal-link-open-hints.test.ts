@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getTerminalUrlOpenHint, terminalUrlOpenHintOptionsFor } from './terminal-link-open-hints'
+import {
+  getTerminalUrlOpenHint,
+  terminalHttpLinkActionDestinationsFor,
+  terminalUrlOpenHintOptionsFor
+} from './terminal-link-open-hints'
 
 function stubPlatform(isMac: boolean): void {
   vi.stubGlobal('navigator', { userAgent: isMac ? 'Mac OS X' : 'Windows NT 10.0' })
@@ -12,7 +16,9 @@ afterEach(() => {
 describe('getTerminalUrlOpenHint', () => {
   it('keeps the system-browser wording by default', () => {
     stubPlatform(true)
-    expect(getTerminalUrlOpenHint()).toBe('⌘+click to open or ⇧⌘+click for system browser')
+    expect(getTerminalUrlOpenHint()).toBe(
+      'Click for actions, ⌘+click to open, or ⇧⌘+click for system browser'
+    )
   })
 
   it('keeps the system-browser wording when inverting is off', () => {
@@ -34,15 +40,26 @@ describe('getTerminalUrlOpenHint', () => {
   it('names Orca when inverting and links open externally', () => {
     stubPlatform(true)
     expect(getTerminalUrlOpenHint({ openLinksInApp: false, modifierInverts: true })).toBe(
-      '⌘+click to open or ⇧⌘+click to open in Orca'
+      'Click for actions, ⌘+click to open, or ⇧⌘+click to open in Orca'
     )
   })
 
   it('uses the Ctrl chord off macOS', () => {
     stubPlatform(false)
     expect(getTerminalUrlOpenHint({ openLinksInApp: false, modifierInverts: true })).toBe(
-      'Ctrl+click to open or Shift+Ctrl+click to open in Orca'
+      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click to open in Orca'
     )
+  })
+
+  it('omits the action-menu gesture when terminal link actions are disabled', () => {
+    stubPlatform(false)
+    expect(
+      getTerminalUrlOpenHint({
+        openLinksInApp: false,
+        modifierInverts: true,
+        showActions: false
+      })
+    ).toBe('Ctrl+click to open, or Shift+Ctrl+click to open in Orca')
   })
 })
 
@@ -124,5 +141,43 @@ describe('terminalUrlOpenHintOptionsFor', () => {
 
     expect(options.modifierInverts).toBe(true)
     expect(getTerminalUrlOpenHint(options)).toContain('to open in Orca')
+  })
+
+  it('keeps inversion for a runtime pane when its host can open an Orca browser', () => {
+    const options = terminalUrlOpenHintOptionsFor(
+      {
+        openLinksInApp: false,
+        openLinksInAppModifierInverts: true
+      },
+      { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+      true
+    )
+
+    expect(options.modifierInverts).toBe(true)
+  })
+})
+
+describe('terminalHttpLinkActionDestinationsFor', () => {
+  it('offers both destinations for a capable runtime and follows the preference', () => {
+    const owner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
+
+    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, true)).toEqual({
+      primary: 'orca',
+      alternate: 'system'
+    })
+    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: false }, owner, true)).toEqual({
+      primary: 'system',
+      alternate: 'orca'
+    })
+  })
+
+  it.each([
+    ['incapable runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const],
+    ['SSH', { kind: 'ssh', connectionId: 'ssh-1' } as const],
+    ['unknown owner', { kind: 'unknown' } as const]
+  ])('offers only the system browser for an %s', (_label, owner) => {
+    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, false)).toEqual({
+      primary: 'system'
+    })
   })
 })

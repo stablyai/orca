@@ -67,16 +67,28 @@ function optionDescriptor(args: {
   option: CatalogOption
   tracked: TrackedNativeChatSessionOption | undefined
   mode: NativeChatSessionOptionMode
+  modelIsCliDefault: boolean
   composedModelApply: AgentSessionOptionCatalog['modelApply']
 }): SessionOptionDescriptor | null {
-  const { option, tracked, mode, composedModelApply } = args
+  const { option, tracked, mode, modelIsCliDefault, composedModelApply } = args
   const action = actionForApply(option.apply, tracked, mode)
   const settable = settableState({ mode, apply: option.apply, composedModelApply })
+  // Why: the launch only emits `values[id] ?? defaultValue` alongside a model flag, so
+  // a draft names this option's value exactly when a model was picked. Under the CLI's
+  // own default no flag is sent at all, and the CLI's unstated choice is not ours to name.
+  const showDefault = mode === 'draft' && !tracked && !modelIsCliDefault
+  const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
     const choices = choiceWithCurrent(option.kind.choices, tracked)
     if (choices.length <= 1) {
       return null
     }
+    const currentValue =
+      typeof tracked?.value === 'string'
+        ? tracked.value
+        : showDefault
+          ? option.kind.defaultValue
+          : undefined
     return {
       id: option.id,
       label: option.label,
@@ -84,14 +96,20 @@ function optionDescriptor(args: {
       ...(option.category ? { category: option.category } : {}),
       kind: {
         type: 'select',
-        ...(typeof tracked?.value === 'string' ? { currentValue: tracked.value } : {}),
+        ...(currentValue === undefined ? {} : { currentValue }),
         choices
       },
-      valueSource: tracked?.source ?? 'unknown',
+      valueSource,
       ...settable,
       ...(action ? { action } : {})
     }
   }
+  const currentValue =
+    typeof tracked?.value === 'boolean'
+      ? tracked.value
+      : showDefault
+        ? option.kind.defaultValue
+        : undefined
   return {
     id: option.id,
     label: option.label,
@@ -99,9 +117,9 @@ function optionDescriptor(args: {
     ...(option.category ? { category: option.category } : {}),
     kind: {
       type: 'boolean',
-      ...(typeof tracked?.value === 'boolean' ? { currentValue: tracked.value } : {})
+      ...(currentValue === undefined ? {} : { currentValue })
     },
-    valueSource: tracked?.source ?? 'unknown',
+    valueSource,
     ...settable,
     ...(action ? { action } : {})
   }
@@ -147,6 +165,30 @@ export function withTrackedNativeChatModel(
   return [...models, seeded ?? { id: trackedId, label: trackedId, options: [] }]
 }
 
+/** Why: no tracked model means no `-m` was ever emitted, so the CLI is running its
+ *  own default — nameable only for a catalog that proves the seed states it. */
+function cliDefaultModelId(
+  catalog: AgentSessionOptionCatalog,
+  models: readonly CatalogModel[],
+  trackedModelId: string | null
+): string | null {
+  if (trackedModelId || !catalog.defaultModelIsCliDefault) {
+    return null
+  }
+  return models.find((model) => model.isDefault)?.id ?? null
+}
+
+/** The model the picker is showing, tracked or CLI default. Shared so applying an
+ *  option resolves the same row the snapshot rendered it under. */
+export function resolveEffectiveNativeChatModelId(
+  catalog: AgentSessionOptionCatalog,
+  models: readonly CatalogModel[],
+  record: NativeChatSessionOptionRecord
+): string | null {
+  const trackedModelId = typeof record.model?.value === 'string' ? record.model.value : null
+  return trackedModelId ?? cliDefaultModelId(catalog, models, trackedModelId)
+}
+
 export function buildNativeChatSessionOptionSnapshot(args: {
   catalog: AgentSessionOptionCatalog
   models: readonly CatalogModel[]
@@ -167,6 +209,9 @@ export function buildNativeChatSessionOptionSnapshot(args: {
     label,
     ...(description ? { description } : {})
   }))
+  const trackedModelId = typeof modelTracked?.value === 'string' ? modelTracked.value : null
+  const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
+  const effectiveModelId = trackedModelId ?? defaultModelId
   const modelAction = actionForApply(catalog.modelApply, modelTracked, mode)
   const snapshot: SessionOptionDescriptor[] = [
     {
@@ -175,24 +220,25 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       category: 'model',
       kind: {
         type: 'select',
-        ...(typeof modelTracked?.value === 'string' ? { currentValue: modelTracked.value } : {}),
+        ...(effectiveModelId ? { currentValue: effectiveModelId } : {}),
         choices: modelChoices
       },
-      valueSource: modelTracked?.source ?? 'unknown',
+      valueSource: modelTracked?.source ?? (defaultModelId ? 'default' : 'unknown'),
       ...settableState({ mode, apply: catalog.modelApply }),
       ...(modelAction ? { action: modelAction } : {})
     }
   ]
-  if (typeof modelTracked?.value !== 'string') {
+  if (!effectiveModelId) {
     return snapshot
   }
-  const model = models.find((candidate) => candidate.id === modelTracked.value)
-  const trackedValues = record.valuesByModel[modelTracked.value] ?? {}
+  const model = models.find((candidate) => candidate.id === effectiveModelId)
+  const trackedValues = record.valuesByModel[effectiveModelId] ?? {}
   for (const option of model?.options ?? []) {
     const descriptor = optionDescriptor({
       option,
       tracked: trackedValues[option.id],
       mode,
+      modelIsCliDefault: effectiveModelId === defaultModelId,
       composedModelApply: catalog.modelApply
     })
     if (descriptor) {

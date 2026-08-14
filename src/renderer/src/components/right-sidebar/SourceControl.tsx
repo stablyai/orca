@@ -111,9 +111,8 @@ import { useSourceControlSubmoduleStatus } from './useSourceControlSubmoduleStat
 import {
   buildSourceControlDisplaySections,
   getSourceControlSectionViewAction,
-  mergeUntrackedIntoChanges,
+  resolveSourceControlGroupOrder,
   SOURCE_CONTROL_AREAS,
-  SOURCE_CONTROL_GROUP_ORDER,
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlSectionArea
@@ -247,6 +246,8 @@ import {
 } from './source-control-pull-policy-error-notice'
 import { SourceControlTextGenerationDialog } from './SourceControlTextGenerationDialog'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
+import { useHostedReviewStackParent } from './useHostedReviewStackParent'
+import { resolveCreatedHostedReviewLink } from './source-control-created-review-link'
 import {
   hasConfiguredCommitMessageGenerationDefaults,
   hasConfiguredSourceControlTextGenerationDefaults
@@ -645,11 +646,6 @@ type SourceControlDirectoryActionPaths = {
   stagePaths: string[]
   unstagePaths: string[]
   discardPaths: string[]
-  discardHasUntracked: boolean
-}
-
-function discardAllAreaFilter(area: DiscardAllArea): DiscardAllArea | readonly DiscardAllArea[] {
-  return area === 'unstaged' ? (['unstaged', 'untracked'] as const) : area
 }
 
 function getSourceControlDirectoryActionPaths(
@@ -661,9 +657,8 @@ function getSourceControlDirectoryActionPaths(
     unstagePaths: getUnstageAllPaths(entries),
     discardPaths:
       node.area === 'unstaged' || node.area === 'untracked'
-        ? getDiscardAllPaths(entries, discardAllAreaFilter(node.area))
-        : [],
-    discardHasUntracked: entries.some((entry) => entry.area === 'untracked')
+        ? getDiscardAllPaths(entries, node.area)
+        : []
   }
 }
 
@@ -917,6 +912,7 @@ function SourceControlInner(): React.JSX.Element {
     (s) => s.getHostedReviewCreationEligibility
   )
   const createHostedReview = useAppStore((s) => s.createHostedReview)
+  const createStackedHostedReview = useAppStore((s) => s.createStackedHostedReview)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
@@ -1067,6 +1063,7 @@ function SourceControlInner(): React.JSX.Element {
     settings?.sourceControlViewMode
   )
   const sourceControlViewMode = persistedSourceControlViewMode
+  const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -1802,19 +1799,13 @@ function SourceControlInner(): React.JSX.Element {
     [fileFilterState, grouped]
   )
 
-  const mergedGrouped = useMemo(() => mergeUntrackedIntoChanges(grouped), [grouped])
-  const mergedFilteredGrouped = useMemo(
-    () => mergeUntrackedIntoChanges(filteredGrouped),
-    [filteredGrouped]
-  )
-
   const displaySections = useMemo(
-    () => buildSourceControlDisplaySections(mergedFilteredGrouped, SOURCE_CONTROL_GROUP_ORDER),
-    [mergedFilteredGrouped]
+    () => buildSourceControlDisplaySections(filteredGrouped, sourceControlGroupOrder),
+    [filteredGrouped, sourceControlGroupOrder]
   )
   const unfilteredDisplaySections = useMemo(
-    () => buildSourceControlDisplaySections(mergedGrouped, SOURCE_CONTROL_GROUP_ORDER),
-    [mergedGrouped]
+    () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
+    [grouped, sourceControlGroupOrder]
   )
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
@@ -2765,26 +2756,18 @@ function SourceControlInner(): React.JSX.Element {
         setRightSidebarTab('checks')
       }
       try {
-        if (worktreeId && result.provider === 'github') {
-          await updateWorktreeMeta(worktreeId, { linkedPR: result.number })
-        }
-        if (worktreeId && result.provider === 'gitlab') {
-          await updateWorktreeMeta(worktreeId, { linkedGitLabMR: result.number })
-        }
-        if (worktreeId && result.provider === 'azure-devops') {
-          await updateWorktreeMeta(worktreeId, { linkedAzureDevOpsPR: result.number })
-        }
-        if (worktreeId && result.provider === 'gitea') {
-          await updateWorktreeMeta(worktreeId, { linkedGiteaPR: result.number })
+        const createdLink = resolveCreatedHostedReviewLink(result.provider, result.number)
+        if (worktreeId && result.provider !== 'unsupported') {
+          await updateWorktreeMeta(worktreeId, createdLink.worktree)
         }
         const linkedReviewNumbers = {
-          linkedGitHubPR: result.provider === 'github' ? result.number : linkedGitHubPR,
+          linkedGitHubPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR: result.provider === 'gitlab' ? result.number : linkedGitLabMR,
+          linkedGitLabMR,
           linkedBitbucketPR,
-          linkedAzureDevOpsPR:
-            result.provider === 'azure-devops' ? result.number : linkedAzureDevOpsPR,
-          linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
+          linkedAzureDevOpsPR,
+          linkedGiteaPR,
+          ...createdLink.lookup
         }
         if (result.provider === 'gitlab') {
           await fetchHostedReviewForBranch(repoPath, branch, {
@@ -3032,10 +3015,13 @@ function SourceControlInner(): React.JSX.Element {
     setBody: setPrBody,
     draft: prDraft,
     setDraft: setPrDraft,
+    stackedCreationSupported: prStackedCreationSupported,
+    repoDefaultBaseRef: prRepoDefaultBaseRef,
     baseQuery: prBaseQuery,
     setBaseQuery: setPrBaseQuery,
     baseResults: prBaseResults,
     setBaseResults: setPrBaseResults,
+    baseSearchPending: prBaseSearchPending,
     baseSearchError: prBaseSearchError,
     generating: prGenerating,
     generateError: prGenerateError,
@@ -3071,6 +3057,17 @@ function SourceControlInner(): React.JSX.Element {
       },
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
+  })
+  const stackParentReview = useHostedReviewStackParent({
+    enabled: hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
+    repoPath: activeRepo?.path ?? '',
+    repoId: activeRepo?.id ?? null,
+    base: prBase,
+    // Why: the repo default, not eligibility's defaultBaseRef — that one resolves to
+    // the worktree's own base, which is exactly the branch a stacked PR targets.
+    repoDefaultBase: prRepoDefaultBaseRef,
+    head: branchName,
+    fetchHostedReviewForBranch
   })
 
   const handleGeneratePullRequestFieldsClick = useCallback((): void => {
@@ -3292,163 +3289,184 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
-  const handleCreatePullRequest = useCallback(async (): Promise<void> => {
-    if (
-      !activeRepo ||
-      !activeWorktreeId ||
-      !worktreePath ||
-      !hostedReviewCreation ||
-      prGenerating ||
-      createPrInFlightRef.current[activeWorktreeId]
-    ) {
-      return
-    }
-
-    if (!hostedReviewCreation.canCreate) {
-      // Why: blocked Create Review clicks are intentional; the inline notice tells the user which prerequisite to clear.
-      const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
-      if (message) {
-        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-          tone: 'destructive',
-          message
-        })
+  const handleCreatePullRequest = useCallback(
+    async (stacked = false): Promise<void> => {
+      if (
+        !activeRepo ||
+        !activeWorktreeId ||
+        !worktreePath ||
+        !hostedReviewCreation ||
+        prGenerating ||
+        createPrInFlightRef.current[activeWorktreeId]
+      ) {
+        return
       }
-      return
-    }
 
-    const base = stripBaseRef(prBase).trim()
-    const title = prTitle.trim()
-
-    if (!title) {
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-        tone: 'destructive',
-        message: translate(
-          'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
-          'Enter a {{value0}} title.',
-          { value0: hostedReviewCreateCopy.reviewLabel }
-        )
-      })
-      return
-    }
-
-    if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branchName).toLowerCase()) {
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-        tone: 'destructive',
-        message: translate(
-          'auto.components.right.sidebar.SourceControl.ae743199cd',
-          'Choose a different base branch before creating a {{value0}}.',
-          { value0: hostedReviewCreateCopy.reviewLabel }
-        )
-      })
-      return
-    }
-
-    createPrInFlightRef.current[activeWorktreeId] = true
-    setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
-    setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
-    try {
-      const result = await createHostedReview(activeRepo.path, {
-        repoId: activeRepo.id,
-        provider: hostedReviewCreateProvider,
-        base,
-        head: normalizeHostedReviewHeadRef(branchName),
-        title,
-        body: prBody,
-        draft: prDraft,
-        worktreePath,
-        useTemplate: resolvedPrCreationDefaults.useTemplate
-      })
-
-      if (result.ok) {
-        setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
-        await handlePullRequestCreated({
-          provider: hostedReviewCreateProvider,
-          number: result.number,
-          url: result.url
-        })
-        if (resolvedPrCreationDefaults.openAfterCreate) {
-          window.api.shell.openUrl(result.url)
+      if (!hostedReviewCreation.canCreate) {
+        // Why: blocked Create Review clicks are intentional; the inline notice tells the user which prerequisite to clear.
+        const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
+        if (message) {
+          setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+            tone: 'destructive',
+            message
+          })
         }
         return
       }
 
-      if (result.existingReview?.url) {
-        const number = result.existingReview.number
-        toast.success(
-          number
-            ? translate(
-                'auto.components.right.sidebar.SourceControl.eef5446523',
-                '{{value0}} #{{value1}} is already open',
-                { value0: hostedReviewCreateCopy.titleLabel, value1: number }
-              )
-            : translate(
-                'auto.components.right.sidebar.SourceControl.d6fb1df5fe',
-                '{{value0}} is already open',
-                { value0: hostedReviewCreateCopy.titleLabel }
-              ),
-          {
-            action: {
-              label: translate(
-                'auto.components.right.sidebar.SourceControl.812cb992ee',
-                'Open on {{value0}}',
-                { value0: hostedReviewCreateCopy.providerName }
-              ),
-              onClick: () => window.api.shell.openUrl(result.existingReview!.url)
-            }
-          }
-        )
-        if (number) {
+      const base = stripBaseRef(prBase).trim()
+      const title = prTitle.trim()
+
+      if (!title) {
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
+            'Enter a {{value0}} title.',
+            { value0: hostedReviewCreateCopy.reviewLabel }
+          )
+        })
+        return
+      }
+
+      if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branchName).toLowerCase()) {
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.ae743199cd',
+            'Choose a different base branch before creating a {{value0}}.',
+            { value0: hostedReviewCreateCopy.reviewLabel }
+          )
+        })
+        return
+      }
+
+      createPrInFlightRef.current[activeWorktreeId] = true
+      setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+      setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+      try {
+        const createInput = {
+          repoId: activeRepo.id,
+          provider: hostedReviewCreateProvider,
+          base,
+          head: normalizeHostedReviewHeadRef(branchName),
+          title,
+          body: prBody,
+          draft: prDraft,
+          worktreePath,
+          useTemplate: resolvedPrCreationDefaults.useTemplate
+        }
+        const result = stacked
+          ? await createStackedHostedReview(activeRepo.path, createInput)
+          : await createHostedReview(activeRepo.path, createInput)
+
+        if (result.ok) {
           setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
           await handlePullRequestCreated({
             provider: hostedReviewCreateProvider,
-            number,
-            url: result.existingReview.url
+            number: result.number,
+            url: result.url
           })
+          if (resolvedPrCreationDefaults.openAfterCreate) {
+            window.api.shell.openUrl(result.url)
+          }
           return
         }
-      }
 
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-        tone: 'destructive',
-        message: result.error
-      })
-    } catch (error) {
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
-        tone: 'destructive',
-        message:
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
-                'Failed to create {{value0}}',
-                { value0: hostedReviewCreateCopy.reviewLabel }
-              )
-      })
-    } finally {
-      createPrInFlightRef.current[activeWorktreeId] = false
-      setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
-    }
-  }, [
-    activeRepo,
-    activeWorktreeId,
-    branchName,
-    createHostedReview,
-    handlePullRequestCreated,
-    hostedReviewCreation,
-    hostedReviewCreateCopy.providerName,
-    hostedReviewCreateCopy.reviewLabel,
-    hostedReviewCreateCopy.titleLabel,
-    hostedReviewCreateProvider,
-    prBase,
-    prBody,
-    prDraft,
-    prGenerating,
-    prTitle,
-    resolvedPrCreationDefaults.openAfterCreate,
-    resolvedPrCreationDefaults.useTemplate,
-    setCreatePrIntentNoticeForWorktree,
-    worktreePath
-  ])
+        if ('existingReview' in result && result.existingReview?.url) {
+          const number = result.existingReview.number
+          toast.success(
+            number
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.eef5446523',
+                  '{{value0}} #{{value1}} is already open',
+                  { value0: hostedReviewCreateCopy.titleLabel, value1: number }
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.d6fb1df5fe',
+                  '{{value0}} is already open',
+                  { value0: hostedReviewCreateCopy.titleLabel }
+                ),
+            {
+              action: {
+                label: translate(
+                  'auto.components.right.sidebar.SourceControl.812cb992ee',
+                  'Open on {{value0}}',
+                  { value0: hostedReviewCreateCopy.providerName }
+                ),
+                onClick: () => window.api.shell.openUrl(result.existingReview!.url)
+              }
+            }
+          )
+          if (number) {
+            setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+            await handlePullRequestCreated({
+              provider: hostedReviewCreateProvider,
+              number,
+              url: result.existingReview.url
+            })
+            return
+          }
+        }
+
+        // Why: stacked creation can create the pull request and still fail to register
+        // the stack. Link the review that exists before surfacing the stack failure, or
+        // the workspace stays unaware of a PR the user can already see on GitHub.
+        if ('createdReview' in result && result.createdReview?.url) {
+          const { number, url } = result.createdReview
+          if (number) {
+            await handlePullRequestCreated({
+              provider: hostedReviewCreateProvider,
+              number,
+              url
+            })
+          }
+        }
+
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message: result.error
+        })
+      } catch (error) {
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message:
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
+                  'Failed to create {{value0}}',
+                  { value0: hostedReviewCreateCopy.reviewLabel }
+                )
+        })
+      } finally {
+        createPrInFlightRef.current[activeWorktreeId] = false
+        setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      }
+    },
+    [
+      activeRepo,
+      activeWorktreeId,
+      branchName,
+      createHostedReview,
+      createStackedHostedReview,
+      handlePullRequestCreated,
+      hostedReviewCreation,
+      hostedReviewCreateCopy.providerName,
+      hostedReviewCreateCopy.reviewLabel,
+      hostedReviewCreateCopy.titleLabel,
+      hostedReviewCreateProvider,
+      prBase,
+      prBody,
+      prDraft,
+      prGenerating,
+      prTitle,
+      resolvedPrCreationDefaults.openAfterCreate,
+      resolvedPrCreationDefaults.useTemplate,
+      setCreatePrIntentNoticeForWorktree,
+      worktreePath
+    ]
+  )
 
   const createHostedReviewForCreatePrIntent = useCallback(
     async (
@@ -5412,9 +5430,7 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths
-        ? [...confirmedPaths]
-        : getDiscardAllPaths(mergedGrouped[area], discardAllAreaFilter(area))
+      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
       if (paths.length === 0) {
         return
       }
@@ -5486,7 +5502,7 @@ function SourceControlInner(): React.JSX.Element {
       activeRepoSettings,
       worktreePath,
       activeWorktreeId,
-      mergedGrouped,
+      grouped,
       isExecutingBulk,
       clearSelection,
       discardMany,
@@ -5500,21 +5516,13 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths
-        ? [...confirmedPaths]
-        : getDiscardAllPaths(mergedGrouped[area], discardAllAreaFilter(area))
+      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
       if (paths.length === 0) {
         return
       }
-      setPendingDiscard({
-        kind: 'area',
-        area,
-        paths,
-        hasUntracked:
-          area === 'unstaged' && mergedGrouped.unstaged.some((entry) => entry.area === 'untracked')
-      })
+      setPendingDiscard({ kind: 'area', area, paths })
     },
-    [activeWorktreeId, isExecutingBulk, mergedGrouped, worktreePath]
+    [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
   )
 
   const requestDiscardEntry = useCallback(
@@ -5839,9 +5847,11 @@ function SourceControlInner(): React.JSX.Element {
           {shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation) &&
             (directCreatePrAction ? (
               <CreateHostedReviewComposer
+                key={`${activeRepo?.id ?? ''}:${activeWorktreeId ?? worktreePath ?? ''}:${branchName}`}
                 provider={hostedReviewCreateProvider}
                 branch={branchName}
                 base={prBase}
+                repoDefaultBase={prRepoDefaultBaseRef}
                 setBase={setPrBase}
                 title={prTitle}
                 setTitle={setPrTitle}
@@ -5849,10 +5859,13 @@ function SourceControlInner(): React.JSX.Element {
                 setBody={setPrBody}
                 draft={prDraft}
                 setDraft={setPrDraft}
+                stackedCreationSupported={prStackedCreationSupported}
+                stackParentReview={stackParentReview}
                 baseQuery={prBaseQuery}
                 setBaseQuery={setPrBaseQuery}
                 baseResults={prBaseResults}
                 setBaseResults={setPrBaseResults}
+                baseSearchPending={prBaseSearchPending}
                 baseSearchError={prBaseSearchError}
                 aiGenerationEnabled={sourceControlAiActionsVisible && prAiGenerationEnabled}
                 generating={prGenerating}
@@ -5867,8 +5880,8 @@ function SourceControlInner(): React.JSX.Element {
                 dropdownItems={dropdownItems}
                 onGenerate={handleGeneratePullRequestFieldsClick}
                 onCancelGenerate={handleCancelGeneratePullRequestFields}
-                onPrimaryAction={() => {
-                  void handleCreatePullRequest()
+                onPrimaryAction={(stacked) => {
+                  void handleCreatePullRequest(stacked)
                 }}
                 onDropdownAction={handleActionInvoke}
               />
@@ -5936,8 +5949,7 @@ function SourceControlInner(): React.JSX.Element {
                   .filter(isStageableStatusEntry)
                   .map((entry) => entry.path)
                 const unstageAllPaths = getUnstageAllPaths(actionItems)
-                const discardAllPaths = getDiscardAllPaths(actionItems, discardAllAreaFilter(area))
-                const discardHasUntracked = actionItems.some((entry) => entry.area === 'untracked')
+                const discardAllPaths = getDiscardAllPaths(actionItems, area)
                 const canStageAll = !normalizedFilter && stageAllPaths.length > 0
                 const canUnstageAll = !normalizedFilter && unstageAllPaths.length > 0
                 const canRevertAll = !normalizedFilter && discardAllPaths.length > 0
@@ -5960,7 +5972,7 @@ function SourceControlInner(): React.JSX.Element {
                           <div className="flex items-center can-hover:opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
                             {canRevertAll && (
                               <ActionButton
-                                icon={discardHasUntracked ? Trash : Undo2}
+                                icon={area === 'untracked' ? Trash : Undo2}
                                 // Why: for untracked files, discard deletes outright (rm -rf), so label the destructive variant explicitly.
                                 title={
                                   area === 'untracked'
@@ -5968,15 +5980,10 @@ function SourceControlInner(): React.JSX.Element {
                                         'auto.components.right.sidebar.SourceControl.2f609a2e7c',
                                         'Delete all untracked'
                                       )
-                                    : discardHasUntracked
-                                      ? translate(
-                                          'auto.components.right.sidebar.SourceControl.discardAllMixedUntracked',
-                                          'Discard changes and delete untracked files'
-                                        )
-                                      : translate(
-                                          'auto.components.right.sidebar.SourceControl.ce41708855',
-                                          'Discard all'
-                                        )
+                                    : translate(
+                                        'auto.components.right.sidebar.SourceControl.ce41708855',
+                                        'Discard all'
+                                      )
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation()
@@ -6083,12 +6090,11 @@ function SourceControlInner(): React.JSX.Element {
                                   isExecutingBulk={isExecutingBulk}
                                   isCollapsed={collapsedTreeDirs.has(node.key)}
                                   onToggle={() => toggleTreeDir(node.key)}
-                                  onRequestDiscardPaths={(discardArea, paths, hasUntracked) =>
+                                  onRequestDiscardPaths={(discardArea, paths) =>
                                     setPendingDiscard({
                                       kind: 'area',
                                       area: discardArea,
-                                      paths,
-                                      hasUntracked
+                                      paths
                                     })
                                   }
                                   onStagePaths={handleStageAllPaths}
@@ -7727,11 +7733,7 @@ function SourceControlTreeDirectoryRow({
   isExecutingBulk: boolean
   isCollapsed: boolean
   onToggle: () => void
-  onRequestDiscardPaths: (
-    area: DiscardAllArea,
-    paths: readonly string[],
-    hasUntracked: boolean
-  ) => void
+  onRequestDiscardPaths: (area: DiscardAllArea, paths: readonly string[]) => void
   onStagePaths: (paths: readonly string[]) => Promise<void>
   onUnstagePaths: (paths: readonly string[]) => Promise<void>
 }): React.JSX.Element {
@@ -7770,30 +7772,21 @@ function SourceControlTreeDirectoryRow({
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
           {canDiscard && (
             <ActionButton
-              icon={actionPaths.discardHasUntracked ? Trash : Undo2}
+              icon={node.area === 'untracked' ? Trash : Undo2}
               title={
                 node.area === 'untracked'
                   ? translate(
                       'auto.components.right.sidebar.SourceControl.9b367363b6',
                       'Delete untracked in folder'
                     )
-                  : actionPaths.discardHasUntracked
-                    ? translate(
-                        'auto.components.right.sidebar.SourceControl.discardFolderMixedUntracked',
-                        'Discard changes and delete untracked files in folder'
-                      )
-                    : translate(
-                        'auto.components.right.sidebar.SourceControl.6d7f2a47e5',
-                        'Discard folder'
-                      )
+                  : translate(
+                      'auto.components.right.sidebar.SourceControl.6d7f2a47e5',
+                      'Discard folder'
+                    )
               }
               onClick={(event) => {
                 event.stopPropagation()
-                onRequestDiscardPaths(
-                  node.area,
-                  actionPaths.discardPaths,
-                  actionPaths.discardHasUntracked
-                )
+                onRequestDiscardPaths(node.area, actionPaths.discardPaths)
               }}
               disabled={isExecutingBulk}
             />

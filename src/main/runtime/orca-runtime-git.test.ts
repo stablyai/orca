@@ -318,8 +318,7 @@ describe('RuntimeGitCommands', () => {
       getRuntimeSettings: () =>
         ({
           commitMessageAi: { enabled: true, agentId: 'codex' },
-          agentCmdOverrides: {},
-          enableGitHubAttribution: false
+          agentCmdOverrides: {}
         }) as GlobalSettings,
       getCommitMessageAgentEnvironment: () => ({
         prepareForCodexLaunch: () => '/managed/codex-home'
@@ -374,8 +373,7 @@ describe('RuntimeGitCommands', () => {
       getRuntimeSettings: () =>
         ({
           commitMessageAi: { enabled: true, agentId: 'codex' },
-          agentCmdOverrides: {},
-          enableGitHubAttribution: false
+          agentCmdOverrides: {}
         }) as GlobalSettings,
       getCommitMessageAgentEnvironment: () => ({
         prepareForCodexLaunch

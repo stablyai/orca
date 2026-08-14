@@ -51,7 +51,7 @@ function remapLeafRecord(
 
 function collectLeafCounts(
   node: TerminalPaneLayoutNode,
-  counts: Map<string, number> = new Map()
+  counts = new Map<string, number>()
 ): Map<string, number> {
   if (node.type === 'leaf') {
     counts.set(node.leafId, (counts.get(node.leafId) ?? 0) + 1)
@@ -73,7 +73,7 @@ function hasLeafPtyBinding(
   ptyIdsByLeafId: Record<string, string> | undefined,
   leafId: string
 ): boolean {
-  return ptyIdsByLeafId ? Object.prototype.hasOwnProperty.call(ptyIdsByLeafId, leafId) : false
+  return ptyIdsByLeafId ? Object.hasOwn(ptyIdsByLeafId, leafId) : false
 }
 
 export function resolveRootlessTerminalLayoutLeafId(

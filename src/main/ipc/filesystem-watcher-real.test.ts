@@ -26,7 +26,7 @@ vi.mock('electron', () => ({
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 type FsChangedCall = { worktreePath: string; events: { kind: string; absolutePath: string }[] }
 

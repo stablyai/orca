@@ -78,9 +78,12 @@ vi.mock('../providers/windows-conpty-process-membership', () => ({
 import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
+import {
+  LEGACY_TERMINAL_SHIM_ENV_KEYS,
+  stripLegacyTerminalShimEnv
+} from '../pty/legacy-terminal-shim-dir'
 
 const ORCA_SHELL_WRAPPER_ENV = [
-  'ORCA_ATTRIBUTION_SHIM_DIR',
   'ORCA_OPENCODE_CONFIG_DIR',
   'ORCA_MIMOCODE_HOME',
   'ORCA_PI_CODING_AGENT_DIR',
@@ -1276,6 +1279,35 @@ describe('createPtySubprocess', () => {
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 
+  it('does not inherit legacy attribution state from a pre-upgrade daemon', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const saved = Object.fromEntries(
+      [...LEGACY_TERMINAL_SHIM_ENV_KEYS, 'PATH'].map((key) => [key, process.env[key]])
+    )
+    process.env.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
+    process.env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-terminal-attribution/posix'
+    process.env.PATH = `/tmp/orca-terminal-attribution/posix${delimiter}/usr/bin`
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.PATH).toBe('/usr/bin')
+    for (const key of LEGACY_TERMINAL_SHIM_ENV_KEYS) {
+      expect(env[key]).toBeUndefined()
+    }
+  })
+
   it('does not inherit NODE_ENV from the daemon process env', () => {
     // Why: a dev-mode Orca forks the daemon with NODE_ENV=development; leaking
     // Orca's build mode into user shells breaks `next build` and Vitest.
@@ -1296,7 +1328,9 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.NODE_ENV).toBeUndefined()
-    expect(env.PATH).toBe(process.env.PATH)
+    const expectedEnv = { PATH: process.env.PATH ?? '' }
+    stripLegacyTerminalShimEnv(expectedEnv, process.platform)
+    expect(env.PATH).toBe(expectedEnv.PATH)
   })
 
   it('keeps an explicitly requested NODE_ENV for daemon PTY shells', () => {
@@ -1760,7 +1794,7 @@ describe('createPtySubprocess', () => {
     expect(spawnEnv.MY_VAR).toBe('test-value')
   })
 
-  it('uses shell wrapper when attribution shims must survive shell startup', () => {
+  it('uses shell wrapper when managed env must survive shell startup', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1773,7 +1807,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         env: {
           SHELL: '/bin/zsh',
-          ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/orca-terminal-attribution/posix'
+          ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config'
         }
       })
     } finally {
@@ -2165,7 +2199,7 @@ describe('createPtySubprocess', () => {
         PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
         ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
       },
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      envToDelete: ['TERM_PROGRAM']
     })
 
     const lastCall = spawnMock.mock.calls.at(-1)!
@@ -2173,7 +2207,6 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.TERM).toBe('screen-256color')
     expect(lastCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
     expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
-    expect(lastCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
   })
 
   it('collapses its own env merge onto the requested Windows `Path` spelling', () => {
@@ -2209,6 +2242,8 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const expectedEnv = { PATH: process.env.PATH ?? '' }
+    stripLegacyTerminalShimEnv(expectedEnv, 'win32')
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
     try {
@@ -2220,7 +2255,7 @@ describe('createPtySubprocess', () => {
     }
 
     const env = spawnMock.mock.calls.at(-1)![2].env
-    expect(env.PATH).toBe(process.env.PATH)
+    expect(env.PATH).toBe(expectedEnv.PATH)
   })
 
   it('preserves a duplicated path block supplied by main', () => {
@@ -2613,6 +2648,8 @@ describe('createPtySubprocess', () => {
     spawnMock.mockImplementation(() => {
       throw new Error('File not found: ')
     })
+    const previousVersion = process.env.ORCA_APP_VERSION
+    process.env.ORCA_APP_VERSION = '1.4.178-test'
 
     try {
       expect(() =>
@@ -2623,9 +2660,14 @@ describe('createPtySubprocess', () => {
           shellOverride: 'not-a-real-shell.exe'
         })
       ).toThrow(
-        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:/
+        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:.*orca: 1\.4\.178-test/
       )
     } finally {
+      if (previousVersion === undefined) {
+        delete process.env.ORCA_APP_VERSION
+      } else {
+        process.env.ORCA_APP_VERSION = previousVersion
+      }
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -2958,36 +3000,39 @@ describe('createPtySubprocess', () => {
     expect(spawnCall[2].env.WSLENV ?? '').not.toContain(POWERLEVEL10K_WIZARD_DISABLE_ENV)
   })
 
-  it('keeps daemon WSL split panes in their distro when cwd is already POSIX', () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+  it.each(['/home/jin/repo/subdir', '/a', '/c'])(
+    'keeps daemon WSL split panes in their distro when cwd is POSIX (%s)',
+    (cwd) => {
+      const proc = mockPtyProcess()
+      spawnMock.mockReturnValue(proc)
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
 
-    Object.defineProperty(process, 'platform', { value: 'win32' })
+      Object.defineProperty(process, 'platform', { value: 'win32' })
 
-    try {
-      createPtySubprocess({
-        sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
-        cols: 80,
-        rows: 24,
-        cwd: '/home/jin/repo/subdir',
-        shellOverride: 'wsl.exe'
-      })
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
+      try {
+        createPtySubprocess({
+          sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
+          cols: 80,
+          rows: 24,
+          cwd,
+          shellOverride: 'wsl.exe'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
       }
-    }
 
-    expect(validateWorkingDirectoryMock).toHaveBeenCalledWith(
-      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\subdir'
-    )
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
-      expect.objectContaining({ cwd: expect.any(String) })
-    )
-  })
+      expect(validateWorkingDirectoryMock).toHaveBeenCalledWith(
+        `\\\\wsl.localhost\\Ubuntu${cwd.replaceAll('/', '\\')}`
+      )
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining(`cd '${cwd}'`)],
+        expect.objectContaining({ cwd: expect.any(String) })
+      )
+    }
+  )
 
   // Why: node-pty's UnixTerminal.destroy() registers _socket.once('close', () =>
   // this.kill('SIGHUP')), and the socket 'close' event can fire concurrently

@@ -9,12 +9,14 @@ import {
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
   HERMES_AGENT_NAME_RE,
+  QUARTER_CIRCLE_SPINNER_RE,
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE_GLOBAL,
   containsAgentName,
+  containsAgentSpinnerGlyph,
   containsAny,
-  containsBrailleSpinner,
+  containsQuarterCircleSpinner,
   containsLegacyAgentName,
   isClaudeManagementTitle,
   isGeminiTerminalTitle,
@@ -22,6 +24,7 @@ import {
   isPiTerminalTitle
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
+import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
 
@@ -34,6 +37,7 @@ export function clearWorkingIndicators(title: string): string {
   cleaned = cleaned.replace(GEMINI_WORKING, '')
   cleaned = cleaned.replace(GEMINI_SILENT_WORKING, '')
   cleaned = cleaned.replace(BRAILLE_SPINNER_RE, '')
+  cleaned = cleaned.replace(QUARTER_CIRCLE_SPINNER_RE, '')
   if (cleaned.startsWith('. ')) {
     cleaned = cleaned.slice(2)
   }
@@ -56,7 +60,7 @@ export function createAgentStatusTracker(
 ): {
   handleTitle: (title: string) => void
   seedTitle: (title: string) => void
-  restoreLastExit: () => void
+  restoreLastExit: () => AgentStatus | null
   reset: () => void
 } {
   // Why: trackers restored mid-session need a last-known status without firing
@@ -92,11 +96,13 @@ export function createAgentStatusTracker(
       lastStatus = detectAgentStatusFromTitle(title)
       restorableExitStatus = null
     },
-    restoreLastExit(): void {
-      if (lastStatus === null && restorableExitStatus !== null) {
-        lastStatus = restorableExitStatus
+    restoreLastExit(): AgentStatus | null {
+      const restoredStatus = lastStatus === null ? restorableExitStatus : null
+      if (restoredStatus !== null) {
+        lastStatus = restoredStatus
       }
       restorableExitStatus = null
+      return restoredStatus
     },
     reset(): void {
       lastStatus = null
@@ -156,6 +162,10 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     return null
   }
 
+  if (isOpenCodeNativeTitle(title)) {
+    return containsAgentSpinnerGlyph(title) ? 'working' : 'idle'
+  }
+
   if (title.includes(GEMINI_PERMISSION)) {
     return 'permission'
   }
@@ -179,10 +189,9 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (isPiTerminalTitle(title)) {
     return 'idle'
   }
-  if (containsBrailleSpinner(title)) {
+  if (containsAgentSpinnerGlyph(title)) {
     return 'working'
   }
-
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
@@ -214,4 +223,16 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   }
 
   return 'idle'
+}
+
+/**
+ * True when a quarter-circle spinner frame is the only agent evidence a title carries.
+ * Any TUI animates those glyphs, so they prove activity, not identity — callers that
+ * authorize writes into the pane need independent evidence (STA-4028, regression #13925).
+ */
+export function isQuarterCircleSpinnerOnlyAgentTitle(title: string | null | undefined): boolean {
+  if (!title || !containsQuarterCircleSpinner(title)) {
+    return false
+  }
+  return detectAgentStatusFromTitle(title.replace(QUARTER_CIRCLE_SPINNER_RE, '').trim()) === null
 }

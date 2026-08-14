@@ -20,6 +20,7 @@ import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './types'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
 
 export type AgentStartupPlan = {
   agent: TuiAgent
@@ -222,14 +223,9 @@ export function buildAgentResumeStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.command
   })
-  const resumeArgs = argv
-    .slice(1)
-    .map((arg) => quoteStartupArg(arg, shell))
-    .join(' ')
-  const launchCommand = resumeArgs ? `${baseCommand.command} ${resumeArgs}` : baseCommand.command
   return {
     agent: args.agent,
-    launchCommand,
+    launchCommand: buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell),
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
     launchConfig,

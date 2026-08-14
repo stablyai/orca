@@ -1,15 +1,34 @@
 #!/usr/bin/env node
 import { _electron as electron } from '@stablyai/playwright-test'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import {
+  descendantsOf,
+  readProcessRows,
+  sampleProcessTreeUntilWorkloadsComplete,
+  summarizeProcessInventory,
+  summarizeSamples,
+  terminateProcesses
+} from './idle-cpu-process-sampling.mjs'
+import {
+  collectRendererCensus,
+  configureRendererScaleFixture
+} from './idle-cpu-renderer-scale-fixture.mjs'
+import {
+  runZustandPublications,
+  snapshotRendererTimingProbe,
+  startRendererTimingProbe,
+  stopRendererTimingProbe
+} from './idle-cpu-renderer-timing-probe.mjs'
 import { installSyntheticVisibleSpinners } from './idle-cpu-synthetic-spinners.mjs'
 
 const DEFAULT_WARMUP_MS = 15_000
 const DEFAULT_SAMPLE_MS = 30_000
 const DEFAULT_INTERVAL_MS = 1_000
 const DEFAULT_WORKTREE_COUNT = 1
+const DEFAULT_ZUSTAND_PUBLICATION_INTERVAL_MS = 100
 const ONBOARDING_FINAL_STEP = 3
 const ONBOARDING_FLOW_VERSION = 2
 
@@ -19,6 +38,10 @@ function parseArgs(argv) {
     sampleMs: DEFAULT_SAMPLE_MS,
     intervalMs: DEFAULT_INTERVAL_MS,
     worktrees: DEFAULT_WORKTREE_COUNT,
+    lineageDepth: 0,
+    agentsPerWorktree: 0,
+    zustandPublications: 0,
+    zustandPublicationIntervalMs: DEFAULT_ZUSTAND_PUBLICATION_INTERVAL_MS,
     skipBuild: false,
     headful: false,
     output: null,
@@ -47,6 +70,14 @@ function parseArgs(argv) {
       options.intervalMs = Number(readValue())
     } else if (arg === '--worktrees') {
       options.worktrees = Number(readValue())
+    } else if (arg === '--lineage-depth') {
+      options.lineageDepth = Number(readValue())
+    } else if (arg === '--agents-per-worktree') {
+      options.agentsPerWorktree = Number(readValue())
+    } else if (arg === '--zustand-publications') {
+      options.zustandPublications = Number(readValue())
+    } else if (arg === '--zustand-publication-interval-ms') {
+      options.zustandPublicationIntervalMs = Number(readValue())
     } else if (arg === '--output') {
       options.output = readValue()
     } else if (arg === '--skip-build') {
@@ -73,6 +104,10 @@ function parseArgs(argv) {
     'sampleMs',
     'intervalMs',
     'worktrees',
+    'lineageDepth',
+    'agentsPerWorktree',
+    'zustandPublications',
+    'zustandPublicationIntervalMs',
     'syntheticVisibleSpinners',
     'syntheticSpinnerSteps'
   ]) {
@@ -82,16 +117,33 @@ function parseArgs(argv) {
   }
   options.worktrees = Math.max(1, Math.floor(options.worktrees))
   options.intervalMs = Math.max(250, Math.floor(options.intervalMs))
+  options.lineageDepth = Math.floor(options.lineageDepth)
+  options.agentsPerWorktree = Math.floor(options.agentsPerWorktree)
+  options.zustandPublications = Math.floor(options.zustandPublications)
+  options.zustandPublicationIntervalMs = Math.max(
+    1,
+    Math.floor(options.zustandPublicationIntervalMs)
+  )
   options.syntheticVisibleSpinners = Math.max(0, Math.floor(options.syntheticVisibleSpinners))
   options.syntheticSpinnerSteps = Math.max(1, Math.floor(options.syntheticSpinnerSteps))
   if (!['smooth', 'steps'].includes(options.syntheticSpinnerAnimation)) {
     throw new Error(`Invalid --synthetic-spinner-animation: ${options.syntheticSpinnerAnimation}`)
   }
+  if (options.lineageDepth > 0 && options.worktrees < 2) {
+    throw new Error('--lineage-depth requires at least two --worktrees')
+  }
+  const publicationSpanMs =
+    Math.max(0, options.zustandPublications - 1) * options.zustandPublicationIntervalMs
+  if (publicationSpanMs > options.sampleMs) {
+    throw new Error(
+      `Zustand publication span ${publicationSpanMs}ms exceeds --sample-ms ${options.sampleMs}`
+    )
+  }
   return options
 }
 function printUsage() {
   console.log(
-    `Usage: node config/scripts/run-idle-cpu-benchmark.mjs [options]\n\nOptions:\n  --warmup-ms <n>    Time to wait after app readiness before sampling (default ${DEFAULT_WARMUP_MS})\n  --sample-ms <n>    Sampling window duration (default ${DEFAULT_SAMPLE_MS})\n  --interval-ms <n>  Sampling cadence (default ${DEFAULT_INTERVAL_MS})\n  --worktrees <n>    Seed repo worktree count, including primary (default ${DEFAULT_WORKTREE_COUNT})\n  --headful          Show the Electron window while measuring\n  --skip-build       Reuse out/main/index.js instead of building first\n  --output <path>    Write JSON report to this path\n  --disable-renderer-animations  Inject measurement-only CSS that disables animations/transitions\n  --synthetic-visible-spinners <n>  Measurement-only: add visible working spinners\n  --synthetic-spinner-animation <smooth|steps>  Spinner animation style (default smooth)\n  --synthetic-spinner-steps <n>  Step count for --synthetic-spinner-animation steps (default 12)\n`
+    `Usage: node config/scripts/run-idle-cpu-benchmark.mjs [options]\n\nOptions:\n  --warmup-ms <n>    Time to wait after app readiness before sampling (default ${DEFAULT_WARMUP_MS})\n  --sample-ms <n>    Sampling window duration (default ${DEFAULT_SAMPLE_MS})\n  --interval-ms <n>  Sampling cadence (default ${DEFAULT_INTERVAL_MS})\n  --worktrees <n>    Seed repo worktree count, including primary (default ${DEFAULT_WORKTREE_COUNT})\n  --lineage-depth <n>  Nest all worktrees under one expanded lineage, up to this depth\n  --agents-per-worktree <n>  Seed this many visible inline agent rows per worktree\n  --zustand-publications <n>  Publish exactly this many store updates during sampling\n  --zustand-publication-interval-ms <n>  Publication cadence (default ${DEFAULT_ZUSTAND_PUBLICATION_INTERVAL_MS})\n  --headful          Show the Electron window while measuring\n  --skip-build       Reuse out/main/index.js instead of building first\n  --output <path>    Write JSON report to this path\n  --disable-renderer-animations  Inject measurement-only CSS that disables animations/transitions\n  --synthetic-visible-spinners <n>  Measurement-only: add visible working spinners\n  --synthetic-spinner-animation <smooth|steps>  Spinner animation style (default smooth)\n  --synthetic-spinner-steps <n>  Step count for --synthetic-spinner-animation steps (default 12)\n`
   )
 }
 function run(command, args, options = {}) {
@@ -188,140 +240,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function parseCpuTimeSeconds(value) {
-  const trimmed = String(value || '').trim()
-  if (!trimmed) {
-    return null
-  }
-  const [dayOrTime, maybeTime] = trimmed.includes('-') ? trimmed.split('-', 2) : [null, trimmed]
-  const days = dayOrTime === null ? 0 : Number(dayOrTime)
-  const parts = maybeTime.split(':').map(Number)
-  if (!Number.isFinite(days) || parts.some((part) => !Number.isFinite(part))) {
-    return null
-  }
-  if (parts.length === 3) {
-    return days * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2]
-  }
-  if (parts.length === 2) {
-    return days * 86400 + parts[0] * 60 + parts[1]
-  }
-  if (parts.length === 1) {
-    return days * 86400 + parts[0]
-  }
-  return null
-}
-
-function parseUnixProcesses(stdout) {
-  const rows = []
-  for (const raw of stdout.split('\n')) {
-    const line = raw.trim()
-    if (!line) {
-      continue
-    }
-    const match = line.match(/^(\d+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(.+)$/)
-    if (!match) {
-      continue
-    }
-    rows.push({
-      pid: Number(match[1]),
-      ppid: Number(match[2]),
-      percentCpu: Number(match[3]),
-      rssBytes: Number(match[4]) * 1024,
-      cpuTimeSeconds: parseCpuTimeSeconds(match[5]),
-      command: match[6]
-    })
-  }
-  return rows
-}
-
-function readUnixProcesses() {
-  const stdout = execFileSync('ps', ['-axo', 'pid=,ppid=,pcpu=,rss=,cputime=,command='], {
-    encoding: 'utf8',
-    env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
-    maxBuffer: 20 * 1024 * 1024
-  })
-  return parseUnixProcesses(stdout)
-}
-
-function readWindowsProcesses() {
-  const script =
-    'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize,CommandLine | ConvertTo-Json -Compress'
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', script], {
-    encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024
-  })
-  if (result.status !== 0) {
-    throw new Error(result.stderr || 'PowerShell process enumeration failed')
-  }
-  const parsed = JSON.parse(result.stdout || '[]')
-  const entries = Array.isArray(parsed) ? parsed : [parsed]
-  return entries.map((entry) => ({
-    pid: Number(entry.ProcessId),
-    ppid: Number(entry.ParentProcessId),
-    percentCpu: 0,
-    cpuTimeSeconds: null,
-    rssBytes: Number(entry.WorkingSetSize) || 0,
-    command: String(entry.CommandLine || '')
-  }))
-}
-
-function readProcessRows() {
-  return process.platform === 'win32' ? readWindowsProcesses() : readUnixProcesses()
-}
-
-function descendantsOf(rows, rootPid) {
-  const children = new Map()
-  for (const row of rows) {
-    const list = children.get(row.ppid) ?? []
-    list.push(row)
-    children.set(row.ppid, list)
-  }
-  const result = []
-  const stack = [rootPid]
-  const seen = new Set()
-  while (stack.length > 0) {
-    const pid = stack.pop()
-    if (seen.has(pid)) {
-      continue
-    }
-    seen.add(pid)
-    const row = rows.find((candidate) => candidate.pid === pid)
-    if (row) {
-      result.push(row)
-    }
-    for (const child of children.get(pid) ?? []) {
-      stack.push(child.pid)
-    }
-  }
-  return result
-}
-
-function classify(row, rootPid) {
-  const command = row.command.toLowerCase()
-  if (row.pid === rootPid) {
-    return 'main'
-  }
-  if (command.includes('daemon-entry')) {
-    return 'daemon'
-  }
-  if (command.includes('--type=gpu-process')) {
-    return 'gpu'
-  }
-  if (command.includes('--type=renderer')) {
-    return 'renderer'
-  }
-  if (command.includes('--type=utility')) {
-    return 'utility'
-  }
-  if (command.includes('--type=')) {
-    return 'electron-other'
-  }
-  if (command.includes('node') || command.includes('/pi') || command.endsWith(' pi')) {
-    return 'agent-or-node'
-  }
-  return 'other-descendant'
-}
-
 async function collectRendererIdleState(page) {
   return page.evaluate(() => {
     const describeElement = (element) => {
@@ -364,93 +282,6 @@ async function collectRendererIdleState(page) {
   })
 }
 
-function summarizeSamples(samples) {
-  const byKind = new Map()
-  for (const sample of samples) {
-    for (const proc of sample.processes) {
-      const bucket = byKind.get(proc.kind) ?? { cpuValues: [], rssValues: [], maxProcessCount: 0 }
-      bucket.cpuValues.push(proc.cpu)
-      bucket.rssValues.push(proc.rssBytes)
-      byKind.set(proc.kind, bucket)
-    }
-    const counts = new Map()
-    for (const proc of sample.processes) {
-      counts.set(proc.kind, (counts.get(proc.kind) ?? 0) + 1)
-    }
-    for (const [kind, count] of counts) {
-      byKind.get(kind).maxProcessCount = Math.max(byKind.get(kind).maxProcessCount, count)
-    }
-  }
-  const summary = {}
-  for (const [kind, values] of byKind) {
-    const cpuSorted = [...values.cpuValues].sort((a, b) => a - b)
-    const rssSumBySample = samples.map((sample) =>
-      sample.processes
-        .filter((proc) => proc.kind === kind)
-        .reduce((sum, proc) => sum + proc.rssBytes, 0)
-    )
-    summary[kind] = {
-      meanCpuPercent: mean(values.cpuValues),
-      p95CpuPercent: percentile(cpuSorted, 0.95),
-      maxCpuPercent: Math.max(0, ...values.cpuValues),
-      meanRssBytes: mean(rssSumBySample),
-      maxProcessCount: values.maxProcessCount
-    }
-  }
-  summary.total = {
-    meanCpuPercent: mean(samples.map((sample) => sample.totalCpuPercent)),
-    p95CpuPercent: percentile(
-      samples.map((sample) => sample.totalCpuPercent).sort((a, b) => a - b),
-      0.95
-    ),
-    meanRssBytes: mean(samples.map((sample) => sample.totalRssBytes))
-  }
-  return summary
-}
-
-function summarizeProcessInventory(samples) {
-  const inventory = {}
-  for (const sample of samples) {
-    const counts = new Map()
-    for (const proc of sample.processes) {
-      counts.set(proc.kind, (counts.get(proc.kind) ?? 0) + 1)
-      const entry = inventory[proc.kind] ?? {
-        maxProcessCount: 0,
-        maxCpuPercent: 0,
-        commandSamples: []
-      }
-      entry.maxCpuPercent = Math.max(entry.maxCpuPercent, proc.cpu)
-      if (!entry.commandSamples.includes(proc.command) && entry.commandSamples.length < 6) {
-        entry.commandSamples.push(proc.command)
-      }
-      inventory[proc.kind] = entry
-    }
-    for (const [kind, count] of counts) {
-      inventory[kind].maxProcessCount = Math.max(inventory[kind].maxProcessCount, count)
-    }
-  }
-  return inventory
-}
-function mean(values) {
-  return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length
-}
-
-function percentile(sorted, fraction) {
-  if (sorted.length === 0) {
-    return 0
-  }
-  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)
-  return sorted[index]
-}
-
-function terminateProcesses(processes) {
-  for (const proc of processes) {
-    try {
-      process.kill(proc.pid)
-    } catch {}
-  }
-}
-
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const root = path.resolve(import.meta.dirname, '..', '..')
@@ -491,6 +322,11 @@ async function main() {
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+    await page.waitForFunction(
+      () => window.__store?.getState().workspaceSessionReady === true,
+      null,
+      { timeout: 60_000 }
+    )
     const measurementCss = []
     if (options.disableRendererAnimations) {
       measurementCss.push(
@@ -506,63 +342,111 @@ async function main() {
       options.syntheticSpinnerAnimation,
       options.syntheticSpinnerSteps
     )
-    await page.evaluate(async (repoPath) => {
-      await window.api.repos.add({ path: repoPath })
+    const fixtureState = await page.evaluate(async (repoPath) => {
+      const added = await window.api.repos.add({ path: repoPath })
+      if ('error' in added) {
+        return { error: added.error }
+      }
       const store = window.__store
       await store?.getState().fetchRepos()
-      const repo = store?.getState().repos.find((candidate) => candidate.path === repoPath)
+      const repo = store?.getState().repos.find((candidate) => candidate.id === added.repo.id)
       if (repo) {
-        await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-        await store.getState().fetchWorktrees(repo.id)
+        const detected = await store
+          .getState()
+          .fetchWorktrees(repo.id, { requireAuthoritative: true })
+        const importedWorktreePaths = (
+          store.getState().detectedWorktreesByRepo[repo.id]?.worktrees ?? []
+        )
+          .filter((worktree) => !worktree.selectedCheckout)
+          .map((worktree) => worktree.path)
+        const updated = await store.getState().updateRepo(repo.id, {
+          externalWorktreeVisibility: 'show',
+          importedExternalWorktreePaths: importedWorktreePaths,
+          externalWorktreeInboxBaselinePaths: importedWorktreePaths
+        })
+        const refreshed = await store
+          .getState()
+          .fetchWorktrees(repo.id, { requireAuthoritative: true })
+        return {
+          detected,
+          updated,
+          refreshed,
+          detectedCount: store.getState().detectedWorktreesByRepo[repo.id]?.worktrees.length ?? 0,
+          importedCount: importedWorktreePaths.length,
+          visibleCount: store.getState().worktreesByRepo[repo.id]?.length ?? 0
+        }
       }
+      return { error: 'repo-not-found' }
     }, repoDir)
+    console.log(`[idle-cpu] fixture ${JSON.stringify(fixtureState)}`)
     await page.waitForFunction(
-      () => window.__store?.getState().workspaceSessionReady === true,
+      (expectedWorktrees) => {
+        const state = window.__store?.getState()
+        return (
+          state?.workspaceSessionReady === true &&
+          Object.values(state.worktreesByRepo).flat().length === expectedWorktrees
+        )
+      },
+      options.worktrees,
+      { timeout: 180_000 }
+    )
+    const scaleFixtureState = await configureRendererScaleFixture(page, options, repoDir)
+    if (scaleFixtureState.applied) {
+      console.log(`[idle-cpu] scale fixture ${JSON.stringify(scaleFixtureState)}`)
+    }
+    await page.waitForFunction(
+      (expectedAgentRows) => {
+        const state = window.__store?.getState()
+        return (
+          state !== undefined &&
+          Object.keys(state.agentStatusByPaneKey ?? {}).length >= expectedAgentRows
+        )
+      },
+      scaleFixtureState.seededAgentRows,
+      { timeout: 30_000 }
+    )
+    await page.waitForFunction(
+      () => Boolean(document.querySelector('[data-worktree-sidebar] [data-worktree-id]')),
       null,
-      { timeout: 60_000 }
+      { timeout: 30_000 }
     )
     console.log(
-      `[idle-cpu] root pid=${rootPid}; warmup=${options.warmupMs}ms sample=${options.sampleMs}ms interval=${options.intervalMs}ms worktrees=${options.worktrees}`
+      `[idle-cpu] root pid=${rootPid}; warmup=${options.warmupMs}ms sample=${options.sampleMs}ms interval=${options.intervalMs}ms worktrees=${options.worktrees} lineage-depth=${options.lineageDepth} agents/worktree=${options.agentsPerWorktree} publications=${options.zustandPublications}`
     )
+    await startRendererTimingProbe(page)
     await sleep(options.warmupMs)
     const rendererIdleState = await collectRendererIdleState(page)
-    const deadline = Date.now() + options.sampleMs
-    const samples = []
-    let previousSnapshot = null
-    while (Date.now() <= deadline || samples.length === 0) {
-      const sampledAt = Date.now()
-      const processRows = descendantsOf(readProcessRows(), rootPid)
-      const rawProcesses = processRows.map((row) => ({ ...row, kind: classify(row, rootPid) }))
-      if (previousSnapshot) {
-        const elapsedSeconds = Math.max(0.001, (sampledAt - previousSnapshot.at) / 1000)
-        const previousByPid = new Map(previousSnapshot.processes.map((proc) => [proc.pid, proc]))
-        const processes = rawProcesses.map((row) => {
-          const previous = previousByPid.get(row.pid)
-          const canComputeDelta =
-            typeof row.cpuTimeSeconds === 'number' && typeof previous?.cpuTimeSeconds === 'number'
-          const cpu = canComputeDelta
-            ? Math.max(0, ((row.cpuTimeSeconds - previous.cpuTimeSeconds) / elapsedSeconds) * 100)
-            : row.percentCpu
-          return { ...row, cpu }
-        })
-        samples.push({
-          at: sampledAt,
-          elapsedMs: sampledAt - previousSnapshot.at,
-          totalCpuPercent: processes.reduce((sum, proc) => sum + proc.cpu, 0),
-          totalRssBytes: processes.reduce((sum, proc) => sum + proc.rssBytes, 0),
-          processes
-        })
-      }
-      previousSnapshot = { at: sampledAt, processes: rawProcesses }
-      await sleep(options.intervalMs)
-    }
+    const rendererCensusBefore = await collectRendererCensus(page, options.lineageDepth)
+    const rendererTimingBefore = await snapshotRendererTimingProbe(page)
+    const publicationPromise = runZustandPublications(
+      page,
+      options.zustandPublications,
+      options.zustandPublicationIntervalMs
+    )
+    const sampled = await sampleProcessTreeUntilWorkloadsComplete({
+      rootPid,
+      requestedDurationMs: options.sampleMs,
+      intervalMs: options.intervalMs,
+      workloadPromise: publicationPromise
+    })
+    const samples = sampled.samples
+    const zustandPublications = sampled.workloadResult
+    const rendererTimingAfter = await stopRendererTimingProbe(page)
+    const rendererCensusAfter = await collectRendererCensus(page, options.lineageDepth)
     const report = {
       benchmark: 'orca-idle-cpu',
       createdAt: new Date().toISOString(),
       options,
       rootPid,
       platform: { platform: process.platform, arch: process.arch, cpus: os.cpus().length },
+      fixtureState,
+      scaleFixtureState,
       rendererIdleState,
+      rendererCensusBefore,
+      rendererCensusAfter,
+      rendererTiming: { before: rendererTimingBefore, after: rendererTimingAfter },
+      zustandPublications,
+      samplingWindow: sampled.samplingWindow,
       sampleCount: samples.length,
       summary: summarizeSamples(samples),
       processInventory: summarizeProcessInventory(samples),
@@ -578,7 +462,13 @@ async function main() {
         {
           summary: report.summary,
           processInventory: report.processInventory,
-          sampleCount: report.sampleCount
+          sampleCount: report.sampleCount,
+          scaleFixtureState: report.scaleFixtureState,
+          rendererCensusBefore: report.rendererCensusBefore,
+          rendererCensusAfter: report.rendererCensusAfter,
+          rendererTiming: report.rendererTiming,
+          zustandPublications: report.zustandPublications,
+          samplingWindow: report.samplingWindow
         },
         null,
         2

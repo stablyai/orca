@@ -12,7 +12,10 @@ import {
   resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
+import {
+  isClaudeIdentityFrameTitle,
+  resolveExplicitTerminalTitleAgentType
+} from '../../../shared/terminal-title-agent-type'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
 import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
@@ -115,11 +118,16 @@ export function resolveTabAgentFromSignals(args: {
   )
   const priorIdentity = idleFocusedIdentity ?? launchAgent
   const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
+  // Why: a "claude" token in another agent's task text is a mention, not identity, so it must
+  // not take a pane from its known owner — only a title that PRESENTS Claude may (#8940).
+  const titleClaimsIdentity =
+    explicitTitleAgent !== 'claude' || isClaudeIdentityFrameTitle(args.title)
   // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
   const titleReclaimsReusedPane =
     priorIdentity !== null &&
     explicitTitleAgent !== null &&
     explicitTitleAgent !== priorIdentity &&
+    titleClaimsIdentity &&
     (args.hasObservedAgentSignal || hasCompletedHook || nativeOpenCodeTitle)
   // Why: native OpenCode titles lack a provider generation and cannot displace durable ownership.
   const titleAgent =

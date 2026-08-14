@@ -124,6 +124,7 @@ export function OrchestrationPane(): React.JSX.Element {
         terminalAriaLabel="Orchestration skill install terminal"
         terminalWorktreeId="settings-orchestration-skill-terminal"
         terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+        terminalRuntime={activeSkillRuntime.agentRuntime}
         installed={orchestrationSkillDetected}
         loading={orchestrationSkillLoading}
         error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}

@@ -151,6 +151,37 @@ export function terminateDockerSshRelay(
   )
 }
 
+// Drops the app's SSH transport the way a real network fault does: the sshd
+// session and the `relay.js --connect` bridge die, while the detached relay and
+// every shell it hosts keep running. A clean `ssh:disconnect` releases the PTY
+// sources first, so only this shape reaches the reattach-after-fault path.
+const SEVER_RELAY_TRANSPORT_COMMAND = `
+killed=0
+for proc in /proc/[0-9]*; do
+  [ -r "$proc/cmdline" ] || continue
+  argv=()
+  mapfile -d '' -t argv < "$proc/cmdline" 2>/dev/null || continue
+  joined="\${argv[*]}"
+  match=
+  case "$joined" in
+    "sshd: root@"*) match=1 ;;
+    *"relay.js --connect"*) match=1 ;;
+  esac
+  [ -n "$match" ] || continue
+  case "$joined" in *"relay.js --detached"*) continue ;; esac
+  kill -KILL "\${proc##*/}" 2>/dev/null && killed=$((killed + 1))
+done
+printf '%s' "$killed"
+`
+
+export function severDockerSshRelayTransport(target: DockerSshRelayTarget): number {
+  const killed = Number(execDockerSshRelayTargetCommand(target, SEVER_RELAY_TRANSPORT_COMMAND))
+  if (!Number.isInteger(killed) || killed <= 0) {
+    throw new Error('No Docker SSH relay transport process was severed')
+  }
+  return killed
+}
+
 export function isDockerSshRelayPidRunning(
   target: DockerSshRelayTarget,
   relayPid: number

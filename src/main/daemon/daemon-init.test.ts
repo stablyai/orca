@@ -1,8 +1,10 @@
 /* eslint-disable max-lines -- Why: covers daemon-init's full restart flow (7-step sequence per docs/daemon-staleness-ux.md §Phase 1 + coalescer); one describe block keeps shared mocks in one place. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { WEDGED_DAEMON_CLASSIFICATION_BUDGET_MS } from './daemon-init'
+import { OCCUPANCY_CONNECT_BUDGET_MS, OCCUPANCY_REQUEST_BUDGET_MS } from './daemon-occupancy'
+import type { DaemonLaunchMode } from './daemon-spawner'
 import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './types'
-import { WEDGED_DAEMON_GRACE_RETRIES } from './daemon-init'
 
 const FAKE_USER_DATA_PATH = '/fake/userData'
 const FAKE_RUNTIME_DIR = join(FAKE_USER_DATA_PATH, 'daemon')
@@ -28,6 +30,8 @@ const {
   getDaemonLaunchIdentityMock,
   isDaemonStaleForCurrentBundleMock,
   killStaleDaemonMock,
+  readVerifiedDaemonPidMock,
+  inspectDaemonPtyOwnershipMock,
   getProcessStartedAtMsMock,
   parseDaemonPidFileMock,
   replaceDaemonPidFileMock,
@@ -91,6 +95,10 @@ const {
   const getMacDaemonTccAttributionHealthMock = vi.fn(async () => 'unknown')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
   const isDaemonStaleForCurrentBundleMock = vi.fn(() => false)
+  const inspectDaemonPtyOwnershipMock = vi.fn(
+    async (): Promise<'owns-live-ptys' | 'no-live-ptys' | 'unknown'> => 'unknown'
+  )
+  const readVerifiedDaemonPidMock = vi.fn(async (): Promise<{ pid: number } | null> => null)
   const killStaleDaemonMock = vi.fn(async () => ({
     killed: true,
     liveOwnerSurvived: false
@@ -129,10 +137,12 @@ const {
 
   // Why: every DaemonSpawner pushes here so assertions can check the *same* spawner was reused across restart.
   const spawnerInstances: MockSpawner[] = []
+  // Mirrors DaemonLaunchMode rather than restating one of its members: the type used to omit
+  // 'held', so no test could describe the launch the hold produces.
   const ensureRunningOverrides: (() => Promise<{
     socketPath: string
     tokenPath: string
-    mode?: 'degraded-new-pty-fallback'
+    mode?: DaemonLaunchMode
   }>)[] = []
   const adoptionLeaseReleases: ReturnType<typeof vi.fn>[] = []
   const lifecycleLeaseErrors: Error[] = []
@@ -196,6 +206,8 @@ const {
     getDaemonLaunchIdentityMock,
     isDaemonStaleForCurrentBundleMock,
     killStaleDaemonMock,
+    readVerifiedDaemonPidMock,
+    inspectDaemonPtyOwnershipMock,
     getProcessStartedAtMsMock,
     parseDaemonPidFileMock,
     replaceDaemonPidFileMock,
@@ -265,6 +277,17 @@ vi.mock('electron', () => ({
   }
 }))
 
+// Map the existing boolean socket double onto the canonical three-valued probe:
+// present ⇒ something is serving, absent ⇒ positively dead.
+vi.mock('./daemon-live-pty-evidence', () => ({
+  inspectDaemonPtyOwnership: inspectDaemonPtyOwnershipMock
+}))
+
+vi.mock('./daemon-endpoint-probe', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  probeSocketConnect: async (p: string) => (probeSocketExistsMock(p) ? 'connected' : 'missing')
+}))
+
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
   existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
@@ -289,11 +312,26 @@ vi.mock('./daemon-health', () => ({
   healthCheckDaemon: healthCheckDaemonMock,
   isDaemonStaleForCurrentBundle: isDaemonStaleForCurrentBundleMock,
   killStaleDaemon: killStaleDaemonMock,
+  readVerifiedDaemonPid: readVerifiedDaemonPidMock,
   getProcessStartedAtMs: getProcessStartedAtMsMock,
   parseDaemonPidFile: parseDaemonPidFileMock
 }))
 
-vi.mock('./client', () => ({ DaemonClient: daemonClientMock }))
+vi.mock('./client', () => ({
+  // Mirror ensureConnected onto the bounded variant so every existing double keeps its
+  // behaviour — including the ones whose whole point is that connecting throws. The budget is
+  // forwarded rather than dropped so a test can see what the launcher was willing to wait.
+  DaemonClient: function DaemonClientDouble(...args: unknown[]) {
+    const instance = (daemonClientMock as unknown as (...a: unknown[]) => Record<string, unknown>)(
+      ...args
+    )
+    if (instance && typeof instance === 'object' && !('ensureConnectedWithin' in instance)) {
+      instance.ensureConnectedWithin = (budgetMs?: number) =>
+        (instance.ensureConnected as (ms?: number) => unknown)(budgetMs)
+    }
+    return instance
+  }
+}))
 
 vi.mock('./daemon-lifecycle-event', () => ({
   trackDaemonReplaced: trackDaemonReplacedMock,
@@ -309,7 +347,7 @@ vi.mock('./daemon-spawner', () => ({
     readonly getHandle: ReturnType<typeof vi.fn>
     private socketCounter: number
     private handle: {
-      mode?: 'degraded-new-pty-fallback'
+      mode?: DaemonLaunchMode
       releaseAdoptionLease?: () => void
       shutdown: () => Promise<void>
     } | null
@@ -359,7 +397,6 @@ vi.mock('./daemon-spawner', () => ({
     `/fake/daemon/daemon-v${version ?? PROTOCOL_VERSION}.pid`,
   serializeDaemonPidFile: (obj: unknown) => JSON.stringify(obj),
   replaceDaemonPidFile: replaceDaemonPidFileMock,
-  sweepAbandonedDaemonClaims: vi.fn(() => 0),
   unlinkOwnedDaemonPidFile: unlinkOwnedDaemonPidFileMock
 }))
 
@@ -555,6 +592,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+    // Why restore too: tests here spy on Date.now, and clearAllMocks keeps the fake
+    // implementation. A failure before an inline restore would freeze the clock for every
+    // later test in the file, turning one red into a cascade.
+    vi.restoreAllMocks()
   })
 
   it('re-binds listeners after the first daemon provider is installed', async () => {
@@ -716,6 +757,28 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ])
     expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
     expect(adapterInstances[1].disconnectOnly).toHaveBeenCalledOnce()
+  })
+
+  it('routes a held daemon through the degraded provider, not a bare adapter', async () => {
+    // The wiring the hold depends on. Without it a held daemon gets a plain DaemonPtyAdapter:
+    // every fresh spawn hangs on the wedged socket instead of falling back locally, and
+    // isDaemonDegraded() — an instanceof check — reports false, so the notice telling the user
+    // how to recover never renders.
+    const mod = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/held-socket',
+      tokenPath: '/fake/held-token',
+      mode: 'held'
+    }))
+
+    await mod.initDaemonPtyProvider()
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    expect(
+      (provider as InstanceType<typeof DegradedDaemonPtyProvider>).routesFreshSpawnsToLocalProvider
+    ).toBe(true)
   })
 
   it('routes fresh PTYs to the local fallback when a preserved daemon cannot spawn new PTYs', async () => {
@@ -1197,6 +1260,50 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
   })
 
+  it('falls back to killStaleDaemon without the live-PTY veto, so an explicit restart always wins', async () => {
+    // Why: this is the documented escape hatch (Settings → Manage Sessions → Restart). Opting
+    // into the veto here would report liveOwnerSurvived and throw, leaving the user no daemon.
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(() => {
+      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+      return {
+        on(event: string, cb: () => void) {
+          handlers[event]?.push(cb)
+          if (event === 'connect') {
+            queueMicrotask(() => cb())
+          }
+          return this
+        },
+        removeListener(event: string, cb: () => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
+        destroy() {}
+      }
+    })
+    const mod = await importFresh()
+    daemonClientMock.mockImplementationOnce(function MockWedgedDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('Hello response timed out')
+        }),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+
+    await expect(
+      mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)
+    ).resolves.toMatchObject({ cleaned: true })
+
+    expect(killStaleDaemonMock).toHaveBeenCalledWith(
+      '/fake/daemon',
+      `/fake/daemon/daemon-v${PROTOCOL_VERSION}.sock`,
+      `/fake/daemon/daemon-v${PROTOCOL_VERSION}.token`,
+      PROTOCOL_VERSION
+    )
+  })
+
   it('coalesces concurrent restartDaemon() calls so the 7-step sequence runs exactly once', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
@@ -1313,6 +1420,54 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // STA-2376: different-app-path replacement, emitted exactly once.
     expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
     expect(trackDaemonReplacedMock).toHaveBeenCalledWith('different_app_path', 0)
+  })
+
+  it('adopts the winner when a launched daemon loses the endpoint race', async () => {
+    // Why: losing the publish race is an expected outcome, not a crash. Reporting it as a
+    // startup failure strands this app on local non-persistent PTYs beside a healthy daemon.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider(undefined, { macosLoginSessionWatch: true })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    // Force the replace-and-launch path; otherwise the launcher adopts the healthy daemon and
+    // never forks, and this test would pass without exercising anything.
+    getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
+    forkMock.mockImplementationOnce(() => {
+      const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+        message: [],
+        error: [],
+        exit: []
+      }
+      return {
+        pid: 24680,
+        on(event: string, cb: (arg?: unknown) => void) {
+          handlers[event]?.push(cb)
+          // Why the exit code and not the message: the launcher settles on exit, so keying
+          // adoption off the notification alone could lose that race.
+          if (event === 'exit') {
+            queueMicrotask(() => cb(20))
+          }
+          return this
+        },
+        off(event: string, cb: (arg?: unknown) => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
+        kill: vi.fn(),
+        disconnect: vi.fn(),
+        unref: vi.fn()
+      }
+    })
+
+    // A handle rather than a rejection means the incumbent was adopted.
+    await expect(launcher('/fake/socket', '/fake/token')).resolves.toMatchObject({
+      shutdown: expect.any(Function)
+    })
+    // Guard against passing for the wrong reason: the adoption must follow a real launch.
+    expect(forkMock).toHaveBeenCalledTimes(1)
   })
 
   it('replaces a healthy daemon whose macOS TCC attribution is severed when it has no live sessions', async () => {
@@ -1682,7 +1837,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/token',
       FAKE_DAEMON_ENTRY_PATH
     )
-    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
     expect(disconnectMock).toHaveBeenCalledOnce()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
@@ -1716,7 +1871,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
     expect(disconnectMock).toHaveBeenCalledOnce()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
@@ -1815,7 +1970,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith('/fake/socket', '/fake/token')
-    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
     expect(disconnectMock).toHaveBeenCalledOnce()
     expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
@@ -1852,7 +2007,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
     expect(disconnectMock).toHaveBeenCalledOnce()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
@@ -2793,7 +2948,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
     expect(disconnectMock).toHaveBeenCalledOnce()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
@@ -2824,20 +2979,23 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{
-      mode?: 'degraded-new-pty-fallback'
+      mode?: DaemonLaunchMode
       shutdown(): Promise<void>
     }>
     checkDaemonHealthMock.mockResolvedValueOnce('pty-spawn-unhealthy')
 
     const handle = await launcher('/fake/socket', '/fake/token')
 
-    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
     expect(handle.mode).toBe('degraded-new-pty-fallback')
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
   })
 
-  it('replaces a health-check-failing daemon when live sessions cannot be verified and the pipe is dead', async () => {
+  // Note: only the adoption client is wedged here; the session probe answers, so this is the
+  // verified-zero case and the live-PTY veto stays off. The unverifiable path is covered by
+  // the grace-retry tests below.
+  it('replaces a health-check-failing daemon that reports no sessions when the pipe is dead', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -2904,6 +3062,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock
       .mockImplementationOnce(unreachableClient)
       .mockImplementationOnce(unreachableClient)
+    // A cold start has no pid record to act on, so nothing is ever killed.
+    killStaleDaemonMock.mockResolvedValueOnce({ killed: false, liveOwnerSurvived: false })
 
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
@@ -3000,8 +3160,12 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).not.toHaveBeenCalled()
   })
 
-  it('replaces a permanently wedged daemon after the grace window is exhausted (#8689)', async () => {
-    // Why: a socket that accepts connections but never answers hello was preserved forever (#8689); after grace it must be replaced.
+  it('holds a permanently wedged daemon rather than killing what it might be hosting', async () => {
+    // The trade this makes, deliberately: a socket that accepts connections but never answers
+    // hello can no longer be replaced at launch, so a wedged-but-empty daemon stays until the
+    // user restarts it (#8689 regresses to degraded mode). The alternative was killing a daemon
+    // whose live agents we had simply failed to observe, and that loss is unrecoverable while
+    // this one is one click from repaired.
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -3018,7 +3182,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       daemonClientConstructionCount++
       return {
         ensureConnected: vi.fn(async () => {
-          if (daemonClientConstructionCount <= 2 + WEDGED_DAEMON_GRACE_RETRIES) {
+          if (daemonClientConstructionCount <= 2) {
             throw new Error('Hello response timed out')
           }
         }),
@@ -3057,22 +3221,22 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     try {
       await launcher('/fake/socket', '/fake/token')
 
-      expect(killStaleDaemonMock).toHaveBeenCalledWith(
-        FAKE_RUNTIME_DIR,
-        '/fake/socket',
-        '/fake/token'
-      )
-      expect(forkMock).toHaveBeenCalled()
-      // The launcher probes the full grace budget: 1 initial probe + WEDGED_DAEMON_GRACE_RETRIES retries.
-      expect(daemonClientMock).toHaveBeenCalledTimes(3 + WEDGED_DAEMON_GRACE_RETRIES)
-      // Why: this replace path used to kill the daemon with no log, so a post-hoc
-      // reader could not tell it apart from an adoption; the verdict must be recorded.
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Replacing daemon that failed the health check')
-      )
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`graceRetries=${WEDGED_DAEMON_GRACE_RETRIES}`)
-      )
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
+      expect(forkMock).not.toHaveBeenCalled()
+      // 1 adoption + 1 patient probe. No post-fork adoption, because nothing was forked, and
+      // no retries, because there is no longer a retry loop: what remains after the patient
+      // connect is always exactly OCCUPANCY_REQUEST_BUDGET_MS, which cannot fund another ask
+      // at any ceiling.
+      expect(daemonClientMock).toHaveBeenCalledTimes(2)
+      // The verdict must still be recorded: holding without a log is indistinguishable from
+      // a successful adoption to anyone reading the log afterwards.
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('holding an unreachable daemon'))
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Manage Sessions'))
+      // Why the second remedy is asserted: killStaleDaemon only kills a process whose identity
+      // matches the pid record, so when something other than an Orca daemon holds the endpoint
+      // a Restart clears nothing and the next launch is identical. Offering only the remedy
+      // that cannot work is how a user concludes the app is broken.
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('quit and relaunch'))
     } finally {
       warnSpy.mockRestore()
       // Restore the answering default: clearAllMocks clears calls not impls, so the throwing impl would leak into later tests.
@@ -3080,13 +3244,373 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
   })
 
-  it('grace budget is generous enough to ride out a ~60s transient wedge', () => {
-    // Why: each probe waits the client's 5s hello timeout, so 1 + 11 probes ≈ 60s of drain grace; don't cut without telemetry.
-    expect(WEDGED_DAEMON_GRACE_RETRIES).toBeGreaterThanOrEqual(11)
+  it('holds a wedged daemon that still owns live terminals instead of killing its agents', async () => {
+    // Why hold and not adopt: a daemon that cannot answer listSessions cannot answer a hello,
+    // so there is nothing to adopt. The kill must never be attempted — its agents are alive.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const answeringDefault = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    }
+    daemonClientMock.mockImplementation(function MockWedgedDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('Hello response timed out')
+        }),
+        getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+    // The daemon is identity-verified and its process still owns live terminals.
+    readVerifiedDaemonPidMock.mockResolvedValue({ pid: 4242 })
+    inspectDaemonPtyOwnershipMock.mockResolvedValue('owns-live-ptys')
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void>; mode?: string }>
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token')
+
+      expect(handle.mode).toBe('held')
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
+      expect(forkMock).not.toHaveBeenCalled()
+    } finally {
+      daemonClientMock.mockImplementation(answeringDefault)
+      readVerifiedDaemonPidMock.mockResolvedValue(null)
+      inspectDaemonPtyOwnershipMock.mockResolvedValue('unknown')
+    }
   })
 
-  it('preserves a daemon that stays wedged until the LAST allowed grace retry', async () => {
-    // Why: daemon drains only on the last allowed probe (1 + WEDGED_DAEMON_GRACE_RETRIES) — must be preserved, not replaced.
+  it('adopts a PTY-spawn-unhealthy daemon in degraded mode when it can still answer', async () => {
+    // Why the count must come from IPC: an answered listSessions is what proves the daemon
+    // can still complete a handshake, and adoption opens one.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const answeringDefault = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    }
+    daemonClientMock.mockImplementation(function MockAnsweringDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [{ isAlive: true }] })),
+        getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
+        disconnect: vi.fn()
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void>; mode?: string }>
+    checkDaemonHealthMock.mockResolvedValueOnce('pty-spawn-unhealthy')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token')
+
+      expect(handle.mode).toBe('degraded-new-pty-fallback')
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
+      expect(forkMock).not.toHaveBeenCalled()
+    } finally {
+      daemonClientMock.mockImplementation(answeringDefault)
+    }
+  })
+
+  it('holds a PTY-spawn-unhealthy daemon that has since stopped answering', async () => {
+    // Why: `health` is a reading from before the grace window. If listSessions went
+    // unanswered across all of it, adoption would open a hello the daemon can no longer
+    // complete — and that throw costs the app its daemon.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const answeringDefault = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    }
+    daemonClientMock.mockImplementation(function MockSilentDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => {
+          throw new Error('listSessions timed out')
+        }),
+        getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
+        disconnect: vi.fn()
+      }
+    })
+    readVerifiedDaemonPidMock.mockResolvedValue({ pid: 4242 })
+    inspectDaemonPtyOwnershipMock.mockResolvedValue('owns-live-ptys')
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void>; mode?: string }>
+    checkDaemonHealthMock.mockResolvedValueOnce('pty-spawn-unhealthy')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token')
+
+      expect(handle.mode).toBe('held')
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
+      expect(forkMock).not.toHaveBeenCalled()
+    } finally {
+      daemonClientMock.mockImplementation(answeringDefault)
+      readVerifiedDaemonPidMock.mockResolvedValue(null)
+      inspectDaemonPtyOwnershipMock.mockResolvedValue('unknown')
+    }
+  })
+
+  it('keeps a daemon handle when the preserved daemon is too wedged to be adopted', async () => {
+    // Why: adoption needs a hello, which is exactly what a daemon wedged enough to be
+    // preserved cannot answer. Throwing here would abort initDaemonPtyProvider, leaving no
+    // spawner — and restartDaemon() throws without one, so the user loses the documented
+    // Manage Sessions → Restart remedy on top of having no daemon.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const answeringDefault = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    }
+    // Permanently wedged: every client, including the adoption client, fails its hello.
+    daemonClientMock.mockImplementation(function MockWedgedDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('Hello response timed out')
+        }),
+        getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+    killStaleDaemonMock.mockResolvedValueOnce({ killed: false, liveOwnerSurvived: true })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void>; mode?: string }>
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    // The endpoint still listens, so the daemon is wedged rather than gone.
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token')
+
+      // 'held', not merely degraded: init must not attempt a lease on a daemon whose
+      // adoption hello just failed — that throw would cost the app its daemon entirely.
+      expect(handle.mode).toBe('held')
+      expect(forkMock).not.toHaveBeenCalled()
+    } finally {
+      daemonClientMock.mockImplementation(answeringDefault)
+    }
+  })
+
+  it('holds a hello-rejected daemon that owns live terminals rather than adopting it', async () => {
+    // Why: 'rejected' means it answered and refused the handshake, so adoption can never
+    // succeed. Falling through to preserveDaemon() would throw and cost the app its daemon
+    // entirely — and killing it would end agents that are still running.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const answeringDefault = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    }
+    daemonClientMock.mockImplementation(function MockRejectingDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('hello refused')
+        }),
+        getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+    readVerifiedDaemonPidMock.mockResolvedValue({ pid: 4242 })
+    inspectDaemonPtyOwnershipMock.mockResolvedValue('owns-live-ptys')
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void>; mode?: string }>
+    checkDaemonHealthMock.mockResolvedValueOnce('rejected')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token')
+
+      expect(handle.mode).toBe('held')
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
+      expect(forkMock).not.toHaveBeenCalled()
+    } finally {
+      daemonClientMock.mockImplementation(answeringDefault)
+      readVerifiedDaemonPidMock.mockResolvedValue(null)
+      inspectDaemonPtyOwnershipMock.mockResolvedValue('unknown')
+    }
+  })
+
+  const wedgedClient = function MockWedgedDaemonClient() {
+    return {
+      ensureConnected: vi.fn(async () => {
+        throw new Error('Hello response timed out')
+      }),
+      request: vi.fn(),
+      disconnect: vi.fn()
+    }
+  }
+  const answeringClient = function MockDaemonClient() {
+    return {
+      ensureConnected: vi.fn(async () => {}),
+      request: vi.fn(async () => ({ sessions: [] })),
+      disconnect: vi.fn()
+    }
+  }
+
+  it('still replaces when the endpoint is proven dead, so a cold start is not held', async () => {
+    // The regression holding most risks: 'unknown' is also what a cold start looks like, since
+    // nothing answers when nothing is there. Holding then would hand every first launch a
+    // provider pointed at no daemon. A missing socket is the discriminator.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    daemonClientMock.mockImplementation(wedgedClient)
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    probeSocketExistsMock.mockReturnValue(false)
+    // Reaching the fork IS the assertion; throwing there stops before the spawn plumbing.
+    forkMock.mockImplementationOnce(() => {
+      throw new Error('reached the replacement fork')
+    })
+
+    try {
+      await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
+        'reached the replacement fork'
+      )
+    } finally {
+      daemonClientMock.mockImplementation(answeringClient)
+    }
+  })
+
+  it('still replaces an unreachable daemon that refused the handshake', async () => {
+    // 'rejected' answered and refused — bad token or foreign protocol — so it can never be
+    // adopted and its sessions can never be reattached. Holding one would be permanent
+    // degradation buying nothing, which is the opposite of the trade holding exists to make.
+    // Note this needs occupancy to stay 'unknown': a daemon that answers listSessions is
+    // 'empty' and reaches the replace path without ever consulting the exclusion.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    daemonClientMock.mockImplementation(wedgedClient)
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    checkDaemonHealthMock.mockResolvedValueOnce('rejected')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+    forkMock.mockImplementationOnce(() => {
+      throw new Error('reached the replacement fork')
+    })
+
+    try {
+      await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
+        'reached the replacement fork'
+      )
+    } finally {
+      daemonClientMock.mockImplementation(answeringClient)
+    }
+  })
+
+  it('spends a patient connect budget on the wedged ask, not the cheap one', async () => {
+    // Pins the round-11 defect, which shipped green because every other test recomputes the
+    // budget expression instead of watching the launcher spend it: with the evidence clock
+    // withheld, max(CONNECT, probeBudget - REQUEST) collapsed to CONNECT and the "patient" ask
+    // was a cheap ask wearing a comment. Observed here through the client double, which
+    // forwards the budget rather than dropping it.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const connectBudgets: (number | undefined)[] = []
+    const answeringDefault = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    }
+    daemonClientMock.mockImplementation(function MockWedgedDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async (budgetMs?: number) => {
+          connectBudgets.push(budgetMs)
+          throw new Error('Hello response timed out')
+        }),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+
+    try {
+      await launcher('/fake/socket', '/fake/token')
+
+      // The first budget is the launcher's own adoption connect; the ask follows it.
+      const askBudget = connectBudgets[1]
+      expect(askBudget).toBeGreaterThan(OCCUPANCY_CONNECT_BUDGET_MS)
+      // And it must still leave the answer something to arrive in.
+      expect(askBudget).toBeLessThanOrEqual(
+        WEDGED_DAEMON_CLASSIFICATION_BUDGET_MS - OCCUPANCY_REQUEST_BUDGET_MS
+      )
+    } finally {
+      daemonClientMock.mockImplementation(answeringDefault)
+    }
+  })
+
+  it('adopts a daemon that drains inside the patient ask, rather than degrading it', async () => {
+    // The payoff for spending the clock on one tolerant ask instead of many cheap ones. A
+    // counted answer is the only verdict that reaches preserveDaemon() — full daemon service —
+    // where 'unknown' would have settled for a degraded hold. This is what a slow-but-alive
+    // daemon gets back.
+    const frozenNow = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(frozenNow)
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -3100,7 +3624,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
     daemonClientMock.mockImplementation(function MockDaemonClient() {
       probe += 1
-      const drainsNow = probe >= 1 + WEDGED_DAEMON_GRACE_RETRIES
+      // 1 = the launcher's adoption client; 2 = the patient ask, which is where it drains.
+      const drainsNow = probe >= 2
       return {
         ensureConnected: vi.fn(async () => {
           if (!drainsNow) {
@@ -3123,10 +3648,13 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     netConnectMock.mockImplementation(stubAliveSocketConnect)
 
     try {
-      await launcher('/fake/socket', '/fake/token')
+      const handle = (await launcher('/fake/socket', '/fake/token')) as { mode?: string }
 
       expect(killStaleDaemonMock).not.toHaveBeenCalled()
       expect(forkMock).not.toHaveBeenCalled()
+      // Not 'held': a counted answer is adoptable, and settling for degraded mode here would
+      // waste the very patience the single ask was widened to buy.
+      expect(handle.mode).toBeUndefined()
     } finally {
       daemonClientMock.mockImplementation(answeringDefault)
     }
@@ -3456,7 +3984,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/token',
       '1.2.3'
     )
-    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
     expect(disconnectMock).toHaveBeenCalledOnce()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()

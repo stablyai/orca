@@ -10,7 +10,6 @@ inline src/main/agent-hooks/server.test.ts
 inline src/main/agent-hooks/server.ts
 inline src/main/amp/hook-service.ts
 inline src/main/antigravity/hook-service.ts
-inline src/main/attribution/terminal-attribution.ts
 inline src/main/automations/external-manager.ts
 inline src/main/automations/hermes-cron-output.ts
 inline src/main/browser/agent-browser-bridge.test.ts
@@ -232,10 +231,8 @@ inline src/renderer/src/components/settings/AgentsPane.tsx
 inline src/renderer/src/components/settings/RepositoryHooksSection.tsx
 inline src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx
 inline src/renderer/src/components/settings/Settings.tsx
-inline src/renderer/src/components/settings/SettingsFormControls.tsx
 inline src/renderer/src/components/sidebar/RemoteFileBrowser.tsx
 inline src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
-inline src/renderer/src/components/sidebar/WorktreeCard.tsx
 inline src/renderer/src/components/sidebar/WorktreeContextMenu.tsx
 inline src/renderer/src/components/sidebar/WorktreeList.lineage-child-card.test.ts
 inline src/renderer/src/components/sidebar/WorktreeList.tsx
@@ -246,7 +243,6 @@ inline src/renderer/src/components/stats/usage-overview-model.ts
 inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx
 inline src/renderer/src/components/status-bar/StatusBar.tsx
 inline src/renderer/src/components/status-bar/WorkspaceSpaceManagerPanel.tsx
-inline src/renderer/src/components/tab-bar/TabBar.tsx
 inline src/renderer/src/components/tab-bar/TabBar.windows-shell-launch.test.ts
 inline src/renderer/src/components/tab-group/useTabDragSplit.ts
 inline src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
@@ -270,7 +266,6 @@ inline src/renderer/src/hooks/useComposerState.ts
 inline src/renderer/src/hooks/useEditorExternalWatch.ts
 inline src/renderer/src/hooks/useIpcEvents.test.ts
 inline src/renderer/src/hooks/useIpcEvents.ts
-inline src/renderer/src/hooks/useIssueMetadata.ts
 inline src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 inline src/renderer/src/lib/active-agent-note-send.test.ts
 inline src/renderer/src/lib/file-type-icons.ts
@@ -342,7 +337,6 @@ mobile-config app/h/*/source-control/*.tsx
 mobile-config app/h/*/tasks.tsx
 mobile-config app/index.tsx
 mobile-config app/pair-scan.tsx
-mobile-config app/terminal-settings.tsx
 mobile-config app/troubleshoot.tsx
 mobile-config scripts/mock-server.ts
 mobile-config scripts/repro-terminal-colors.ts

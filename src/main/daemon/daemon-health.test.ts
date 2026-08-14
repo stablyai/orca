@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { spawn } from 'node:child_process'
-import { existsSync, linkSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { createServer, connect, Socket, type Server } from 'node:net'
+import { createServer, connect, type Server } from 'node:net'
 import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
+import type { SocketProbeOutcome } from './daemon-endpoint-probe'
 import {
   checkDaemonHealth,
   E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV,
@@ -20,6 +22,8 @@ import {
   startTimesWithinTolerance
 } from './daemon-health'
 import type { SubprocessHandle } from './session'
+
+// Why: the veto's production default is otherwise never exercised — every other test injects it.
 
 function createMockSubprocess(): SubprocessHandle {
   return {
@@ -169,10 +173,6 @@ describe('daemon health', () => {
   })
 
   it('does not unlink a live socket when the pid file does not match this daemon', async () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
     const server = createServer((socket) => socket.end())
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -354,9 +354,6 @@ describe('startTimeMatches', () => {
   })
 
   it('returns false for start times outside tolerance', () => {
-    if (process.platform === 'win32') {
-      return
-    }
     const actual = getProcessStartedAtMs(process.pid)
     if (actual === null) {
       return
@@ -418,10 +415,6 @@ describe('killStaleDaemon pid identity guards', () => {
   })
 
   it('does not SIGTERM when the saved startedAtMs mismatches the current process', async () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
     // Why: seed a pid file that claims the daemon is `process.pid` (us) but
     // was started 1 hour ago. Our real start time is "now," so startTimeMatches
     // returns false and isDaemonProcess rejects. killStaleDaemon must not call
@@ -451,7 +444,7 @@ describe('killStaleDaemon pid identity guards', () => {
   })
 })
 
-describe('killStaleDaemon endpoint reclamation', () => {
+describe('killStaleDaemon ownership decisions', () => {
   let dir: string
   let socketPath: string
   let tokenPath: string
@@ -476,99 +469,123 @@ describe('killStaleDaemon endpoint reclamation', () => {
     })
   }
 
-  it('preserves the pid record and the endpoint when the owner cannot be proven gone', async () => {
-    if (process.platform === 'win32') {
-      return
+  it.each<{ outcome: SocketProbeOutcome; liveOwnerSurvived: boolean }>([
+    { outcome: 'connected', liveOwnerSurvived: true },
+    { outcome: 'refused', liveOwnerSurvived: false },
+    { outcome: 'missing', liveOwnerSurvived: false },
+    { outcome: 'unknown', liveOwnerSurvived: false }
+  ])(
+    'reports liveOwnerSurvived=$liveOwnerSurvived for a $outcome endpoint',
+    async ({ outcome, liveOwnerSurvived }) => {
+      const probeEndpoint = vi.fn(async () => outcome)
+
+      await expect(
+        killStaleDaemon(dir, socketPath, tokenPath, undefined, { probeEndpoint })
+      ).resolves.toEqual({ killed: false, liveOwnerSurvived })
+      expect(probeEndpoint).toHaveBeenCalledOnce()
+      expect(probeEndpoint).toHaveBeenCalledWith(socketPath)
     }
+  )
 
-    // Why: isDaemonProcess matches on the command line, so a child carrying the daemon
-    // entry plus this endpoint's paths is adopted as the recorded owner by the first probe.
-    const child = spawn(
-      process.execPath,
-      ['-e', 'setInterval(() => {}, 1000)', 'daemon-entry', socketPath, tokenPath],
-      { stdio: 'ignore' }
-    )
-    await new Promise<void>((resolve, reject) => {
-      child.once('spawn', resolve)
-      child.once('error', reject)
+  it('preserves a daemon that cannot be proven dead', async () => {
+    const record = serializeDaemonPidFile({
+      pid: process.pid,
+      startedAtMs: null,
+      launchNonce: 'live-owner'
     })
-    const childPid = child.pid as number
-    const childExited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
-    const server = createServer((socket) => socket.end())
-    await listenOnSocketPath(server, socketPath)
-    writeFileSync(
-      getDaemonPidPath(dir),
-      serializeDaemonPidFile({ pid: childPid, startedAtMs: null }),
-      { mode: 0o600 }
-    )
+    writeFileSync(getDaemonPidPath(dir), record, { mode: 0o600 })
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+    })
 
-    const realKill = process.kill.bind(process)
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-    // Why: the recorded owner vanishes mid-wait, so the pre-SIGKILL identity re-probe
-    // fails and only the still-answering endpoint proves a daemon is alive.
-    const identityBreaker = setTimeout(() => realKill(childPid, 'SIGKILL'), 800)
     try {
-      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toEqual({
-        killed: false,
-        liveOwnerSurvived: true
-      })
-      expect(existsSync(getDaemonPidPath(dir))).toBe(true)
-      expect(existsSync(socketPath)).toBe(true)
-      await expect(canConnect(socketPath)).resolves.toBe(true)
+      await expect(
+        killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+          probeEndpoint: async () => 'unknown'
+        })
+      ).resolves.toEqual({ killed: false, liveOwnerSurvived: true })
+      expect(readFileSync(getDaemonPidPath(dir), 'utf8')).toBe(record)
     } finally {
-      clearTimeout(identityBreaker)
       killSpy.mockRestore()
-      try {
-        realKill(childPid, 'SIGKILL')
-      } catch {
-        // Already gone.
-      }
-      await childExited
-      await closeServer(server)
     }
   })
 
-  it('unlinks a stale endpoint file once connects to it are refused', async () => {
-    if (process.platform === 'win32') {
-      return
-    }
+  it('removes a malformed pid record', async () => {
+    writeFileSync(getDaemonPidPath(dir), '{truncated', { mode: 0o600 })
 
-    // Why: hard-linking the bound inode leaves the endpoint name behind after the
-    // listener closes — exactly the entry a crashed daemon leaves for connect to refuse.
-    const bindPath = join(dir, '.bstale')
-    const server = createServer((socket) => socket.end())
-    await listenOnSocketPath(server, bindPath)
-    linkSync(bindPath, socketPath)
-    await closeServer(server)
-
-    await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toEqual({
-      killed: false,
-      liveOwnerSurvived: false
+    await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+      probeEndpoint: async () => 'missing'
     })
-    expect(existsSync(socketPath)).toBe(false)
+
+    expect(existsSync(getDaemonPidPath(dir))).toBe(false)
   })
 
-  it('keeps the endpoint file when the connect probe neither connects nor is refused', async () => {
-    if (process.platform === 'win32') {
-      return
-    }
+  it('removes a legacy bare-integer pid record', async () => {
+    writeFileSync(getDaemonPidPath(dir), String(999_999), { mode: 0o600 })
 
-    writeFileSync(socketPath, '')
-    // A connect that never settles leaves the probe to time out, which is not proof
-    // the endpoint is dead — net.connect itself cannot be spied on in ESM.
-    const connectSpy = vi
-      .spyOn(Socket.prototype, 'connect')
-      .mockImplementation(function (this: Socket) {
-        return this
-      })
-    try {
-      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toEqual({
-        killed: false,
-        liveOwnerSurvived: false
-      })
-      expect(existsSync(socketPath)).toBe(true)
-    } finally {
-      connectSpy.mockRestore()
-    }
+    await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+      probeEndpoint: async () => 'missing'
+    })
+
+    expect(existsSync(getDaemonPidPath(dir))).toBe(false)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    "leaves a replacement's pid record after killing the recorded owner",
+    async () => {
+      const child = spawn(
+        process.execPath,
+        [
+          '-e',
+          "process.on('SIGTERM', () => {}); console.log('ready'); setInterval(() => {}, 1000)",
+          'daemon-entry',
+          socketPath,
+          tokenPath
+        ],
+        { stdio: ['ignore', 'pipe', 'ignore'] }
+      )
+      // The handler must exist before SIGTERM to hold the fencing window open.
+      await new Promise<void>((resolve, reject) => {
+        child.once('error', reject)
+        child.stdout?.once('data', () => resolve())
+      })
+      const childPid = child.pid as number
+      const childExited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
+      writeFileSync(
+        getDaemonPidPath(dir),
+        serializeDaemonPidFile({ pid: childPid, startedAtMs: null, launchNonce: 'daemon-a' }),
+        { mode: 0o600 }
+      )
+
+      const replacementRecord = serializeDaemonPidFile({
+        pid: process.pid,
+        startedAtMs: 2_000,
+        launchNonce: 'daemon-b'
+      })
+      const replacement = createServer((socket) => socket.end())
+      const handover = setTimeout(() => {
+        void listenOnSocketPath(replacement, socketPath).then(() => {
+          writeFileSync(getDaemonPidPath(dir), replacementRecord, { mode: 0o600 })
+        })
+      }, 300)
+
+      try {
+        await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toEqual({
+          killed: true,
+          liveOwnerSurvived: true
+        })
+        expect(readFileSync(getDaemonPidPath(dir), 'utf8')).toBe(replacementRecord)
+        await expect(canConnect(socketPath)).resolves.toBe(true)
+      } finally {
+        clearTimeout(handover)
+        try {
+          process.kill(childPid, 'SIGKILL')
+        } catch {
+          // Already gone.
+        }
+        await childExited
+        await closeServer(replacement)
+      }
+    }
+  )
 })

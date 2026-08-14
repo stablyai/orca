@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionOptionDescriptor } from './native-chat-session-options'
+import { mergeDiscoveredAuthoritativeModels } from './agent-session-option-catalog'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
+import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
+import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   createNativeChatSessionOptionRecord,
   type NativeChatSessionOptionRecord
@@ -170,9 +173,41 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         )
       ).toEqual([...CLAUDE_SESSION_OPTION_CATALOG.models])
     })
+
+    it('re-injects a grok seed model an authoritative discovery dropped', () => {
+      // Reconciliation alone never un-picks: the PTY surface untracks a retired id
+      // when an authoritative discovery lands (see native-chat-pty-session-options),
+      // while this shared layer keeps a pre-discovery persisted pick labelled.
+      const record = createNativeChatSessionOptionRecord('grok')
+      record.model = { value: 'grok-4.5', source: 'dispatched' }
+      const discovered = mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
+        { id: 'grok-build', label: 'Grok Build', options: [] }
+      ])
+      expect(discovered.map(({ id }) => id)).toEqual(['grok-build'])
+
+      const reconciled = withTrackedNativeChatModel(GROK_SESSION_OPTION_CATALOG, discovered, record)
+      expect(reconciled.map(({ id }) => id)).toEqual(['grok-build', 'grok-4.5'])
+      expect(reconciled.at(-1)).toBe(GROK_SESSION_OPTION_CATALOG.models[0])
+      expect(reconciled.at(-1)!.options.map(({ id }) => id)).toEqual(['effort'])
+
+      const snapshot = buildNativeChatSessionOptionSnapshot({
+        catalog: GROK_SESSION_OPTION_CATALOG,
+        models: reconciled,
+        record,
+        mode: 'live',
+        modelLabel: 'Model'
+      })
+      expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
+      expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5' }).args).toEqual([
+        '-m',
+        'grok-4.5',
+        '--reasoning-effort',
+        'high'
+      ])
+    })
   })
 
-  it('exposes Codex model changes as native selectable values', () => {
+  it('routes Codex model changes through its typed TUI picker', () => {
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CODEX_SESSION_OPTION_CATALOG,
       models: CODEX_SESSION_OPTION_CATALOG.models,
@@ -181,7 +216,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model'
     })
     expect(snapshot[0]).toMatchObject({ settable: true })
-    expect(snapshot[0]?.action).toBeUndefined()
+    expect(snapshot[0]?.action).toEqual({ type: 'agent-picker' })
     expect(snapshot[0]?.kind).toMatchObject({
       type: 'select',
       choices: expect.arrayContaining([{ value: 'gpt-5.5', label: 'GPT-5.5' }])
@@ -200,5 +235,113 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     })
     const fastMode = snapshot.find((descriptor) => descriptor.id === 'fastMode')
     expect(fastMode).toMatchObject({ action: { type: 'toggle-command' } })
+  })
+})
+
+describe('defaults on load', () => {
+  const grokDraft = (
+    models = GROK_SESSION_OPTION_CATALOG.models,
+    mode: 'draft' | 'live' = 'draft'
+  ): SessionOptionDescriptor[] =>
+    buildNativeChatSessionOptionSnapshot({
+      catalog: GROK_SESSION_OPTION_CATALOG,
+      models,
+      record: createNativeChatSessionOptionRecord('grok'),
+      mode,
+      modelLabel: 'Model'
+    })
+
+  it('shows the default model before anything is picked', () => {
+    const model = grokDraft()[0]!
+    expect(model).toMatchObject({ id: 'model', valueSource: 'default' })
+    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('grok-4.5')
+  })
+
+  it('offers the effort row under that default model without naming its value', () => {
+    // `grok --help` documents no default for --reasoning-effort, and with no model
+    // picked the launch sends the flag nowhere, so grok's own choice is unknowable.
+    const effort = grokDraft().find((descriptor) => descriptor.id === 'effort')
+    expect(effort).toMatchObject({ valueSource: 'unknown' })
+    expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeUndefined()
+  })
+
+  it('names the CLI default in a live session too, where the picker actually renders', () => {
+    // No tracked model means no `-m` was emitted, so the CLI is running its own
+    // default — as true of a running session as of a draft.
+    const live = grokDraft(GROK_SESSION_OPTION_CATALOG.models, 'live')
+    expect(live[0]).toMatchObject({ id: 'model', valueSource: 'default' })
+    expect(live[0]!.kind.type === 'select' ? live[0]!.kind.currentValue : null).toBe('grok-4.5')
+    expect(live.find((descriptor) => descriptor.id === 'effort')).toMatchObject({
+      valueSource: 'unknown'
+    })
+  })
+
+  it('names no model when discovery retired the one the catalog marks default', () => {
+    // Guessing a replacement would misreport which model the launch actually picks.
+    const retired = mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
+      { id: 'grok-build', label: 'Grok Build', options: [] }
+    ])
+    const snapshot = grokDraft(retired)
+    expect(snapshot).toHaveLength(1)
+    expect(snapshot[0]).toMatchObject({ valueSource: 'unknown' })
+  })
+
+  it('leaves a tracked pick as the authority over the default', () => {
+    const record = createNativeChatSessionOptionRecord('grok')
+    record.model = { value: 'grok-build', source: 'dispatched' }
+    const snapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: GROK_SESSION_OPTION_CATALOG,
+      models: [
+        ...GROK_SESSION_OPTION_CATALOG.models,
+        { id: 'grok-build', label: 'Grok Build', options: [] }
+      ],
+      record,
+      mode: 'draft',
+      modelLabel: 'Model'
+    })
+    expect(snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
+    expect(snapshot[0]!.kind.type === 'select' ? snapshot[0]!.kind.currentValue : null).toBe(
+      'grok-build'
+    )
+  })
+
+  it('shows no default for an agent whose isDefault is only decorative', () => {
+    // Claude's real default comes from the account and the user's settings, and an
+    // untouched draft sends no --model, so naming the seed's `sonnet` would be a guess.
+    const snapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: CLAUDE_SESSION_OPTION_CATALOG,
+      models: CLAUDE_SESSION_OPTION_CATALOG.models,
+      record: claudeRecord(),
+      mode: 'draft',
+      modelLabel: 'Model'
+    })
+    expect(CLAUDE_SESSION_OPTION_CATALOG.models.some((model) => model.isDefault)).toBe(true)
+    expect(CLAUDE_SESSION_OPTION_CATALOG.defaultModelIsCliDefault).toBeUndefined()
+    expect(snapshot).toHaveLength(1)
+    expect(snapshot[0]).toMatchObject({ valueSource: 'unknown' })
+  })
+
+  it('still shows an option default once a model is actually picked', () => {
+    // Not a guess: launch reads `values[id] ?? defaultValue`, so this is the flag it emits.
+    const record = claudeRecord()
+    record.model = { value: 'sonnet', source: 'applied' }
+    const snapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: CLAUDE_SESSION_OPTION_CATALOG,
+      models: CLAUDE_SESSION_OPTION_CATALOG.models,
+      record,
+      mode: 'draft',
+      modelLabel: 'Model'
+    })
+    const effort = snapshot.find((descriptor) => descriptor.id === 'effort')
+    expect(effort).toMatchObject({ valueSource: 'default' })
+    expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeDefined()
+  })
+
+  it('does not turn a shown default into a launch flag', () => {
+    // Display is not authorization: only a persisted pick may emit `-m`.
+    expect(resolveAgentSessionOptionLaunch('grok', undefined)).toEqual({
+      args: [],
+      appliedValues: {}
+    })
   })
 })

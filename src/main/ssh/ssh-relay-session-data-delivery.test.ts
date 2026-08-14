@@ -403,7 +403,6 @@ describe('SshRelaySession data delivery', () => {
     expect(retryCalls[0]).toHaveProperty('resume')
     expect(attachForReconnectMock).toHaveBeenCalledWith(
       'pty-1',
-      undefined,
       Object.freeze({ status: 'checkpointUnavailable' })
     )
     second.dispose()
@@ -762,7 +761,6 @@ describe('SshRelaySession data delivery', () => {
 
     expect(attachForReconnectMock).toHaveBeenCalledWith(
       'pty-1',
-      undefined,
       expect.objectContaining({
         status: 'checkpoint',
         deliveryToken: 'old-token',

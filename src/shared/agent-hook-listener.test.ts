@@ -115,6 +115,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
     expect(resolveHookSource('/hook/pi')).toBe('pi')
     expect(resolveHookSource('/hook/omp')).toBe('omp')
+    expect(resolveHookSource('/hook/prime-agent')).toBe('prime-agent')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
@@ -150,6 +151,45 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
+  })
+
+  it('normalizes a BOM-prefixed Cursor hook payload to a working state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'cursor',
+      {
+        paneKey: PANE_KEY,
+        payload: '\uFEFF{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}'
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      agentType: 'cursor',
+      state: 'working',
+      prompt: 'Synthetic Cursor prompt'
+    })
+    expect(event?.hookEventName).toBe('beforeSubmitPrompt')
+  })
+
+  // Why: pins the allowance to exactly one leading U+FEFF, so nobody widens it into a trim.
+  it('still rejects a hook payload that is malformed once the BOM is removed', () => {
+    const bom = '\uFEFF'
+    const body = '{"hook_event_name":"beforeSubmitPrompt"}'
+    for (const payload of [
+      `${bom}${bom}${body}`,
+      `${bom}not json`,
+      ` ${bom}${body}`,
+      `{"hook_event_name"${bom}:"beforeSubmitPrompt"}`
+    ]) {
+      const event = normalizeHookPayload(
+        state,
+        'cursor',
+        { paneKey: PANE_KEY, payload },
+        'production'
+      )
+      expect(event).toBeNull()
+    }
   })
 
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
@@ -349,6 +389,90 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.toolName).toBe('Bash')
     expect(next?.payload.toolInput).toBe('ls')
     expect(next?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('keeps AskUserQuestion visible through a late parallel sibling completion', () => {
+    const questions = { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+    const question = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_use_id: 'tool-question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'AskUserQuestion',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    const siblingCompletion = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_use_id: 'tool-sibling',
+          tool_input: { command: 'sleep 5' }
+        }
+      },
+      'production'
+    )
+
+    expect(siblingCompletion?.payload).toMatchObject({
+      state: 'waiting',
+      toolName: 'AskUserQuestion',
+      interactivePrompt: question?.payload.interactivePrompt
+    })
+  })
+
+  it('clears AskUserQuestion when its own PostToolUse arrives', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_use_id: 'tool-question',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_use_id: 'tool-question'
+        }
+      },
+      'production'
+    )
+
+    expect(answered?.payload.state).toBe('working')
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
   })
 
   it('does not re-assert the AskUserQuestion prompt on PostToolUse', () => {
@@ -677,7 +801,7 @@ describe('shared agent-hook-listener', () => {
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('keeps OMP ask_user_question behavior on Pi-compatible events', () => {
+  it('maps OMP ask to blocked without publishing a native prompt', () => {
     const tool = normalizeHookPayload(
       state,
       'omp',
@@ -688,8 +812,8 @@ describe('shared agent-hook-listener', () => {
         env: 'production',
         version: '1',
         payload: {
-          hook_event_name: 'tool_call',
-          tool_name: 'ask_user_question',
+          hook_event_name: 'tool_execution_start',
+          tool_name: 'ask',
           tool_input: {
             questions: [
               {
@@ -703,9 +827,9 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(tool?.payload).toMatchObject({
-      state: 'working',
+      state: 'blocked',
       agentType: 'omp',
-      toolName: 'ask_user_question'
+      toolName: 'ask'
     })
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
@@ -780,6 +904,53 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(next?.payload.prompt).toBe('')
+  })
+
+  it('normalizes Prime status and session identity without Pi-only ask-user behavior', () => {
+    const tool = normalizeHookPayload(
+      state,
+      'prime-agent',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'tool_call',
+          prompt: 'prime task',
+          tool_name: 'ask_user_question',
+          tool_input: { questions: [{ question: 'Choose', options: ['x'] }] },
+          session_id: 'prime-session-1',
+          session_file: '/tmp/prime-session-1.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(tool).toMatchObject({
+      source: 'prime-agent',
+      providerSession: {
+        key: 'session_id',
+        id: 'prime-session-1',
+        transcriptPath: '/tmp/prime-session-1.jsonl'
+      },
+      payload: { state: 'working', agentType: 'prime-agent', prompt: 'prime task' }
+    })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
+
+    const sessionStart = normalizeHookPayload(
+      state,
+      'prime-agent',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'session_start',
+          session_id: 'prime-session-2',
+          session_file: '/tmp/prime-session-2.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      payload: { state: 'done', prompt: '', agentType: 'prime-agent' }
+    })
   })
 
   it('normalizes Command Code hooks and reads turn text from the transcript', () => {
@@ -3505,6 +3676,28 @@ describe('shared agent-hook-listener', () => {
       expect(childTool?.payload.state).toBe('waiting')
       expect(childTool?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
       expect(childTool?.payload.toolName).toBe('AskUserQuestion')
+    })
+
+    it('keeps a child AskUserQuestion visible through its parallel sibling completion', () => {
+      const question = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'a1',
+        tool_use_id: 'question-1',
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+      })
+
+      const siblingCompletion = claudeEvent({
+        hook_event_name: 'PostToolUse',
+        agent_id: 'a1',
+        tool_use_id: 'sibling-1',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 5' }
+      })
+
+      expect(siblingCompletion?.payload.state).toBe('waiting')
+      expect(siblingCompletion?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
+      expect(siblingCompletion?.payload.toolName).toBe('AskUserQuestion')
     })
 
     it('preserves the interrupted flag across a gated working window', () => {

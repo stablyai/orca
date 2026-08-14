@@ -65,6 +65,8 @@ export type DashboardWorkspace = {
   parentWorktreeId?: string
   hostKind: DashboardCardHostKind
   executionHostId: ExecutionHostId
+  /** Friendly saved-host name for compact host tooltips. */
+  hostLabel?: string
   workspaceKind: DashboardCardWorkspaceKind
   workspaceStatusId?: string
   workspaceStatusLabel?: string
@@ -103,6 +105,8 @@ export type DashboardCard = {
   hostKind?: DashboardCardHostKind
   /** Exact owner used by in-window workspace actions when IDs collide across hosts. */
   executionHostId?: ExecutionHostId
+  /** Friendly saved-host name for compact host tooltips. */
+  hostLabel?: string
   /** Folder workspaces share the ring hierarchy without pretending to be git worktrees. */
   workspaceKind?: DashboardCardWorkspaceKind
   workspaceStatusId?: string
@@ -154,6 +158,8 @@ export type DashboardCardTerminalInput = {
   osRelease?: string
   /** Shift+Enter encoding resolved from this pane's agent evidence. */
   windowsShiftEnterEncoding: 'alt-enter' | 'csi-u'
+  /** Trusted query-only consumer accepts Ctrl+Enter CSI-u without active flags. */
+  ctrlEnterCsiU: boolean
   /** False withholds the kitty (CSI-u) advertisement, as ConPTY panes do. */
   kittyKeyboardAdvertised: boolean
 }

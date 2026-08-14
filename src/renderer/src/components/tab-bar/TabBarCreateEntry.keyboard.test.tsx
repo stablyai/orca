@@ -3,9 +3,15 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Tab, TabGroup, TerminalTab, Worktree } from '../../../../shared/types'
 import type { TabEntryOption } from './tab-create-entry-action'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
+// Unmocked on purpose: the empty-query message must stay in step with the
+// placeholder rendered below.
+import { getTabEntryOptions as classifyTabEntryOptions } from './tab-create-entry-classifier'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 
 // Why: the real entry-action module pulls in runtime IPC + the app store; the
 // keyboard behavior under test only needs a controllable option list.
@@ -32,6 +38,74 @@ const fileOption = (relativePath: string): TabEntryOption => ({
   id: `existing-file:${relativePath}`,
   classification: { kind: 'existing-file', matchKind: 'fuzzy', relativePath }
 })
+
+// A worktree with two open terminals, so the no-query case is exercised against a
+// store that would otherwise produce switch rows.
+function seedOpenTabs(): void {
+  const worktree = {
+    id: 'wt-1',
+    repoId: 'repo-1',
+    path: '/tmp/wt-1',
+    head: 'abc123',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: 'Aurora',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0
+  } satisfies Worktree
+  const unifiedTab = (id: string, entityId: string): Tab => ({
+    id,
+    entityId,
+    groupId: 'group-1',
+    worktreeId: 'wt-1',
+    contentType: 'terminal',
+    label: '',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  })
+  const terminalTab = (id: string, title: string): TerminalTab => ({
+    id,
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title,
+    generatedTitle: null,
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  })
+  const group: TabGroup = {
+    id: 'group-1',
+    worktreeId: 'wt-1',
+    activeTabId: 'tab-a',
+    tabOrder: ['tab-a', 'tab-b']
+  }
+
+  useAppStore.setState(
+    {
+      ...useAppStore.getInitialState(),
+      worktreesByRepo: { 'repo-1': [worktree] },
+      unifiedTabsByWorktree: {
+        'wt-1': [unifiedTab('tab-a', 'term-a'), unifiedTab('tab-b', 'term-b')]
+      },
+      tabsByWorktree: { 'wt-1': [terminalTab('term-a', 'alpha'), terminalTab('term-b', 'beta')] },
+      groupsByWorktree: { 'wt-1': [group] },
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      activeWorktreeId: 'wt-1'
+    } as AppState,
+    true
+  )
+}
 
 let container: HTMLDivElement
 let root: Root
@@ -218,6 +292,46 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     pressKey(container.querySelector('input')!, 'ArrowDown')
 
     expect(document.activeElement).toBe(firstItem)
+  })
+
+  it('gives the input the same accessible name as its placeholder', () => {
+    mount(<TabBarCreateEntry worktreeId="wt" groupId="g" menuOpen onOpenEntry={vi.fn()} />)
+
+    const input = container.querySelector('input')!
+    const placeholder = input.getAttribute('placeholder')
+    expect(placeholder).toBe('Search open tabs, files, URLs, agents\u2026')
+    expect(input.getAttribute('aria-label')).toBe(placeholder)
+  })
+
+  it('states the same thing in the empty-query message as in the placeholder', () => {
+    mount(<TabBarCreateEntry worktreeId="wt" groupId="g" menuOpen onOpenEntry={vi.fn()} />)
+
+    const [emptyOption] = classifyTabEntryOptions('', {
+      files: [],
+      loading: false,
+      loadError: null
+    })
+    expect(emptyOption.classification).toMatchObject({ kind: 'empty' })
+    expect(
+      emptyOption.classification.kind === 'empty' ? emptyOption.classification.message : null
+    ).toBe(container.querySelector('input')!.getAttribute('placeholder'))
+  })
+
+  it('offers no switch rows when the menu opens with tabs open and no query', () => {
+    seedOpenTabs()
+    mount(
+      <div role="menu">
+        <TabBarCreateEntry worktreeId="wt-1" groupId="group-1" menuOpen onOpenEntry={vi.fn()} />
+        <button type="button" role="menuitem">
+          New Terminal
+        </button>
+      </div>
+    )
+
+    // Only the create actions the menu already renders remain.
+    expect(container.querySelectorAll('[role="option"]')).toHaveLength(0)
+    expect(container.querySelectorAll('[role="menuitem"]')).toHaveLength(1)
+    expect(container.querySelector('input')!.value).toBe('')
   })
 
   it('returns focus to the input on ArrowUp from the first menu item (no dead-end)', () => {

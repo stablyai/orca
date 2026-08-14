@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const appState = vi.hoisted(() => ({
   current: 'active',
@@ -25,7 +25,6 @@ import { useNow } from './use-now'
 describe('useNow', () => {
   let renderer: ReactTestRenderer | null = null
   let latest = 0
-  let consoleSpy: MockInstance
 
   function Harness({ enabled = true }: { enabled?: boolean }): null {
     latest = useNow(1_000, enabled)
@@ -42,18 +41,10 @@ describe('useNow', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     appState.current = 'active'
     appState.listener = null
     appState.remove.mockClear()
     latest = 0
-    const original = console.error
-    consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
-    })
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -63,7 +54,6 @@ describe('useNow', () => {
     act(() => renderer?.unmount())
     renderer = null
     vi.useRealTimers()
-    consoleSpy.mockRestore()
   })
 
   it('ticks while active, pauses in the background, and refreshes immediately on resume', () => {

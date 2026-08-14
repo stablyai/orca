@@ -12,6 +12,7 @@ import type { SshPtyAttachResult } from '../providers/ssh-pty-session-reattach'
 import type { SshPtyDataCallback, SshPtyExitCallback } from '../providers/ssh-pty-provider-contract'
 import type { SshPtyRecoveryActivationLease } from '../providers/ssh-pty-notification-routing'
 import { isSshPtyIdentityMismatchError, isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
+import { parseMatchingPtyExitedError } from '../../shared/ssh-pty-failure-tokens'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { isMethodNotFoundError } from './ssh-filesystem-stream-reader'
@@ -32,6 +33,8 @@ import {
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
+  bindPaneShell,
+  resolvePaneShellTabId,
   registerSshPtyProvider,
   unregisterSshPtyProvider,
   getSshPtyProvider,
@@ -76,6 +79,7 @@ import {
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
 } from '../../shared/ssh-types'
+import { normalizeRemoteArtifactInput } from '../../shared/artifact-cli-bridge'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
@@ -94,13 +98,16 @@ import {
   parseRemoteOrcaCliPostOutput
 } from './ssh-remote-orchestration-post-output'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import {
   SSH_AI_VAULT_LIST_SESSIONS_METHOD,
   SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS,
-  type SshAiVaultRelayListParams
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD,
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS,
+  type SshAiVaultRelayListParams,
+  type SshAiVaultRelayTitleParams
 } from '../../shared/ssh-ai-vault-relay'
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
-import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import {
   openSshPtyConsumerSession,
   type OpenSshPtyConsumerSessionOptions,
@@ -134,11 +141,15 @@ const SSH_PTY_REATTACH_MAX_CONCURRENCY = 8
 const SSH_PTY_REATTACH_ATTEMPT_TIMEOUT_MS = 10_000
 const SSH_PTY_REATTACH_RETRY_MIN_DELAY_MS = 50
 const SSH_PTY_REATTACH_RETRY_JITTER_MS = 200
-const SSH_REJECTED_PTY_RECOVERY_MAX_ATTEMPTS = 2
-// Why a second ceiling: the consecutive budget resets whenever a reattach succeeds, so a PTY that
-// alternates recovered and rejected frames would otherwise reattach forever — each one costs a
-// store read, an attach round trip and a store write.
+// Why a ceiling at all: a PTY that alternates recovered and rejected frames would otherwise reattach
+// forever — each one costs a store read, an attach round trip and a store write. Exhausting it parks
+// this PTY's delivery; it never authorizes tearing anything down.
 const SSH_REJECTED_PTY_RECOVERY_MAX_GENERATION_ATTEMPTS = 12
+// Why a park expires: exhaustion parks one PTY's delivery instead of dropping the shared channel,
+// and the escape it names — the next relay open — may never come while that channel stays healthy.
+// A pane with no output and no way back is the state this change exists to prevent, so the park is
+// a cooldown rather than a verdict: recovery is rate-limited, never abandoned.
+const SSH_REJECTED_PTY_RECOVERY_PARK_MS = 60_000
 const SSH_REJECTED_PTY_RECOVERY_RETRY_DELAY_MS = 150
 const SSH_SOURCE_RECOVERY_CANCELLATION_FAILED = 'ssh_source_recovery_cancellation_failed'
 
@@ -187,15 +198,15 @@ type RemoteCliBridgeEnv = {
   pathDelimiter?: ':' | ';'
 }
 
-type ExpectedPtyIdentity = { paneKey?: string; tabId?: string }
+type LegacyExpectedPtyIdentity = { paneKey?: string; tabId?: string }
 type TargetedDeliveryRecovery = 'confirm-existing' | 'fresh-activation'
 
-function expectedIdentityForLease(lease: {
+function legacyExpectedIdentityForLease(lease: {
   tabId?: string
   leafId?: string
-}): ExpectedPtyIdentity | null {
+}): LegacyExpectedPtyIdentity | undefined {
   if (typeof lease.tabId !== 'string' || lease.tabId.length === 0) {
-    return null
+    return undefined
   }
   const paneKey =
     isValidTerminalTabId(lease.tabId) &&
@@ -203,10 +214,7 @@ function expectedIdentityForLease(lease: {
     isTerminalLeafId(lease.leafId)
       ? makePaneKey(lease.tabId, lease.leafId)
       : undefined
-  return {
-    ...(paneKey ? { paneKey } : {}),
-    tabId: lease.tabId
-  }
+  return { ...(paneKey ? { paneKey } : {}), tabId: lease.tabId }
 }
 
 function parseRecoveryComplete(params: Record<string, unknown>): PtySourceRecoveryComplete | null {
@@ -311,6 +319,7 @@ export class SshRelaySession {
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private aiVaultListMethodSupported: boolean | null = null
+  private aiVaultTitleMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -338,9 +347,10 @@ export class SshRelaySession {
     string,
     {
       providerGeneration: number
-      attempts: number
       generationAttempts: number
       reported: boolean
+      /** When the budget ran out; 0 while it has not. Drives the park cooldown. */
+      parkedAt: number
     }
   >()
   private readonly rejectedPtyRecoveryRetries = new Set<ReturnType<typeof setTimeout>>()
@@ -433,7 +443,7 @@ export class SshRelaySession {
   async requestAiVaultSessionList(
     params: SshAiVaultRelayListParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     if (this.aiVaultListMethodSupported === false) {
       return null
     }
@@ -451,6 +461,33 @@ export class SshRelaySession {
     } catch (error) {
       if (isMethodNotFoundError(error)) {
         this.aiVaultListMethodSupported = false
+        return null
+      }
+      throw error
+    }
+  }
+
+  async requestAiVaultSessionTitles(
+    params: SshAiVaultRelayTitleParams,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<unknown> {
+    if (this.aiVaultTitleMethodSupported === false) {
+      return null
+    }
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    try {
+      const result = await mux.request(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, params, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+      })
+      this.aiVaultTitleMethodSupported = true
+      return result
+    } catch (error) {
+      if (isMethodNotFoundError(error)) {
+        this.aiVaultTitleMethodSupported = false
         return null
       }
       throw error
@@ -476,6 +513,7 @@ export class SshRelaySession {
     }
     this._state = 'deploying'
     this.aiVaultListMethodSupported = null
+    this.aiVaultTitleMethodSupported = null
     this.currentConnection = conn
 
     try {
@@ -607,6 +645,7 @@ export class SshRelaySession {
       return
     }
 
+    this.releaseRelayLossWatcher()
     // Cancel any in-flight reconnect
     this.abortController?.abort()
     const abortController = new AbortController()
@@ -614,6 +653,7 @@ export class SshRelaySession {
 
     this._state = 'reconnecting'
     this.aiVaultListMethodSupported = null
+    this.aiVaultTitleMethodSupported = null
     this.currentConnection = conn
 
     // Why: stop scanning before teardownProviders so the poll timer can't fire against a disposed multiplexer.
@@ -801,6 +841,7 @@ export class SshRelaySession {
   private runDisposal(pendingDetach: Promise<void> | null): Promise<void> {
     // Why: the whole in-memory half runs before any await so a concurrent connect can never observe
     // a half-torn session; only the durability barriers below are deferred onto the returned promise.
+    this.releaseRelayLossWatcher()
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
@@ -874,6 +915,7 @@ export class SshRelaySession {
       return
     }
     detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
+    this.releaseRelayLossWatcher()
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
@@ -893,6 +935,7 @@ export class SshRelaySession {
       // step — a fast reconnect must reclaim this identity instead of minting one, even if a
       // teardown call below throws unexpectedly.
       detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
+      this.releaseRelayLossWatcher()
       this.abortController?.abort()
       this.stopPortScanning()
       this.broadcastEmptyLists()
@@ -913,9 +956,21 @@ export class SshRelaySession {
 
   // ── Private ───────────────────────────────────────────────────────
 
+  // Why: teardown itself can kill the mux — an aborted request emits rpc.cancel, and a saturated
+  // control lane turns that admission failure into mux.dispose('connection_lost'). Every teardown
+  // path must release the watcher before its first mux write, or our own shutdown re-enters
+  // recovery as a spurious relay loss. teardownProviders is not early enough: stopPortScanning
+  // runs ahead of it and is what emits that frame. Call this ahead of abortController.abort()
+  // too — that signal reaches no mux request today, but plumbing it into one would otherwise
+  // reopen the same hole silently.
+  private releaseRelayLossWatcher(): void {
+    this.muxDisposeCleanup?.()
+    this.muxDisposeCleanup = null
+  }
+
   // Why: onStateChange only fires on SSH-level reconnects, so watch for relay-channel loss while SSH stays up and fire onRelayLost.
   private watchMuxForRelayLoss(mux: SshChannelMultiplexer): void {
-    this.muxDisposeCleanup?.()
+    this.releaseRelayLossWatcher()
     this.muxDisposeCleanup = mux.onDispose((reason) => {
       if (reason === 'connection_lost' && this.mux === mux && !this.isDisposed()) {
         console.warn(
@@ -1333,6 +1388,7 @@ export class SshRelaySession {
             )
           : {}
       const stdin = typeof params.stdin === 'string' ? params.stdin : undefined
+      const artifactInput = normalizeRemoteArtifactInput(params.artifactInput)
       const runtimeAuthority = this.runtime.registerOrchestrationCompatibilitySshAttachment(
         this.targetId,
         connectionIncarnation
@@ -1344,6 +1400,7 @@ export class SshRelaySession {
           cwd,
           env,
           ...(stdin !== undefined ? { stdin } : {}),
+          ...(artifactInput ? { artifactInput } : {}),
           runtimeAuthority
         })
       } finally {
@@ -1384,7 +1441,7 @@ export class SshRelaySession {
     })
   }
 
-  // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy (agent-status-over-ssh.md §4/§8). Best-effort.
+  // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return
@@ -1393,7 +1450,8 @@ export class SshRelaySession {
       await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
         piExtensionSource: getPiAgentStatusExtensionSource('pi'),
-        ompExtensionSource: getPiAgentStatusExtensionSource('omp')
+        ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
+        primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
       })
     } catch (err) {
       // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.
@@ -1460,7 +1518,7 @@ export class SshRelaySession {
       if (typeof envelope.paneKey !== 'string') {
         return
       }
-      // Why: forward env/version verbatim so cross-build warn-once diagnostics fire on remote events too (agent-status-over-ssh.md §3).
+      // Why: forward the agent CLI's env/version verbatim (not the relay's) so warn-once protocol-mismatch diagnostics fire for remote events too.
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
@@ -1523,8 +1581,7 @@ export class SshRelaySession {
     reason: 'shutdown' | 'connection_lost',
     outputGenerationReason: string = reason
   ): void {
-    this.muxDisposeCleanup?.()
-    this.muxDisposeCleanup = null
+    this.releaseRelayLossWatcher()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
     for (const cleanup of this.ptyRecoveryNotificationCleanups) {
@@ -1737,7 +1794,8 @@ export class SshRelaySession {
     const offeredSource = payload.source
     if (
       offeredSource &&
-      this.retiredSourceDeliveries.has(payload.providerGeneration, offeredSource)
+      this.retiredSourceDeliveries.has(payload.providerGeneration, offeredSource) &&
+      !this.isParkedRecoveryDue(payload.id)
     ) {
       return Promise.resolve()
     }
@@ -1794,6 +1852,19 @@ export class SshRelaySession {
     })
   }
 
+  /**
+   * A parked PTY whose cooldown has elapsed must be let back past the retired-delivery filter.
+   * Retirement is ours, not the host's: a stalled source keeps publishing the very token we
+   * retired, so that filter would swallow every frame that could re-arm the park and the pane
+   * would stay dark for good — the failure the cooldown exists to rule out. Letting one through
+   * costs nothing: it is re-classified as rejected and re-retired, so no output reaches the
+   * terminal; it only regains the ability to ask for recovery.
+   */
+  private isParkedRecoveryDue(appPtyId: string): boolean {
+    const attempt = this.rejectedPtyRecoveryAttempts.get(appPtyId)
+    return !!attempt?.parkedAt && Date.now() - attempt.parkedAt >= SSH_REJECTED_PTY_RECOVERY_PARK_MS
+  }
+
   private recoverRejectedPtyDelivery(
     payload: SshPtyDataPayload,
     source: SshPtyDataPayload['source']
@@ -1828,26 +1899,28 @@ export class SshRelaySession {
     const attempt =
       previous?.providerGeneration === providerGeneration
         ? previous
-        : { providerGeneration, attempts: 0, generationAttempts: 0, reported: false }
-    if (
-      attempt.attempts >= SSH_REJECTED_PTY_RECOVERY_MAX_ATTEMPTS ||
-      attempt.generationAttempts >= SSH_REJECTED_PTY_RECOVERY_MAX_GENERATION_ATTEMPTS
-    ) {
-      if (!attempt.reported) {
-        attempt.reported = true
-        console.warn(
-          `[ssh-relay-session] PTY ${relayPtyId} delivery recovery exhausted for ${this.targetId}; dropping the relay channel to reconnect`
-        )
-        // Why a channel drop and not a terminal relay error: a terminal error clears the reconnect
-        // backoff, rotates provider authority (aborting every in-flight fs and git request on the
-        // target) and parks the target in a manual-recovery state — over one PTY's delivery. Losing
-        // the channel is the recoverable escalation, and it is what this path did before targeted
-        // recovery existed.
-        mux.dispose('connection_lost')
+        : { providerGeneration, generationAttempts: 0, reported: false, parkedAt: 0 }
+    if (attempt.generationAttempts >= SSH_REJECTED_PTY_RECOVERY_MAX_GENERATION_ATTEMPTS) {
+      // Why park instead of dropping the relay channel: a retry count is not proof of anything, and
+      // the channel is shared — dropping it rotates provider authority, aborts every in-flight fs
+      // and git request on the target and stalls every sibling PTY over one PTY's delivery. The
+      // remote shell keeps running and its lease stands.
+      if (attempt.parkedAt && Date.now() - attempt.parkedAt >= SSH_REJECTED_PTY_RECOVERY_PARK_MS) {
+        // The park has served its cooldown. Re-arm rather than leave the pane dark for good.
+        attempt.generationAttempts = 0
+        attempt.reported = false
+        attempt.parkedAt = 0
+      } else {
+        if (!attempt.reported) {
+          attempt.reported = true
+          attempt.parkedAt = Date.now()
+          console.warn(
+            `[ssh-relay-session] PTY ${relayPtyId} delivery recovery exhausted for ${this.targetId}; parking its delivery for ${SSH_REJECTED_PTY_RECOVERY_PARK_MS}ms or until the next relay open`
+          )
+        }
+        return
       }
-      return
     }
-    attempt.attempts++
     attempt.generationAttempts++
     this.rejectedPtyRecoveryAttempts.set(appPtyId, attempt)
     void this.rejectedPtyReattaches
@@ -1863,13 +1936,9 @@ export class SshRelaySession {
       )
       .then(
         (recovered) => {
-          if (recovered) {
-            // Why only a completed reattach clears this: an accepted frame proves nothing about the
-            // delivery that was rejected, and resetting on one lets a flapping PTY reattach forever.
-            attempt.attempts = 0
-            return
+          if (!recovered) {
+            this.retryRejectedPtyDelivery(payload, source, appPtyId)
           }
-          this.retryRejectedPtyDelivery(payload, source, appPtyId)
         },
         (error: unknown) => {
           console.warn(`[ssh-relay-session] PTY ${relayPtyId} targeted delivery recovery failed`, {
@@ -1883,14 +1952,23 @@ export class SshRelaySession {
 
   // Why liveness is checked before retrying: reattachKnownPty resolves without claiming the lease
   // when the PTY exited mid-attach, which is indistinguishable from a failed reattach at the call
-  // site. Retrying that race twice would drop the relay channel over an ordinary PTY exit.
+  // site, so an ordinary exit would otherwise burn the whole recovery budget on attach round trips.
   private retryRejectedPtyDelivery(
     payload: SshPtyDataPayload,
     source: SshPtyDataPayload['source'],
     appPtyId: string
   ): void {
     const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
-    if (!ptyProvider || typeof ptyProvider.hasPty !== 'function' || !ptyProvider.hasPty(appPtyId)) {
+    // Why `=== false` and not `!`: hasPty is three-state, and null means the provider has not
+    // listed the host yet — ignorance, not death, which is exactly the state a fresh provider is
+    // in right after the reconnect that produces these rejected frames. Treating it as death
+    // dropped the recovery attempt and scheduled nothing, and since the delivery token is already
+    // retired, no later frame could revive it: the pane stayed dark. Only proof stops us.
+    if (
+      !ptyProvider ||
+      typeof ptyProvider.hasPty !== 'function' ||
+      ptyProvider.hasPty(appPtyId) === false
+    ) {
       this.rejectedPtyRecoveryAttempts.delete(appPtyId)
       return
     }
@@ -1927,21 +2005,25 @@ export class SshRelaySession {
     const activeLeaseByPtyId = activeLease
       ? new Map<string, SshPtyLease>([[relayPtyId, activeLease]])
       : new Map<string, SshPtyLease>()
-    const expectedIdentity = activeLease ? expectedIdentityForLease(activeLease) : undefined
     const attachedLeaseIds = new Set<string>()
+    const terminatedLeaseIds = new Set<string>()
     await this.reattachKnownPty({
       ptyProvider,
       ptyId: relayPtyId,
       activeLeaseByPtyId,
-      expectedIdentityByPtyId: expectedIdentity
-        ? new Map([[relayPtyId, expectedIdentity]])
-        : new Map(),
       attachedLeaseIds,
+      terminatedLeaseIds,
       mux,
       providerGeneration,
       shouldContinue,
       targetedDeliveryRecovery
     })
+    if (terminatedLeaseIds.size > 0) {
+      await this.store.markSshRemotePtyLeasesTerminatedAsync(
+        this.targetId,
+        Array.from(terminatedLeaseIds)
+      )
+    }
     if (attachedLeaseIds.size > 0 && shouldContinue()) {
       await this.store.markSshRemotePtyLeasesAttachedAsync(
         this.targetId,
@@ -2193,21 +2275,21 @@ export class SshRelaySession {
     mux: SshChannelMultiplexer,
     shouldContinue: () => boolean
   ): Promise<void> {
+    // Why: installs predating pane-keyed supersession carry duplicate live leases;
+    // fanning out over them is what grafted panes the user never opened (STA-3077).
+    const retired = await this.store.supersedeDuplicatePaneLeases(this.targetId)
+    if (retired > 0) {
+      console.info(
+        `[ssh-relay-session] Retired ${retired} duplicate pane lease(s) for ${this.targetId}; their remote shells are left running.`
+      )
+    }
     const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
     const activeLeaseByPtyId = new Map(activeLeases.map((lease) => [lease.ptyId, lease]))
     const leasedPtyIds = activeLeases.map((lease) => lease.ptyId)
-    // Why: pass pane identity so the relay can reject cross-generation id collisions; tabId falls back for pre-leafId leases.
-    const expectedIdentityByPtyId = new Map(
-      activeLeases
-        .map((lease): [string, ExpectedPtyIdentity] | null => {
-          const expected = expectedIdentityForLease(lease)
-          return expected ? [lease.ptyId, expected] : null
-        })
-        .filter((entry): entry is [string, ExpectedPtyIdentity] => entry !== null)
-    )
     const attachedLeaseIds = new Set<string>()
+    const terminatedLeaseIds = new Set<string>()
     // Why: after app restart ptyOwnership is empty, but durable SSH leases still describe grace-window survivors.
     const ptyIds = Array.from(
       new Set([
@@ -2234,8 +2316,8 @@ export class SshRelaySession {
             ptyProvider,
             ptyId,
             activeLeaseByPtyId,
-            expectedIdentityByPtyId,
             attachedLeaseIds,
+            terminatedLeaseIds,
             mux,
             providerGeneration,
             shouldContinue
@@ -2255,6 +2337,12 @@ export class SshRelaySession {
     await Promise.all(
       Array.from({ length: Math.min(SSH_PTY_REATTACH_MAX_CONCURRENCY, ptyIds.length) }, worker)
     )
+    if (terminatedLeaseIds.size > 0) {
+      await this.store.markSshRemotePtyLeasesTerminatedAsync(
+        this.targetId,
+        Array.from(terminatedLeaseIds)
+      )
+    }
     if (attachedLeaseIds.size > 0 && shouldContinue()) {
       await this.store.markSshRemotePtyLeasesAttachedAsync(
         this.targetId,
@@ -2267,8 +2355,8 @@ export class SshRelaySession {
     ptyProvider: SshPtyProvider
     ptyId: string
     activeLeaseByPtyId: Map<string, SshPtyLease>
-    expectedIdentityByPtyId: Map<string, ExpectedPtyIdentity>
     attachedLeaseIds: Set<string>
+    terminatedLeaseIds: Set<string>
     mux: SshChannelMultiplexer
     providerGeneration: number
     shouldContinue: () => boolean
@@ -2278,8 +2366,8 @@ export class SshRelaySession {
       ptyProvider,
       ptyId,
       activeLeaseByPtyId,
-      expectedIdentityByPtyId,
       attachedLeaseIds,
+      terminatedLeaseIds,
       mux,
       providerGeneration,
       shouldContinue,
@@ -2306,12 +2394,17 @@ export class SshRelaySession {
         targetedDeliveryRecovery === 'fresh-activation'
           ? undefined
           : await this.sourceRecoveryRequest(appPtyId)
+      // The shell this lease names, as the host attested it. Without it the main reconnect path
+      // attaches by id alone, and a replaced relay reissues ids from pty-1.
       const attachResult = await this.attachPtyWithRetry(
         ptyProvider,
         ptyId,
-        expectedIdentityByPtyId.get(ptyId),
         recoveryRequest,
-        shouldContinue
+        shouldContinue,
+        activeLeaseByPtyId.get(ptyId)?.incarnationId,
+        activeLeaseByPtyId.get(ptyId)
+          ? legacyExpectedIdentityForLease(activeLeaseByPtyId.get(ptyId)!)
+          : undefined
       )
       sourceActivationLease = attachResult.sourceActivationLease
       if (!shouldContinue()) {
@@ -2457,7 +2550,13 @@ export class SshRelaySession {
       if (!shouldContinue()) {
         return
       }
-      this.handlePtyReattachFailure(ptyId, appPtyId, pendingReattach, error)
+      this.handlePtyReattachFailure(
+        ptyId,
+        pendingReattach,
+        error,
+        activeLeaseByPtyId.get(ptyId)?.incarnationId,
+        terminatedLeaseIds
+      )
     } finally {
       recoveryActivationLease?.retire()
       sourceActivationLease?.rollback()
@@ -2496,22 +2595,42 @@ export class SshRelaySession {
     lease: SshPtyLease | undefined
   ): void {
     if (lease?.worktreeId && lease.tabId && lease.leafId) {
-      this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
-        tabId: lease.tabId,
-        leafId: lease.leafId,
-        incarnationId
-      })
+      // Why bind before registering: `mayCreate: false` refuses when the pane is
+      // gone, and registering first would surface a pane the user never opened.
+      // A thrown write is unknown, not a refusal, so it must not detach anything.
+      // The lease's tabId was frozen when it was written and the pane may have moved since, so the
+      // live layout outranks it. Resolved before the write, so a throw cannot lose it and leave the
+      // graph registered under the tab the pane left.
+      const tabId = resolvePaneShellTabId(this.store, lease.leafId) ?? lease.tabId
+      let bind: { bound: boolean; tabId: string } | null = null
       try {
-        this.store.persistPtyBinding({
+        bind = bindPaneShell({
+          store: this.store,
           worktreeId: lease.worktreeId,
-          tabId: lease.tabId,
+          tabId,
           leafId: lease.leafId,
           ptyId: appPtyId,
-          incarnationId
+          incarnationId,
+          mayCreate: false
         })
       } catch (error) {
         console.error('[ssh-relay-session] Failed to persist reconnect incarnation:', error)
       }
+      if (bind?.bound === false) {
+        // Unresolved, not dead: the remote shell keeps running and stays
+        // reattachable once a durable pane names it again.
+        console.info(
+          `[ssh-relay-session] No durable pane owns ${appPtyId} on ${this.targetId}; left running unbound.`
+        )
+        return
+      }
+      // The tab the bind resolved, not the lease's frozen one — a moved pane must not be recorded
+      // in the graph under the tab it left while its record and fence name the tab it is in.
+      this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
+        tabId,
+        leafId: lease.leafId,
+        incarnationId
+      })
       return
     }
     this.runtime?.onPtySpawned(appPtyId, incarnationId, { awaitsRegistration: false })
@@ -2520,9 +2639,10 @@ export class SshRelaySession {
   private async attachPtyWithRetry(
     ptyProvider: SshPtyProvider,
     ptyId: string,
-    expectedIdentity: ExpectedPtyIdentity | undefined,
     recoveryRequest: PtySourceRecoveryRequest | undefined,
-    shouldContinue: () => boolean
+    shouldContinue: () => boolean,
+    expectedIncarnationId: string | undefined,
+    legacyExpectedIdentity: LegacyExpectedPtyIdentity | undefined
   ): Promise<SshPtyAttachResult> {
     let lastError: unknown
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -2533,12 +2653,26 @@ export class SshRelaySession {
         return await this.attachPtyWithDeadline(
           ptyProvider,
           ptyId,
-          expectedIdentity,
-          recoveryRequest
+          recoveryRequest,
+          expectedIncarnationId,
+          legacyExpectedIdentity
         )
       } catch (error) {
         lastError = error
-        if (!shouldContinue() || isSshPtyNotFoundError(error) || attempt === 1) {
+        // A proven exit is as final as an unknown id: retrying either only burns the wait before
+        // the same answer. Without this the liveness-probe reap, which now answers with proof
+        // rather than "not found", would no longer match and would cost a needless retry.
+        if (
+          !shouldContinue() ||
+          isSshPtyNotFoundError(error) ||
+          isSshPtyIdentityMismatchError(error) ||
+          parseMatchingPtyExitedError(
+            error instanceof Error ? error.message : String(error),
+            ptyId,
+            expectedIncarnationId
+          ) !== null ||
+          attempt === 1
+        ) {
           throw error
         }
         await this.waitForPtyReattachRetry()
@@ -2550,8 +2684,9 @@ export class SshRelaySession {
   private async attachPtyWithDeadline(
     ptyProvider: SshPtyProvider,
     ptyId: string,
-    expectedIdentity: ExpectedPtyIdentity | undefined,
-    recoveryRequest: PtySourceRecoveryRequest | undefined
+    recoveryRequest: PtySourceRecoveryRequest | undefined,
+    expectedIncarnationId: string | undefined,
+    legacyExpectedIdentity: LegacyExpectedPtyIdentity | undefined
   ): Promise<SshPtyAttachResult> {
     let timer: ReturnType<typeof setTimeout> | undefined
     let timedOut = false
@@ -2565,13 +2700,17 @@ export class SshRelaySession {
       timer.unref?.()
     })
     try {
-      const attach = expectedIdentity
-        ? recoveryRequest
-          ? ptyProvider.attachForReconnect(ptyId, expectedIdentity, recoveryRequest)
-          : ptyProvider.attachForReconnect(ptyId, expectedIdentity)
-        : recoveryRequest
-          ? ptyProvider.attachForReconnect(ptyId, undefined, recoveryRequest)
-          : ptyProvider.attachForReconnect(ptyId)
+      const attach =
+        expectedIncarnationId !== undefined || legacyExpectedIdentity !== undefined
+          ? ptyProvider.attachForReconnect(
+              ptyId,
+              recoveryRequest,
+              expectedIncarnationId,
+              legacyExpectedIdentity
+            )
+          : recoveryRequest !== undefined
+            ? ptyProvider.attachForReconnect(ptyId, recoveryRequest)
+            : ptyProvider.attachForReconnect(ptyId)
       const guardedAttach = attach.then((result) => {
         if (timedOut) {
           result.sourceActivationLease?.rollback()
@@ -2598,40 +2737,31 @@ export class SshRelaySession {
 
   private handlePtyReattachFailure(
     ptyId: string,
-    appPtyId: string,
     pending: PendingPtyReattach,
-    error: unknown
+    error: unknown,
+    expectedIncarnationId: string | undefined,
+    terminatedLeaseIds: Set<string>
   ): void {
-    if (!isSshPtyNotFoundError(error)) {
-      pending.restoreRequired = 'reattachAttemptsExhausted'
-      this.wakeRecovery(pending)
-      console.warn(
-        `[ssh-relay-session] Leaving PTY ${ptyId} detached for ${this.targetId} after bounded reattach attempts failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      )
-      return
+    // An exact exit proof settles the lease; queue it for one post-worker durable retirement batch.
+    // `terminated` is not the recovery-grant state, so this cannot authorize a replacement.
+
+    const exitProof = parseMatchingPtyExitedError(
+      error instanceof Error ? error.message : String(error),
+      ptyId,
+      expectedIncarnationId
+    )
+    if (exitProof) {
+      terminatedLeaseIds.add(ptyId)
     }
-    if (isSshPtyIdentityMismatchError(error)) {
-      console.warn(
-        `[ssh-relay-session] Ignoring stale PTY ${ptyId} for ${this.targetId} after relay identity mismatch: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      )
-      return
-    }
+    // Nothing else proves it — not even a not-found, which the relay also returns when it merely
+    // cannot hand this id back — so every other failure leaves the pane detached and recoverable.
+    pending.restoreRequired = 'reattachAttemptsExhausted'
+    this.wakeRecovery(pending)
     console.warn(
-      `[ssh-relay-session] Dropping stale PTY ${ptyId} for ${this.targetId} after relay reattach failed: ${
+      `[ssh-relay-session] Leaving PTY ${ptyId} detached for ${this.targetId} after reattach failed: ${
         error instanceof Error ? error.message : String(error)
       }`
     )
-    clearProviderPtyState(appPtyId)
-    deletePtyOwnership(appPtyId)
-    this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
-    const win = this.getMainWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
-    }
   }
 
   private async sourceRecoveryRequest(

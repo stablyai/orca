@@ -39,7 +39,10 @@ import {
   shutdownDaemon
 } from './daemon/daemon-init'
 import {
-  hasRecordedLegacySharedCodexPane,
+  type CodexPaneHomeRoute,
+  getCodexPaneAccount,
+  hasRecordedManagedHostCodexPane,
+  isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
@@ -66,6 +69,8 @@ import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-cl
 import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtime/orca-runtime'
+import { ArtifactCloudService } from './artifacts/artifact-cloud-service'
+import { isArtifactSharingEnabled } from '../shared/artifact-sharing-gate'
 import { loadAgentSessionClaimSigner } from './runtime/agent-session-claim-identity'
 import {
   fingerprintOrchestrationPeer,
@@ -114,6 +119,7 @@ import {
   configureElectronNetworkCompatibility,
   configureDevUserDataPath,
   configureOrcaUserDataPathEnv,
+  disableUnsupportedChromiumFeatures,
   enableMainProcessGpuFeatures,
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
@@ -127,6 +133,7 @@ import {
   installUnhandledRejectionLogging
 } from './startup/main-process-error-guards'
 import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
+import { argvRequestsServeMode, normalizeServeModeArgv } from './startup/serve-mode-argv'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
   readActiveGpuFallbackMarker,
@@ -156,6 +163,11 @@ import { recoverLegacyWorkerTerminalsForRendererStartup } from './startup/legacy
 import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
+import { createWindowsShellPathHydration } from './startup/windows-shell-path-hydration'
+import {
+  startWindowsDesktopBeforeShellPathReady,
+  type WindowsDesktopStartupServices
+} from './startup/windows-desktop-shell-path-startup'
 import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
@@ -173,6 +185,7 @@ import {
   logStartupMilestone
 } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
+import { neutralizeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import {
   createServeDesktopActivationGate,
@@ -182,6 +195,7 @@ import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
+import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import {
   attachMainWindowServices,
@@ -211,6 +225,7 @@ import {
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService, setSystemCodexHomeHookSweepSuppressed } from './codex/hook-service'
+import { reconcileRetainedCodexHookHomes } from './codex/retained-codex-hook-state'
 import {
   ensureRealHomeCodexHookState,
   isRealHomeCodexHookLaneUsable
@@ -218,6 +233,10 @@ import {
 import { setCodexTrustGrantTelemetry } from './codex/codex-trust-grant-telemetry'
 import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
+import {
+  startCodexStateDbBackfillRecoveryInBackground,
+  stopCodexStateDbBackfillRecoveries
+} from './codex/codex-state-db-backfill-recovery'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
@@ -244,7 +263,10 @@ import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branc
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
-import { setDefaultWslDistroOverride } from './git/runner'
+import {
+  configureWindowsHostGitEnvironmentReadiness,
+  setDefaultWslDistroOverride
+} from './git/runner'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -258,6 +280,7 @@ import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
+import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
@@ -293,6 +316,7 @@ import {
   type ExpectedTeardownScope
 } from './crash-reporting/process-gone-classification'
 import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from './crash-reporting/process-gone-recorder'
+import { resolveExpectedTeardownScope } from './crash-reporting/expected-teardown-state'
 import {
   advanceSyntheticTitleSpinnerEntries,
   type SyntheticTitleSpinnerEntry
@@ -330,6 +354,7 @@ let codexUsage: CodexUsageStore | null = null
 let openCodeUsage: OpenCodeUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
+let codexSessionMigration: ReturnType<typeof createCodexSessionMigrationScheduler> | null = null
 let claudeAccounts: ClaudeAccountService | null = null
 let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
@@ -383,6 +408,73 @@ let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
+
+function handleCodexHomePtySpawned(args: {
+  id: string
+  codexHomePath: string | null
+  reattached?: boolean
+  reattachedHomeRoute?: CodexPaneHomeRoute | null
+  launchEnv?: NodeJS.ProcessEnv
+  startedAt?: Date
+  startedSequence?: number
+}): void {
+  // Why: only shared or ambiguous retained shells can create rollout logs that still need publication.
+  if (args.reattached && args.startedSequence !== undefined) {
+    const paneAccount = getCodexPaneAccount(args.id)
+    const homeRoute =
+      args.reattachedHomeRoute !== undefined
+        ? (args.reattachedHomeRoute ?? undefined)
+        : paneAccount?.homeRoute
+    if (codexSessionMigration && isCodexPaneHomeRouteProvenAwayFromSharedHome(homeRoute)) {
+      codexSessionMigration.ignoreLaunch(args.id, args.startedSequence)
+      return
+    }
+  }
+  const fullScanRequired =
+    codexRuntimeHome?.beginHostSystemDefaultSessionMigrationLaunch(args.codexHomePath, {
+      reattached: args.reattached,
+      launchEnv: args.launchEnv
+    }) ?? null
+  if (fullScanRequired !== null) {
+    codexSessionMigration?.beginLaunch(
+      args.id,
+      args.reattached === true || fullScanRequired,
+      args.startedAt,
+      args.startedSequence
+    )
+  }
+}
+
+function handlePtyExit(id: string, exitSequence: number): void {
+  codexSessionMigration?.finishLaunch(id, exitSequence)
+}
+// Why: on Windows a CLI launch that lost ELECTRON_RUN_AS_NODE would boot the GUI and exit silently; redirect to node mode before the lock gate below.
+// Both redirects run before the serve-argv rewrite so they still match on the launch argv verbatim.
+// It is load-bearing for the AppImage one: rewriting first replaces the `serve` positional, so its
+// command-name lookup finds a port number and strands the launch in an in-process serve. The
+// packaged-CLI one matches on the entry path instead, so order cannot affect it either way.
+const packagedCliEntryRedirect = maybeRedirectPackagedCliEntryLaunch({
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  execPath: process.execPath
+})
+if (packagedCliEntryRedirect.redirected) {
+  app.exit(packagedCliEntryRedirect.status)
+}
+const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  execPath: process.execPath
+})
+if (appImageCliRedirect.redirected) {
+  app.exit(appImageCliRedirect.status)
+}
+// Why: extracted AppRun / binary launches can land CLI-form `serve` args on the
+// Electron process without the CLI rewrite that injects `--serve` (#12677).
+// Guarded so a normal GUI launch keeps its original argv array identity.
+if (argvRequestsServeMode(process.argv)) {
+  process.argv = normalizeServeModeArgv(process.argv)
+}
 const isServeMode = process.argv.includes('--serve')
 
 function updateGpuAccelerationAboutPanel(): void {
@@ -416,23 +508,6 @@ const desktopActivationGate = createServeDesktopActivationGate({
   },
   onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)
 })
-// Why: on Windows a CLI launch that lost ELECTRON_RUN_AS_NODE would boot the GUI and exit silently; redirect to node mode before the lock gate below.
-const packagedCliEntryRedirect = maybeRedirectPackagedCliEntryLaunch({
-  isPackaged: app.isPackaged,
-  resourcesPath: process.resourcesPath,
-  execPath: process.execPath
-})
-if (packagedCliEntryRedirect.redirected) {
-  app.exit(packagedCliEntryRedirect.status)
-}
-const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
-  isPackaged: app.isPackaged,
-  resourcesPath: process.resourcesPath,
-  execPath: process.execPath
-})
-if (appImageCliRedirect.redirected) {
-  app.exit(appImageCliRedirect.status)
-}
 
 // Kill switch for the first-work on-disk folder rename; the renderer reconciles the id change (migrateWorktreeIdentity) so it isn't mistaken for a deletion.
 const ENABLE_FIRST_WORK_FOLDER_RENAME = false
@@ -682,14 +757,17 @@ function clearExpectedRendererReload(webContentsId?: number): void {
   expectedRendererReload.clear(webContentsId)
 }
 
-function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope {
-  if (isQuitting || isQuittingForUpdate()) {
-    return 'app-shutdown'
-  }
-  if (webContentsId === undefined) {
-    return 'none'
-  }
-  return expectedRendererReload.matches(webContentsId) ? 'renderer-reload' : 'none'
+function getExpectedTeardownScope(
+  webContentsId?: number,
+  includeSystemSessionEnd = true
+): ExpectedTeardownScope {
+  return resolveExpectedTeardownScope({
+    isQuitting,
+    isQuittingForUpdate: isQuittingForUpdate(),
+    isExpectedRendererReload:
+      webContentsId !== undefined && expectedRendererReload.matches(webContentsId),
+    includeSystemSessionEnd
+  })
 }
 
 function markRecoveryReloadInFlight(webContentsId: number, durationMs = 10_000): void {
@@ -770,6 +848,7 @@ if (hasSingleInstanceLock) {
     platform: process.platform,
     ...getMainProcessLifecycleIdentity()
   })
+  disableUnsupportedChromiumFeatures()
   configureElectronNetworkCompatibility()
   enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
@@ -854,7 +933,7 @@ async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
   })
 }
 
-function startTerminalRuntimeStartupServices(): Promise<void> {
+function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
   logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({
     // Why: both desktop and headless serve must adopt the same persistent provider before creating terminals or a renderer.
@@ -865,10 +944,19 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
       await initDaemonPtyProvider(signal, {
         macosLoginSessionWatch: process.platform === 'darwin' && !isServeMode
       })
-      if (codexRuntimeHome?.isHostSystemDefaultRealHome() && hasRecordedLegacySharedCodexPane()) {
+      // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
+      if (codexRuntimeHome && hasRecordedManagedHostCodexPane()) {
         const livePtyIds = await listLiveDaemonPtyIds()
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
+          const settings = store?.getSettings()
+          reconcileRetainedCodexHookHomes({
+            hookService: codexHookService,
+            hooksEnabled:
+              isAgentStatusHooksEnabled(settings) &&
+              settings?.disabledTuiAgents.includes('codex') !== true,
+            runtimeHomePaths: codexRuntimeHome.getRetainedHostCodexHookHomePaths(livePtyIds)
+          })
         }
       }
       // Why: retained shells can invoke Codex immediately after the startup gate.
@@ -902,19 +990,24 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
       console.error('[agent-hooks] Failed to start local hook server:', error)
     }
   })
-  firstWindowStartupServicesReady = startupServices.firstWindowReady
-  localPtyStartupReady = startupServices.localPtyReady
-  localPtyProviderStartupReady = startupServices.localPtyProviderReady
-  void firstWindowStartupServicesReady.then(() => {
+  void startupServices.firstWindowReady.then(() => {
     logStartupMilestone('first-window-startup-services-ready')
   })
-  void localPtyStartupReady.then(() => {
+  void startupServices.localPtyReady.then(() => {
     logStartupMilestone('local-pty-startup-ready')
     void reapRestoredSubagentsWithoutLiveAgent().catch((error) => {
       console.warn('[agent-hooks] restored-subagent liveness probe failed:', error)
     })
   })
-  return firstWindowStartupServicesReady
+  return startupServices
+}
+
+function bindTerminalRuntimeStartupServices(
+  services: Promise<WindowsDesktopStartupServices>
+): void {
+  firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
+  localPtyStartupReady = services.then((value) => value.localPtyReady)
+  localPtyProviderStartupReady = services.then((value) => value.localPtyProviderReady)
 }
 
 function prepareCodexRuntimeHomeForLaunch(
@@ -1170,7 +1263,7 @@ function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
   return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
-function openMainWindow(): BrowserWindow {
+function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
@@ -1248,7 +1341,7 @@ function openMainWindow(): BrowserWindow {
     shouldRecoverRenderer: (details, webContentsId) =>
       shouldRecoverRendererAfterProcessGone({
         reason: details.reason,
-        expectedTeardown: getExpectedTeardownScope(webContentsId)
+        expectedTeardown: getExpectedTeardownScope(webContentsId, false)
       }),
     onRendererRecoveryExhausted: ({ details, recentRecoveryCount }) => {
       recordDurableCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
@@ -1259,6 +1352,7 @@ function openMainWindow(): BrowserWindow {
       void presentRendererRecoveryPrompt(recentRecoveryCount)
     },
     deferLoad: true,
+    ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
     title: devInstanceIdentity.name,
     getKeybindings: () => keybindings?.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
@@ -1297,6 +1391,9 @@ function openMainWindow(): BrowserWindow {
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
     setImmediate(createSystemTrayDeferred)
+  })
+  window.once('show', () => {
+    logStartupMilestone('window-shown')
   })
   const trayCreateFallback = setTimeout(createSystemTrayDeferred, TRAY_CREATE_FALLBACK_MS)
   trayCreateFallback.unref?.()
@@ -1381,6 +1478,8 @@ function openMainWindow(): BrowserWindow {
       },
       // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
       isRecoveryReloadInFlight,
+      onCodexHomePtySpawned: handleCodexHomePtySpawned,
+      onPtyExit: handlePtyExit,
       onBeforeUpdateQuit: () =>
         preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
       updateInstallMode: resolveUpdateInstallMode(isServeMode),
@@ -2072,6 +2171,26 @@ void app.whenReady().then(async () => {
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  // Why: must precede PTY handler registration and run in headless serve too, which returns before openMainWindow.
+  neutralizeLegacyTerminalShimDir(app.getPath('userData'))
+  const windowsShellPathHydration = createWindowsShellPathHydration()
+  configureWindowsHostGitEnvironmentReadiness(
+    process.platform === 'win32' ? windowsShellPathHydration.whenReady : null
+  )
+  if (process.platform === 'win32') {
+    const settings = store.getSettings()
+    if (app.isPackaged) {
+      void windowsShellPathHydration.hydrate(
+        settings.terminalWindowsShell,
+        settings.terminalWindowsPowerShellImplementation
+      )
+    } else {
+      windowsShellPathHydration.configure(
+        settings.terminalWindowsShell,
+        settings.terminalWindowsPowerShellImplementation
+      )
+    }
+  }
   wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
@@ -2081,9 +2200,35 @@ void app.whenReady().then(async () => {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
     }
+    if (
+      ('terminalWindowsShell' in updates || 'terminalWindowsPowerShellImplementation' in updates) &&
+      process.platform === 'win32'
+    ) {
+      if (app.isPackaged) {
+        void windowsShellPathHydration.hydrate(
+          settings.terminalWindowsShell,
+          settings.terminalWindowsPowerShellImplementation
+        )
+      } else {
+        windowsShellPathHydration.configure(
+          settings.terminalWindowsShell,
+          settings.terminalWindowsPowerShellImplementation
+        )
+      }
+    }
     if ('showMenuBarIcon' in updates) {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
+    }
+    if ('agentStatusHooksEnabled' in updates) {
+      // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running
+      // guest process and timers, and on must restart them — otherwise open WSL panes report no
+      // status until their next spawn.
+      if (isAgentStatusHooksEnabled(settings)) {
+        wslHookRelayManager.resumeStoppedRelays()
+      } else {
+        wslHookRelayManager.disposeAll({ permanent: false })
+      }
     }
   })
   // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.
@@ -2122,7 +2267,12 @@ void app.whenReady().then(async () => {
   })
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
-  agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
+  agentAwakeService.setMode(
+    normalizeComputerAwakeMode(
+      store.getSettings().computerAwakeMode,
+      store.getSettings().keepComputerAwakeWhileAgentsRun
+    )
+  )
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
@@ -2221,6 +2371,7 @@ void app.whenReady().then(async () => {
   openCodeUsage = new OpenCodeUsageStore(store)
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
+  void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   // Why: an incapable trust-grant host must fall back to the managed home for
   // every consumer (PTY env, rate limits, commit messages) in one place.
   codexRuntimeHome.setRealHomeLaneGate(() => isRealHomeCodexHookLaneUsable())
@@ -2234,21 +2385,21 @@ void app.whenReady().then(async () => {
       codexRuntimeHome.isHostSystemDefaultRealHome() &&
       isAgentStatusHooksEnabled(store?.getSettings())
   )
-  const codexSessionMigration = createCodexSessionMigrationScheduler({
-    isEligible: () => codexRuntimeHome?.isHostSystemDefaultRealHome() === true,
+  codexSessionMigration = createCodexSessionMigrationScheduler({
+    isEligible: () => codexRuntimeHome?.isHostSystemDefaultSessionMigrationEligible() === true,
     isQuitting: () => isQuitting,
     resolveSystemCodexHomePathOverride: () =>
       resolveHostCodexSessionSourceHome(store!.getSettings()),
+    prepareScheduledRun: () => codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(),
+    finishScheduledRun: () => codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
     startBackfill: startCodexSessionBackfillInBackground,
     startIndexHeal: startCodexSessionIndexHealInBackground
   })
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome, {
     onHostSystemDefaultSelected: codexSessionMigration.requestRun
   })
-  // Why: one-time per-host backfill makes historical Orca-managed Codex
-  // sessions visible to the user's own resume picker and app history (#4444,
-  // #8612). Deferred so startup and first PTY spawns never compete with the
-  // sessions tree walk.
+  // Why: migrate historical shared-home sessions after startup; compatibility
+  // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   codexSessionMigration.scheduleInitialRun()
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
@@ -2256,6 +2407,9 @@ void app.whenReady().then(async () => {
     codexRuntimeHome!.prepareForRateLimitFetch(target)
   )
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
+  // Why: Kimi's CLI refreshes its OAuth token in whichever runtime it runs in, so the
+  // usage fetch must read the WSL-side credentials when that's the configured runtime (#12370).
+  rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store!.getSettings())))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
@@ -2500,6 +2654,11 @@ void app.whenReady().then(async () => {
       : undefined
   })
   runtimeService.setAutomationService(automations)
+  runtimeService.setArtifactService(
+    new ArtifactCloudService(app.getPath('userData'), () =>
+      isArtifactSharingEnabled(store?.getSettings())
+    )
+  )
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
@@ -2671,7 +2830,7 @@ void app.whenReady().then(async () => {
     if (isAgentStatusHooksEnabled(store.getSettings())) {
       const managedHookStore = store
       void applyAgentStatusHooksEnabled(true, managedHookStore.getSettings(), {
-        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        shouldHydrateShellPath: app.isPackaged,
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const settings = managedHookStore.getSettings()
@@ -2845,7 +3004,20 @@ void app.whenReady().then(async () => {
     }
   })
 
-  startTerminalRuntimeStartupServices()
+  const shellPathReady = windowsShellPathHydration.whenReady()
+  let desktopWindow: BrowserWindow | null = null
+  if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
+    const desktopStartup = startWindowsDesktopBeforeShellPathReady({
+      openWindow: () => openMainWindow({ revealOnDidFinishLoad: true }),
+      shellPathReady,
+      startServices: startTerminalRuntimeStartupServices
+    })
+    desktopWindow = desktopStartup.window
+    bindTerminalRuntimeStartupServices(desktopStartup.services)
+  } else {
+    await shellPathReady
+    bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
+  }
   app.on('activate', handleMacAppActivation)
 
   if (serveOptions) {
@@ -2863,7 +3035,11 @@ void app.whenReady().then(async () => {
       () => store!.getSettings(),
       (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
       store,
-      prepareCodexSessionResumeForLaunch
+      prepareCodexSessionResumeForLaunch,
+      {
+        onCodexHomePtySpawned: handleCodexHomePtySpawned,
+        onPtyExit: handlePtyExit
+      }
     )
     await runtime.refreshRestoredOrchestrationAuthority()
     await runtime.reconcileLegacyWorkerTerminals()
@@ -2925,15 +3101,21 @@ void app.whenReady().then(async () => {
   }
 
   // Why: window and RPC startup run in parallel; registerPtyHandlers gates PTY spawns so RPC binds without racing the daemon provider swap.
+  const desktopRuntimeRpc = runtimeRpc
+  if (!desktopRuntimeRpc) {
+    throw new Error('runtime_rpc_unavailable')
+  }
   const [win, runtimeRpcStartResult] = await Promise.all([
-    Promise.resolve(openMainWindow()),
-    runtimeRpc.start().then(
-      () => ({ ok: true as const }),
-      (error: unknown) => {
-        recordRuntimeRpcStartFailure(error)
-        return { ok: false as const, error }
-      }
-    )
+    Promise.resolve(desktopWindow ?? openMainWindow()),
+    shellPathReady
+      .then(() => desktopRuntimeRpc.start())
+      .then(
+        () => ({ ok: true as const }),
+        (error: unknown) => {
+          recordRuntimeRpcStartFailure(error)
+          return { ok: false as const, error }
+        }
+      )
   ])
   if (!runtimeRpcStartResult.ok) {
     void showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
@@ -3048,6 +3230,7 @@ app.on('will-quit', (e) => {
   pluginMarketplaceService = null
   pluginMarketplaceInstaller = null
   const pluginHostShutdown = pluginService?.dispose() ?? Promise.resolve()
+  const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
   pluginService = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
@@ -3107,6 +3290,7 @@ app.on('will-quit', (e) => {
     { name: 'emulator', promise: emulatorShutdown },
     { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
+    { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'stats', promise: statsFlush },
     { name: 'state', promise: storeFlush }

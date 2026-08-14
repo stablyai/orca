@@ -56,29 +56,12 @@ const HOST_FIXTURE = {
   lastConnected: 1
 }
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 async function renderEditHostRoute(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    await act(async () => {
-      renderer = create(createElement(EditHostScreen))
-      await Promise.resolve()
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  await act(async () => {
+    renderer = create(createElement(EditHostScreen))
+    await Promise.resolve()
+  })
   if (!renderer) {
     throw new Error('Edit host route did not render')
   }
@@ -135,7 +118,6 @@ function findText(renderer: ReactTestRenderer, match: string): boolean {
 
 describe('edit host handleSave', () => {
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     dependencies.hostId = 'host-1'
     dependencies.back.mockReset()
     dependencies.forceReconnectHost.mockReset().mockResolvedValue(undefined)
@@ -285,7 +267,6 @@ describe('edit host handleSave', () => {
 
 describe('edit host load() error states', () => {
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     dependencies.hostId = 'host-1'
     dependencies.back.mockReset()
     dependencies.forceReconnectHost.mockReset().mockResolvedValue(undefined)

@@ -32,16 +32,8 @@ import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
-import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
-import {
-  selectRuntimeAwareSshStatus,
-  selectRuntimeAwareSshTargetLabel,
-  selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh'
+import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
@@ -93,6 +85,11 @@ import {
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
+import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
+import {
+  closeTerminalLinkActionRequest,
+  type TerminalLinkActionRequest
+} from './terminal-link-action-request'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import {
   detachTerminalPaneToTab,
@@ -118,7 +115,6 @@ import {
   resolveNativeChatLeafRoute,
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
@@ -138,6 +134,12 @@ import {
   readPrimarySelectionText
 } from '@/lib/primary-selection'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import {
+  APP_MENU_SELECTION_ACTION_EVENT,
+  type AppMenuSelectionAction
+} from '@/lib/app-menu-selection-actions'
+import { isEditableTarget } from '@/lib/editable-target'
+import { copyTerminalSelection } from './terminal-selection-copy'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
@@ -156,14 +158,19 @@ import {
   type RemotePaneLayoutPusher
 } from './remote-pane-layout-push'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { useProjectHostSetupProjection, useRepoById } from '@/store/selectors'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
   getTerminalQuickCommandScope,
-  isTerminalQuickCommandComplete,
-  terminalQuickCommandMatchesRepo
+  isTerminalQuickCommandComplete
 } from '../../../../shared/terminal-quick-commands'
+import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
@@ -183,7 +190,7 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
-import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
+import { TerminalPaneDisconnectedBanner } from './TerminalPaneDisconnectedBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import {
@@ -226,7 +233,7 @@ import {
   getCachedUnifiedTerminalTabForWorktree
 } from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
-import { useRepoById } from '@/store/selectors'
+import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 import {
   isXtermHelperTextarea,
   releaseTerminalFocusForOutsidePointerDown,
@@ -234,6 +241,7 @@ import {
   resyncTerminalFocusForWindowFocus,
   setRegularTerminalInputFocusAttribute
 } from './regular-terminal-focus-ownership'
+import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
 
 type TerminalPaneProps = {
@@ -257,23 +265,28 @@ export type TerminalPaneHandle = {
 
 type TerminalQuickCommandEditorDialogProps = {
   command: TerminalQuickCommand
+  hostId: ExecutionHostId
   onOpenChange: (open: boolean) => void
   onSave: (command: TerminalQuickCommand) => void
 }
 
 function TerminalQuickCommandEditorDialog({
   command,
+  hostId,
   onOpenChange,
   onSave
 }: TerminalQuickCommandEditorDialogProps): React.JSX.Element {
   const repos = useAppStore((store) => store.repos)
+  const hostRepos = hostId.startsWith('runtime:')
+    ? repos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+    : repos
 
   return (
     <TerminalQuickCommandDialog
       open
       mode="add"
       command={command}
-      repos={repos}
+      repos={hostRepos}
       onOpenChange={onOpenChange}
       onSave={onSave}
     />
@@ -327,37 +340,14 @@ function TerminalPane(
   const isRendererVisible = isVisible && isWorktreeActive
   const isVisibleRef = useRef(isRendererVisible)
   isVisibleRef.current = isRendererVisible
-  const sshReconnectTargetId = useAppStore((store) => {
-    const connectionId = getConnectionIdFromState(store, worktreeId)
-    // Why: runtime-owned SSH targets are internal plumbing users can't connect to, so a reconnect prompt would mislead.
-    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
-      return null
-    }
-    return connectionId
-  })
-  const nativeChatTranscriptIsLocalReadable = useAppStore((store) =>
-    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(store, worktreeId))
-  )
-  // Which machine's SSH store this target belongs to: a remote server's per-environment bucket, or null for this machine's local SSH maps.
-  const sshReconnectEnvironmentId = useAppStore((store) =>
-    sshReconnectTargetId ? getExplicitRuntimeEnvironmentIdForWorktree(store, worktreeId) : null
-  )
-  const sshReconnectStatus = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshStatus(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : null
-  )
-  const sshReconnectTargetLabel = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshTargetLabel(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : ''
-  )
-  // Why: a ghost target (removed from its host) can only fail reconnect, so the overlay offers Remove instead of Connect.
-  const sshReconnectTargetRemoved = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshTargetRemoved(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : false
-  )
+  const {
+    nativeChatTranscriptIsLocalReadable,
+    sshReconnectEnvironmentId,
+    sshReconnectStatus,
+    sshReconnectTargetId,
+    sshReconnectTargetLabel,
+    sshReconnectTargetRemoved
+  } = useAppStore(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
   useEffect(() => {
     if (!sshReconnectEnvironmentId) {
       return
@@ -373,6 +363,14 @@ function TerminalPane(
   const [paneCount, setPaneCount] = useState<number>(0)
   // Why: pane reorders can move panes without changing count or size, so overlay rects need an explicit layout-change render trigger.
   const [paneLayoutRevision, setPaneLayoutRevision] = useState(0)
+  const [terminalLinkActionRequest, setTerminalLinkActionRequest] =
+    useState<TerminalLinkActionRequest | null>(null)
+  const requestTerminalLinkAction = useCallback((request: TerminalLinkActionRequest) => {
+    setTerminalLinkActionRequest(request)
+  }, [])
+  const closeTerminalLinkActions = useCallback((dismissed?: TerminalLinkActionRequest) => {
+    setTerminalLinkActionRequest((current) => closeTerminalLinkActionRequest(current, dismissed))
+  }, [])
   const [searchOpen, setSearchOpen] = useState(false)
   const searchOpenRef = useRef(false)
   searchOpenRef.current = searchOpen
@@ -382,6 +380,8 @@ function TerminalPane(
     copyKind: CloseTerminalDialogCopyKind
   } | null>(null)
   const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
+  const [quickCommandEditorHostId, setQuickCommandEditorHostId] =
+    useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
   const [chatLeafId, setChatLeafId] = useState<string | null>(null)
   const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
   const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
@@ -548,6 +548,10 @@ function TerminalPane(
     const leafIds = getNativeChatLeafIds()
     return leafIds.length === 1 ? leafIds[0] : null
   }, [getNativeChatLeafIds, tabWideAgentHintLeafId])
+  const getTabWideAgentHintLeafIdRef = useRef(getTabWideAgentHintLeafId)
+  useEffect(() => {
+    getTabWideAgentHintLeafIdRef.current = getTabWideAgentHintLeafId
+  }, [getTabWideAgentHintLeafId])
   useEffect(() => {
     if (tabWideAgentHintLeafId !== undefined) {
       return
@@ -676,6 +680,13 @@ function TerminalPane(
     }
     toggleNativeChatForLeaf(activeLeafId)
   }, [toggleNativeChatForLeaf])
+  // Stable identity: this reaches the session-option surface's useMemo deps, so an
+  // inline arrow would rebuild the surface on every TerminalPane render.
+  const switchNativeChatToTerminal = useCallback(() => {
+    if (chatLeafId) {
+      toggleNativeChatForLeaf(chatLeafId)
+    }
+  }, [chatLeafId, toggleNativeChatForLeaf])
   const readNativeChatTerminalScreen = useCallback((): string | null => {
     if (!chatLeafId) {
       return null
@@ -780,21 +791,12 @@ function TerminalPane(
   const quickCommandRepoId =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
   const quickCommandRepo = useRepoById(quickCommandRepoId)
+  const projectHostSetupProjection = useProjectHostSetupProjection()
   const quickCommandRepoLabel = quickCommandRepo
     ? quickCommandRepo.displayName || quickCommandRepo.path
     : quickCommandRepoId
       ? 'This Repo'
       : null
-  const validQuickCommands = (settings?.terminalQuickCommands ?? []).filter((command) =>
-    isTerminalQuickCommandComplete(command)
-  )
-  const repoQuickCommands = validQuickCommands.filter((command) => {
-    const scope = getTerminalQuickCommandScope(command)
-    return scope.type === 'repo' && terminalQuickCommandMatchesRepo(command, quickCommandRepoId)
-  })
-  const globalQuickCommands = validQuickCommands.filter(
-    (command) => getTerminalQuickCommandScope(command).type === 'global'
-  )
   const quickCommandGroupId =
     useAppStore(
       (s) =>
@@ -803,17 +805,20 @@ function TerminalPane(
         null
     ) ?? null
 
-  const openQuickCommandEditor = useCallback((scope: TerminalQuickCommandScope): void => {
-    setQuickCommandDraft(createTerminalQuickCommandDraft(scope))
-    setQuickCommandEditorOpen(true)
-  }, [])
+  const openQuickCommandEditor = useCallback(
+    (scope: TerminalQuickCommandScope, hostId: ExecutionHostId): void => {
+      setQuickCommandDraft(createTerminalQuickCommandDraft(scope))
+      setQuickCommandEditorHostId(hostId)
+      setQuickCommandEditorOpen(true)
+    },
+    []
+  )
 
   const saveQuickCommand = useCallback(
     (command: TerminalQuickCommand): void => {
-      const currentCommands = useAppStore.getState().settings?.terminalQuickCommands ?? []
-      void updateSettings({ terminalQuickCommands: [...currentCommands, command] })
+      void useAppStore.getState().upsertTerminalQuickCommand(quickCommandEditorHostId, command)
     },
-    [updateSettings]
+    [quickCommandEditorHostId]
   )
 
   useEffect(() => {
@@ -1343,10 +1348,12 @@ function TerminalPane(
     settings,
     settingsRef,
     requestOpenLinksInAppPreference,
+    requestTerminalLinkAction,
     effectiveMacOptionAsAlt,
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
     managerRef,
+    getTabWideAgentHintLeafId: () => getTabWideAgentHintLeafIdRef.current(),
     containerRef,
     expandedStyleSnapshotRef,
     paneFontSizesRef,
@@ -1394,6 +1401,10 @@ function TerminalPane(
     resolveExternalPaneDropTarget,
     onExternalPaneDrop: handleExternalPaneDrop
   })
+
+  useEffect(() => {
+    closeTerminalLinkActions()
+  }, [closeTerminalLinkActions, isActive, isRendererVisible, paneLayoutRevision])
 
   useEffect(() => {
     const manager = managerRef.current
@@ -1556,6 +1567,7 @@ function TerminalPane(
         worktreeId,
         cwd,
         startup: CODEX_ACCOUNT_RESTART_STARTUP,
+        mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,
         paneKittyKeyboardModesRef,
@@ -2126,9 +2138,44 @@ function TerminalPane(
       })
     }
 
+    const onAppMenuSelectionAction = (event: Event): void => {
+      const activeElement = document.activeElement
+      if (
+        !(activeElement instanceof Element) ||
+        !container.contains(activeElement) ||
+        isEditableTarget(activeElement) ||
+        activeElement.closest('[data-terminal-search-root]') ||
+        isInsideNativeChatRoot(activeElement)
+      ) {
+        return
+      }
+      const manager = managerRef.current
+      const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      const action = (event as CustomEvent<AppMenuSelectionAction>).detail
+      if (action === 'copy') {
+        if (!pane.terminal.getSelection()) {
+          return
+        }
+        event.preventDefault()
+        void copyTerminalSelection({
+          terminal: pane.terminal,
+          writeClipboardText: window.api.ui.writeTerminalClipboardText
+        }).catch(() => undefined)
+        return
+      }
+      if (action === 'select-all') {
+        event.preventDefault()
+        pane.terminal.selectAll()
+      }
+    }
+
     container.addEventListener('keydown', onKeyPaste, { capture: true })
     container.addEventListener('paste', onPaste, { capture: true })
     window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+    window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
     return () => {
       if (pasteSuppressionTimerId !== null) {
         window.clearTimeout(pasteSuppressionTimerId)
@@ -2136,6 +2183,7 @@ function TerminalPane(
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
       window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+      window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
     }
   }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
 
@@ -2476,6 +2524,49 @@ function TerminalPane(
     forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
+  const {
+    executionHostId: quickCommandExecutionHostId,
+    hosts: quickCommandHosts,
+    refreshRemoteHost: refreshQuickCommandRemoteHost,
+    remoteHostLoadFailed: quickCommandHostLoadFailed,
+    remoteHostPending: quickCommandHostOwnershipPending
+  } = useTerminalQuickCommandHosts(worktreeId, contextMenu.open)
+  const visibleQuickCommandHosts = useMemo(
+    () =>
+      quickCommandHosts.map((host) => {
+        const commands = host.commands.filter(isTerminalQuickCommandComplete)
+        return {
+          globalCommands: commands.filter(
+            (command) => getTerminalQuickCommandScope(command).type === 'global'
+          ),
+          hostId: host.hostId,
+          label: host.label,
+          repoCommands: commands.filter((command) => {
+            const scope = getTerminalQuickCommandScope(command)
+            return (
+              scope.type === 'repo' &&
+              terminalQuickCommandMatchesWorkspaceProject(command, {
+                commandHostId: host.hostId,
+                projectHostSetups: projectHostSetupProjection.setups,
+                targetHostId: quickCommandExecutionHostId,
+                targetRepoId: quickCommandRepoId
+              })
+            )
+          })
+        }
+      }),
+    [
+      projectHostSetupProjection.setups,
+      quickCommandExecutionHostId,
+      quickCommandHosts,
+      quickCommandRepoId
+    ]
+  )
+  useEffect(() => {
+    if (contextMenu.open) {
+      refreshQuickCommandRemoteHost()
+    }
+  }, [contextMenu.open, refreshQuickCommandRemoteHost])
   const getContextMenuLeafId = useCallback((): string | null => {
     const paneId = contextMenu.menuPaneId
     const manager = managerRef.current
@@ -2829,6 +2920,10 @@ function TerminalPane(
     resolveAgentForLeaf(contextMenuLeafId)
   )
   // Each toggle gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
+  // The pane-level disconnected card owns the bottom strip while it is up; see the error toast below.
+  const activePaneShowsUnreachableCard = Boolean(
+    activePane && ptyRecoveryStatesByPaneId[activePane.id]?.unreachablePane
+  )
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   return (
@@ -2896,8 +2991,12 @@ function TerminalPane(
         )
       })}
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
-          toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
-      {terminalError && isActive && !showSshReconnectOverlay ? (
+          toast was painting over it (same bottom strip) with the raw ssh:connect failure.
+          The pane's own disconnected card owns the same strip and the same story, and the toast
+          outranks it at z-50 — so it covered BOTH of its actions and made the affordance
+          unclickable. Naming only the connection overlay here was the gap: the card is raised for
+          a per-pane failure that leaves the connection up, which is exactly when this fires. */}
+      {terminalError && isActive && !showSshReconnectOverlay && !activePaneShowsUnreachableCard ? (
         <TerminalErrorToast
           error={terminalError}
           onDismiss={dismissTerminalError}
@@ -2948,11 +3047,12 @@ function TerminalPane(
             <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
               <NativeChatView
                 terminalTabId={tabId}
+                isVisible={isRendererVisible}
                 paneKey={makePaneKey(tabId, chatPane.leafId)}
                 targetPtyId={chatPanePtyId}
                 launchAgent={chatPaneLaunchAgent}
                 resolvedAgent={chatPaneResolvedAgent}
-                onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
+                onSwitchToTerminal={switchNativeChatToTerminal}
                 readTerminalScreen={readNativeChatTerminalScreen}
                 contextMenuActions={{
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
@@ -3000,6 +3100,7 @@ function TerminalPane(
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
         onCopy={() => void contextMenu.onCopy()}
+        onSelectAll={contextMenu.onSelectAll}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
@@ -3014,14 +3115,15 @@ function TerminalPane(
         isNativeChatView={contextMenuIsChatView}
         onToggleNativeChat={handleContextMenuToggleNativeChat}
         onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
-        repoQuickCommands={repoQuickCommands}
-        globalQuickCommands={globalQuickCommands}
+        quickCommandHosts={visibleQuickCommandHosts}
+        quickCommandHostLoadFailed={quickCommandHostLoadFailed}
+        quickCommandHostOwnershipPending={quickCommandHostOwnershipPending}
         quickCommandRepoLabel={quickCommandRepoLabel}
         onQuickCommand={contextMenu.onQuickCommand}
-        onAddQuickCommand={
+        onAddQuickCommand={(hostId) =>
           quickCommandRepoId
-            ? () => openQuickCommandEditor({ type: 'repo', repoId: quickCommandRepoId })
-            : () => openQuickCommandEditor({ type: 'global' })
+            ? openQuickCommandEditor({ type: 'repo', repoId: quickCommandRepoId }, hostId)
+            : openQuickCommandEditor({ type: 'global' }, hostId)
         }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
@@ -3030,10 +3132,15 @@ function TerminalPane(
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
       />
+      <TerminalLinkActionPopover
+        request={terminalLinkActionRequest}
+        onClose={closeTerminalLinkActions}
+      />
       {/* Why: repos is a broad store slice; only subscribe while the editor is visible. */}
       {quickCommandEditorOpen ? (
         <TerminalQuickCommandEditorDialog
           command={quickCommandDraft}
+          hostId={quickCommandEditorHostId}
           onOpenChange={setQuickCommandEditorOpen}
           onSave={saveQuickCommand}
         />
@@ -3104,12 +3211,20 @@ function TerminalPane(
               return null
             }
             return createPortal(
-              <TerminalRemoteRuntimeReconnectBanner
+              <TerminalPaneDisconnectedBanner
                 key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
                 phase={recoveryState.phase}
+                variant={recoveryState.unreachablePane ? 'ssh-pane' : 'remote-runtime'}
                 onReconnect={() => {
+                  const unreachable = recoveryState.unreachablePane
+                  if (unreachable) {
+                    unreachable.onRetry()
+                    return
+                  }
                   paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
                 }}
+                onStartNewTerminal={recoveryState.unreachablePane?.onStartNewTerminal}
+                onRestoreTerminalFocus={() => pane.terminal.focus()}
               />,
               pane.container,
               `remote-runtime-reconnect-${pane.id}`

@@ -21,7 +21,7 @@ function textGenerationRecipeIsConfigured(
   actionId: SourceControlTextActionId,
   recipe: TextGenerationRecipeConfiguration | null | undefined
 ): boolean {
-  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'agentId')) {
+  if (Object.hasOwn(recipe ?? {}, 'agentId')) {
     return true
   }
   if (

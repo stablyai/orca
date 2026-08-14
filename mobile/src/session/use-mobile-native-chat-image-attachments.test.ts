@@ -87,7 +87,6 @@ describe('useMobileNativeChatImageAttachments', () => {
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     pick.mockReset()
     // Stale markers and write locks live at module scope (they outlive the
     // screen), so they also outlive a test.
@@ -101,20 +100,9 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   function mount(args: HookArgs): void {
-    const original = console.error
-    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
-      if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...a)
+    act(() => {
+      renderer = create(createElement(Harness, { args }))
     })
-    try {
-      act(() => {
-        renderer = create(createElement(Harness, { args }))
-      })
-    } finally {
-      spy.mockRestore()
-    }
   }
 
   function update(args: HookArgs): void {

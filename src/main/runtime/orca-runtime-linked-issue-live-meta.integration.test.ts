@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../git/worktree', async () => ({
   ...(await vi.importActual<typeof WorktreeModule>('../git/worktree')),
-  listWorktrees: mocks.listWorktrees
+  listWorktrees: mocks.listWorktrees,
+  listWorktreesStrict: mocks.listWorktrees
 }))
 
 vi.mock('../git/status', async () => ({

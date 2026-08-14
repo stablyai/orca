@@ -272,6 +272,7 @@ function isDashboardCard(value: unknown): boolean {
     (card.executionHostId === undefined ||
       (isBoundedString(card.executionHostId, MAX_ID_LENGTH) &&
         normalizeExecutionHostId(card.executionHostId) !== null)) &&
+    isOptionalBoundedString(card.hostLabel, MAX_LABEL_LENGTH) &&
     (card.workspaceKind === undefined ||
       (typeof card.workspaceKind === 'string' &&
         DASHBOARD_WORKSPACE_KINDS.has(card.workspaceKind))) &&
@@ -307,6 +308,7 @@ function isDashboardTerminalInput(value: unknown): boolean {
     isOptionalBoundedString(input.osRelease, MAX_LABEL_LENGTH) &&
     typeof input.windowsShiftEnterEncoding === 'string' &&
     WINDOWS_SHIFT_ENTER_ENCODINGS.has(input.windowsShiftEnterEncoding) &&
+    typeof input.ctrlEnterCsiU === 'boolean' &&
     typeof input.kittyKeyboardAdvertised === 'boolean'
   )
 }

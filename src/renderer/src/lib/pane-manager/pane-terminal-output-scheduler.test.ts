@@ -1038,6 +1038,50 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('\x1b[?2026h\x1b[?25lpartial', expect.any(Function))
   })
 
+  // Why: issue #8754 — ConPTY splits Codex spinner frames into an open chunk and a
+  // close chunk; hold and coalesce each cancelled the other's fallback timer, so a
+  // visible pane never repainted until the tab was blurred.
+  it('keeps repainting when synchronized frames alternate hold and coalesce chunks', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    const writeFrameOpen = (frame: number): void => {
+      writeTerminalOutput(terminal, `\x1b[?2026h\x1b[?25l\x1b[10;5HWorking ${frame}`, {
+        foreground: true,
+        forceForegroundRefresh: true,
+        stripTransientCursorShows: true,
+        holdForeground: true
+      })
+    }
+    // Codex shows the cursor before the end marker, so this never hits the immediate-drain escape.
+    const writeFrameClose = (): void => {
+      writeTerminalOutput(terminal, '\x1b[10;8H\x1b[?25h\x1b[?2026l', {
+        foreground: true,
+        forceForegroundRefresh: true,
+        stripTransientCursorShows: true,
+        coalesceForeground: true
+      })
+    }
+
+    writeFrameOpen(0)
+    vi.advanceTimersByTime(100)
+    writeFrameClose()
+    vi.advanceTimersByTime(100)
+    writeFrameOpen(1)
+    vi.advanceTimersByTime(60)
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+
+    for (let frame = 2; frame < 8; frame += 1) {
+      writeFrameClose()
+      vi.advanceTimersByTime(100)
+      writeFrameOpen(frame)
+      vi.advanceTimersByTime(100)
+    }
+
+    expect(terminal.write.mock.calls.length).toBeGreaterThanOrEqual(4)
+  })
+
   it('safety-flushes latency-sensitive synchronized holds without a visible input delay', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -1676,5 +1720,169 @@ describe('pane terminal output scheduler', () => {
     // Advancing further must not rediscover the dead entry.
     vi.advanceTimersByTime(100)
     expect(throwing.write).toHaveBeenCalledTimes(1)
+  })
+
+  describe('queue memory retention (STA-3567)', () => {
+    // Why 2 MB: comfortably above BACKGROUND_CHUNK_CHARS (16 K), so every drain leaves a residual slice.
+    const CHUNK_CHARS = 2 * 1024 * 1024
+    const TERMINALS = 8
+
+    function collect(): number {
+      const gc = (globalThis as { gc?: () => void }).gc
+      if (!gc) {
+        throw new Error('global.gc unavailable - config/vitest.config.ts must pass --expose-gc')
+      }
+      gc()
+      gc()
+      return process.memoryUsage().heapUsed
+    }
+
+    it('releases chunks it has already drained past', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput } = await loadScheduler()
+
+      // Why many medium chunks: compactConsumedChunks only splices once chunkIndex reaches 64,
+      // so below that the drained slots stay in the array and must be cleared individually.
+      const CHUNKS_PER_TERMINAL = 40
+      const CHUNK = 48 * 1024
+      const SINKS = 4
+
+      let writtenChars = 0
+      const terminals = Array.from({ length: SINKS }, () => ({
+        write: (data: string, callback?: () => void) => {
+          writtenChars += data.length
+          callback?.()
+        }
+      }))
+
+      const baseline = collect()
+
+      for (const [index, terminal] of terminals.entries()) {
+        for (let chunk = 0; chunk < CHUNKS_PER_TERMINAL; chunk += 1) {
+          writeTerminalOutput(
+            terminal,
+            String.fromCharCode(65 + index) +
+              String.fromCharCode(48 + (chunk % 10)) +
+              'q'.repeat(CHUNK - 2),
+            { foreground: false, latencySensitive: false }
+          )
+        }
+      }
+
+      const debug = (
+        globalThis as {
+          __terminalOutputSchedulerDebug?: { snapshot: () => { queuedChars: number } }
+        }
+      ).__terminalOutputSchedulerDebug
+      if (!debug) {
+        throw new Error('scheduler debug API unavailable')
+      }
+
+      const TAIL_CHARS = 64 * 1024
+      let ticks = 0
+      while (debug.snapshot().queuedChars > TAIL_CHARS && ticks < 40000) {
+        vi.advanceTimersByTime(4)
+        ticks += 1
+      }
+
+      const queuedChars = debug.snapshot().queuedChars
+      const retainedBytes = collect() - baseline
+
+      // Sanity: the queues really drained down, and none hit the backlog cap.
+      expect(writtenChars).toBeGreaterThan(SINKS * CHUNKS_PER_TERMINAL * CHUNK * 0.9)
+      expect(queuedChars).toBeGreaterThan(0)
+      expect(queuedChars).toBeLessThanOrEqual(TAIL_CHARS)
+
+      // The defect: ~39 drained-past slots per terminal kept their strings alive uncharged.
+      expect(retainedBytes).toBeLessThan(2 * 1024 * 1024)
+    })
+
+    it('does not pin the parent when a producer enqueues a slice', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput } = await loadScheduler()
+
+      // Why a slice: agent-status-osc.ts and the restore-overlap trims hand the scheduler
+      // strings cut from a much larger buffer. The queue must own its copy rather than
+      // trusting every producer to flatten first (STA-3567 review round 2).
+      const KEEP_CHARS = 64 * 1024
+      const sinks = Array.from({ length: TERMINALS }, () => ({
+        write: (_data: string, callback?: () => void) => callback?.()
+      }))
+
+      const baseline = collect()
+
+      for (const [index, sink] of sinks.entries()) {
+        const parent = String.fromCharCode(65 + index) + 'q'.repeat(CHUNK_CHARS - 1)
+        writeTerminalOutput(sink, parent.slice(parent.length - KEEP_CHARS), {
+          foreground: false,
+          latencySensitive: false
+        })
+      }
+
+      const retainedBytes = collect() - baseline
+
+      // 8 x 64 KB of real payload must not keep 8 x 2 MB of parents alive.
+      expect(retainedBytes).toBeLessThan(4 * 1024 * 1024)
+    })
+
+    it('drops the parent chunk once only a small tail is still queued', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput } = await loadScheduler()
+
+      // Why a hand-rolled write: vi.fn() retains every argument in mock.calls, which would
+      // dominate the measurement with the very bytes the queue is supposed to have released.
+      let writtenChars = 0
+      const makeSink = (): { write: (data: string, callback?: () => void) => void } => ({
+        write: (data: string, callback?: () => void) => {
+          writtenChars += data.length
+          callback?.()
+        }
+      })
+      const terminals = Array.from({ length: TERMINALS }, makeSink)
+
+      // Why baseline BEFORE enqueueing: the queue owns a copy of every chunk, so a baseline
+      // taken after enqueue already contains the parents this test must prove get released,
+      // and the assertion would hold even with residual flattening disabled.
+      const baseline = collect()
+
+      for (const [index, terminal] of terminals.entries()) {
+        // Built and dropped inline so only the queue's own copy stays reachable.
+        writeTerminalOutput(
+          terminal,
+          String.fromCharCode(65 + index) + 'q'.repeat(CHUNK_CHARS - 1),
+          { foreground: false, latencySensitive: false }
+        )
+      }
+
+      const debug = (
+        globalThis as {
+          __terminalOutputSchedulerDebug?: { snapshot: () => { queuedChars: number } }
+        }
+      ).__terminalOutputSchedulerDebug
+      if (!debug) {
+        throw new Error('scheduler debug API unavailable')
+      }
+
+      // Why stop early: the leak is what a PARTIALLY drained queue pins. Draining to empty
+      // frees the chunks either way, so a full drain cannot observe the defect.
+      const TAIL_CHARS = 64 * 1024
+      let ticks = 0
+      while (debug.snapshot().queuedChars > TAIL_CHARS && ticks < 20000) {
+        vi.advanceTimersByTime(4)
+        ticks += 1
+      }
+
+      const queuedChars = debug.snapshot().queuedChars
+      const retainedBytes = collect() - baseline
+
+      // Sanity: nearly everything drained, but a real tail is still queued - otherwise
+      // there is no residual slice to hold a parent chunk and the measurement is meaningless.
+      expect(writtenChars).toBeGreaterThan(TERMINALS * CHUNK_CHARS * 0.9)
+      expect(queuedChars).toBeGreaterThan(0)
+      expect(queuedChars).toBeLessThanOrEqual(TAIL_CHARS)
+
+      // The defect: those few queued KB pinned 8 x 2 MB of chunks (~16 MB).
+      expect(retainedBytes).toBeLessThan(4 * 1024 * 1024)
+    })
   })
 })

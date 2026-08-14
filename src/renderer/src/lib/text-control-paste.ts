@@ -1,4 +1,5 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../shared/utf8-byte-limits'
 import {
   createTextControlCancelledResult,
   createTextControlPastedResult,
@@ -34,29 +35,12 @@ export type {
   TextControlPasteSource
 } from './text-control-paste-model'
 
-function getCodePointUtf8ByteLength(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
-
 export function measureTextControlPasteByteLength(
   text: string,
   options: { stopAfterBytes?: number } = {}
 ): TextControlPasteByteLengthMeasurement {
   const { byteLength, exceededLimit } = measurePastePayloadMetadata(text, options)
   return { byteLength, exceededLimit }
-}
-
-export function getTextControlPasteByteLength(text: string): number {
-  return measureTextControlPasteByteLength(text).byteLength
 }
 
 export async function measureTextControlPasteByteLengthWithYield(
@@ -127,26 +111,6 @@ export function shouldHandleTextControlPaste(
         }
   const directMaxBytes = options.directMaxBytes ?? TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
   return measurement.exceededLimit || measurement.byteLength > directMaxBytes
-}
-
-function getNextChunkBoundary(text: string, startIndex: number, maxBytes: number): number {
-  let byteLength = 0
-  let index = startIndex
-
-  while (index < text.length) {
-    const codePoint = text.codePointAt(index) ?? 0
-    const codeUnitLength = codePoint > 0xffff ? 2 : 1
-    const nextByteLength = getCodePointUtf8ByteLength(codePoint)
-
-    if (byteLength > 0 && byteLength + nextByteLength > maxBytes) {
-      break
-    }
-
-    byteLength += nextByteLength
-    index += codeUnitLength
-  }
-
-  return index
 }
 
 function dispatchTextControlInputEvent(
@@ -283,7 +247,7 @@ export async function pasteTextIntoTextControl(
         })
       }
 
-      const nextIndex = getNextChunkBoundary(text, textIndex, chunkMaxBytes)
+      const nextIndex = getUtf8ChunkEndIndex(text, textIndex, chunkMaxBytes)
       const chunk = text.slice(textIndex, nextIndex)
       const caret = target.selectionStart ?? target.value.length
       target.setRangeText(chunk, caret, caret, 'end')

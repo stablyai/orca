@@ -19,6 +19,8 @@ export type {
 
 export type PtyProviderBufferSnapshot = {
   data: string
+  /** Live state that can be restored without an alternate-screen frame. */
+  frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
   scrollbackAnsi?: string
   cols: number
@@ -30,12 +32,18 @@ export type PtyProviderBufferSnapshot = {
   oscLinks?: TerminalOscLinkRange[]
   alternateScreen?: boolean
   pendingEscapeTailAnsi?: string
+  /** Effective kitty keyboard flags PROVEN at this snapshot's own `seq`
+   *  boundary. Absent means the source could not prove them; readers must not
+   *  rewrite that silence into a known `0`. */
+  kittyKeyboardFlags?: number
 }
 
 export type PtySpawnOptions = {
   cols: number
   rows: number
   cwd?: string
+  /** Exact per-spawn cwd already proven by main; providers validate any other resolved path. */
+  prevalidatedCwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
   /** Main-validated home provenance for an automatic Codex session resume. */
@@ -114,8 +122,9 @@ export type IPtyProvider = {
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
-  attach(id: string): Promise<void>
-  hasPty?: (id: string) => boolean
+  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
+  /** Three-valued: null means the provider cannot see this id right now — absence is unproven, never dead. */
+  hasPty?: (id: string) => boolean | null
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): void

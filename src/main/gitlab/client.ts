@@ -26,7 +26,7 @@ import {
   acquire,
   classifyGlabError,
   classifyJobLogError,
-  classifyListIssuesError,
+  classifyListFetchError,
   isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
@@ -36,6 +36,7 @@ import {
   glabApiWithHeaders,
   glabExecFileAsync,
   parseGlabAuthStatusHosts,
+  parseGlabJsonList,
   release,
   resolveIssueSource,
   type LocalGitExecOptions,
@@ -321,7 +322,11 @@ export async function getMergeRequestForBranch(
         [
           'api',
           ...glabHostnameArgs(projectRef, connectionId),
-          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1`
+          // Why: GitLab does not proactively recompute merge status on list endpoints, so this row
+          // can sit at `unchecked` forever — and the sidebar merge button gates on MERGEABLE. Ask
+          // for the async recalculation (best-effort; ignored for non-Developers when
+          // `restrict_merge_status_recheck` is on) so polling converges instead of stalling.
+          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
@@ -464,7 +469,7 @@ export async function listMergeRequests(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const data = JSON.parse(stdout) as Parameters<typeof mapMRToWorkItem>[0][]
+      const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(stdout)
       return {
         items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
         page,
@@ -474,14 +479,13 @@ export async function listMergeRequests(
         totalPages: data.length < perPage ? page : page + 1
       }
     } catch (err) {
-      const stderr = err instanceof Error ? err.message : String(err)
       return {
         items: [],
         page,
         perPage,
         totalCount: 0,
         totalPages: 0,
-        error: classifyListIssuesError(stderr)
+        error: classifyListFetchError(err)
       }
     } finally {
       release()
@@ -501,7 +505,7 @@ export async function listMergeRequests(
       [...glabHostnameArgs(projectRef, connectionId), path],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = JSON.parse(body) as Parameters<typeof mapMRToWorkItem>[0][]
+    const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(body)
     return {
       items: data.map((d) => mapMRToWorkItem(d, repoId, projectRef)),
       page,
@@ -513,14 +517,13 @@ export async function listMergeRequests(
         Math.max(1, Math.ceil(parseHeaderInt(headers['x-total'], 0) / perPage))
     }
   } catch (err) {
-    const stderr = err instanceof Error ? err.message : String(err)
     return {
       items: [],
       page,
       perPage,
       totalCount: 0,
       totalPages: 0,
-      error: classifyListIssuesError(stderr)
+      error: classifyListFetchError(err)
     }
   } finally {
     release()
@@ -684,7 +687,7 @@ export async function fetchIssuesAsWorkItems(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = JSON.parse(stdout) as Parameters<typeof mapIssueToWorkItem>[0][]
+    const data = parseGlabJsonList<Parameters<typeof mapIssueToWorkItem>[0]>(stdout)
     return {
       items: data.map((d) => mapIssueToWorkItem(d, projectRef.path, projectRef)),
       error: undefined
@@ -692,7 +695,7 @@ export async function fetchIssuesAsWorkItems(
   } catch (err) {
     return {
       items: [],
-      error: classifyListIssuesError(err instanceof Error ? err.message : String(err))
+      error: classifyListFetchError(err)
     }
   } finally {
     release()

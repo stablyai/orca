@@ -27,7 +27,7 @@ describe('agent session option catalog', () => {
         ?.options.find((option) => option.id === 'effort')
       return effort?.kind.type === 'select' ? effort.kind.choices.map((choice) => choice.value) : []
     }
-    const upToXhigh = ['low', 'medium', 'high', 'xhigh']
+    const upToXhigh = ['minimal', 'low', 'medium', 'high', 'xhigh']
 
     expect(levelsFor('gpt-5.6-sol')).toEqual([...upToXhigh, 'max', 'ultra'])
     expect(levelsFor('gpt-5.6-terra')).toEqual([...upToXhigh, 'max', 'ultra'])
@@ -42,6 +42,7 @@ describe('agent session option catalog', () => {
       (candidate) => candidate.id === 'effort'
     )
     expect(option?.kind.type === 'select' ? option.kind.choices.map((c) => c.value) : []).toEqual([
+      'minimal',
       'low',
       'medium',
       'high',

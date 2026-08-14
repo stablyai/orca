@@ -23,7 +23,7 @@ const issue = {
 
 type SaveIssueInternals = {
   resolveLinearAssignee(input: string, teamId: string, workspaceId: string): Promise<string>
-  resolveLinearAgentState(input: string, states: unknown[]): unknown | null
+  resolveLinearAgentState(input: string, states: unknown[]): unknown
   buildLinearSaveUpdate(
     params: { labels?: string[] },
     current: typeof issue,

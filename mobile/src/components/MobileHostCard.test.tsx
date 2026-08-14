@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCredentialStatus, HostProfile } from '../transport/types'
@@ -38,10 +38,6 @@ const loaded: HostWorktreeInfo = {
 
 describe('MobileHostCard', () => {
   let renderer: ReactTestRenderer | null = null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
 
   afterEach(() => {
     act(() => renderer?.unmount())

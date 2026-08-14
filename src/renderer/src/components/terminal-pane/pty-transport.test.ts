@@ -14,6 +14,7 @@ import {
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import { PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES } from './pty-input-write-queue'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
@@ -95,6 +96,24 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('threads provider command ownership through the spawn IPC', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      command: 'printf ready',
+      commandDelivery: 'provider'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(window.api.pty.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'printf ready',
+        commandDelivery: 'provider'
+      })
+    )
+    transport.disconnect()
+  })
+
   it('routes a rejected daemon write to the owning transport recovery callback', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const recovery = vi.fn()
@@ -105,6 +124,29 @@ describe('createIpcPtyTransport', () => {
 
     expect(recovery).toHaveBeenCalledOnce()
     transport.disconnect()
+  })
+
+  it('routes a thrown renderer write to the owning transport recovery callback', async () => {
+    const failure = new Error('ipc write failed')
+    vi.mocked(window.api.pty.write).mockImplementation(() => {
+      throw failure
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const recovery = vi.fn()
+      const transport = createIpcPtyTransport({})
+      await transport.connect({ url: '', callbacks: { onWriteUnavailable: recovery } })
+
+      expect(transport.sendInput('input')).toBe(true)
+      expect(transport.sendInput('later-input')).toBe(false)
+
+      expect(recovery).toHaveBeenCalledOnce()
+      expect(warn).toHaveBeenCalledWith('[pty-input-write-queue] drain failed:', failure)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('does not create a second kill authority when a mounted pane detaches', async () => {
@@ -216,6 +258,29 @@ describe('createIpcPtyTransport', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] })
+    )
+  })
+
+  it('drops a retired launch token from a suppressed fresh spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({
+      env: {
+        ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111',
+        ORCA_AGENT_LAUNCH_TOKEN: 'retired-token'
+      },
+      launchToken: 'retired-token'
+    })
+
+    await transport.connect({ url: '', callbacks: {}, suppressSavedStartup: true })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: { ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111' }
+      })
+    )
+    expect(spawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ launchToken: 'retired-token' })
     )
   })
 
@@ -801,7 +866,8 @@ describe('createIpcPtyTransport', () => {
       await vi.runOnlyPendingTimersAsync()
 
       expect(vi.getTimerCount()).toBe(0)
-      expect(onTitleChange).not.toHaveBeenCalled()
+      // Why: the literal is the pane's identity once (#10258); the redraw repeats stay ignored.
+      expect(onTitleChange.mock.calls).toEqual([['Cursor Agent', 'Cursor Agent']])
     } finally {
       vi.useRealTimers()
     }
@@ -1126,6 +1192,36 @@ describe('createIpcPtyTransport', () => {
 
       expect(window.api.pty.write).toHaveBeenCalledTimes(2)
       expect(window.api.pty.write).toHaveBeenNthCalledWith(2, 'pty-1', 'tail')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds immediate cooked replies without shedding ordinary-path lookalikes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({})
+      const first = '\x1b[?10000;1n'
+      const ordinary = '\x1b]10;user-ordinary-marker\x1b\\'
+      const replies = Array.from({ length: 10_000 }, (_, index) => `\x1b[?${index};1n`)
+
+      await transport.connect({ url: '', callbacks: {} })
+      expect(transport.sendInputImmediate(first)).toBe(true)
+      expect(transport.sendInput(ordinary)).toBe(true)
+      for (const reply of replies) {
+        expect(transport.sendInputImmediate(reply)).toBe(true)
+      }
+
+      await vi.runAllTimersAsync()
+
+      expect(vi.mocked(window.api.pty.write).mock.calls).toEqual([
+        ['pty-1', first],
+        ['pty-1', ordinary],
+        ...replies
+          .slice(-PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES)
+          .map((reply) => ['pty-1', reply])
+      ])
     } finally {
       vi.useRealTimers()
     }
@@ -1708,7 +1804,7 @@ describe('createIpcPtyTransport', () => {
     expect(writeMock).not.toHaveBeenCalled()
   })
 
-  it('preserves snapshot dimensions when reattaching', async () => {
+  it('preserves snapshot dimensions and split alt-frame strings when reattaching', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi.fn().mockResolvedValue({
       id: 'pty-reattach',
@@ -1716,7 +1812,10 @@ describe('createIpcPtyTransport', () => {
       launchAgent: 'droid',
       snapshot: 'snapshot data',
       snapshotCols: 132,
-      snapshotRows: 43
+      snapshotRows: 43,
+      snapshotPrefixAnsi: 'history and modes',
+      snapshotFrameAnsi: 'visual frame',
+      snapshotFrameRestoreAnsi: 'live state'
     })
 
     ;(globalThis as { window: typeof window }).window = {
@@ -1756,6 +1855,9 @@ describe('createIpcPtyTransport', () => {
       snapshot: 'snapshot data',
       snapshotCols: 132,
       snapshotRows: 43,
+      snapshotPrefixAnsi: 'history and modes',
+      snapshotFrameAnsi: 'visual frame',
+      snapshotFrameRestoreAnsi: 'live state',
       isAlternateScreen: undefined,
       coldRestore: undefined,
       replay: undefined,

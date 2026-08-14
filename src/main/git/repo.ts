@@ -535,17 +535,21 @@ export async function getBaseRefDefault(
 /**
  * Return { ahead, behind } (merge-base-symmetric delta) for localRef vs remoteRef, or null on failure.
  * ahead = commits on localRef not in remoteRef; behind = the reverse. Used by the stale-base dispatch guard (§3.1).
+ * Async because this runs before every orchestration dispatch on Electron main.
  */
-export function getRemoteDrift(
+export async function getRemoteDrift(
   repoPath: string,
   localRef: string,
   remoteRef: string,
   options: LocalGitExecOptions = {}
-): { ahead: number; behind: number } | null {
+): Promise<{ ahead: number; behind: number } | null> {
   try {
-    const stdout = gitExecFileSync(
+    const { stdout } = await gitExecFileAsync(
       ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
-      gitExecOptions(repoPath, options)
+      {
+        ...gitExecOptions(repoPath, options),
+        timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
+      }
     )
     const counts = parseGitRevListAheadBehindCounts(stdout)
     if (counts.status !== 'ok') {
@@ -561,17 +565,20 @@ export function getRemoteDrift(
  * Up to `limit` commit subjects on remoteRef but not localRef, recency order; [] on git failure.
  * Powers the preamble drift section (§3.2) so a worker sees whether stale-base drift touches its area.
  */
-export function getRecentDriftSubjects(
+export async function getRecentDriftSubjects(
   repoPath: string,
   localRef: string,
   remoteRef: string,
   limit: number,
   options: LocalGitExecOptions = {}
-): string[] {
+): Promise<string[]> {
   try {
-    const stdout = gitExecFileSync(
+    const { stdout } = await gitExecFileAsync(
       ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
-      gitExecOptions(repoPath, options)
+      {
+        ...gitExecOptions(repoPath, options),
+        timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
+      }
     )
     return stdout.split('\n').filter((s) => s.trim().length > 0)
   } catch {
@@ -925,7 +932,7 @@ export function parseAndFilterSearchRefDetails(
       .filter((line) => line.length > 0)
       .map((line) => {
         const nul = line.indexOf('\0')
-        if (nul < 0) {
+        if (nul === -1) {
           // Why: no NUL means an unexpected %(refname) format; drop it rather than hand callers an unusable "short" ref.
           return null
         }

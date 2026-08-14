@@ -16,7 +16,6 @@ export function AgentDashboardExperimentalSetting({
 }: AgentDashboardExperimentalSettingProps): React.JSX.Element {
   const enabled = settings.experimentalAgentDashboardPopout === true
   const mode = settings.experimentalAgentDashboardMode ?? 'in-window'
-  const showIdle = settings.experimentalAgentDashboardShowIdle === true
 
   return (
     <SearchableSetting
@@ -97,22 +96,6 @@ export function AgentDashboardExperimentalSetting({
                   )
                 }
               ]}
-            />
-          </div>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 shrink space-y-0.5">
-              <Label>{translate('dashboardPopout.settings.showIdle', 'Show idle agents')}</Label>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'dashboardPopout.settings.showIdleCopy',
-                  'Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default.'
-                )}
-              </p>
-            </div>
-            <SettingsSwitch
-              checked={showIdle}
-              onChange={() => updateSettings({ experimentalAgentDashboardShowIdle: !showIdle })}
-              ariaLabel={translate('dashboardPopout.settings.showIdle', 'Show idle agents')}
             />
           </div>
         </div>

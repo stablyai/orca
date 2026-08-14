@@ -10,6 +10,8 @@ import {
 const SETTINGS = {
   terminalFontSize: 17,
   terminalFontFamily: 'Fira Code',
+  terminalFontWeight: 500,
+  terminalFontWeightBold: 800,
   terminalCursorStyle: 'bar',
   terminalCursorBlink: false,
   terminalLineHeight: 1.4,
@@ -22,6 +24,8 @@ describe('buildPreviewAppearanceOptions', () => {
     const options = buildPreviewAppearanceOptions(SETTINGS, false)
     expect(options.fontSize).toBe(17)
     expect(options.fontFamily).toContain('Fira Code')
+    expect(options.fontWeight).toBe(500)
+    expect(options.fontWeightBold).toBe(800)
     expect(options.cursorStyle).toBe('bar')
     expect(options.cursorBlink).toBe(false)
     expect(options.lineHeight).toBe(1.4)
@@ -61,6 +65,7 @@ describe('buildPreviewTerminalOptions', () => {
         hostPlatform: 'darwin',
         localWindowsConpty: false,
         windowsShiftEnterEncoding: 'alt-enter',
+        ctrlEnterCsiU: false,
         kittyKeyboardAdvertised: true
       }
     })
@@ -77,6 +82,7 @@ describe('buildPreviewTerminalOptions', () => {
         localWindowsConpty: true,
         osRelease: '10.0.22631',
         windowsShiftEnterEncoding: 'alt-enter',
+        ctrlEnterCsiU: false,
         kittyKeyboardAdvertised: false
       }
     })

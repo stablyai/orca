@@ -8,13 +8,12 @@
 // We deliberately keep the JSON merge logic in the existing
 // `installer-utils.ts` and only swap fs primitives — the JSON shape and
 // managed-command matching must stay identical to the local install.
-//
-// See docs/design/agent-status-over-ssh.md §8 (commit #8).
 
 import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
 
-import { isPlainObject, type HooksConfig } from './installer-utils'
+import type { HooksConfig } from './installer-utils'
+import { parseHooksJsonText } from './hooks-json-read'
 
 const DEFAULT_REMOTE_CONFIG_MODE = 0o600
 const REMOTE_SFTP_OPERATION_TIMEOUT_MS = 10_000
@@ -38,12 +37,7 @@ export async function readHooksJsonRemote(
     }
     throw err
   }
-  try {
-    const parsed = JSON.parse(body)
-    return isPlainObject(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  return parseHooksJsonText(body)
 }
 
 /** Atomically write a JSON config to the remote — write to a tmp path then
@@ -87,9 +81,9 @@ export async function writeHooksJsonRemote(
   }
 }
 
-/** Write the managed hook script to the remote and chmod 0o755. POSIX-only —
- *  the relay deliberately does not support Windows-remote in v1 (see design
- *  doc §3 + §6). */
+/** Write the managed hook script to the remote and chmod 0o755. POSIX-only:
+ *  the payload is a shell script and every path here is POSIX-joined, so a
+ *  Windows SSH target would need a separate installer, not a tweak to this one. */
 export async function writeManagedScriptRemote(
   sftp: SFTPWrapper,
   remotePath: string,

@@ -43,7 +43,7 @@ export function resolveAgentLaunchCommand(args: {
   }
   const trailingTokens = args.agentArgs?.trim()
     ? tokenizeStartupCommand(args.agentArgs.trim(), args.shell)
-    : { ok: true as const, tokens: [] }
+    : { ok: true as const, tokens: [], spans: [] }
   if (!trailingTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${trailingTokens.error}` }
   }

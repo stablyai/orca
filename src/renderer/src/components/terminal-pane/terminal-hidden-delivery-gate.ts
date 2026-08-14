@@ -4,7 +4,7 @@
  * The gate only operates when main holds side-effect authority for the PTY
  * (see isMainTerminalSideEffectAuthorityForPty) AND the gate-specific kill
  * switch is on. Callers decide once at pane/watcher creation — the decision
- * picks which mode-2031 responder is registered (byte sidecar vs fact reply),
+ * picks which observer records mode-2031 subscriptions (byte scan vs fact),
  * so it must never flip per chunk.
  */
 import type { GlobalSettings } from '../../../../shared/types'

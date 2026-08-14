@@ -36,6 +36,15 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const [openAiKeyPending, setOpenAiKeyPending] = useState(false)
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
   const mountedRef = useRef(true)
+  // Why: every write here is a read-modify-write of the whole voice object, and the
+  // writers are async (key status probe, save/clear key). Merging onto the render-time
+  // snapshot would resurrect settings that changed while the IPC was in flight — e.g.
+  // reverting `enabled` to false and leaving the microphone picker permanently disabled.
+  // Written in an effect, not during render: the async writers all run post-commit.
+  const voiceSettingsRef = useRef(voiceSettings)
+  useEffect(() => {
+    voiceSettingsRef.current = voiceSettings
+  }, [voiceSettings])
 
   const handlePaneRef = useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null
@@ -45,12 +54,12 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     (updates: Partial<VoiceSettings>): void => {
       updateSettings({
         voice: {
-          ...voiceSettings,
+          ...voiceSettingsRef.current,
           ...updates
         }
       })
     },
-    [updateSettings, voiceSettings]
+    [updateSettings]
   )
 
   useEffect(() => {

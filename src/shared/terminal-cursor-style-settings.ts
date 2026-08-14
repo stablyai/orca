@@ -5,6 +5,10 @@ type TerminalCursorStyleSettings = Pick<
   'terminalCursorStyle' | 'terminalCursorStyleDefaultedToBlock'
 >
 
+function isTerminalCursorStyle(value: unknown): value is GlobalSettings['terminalCursorStyle'] {
+  return value === 'bar' || value === 'block' || value === 'underline'
+}
+
 export function normalizeTerminalCursorStyleDefault(
   settings: Partial<TerminalCursorStyleSettings> | undefined,
   options: { preserveExplicitValue?: boolean } = {}
@@ -15,7 +19,10 @@ export function normalizeTerminalCursorStyleDefault(
   return {
     // Why: prior builds persisted the old bar default into profiles; migrate
     // those inherited values once while preserving later explicit choices.
-    terminalCursorStyle: defaultedToBlock ? (settings?.terminalCursorStyle ?? 'block') : 'block',
+    terminalCursorStyle:
+      defaultedToBlock && isTerminalCursorStyle(settings?.terminalCursorStyle)
+        ? settings.terminalCursorStyle
+        : 'block',
     terminalCursorStyleDefaultedToBlock: true
   }
 }

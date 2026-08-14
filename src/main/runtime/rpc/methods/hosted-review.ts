@@ -105,5 +105,21 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         draft: params.draft,
         useTemplate: params.useTemplate
       })
+  }),
+  defineMethod({
+    name: 'hostedReview.createStacked',
+    params: HostedReviewCreate,
+    handler: async (params, { runtime }) =>
+      runtime.createStackedHostedReview({
+        repoSelector: params.repo,
+        worktreeSelector: params.worktree,
+        provider: params.provider,
+        base: params.base,
+        head: params.head,
+        title: params.title,
+        body: params.body,
+        draft: params.draft,
+        useTemplate: params.useTemplate
+      })
   })
 ]

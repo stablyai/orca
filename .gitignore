@@ -94,6 +94,7 @@ docs/**
 !docs/readme/
 !docs/readme/**
 !docs/STYLEGUIDE.md
+!docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
 !docs/reference/git-compatibility.md
@@ -101,7 +102,12 @@ docs/**
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/remote-wire-compatibility.md
+!docs/reference/terminal-session-behavior-contract.md
+!docs/reference/terminal-session-correctness-handoff-2026-08-07/
+!docs/reference/terminal-session-correctness-handoff-2026-08-07/**
+!docs/reference/renderer-agent-status-performance.md
 !docs/reference/windows-setup-shell.md
+!docs/reference/worktree-scan-fingerprint.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
@@ -123,6 +129,10 @@ playwright-report/
 /.claude/skills/
 /.agents/skills/
 /skills-lock.json
+
+# Generated Clawpatch state includes machine-local paths and review records.
+/.clawpatch/
+/mobile/.clawpatch/
 
 # Agent hook runtime endpoints (machine-local secrets)
 /agent-hooks/

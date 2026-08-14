@@ -23,7 +23,9 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })
 
-  it('uses a commit-oriented Source Control layout by default', () => {})
+  it('keeps Source Control changes first by default', () => {
+    expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
+  })
 
   it('defaults mobile pairing to discovered network addresses', () => {
     expect(getDefaultSettings('/tmp').mobilePairingCustomAddress).toBeNull()
@@ -65,6 +67,10 @@ describe('getDefaultSettings', () => {
 
   it('defaults the menu bar icon on so the value round-trips across platforms', () => {
     expect(getDefaultSettings('/tmp').showMenuBarIcon).toBe(true)
+  })
+
+  it('shows terminal link actions by default', () => {
+    expect(getDefaultSettings('/tmp').terminalLinkActionPopoverEnabled).toBe(true)
   })
 
   it('confirms before closing pinned tabs by default', () => {

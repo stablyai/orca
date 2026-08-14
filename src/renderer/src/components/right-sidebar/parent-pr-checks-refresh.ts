@@ -151,7 +151,7 @@ async function refreshParentPrChecksCandidate(
         review.number,
         candidate.branch,
         review.headSha,
-        null,
+        review.githubRepository ?? null,
         { repoId: candidate.repo.id, force }
       )
     }

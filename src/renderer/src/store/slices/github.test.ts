@@ -33,6 +33,7 @@ import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from './github-work-items-query-bou
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
+const runtimeEnvironmentSubscribe = vi.fn()
 
 const mockApi = {
   gh: {
@@ -45,6 +46,7 @@ const mockApi = {
     prComments: vi.fn().mockResolvedValue([]),
     addIssueComment: vi.fn(),
     addPRReviewCommentReply: vi.fn(),
+    setPRCommentReaction: vi.fn(),
     resolveReviewThread: vi.fn(),
     listWorkItems: vi.fn(),
     countWorkItems: vi.fn().mockResolvedValue(0),
@@ -61,7 +63,8 @@ const mockApi = {
     create: vi.fn()
   },
   runtimeEnvironments: {
-    call: runtimeEnvironmentTransportCall
+    call: runtimeEnvironmentTransportCall,
+    subscribe: runtimeEnvironmentSubscribe
   },
   cache: {
     getGitHub: vi.fn().mockResolvedValue(null),
@@ -76,9 +79,30 @@ function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
+  runtimeEnvironmentSubscribe.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
+  runtimeEnvironmentSubscribe.mockImplementation(
+    async (
+      args: RuntimeEnvironmentCallRequest,
+      handlers: {
+        onResponse: (response: unknown) => void
+        onError: (error: { message: string }) => void
+      }
+    ) => {
+      let active = true
+      void Promise.resolve(runtimeEnvironmentCall(args)).then(
+        (response) => active && handlers.onResponse(response),
+        (error) => active && handlers.onError({ message: String(error) })
+      )
+      return {
+        unsubscribe: () => {
+          active = false
+        }
+      }
+    }
+  )
 }
 
 function createTestStore() {
@@ -1443,6 +1467,109 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
     expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
   })
 
+  it('bounds the whole runtime check-detail load when compatibility probing stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeEnvironmentTransportCall.mockImplementation(() => new Promise(() => {}))
+      const store = createTestStore()
+      const repoPath = '/repo'
+      const repoId = 'repo-id'
+
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+        repos: [
+          {
+            id: repoId,
+            path: repoPath,
+            name: 'repo',
+            kind: 'git',
+            executionHostId: 'runtime:env-1'
+          }
+        ]
+      } as unknown as Partial<AppState>)
+
+      const request = store
+        .getState()
+        .fetchPRCheckDetails(repoPath, { checkRunId: 123, checkName: 'build' }, { repoId })
+      const rejection = expect(request).rejects.toThrow('Timed out loading check details.')
+
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await rejection
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shares one timeout budget between runtime compatibility and check details', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+        const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (compatibility) {
+          return new Promise((resolve) => setTimeout(() => resolve(compatibility), 20_000))
+        }
+        return runtimeEnvironmentCall(args)
+      })
+      runtimeEnvironmentCall.mockImplementation(() => new Promise(() => {}))
+      const store = createTestStore()
+      const repoPath = '/repo'
+      const repoId = 'repo-id'
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+        repos: [
+          {
+            id: repoId,
+            path: repoPath,
+            name: 'repo',
+            kind: 'git',
+            executionHostId: 'runtime:env-1'
+          }
+        ]
+      } as unknown as Partial<AppState>)
+
+      const request = store
+        .getState()
+        .fetchPRCheckDetails(repoPath, { checkRunId: 123, checkName: 'build' }, { repoId })
+      let settled = false
+      void request.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      const rejection = expect(request).rejects.toThrow('Timed out loading check details.')
+
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'github.prCheckDetails',
+        params: {
+          repo: repoId,
+          checkRunId: 123,
+          workflowRunId: undefined,
+          checkName: 'build',
+          url: undefined,
+          prRepo: null
+        },
+        timeoutMs: 30_000
+      })
+
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+
+      await rejection
+      expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('loads known local repo check details through local IPC when a runtime is focused', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -1503,6 +1630,7 @@ describe('createGitHubSlice PR comment mutations', () => {
         url: ''
       }
     })
+    mockApi.gh.setPRCommentReaction.mockResolvedValue(true)
   })
 
   it('deduplicates merged PR comments and preserves existing thread metadata', () => {
@@ -1664,6 +1792,153 @@ describe('createGitHubSlice PR comment mutations', () => {
       store.getState().commentsCache[`runtime:env-1::${repoId}::pr-comments::acme/widgets::12`]
         ?.data?.[0]
     ).toMatchObject({ body: 'reply', threadId: 'PRRT_1', path: 'src/a.ts', line: 8 })
+  })
+
+  it('updates cached reactions through local GitHub IPC', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const cacheKey = `${repoId}::pr-comments::acme/widgets::12`
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      commentsCache: {
+        [cacheKey]: {
+          data: [
+            {
+              id: 10,
+              reactionSubjectId: 'IC_10',
+              author: 'reviewer',
+              authorAvatarUrl: '',
+              body: 'Nice',
+              createdAt: '2026-03-28T00:00:00Z',
+              url: ''
+            }
+          ],
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().setPRCommentReaction(repoPath, 12, 'IC_10', 'heart', true, {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(mockApi.gh.setPRCommentReaction).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      reactionSubjectId: 'IC_10',
+      content: 'heart',
+      reacted: true,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      sourceContext: undefined
+    })
+    expect(store.getState().commentsCache[cacheKey]?.data?.[0].reactions).toEqual([
+      { content: 'heart', count: 1, viewerHasReacted: true }
+    ])
+  })
+
+  it('rolls back an optimistic reaction when GitHub rejects it', async () => {
+    let resolveReaction!: (ok: boolean) => void
+    mockApi.gh.setPRCommentReaction.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (resolveReaction = resolve))
+    )
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const cacheKey = `${repoId}::pr-comments::acme/widgets::12`
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      commentsCache: {
+        [cacheKey]: {
+          data: [
+            {
+              id: 10,
+              reactionSubjectId: 'IC_10',
+              author: 'reviewer',
+              authorAvatarUrl: '',
+              body: 'Nice',
+              createdAt: '2026-03-28T00:00:00Z',
+              url: '',
+              reactions: [{ content: 'heart', count: 2, viewerHasReacted: false }]
+            }
+          ],
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    const pending = store.getState().setPRCommentReaction(repoPath, 12, 'IC_10', 'heart', true, {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+    const optimisticEntry = store.getState().commentsCache[cacheKey]
+    store.setState({
+      commentsCache: {
+        ...store.getState().commentsCache,
+        [cacheKey]: {
+          ...optimisticEntry,
+          data: (optimisticEntry?.data ?? []).map((comment) => ({
+            ...comment,
+            reactions: [
+              ...(comment.reactions ?? []),
+              { content: 'eyes' as const, count: 1, viewerHasReacted: false }
+            ]
+          }))
+        }
+      }
+    })
+    resolveReaction(false)
+    const ok = await pending
+
+    expect(ok).toBe(false)
+    expect(store.getState().commentsCache[cacheKey]?.data?.[0].reactions).toEqual([
+      { content: 'heart', count: 2, viewerHasReacted: false },
+      { content: 'eyes', count: 1, viewerHasReacted: false }
+    ])
+  })
+
+  it('routes reaction mutations through the workspace runtime', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-pr-reaction',
+      ok: true,
+      result: true,
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().setPRCommentReaction(repoPath, 12, 'PRRC_10', 'rocket', true, {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.setPRCommentReaction',
+      params: {
+        repo: repoId,
+        reactionSubjectId: 'PRRC_10',
+        content: 'rocket',
+        reacted: true,
+        prRepo: { owner: 'Acme', repo: 'Widgets' }
+      },
+      timeoutMs: 30_000
+    })
+    expect(mockApi.gh.setPRCommentReaction).not.toHaveBeenCalled()
   })
 
   it('does not mutate the PR comments cache when GitHub omits the comment payload', async () => {
@@ -5276,6 +5551,447 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
 describe('createGitHubSlice.refreshAllGitHub', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  it('publishes no store update when the cache sweep changes nothing', () => {
+    const store = createTestStore()
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      rightSidebarOpen: false,
+      worktreesByRepo: { 'repo-1': [makePRRefreshWorktree()] }
+    } as unknown as Partial<AppState>)
+    let publications = 0
+    const unsubscribe = store.subscribe(() => {
+      publications += 1
+    })
+
+    store.getState().refreshAllGitHub()
+    unsubscribe()
+
+    expect(publications).toBe(0)
+  })
+
+  it('still clears populated comments when no workspace refresh is needed', () => {
+    const store = createTestStore()
+    store.setState({
+      commentsCache: { cached: { data: [], fetchedAt: 1 } },
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      rightSidebarOpen: false
+    } as unknown as Partial<AppState>)
+    let publications = 0
+    const unsubscribe = store.subscribe(() => {
+      publications += 1
+    })
+
+    store.getState().refreshAllGitHub()
+    unsubscribe()
+
+    expect(store.getState().commentsCache).toEqual({})
+    expect(publications).toBe(1)
+  })
+
+  it('skips repo and worktree identity reads when no GitHub decoration is visible', () => {
+    const store = createTestStore()
+    const repoId = 'repo-idle'
+    let repoIdentityReads = 0
+    let worktreeRepoIdentityReads = 0
+    const repo = { id: repoId, path: '/idle', name: 'idle', kind: 'git' as const }
+    const worktree = makePRRefreshWorktree({
+      id: 'wt-idle',
+      repoId,
+      path: '/idle/worktrees/idle',
+      branch: 'feature/idle'
+    })
+    Object.defineProperty(repo, 'id', {
+      configurable: true,
+      enumerable: true,
+      get: () => {
+        repoIdentityReads += 1
+        return repoId
+      }
+    })
+    Object.defineProperty(worktree, 'repoId', {
+      configurable: true,
+      enumerable: true,
+      get: () => {
+        worktreeRepoIdentityReads += 1
+        return repoId
+      }
+    })
+    store.setState({
+      repos: [repo],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      rightSidebarOpen: false,
+      commentsCache: { cached: { data: [], fetchedAt: 1 } },
+      worktreesByRepo: { [repoId]: [worktree] }
+    } as unknown as Partial<AppState>)
+    repoIdentityReads = 0
+    worktreeRepoIdentityReads = 0
+
+    store.getState().refreshAllGitHub()
+
+    expect(store.getState().commentsCache).toEqual({})
+    expect(repoIdentityReads).toBe(0)
+    expect(worktreeRepoIdentityReads).toBe(0)
+    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(mockApi.gh.issue).not.toHaveBeenCalled()
+  })
+
+  it('bounds stale PR repo identity reads to a constant amount per repo and worktree', () => {
+    const store = createTestStore()
+    const repoCount = 128
+    let repoIdentityReads = 0
+    const repoIds = Array.from({ length: repoCount }, (_, index) => `repo-${index}`)
+    const repos = repoIds.map((repoId) => {
+      const repo = { id: repoId, path: `/${repoId}`, name: repoId, kind: 'git' as const }
+      return Object.defineProperty(repo, 'id', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          repoIdentityReads += 1
+          return repoId
+        }
+      })
+    })
+    const worktreesByRepo = Object.fromEntries(
+      repoIds.map((repoId, index) => [
+        repoId,
+        [
+          makePRRefreshWorktree({
+            id: `wt-${index}`,
+            repoId,
+            path: `/${repoId}/worktrees/feature`,
+            branch: `feature/${index}`,
+            lastActivityAt: index
+          })
+        ]
+      ])
+    )
+    store.setState({
+      repos,
+      groupBy: 'repo',
+      worktreeCardProperties: ['pr'],
+      rightSidebarOpen: false,
+      worktreesByRepo
+    } as unknown as Partial<AppState>)
+    repoIdentityReads = 0
+
+    store.getState().refreshAllGitHub()
+
+    expect(repoIdentityReads).toBeLessThanOrEqual(repoCount * 5)
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledTimes(5)
+  })
+
+  it('stops repo indexing after a sparse enabled match', () => {
+    const store = createTestStore()
+    const repoCount = 128
+    let repoIdentityReads = 0
+    const repos = Array.from({ length: repoCount }, (_, index) => {
+      const repoId = `repo-${index}`
+      const repo = { id: repoId, path: `/${repoId}`, name: repoId, kind: 'git' as const }
+      return Object.defineProperty(repo, 'id', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          repoIdentityReads += 1
+          return repoId
+        }
+      })
+    })
+    store.setState({
+      repos,
+      groupBy: 'repo',
+      worktreeCardProperties: ['pr'],
+      rightSidebarOpen: false,
+      worktreesByRepo: {
+        'repo-0': [
+          makePRRefreshWorktree({
+            id: 'wt-sparse',
+            repoId: 'repo-0',
+            path: '/repo-0/worktrees/feature',
+            branch: 'feature/sparse'
+          })
+        ]
+      }
+    } as unknown as Partial<AppState>)
+    repoIdentityReads = 0
+
+    store.getState().refreshAllGitHub()
+
+    expect(repoIdentityReads).toBeLessThanOrEqual(5)
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledOnce()
+  })
+
+  it('does not restart repo indexing for repeated missing IDs', () => {
+    const store = createTestStore()
+    const repoCount = 128
+    let repoIdentityReads = 0
+    const repos = Array.from({ length: repoCount }, (_, index) => {
+      const repoId = `repo-${index}`
+      const repo = { id: repoId, path: `/${repoId}`, name: repoId, kind: 'git' as const }
+      return Object.defineProperty(repo, 'id', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          repoIdentityReads += 1
+          return repoId
+        }
+      })
+    })
+    const missingWorktrees = Array.from({ length: repoCount }, (_, index) =>
+      makePRRefreshWorktree({
+        id: `wt-missing-${index}`,
+        repoId: `missing-${index}`,
+        branch: `feature/missing-${index}`
+      })
+    )
+    store.setState({
+      repos,
+      groupBy: 'repo',
+      worktreeCardProperties: ['pr'],
+      rightSidebarOpen: false,
+      worktreesByRepo: { missing: missingWorktrees }
+    } as unknown as Partial<AppState>)
+    repoIdentityReads = 0
+
+    store.getState().refreshAllGitHub()
+
+    expect(repoIdentityReads).toBeLessThanOrEqual(repoCount)
+    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps runtime PR dispatch identity reads linear in PR-status grouping', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-linear-pr',
+      ok: true,
+      result: makePR({ number: 12 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoCount = 128
+    let repoIdentityReads = 0
+    let worktreeIdentityReads = 0
+    const repos = Array.from({ length: repoCount }, (_, index) => {
+      const repoId = `runtime-repo-${index}`
+      const repoPath = `/runtime/repo-${index}`
+      const repo = {
+        id: repoId,
+        path: repoPath,
+        name: repoId,
+        kind: 'git' as const,
+        executionHostId: 'runtime:env-1'
+      }
+      Object.defineProperty(repo, 'id', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          repoIdentityReads += 1
+          return repoId
+        }
+      })
+      return Object.defineProperty(repo, 'path', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          repoIdentityReads += 1
+          return repoPath
+        }
+      })
+    })
+    const worktreesByRepo = Object.fromEntries(
+      repos.map((repo, index) => {
+        const worktreeId = `runtime-wt-${index}`
+        const worktree = makePRRefreshWorktree({
+          id: worktreeId,
+          repoId: repo.id,
+          path: `${repo.path}/worktrees/feature`,
+          branch: `feature/${index}`,
+          linkedPR: 12,
+          lastActivityAt: index
+        })
+        Object.defineProperty(worktree, 'id', {
+          configurable: true,
+          enumerable: true,
+          get: () => {
+            worktreeIdentityReads += 1
+            return worktreeId
+          }
+        })
+        return [repo.id, [worktree]]
+      })
+    )
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos,
+      groupBy: 'pr-status',
+      worktreeCardProperties: ['comment'],
+      worktreesByRepo
+    } as unknown as Partial<AppState>)
+    repoIdentityReads = 0
+    worktreeIdentityReads = 0
+
+    store.getState().refreshAllGitHub()
+
+    await vi.waitFor(() => expect(Object.keys(store.getState().prCache)).toHaveLength(repoCount))
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(repoCount)
+    expect(repoIdentityReads).toBeLessThanOrEqual(repoCount * 20)
+    expect(worktreeIdentityReads).toBeLessThanOrEqual(repoCount * 5)
+  })
+
+  it('keeps runtime issue dispatch repo identity reads linear', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-linear-issue',
+      ok: true,
+      result: null,
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoCount = 128
+    let repoIdentityReads = 0
+    const repos = Array.from({ length: repoCount }, (_, index) => {
+      const repoId = `issue-repo-${index}`
+      const repoPath = `/runtime/issues-${index}`
+      const repo = {
+        id: repoId,
+        path: repoPath,
+        name: repoId,
+        kind: 'git' as const,
+        executionHostId: 'runtime:env-1'
+      }
+      Object.defineProperty(repo, 'id', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          repoIdentityReads += 1
+          return repoId
+        }
+      })
+      return Object.defineProperty(repo, 'path', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          repoIdentityReads += 1
+          return repoPath
+        }
+      })
+    })
+    const worktreesByRepo = Object.fromEntries(
+      repos.map((repo, index) => [
+        repo.id,
+        [
+          makePRRefreshWorktree({
+            id: `issue-wt-${index}`,
+            repoId: repo.id,
+            path: `${repo.path}/worktrees/feature`,
+            linkedIssue: index + 1
+          })
+        ]
+      ])
+    )
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos,
+      groupBy: 'repo',
+      worktreeCardProperties: ['issue'],
+      worktreesByRepo
+    } as unknown as Partial<AppState>)
+    repoIdentityReads = 0
+
+    store.getState().refreshAllGitHub()
+
+    await vi.waitFor(() => expect(Object.keys(store.getState().issueCache)).toHaveLength(repoCount))
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(repoCount)
+    expect(repoIdentityReads).toBeLessThanOrEqual(repoCount * 15)
+  })
+
+  it('keeps the first repo owner when duplicate IDs span hosts', () => {
+    const store = createTestStore()
+    const repoId = 'duplicate-repo'
+    const firstRepo = {
+      id: repoId,
+      path: '/first',
+      name: 'first',
+      kind: 'git' as const,
+      connectionId: 'first',
+      executionHostId: 'ssh:first'
+    }
+    const secondRepo = {
+      id: repoId,
+      path: '/second',
+      name: 'second',
+      kind: 'git' as const,
+      connectionId: 'second',
+      executionHostId: 'ssh:second'
+    }
+    const laterRepo = {
+      id: 'later-repo',
+      path: '/later',
+      name: 'later',
+      kind: 'git' as const
+    }
+    store.setState({
+      repos: [firstRepo, secondRepo, laterRepo],
+      groupBy: 'repo',
+      worktreeCardProperties: ['pr'],
+      rightSidebarOpen: false,
+      sshConnectionStates: new Map([
+        ['first', { status: 'connected' }],
+        ['second', { status: 'connected' }]
+      ]),
+      worktreesByRepo: {
+        first: [
+          makePRRefreshWorktree({
+            id: 'wt-duplicate-first',
+            repoId,
+            path: '/first/worktrees/feature',
+            branch: 'feature/duplicate-first'
+          })
+        ],
+        middle: [
+          makePRRefreshWorktree({
+            id: 'wt-later',
+            repoId: laterRepo.id,
+            path: '/later/worktrees/feature',
+            branch: 'feature/later'
+          })
+        ],
+        last: [
+          makePRRefreshWorktree({
+            id: 'wt-duplicate-last',
+            repoId,
+            path: '/first/worktrees/last',
+            branch: 'feature/duplicate-last'
+          })
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshAllGitHub()
+
+    const duplicateCandidates = mockApi.gh.enqueuePRRefresh.mock.calls
+      .map(([call]) => call.candidate)
+      .filter((candidate) => candidate.repoId === repoId)
+    expect(duplicateCandidates).toHaveLength(2)
+    expect(duplicateCandidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          repoPath: '/first',
+          connectionId: 'first',
+          executionHostId: 'ssh:first'
+        }),
+        expect.objectContaining({
+          repoPath: '/first',
+          connectionId: 'first',
+          executionHostId: 'ssh:first'
+        })
+      ])
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('refreshes stale PR data when source control is the visible PR surface', () => {
@@ -5584,6 +6300,151 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
   })
 })
 
+describe('createGitHubSlice.fetchWorkItems cache identity', () => {
+  const nestedSources = {
+    issues: { owner: 'acme', repo: 'widgets' },
+    prs: { owner: 'acme', repo: 'widgets' },
+    originCandidate: { owner: 'acme', repo: 'widgets' },
+    upstreamCandidate: { owner: 'acme-upstream', repo: 'widgets' }
+  }
+
+  function makeNestedWorkItem(
+    overrides: Partial<GitHubWorkItem> & Pick<GitHubWorkItem, 'id' | 'number' | 'title'>
+  ): Omit<GitHubWorkItem, 'repoId'> {
+    return {
+      type: 'pr',
+      state: 'open',
+      url: `https://github.com/acme/widgets/pull/${overrides.number}`,
+      labels: ['bug', 'needs-review'],
+      updatedAt: '2026-05-22T00:00:00Z',
+      author: 'octocat',
+      authorAvatarUrl: 'https://avatars.example/octocat.png',
+      branchName: 'feature/nested',
+      baseRefName: 'main',
+      headSha: 'abc123def456',
+      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.com' },
+      additions: 12,
+      deletions: 3,
+      changedFiles: 2,
+      reviewDecision: 'REVIEW_REQUIRED',
+      reviewRequests: [
+        { login: 'reviewer', name: 'Reviewer', avatarUrl: 'https://avatars.example/reviewer.png' }
+      ],
+      latestReviews: [
+        { login: 'reviewer', state: 'COMMENTED', avatarUrl: 'https://avatars.example/reviewer.png' }
+      ],
+      assignees: [
+        { login: 'assignee', name: 'Assignee', avatarUrl: 'https://avatars.example/assignee.png' }
+      ],
+      checksSummary: {
+        state: 'pending',
+        total: 4,
+        passed: 1,
+        failed: 0,
+        pending: 3,
+        neutral: 0
+      },
+      mergeable: 'MERGEABLE',
+      ...overrides
+    }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('reuses the cache map, entry, and nested rows on a no-op force refetch', async () => {
+    const store = createTestStore()
+    const items = [
+      makeNestedWorkItem({ id: 'pr:42', number: 42, title: 'First nested PR' }),
+      makeNestedWorkItem({ id: 'pr:43', number: 43, title: 'Second nested PR' })
+    ]
+    mockApi.gh.listWorkItems.mockImplementation(() =>
+      Promise.resolve({
+        items: structuredClone(items),
+        sources: structuredClone(nestedSources)
+      })
+    )
+
+    let now = 1_700_000_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+
+    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
+    const cacheKey = workItemsCacheKey('repo-id', 24, '')
+    const previousCache = store.getState().workItemsCache
+    const previousEntry = previousCache[cacheKey]
+    const previousRows = previousEntry?.data
+    expect(previousRows).toHaveLength(2)
+    expect(previousRows?.[0]?.labels).toEqual(['bug', 'needs-review'])
+    expect(previousRows?.[0]?.assignees?.[0]?.login).toBe('assignee')
+    expect(previousRows?.[0]?.reviewRequests?.[0]?.login).toBe('reviewer')
+    expect(previousRows?.[0]?.prRepo).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'github.com'
+    })
+    expect(previousRows?.[0]?.checksSummary?.state).toBe('pending')
+
+    now += 5_000
+    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '', { force: true })
+
+    const nextCache = store.getState().workItemsCache
+    const nextEntry = nextCache[cacheKey]
+    expect(nextCache).toBe(previousCache)
+    expect(nextEntry).toBe(previousEntry)
+    expect(nextEntry?.data).toBe(previousRows)
+    expect(nextEntry?.data?.[0]).toBe(previousRows?.[0])
+    expect(nextEntry?.data?.[1]).toBe(previousRows?.[1])
+    expect(nextEntry?.sources).toBe(previousEntry?.sources)
+    expect(nextEntry?.fetchedAt).toBe(now)
+    expect(nextEntry?.fetchedAt).toBeGreaterThan(1_700_000_000_000)
+  })
+
+  it('writes a new entry when a nested reviewRequests login changes but reuses the sibling row', async () => {
+    const store = createTestStore()
+    const first = makeNestedWorkItem({ id: 'pr:42', number: 42, title: 'First nested PR' })
+    const second = makeNestedWorkItem({ id: 'pr:43', number: 43, title: 'Second nested PR' })
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: structuredClone([first, second]),
+      sources: structuredClone(nestedSources)
+    })
+
+    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
+    const cacheKey = workItemsCacheKey('repo-id', 24, '')
+    const previousCache = store.getState().workItemsCache
+    const previousEntry = previousCache[cacheKey]
+    const previousRows = previousEntry?.data
+    expect(previousRows).toHaveLength(2)
+
+    const changedFirst = structuredClone(first)
+    const nextReviewer = changedFirst.reviewRequests?.[0]
+    if (nextReviewer) {
+      nextReviewer.login = 'reviewer-updated'
+    }
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [changedFirst, structuredClone(second)],
+      sources: structuredClone(nestedSources)
+    })
+
+    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '', { force: true })
+
+    const nextCache = store.getState().workItemsCache
+    const nextEntry = nextCache[cacheKey]
+    expect(nextCache).not.toBe(previousCache)
+    expect(nextEntry).not.toBe(previousEntry)
+    expect(nextEntry?.data).not.toBe(previousRows)
+    expect(nextEntry?.data?.[0]).not.toBe(previousRows?.[0])
+    expect(nextEntry?.data?.[0]?.reviewRequests?.[0]?.login).toBe('reviewer-updated')
+    expect(nextEntry?.data?.[1]).toBe(previousRows?.[1])
+    expect(nextEntry?.sources).toBe(previousEntry?.sources)
+  })
+})
+
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -5818,17 +6679,18 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
+    const repos: AppState['repos'] = [
+      {
+        id: 'runtime-repo-id',
+        path: '/server/repo',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+    ]
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
-      repos: [
-        {
-          id: 'runtime-repo-id',
-          path: '/server/repo',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          addedAt: 1
-        }
-      ]
+      repos
     } as Partial<AppState>)
 
     await store.getState().fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', {
@@ -5918,17 +6780,18 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'source-runtime' }
     })
     const store = createTestStore()
+    const repos: AppState['repos'] = [
+      {
+        id: 'local-repo-id',
+        path: '/server/repo',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+    ]
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
-      repos: [
-        {
-          id: 'local-repo-id',
-          path: '/server/repo',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          addedAt: 1
-        }
-      ]
+      repos
     } as Partial<AppState>)
 
     const sourceContext = {

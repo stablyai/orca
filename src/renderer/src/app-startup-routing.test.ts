@@ -36,6 +36,10 @@ describe('renderer startup runtime routing', () => {
     const hydrationWorktreesIndex = source.indexOf(
       "timeRendererStartupStep('fetch-hydration-worktrees'"
     )
+    const servicesIndex = source.indexOf(
+      "timeRendererStartupStep('first-window-services-await'",
+      sessionIndex
+    )
     const fullWorktreesIndex = source.indexOf('await actions.fetchAllWorktrees()')
     const lineageIndex = startupBlock.indexOf('actions.fetchWorktreeLineage()')
 
@@ -53,7 +57,8 @@ describe('renderer startup runtime routing', () => {
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
     expect(localReposIndex).toBeLessThan(sessionIndex)
-    expect(sessionIndex).toBeLessThan(hydrationWorktreesIndex)
+    expect(sessionIndex).toBeLessThan(servicesIndex)
+    expect(servicesIndex).toBeLessThan(hydrationWorktreesIndex)
     const hydrationWorktreeBlock = source.slice(
       hydrationWorktreesIndex,
       source.indexOf('await keybindingsPromise')
@@ -463,7 +468,7 @@ describe('renderer startup runtime routing', () => {
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const checkpointStart = source.indexOf(
-      'const shutdownCheckpoint = createShutdownCheckpointGuard(() => {'
+      'const shutdownCheckpoint = createShutdownCheckpointGuard('
     )
     const checkpointEnd = source.indexOf(
       'const persistBeforeUnload = createShutdownCheckpointBeforeUnloadHandler(shutdownCheckpoint)',
@@ -473,13 +478,21 @@ describe('renderer startup runtime routing', () => {
     expect(checkpointEnd).toBeGreaterThan(checkpointStart)
     const checkpointBlock = source.slice(checkpointStart, checkpointEnd)
 
-    expect(checkpointBlock).toContain('const sessionSnapshots = shouldCaptureSession')
+    expect(checkpointBlock).toContain(
+      'let sessionSnapshots: ReturnType<typeof buildWorkspaceSessionHostSnapshots> = []'
+    )
     expect(checkpointBlock).toContain(
       'buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)'
     )
     expect(checkpointBlock).toContain('window.api.app.stageBeforeUnloadSync({')
     expect(checkpointBlock).toContain('sessions: sessionSnapshots')
     expect(checkpointBlock).toContain('ui: buildActiveViewUnloadPatch(freshState)')
+    expect(checkpointBlock).toContain('!isIntentionalAppRestartInProgress()')
+    expect(checkpointBlock).toContain('freshState.openFiles.some((file) => file.isDirty)')
+    expect(checkpointBlock).toContain('sessions: []')
+    expect(checkpointBlock).toContain(
+      'return\n      }\n      window.api.app.stageBeforeUnloadSync({\n        sessions: sessionSnapshots'
+    )
     expect(source).toContain(
       'window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)'
     )

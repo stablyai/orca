@@ -212,7 +212,7 @@ function createMockGuest(
       removeListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         const handlers = debuggerListeners.get(event) ?? []
         const idx = handlers.indexOf(handler)
-        if (idx >= 0) {
+        if (idx !== -1) {
           handlers.splice(idx, 1)
         }
       }),

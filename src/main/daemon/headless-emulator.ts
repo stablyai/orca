@@ -10,14 +10,17 @@ import {
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
+import { readTerminalModes } from './headless-emulator-modes'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
+import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
 import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'
 import {
   installTerminalViewAttributeResponder,
   type TerminalViewAttributeResponder
 } from './terminal-view-attribute-responder'
+import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
@@ -100,21 +103,24 @@ export class HeadlessEmulator {
     }
   }
 
-  /** ConPTY 1.22+ blocks at spawn awaiting a DA1 reply; answers `CSI ?61;4c` and consumes the query so xterm's default `?1;2c` can't double-reply. */
+  /** ConPTY 1.22+ blocks at spawn awaiting a DA1 reply. See startup-device-attributes-responder. */
   installConptyPrimaryDeviceAttributesOverride(): void {
     // Why idempotent: installed at creation and again at spawn-mark time (which can land later), so it's never stacked.
     if (this.conptyDa1OverrideInstalled) {
       return
     }
     this.conptyDa1OverrideInstalled = true
-    this.terminal.parser.registerCsiHandler({ final: 'c' }, (params) => {
-      const isPrimaryQuery = params.length === 0 || (params.length === 1 && params[0] === 0)
-      if (!isPrimaryQuery) {
-        return false
-      }
-      this.emitQueryReply(CONPTY_DA1_RESPONSE)
-      return true
+    installDeviceAttributesResponder({
+      parser: this.terminal.parser,
+      response: CONPTY_DA1_RESPONSE,
+      reply: (data) => this.emitQueryReply(data)
     })
+  }
+
+  /** Why exposed: responder modules install handlers here (see the view-attribute and
+   *  device-attributes responders); the caller owns disposal. */
+  get responderParser(): Terminal['parser'] {
+    return this.terminal.parser
   }
 
   /** Headless core has no theme service, so OSC 4/10/11/12 and DSR ?996n answer from the renderer's pushed attributes; daemon Session must never call this. */
@@ -251,6 +257,7 @@ export class HeadlessEmulator {
         this.restoredOscLinks
       ),
       rehydrateSequences: buildRehydrateSequences(modes),
+      ...buildFrameRestoreSnapshotFields(this.serializer, this.terminal, modes),
       cwd: this.oscText.cwd,
       modes,
       cols: this.terminal.cols,
@@ -261,10 +268,6 @@ export class HeadlessEmulator {
       ...(this.partialEscapeTail.length > 0
         ? { pendingEscapeTailAnsi: this.partialEscapeTail }
         : {})
-    }
-    if (this.partialEscapeTail.length > 0) {
-      // Why a separate field: consumers write their own reset sequences after the body, and any ESC after a dangling partial would abort it.
-      snapshot.pendingEscapeTailAnsi = this.partialEscapeTail
     }
     return snapshot
   }
@@ -336,24 +339,6 @@ export class HeadlessEmulator {
   }
 
   private getModes(): TerminalModes {
-    const buffer = this.terminal.buffer.active
-    const mouseTrackingMode = this.mouseModes.mouseTrackingMode
-    return {
-      bracketedPaste: this.terminal.modes.bracketedPasteMode,
-      mouseTracking: mouseTrackingMode !== 'none',
-      mouseTrackingMode,
-      sgrMouseMode: this.mouseModes.sgrMouseMode,
-      sgrMousePixelsMode: this.mouseModes.sgrMousePixelsMode,
-      applicationCursor:
-        buffer.type === 'normal' ? this.terminal.modes.applicationCursorKeysMode : false,
-      alternateScreen: buffer.type === 'alternate',
-      kittyKeyboardFlags: this.getKittyKeyboardFlags()
-    }
-  }
-
-  private getKittyKeyboardFlags(): number {
-    const flags = (this.terminal as TerminalWithSynchronousWrite)._core?.coreService?.kittyKeyboard
-      ?.flags
-    return typeof flags === 'number' ? flags : 0
+    return readTerminalModes(this.terminal, this.mouseModes)
   }
 }

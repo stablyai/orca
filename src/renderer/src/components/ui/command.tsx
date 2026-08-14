@@ -93,6 +93,7 @@ function CommandInput({
   wrapperClassName,
   iconClassName,
   trailing,
+  ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input> & {
   wrapperClassName?: string
@@ -110,6 +111,7 @@ function CommandInput({
     >
       <SearchIcon className={cn('mr-2 h-4 w-4 shrink-0 opacity-50', iconClassName)} />
       <CommandPrimitive.Input
+        ref={ref}
         data-slot="command-input"
         className={cn(
           'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
