@@ -218,6 +218,96 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
+  it('drops a mid-session OSC 11 reply after the querier has left (shell foreground)', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'zsh'
+    })
+
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([])
+    vi.advanceTimersByTime(200)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
+  it('delivers an in-order OSC 11 reply while the querier still owns the tty', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'gh'
+    })
+
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([OSC_COLOR_REPLY])
+    ingress.drainAndClose()
+  })
+
+  it('keeps Windows-owned WSL replies even when a shell owns the tty', () => {
+    const writes: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'windows-wsl',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'zsh'
+    })
+
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    expect(writes).toEqual([OSC_COLOR_REPLY])
+    ingress.drainAndClose()
+  })
+
+  it('drops a deferred OSC 11 reply if the querier exits before the echo budget flush', async () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    let foreground = 'gh'
+    const probe = scriptedEchoProbe('echoing', 'echoing', 'echoing')
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      echoProbe: probe,
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => foreground
+    })
+
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    await vi.advanceTimersByTimeAsync(40)
+    expect(writes).toEqual([])
+    foreground = 'zsh'
+    await vi.advanceTimersByTimeAsync(200)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
+  it('still writes the in-order 200ms reply when foreground is unknown (#13892)', async () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const echoProbe: PtySlaveEchoProbe = () => new Promise(() => {})
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      echoProbe,
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => null
+    })
+
+    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    await vi.advanceTimersByTimeAsync(199)
+    expect(writes).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(writes).toEqual([COLOR_SCHEME_REPLY])
+    ingress.drainAndClose()
+  })
+
   it('bounds pending writes and unmatched live echo projections', async () => {
     vi.useFakeTimers()
     const writes: string[] = []

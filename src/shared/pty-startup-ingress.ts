@@ -55,7 +55,7 @@ export class PtyStartupIngress {
   constructor(options: PtyStartupIngressOptions) {
     this.intent = options.intent
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
-    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write, options.echoProbe)
+    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options)
     this.onEmission = options.onEmission
     this.queryOpen = options.intent !== undefined
     if (options.intent) {
@@ -95,8 +95,9 @@ export class PtyStartupIngress {
 
   // Live color replies reuse startup's cooked-echo containment (#13137).
   answerLiveQueryReply(reply: string): boolean {
+    // oxfmt-ignore
     return !this.closed && reply.length > 0
-      ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answer(part))
+      ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answer(part, undefined, true))
       : false
   }
 

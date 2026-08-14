@@ -20,6 +20,11 @@ export type PtyStartupIngressOptions = {
    * on backends with no line discipline to read (ConPTY, wsl.exe).
    */
   echoProbe?: PtySlaveEchoProbe
+  /**
+   * Live PTY foreground name (node-pty `.process`). Used only when a deferred
+   * query reply is about to be written, so a shell owner can drop it.
+   */
+  readForegroundProcess?: () => string | null | undefined
 }
 
 export type PtyIngressSourceSpan = {
