@@ -13,6 +13,7 @@ import {
 import { GitHistoryRow } from './GitHistoryRow'
 import { GitHistoryCommitFiles } from './GitHistoryCommitFiles'
 import { useGitHistoryCommitExpansion } from './useGitHistoryCommitExpansion'
+import { useGitHistoryAutoLoad } from './useGitHistoryAutoLoad'
 import { GitHistoryVirtualRows } from './git-history-virtual-rows'
 import {
   GitHistoryCommitContextMenu,
@@ -96,12 +97,25 @@ export function GitHistoryPanel({
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   // Why: state, not a ref — the virtualizer must re-run once the scroller element attaches.
   const [historyScrollElement, setHistoryScrollElement] = useState<HTMLDivElement | null>(null)
+  // Why: state for the same reason — the observer has nothing to watch until the button mounts,
+  // which happens after the first page decides there is more to load.
+  const [loadMoreTrigger, setLoadMoreTrigger] = useState<HTMLButtonElement | null>(null)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
 
   const { expanded, filesByCommit, toggleExpand } = useGitHistoryCommitExpansion({
     result,
     worktreeId,
     onLoadCommitFiles
+  })
+
+  // Scrolling to the bottom fetches the next page on its own; the button stays for keyboard use,
+  // for a page that failed, and for anywhere IntersectionObserver is unavailable.
+  useGitHistoryAutoLoad({
+    trigger: loadMoreTrigger,
+    scrollElement: historyScrollElement,
+    result,
+    enabled: canLoadMore && !loading,
+    onLoadMore: () => onLoadMore?.()
   })
 
   const stopResize = useCallback((): void => {
@@ -354,6 +368,7 @@ export function GitHistoryPanel({
           {canLoadMore && (
             <div className="flex justify-center px-6 py-1.5">
               <Button
+                ref={setLoadMoreTrigger}
                 type="button"
                 variant="ghost"
                 size="xs"
@@ -361,6 +376,7 @@ export function GitHistoryPanel({
                 disabled={loading}
                 onClick={onLoadMore}
               >
+                {loading && <RefreshCw className="size-3 animate-spin" />}
                 {translate(
                   'auto.components.right.sidebar.GitHistoryPanel.loadMoreCommits',
                   'Load more commits'
