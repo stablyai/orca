@@ -1,5 +1,7 @@
 // On first agent work in a fresh workspace, replace the auto-generated creature branch (e.g. `you/Nautilus`) with a short work-derived name.
-import type { GlobalSettings, Repo } from '../../shared/types'
+import type { AgentType } from '../../shared/agent-status-types'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -36,6 +38,7 @@ export type FirstWorkBranchRenameEvent = {
   state: string
   prompt: string | undefined
   assistantMessage: string | undefined
+  agentType?: AgentType
   isReplay: boolean | undefined
 }
 
@@ -119,7 +122,13 @@ export async function maybeAutoRenameBranchOnFirstWork(
   inFlightWorktreeIds.add(worktreeId)
   try {
     // settled = definitive verdict (renamed/ineligible); false = transient bail to retry later.
-    const settled = await runAutoRename(worktreeId, prompt, event.assistantMessage, deps)
+    const settled = await runAutoRename(
+      worktreeId,
+      prompt,
+      event.assistantMessage,
+      isTuiAgent(event.agentType) ? event.agentType : undefined,
+      deps
+    )
     if (settled) {
       rememberSettledWorktreeId(worktreeId)
     }
@@ -136,6 +145,7 @@ async function runAutoRename(
   worktreeId: string,
   prompt: string,
   assistantMessage: string | undefined,
+  agentType: TuiAgent | undefined,
   deps: FirstWorkBranchRenameDeps
 ): Promise<boolean> {
   // `stop` = permanent skip (logs which gate bailed); `retry` = transient; `clearError` drops a stale "rename failed" badge on a benign final state.
@@ -157,6 +167,7 @@ async function runAutoRename(
       worktreeId,
       prompt,
       assistantMessage,
+      agentType,
       deps,
       stop,
       retry
@@ -208,7 +219,13 @@ async function runAutoRename(
 
   const settings = deps.getSettings()
   const hostKey = getCommitMessageModelDiscoveryHostKey(repo.connectionId ?? null)
-  const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
+  const resolvedParams = resolveTextGenerationParams(
+    settings,
+    hostKey,
+    'branchName',
+    repo,
+    agentType
+  )
   if (!resolvedParams.ok) {
     // Why: a generation-step failure (vs a benign skip) is user-actionable, so surface it on the card.
     deps.setRenameError(worktreeId, resolvedParams.error)

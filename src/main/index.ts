@@ -328,7 +328,7 @@ import {
   shouldDriveSyntheticAgentTitleFromHook,
   type SyntheticAgentTitleProfile
 } from '../shared/synthetic-agent-title'
-import type { AgentStatusState } from '../shared/agent-status-types'
+import type { AgentStatusState, AgentType } from '../shared/agent-status-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
 import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
@@ -517,7 +517,12 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
   paneKey: string
   tabId: string | undefined
   worktreeId: string | undefined
-  payload: { state: string; prompt?: string; lastAssistantMessage?: string }
+  payload: {
+    state: string
+    prompt?: string
+    lastAssistantMessage?: string
+    agentType?: AgentType
+  }
   isReplay: boolean | undefined
 }): void {
   const currentStore = store
@@ -533,6 +538,7 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
       state: event.payload.state,
       prompt: event.payload.prompt,
       assistantMessage: event.payload.lastAssistantMessage,
+      agentType: event.payload.agentType,
       isReplay: event.isReplay
     },
     {
