@@ -132,30 +132,29 @@ describe('reuseEqualCatalogRows', () => {
   })
 
   // Leaving rejected candidates in place is only affordable because the group
-  // scan is itself capped. Nothing else in this suite fails if that cap is
-  // dropped, so count reads: one to fingerprint the incoming row, then at most
-  // DUPLICATE_ID_INDEX_THRESHOLD confirms — never one per group member.
+  // scan is itself capped, and nothing else in this suite fails if that cap is
+  // dropped. Assert the confirms do not SCALE with the group — an absolute bound
+  // would pin the threshold constant instead, which is a tuning knob.
   it('bounds the confirms inside an all-colliding fingerprint group', () => {
-    const groupSize = 200
-    const current = Array.from({ length: groupSize }, () => ({ id: 'dup', at: new Date(0) }))
-    let reads = 0
-    const incoming = [
-      {
-        id: 'dup',
-        get at(): Date {
-          reads++
-          return new Date(0)
+    const confirmsFor = (groupSize: number): number => {
+      // One fingerprint, no two rows structurally equal: distinct Date objects.
+      const current = Array.from({ length: groupSize }, () => ({ id: 'dup', at: new Date(0) }))
+      let reads = 0
+      const incoming = [
+        {
+          id: 'dup',
+          get at(): Date {
+            reads++
+            return new Date(0)
+          }
         }
-      }
-    ]
+      ]
 
-    // Every row shares one fingerprint and none is structurally equal (distinct
-    // Date objects), so an uncapped group scan would confirm all 200.
-    const reconciled = reuseEqualCatalogRows(current as never, incoming as never)
+      expect(reuseEqualCatalogRows(current as never, incoming as never)[0]).toBe(incoming[0])
+      return reads
+    }
 
-    expect(reconciled[0]).toBe(incoming[0])
-    expect(reads).toBeLessThanOrEqual(9)
-    expect(reads).toBeLessThan(groupSize)
+    expect(confirmsFor(400)).toBe(confirmsFor(50))
   })
 
   it('still matches when a large bucket cannot be fingerprinted', () => {
@@ -190,7 +189,6 @@ describe('reuseEqualCatalogRows', () => {
 
     // No match, so the incoming row is kept — a missed reuse costs identity, never correctness.
     expect(reconciled[0]).toBe(incoming[0])
-    expect(reads).toBeLessThanOrEqual(8)
     expect(reads).toBeLessThan(bucketSize)
   })
 })

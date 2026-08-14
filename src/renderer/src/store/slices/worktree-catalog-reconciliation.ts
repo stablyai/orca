@@ -2,11 +2,13 @@ import { structuralValuesEqualIgnoringUndefined } from '../../../../shared/struc
 
 type CatalogRow = { id: string }
 
-// Above this many rows sharing an id, matching switches from a linear scan to a
-// fingerprint index: scanning costs one deep compare per candidate, so an
+// Above this many rows sharing an id, matching switches from a linear scan to
+// a fingerprint index: scanning costs one deep compare per candidate, so an
 // unbounded bucket would be O(k^2). Below it the scan is cheaper than building
-// an index, and that is where every live caller sits — both key on ids that are
-// unique by construction, so buckets stay at 1-3.
+// an index, and that is where every live caller sits — but not because ids are
+// globally unique. areWorktreesEqual compares unfiltered cross-host lists in
+// which one worktree path legitimately repeats, so a bucket is bounded by the
+// hosts sharing that path, which is why it stays far below the threshold.
 const DUPLICATE_ID_INDEX_THRESHOLD = 8
 
 export function reuseEqualCatalogRows<T extends CatalogRow>(
