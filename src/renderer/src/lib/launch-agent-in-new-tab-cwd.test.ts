@@ -21,6 +21,7 @@ const store = {
   queueTabInitialCwd: mockQueueTabInitialCwd,
   queueTabStartupCommand: vi.fn(),
   setActiveTabType: vi.fn(),
+  setActiveTabTypeForWorktree: vi.fn(),
   setTabBarOrder: vi.fn()
 }
 

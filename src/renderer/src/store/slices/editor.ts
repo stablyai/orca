@@ -491,6 +491,8 @@ export type EditorSlice = {
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
   activeTabType: WorkspaceVisibleTabType
   setActiveTabType: (type: WorkspaceVisibleTabType) => void
+  /** Stamps one worktree's remembered tab type; only touches the visible pane when that worktree is the viewed one. */
+  setActiveTabTypeForWorktree: (worktreeId: string, type: WorkspaceVisibleTabType) => void
   openFile: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options?: {
@@ -1726,6 +1728,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeTabTypeByWorktree: worktreeId
           ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
           : s.activeTabTypeByWorktree
+      }
+    }),
+
+  setActiveTabTypeForWorktree: (worktreeId, type) =>
+    set((s) => {
+      const isViewed = worktreeId === s.activeWorktreeId
+      if (
+        s.activeTabTypeByWorktree[worktreeId] === type &&
+        (!isViewed || s.activeTabType === type)
+      ) {
+        // Why: preserve the root reference on a no-op so session persistence/runtime sync don't fan out.
+        return s
+      }
+      return {
+        // Why: a launch into a background worktree must not flip the pane the user is looking at.
+        ...(isViewed ? { activeTabType: type } : {}),
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: type }
       }
     }),
 

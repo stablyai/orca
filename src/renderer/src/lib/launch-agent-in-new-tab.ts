@@ -247,8 +247,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     onPromptDelivered?.()
   }
 
-  // Why: without setActiveTabType('terminal') a worktree showing an editor keeps rendering it and the new tab stays hidden.
-  store.setActiveTabType('terminal')
+  // Why: without this a worktree showing an editor keeps rendering it and the new tab stays hidden. Stamp the
+  // launch target, not the viewed worktree, so launching into a background worktree can't displace the user's pane.
+  store.setActiveTabTypeForWorktree(worktreeId, 'terminal')
 
   // Why: persist tab-bar order so reconcileTabOrder doesn't fall back to terminals-first and jump the new tab to index 0.
   const fresh = useAppStore.getState()

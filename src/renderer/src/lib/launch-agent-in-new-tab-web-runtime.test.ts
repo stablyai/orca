@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
   closeTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
-  setActiveTabType: vi.fn()
+  setActiveTabType: vi.fn(),
+  setActiveTabTypeForWorktree: vi.fn()
 }))
 
 const store = {
@@ -42,6 +43,7 @@ const store = {
   closeTab: mocks.closeTab,
   queueTabStartupCommand: vi.fn(),
   setActiveTabType: mocks.setActiveTabType,
+  setActiveTabTypeForWorktree: mocks.setActiveTabTypeForWorktree,
   setTabBarOrder: vi.fn(),
   setAgentStatus: vi.fn(),
   seedNativeChatLaunchPrompt: vi.fn(),
@@ -97,7 +99,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     })
     expect(mocks.createTab).not.toHaveBeenCalled()
     await Promise.resolve()
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.setActiveTabTypeForWorktree).toHaveBeenCalledWith('wt-1', 'terminal')
     expect(mocks.closeTab).toHaveBeenCalledWith('stale-agent-tab', { reason: 'cleanup' })
   })
 

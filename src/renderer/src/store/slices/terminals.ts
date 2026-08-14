@@ -1477,7 +1477,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...s.layoutByWorktree,
           [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
         },
-        activeTabId: shouldActivate ? tab.id : orphanCleanupPatch.activeTabId,
+        // Why: global activeTabId is the visible tab, so only repoint it for the viewed worktree — a launch into a background worktree must not displace what the user is looking at (mirrors the guard in activateTab).
+        activeTabId:
+          shouldActivate && worktreeId === s.activeWorktreeId
+            ? tab.id
+            : orphanCleanupPatch.activeTabId,
         activeTabIdByWorktree: {
           ...orphanCleanupPatch.activeTabIdByWorktree,
           [worktreeId]: nextActiveTabIdForWorktree

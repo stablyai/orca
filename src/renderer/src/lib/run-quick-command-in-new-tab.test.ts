@@ -5,6 +5,7 @@ type MockStoreState = {
   createTab: ReturnType<typeof vi.fn>
   queueTabStartupCommand: ReturnType<typeof vi.fn>
   setActiveTabType: ReturnType<typeof vi.fn>
+  setActiveTabTypeForWorktree: ReturnType<typeof vi.fn>
   setTabBarOrder: ReturnType<typeof vi.fn>
   setRecentQuickCommandForGroup: ReturnType<typeof vi.fn>
   tabsByWorktree: Record<string, { id: string }[]>
@@ -39,6 +40,7 @@ function createStoreState(): MockStoreState {
     createTab: vi.fn(() => ({ id: 'tab-new' })),
     queueTabStartupCommand: vi.fn(),
     setActiveTabType: vi.fn(),
+    setActiveTabTypeForWorktree: vi.fn(),
     setTabBarOrder: vi.fn(),
     setRecentQuickCommandForGroup: vi.fn(),
     tabsByWorktree: { 'wt-1': [{ id: 'tab-existing' }, { id: 'tab-new' }] },
