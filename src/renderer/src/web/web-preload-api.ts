@@ -52,6 +52,7 @@ import {
   getDefaultWorkspaceSession,
   getWorktreeCardModeProperties,
   normalizeAgentActivityDisplayMode,
+  normalizeAgentRowDisplayFields,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
 } from '../../../shared/constants'
@@ -4022,6 +4023,9 @@ function mergeWebUIState(
       safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    ),
+    agentRowDisplayFields: normalizeAgentRowDisplayFields(
+      safeUpdates.agentRowDisplayFields ?? base.agentRowDisplayFields
     ),
     usagePercentageDisplay: normalizeUsagePercentageDisplay(
       safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay

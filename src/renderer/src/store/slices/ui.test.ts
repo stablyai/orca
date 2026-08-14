@@ -1992,6 +1992,24 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().agentActivityDisplayMode).toBe('compact')
   })
+
+  it('persists and normalizes agent row display fields', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setAgentRowDisplayFields(['model', 'bogus' as never, 'provider-icon'])
+
+    expect(store.getState().agentRowDisplayFields).toEqual(['provider-icon', 'model'])
+    expect(setUI).toHaveBeenCalledWith({ agentRowDisplayFields: ['provider-icon', 'model'] })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentRowDisplayFields: ['relative-time', 'nope' as never]
+      })
+    )
+    expect(store.getState().agentRowDisplayFields).toEqual(['relative-time'])
+  })
 })
 
 describe('createUISlice settings navigation', () => {

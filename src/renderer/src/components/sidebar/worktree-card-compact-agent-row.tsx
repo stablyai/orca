@@ -11,6 +11,7 @@ import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
+import { useAgentRowDisplayFields } from '@/components/dashboard/use-agent-row-display-fields'
 
 function formatShortTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -115,17 +116,19 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
+  const { showProviderIcon, showSecondaryStatus, showModel, showRelativeTime } =
+    useAgentRowDisplayFields()
   // Why: subagent child rows carry the child's NAME (e.g. "pr-reviewer") in
   // agentType, which is not an iconable agent and would render the unknown
   // "?" glyph. Nesting under the parent already conveys identity.
-  const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
+  const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent' || !showProviderIcon
   const dotState = getAgentDotState(agent)
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
-  const secondary = getCompactAgentSecondary(agent)
-  const model = agent.entry.model?.trim() ?? ''
-  const shortTime = getCompactAgentTime(agent, now)
+  const secondary = showSecondaryStatus ? getCompactAgentSecondary(agent) : ''
+  const model = showModel ? (agent.entry.model?.trim() ?? '') : ''
+  const shortTime = showRelativeTime ? getCompactAgentTime(agent, now) : null
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
 
   const handleActivate = useCallback(

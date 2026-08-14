@@ -23,6 +23,7 @@ import type {
   UpdateStatus,
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
+  AgentRowDisplayField,
   ProjectOrderBy,
   WorktreeCardProperty,
   WorktreeCardMode,
@@ -76,11 +77,13 @@ import {
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
+  DEFAULT_AGENT_ROW_DISPLAY_FIELDS,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
   normalizeAgentActivityDisplayMode,
+  normalizeAgentRowDisplayFields,
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
@@ -896,6 +899,8 @@ export type UISlice = {
   setWorktreeCardProperties: (properties: readonly WorktreeCardProperty[]) => void
   agentActivityDisplayMode: AgentActivityDisplayMode
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
+  agentRowDisplayFields: AgentRowDisplayField[]
+  setAgentRowDisplayFields: (fields: readonly AgentRowDisplayField[]) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
   workspaceBoardOpacity: number
@@ -2149,6 +2154,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ agentActivityDisplayMode: normalized }).catch(console.error)
     set({ agentActivityDisplayMode: normalized })
   },
+  agentRowDisplayFields: [...DEFAULT_AGENT_ROW_DISPLAY_FIELDS],
+  setAgentRowDisplayFields: (fields) => {
+    const normalized = normalizeAgentRowDisplayFields(fields)
+    window.api.ui.set({ agentRowDisplayFields: normalized }).catch(console.error)
+    set({ agentRowDisplayFields: normalized })
+  },
 
   workspaceStatuses: cloneDefaultWorkspaceStatuses(),
   setWorkspaceStatuses: (statuses) => {
@@ -2489,6 +2500,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
         _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
         agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
+        agentRowDisplayFields: normalizeAgentRowDisplayFields(ui.agentRowDisplayFields),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),

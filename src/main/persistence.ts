@@ -130,6 +130,7 @@ import {
   getWorktreeCardModeProperties,
   isDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
+  normalizeAgentRowDisplayFields,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
@@ -6138,6 +6139,7 @@ export class Store {
       agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
         this.state.ui?.agentActivityDisplayMode
       ),
+      agentRowDisplayFields: normalizeAgentRowDisplayFields(this.state.ui?.agentRowDisplayFields),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
@@ -6236,6 +6238,10 @@ export class Store {
         updates.agentActivityDisplayMode !== undefined
           ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
           : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
+      agentRowDisplayFields:
+        sanitizedUpdates.agentRowDisplayFields !== undefined
+          ? normalizeAgentRowDisplayFields(sanitizedUpdates.agentRowDisplayFields)
+          : normalizeAgentRowDisplayFields(this.state.ui?.agentRowDisplayFields),
       workspaceStatuses:
         sanitizedUpdates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)

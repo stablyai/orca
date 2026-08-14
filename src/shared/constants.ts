@@ -10,6 +10,12 @@ import type {
   WorkspaceSessionState,
   AgentActivityDisplayMode
 } from './types'
+import {
+  AGENT_ROW_DISPLAY_FIELDS,
+  DEFAULT_AGENT_ROW_DISPLAY_FIELDS,
+  agentRowShowsField,
+  normalizeAgentRowDisplayFields
+} from './agent-row-display-fields'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
@@ -52,6 +58,13 @@ export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
 export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
 export const DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY = 0.9
+
+export {
+  AGENT_ROW_DISPLAY_FIELDS,
+  DEFAULT_AGENT_ROW_DISPLAY_FIELDS,
+  agentRowShowsField,
+  normalizeAgentRowDisplayFields
+}
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
@@ -490,6 +503,7 @@ export function getDefaultUIState(): PersistedUIState {
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
+    agentRowDisplayFields: [...DEFAULT_AGENT_ROW_DISPLAY_FIELDS],
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardColumnWidth: 308,

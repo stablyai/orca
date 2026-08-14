@@ -13,6 +13,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { useAgentRowDisplayFields } from './use-agent-row-display-fields'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -104,6 +105,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
+  const { showProviderIcon, showSecondaryStatus, showModel, showRelativeTime } =
+    useAgentRowDisplayFields()
   const [expanded, setExpanded] = useState(false)
   const handleToggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev)
@@ -143,12 +146,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
-  const model = agent.entry.model?.trim() ?? ''
+  const model = showModel ? (agent.entry.model?.trim() ?? '') : ''
   // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
   const isWorking = agent.state === 'working'
-  const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
-  const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
-  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  const toolName = showSecondaryStatus && isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolInput = showSecondaryStatus && isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  const lastAssistantMessage = showSecondaryStatus
+    ? (agent.entry.lastAssistantMessage?.trim() ?? '')
+    : ''
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
   const isLineageChild = lineage?.depth === 1
@@ -166,8 +171,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
-  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
-  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
+  const startedTimeAgo =
+    showRelativeTime && startedAt !== null ? formatTimeAgo(startedAt, now) : null
+  const doneTimeAgo = showRelativeTime && doneAt !== null ? formatTimeAgo(doneAt, now) : null
   const relativeTimestamp = doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = []
   if (startedTimeAgo !== null) {
@@ -250,7 +256,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           </TooltipContent>
         </Tooltip>
         {/* Why: subagent rows skip the icon — agentType holds a child name, not an iconable agent, so it would render the unknown "?" glyph. */}
-        {!hideIdentityIcon && agent.rowSource !== 'subagent' && (
+        {showProviderIcon && !hideIdentityIcon && agent.rowSource !== 'subagent' && (
           <span className="inline-flex shrink-0" title={identityTitle}>
             <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
           </span>
@@ -306,7 +312,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       />
       <DashboardAgentRowMessage
         expanded={expanded}
-        isInterrupted={isInterrupted}
+        isInterrupted={showSecondaryStatus && isInterrupted}
         lastAssistantMessage={lastAssistantMessage}
       />
     </div>

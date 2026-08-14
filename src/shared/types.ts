@@ -3396,6 +3396,9 @@ export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
+/** Optional fields on compact/full agent rows in the workspace sidebar. */
+export type AgentRowDisplayField = 'provider-icon' | 'secondary-status' | 'model' | 'relative-time'
+
 export type StatusBarItem =
   | 'claude'
   | 'codex'
@@ -3517,6 +3520,8 @@ export type PersistedUIState = {
   /** One-shot migration flag for deriving card properties from the two worktree card modes. */
   _worktreeCardModeDefaulted?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
+  /** Which optional agent-row fields are visible; absent means all on. */
+  agentRowDisplayFields?: AgentRowDisplayField[]
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number

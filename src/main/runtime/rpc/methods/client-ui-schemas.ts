@@ -17,6 +17,7 @@ import {
   normalizeWorktreeCardProperties,
   WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/worktree-card-properties'
+import { AGENT_ROW_DISPLAY_FIELDS } from '../../../../shared/agent-row-display-fields'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 import type { TaskProvider } from '../../../../shared/types'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields'
@@ -34,9 +35,8 @@ const UnknownRecordArray = z.array(UnknownRecord)
 type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
 // Derived from the shared union so a new card property cannot drift out of the
 // client schema — it previously omitted 'cli' and rejected the whole payload.
-const WorktreeCardPropertyParam = z.enum(WORKTREE_CARD_PROPERTIES)
 const WorktreeCardProperties = z
-  .array(WorktreeCardPropertyParam)
+  .array(z.enum(WORKTREE_CARD_PROPERTIES))
   .transform((value) => normalizeWorktreeCardProperties(value))
 const STATIC_RIGHT_SIDEBAR_TABS = [
   'explorer',
@@ -224,6 +224,7 @@ const UiUpdateFields = z
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
+    agentRowDisplayFields: z.array(z.enum(AGENT_ROW_DISPLAY_FIELDS)).optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
