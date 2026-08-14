@@ -625,6 +625,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
+    ORCA_IMAGE_PROTOCOL: 'kitty',
     // Why: TUIs feature-gate on TERM_PROGRAM_VERSION; ORCA_APP_VERSION is inherited from the forking main process.
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     // Why: `supports-hyperlinks` gates OSC 8 on a TERM_PROGRAM allowlist excluding Orca; force it since xterm.js parses OSC 8 for clickable links.
@@ -727,6 +728,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+      addWslEnvKeys(env, ['ORCA_IMAGE_PROTOCOL'])
       if (codexHomeWslInfo) {
         const launchWslDistro = resolvedWslContext?.distro
         if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {

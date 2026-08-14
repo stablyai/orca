@@ -3,6 +3,17 @@ import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { createPaneDOM } from './pane-dom-creation'
 
+const imageAddonMock = vi.hoisted(() => ({
+  options: null as Record<string, unknown> | null
+}))
+
+vi.mock('@xterm/addon-image', () => ({
+  ImageAddon: vi.fn().mockImplementation(function ImageAddon(options) {
+    imageAddonMock.options = options
+    return {}
+  })
+}))
+
 const webLinksAddonMock = vi.hoisted(() => ({
   handler: null as ((event: MouseEvent, uri: string) => void) | null,
   options: null as { hover?: (event: MouseEvent, uri: string) => void; leave?: () => void } | null
@@ -51,6 +62,32 @@ vi.mock('@xterm/xterm', () => ({
 }))
 
 describe('createPaneDOM link tooltips', () => {
+  it('creates bounded Kitty and iTerm2 image support for each pane', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const pane = createPaneDOM(
+      1,
+      leafId,
+      { linkOpenHint: () => 'open hint' },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    expect(pane.imageAddon).toBeDefined()
+    expect(imageAddonMock.options).toEqual({
+      enableSizeReports: true,
+      pixelLimit: 4_194_304,
+      storageLimit: 16,
+      showPlaceholder: true,
+      sixelSupport: false,
+      iipSupport: true,
+      iipSizeLimit: 8_388_608,
+      kittySupport: true,
+      kittySizeLimit: 8_388_608
+    })
+  })
+
   it('anchors WebLinks hover text to the unpadded terminal window corner', () => {
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
     const pane = createPaneDOM(

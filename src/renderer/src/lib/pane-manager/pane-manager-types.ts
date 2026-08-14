@@ -1,5 +1,6 @@
 import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
+import type { ImageAddon } from '@xterm/addon-image'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -165,6 +166,7 @@ export type ManagedPaneInternal = {
   // Stored so disposePane() can cancel the post-WebGL-teardown refresh frame.
   pendingWebglRefreshRafId?: number | null
   pendingObservedFitRafId: number | null
+  imageAddon?: ImageAddon
   serializeAddon: SerializeAddon
   unicode11Addon: Unicode11Addon
   webLinksAddon: WebLinksAddon

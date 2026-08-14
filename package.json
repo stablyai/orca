@@ -194,6 +194,7 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.2.0",
     "@xterm/addon-fit": "0.12.0-beta.287",
+    "@xterm/addon-image": "0.10.0-beta.287",
     "@xterm/addon-ligatures": "0.11.0-beta.287",
     "@xterm/addon-search": "0.17.0-beta.287",
     "@xterm/addon-unicode11": "0.10.0-beta.287",

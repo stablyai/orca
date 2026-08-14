@@ -36,6 +36,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     linkTooltip,
     terminalTuiScrollSensitivity,
     fitAddon,
+    imageAddon,
     searchAddon,
     serializeAddon,
     unicode11Addon,
@@ -50,6 +51,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   // Load addons (order matters: WebGL must be after open())
   terminal.loadAddon(fitAddon)
+  if (imageAddon) {
+    terminal.loadAddon(imageAddon)
+  }
   terminal.loadAddon(searchAddon)
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
@@ -226,6 +230,11 @@ export function disposePane(
     /* ignore */
   }
   disposeWebgl(pane)
+  try {
+    pane.imageAddon?.dispose()
+  } catch {
+    /* ignore */
+  }
   try {
     pane.searchAddon.dispose()
   } catch {

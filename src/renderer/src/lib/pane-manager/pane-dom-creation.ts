@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit'
+import { ImageAddon } from '@xterm/addon-image'
 import { SearchAddon } from '@xterm/addon-search'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -52,6 +53,19 @@ export function createPaneDOM(
   installGuardedLinkProviderRegistration(terminal)
   installWindowsCtrlAltChordRepair(terminal)
   const fitAddon = new FitAddon()
+  // Inline-image decoders can transiently hold multiple RGBA buffers, so keep
+  // both each image and the retained per-pane cache bounded.
+  const imageAddon = new ImageAddon({
+    enableSizeReports: true,
+    pixelLimit: 4_194_304,
+    storageLimit: 16,
+    showPlaceholder: true,
+    sixelSupport: false,
+    iipSupport: true,
+    iipSizeLimit: 8_388_608,
+    kittySupport: true,
+    kittySizeLimit: 8_388_608
+  })
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
   // Why: async tooltip formatting can resolve after hover changes, so stale
@@ -124,6 +138,7 @@ export function createPaneDOM(
     webglRebuildDeferred: false,
     hasComplexScriptOutput: false,
     fitAddon,
+    imageAddon,
     fitResizeObserver: null,
     pendingInitialFitRafId: null,
     pendingWebglRefreshRafId: null,

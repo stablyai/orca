@@ -599,6 +599,7 @@ export class PtyHandler {
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         TERM_PROGRAM: 'Orca',
+        ORCA_IMAGE_PROTOCOL: 'kitty',
         TERM_PROGRAM_VERSION:
           rendererEnv?.ORCA_APP_VERSION || process.env.ORCA_APP_VERSION || '0.0.0-dev',
         FORCE_HYPERLINK: '1'

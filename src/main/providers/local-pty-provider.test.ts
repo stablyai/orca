@@ -542,6 +542,13 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('advertises Kitty image support to spawned terminals', async () => {
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
+    })
+
     it('verifies shell identity against the exact spawn PATH', async () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => ({ ...env, PATH: '/post-hook/bin' })
@@ -1210,9 +1217,11 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[2].env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
       expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
       expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
         expect.arrayContaining([
+          'ORCA_IMAGE_PROTOCOL',
           'ORCA_TERMINAL_HANDLE/u',
           'ORCA_HERMES_STARTUP_QUERY',
           POWERLEVEL10K_WIZARD_DISABLE_ENV
