@@ -80,7 +80,10 @@ wrapper_src="${SHELL_DOLLAR}{BASH_SOURCE[0]}"
 case "$wrapper_src" in
   # Why: with no slash the %/* strip yields the file name, not a directory, so self-exclusion
   # would miss the wrapper's own dir and the lookup would resolve back to this script.
-  */*) wrapper_dir="$(cd -- "${SHELL_DOLLAR}{wrapper_src%/*}" 2>/dev/null && pwd)" ;;
+  # Why: with CDPATH set, cd searches it for a relative operand and echoes the directory it lands
+  # in, which the command substitution then captures — wrapper_dir ends up wrong and doubled.
+  # Clear it for this one command.
+  */*) wrapper_dir="$(CDPATH= cd -P -- "${SHELL_DOLLAR}{wrapper_src%/*}" 2>/dev/null && pwd)" ;;
   *) wrapper_dir="$PWD" ;;
 esac
 [[ -n "$wrapper_dir" ]] || wrapper_dir="$PWD"
