@@ -7,13 +7,11 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { AutomationWorkspaceMode } from '../../../../shared/automations-types'
-import type {
-  GlobalSettings,
-  OrcaHooks,
-  ProjectHostSetup,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { Field } from './automation-page-parts'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'

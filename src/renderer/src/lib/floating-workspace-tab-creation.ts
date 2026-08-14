@@ -1,5 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { BrowserTab, TerminalTab } from '../../../shared/types'
+import type { BrowserTab } from '../../../shared/browser-workspace-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { createUntitledMarkdownFileWithTemplateSelection } from './create-untitled-markdown'
 import { getConnectionId } from './connection-context'
 import { detectLanguage } from './language-detect'

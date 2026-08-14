@@ -1,25 +1,33 @@
+import { foldComparableGitHubHost } from '../../../shared/git-remote-host-alias'
+import {
+  matchGitRemoteKeyParts,
+  splitGitRemoteKey,
+  type GitRemoteKeyParts
+} from '../../../shared/git-remote-identity'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import {
   parseGitHubIssueOrPRLink,
   type GitHubIssueOrPRLink,
   type RepoSlug
-} from '../../../shared/github-links'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+} from '../../../shared/github/links'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../shared/new-workspace/gitlab-links'
 import { parseJiraIssueUrl, type ParsedJiraIssueUrl } from '../../../shared/jira-issue-url'
-import { parseLinearIssueUrlIntent, type LinearIssueUrlIntent } from '../../../shared/linear-links'
-import type { Repo, Worktree } from '../../../shared/types'
+import { parseLinearIssueUrlIntent, type LinearIssueUrlIntent } from '../../../shared/linear/links'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { normalizeLinearIdentifier } from './linear-issue-workspace-attachment'
+import {
+  worktreeMatchesGitLabUrl,
+  type GitLabIssueOrMRLink
+} from './worktree-palette-gitlab-url-match'
 import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
 import type { PaletteSearchResult, PaletteSupportingText } from './worktree-palette-search'
 
 export type CmdJTaskSourceUrl =
   | { provider: 'github'; link: GitHubIssueOrPRLink }
   | { provider: 'linear'; intent: LinearIssueUrlIntent }
-  | {
-      provider: 'gitlab'
-      link: NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
-    }
+  | { provider: 'gitlab'; link: GitLabIssueOrMRLink }
   | { provider: 'jira'; parsed: ParsedJiraIssueUrl }
 
 export type CmdJTaskUrlCreatePreview = {
@@ -74,10 +82,37 @@ function parseOwnerRepoDisplayName(value: string | null | undefined): RepoSlug |
   return { owner: match[1], repo: match[2] }
 }
 
+/** Host + `owner/repo` tail, matching how `GitRemoteIdentity.canonicalKey` is built. */
+function githubRemoteKeyParts(slug: RepoSlug): GitRemoteKeyParts {
+  return {
+    host: foldComparableGitHubHost((slug.host || 'github.com').replace(/:\d+$/, '')),
+    tail: `${slug.owner.toLowerCase()}/${slug.repo.replace(/\.git$/i, '').toLowerCase()}`
+  }
+}
+
+function remoteIdentityMatchesGitHubSlug(repo: Repo, slug: RepoSlug): boolean | 'unknown' {
+  const identity = repo.gitRemoteIdentity
+  const identityParts = splitGitRemoteKey(identity?.canonicalKey, foldComparableGitHubHost)
+  if (!identityParts) {
+    return 'unknown'
+  }
+  const verdict = matchGitRemoteKeyParts(identityParts, githubRemoteKeyParts(slug))
+  if (verdict !== false) {
+    return verdict
+  }
+  // Why not false: identity keeps one remote, chosen when the repo was added and never re-probed.
+  // An `upstream` pick means a fork's `origin` existed and is invisible here, so rejecting would
+  // drop URLs from the fork itself. A stale snapshot can still misjudge a renamed repo.
+  return identity?.remoteName === 'upstream' ? 'unknown' : false
+}
+
+/** Tri-state: `'unknown'` stays permissive for forks and host aliases. */
 function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean | 'unknown' {
   if (!repo) {
     return 'unknown'
   }
+  // Why displayName first: it is compared host-agnostically, so mirrors and host aliases of the
+  // same owner/repo keep matching; the probed remote only fills in where no name evidence exists.
   const fromName = parseOwnerRepoDisplayName(repo.displayName)
   if (fromName) {
     return githubIdentityKey({ ...fromName, host: slug.host }) === githubIdentityKey(slug)
@@ -85,7 +120,9 @@ function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean 
   if (repo.upstream?.owner && repo.upstream.repo) {
     return githubIdentityKey(repo.upstream) === githubIdentityKey(slug)
   }
-  return 'unknown'
+  // Why: a basename-only displayName is the common non-fork case, and issue/PR numbers are
+  // per-repo, so a bare number must still clear the remote the repo actually points at.
+  return remoteIdentityMatchesGitHubSlug(repo, slug)
 }
 
 export function parseCmdJTaskSourceUrl(query: string): CmdJTaskSourceUrl | null {
@@ -237,27 +274,6 @@ function worktreeMatchesLinearUrl(worktree: Worktree, intent: LinearIssueUrlInte
   return true
 }
 
-function worktreeMatchesGitLabUrl(
-  worktree: Worktree,
-  link: NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
-): boolean {
-  const linkedUrl = worktree.linkedWorkItem?.url
-    ? parseGitLabIssueOrMRLink(worktree.linkedWorkItem.url)
-    : null
-  if (
-    linkedUrl &&
-    linkedUrl.number === link.number &&
-    linkedUrl.type === link.type &&
-    linkedUrl.slug.host.toLowerCase() === link.slug.host.toLowerCase() &&
-    linkedUrl.slug.path.toLowerCase() === link.slug.path.toLowerCase()
-  ) {
-    return true
-  }
-  return link.type === 'mr'
-    ? worktree.linkedGitLabMR === link.number
-    : worktree.linkedGitLabIssue === link.number
-}
-
 function worktreeMatchesJiraUrl(worktree: Worktree, parsed: ParsedJiraIssueUrl): boolean {
   if (worktree.linkedWorkItem?.jiraIdentifier?.toUpperCase() === parsed.issueKey) {
     return true
@@ -300,7 +316,7 @@ export function matchWorktreePaletteTaskUrl(args: {
     return result(worktree.id, 'issue', supportingText('issue', intent.intent.identifier))
   }
   if (intent.provider === 'gitlab') {
-    if (!worktreeMatchesGitLabUrl(worktree, intent.link)) {
+    if (!worktreeMatchesGitLabUrl(worktree, intent.link, repo, review)) {
       return null
     }
     return result(

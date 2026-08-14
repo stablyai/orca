@@ -4,7 +4,8 @@ import {
   WORKTREE_PALETTE_QUERY_MAX_BYTES,
   isWorktreePaletteQueryTooLarge
 } from './worktree-palette-query-bounds'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {

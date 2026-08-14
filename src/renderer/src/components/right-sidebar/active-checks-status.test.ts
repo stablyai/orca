@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getActiveChecksStatus } from './active-checks-status'
 import type { AppState } from '../../store/types'
-import type { PRInfo } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 
 function makePR(status: PRInfo['checksStatus']): PRInfo {
   return {

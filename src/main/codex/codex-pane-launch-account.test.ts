@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { resolveCodexPaneLaunchAccount } from './codex-pane-launch-account'
 
 const SYSTEM_HOME = '/Users/example/.codex'

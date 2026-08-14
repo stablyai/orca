@@ -3,7 +3,7 @@
 // RPCs). Keeping these settings in the same global store is what lets a grouping
 // or filter change on the phone show up on desktop and vice-versa.
 
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'

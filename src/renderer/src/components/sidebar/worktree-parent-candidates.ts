@@ -1,5 +1,7 @@
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
 import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-projection'
 

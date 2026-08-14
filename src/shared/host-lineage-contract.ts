@@ -1,7 +1,7 @@
 import type { ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from './execution-host'
 import type { SshExecutionHostId } from './detected-worktree-provider-contract'
 import type { DirectSshAuthority } from './ssh-types'
-import type { WorktreeLineage, WorkspaceLineage } from './types'
+import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 
 export type ListDesktopLineageForHostArgs =
   | { executionHostId: typeof LOCAL_EXECUTION_HOST_ID }

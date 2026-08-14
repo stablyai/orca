@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join, sep } from 'node:path'
-import type { GlobalSettings, Repo } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
 import type {
   WorktreeBasePollEvent,
   WorktreeBasePollerOptions

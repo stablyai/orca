@@ -5,7 +5,7 @@ import {
   type ExecutionHostScope
 } from './execution-host'
 import { isGitRepoKind } from './repo-kind'
-import type { Repo } from './types'
+import type { Repo } from './repo-types'
 
 type NewWorkspaceDialogRepo = Pick<
   Repo,

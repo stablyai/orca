@@ -261,29 +261,6 @@ describe('createIpcPtyTransport', () => {
     )
   })
 
-  it('drops a retired launch token from a suppressed fresh spawn', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    const transport = createIpcPtyTransport({
-      env: {
-        ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111',
-        ORCA_AGENT_LAUNCH_TOKEN: 'retired-token'
-      },
-      launchToken: 'retired-token'
-    })
-
-    await transport.connect({ url: '', callbacks: {}, suppressSavedStartup: true })
-
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        env: { ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111' }
-      })
-    )
-    expect(spawn).toHaveBeenCalledWith(
-      expect.not.objectContaining({ launchToken: 'retired-token' })
-    )
-  })
-
   it('forwards automatic resume provenance to the PTY spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

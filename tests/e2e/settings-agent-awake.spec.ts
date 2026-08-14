@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import type { GlobalSettings } from '../../src/shared/types'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 
 type AwakeProbeSnapshot = {

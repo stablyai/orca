@@ -5,7 +5,8 @@ import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-stat
 import { translate } from '@/i18n/i18n'
 import { branchDisplayName } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 // Why: presentational and memoized — the picker resolves every row's status
 // from one batched store read so the rows themselves hold no subscriptions.

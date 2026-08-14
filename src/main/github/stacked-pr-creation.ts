@@ -2,7 +2,7 @@ import type {
   CreateStackedHostedReviewInput,
   CreateStackedHostedReviewResult
 } from '../../shared/hosted-review'
-import { isDefaultGitHubHost } from '../../shared/github-repository-identity-key'
+import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef

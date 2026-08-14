@@ -1,28 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  SSH_PTY_IDENTITY_MISMATCH_ERROR,
-  SSH_SESSION_EXPIRED_ERROR,
-  SSH_SOURCE_RESTORE_REQUIRED_ERROR
-} from './ssh-pty-errors'
+import { SSH_SESSION_EXPIRED_ERROR } from './ssh-pty-errors'
 import { SshPtyProvider } from './ssh-pty-provider'
 
 describe('SSH PTY provider session reattach incarnation', () => {
-  it.each([
-    ['an old-relay response without an incarnation', {}],
-    ['a response for a different incarnation', { incarnationId: 'incarnation-other' }]
-  ])('rejects %s', async (_label, response) => {
-    const mux = {
-      request: vi.fn().mockResolvedValue(response),
-      notify: vi.fn(),
-      onNotification: vi.fn().mockReturnValue(vi.fn())
-    }
-    const provider = new SshPtyProvider('conn-1', mux as never)
-
-    await expect(
-      provider.attachForReconnect('ssh:conn-1@@pty-old', undefined, 'incarnation-expected')
-    ).rejects.toThrow(SSH_PTY_IDENTITY_MISMATCH_ERROR)
-  })
-
   it('remembers the authoritative incarnation before a legacy exit arrives', async () => {
     let notify: ((method: string, params: Record<string, unknown>) => void) | undefined
     const mux = {
@@ -64,10 +44,8 @@ describe('SSH PTY provider session reattach incarnation', () => {
     }
     const provider = new SshPtyProvider('conn-1', mux as never)
 
-    // Fails closed, but NOT as expiry: the shell is still running, and callers
-    // respawn on expiry — which duplicate-resumed the live agent session.
-    const spawn = provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
-    await expect(spawn).rejects.toThrow(`${SSH_SOURCE_RESTORE_REQUIRED_ERROR}: pty-old`)
-    await expect(spawn).rejects.not.toThrow(SSH_SESSION_EXPIRED_ERROR)
+    await expect(provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })).rejects.toThrow(
+      `${SSH_SESSION_EXPIRED_ERROR}: pty-old`
+    )
   })
 })

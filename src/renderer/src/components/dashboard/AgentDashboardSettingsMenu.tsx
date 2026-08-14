@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SettingsSegmentedControl, SettingsSwitch } from '../settings/SettingsFormControls'
-import type { AgentDashboardMode } from '../../../../shared/types'
+import type { AgentDashboardMode } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 
 type AgentDashboardSettingsMenuProps = {

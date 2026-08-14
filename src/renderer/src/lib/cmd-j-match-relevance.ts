@@ -3,7 +3,7 @@ import {
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
 import type { MatchRange, PaletteSearchResult } from './worktree-palette-search'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 // Why: worktrees and open tabs are searched by separate scorers whose scales encode list position,
 // so neither can say which section holds the better hit. Relevance is the one shared scale: which

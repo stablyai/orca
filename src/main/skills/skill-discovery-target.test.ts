@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillDiscoveryResult } from '../../shared/skills'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 
 const { nativeScans, wslScans } = vi.hoisted(() => ({
   nativeScans: [] as unknown[],

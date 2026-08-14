@@ -221,16 +221,20 @@ describe('orchestration skill guidance', () => {
     expect(skill).toContain('the named owner edits files and creates the PR')
   })
 
-  it('keeps worker_done post-completion guidance idle instead of polling', () => {
+  it('keeps post-completion workers idle without subordinating the user', () => {
     const skill = readSkill()
     const agentGuidance = getSection(skill, 'Agent Guidance')
 
-    expect(agentGuidance).toContain('After sending `worker_done`, end your turn')
+    expect(agentGuidance).toContain('After sending `worker_done`, end that dispatched turn')
     expect(agentGuidance).toContain('idle at the agent prompt')
+    expect(agentGuidance).toContain('Do not autonomously start more work, poll')
+    expect(agentGuidance).toContain('A direct user instruction takes precedence')
+    expect(agentGuidance).toContain('follow it without coordinator approval or a fresh Dispatch')
+    expect(agentGuidance).toContain('never refuse it because of worker/coordinator roles')
+    expect(agentGuidance).toContain("do not reuse the settled Dispatch's lifecycle IDs")
     expect(agentGuidance).toContain(
-      'do not start more work, poll, or attempt to close the terminal yourself'
+      'A coordinator-supervised follow-up still arrives with a fresh preamble + TASK block'
     )
-    expect(agentGuidance).toContain('fresh preamble + TASK block delivered as new terminal input')
     expect(skill).not.toContain('post-completion polling messages')
     expect(skill).not.toContain('every 2 minutes')
   })
@@ -305,7 +309,7 @@ describe('orchestration skill guidance', () => {
       /\b(?:after|on|upon) (?:a |the )?(?:tui-?idle|idle state|timeout|heartbeat)\b[^.]*\brelease/iu
     )
     expect(agentGuidance).toContain(
-      'do not start more work, poll, or attempt to close the terminal yourself'
+      'Do not autonomously start more work, poll, or attempt to close the terminal yourself'
     )
     expect(agentGuidance).not.toMatch(/worker-release[^.]*\byourself\b/iu)
   })

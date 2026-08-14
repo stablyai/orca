@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { getInitialClaudeRateLimitTarget } from './claude-rate-limit-target'

@@ -18,7 +18,9 @@ import {
 } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
-import type { GitHubWorkItem, PRInfo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
 import {

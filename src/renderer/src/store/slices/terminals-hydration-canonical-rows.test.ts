@@ -1,7 +1,7 @@
 import './terminal-hydration-store-test-bootstrap'
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'

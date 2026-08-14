@@ -5,7 +5,7 @@ import type {
   LinearMcpIssueListResult,
   LinearProjectListResult,
   LinearSearchResult
-} from '../shared/linear-agent-access'
+} from '../shared/linear/agent-access'
 import {
   formatLinearCreate,
   formatLinearIssue,

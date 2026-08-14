@@ -598,7 +598,10 @@ describe('agent status tool + assistant fields', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const setGeneratedTabTitleFromAgentPrompt = vi.fn()
-    store.setState({ setGeneratedTabTitleFromAgentPrompt } as Partial<AppState>)
+    store.setState({
+      settings: { ...store.getState().settings, tabAutoGenerateTitle: true },
+      setGeneratedTabTitleFromAgentPrompt
+    } as Partial<AppState>)
     store
       .getState()
       .setAgentStatus(

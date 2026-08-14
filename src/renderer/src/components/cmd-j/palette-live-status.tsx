@@ -26,7 +26,9 @@ import {
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { translate } from '@/i18n/i18n'
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
-import type { BrowserWorkspace, TerminalTab, Worktree } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {

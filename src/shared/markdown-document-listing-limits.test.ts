@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MarkdownDocument } from './types'
+import type { MarkdownDocument } from './filesystem-entry-types'
 import {
   assertMarkdownDocumentsWithinLimit,
   createMarkdownDocumentListingBudget,

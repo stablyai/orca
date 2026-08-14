@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem, GitHistoryResult } from '../../../../shared/git-history'
-import type { GitBranchChangeEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
 import type { GitHistoryCommitFilesState } from './GitHistoryCommitFiles'
 
 // `worktreeId` rides along with the caches so a load that completes after a worktree switch can

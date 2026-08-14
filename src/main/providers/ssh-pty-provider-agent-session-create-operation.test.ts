@@ -316,8 +316,7 @@ describe('SSH fresh agent-session create operations', () => {
     )
 
     expect(onData).not.toHaveBeenCalled()
-    // Not `false`: the provider has never listed this host, so absence is unknown, not proven.
-    expect(exactProvider.hasPty('ssh:conn-1@@pty-1')).not.toBe(true)
+    expect(exactProvider.hasPty('ssh:conn-1@@pty-1')).toBe(false)
     const shutdownRequest = await waitForRequest(transport, 'pty.shutdown')
     transport.deliver(responseFrame(shutdownRequest.id as number, null, 4))
     const cancelRequest = await waitForRequest(transport, 'pty.cancelDelivery')

@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Tab, TabGroup, Worktree } from '../../../shared/types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { selectPaletteTypeAliasMatch } from './palette-type-alias-match'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'

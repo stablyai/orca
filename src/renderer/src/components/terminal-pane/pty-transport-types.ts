@@ -11,7 +11,7 @@ import type { StartupCommandDelivery } from '../../../../shared/codex-startup-de
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
@@ -130,8 +130,6 @@ export type PtyTransportRecoveryState = {
     | 'disposed'
   epoch: number
   attempt: number
-  /** Set only for a pane whose shell we cannot reach; drives the two-action disconnected banner. */
-  unreachablePane?: { onRetry: () => void; onStartNewTerminal: () => void }
 }
 
 export type PtyTransport = {
@@ -151,13 +149,6 @@ export type PtyTransport = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
-    /** Start a genuinely new shell: ignore the startup this transport was constructed with.
-     *  Omitting the fields is not enough — connect falls back to its constructor values, so a
-     *  "fresh" spawn would silently resume the saved agent session. */
-    suppressSavedStartup?: boolean
-    /** Refuse adoption: this pane's recorded shell cannot be reached, so attaching it would fail
-     *  and create nothing. The old shell is left alive and unbound. */
-    createFreshShellForUnreachablePane?: boolean
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery

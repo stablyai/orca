@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../shared/types'
+import type { ClassifiedError } from '../../shared/classified-error'
 
 // Why: gh CLI surfaces API errors as unstructured stderr. Map known
 // patterns to typed errors so callers can show user-friendly messages.

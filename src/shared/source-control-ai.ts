@@ -24,11 +24,11 @@ import {
 } from './source-control-ai-actions'
 import type {
   CommitMessageAiModelCapability,
-  CommitMessageAiSettings,
-  GlobalSettings,
-  Repo,
-  TuiAgent
-} from './types'
+  CommitMessageAiSettings
+} from './commit-message-ai-types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
+import type { TuiAgent } from './tui-agent'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiModelChoice,

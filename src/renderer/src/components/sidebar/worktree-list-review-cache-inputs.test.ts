@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
-import type { FolderWorkspace } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import {
   EMPTY_WORKTREE_LIST_REVIEW_CACHE_INPUTS,
   selectWorktreeListReviewCacheInputs,

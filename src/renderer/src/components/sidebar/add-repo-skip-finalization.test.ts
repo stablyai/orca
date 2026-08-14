@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   finalizeImportedRepoAfterSkip,
   type AddRepoSkipFinalizationState

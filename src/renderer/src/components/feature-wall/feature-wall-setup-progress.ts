@@ -4,7 +4,8 @@ import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import type { GlobalSettings, Worktree } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export type FeatureWallSetupProgressInput = {
   ready?: boolean

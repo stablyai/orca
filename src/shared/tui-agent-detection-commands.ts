@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import {
   getTuiAgentDetectCommands,
   TUI_AGENT_CONFIG,

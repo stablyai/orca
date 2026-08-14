@@ -2,7 +2,9 @@ import { rmSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../src/shared/types'
+import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
+import type { ProjectGroup } from '../../src/shared/project-group-types'
+import type { Repo } from '../../src/shared/repo-types'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,

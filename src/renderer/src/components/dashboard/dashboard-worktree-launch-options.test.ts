@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DASHBOARD_MAX_LAUNCH_WORKTREES } from '../../../../shared/dashboard-snapshot'
 import type { DashboardCard, DashboardWorkspace } from '../../../../shared/dashboard-snapshot'
-import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildDashboardWorktreeLaunchOptions } from './dashboard-worktree-launch-options'
 

@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { GitHistoryResult } from '../../../../shared/git-history'
-import type { GitBranchChangeEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
 import { GitHistoryPanel } from './GitHistoryPanel'
 
 vi.mock('@/components/ui/tooltip', () => ({

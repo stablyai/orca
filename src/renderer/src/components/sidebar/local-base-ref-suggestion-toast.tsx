@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'
-import type { LocalBaseRefUpdateSuggestion } from '../../../../shared/types'
+import type { LocalBaseRefUpdateSuggestion } from '../../../../shared/worktree/base-ref-drift-types'
 import { Button } from '../ui/button'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,

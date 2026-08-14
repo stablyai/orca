@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 
 const { listRepoWorktreesMock, getLocalProjectWorktreeGitOptionsMock } = vi.hoisted(() => ({
   listRepoWorktreesMock: vi.fn(),

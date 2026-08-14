@@ -1,4 +1,4 @@
-import type { GitDiffResult } from '../../../../shared/types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 
 /**
  * Thrown when a worktree's host owner is not yet known (the backing repo has

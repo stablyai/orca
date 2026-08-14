@@ -21,7 +21,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'

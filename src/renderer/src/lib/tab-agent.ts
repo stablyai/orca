@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TuiAgent } from '../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { agentTypeToIconAgent } from './agent-status'

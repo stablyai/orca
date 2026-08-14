@@ -181,7 +181,7 @@ describe('AgentKanbanCard', () => {
       card: card({ bucket: 'attention', dotState: 'waiting' }),
       now: 2_000
     })
-    expect(attention.firstElementChild?.className).toContain('border-amber-500/40')
+    expect(attention.firstElementChild?.className).toContain('border-agent-question/40')
 
     cleanup()
     const { container: done } = renderCard({
@@ -198,7 +198,7 @@ describe('AgentKanbanCard', () => {
     const idleClassName = idle.firstElementChild?.className ?? ''
     expect(idleClassName).toContain('border-border/60')
     expect(idleClassName).not.toContain('emerald')
-    expect(idleClassName).not.toContain('amber')
+    expect(idleClassName).not.toContain('agent-question')
   })
 
   it('heads the card with the conversation name and drops the worktree to the footer', () => {

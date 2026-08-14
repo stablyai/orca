@@ -1,5 +1,6 @@
 import { normalizeRuntimePathForComparison } from './cross-platform-path'
-import type { DetectedWorktree, DetectedWorktreeListResult, Repo } from './types'
+import type { Repo } from './repo-types'
+import type { DetectedWorktree, DetectedWorktreeListResult } from './worktree/types'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility

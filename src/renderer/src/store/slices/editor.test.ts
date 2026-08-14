@@ -13,10 +13,10 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type {
   GitBranchChangeEntry,
-  GitBranchCompareSummary,
-  GitStatusEntry,
-  Tab
-} from '../../../../shared/types'
+  GitBranchCompareSummary
+} from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { Tab } from '../../../../shared/tab-types'
 import { isSyncPushStageError } from '@/lib/source-control-remote-error'
 
 const { toastErrorMock } = vi.hoisted(() => ({

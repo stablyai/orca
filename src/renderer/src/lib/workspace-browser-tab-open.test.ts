@@ -131,6 +131,32 @@ describe('openWorkspaceBrowserTab', () => {
     expect(createBrowserTab).not.toHaveBeenCalled()
   })
 
+  it('waits for host registration before reconciling an asserted runtime link', async () => {
+    const createBrowserTab = vi.fn()
+    mocks.state = {
+      ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      ...browserCapableRuntime('hub-a'),
+      createBrowserTab,
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+    await openWorkspaceBrowserTab({
+      workspaceId: WORKSPACE_ID,
+      url: 'https://example.com/pinned',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'hub-a'
+    })
+
+    expect(mocks.createRemote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        environmentId: 'hub-a',
+        waitForRegistration: true,
+        worktreeId: WORKSPACE_ID
+      })
+    )
+    expect(createBrowserTab).not.toHaveBeenCalled()
+  })
+
   it('fails closed when the workspace route swaps away from the pane runtime before opening', async () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),

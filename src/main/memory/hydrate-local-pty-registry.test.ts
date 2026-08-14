@@ -11,7 +11,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { SessionInfo } from '../daemon/types'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import type { Store } from '../persistence'

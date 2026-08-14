@@ -25,6 +25,7 @@ export async function runRecipeCommand(args: {
   repoPath: string
   context: EphemeralVmRecipeContext
   mode: 'create' | 'suspend' | 'resume' | 'destroy'
+  resultSchemaVersion: 1 | 2
   stdin?: string
   env?: NodeJS.ProcessEnv
   maxCaptureBytes?: number
@@ -42,7 +43,7 @@ export async function runRecipeCommand(args: {
       child = spawnCommand(args.command, {
         cwd: args.repoPath,
         detached: process.platform !== 'win32',
-        env: buildRecipeEnv(args.env, args.mode, args.context),
+        env: buildRecipeEnv(args.env, args.mode, args.context, args.resultSchemaVersion),
         shell: true,
         windowsHide: true
       }) as ChildProcessWithoutNullStreams
@@ -123,7 +124,8 @@ function killRecipeProcess(child: ChildProcessWithoutNullStreams): void {
 function buildRecipeEnv(
   env: NodeJS.ProcessEnv | undefined,
   mode: 'create' | 'suspend' | 'resume' | 'destroy',
-  context: EphemeralVmRecipeContext
+  context: EphemeralVmRecipeContext,
+  resultSchemaVersion: 1 | 2
 ): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -138,6 +140,7 @@ function buildRecipeEnv(
     ORCA_REPO_URL: context.repoUrl ?? '',
     ORCA_REPO_BRANCH: context.branch ?? '',
     ORCA_REPO_REF: context.ref ?? '',
+    ORCA_RECIPE_RESULT_SCHEMA_VERSION: String(resultSchemaVersion),
     ORCA_VERSION: context.orcaVersion ?? ''
   }
 }

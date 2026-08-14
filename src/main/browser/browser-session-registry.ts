@@ -22,7 +22,7 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'

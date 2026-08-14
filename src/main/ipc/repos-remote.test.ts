@@ -2189,6 +2189,39 @@ describe('repos:add + repos:clone', () => {
     })
   })
 
+  it('validates source definitions and preferences through local repos:update', () => {
+    const updated = {
+      id: 'repo-source-visibility',
+      path: '/tmp/repo-source-visibility',
+      displayName: 'repo-source-visibility',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    mockStore.updateRepo.mockReturnValue(updated)
+
+    handlers.get('repos:update')!(null, {
+      repoId: updated.id,
+      updates: {
+        customWorktreeVisibilitySources: [
+          { id: 'team', rootPath: ' /srv/team ' },
+          { id: 'bad id', rootPath: '/srv/other' }
+        ],
+        worktreeVisibilitySourcePreferences: {
+          builtIn: { claude: 'show', gsd: 'invalid' },
+          custom: { team: 'hide' }
+        }
+      }
+    })
+
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team' }],
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show' },
+        custom: { team: 'hide' }
+      }
+    })
+  })
+
   it('prepares and invalidates roots when project host setup update changes worktree base path', () => {
     const repo = {
       id: 'repo-setup-update-root',

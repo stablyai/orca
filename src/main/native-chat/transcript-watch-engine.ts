@@ -159,6 +159,8 @@ export async function installTranscriptWatcher(
     if (contentReplaced) {
       resetIncrementalTranscriptState(state)
     }
+    // Why: subscriber callbacks may replace the path before the drain can finish.
+    watchedVersion ??= current
 
     const replacementSnapshot =
       // Why: 0 is a valid window — an explicit undefined check keeps an empty

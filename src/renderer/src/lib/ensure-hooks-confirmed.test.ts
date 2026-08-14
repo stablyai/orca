@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { PersistedTrustedOrcaHooks } from '../../../shared/types'
+import type { PersistedTrustedOrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
   __resetTrustPromptChainForTests,
   ensureHooksConfirmed,

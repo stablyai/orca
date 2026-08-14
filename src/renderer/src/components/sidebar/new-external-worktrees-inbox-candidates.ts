@@ -1,9 +1,5 @@
-import type {
-  DetectedWorktree,
-  DetectedWorktreeListResult,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { getNewExternalWorktreeInboxWorktrees } from '../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { NewExternalWorktreesInboxCandidate } from './worktree-list-groups'
@@ -38,20 +34,4 @@ export function buildNewExternalWorktreesInboxCandidates(args: {
     }
   }
   return candidates
-}
-
-export type NewExternalWorktreeInboxPreview = Pick<
-  DetectedWorktree,
-  'id' | 'displayName' | 'path' | 'branch'
->
-
-export function toNewExternalWorktreeInboxPreview(
-  worktree: DetectedWorktree
-): NewExternalWorktreeInboxPreview {
-  return {
-    id: worktree.id,
-    displayName: worktree.displayName,
-    path: worktree.path,
-    branch: worktree.branch
-  }
 }

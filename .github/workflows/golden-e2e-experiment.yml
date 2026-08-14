@@ -23,7 +23,7 @@ jobs:
             platform: linux
           - os: macos-15
             platform: mac
-          # Match the release gate: Windows runs the fresh-startup golden only.
+          # Match the release gate: Windows runs a focused golden subset.
           - os: windows-2022
             platform: windows
 
@@ -67,15 +67,27 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
+          if [ -f tests/e2e/golden-fresh-profile-terminal.spec.ts ]; then
+            xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
+          fi
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
       - name: Run golden E2E tests on macOS
         if: runner.os == 'macOS'
         run: |
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
+          if [ -f tests/e2e/golden-fresh-profile-terminal.spec.ts ]; then
+            env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
+          fi
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
       - name: Run golden E2E tests on Windows
         if: runner.os == 'Windows'
@@ -83,7 +95,12 @@ jobs:
         run: |
           $env:SKIP_BUILD = '1'
           $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          pnpm run --if-present test:e2e:workspace-session-golden
           pnpm run --if-present test:e2e:windows-fresh-startup-golden
+          if (Test-Path tests/e2e/golden-fresh-profile-terminal.spec.ts) {
+            pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
+          }
+          pnpm run --if-present test:e2e:source-control-golden
 
       - name: Upload Playwright traces
         if: failure()

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/speech-types'
 import { Separator } from '../ui/separator'

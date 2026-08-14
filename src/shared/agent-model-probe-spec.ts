@@ -1,6 +1,6 @@
 import { getCommitMessageAgentSpec, type CommitMessageAgentSpec } from './commit-message-agent-spec'
 import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 /** Why: model discovery reads only these fields; excluding the prompt-delivery
  *  half is what keeps a probe-only agent out of the commit-message registry. */

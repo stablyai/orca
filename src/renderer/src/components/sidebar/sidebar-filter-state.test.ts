@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeClearFilterActions,
-  isDefaultBranchWorkspace,
   isSleepingSweepExemptionNarrowingList,
   sidebarHasActiveFilters
 } from './visible-worktrees'
-import type { Worktree } from '../../../../shared/types'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 function makeWorktree(id: string, repoId = 'repo1'): Worktree {
   return {
@@ -63,6 +63,13 @@ describe('isDefaultBranchWorkspace', () => {
   it('returns false for non-main worktrees even on the default branch', () => {
     const feature = makeWorktree('feature')
     expect(isDefaultBranchWorkspace(feature)).toBe(false)
+  })
+
+  it('keeps a provisioned root visible as the recipe-created workspace', () => {
+    const provisionedRoot = makeWorktree('provisioned-root')
+    provisionedRoot.isMainWorktree = true
+    provisionedRoot.ephemeralVmCheckoutMode = 'provisioned-root'
+    expect(isDefaultBranchWorkspace(provisionedRoot)).toBe(false)
   })
 })
 

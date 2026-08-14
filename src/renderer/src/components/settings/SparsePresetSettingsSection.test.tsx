@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SparsePreset } from '../../../../shared/types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 
 const storeMock = vi.hoisted(() => ({

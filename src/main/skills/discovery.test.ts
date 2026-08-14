@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildSkillDiscoverySources, clearSkillRootScanCache, discoverSkills } from './discovery'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 
 function makeRepo(path: string, connectionId: string | null = null): Repo {
   return {

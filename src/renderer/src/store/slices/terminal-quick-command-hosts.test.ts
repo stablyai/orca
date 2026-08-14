@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,

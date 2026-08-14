@@ -1,4 +1,4 @@
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 
 export type CheckDetailsLoadState = {
   requestId?: number

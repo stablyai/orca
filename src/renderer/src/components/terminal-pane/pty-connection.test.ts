@@ -9,9 +9,14 @@ import {
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
+  ABORT_TRUNCATED_CONTROL_STRING,
+  buildSnapshotReplayPrologue,
+  RESET_AFTER_BYTE_GAP,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
+
+const NORMAL_BUFFER_PROLOGUE = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: false, paneOnAlternateScreen: false })}`
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { DEFAULT_DA1_RESPONSE } from './terminal-capability-replies'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
@@ -19,14 +24,11 @@ import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shif
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import {
-  isResumableTuiAgent,
-  normalizeAgentProviderSession
-} from '../../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import type { TerminalLayoutSnapshot, TuiAgent } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -499,7 +501,9 @@ function createPaneContainer(): HTMLElement {
 function createPane(paneId: number) {
   const leafId = leafIdForPane(paneId)
   const activeBuffer = {
-    type: 'normal' as const,
+    // Mutable so a test can put the pane on the alt screen: the replay prologue
+    // only switches buffers when this disagrees with the snapshot.
+    type: 'normal' as 'normal' | 'alternate',
     viewportY: 0,
     baseY: 0,
     cursorY: 0,
@@ -609,12 +613,6 @@ function createManager(paneCount = 1, initialActivePaneId: number | null = null)
     })
   }
 }
-
-// Structural subset of PtyTransportRecoveryState: enough to pin the disconnected/unreachable pane.
-type RecoveryStateProbe = {
-  phase: string
-  unreachablePane?: { onRetry: () => void; onStartNewTerminal: () => void }
-} | null
 
 function createDeps(overrides: Record<string, unknown> = {}) {
   return {
@@ -2245,7 +2243,7 @@ describe('connectPanePty', () => {
   it('swallows a worktree-removal fence error instead of surfacing it', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE } =
-      await import('../../../../shared/worktree-removal-fence-error')
+      await import('../../../../shared/worktree/removal-fence-error')
     const transport = createMockTransport()
     const capturedOnError: { current: ((message: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -8219,11 +8217,7 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
-  // STA-3077. `SSH_SESSION_EXPIRED` is produced by the relay's not-found mapping, which also
-  // answers for shells still running under a relay process it replaced — so it is not proof the
-  // shell exited. Respawning here would `--resume` a second agent onto one transcript, so the pane
-  // surfaces as disconnected and the user chooses.
-  it('surfaces a disconnected pane when a non-deferred SSH reattach reports expired via onError', async () => {
+  it('spawns a fresh PTY when a non-deferred SSH reattach reports expired via onError', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transport.connect.mockImplementation(
@@ -8248,36 +8242,23 @@ describe('connectPanePty', () => {
     } as StoreState
     const pane = createPane(2)
     const manager = createManager(2)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
     const deps = createDeps({
       restoredLeafId: LEAF_2,
-      restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' },
-      onPtyRecoveryStateRef: { current: onPtyRecoveryState }
+      restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(10)
 
-    // Producer pin: the reattach must actually have been attempted and reported expired, or the
-    // no-respawn clauses below would pass for the wrong reason.
-    expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('restored-session')
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledTimes(1)
-    expect(
-      onPtyRecoveryState.mock.calls.find(
-        ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-      )?.[1]?.unreachablePane
-    ).toBeDefined()
-    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(2, 'fresh-ssh-pty')
-    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(transport.connect).toHaveBeenCalledTimes(2)
+    expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'restored-session')
+    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-ssh-pty')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
   })
 
-  // STA-3077. The resume this used to assert IS the duplicate-transcript defect: an expired report
-  // is the relay's not-found mapping, not proof the shell exited, so `codex ... resume <session>`
-  // would put a second agent process on the transcript the first one is still writing.
-  it('never resumes a cold-restore agent when an SSH reattach reports expired', async () => {
+  it('delegates a cold-restore resume command after SSH expired-session fallback', async () => {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
@@ -8328,20 +8309,11 @@ describe('connectPanePty', () => {
           }
         }
       } as StoreState
-      // Fixture pin: the resume is genuinely buildable from this record, so "no resume" below
-      // cannot pass because the builder bailed out early for an unrelated reason.
-      expect(isResumableTuiAgent('codex')).toBe(true)
-      expect(
-        normalizeAgentProviderSession({ key: 'session_id', id: 'codex-session-1' })
-      ).not.toBeNull()
-
       const pane = createPane(2)
       const manager = createManager(2)
-      const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
       const deps = createDeps({
         restoredLeafId: LEAF_2,
-        restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' },
-        onPtyRecoveryStateRef: { current: onPtyRecoveryState }
+        restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
 
       connectPanePty(pane as never, manager as never, deps as never)
@@ -8354,23 +8326,25 @@ describe('connectPanePty', () => {
         fn()
       }
 
-      // Producer pin: the reattach ran and reported expired.
-      expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('restored-session')
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-      // No replacement connection was ever opened, so no shell exists to type a resume into.
-      expect(capturedDataCallback.current).toBeNull()
-      expect(
-        onPtyRecoveryState.mock.calls.find(
-          ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-        )?.[1]?.unreachablePane
-      ).toBeDefined()
-      // The resume path claims the launch config before spawning; nothing claimed one.
-      expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.connect).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+          commandDelivery: 'provider',
+          startupCommandDelivery: 'shell-ready',
+          env: expect.objectContaining({
+            ORCA_PANE_KEY: paneKey,
+            ORCA_TAB_ID: 'tab-1',
+            ORCA_WORKTREE_ID: 'wt-1',
+            ORCA_WORKSPACE_ID: 'wt-1',
+            ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          })
+        })
+      )
       expect(transport.sendInput).not.toHaveBeenCalledWith(
         "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
       )
-      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
@@ -9349,16 +9323,8 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
   })
 
-  // STA-3077 moved the replacement behind the disconnected banner: an expired report is the
-  // relay's not-found mapping, not proof the shell exited, so the user starts the new terminal.
-  // The subject here is unchanged — the old connection's callbacks must be fenced off once a
-  // replacement PTY exists, whatever route created it.
   it('drops stale callbacks but delivers fresh replacement output after an old replay clear', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    mockStoreState = {
-      ...mockStoreState,
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }]
-    } as StoreState
     const { getTerminalScrollIntentKind, markTerminalPinnedViewport } =
       await import('@/lib/pane-manager/terminal-scroll-intent')
     const transport = createMockTransport('tab-pty')
@@ -9384,11 +9350,9 @@ describe('connectPanePty', () => {
     pane.terminal.buffer.active.baseY = 100
     markTerminalPinnedViewport(pane.terminal)
     const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
     const deps = createDeps({
       restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' },
-      onPtyRecoveryStateRef: { current: onPtyRecoveryState }
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
     })
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
@@ -9399,16 +9363,6 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(8)
     oldCallbacks.current?.onError?.('SSH_SESSION_EXPIRED: tab-pty')
     oldResult.resolve(undefined)
-    await flushAsyncTicks(20)
-
-    // The expiry no longer respawns on its own; the banner's action is now the route to a
-    // replacement PTY, so drive it to reach this test's subject.
-    expect(connectCount).toBe(1)
-    const published = onPtyRecoveryState.mock.calls.find(
-      ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-    )?.[1]?.unreachablePane
-    expect(published).toBeDefined()
-    published!.onStartNewTerminal()
     await flushAsyncTicks(20)
     expect(replacementCallbacks.current).not.toBeNull()
 
@@ -9608,11 +9562,6 @@ describe('connectPanePty', () => {
     })
     transportFactoryQueue.push(transport)
     setReattachPaneTitle('Cursor Agent')
-    // After setReattachPaneTitle: it rewrites mockStoreState and would drop this.
-    mockStoreState = {
-      ...mockStoreState,
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }]
-    } as StoreState
 
     const pane = createPane(1)
     const textarea = {} as HTMLTextAreaElement
@@ -9686,19 +9635,13 @@ describe('connectPanePty', () => {
     // Why: main can answer a *spawn* with an adopted session, so the reattach handler
     // is reachable by a second door that skips the restored-session path entirely. The
     // cold-restore signal has to survive that door too, or #12101 returns on it.
-    //
-    // Vehicle changed for STA-3077: reaching that door used to be automatic — a restore that threw
-    // `PTY "tab-pty" not found` counted as proof the session was gone and respawned itself. No
-    // reattach failure proves that any more (a replaced relay reports not-found for shells still
-    // running under its predecessor), so the pane surfaces as disconnected and the *user* opens the
-    // same door via "Start a new terminal". The #12101 assertions below are unchanged.
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')
-    let activePtyId: string | null = 'tab-pty'
+    let activePtyId = 'tab-pty'
     transport.getPtyId.mockImplementation(() => activePtyId)
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
       if (sessionId) {
-        throw new Error('PTY "tab-pty" not found')
+        throw new Error('restored session is gone')
       }
       // Main answered the spawn by adopting a durable session instead.
       activePtyId = 'adopted-pty'
@@ -9714,44 +9657,22 @@ describe('connectPanePty', () => {
     })
     transportFactoryQueue.push(transport)
     setReattachPaneTitle('Cursor Agent')
-    // SSH repo: the disconnected card is SSH-only, and setReattachPaneTitle rewrites
-    // mockStoreState, so this must come after it.
-    mockStoreState = {
-      ...mockStoreState,
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }]
-    } as StoreState
 
     const pane = createPane(1)
     const textarea = {} as HTMLTextAreaElement
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
-      const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
       const deps = createDeps({
         restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' },
-        onPtyRecoveryStateRef: { current: onPtyRecoveryState }
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(30)
 
-      // The unproven failure parks the pane instead of respawning it.
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-      expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
-      const unreachable = onPtyRecoveryState.mock.calls.find(
-        ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-      )?.[1]?.unreachablePane
-      expect(unreachable).toBeDefined()
-      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-
-      // The user opens the spawn door; main answers that spawn by adopting a session.
-      unreachable?.onStartNewTerminal()
-      await flushAsyncTicks(30)
-
-      expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(pane.id, 'tab-pty')
-      expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'tab-pty')
       expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
       expect(transport.connect.mock.calls[1]?.[0]?.sessionId).toBeUndefined()
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
         ([data]) => data as string
@@ -9764,273 +9685,6 @@ describe('connectPanePty', () => {
       expect(writes).toContain(POST_REPLAY_MODE_RESET)
       expect(writes).not.toContain(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
     })
-  })
-
-  // STA-3077 / RC2. The relay answers "not found" for any id it cannot hand back — including for
-  // shells still running under a relay process it replaced. Respawning there starts a second
-  // `--resume` against the same agent session and both processes append to one transcript. This is
-  // the last route to that defect, and it is the reason this pane surfaces as disconnected instead.
-  // The reattach can also FULFIL with a result that says the session expired, or with no usable
-  // pty id at all. Both trace back to the same relay not-found, so neither proves the shell exited —
-  // and both used to clear the binding and cold-restore resume the agent, which is the duplicate
-  // transcript this pane exists to prevent. SSH only: a daemon/local provider is authoritative
-  // about its own ptys and keeps replacing in place.
-  it.each([
-    ['a result flagged sessionExpired', { id: 'tab-pty', sessionExpired: true }],
-    ['a result carrying no pty id', {}]
-  ])('surfaces the pane instead of resuming when an SSH reattach returns %s', async (_l, res) => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('tab-pty')
-    transport.getPtyId.mockImplementation(() => null)
-    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
-      sessionId ? res : { id: 'respawned-pty' }
-    )
-    transportFactoryQueue.push(transport)
-
-    // connectionId resolves from the store's repo list, not from deps — an SSH-owned repo is what
-    // makes this pane SSH, and the branch under test is SSH-only by design.
-    mockStoreState = {
-      ...mockStoreState,
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }]
-    } as StoreState
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' },
-      onPtyRecoveryStateRef: { current: onPtyRecoveryState }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(30)
-
-    // Producer pin: the restore ran and returned this shape, or the clauses below are vacuous.
-    expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
-    expect(
-      onPtyRecoveryState.mock.calls.find(
-        ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-      )?.[1]?.unreachablePane
-    ).toBeDefined()
-    expect(transport.connect).toHaveBeenCalledTimes(1)
-    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-  })
-
-  it('does not respawn a pane whose restore was answered with a not-found', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    // SSH repo: these are SSH reattach scenarios, and the disconnected card is SSH-only by design.
-    // Without this the fixture has no connectionId and the pane is not SSH at all.
-    mockStoreState = {
-      ...mockStoreState,
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }]
-    } as StoreState
-    const transport = createMockTransport('tab-pty')
-    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-      if (sessionId) {
-        throw new Error('PTY "tab-pty" not found')
-      }
-      return { id: 'respawned-pty' }
-    })
-    transportFactoryQueue.push(transport)
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' },
-      onPtyRecoveryStateRef: { current: onPtyRecoveryState }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(30)
-
-    // Producer pin: the restore must actually have been attempted and failed, or the
-    // no-respawn clause below would pass for the wrong reason.
-    expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
-    expect(transport.connect).toHaveBeenCalledTimes(1)
-    // Branch pin: the not-found reached the unproven arm specifically. Without this, any earlier
-    // bail-out (an obsolete-reattach reject, a generation mismatch) would satisfy the clauses below.
-    expect(
-      onPtyRecoveryState.mock.calls.find(
-        ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-      )?.[1]?.unreachablePane
-    ).toBeDefined()
-    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-  })
-
-  // The mirror of the clause above, and the reason the diversion REPORTS whether it took the
-  // failure instead of silently doing nothing. This fixture has no connectionId, so there is no
-  // connection for the pane to be unreachable on and no card to show. An earlier revision paired
-  // that silent no-op with an unconditional `return`, which left a local pane with no shell, no
-  // card and no error — strictly worse than the toast the card replaced. A local provider is
-  // authoritative about its own ptys, so this pane must replace in place, as it did before.
-  it('replaces a local pane in place when its restore fails, rather than stranding it', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('tab-pty')
-    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-      if (sessionId) {
-        throw new Error('PTY "tab-pty" not found')
-      }
-      return { id: 'respawned-pty' }
-    })
-    transportFactoryQueue.push(transport)
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' },
-      onPtyRecoveryStateRef: { current: onPtyRecoveryState }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(30)
-
-    // Producer pin: the restore was attempted and failed, or every clause below is vacuous.
-    expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
-    // Not divertible, so no card — the SSH-only surface must not appear here.
-    expect(
-      onPtyRecoveryState.mock.calls.find(
-        ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-      )?.[1]?.unreachablePane
-    ).toBeUndefined()
-    // ...and precisely because no card appeared, the pane must have been replaced in place.
-    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'tab-pty')
-    expect(transport.connect.mock.calls.some(([opts]) => !opts?.sessionId)).toBe(true)
-  })
-
-  // The banner's second action must start a NEW shell. The automatic respawn it replaced passed the
-  // cold-restore startup, which carries the agent's providerSession — correct when it only ran on
-  // proof the shell was gone, but here the shell is probably alive, so resuming would put a second
-  // agent process on one transcript. That is the very defect this pane exists to prevent.
-  it('starts a fresh shell rather than resuming the agent when the user starts a new terminal', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    // SSH repo: these are SSH reattach scenarios, and the disconnected card is SSH-only by design.
-    // Without this the fixture has no connectionId and the pane is not SSH at all.
-    mockStoreState = {
-      ...mockStoreState,
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }]
-    } as StoreState
-    const transport = createMockTransport('tab-pty')
-    const spawnOptions: Record<string, unknown>[] = []
-    transport.connect.mockImplementation(async (options: { sessionId?: string }) => {
-      if (options.sessionId) {
-        throw new Error('PTY "tab-pty" not found')
-      }
-      spawnOptions.push(options)
-      return { id: 'fresh-pty' }
-    })
-    transportFactoryQueue.push(transport)
-
-    // Fixture pin: with no resumable agent + provider session seeded, the resume builder returns
-    // null early and both branches spawn identically — every clause below would pass vacuously.
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    const providerSession = { key: 'session_id', id: 'codex-session-1' }
-    expect(isResumableTuiAgent('codex')).toBe(true)
-    expect(normalizeAgentProviderSession(providerSession)).not.toBeNull()
-    mockStoreState = {
-      ...mockStoreState,
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          state: 'working',
-          prompt: 'finish the task',
-          agentType: 'codex',
-          providerSession,
-          updatedAt: 1,
-          stateStartedAt: 1,
-          stateHistory: []
-        }
-      }
-    } as StoreState
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' },
-      onPtyRecoveryStateRef: { current: onPtyRecoveryState }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(30)
-
-    const published = onPtyRecoveryState.mock.calls.find(
-      ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-    )?.[1]?.unreachablePane
-    expect(published).toBeDefined()
-
-    onPtyRecoveryState.mockClear()
-    published!.onStartNewTerminal()
-    await flushAsyncTicks(30)
-
-    // Nothing else retracts the card, so the action must clear it or it sits over a live shell.
-    expect(onPtyRecoveryState).toHaveBeenCalledWith(pane.id, null)
-    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'tab-pty')
-    // The transport falls back to the startup it was CONSTRUCTED with whenever a per-call field is
-    // absent, so omitting them is not enough — a "fresh" shell would resume the saved session. This
-    // asserts the explicit suppression, which is the only thing that actually closes it. Asserting
-    // the absence of per-call fields cannot: on a mock it passes either way.
-    expect(spawnOptions[0]).toMatchObject({ suppressSavedStartup: true })
-    // The resume path claims the launch config before spawning; a fresh shell has none to claim.
-    expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
-    expect(spawnOptions).toHaveLength(1)
-    // No `codex resume <session>` argv, and none of the resume metadata main keys off it.
-    expect(spawnOptions[0]).not.toHaveProperty('command')
-    expect(spawnOptions[0]).not.toHaveProperty('resumeProviderSession')
-    expect(spawnOptions[0]).not.toHaveProperty('launchAgent')
-    expect(spawnOptions[0]).not.toHaveProperty('launchConfig')
-  })
-
-  // The pane's durable binding still names the old shell while the card is up — deliberately, so a
-  // failed replacement can put the card back. Main resolves a stable pane's owner from that binding,
-  // so if the shell answers again between the failed reattach and this click, the spawn ADOPTS it
-  // and hands back its id. Nothing was replaced. Clearing the binding then would unbind a live
-  // shell that is attached to this very pane, leaving it with no durable record of what it owns.
-  it('keeps the binding when the new-terminal spawn adopts the old shell instead of replacing it', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    mockStoreState = {
-      ...mockStoreState,
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }]
-    } as StoreState
-    const transport = createMockTransport('tab-pty')
-    transport.connect.mockImplementation(async (options: { sessionId?: string }) => {
-      if (options.sessionId) {
-        throw new Error('PTY "tab-pty" not found')
-      }
-      // Main adopted the pane's existing owner: same id back, no new shell.
-      return { id: 'tab-pty', isReattach: true }
-    })
-    transportFactoryQueue.push(transport)
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' },
-      onPtyRecoveryStateRef: { current: onPtyRecoveryState }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(30)
-
-    const published = onPtyRecoveryState.mock.calls.find(
-      ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-    )?.[1]?.unreachablePane
-    // Producer pin: without the card there is no action to invoke and the clauses below are vacuous.
-    expect(published).toBeDefined()
-
-    published!.onStartNewTerminal()
-    await flushAsyncTicks(30)
-
-    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
   })
 
   it('keeps ?25h in the live agent reattach reset when the snapshot leaves the cursor visible', async () => {
@@ -10564,7 +10218,7 @@ describe('connectPanePty', () => {
       claim: true
     })
     expect(written).toContain(viewportClear)
-    expect(written).not.toContain('\x1b[2J\x1b[3J\x1b[H')
+    expect(written).not.toContain(NORMAL_BUFFER_PROLOGUE)
     expect(written).toEqual(
       expect.arrayContaining([coldScrollback, POST_REPLAY_MODE_RESET, blankViewport])
     )
@@ -12456,6 +12110,26 @@ describe('connectPanePty', () => {
       expect(capturedDataCallback.current).not.toBeNull()
       return { transport, pane, dataCallback: capturedDataCallback.current!, binding }
     }
+
+    // STA-4042 root: the restore-needed marker is the ONE point where "bytes
+    // were dropped" is known. The emulator carries state across chunks just like
+    // the cross-chunk parser the handler already resets, so the gap is closed
+    // here rather than left to each recovery path to remember.
+    it('closes the emulator state gap when a drop is announced', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { pane, dataCallback } = await connectHiddenPane(deps)
+      dataCallback('hidden output\r\n', { seq: 16, rawLength: 16 })
+      pane.terminal.write.mockClear()
+
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
+      await flushAsyncTicks(4)
+
+      const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
+      const gapReset = written.find((data) => data === RESET_AFTER_BYTE_GAP)
+      expect(gapReset).toBeDefined()
+    })
 
     it('marks the PTY hidden on hidden output and clears it before requesting restore on reveal', async () => {
       enableMainAuthority()
@@ -15589,6 +15263,10 @@ describe('connectPanePty', () => {
       4
     )
     expect(actual).toEqual(expected)
+    // The imageless snapshot skips the repaint, but the gap still happened — so
+    // the pen is grounded anyway, with the live-path constant since nothing
+    // repaints over whatever is still running here.
+    expect(restoreWrites).toContain(RESET_AFTER_BYTE_GAP)
     expect(transport.serializeBufferOutcome).toHaveBeenCalledTimes(1)
     expect(transport.serializeBuffer).not.toHaveBeenCalled()
     disposable.dispose()
@@ -15775,6 +15453,56 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
+  // The conditional buffer switch is the riskiest logic in the replay prologue,
+  // and the pane mock is on the normal buffer everywhere else — so a stubbed
+  // `() => false` would pass the whole suite. Put the pane on the alt screen and
+  // pin that a normal-buffer snapshot really does emit the `?1049l` unstick.
+  it('emits the alt-screen unstick when the pane is on alt and the model is not', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
+    const live = 'visible-after\r\n'
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'snapshot-state\r\n',
+      cols: 100,
+      rows: 30,
+      seq: hidden.length + live.length
+    })
+
+    const pane = createPane(1)
+    // The gap ate the TUI's own `?1049l`, so the renderer is still on alt.
+    pane.terminal.buffer.active.type = 'alternate'
+    const deps = createDeps({ isVisibleRef: { current: false } })
+    const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(live, {
+      seq: hidden.length + live.length,
+      rawLength: live.length
+    })
+    await flushAsyncTicks(20)
+
+    const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
+    const prologue = written.find((data) => data.startsWith(ABORT_TRUNCATED_CONTROL_STRING))
+    expect(prologue).toBeDefined()
+    expect(prologue).toContain('\x1b[?1049l')
+    expect(prologue).not.toBe(NORMAL_BUFFER_PROLOGUE)
+    disposable.dispose()
+  })
+
   // Why: pins the switch-off hidden fallback chain — 2MB lossy cap drops the backlog, latches restore, and reveal repaints from the model snapshot.
   it('restores hidden backlog overflow from the main terminal snapshot on foreground output', async () => {
     const { connectPanePty } = await import('./pty-connection')
@@ -15819,7 +15547,7 @@ describe('connectPanePty', () => {
 
     expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
     expect(pane.terminal.resize).toHaveBeenCalledWith(100, 30)
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(NORMAL_BUFFER_PROLOGUE, expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith('snapshot-state\r\n', expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(live, expect.any(Function))
     disposable.dispose()
@@ -15869,27 +15597,28 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
 
     expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
-    expect(pane.terminal.write).toHaveBeenCalledWith(
-      '\x1b[?1049l\x1b[2J\x1b[3J\x1b[H',
-      expect.any(Function)
-    )
+    expect(pane.terminal.write).toHaveBeenCalledWith(NORMAL_BUFFER_PROLOGUE, expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith(
       'preserved-shell-history\r\n',
       expect.any(Function)
     )
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      '\x1b[0m\x1b[?1049h\x1b[2J\x1b[H',
+      buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: false }),
       expect.any(Function)
     )
     const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
       (call) => call[0]
     )
     expect(writes.indexOf('preserved-shell-history\r\n')).toBeLessThan(
-      writes.indexOf('\x1b[0m\x1b[?1049h\x1b[2J\x1b[H')
+      writes.indexOf(
+        buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: false })
+      )
     )
-    expect(writes.indexOf('\x1b[0m\x1b[?1049h\x1b[2J\x1b[H')).toBeLessThan(
-      writes.indexOf('altscreen-snapshot\r\n')
-    )
+    expect(
+      writes.indexOf(
+        buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: false })
+      )
+    ).toBeLessThan(writes.indexOf('altscreen-snapshot\r\n'))
     expect(pane.terminal.write).toHaveBeenCalledWith('altscreen-snapshot\r\n', expect.any(Function))
     disposable.dispose()
   })
@@ -16089,7 +15818,7 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
-  it('abandons a stalled hidden restore and drains pending foreground chunks warning-first', async () => {
+  it('abandons a stalled hidden restore with reset, warning, then pending foreground', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
@@ -16151,6 +15880,10 @@ describe('connectPanePty', () => {
     const warningIndex = written.findIndex((data) => data.includes('main recovery was unavailable'))
     const combinedLiveIndex = written.indexOf(firstLive + secondLive)
     expect(warningIndex).toBeGreaterThanOrEqual(0)
+    expect(written[warningIndex - 1]).toBe(RESET_AFTER_BYTE_GAP)
+    // Exactly one: writeRestoreUnavailableWarning already grounds the gap, so a
+    // second unconditional write here was pure duplication.
+    expect(written.filter((data) => data === RESET_AFTER_BYTE_GAP)).toHaveLength(1)
     expect(combinedLiveIndex).toBeGreaterThan(warningIndex)
 
     snapshot.resolve({
@@ -16165,6 +15898,110 @@ describe('connectPanePty', () => {
       'late-snapshot-state\r\n',
       expect.any(Function)
     )
+    disposable.dispose()
+  })
+
+  // STA-4042: the hidden-delivery gate drops renderer-bound bytes, so the span it
+  // ate can contain the `ESC[22m` closing a bold run. Abandoning the restore means
+  // no snapshot will rebuild the buffer, so unless the pen is cleared here every
+  // drained and subsequent cell inherits bold — the "regular text renders bold"
+  // field report.
+  it('clears the SGR pen before draining abandoned foreground chunks', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const snapshot = createDeferred<{ data: string; cols: number; rows: number; seq: number }>()
+    getMainBufferSnapshot.mockReturnValue(snapshot.promise)
+    // The dropped span is where `ESC[22m` would have been; the pen is left bold.
+    const hidden = '\x1b[1mbold-run-opened-while-hidden\r\n'
+    const live = 'live-after-reveal\r\n'
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      startup: { command: 'codex' }
+    })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    vi.useFakeTimers()
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(live, {
+      seq: hidden.length + live.length,
+      rawLength: live.length
+    })
+    await flushAsyncTicks(4)
+
+    // Let the foreground deadline expire so the restore is abandoned.
+    vi.advanceTimersByTime(750)
+    vi.advanceTimersByTime(0)
+    await flushAsyncTicks(10)
+
+    const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
+    const resetIndex = written.indexOf(RESET_AFTER_BYTE_GAP)
+    const liveIndex = written.findIndex((data) => data.includes('live-after-reveal'))
+    expect(resetIndex).toBeGreaterThanOrEqual(0)
+    expect(liveIndex).toBeGreaterThanOrEqual(0)
+    expect(resetIndex).toBeLessThan(liveIndex)
+    disposable.dispose()
+  })
+
+  it('grounds byte-gap state before a remote restore re-arms', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const remotePtyId = 'remote:env-1@@terminal-rearm'
+    const transport = createMockTransport(remotePtyId)
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return remotePtyId
+    })
+    const snapshot = createDeferred<{ data: string; cols: number; rows: number; seq: number }>()
+    transport.serializeBuffer = vi.fn().mockReturnValue(snapshot.promise)
+    transportFactoryQueue.push(transport)
+    const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
+    const live = 'remote-live-after-rearm\r\n'
+
+    const pane = createPane(1)
+    const deps = createDeps({ isVisibleRef: { current: false } })
+    const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(6)
+
+    vi.useFakeTimers()
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(live, {
+      seq: hidden.length + live.length,
+      rawLength: live.length
+    })
+    await flushAsyncTicks(4)
+
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks(10)
+
+    const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
+    const resetIndex = written.indexOf(RESET_AFTER_BYTE_GAP)
+    const liveIndex = written.indexOf(live)
+    expect(resetIndex).toBeGreaterThanOrEqual(0)
+    expect(liveIndex).toBeGreaterThan(resetIndex)
+    // The re-arm arm grounds in rearmRemoteHiddenOutputRestoreInsteadOfWarning,
+    // so the abandon body must not ground a second time.
+    expect(written.filter((data) => data === RESET_AFTER_BYTE_GAP)).toHaveLength(1)
+    expect(written.join('')).not.toContain('main recovery was unavailable')
+
     disposable.dispose()
   })
 
@@ -16218,6 +16055,10 @@ describe('connectPanePty', () => {
     expect(getMainBufferSnapshot).toHaveBeenCalledTimes(4)
     expect(warningIndex).toBeGreaterThanOrEqual(0)
     expect(liveIndex).toBeGreaterThan(warningIndex)
+    // This arm gives up on recovery too, so the gap is grounded exactly once
+    // before the blocked foreground is drained under it.
+    expect(written.filter((data) => data === RESET_AFTER_BYTE_GAP)).toHaveLength(1)
+    expect(written.indexOf(RESET_AFTER_BYTE_GAP)).toBeLessThan(liveIndex)
     disposable.dispose()
   })
 
@@ -16684,7 +16525,7 @@ describe('connectPanePty', () => {
     expect(pane.terminal.clear).toHaveBeenCalled()
     expect(pane.terminal.write).not.toHaveBeenCalledWith(live, expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
-      '\x1b[2J\x1b[3J\x1b[H',
+      NORMAL_BUFFER_PROLOGUE,
       expect.any(Function)
     )
     disposable.dispose()
@@ -17582,7 +17423,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
-      '\x1b[2J\x1b[3J\x1b[H',
+      NORMAL_BUFFER_PROLOGUE,
       expect.any(Function)
     )
     expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -22015,10 +21856,6 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(4)
   })
 
-  // STA-3077 moved the replacement behind the disconnected banner: an expired report is the
-  // relay's not-found mapping, not proof the shell exited, so the user starts the new terminal.
-  // The subject here is unchanged — a parked snapshot that resolves late must not paint over the
-  // replacement PTY, whatever route created it.
   it('does not paint a delayed parked snapshot over an expired-session replacement', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const sshPtyId = toAppSshPtyId('conn-1', 'relay-pty-expired')
@@ -22053,31 +21890,17 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
     const binding = connectPanePty(
       pane as never,
       createManager(1) as never,
       createDeps({
         mountFollowsTerminalPark: true,
         restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId },
-        onPtyRecoveryStateRef: { current: onPtyRecoveryState }
+        restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
       }) as never
     )
     await flushAsyncTicks(30)
-
-    // The expiry no longer respawns on its own; the banner's action is now the route to a
-    // replacement PTY, so drive it to reach this test's subject.
-    expect(transport.connect).toHaveBeenCalledTimes(1)
-    const published = onPtyRecoveryState.mock.calls.find(
-      ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-    )?.[1]?.unreachablePane
-    expect(published).toBeDefined()
-    published!.onStartNewTerminal()
-    await flushAsyncTicks(30)
     expect(transport.connect).toHaveBeenCalledTimes(2)
-    // A fresh spawn, not a second reattach — the replacement is `freshPtyId`.
-    expect(transport.connect.mock.calls[1]?.[0]?.sessionId).toBeUndefined()
 
     snapshot.resolve({
       data: 'EXPIRED-SESSION-SNAPSHOT\r\n',
@@ -22559,10 +22382,7 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
-  // STA-3077, deferred-reconnect twin of the non-deferred onError case. `SSH_SESSION_EXPIRED` is
-  // the relay's not-found mapping and answers for shells still running under a relay process it
-  // replaced, so it is not proof the shell exited and may not authorize a respawn.
-  it('surfaces a disconnected pane when a deferred SSH session reports expired', async () => {
+  it('spawns a fresh PTY when a deferred SSH session expired', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts) => {
@@ -22588,26 +22408,18 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
-    const onPtyRecoveryState = vi.fn<(paneId: number, state: RecoveryStateProbe) => void>()
-    const deps = createDeps({ onPtyRecoveryStateRef: { current: onPtyRecoveryState } })
+    const deps = createDeps()
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(20)
 
-    // Producer pin: the deferred reattach ran and reported expired.
-    expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('expired-session')
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
     expect(toastInfo).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledTimes(1)
-    expect(
-      onPtyRecoveryState.mock.calls.find(
-        ([paneId, state]) => paneId === pane.id && state?.phase === 'disconnected'
-      )?.[1]?.unreachablePane
-    ).toBeDefined()
-    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(1, 'fresh-ssh-pty')
-    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(transport.connect).toHaveBeenCalledTimes(2)
+    expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'expired-session')
+    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'expired-session')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'fresh-ssh-pty')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
   })
 
   it('clears the pending serializer when disposed before deferred SSH expiry resolves', async () => {

@@ -15,17 +15,17 @@ describe('federated worker agent launch', () => {
     vi.restoreAllMocks()
   })
 
-  it('creates the remote worker terminal from the agent id, never as a command', async () => {
+  it('creates an exact folder worker terminal from the agent id, never as a command', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-      id: 'repo::remote-worktree'
+    vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
+      id: 'folder:remote-workspace'
     } as never)
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term_remote_worker',
-      worktreeId: 'repo::remote-worktree',
+      worktreeId: 'folder:remote-workspace',
       title: 'worker'
     })
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
@@ -60,7 +60,7 @@ describe('federated worker agent launch', () => {
         taskId: 'task_remote',
         taskSpec: 'remote cursor worker',
         protocolVersion: 3,
-        worktree: 'id:repo::remote-worktree',
+        worktree: 'folder:remote-workspace',
         agent: 'cursor',
         model: 'gpt-5.3-codex',
         effort: 'high'
@@ -91,14 +91,14 @@ describe('federated worker agent launch', () => {
       }
     })
     expect(createTerminal).toHaveBeenCalledWith(
-      'id:repo::remote-worktree',
+      'id:folder:remote-workspace',
       expect.objectContaining({
         startupAgent: 'cursor',
         launchPreferences: { model: 'gpt-5.3-codex', effort: 'high' }
       })
     )
     expect(createTerminal).toHaveBeenCalledWith(
-      'id:repo::remote-worktree',
+      'id:folder:remote-workspace',
       expect.not.objectContaining({ command: expect.anything() })
     )
   })
