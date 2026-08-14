@@ -165,9 +165,17 @@ export function resolveTextGenerationParams(
   settings: GlobalSettings,
   discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
   operation: SourceControlAiOperation = 'commitMessage',
-  repo?: Pick<Repo, 'sourceControlAi'> | null
+  repo?: Pick<Repo, 'sourceControlAi'> | null,
+  defaultAgentOverride?: TuiAgent
 ): ResolveCommitMessageSettingsResult {
-  return resolveCommitMessageSettings(settings, discoveryHostKey, operation, repo)
+  const resolved = resolveSourceControlAiForOperation({
+    settings,
+    repo,
+    operation,
+    discoveryHostKey,
+    defaultAgentOverride
+  })
+  return resolved.ok ? { ok: true, params: resolved.value.params } : resolved
 }
 
 function formatAgentCliFailureMessage(

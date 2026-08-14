@@ -60,6 +60,71 @@ function resolve(operation: SourceControlAiOperation, overrides?: RepoSourceCont
 }
 
 describe('source-control AI resolution', () => {
+  it('uses a supported launch agent when branch naming has no explicit agent', () => {
+    const base = settings()
+    base.defaultTuiAgent = 'claude'
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      agentId: null,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        branchName: { commandInputTemplate: '{basePrompt}' }
+      }
+    }
+
+    const result = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'branchName',
+      defaultAgentOverride: 'codex'
+    })
+
+    expect(result.ok && result.value.params.agentId).toBe('codex')
+  })
+
+  it('keeps an explicit branch-name agent ahead of the launch agent', () => {
+    const base = settings()
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      agentId: null,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        branchName: { agentId: 'claude', commandInputTemplate: '{basePrompt}' }
+      }
+    }
+
+    const result = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'branchName',
+      defaultAgentOverride: 'codex'
+    })
+
+    expect(result.ok && result.value.params.agentId).toBe('claude')
+  })
+
+  it('ignores a launch agent that cannot generate branch names', () => {
+    const base = settings()
+    base.defaultTuiAgent = 'claude'
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      agentId: null,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        branchName: { commandInputTemplate: '{basePrompt}' }
+      }
+    }
+
+    const result = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'branchName',
+      defaultAgentOverride: 'command-code'
+    })
+
+    expect(result.ok && result.value.params.agentId).toBe('claude')
+  })
+
   it('uses the global default model for every operation', () => {
     expect(resolve('commitMessage').params.model).toBe('gpt-5.5')
     expect(resolve('pullRequest').params.model).toBe('gpt-5.5')

@@ -74,6 +74,7 @@ type ResolveSourceControlAiInput = {
     Partial<Pick<GlobalSettings, 'disabledTuiAgents'>>
   repo?: Pick<Repo, 'sourceControlAi'> | null
   operation: SourceControlAiOperation
+  defaultAgentOverride?: TuiAgent
   discoveryHostKey?: string
   prCreationProductDefaults?: SourceControlAiPrCreationDefaults
 }
@@ -1214,10 +1215,15 @@ export function resolveSourceControlAiForOperation(
   }
   // Why: action recipes own the new customization model. The legacy global
   // agent remains a fallback so existing users migrate without losing intent.
+  const defaultAgent = input.defaultAgentOverride
+    ? getCommitMessageAgentSpec(input.defaultAgentOverride)
+      ? input.defaultAgentOverride
+      : input.settings.defaultTuiAgent
+    : input.settings.defaultTuiAgent
   const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
-    input.settings.defaultTuiAgent,
+    defaultAgent,
     input.settings.disabledTuiAgents
   )
   if (!agentChoice) {

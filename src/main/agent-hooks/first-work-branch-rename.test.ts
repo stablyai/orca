@@ -93,10 +93,25 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       expect.anything(),
       'local',
       'branchName',
-      expect.objectContaining({ id: REPO_ID })
+      expect.objectContaining({ id: REPO_ID }),
+      undefined
     )
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('uses the first-work agent as the branch-name fallback', async () => {
+    const { deps } = makeDeps()
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ agentType: 'codex' }), deps)
+
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      expect.objectContaining({ id: REPO_ID }),
+      'codex'
+    )
   })
 
   it('asks to align the on-disk folder with the generated slug after renaming', async () => {
@@ -226,10 +241,29 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       expect.anything(),
       'local',
       'branchName',
-      null
+      null,
+      undefined
     )
     expect(setDisplayName).toHaveBeenCalledWith(FOLDER_WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(FOLDER_WORKTREE_ID)
+  })
+
+  it('uses the first-work agent as the folder-workspace title fallback', async () => {
+    const { deps } = makeDeps({
+      resolveWorktreeIdForTab: () => FOLDER_WORKTREE_ID,
+      getFolderWorkspacePath: () => '/workspace/platform',
+      isPendingFirstAgentMessageRename: () => true
+    })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ agentType: 'codex' }), deps)
+
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      null,
+      'codex'
+    )
   })
 
   it('does not rename folder workspace titles without the pending marker', async () => {

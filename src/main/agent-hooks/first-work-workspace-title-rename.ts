@@ -5,6 +5,7 @@ import {
 } from '../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
+import type { TuiAgent } from '../../shared/types'
 
 /**
  * Non-git folder workspaces have no branch to rename; the first-work hook
@@ -15,6 +16,7 @@ export async function runFolderWorkspaceTitleAutoRename(
   worktreeId: string,
   prompt: string,
   assistantMessage: string | undefined,
+  agentType: TuiAgent | undefined,
   deps: FirstWorkBranchRenameDeps,
   stop: (reason: string, clearError?: boolean) => true,
   retry: (reason: string) => false
@@ -28,7 +30,13 @@ export async function runFolderWorkspaceTitleAutoRename(
   }
 
   const settings = deps.getSettings()
-  const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
+  const resolvedParams = resolveTextGenerationParams(
+    settings,
+    'local',
+    'branchName',
+    null,
+    agentType
+  )
   if (!resolvedParams.ok) {
     deps.setRenameError(worktreeId, resolvedParams.error)
     return stop(`no generation agent: ${resolvedParams.error}`)
