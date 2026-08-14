@@ -6,14 +6,11 @@ export type WorktreeWithResolvedLineage<T extends Worktree = Worktree> = T & {
   lineage: WorktreeLineage | null
 }
 
+// Why: only the execution host is a real lineage boundary. Repo and project are
+// not — agents routinely spawn a child workspace in a sibling repo, and worktree
+// ids are already repo-qualified so cross-repo edges cannot alias.
 export function sharesResolvedWorktreeLineageBoundary(child: Worktree, parent: Worktree): boolean {
-  return (
-    child.repoId === parent.repoId &&
-    (child.hostId === undefined || parent.hostId === undefined || child.hostId === parent.hostId) &&
-    (child.projectId === undefined ||
-      parent.projectId === undefined ||
-      child.projectId === parent.projectId)
-  )
+  return child.hostId === undefined || parent.hostId === undefined || child.hostId === parent.hostId
 }
 
 export function isValidResolvedWorktreeLineageEdge(

@@ -210,6 +210,8 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       <DeleteWorktreeLineageNotice
         descendants={[child]}
         dirtyChangeCountsByWorktreeId={new Map()}
+        repoMap={new Map()}
+        targetRepoId={child.repoId}
       />
     )
 
@@ -217,6 +219,41 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).toContain('mt-2 min-w-0 max-w-full space-y-1 overflow-hidden')
     expect(markup).toContain('min-w-0 overflow-hidden')
     expect(markup).toContain('truncate text-muted-foreground')
+  })
+
+  // Regression (#11007): lineage can now cross repos, so "delete all" must say so.
+  it('names the repo of a cross-repo descendant in the lineage notice', async () => {
+    const sameRepoChild = makeWorktree('same-repo-child', '/projects/orca/same-repo-child')
+    const crossRepoChild = {
+      ...makeWorktree('cross-repo-child', '/projects/baseline/cross-repo-child'),
+      repoId: 'repo-baseline'
+    }
+    const { DeleteWorktreeLineageNotice } = await import('./DeleteWorktreeLineageNotice')
+
+    const markup = renderToStaticMarkup(
+      <DeleteWorktreeLineageNotice
+        descendants={[sameRepoChild, crossRepoChild]}
+        dirtyChangeCountsByWorktreeId={new Map()}
+        repoMap={
+          new Map([
+            [
+              'repo-baseline',
+              {
+                id: 'repo-baseline',
+                path: '/projects/baseline',
+                displayName: 'baseline',
+                badgeColor: 'blue',
+                addedAt: 1
+              }
+            ]
+          ])
+        }
+        targetRepoId={sameRepoChild.repoId}
+      />
+    )
+
+    expect(markup).toContain('baseline')
+    expect(markup.match(/truncate lowercase/g)).toHaveLength(1)
   })
 
   it('uses non-destructive disk copy for folder workspace deletes', async () => {

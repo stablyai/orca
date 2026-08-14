@@ -66,13 +66,9 @@ describe('projectResolvedWorktreeLineage', () => {
     ])
   })
 
-  it.each([
-    ['repo', { repoId: 'other-repo' }, {}],
-    ['known host', { hostId: 'local' as const }, { hostId: 'ssh:remote' as const }],
-    ['known project', { projectId: 'github:stablyai/orca' }, { projectId: 'github:other/project' }]
-  ])('rejects a %s boundary mismatch', (_label, childOverrides, parentOverrides) => {
-    const boundedChild = worktree('child', 'child-instance', childOverrides)
-    const boundedParent = worktree('parent', 'parent-instance', parentOverrides)
+  it('rejects a known host boundary mismatch', () => {
+    const boundedChild = worktree('child', 'child-instance', { hostId: 'local' })
+    const boundedParent = worktree('parent', 'parent-instance', { hostId: 'ssh:remote' })
 
     const projected = projectResolvedWorktreeLineage([boundedChild, boundedParent], {
       child: lineage()
@@ -83,6 +79,31 @@ describe('projectResolvedWorktreeLineage', () => {
       { id: 'parent', childWorktreeIds: [] }
     ])
   })
+
+  it.each([
+    ['repo', { repoId: 'other-repo' }, {}],
+    ['project', { projectId: 'github:stablyai/orca' }, { projectId: 'github:other/project' }],
+    [
+      'repo and project on the same host',
+      { repoId: 'other-repo', hostId: 'local' as const, projectId: 'github:stablyai/orca' },
+      { hostId: 'local' as const, projectId: 'github:other/project' }
+    ]
+  ])(
+    'projects a cross-%s edge as valid when the host and instances agree',
+    (_label, childOverrides, parentOverrides) => {
+      const boundedChild = worktree('child', 'child-instance', childOverrides)
+      const boundedParent = worktree('parent', 'parent-instance', parentOverrides)
+
+      const projected = projectResolvedWorktreeLineage([boundedChild, boundedParent], {
+        child: lineage()
+      })
+
+      expect(projected).toMatchObject([
+        { id: 'child', parentWorktreeId: 'parent', lineage: lineage() },
+        { id: 'parent', childWorktreeIds: ['child'] }
+      ])
+    }
+  )
 
   it('accepts legacy records when only one side has host or project identity', () => {
     const legacyChild = worktree('child', 'child-instance', {

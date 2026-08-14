@@ -159,7 +159,9 @@ describe('canAssignWorktreeParent', () => {
     ).toBe(false)
   })
 
-  it('stays repo-agnostic while the picker candidate filter is repo and host scoped', () => {
+  // Regression (#11007): the picker must offer the same cross-repo parents the runtime
+  // accepts, otherwise an agent-created cross-repo child can never be re-nested by hand.
+  it('offers a cross-repo candidate on the same host to the picker', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameRepo = makeWorktree('same-repo', 'repo-a')
     const otherRepo = makeWorktree('other-repo', 'repo-b')
@@ -184,7 +186,26 @@ describe('canAssignWorktreeParent', () => {
           { id: 'repo-b', connectionId: null, executionHostId: 'local' }
         ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameRepo.id])
+    ).toEqual([sameRepo.id, otherRepo.id])
+  })
+
+  it('excludes a cross-repo candidate whose repo runs on another host', () => {
+    const child = makeWorktree('child', 'repo-a')
+    const otherRepo = makeWorktree('other-repo', 'repo-b')
+    const worktrees = [child, otherRepo]
+
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap: makeMap(worktrees),
+        repoMap: makeRepoMap([
+          { id: 'repo-a', connectionId: null, executionHostId: 'local' },
+          { id: 'repo-b', connectionId: null, executionHostId: 'ssh:remote' }
+        ])
+      })
+    ).toEqual([])
   })
 
   it('excludes same-repo candidates owned by a different runtime host', () => {
@@ -209,7 +230,7 @@ describe('canAssignWorktreeParent', () => {
     ).toEqual([sameHost.id])
   })
 
-  it('excludes a candidate across a known project boundary for picker and direct drop checks', () => {
+  it('offers a candidate across a known project boundary for picker and direct drop checks', () => {
     const child = { ...makeWorktree('child'), projectId: 'project-a' }
     const sameProject = { ...makeWorktree('same-project'), projectId: 'project-a' }
     const otherProject = { ...makeWorktree('other-project'), projectId: 'project-b' }
@@ -225,11 +246,38 @@ describe('canAssignWorktreeParent', () => {
         worktreeMap,
         repoMap
       }).map((worktree) => worktree.id)
-    ).toEqual([sameProject.id])
+    ).toEqual([sameProject.id, otherProject.id])
     expect(
       isEligibleWorktreeParent({
         child,
         candidateParent: otherProject,
+        lineageById: {},
+        worktreeMap,
+        repoMap
+      })
+    ).toBe(true)
+  })
+
+  it('excludes a candidate across a known host boundary for picker and direct drop checks', () => {
+    const child = { ...makeWorktree('child'), hostId: 'local' as const }
+    const otherHost = { ...makeWorktree('other-host'), hostId: 'ssh:remote' as const }
+    const worktrees = [child, otherHost]
+    const worktreeMap = makeMap(worktrees)
+    const repoMap = makeRepoMap()
+
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap,
+        repoMap
+      })
+    ).toEqual([])
+    expect(
+      isEligibleWorktreeParent({
+        child,
+        candidateParent: otherHost,
         lineageById: {},
         worktreeMap,
         repoMap

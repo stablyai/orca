@@ -221,7 +221,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
     expect(result.lineageChildrenByParentId.size).toBe(0)
   })
 
-  it('rejects nested descendants across host or project boundaries', () => {
+  it('rejects nested descendants across a host boundary while keeping cross-project ones', () => {
     const parent = makeWorktree({
       id: 'repo-1::/parent',
       instanceId: 'parent',
@@ -251,7 +251,14 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       worktreesByRepo: { 'repo-1': [parent, hostChild, projectChild] }
     })
 
-    expect(result.lineageChildrenByParentId.size).toBe(0)
+    expect(
+      new Map(
+        [...result.lineageChildrenByParentId].map(([parentId, children]) => [
+          parentId,
+          children.map((child) => child.id)
+        ])
+      )
+    ).toEqual(new Map([[parent.id, [projectChild.id]]]))
   })
 
   it('does not attach cyclic legacy descendants', () => {

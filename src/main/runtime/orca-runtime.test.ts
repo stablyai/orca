@@ -39704,25 +39704,11 @@ describe('OrcaRuntimeService', () => {
 
   it.each([
     {
-      boundary: 'repository',
-      childRepoId: 'repo-child',
-      parentRepoId: 'repo-parent',
-      childMeta: {},
-      parentMeta: {}
-    },
-    {
       boundary: 'known host',
       childRepoId: TEST_REPO_ID,
       parentRepoId: TEST_REPO_ID,
       childMeta: { hostId: 'runtime:child-host' as const },
       parentMeta: { hostId: 'runtime:parent-host' as const }
-    },
-    {
-      boundary: 'known project',
-      childRepoId: TEST_REPO_ID,
-      parentRepoId: TEST_REPO_ID,
-      childMeta: { projectId: 'project-child' },
-      parentMeta: { projectId: 'project-parent' }
     }
   ])('rejects manual lineage writes across a $boundary boundary', async (scenario) => {
     const repos = [...new Set([scenario.childRepoId, scenario.parentRepoId])].map((id) => ({
@@ -39768,12 +39754,80 @@ describe('OrcaRuntimeService', () => {
       runtime.updateManagedWorktreeMeta(`id:${childId}`, {
         lineage: { parentWorktree: `id:${parentId}` }
       })
-    ).rejects.toThrow(
-      'Parent worktree must belong to the same repository, execution host, and project.'
-    )
+    ).rejects.toThrow('Parent worktree must belong to the same execution host.')
 
     expect(setWorktreeLineage).not.toHaveBeenCalled()
     expect(setWorkspaceLineage).not.toHaveBeenCalled()
+  })
+
+  // Regression (#11007): CLI agents routinely create a child workspace in a sibling repo.
+  it.each([
+    {
+      boundary: 'repository',
+      childRepoId: 'repo-child',
+      parentRepoId: 'repo-parent',
+      childMeta: {},
+      parentMeta: {}
+    },
+    {
+      boundary: 'known project',
+      childRepoId: TEST_REPO_ID,
+      parentRepoId: TEST_REPO_ID,
+      childMeta: { projectId: 'project-child' },
+      parentMeta: { projectId: 'project-parent' }
+    }
+  ])('accepts manual lineage writes across a $boundary boundary', async (scenario) => {
+    const repos = [...new Set([scenario.childRepoId, scenario.parentRepoId])].map((id) => ({
+      id,
+      path: join(tmpdir(), id),
+      displayName: id,
+      badgeColor: 'blue' as const,
+      addedAt: 1
+    }))
+    const childRepoPath = repos.find((repo) => repo.id === scenario.childRepoId)!.path
+    const parentRepoPath = repos.find((repo) => repo.id === scenario.parentRepoId)!.path
+    const childPath = join(childRepoPath, 'child')
+    const parentPath = join(parentRepoPath, 'parent')
+    const childId = `${scenario.childRepoId}::${childPath}`
+    const parentId = `${scenario.parentRepoId}::${parentPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance', ...scenario.childMeta }),
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance', ...scenario.parentMeta })
+    }
+    const setWorktreeLineage = vi.fn()
+    const setWorkspaceLineage = vi.fn()
+    const runtimeStore = {
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage,
+      setWorkspaceLineage
+    }
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [
+      ...(repoPath === childRepoPath ? [makeWorktreeInfo(childPath)] : []),
+      ...(repoPath === parentRepoPath ? [makeWorktreeInfo(parentPath)] : [])
+    ])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await runtime.updateManagedWorktreeMeta(`id:${childId}`, {
+      lineage: { parentWorktree: `id:${parentId}` }
+    })
+
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance'
+      })
+    )
+    expect(setWorkspaceLineage).toHaveBeenCalled()
   })
 
   it('clears workspace lineage when manually removing a parent', async () => {

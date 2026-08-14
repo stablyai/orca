@@ -1,4 +1,5 @@
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
+import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
 import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
 import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-projection'
@@ -57,12 +58,12 @@ export function isEligibleWorktreeParent({
   childHostId?: string | null
 }): boolean {
   return (
-    candidateParent.repoId === child.repoId &&
+    // Why: the shared boundary is the authority, but repo-derived host resolution is
+    // stricter than its raw hostId, so both must agree before offering a parent the
+    // runtime would then reject.
+    sharesResolvedWorktreeLineageBoundary(child, candidateParent) &&
     childHostId !== null &&
     getWorktreeOwnerHostId(candidateParent, repoMap) === childHostId &&
-    (child.projectId === undefined ||
-      candidateParent.projectId === undefined ||
-      child.projectId === candidateParent.projectId) &&
     !candidateParent.isArchived &&
     canAssignWorktreeParent({
       child,

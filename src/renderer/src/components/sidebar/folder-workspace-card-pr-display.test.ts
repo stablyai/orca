@@ -220,9 +220,8 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
 
   it.each([
     ['repository', { repoId: 'repo-2' }, {}],
-    ['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }],
     ['known project', { projectId: 'project-b' }, { projectId: 'project-a' }]
-  ])('excludes nested PRs across a %s boundary', (_boundary, childOverrides, parentOverrides) => {
+  ])('includes nested PRs across a %s boundary', (_boundary, childOverrides, parentOverrides) => {
     const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
     const nested = makeWorktree({
       id: 'nested',
@@ -246,6 +245,31 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       ]),
       hostedReviewCache: null,
       prCache: { [`${nested.repoId}::nested`]: makePrEntry(4, 'success') }
+    })
+
+    expect(display).toMatchObject({ number: 4, status: 'success' })
+  })
+
+  it('excludes nested PRs across a known host boundary', () => {
+    const parent = makeWorktree({ id: 'parent', instanceId: 'parent', hostId: 'local' })
+    const nested = makeWorktree({
+      id: 'nested',
+      instanceId: 'nested',
+      linkedPR: 4,
+      hostId: 'ssh:remote'
+    })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
+      worktreeMap: new Map([
+        [parent.id, parent],
+        [nested.id, nested]
+      ]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::nested': makePrEntry(4, 'success') }
     })
 
     expect(display).toBeNull()

@@ -1,17 +1,22 @@
 import { Workflow } from 'lucide-react'
 import type { JSX } from 'react'
-import type { Worktree } from '../../../../shared/types'
+import type { Repo, Worktree } from '../../../../shared/types'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
 
 type DeleteWorktreeLineageNoticeProps = {
   descendants: readonly Worktree[]
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
+  repoMap: ReadonlyMap<string, Repo>
+  targetRepoId: string | undefined
 }
 
 export function DeleteWorktreeLineageNotice({
   descendants,
-  dirtyChangeCountsByWorktreeId
+  dirtyChangeCountsByWorktreeId,
+  repoMap,
+  targetRepoId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
   const childWorkspaceCount = descendants.length
   if (childWorkspaceCount === 0) {
@@ -44,15 +49,31 @@ export function DeleteWorktreeLineageNotice({
           {/* Why: long nowrap paths can otherwise give this grid child an
              intrinsic width wider than the modal. */}
           <div className="mt-2 min-w-0 max-w-full space-y-1 overflow-hidden rounded-sm border border-border/60 bg-background/60 px-2 py-1.5">
-            {descendants.slice(0, 4).map((child) => (
-              <div key={child.id} className="min-w-0 overflow-hidden">
-                <div className="truncate font-medium text-foreground">{child.displayName}</div>
-                <div className="truncate text-muted-foreground">{child.path}</div>
-                <DeleteWorktreeDirtyChangeHint
-                  changeCount={dirtyChangeCountsByWorktreeId.get(child.id)}
-                />
-              </div>
-            ))}
+            {descendants.slice(0, 4).map((child) => {
+              // Why: a cascade that reaches outside the deleted workspace's repo is a much
+              // bigger action than the same-repo case, so name that repo explicitly.
+              const foreignRepo =
+                child.repoId === targetRepoId ? undefined : repoMap.get(child.repoId)
+              return (
+                <div key={child.id} className="min-w-0 overflow-hidden">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate font-medium text-foreground">
+                      {child.displayName}
+                    </span>
+                    {foreignRepo ? (
+                      <span className="inline-flex min-w-0 max-w-[8rem] shrink-0 items-center gap-1 rounded border border-border bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
+                        <RepoBadgeMark color={foreignRepo.badgeColor} />
+                        <span className="truncate lowercase">{foreignRepo.displayName}</span>
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="truncate text-muted-foreground">{child.path}</div>
+                  <DeleteWorktreeDirtyChangeHint
+                    changeCount={dirtyChangeCountsByWorktreeId.get(child.id)}
+                  />
+                </div>
+              )
+            })}
             {descendants.length > 4 ? (
               <div className="text-muted-foreground">
                 +{descendants.length - 4}{' '}
