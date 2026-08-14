@@ -84,7 +84,8 @@ export default function MonacoCodeExcerpt({
     return () => {
       cancelled = true
     }
-  }, [code, language, lines])
+    // isDark: re-colorize on theme switch — colorize() reads the global monaco theme.
+  }, [code, language, lines, isDark])
 
   return (
     <div
