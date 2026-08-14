@@ -46,6 +46,7 @@ const STRUCTURED_CALLS: { method: string; hostMethod: string | null }[] = [
   { method: 'agentSession.respondToApproval', hostMethod: 'respondToPrompt' },
   { method: 'agentSession.respondToQuestion', hostMethod: 'respondToPrompt' },
   { method: 'agentSession.setOption', hostMethod: 'setOption' },
+  { method: 'agentSession.requestHandoff', hostMethod: 'requestHandoff' },
   { method: 'agentSession.handoffStatus', hostMethod: 'handoffStatus' },
   { method: 'agentSession.options', hostMethod: 'readOptions' },
   { method: 'agentSession.history', hostMethod: 'history' },
@@ -150,6 +151,10 @@ function paramsFor(method: string): unknown {
     }
     case 'agentSession.setOption': {
       const fields = { key: 'model', value: 'gpt-5' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
+    case 'agentSession.requestHandoff': {
+      const fields = { direction: 'to-tui', mode: 'now', action: 'start' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
     case 'agentSession.history':

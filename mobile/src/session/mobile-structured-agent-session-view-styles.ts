@@ -36,10 +36,36 @@ export const styles = StyleSheet.create({
   },
   cancelText: { color: colors.statusRed, fontSize: typography.metaSize, fontWeight: '600' },
   pressed: { opacity: 0.7 },
+  disabled: { opacity: 0.45 },
   writeError: {
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm
   },
-  writeErrorText: { color: colors.statusRed, fontSize: typography.metaSize }
+  writeErrorText: { color: colors.statusRed, fontSize: typography.metaSize },
+  handoffBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs
+  },
+  handoffBanner: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.bgRaised,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  handoffError: { backgroundColor: colors.bgRaised },
+  handoffText: { flex: 1, color: colors.textSecondary, fontSize: typography.metaSize },
+  handoffErrorText: { flex: 1, color: colors.statusRed, fontSize: typography.metaSize },
+  handoffButton: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  handoffButtonText: { color: colors.textPrimary, fontSize: typography.metaSize, fontWeight: '600' }
 })

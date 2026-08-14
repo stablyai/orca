@@ -229,6 +229,7 @@ import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
 import { MobileNativeChatOverlay } from '../../../../src/session/MobileNativeChatOverlay'
 import { MobileStructuredAgentSessionView } from '../../../../src/session/MobileStructuredAgentSessionView'
 import { MobileStructuredSessionCreateError } from '../../../../src/session/MobileStructuredSessionCreateError'
+import * as mobileStructuredTuiSend from '../../../../src/session/mobile-structured-tui-send'
 import { useMobileStructuredSessionEntry } from '../../../../src/session/use-mobile-structured-session-entry'
 import { showMobileStructuredChatChoice } from '../../../../src/session/mobile-structured-session-create'
 import { MobileBrowserTabActionSheet } from '../../../../src/session/MobileBrowserTabActionSheet'
@@ -4675,6 +4676,19 @@ export default function SessionScreen() {
                   }
                   return accepted
                 }}
+                onTuiSend={(text, restored) =>
+                  mobileStructuredTuiSend.sendMobileStructuredTuiComposerMessage({
+                    client,
+                    connected: connState === 'connected',
+                    agent: activeStructuredTab.agent,
+                    handoff: structuredSessionEntry.session.handoff,
+                    deviceToken: deviceTokenRef.current,
+                    text,
+                    attachments: [...restored, ...structuredSessionEntry.attachments.attachments],
+                    onAccepted: structuredSessionEntry.attachments.clear,
+                    onToast: showToast
+                  })
+                }
                 onTakeQueuedForEdit={structuredSessionEntry.writes.takeQueuedForEdit}
                 onRetry={structuredSessionEntry.writes.retry}
                 onRespondToPrompt={structuredSessionEntry.writes.respondToPrompt}
@@ -4684,6 +4698,8 @@ export default function SessionScreen() {
                 onAttachImage={() => void structuredSessionEntry.attachments.attach('library')}
                 onRemoveAttachment={structuredSessionEntry.attachments.remove}
                 onCancel={structuredSessionEntry.writes.cancel}
+                handoff={structuredSessionEntry.session.handoff}
+                onRequestHandoff={structuredSessionEntry.writes.requestHandoff}
               />
             ) : activePendingTerminalTab ? (
               <View style={styles.emptyState}>

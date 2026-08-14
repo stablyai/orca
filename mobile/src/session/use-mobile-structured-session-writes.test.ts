@@ -652,6 +652,56 @@ describe('useMobileStructuredSessionWrites', () => {
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
   })
 
+  it('mints a fresh handoff operation after a settled refusal', async () => {
+    sendRequest
+      .mockResolvedValueOnce({
+        id: 'handoff-stale',
+        ok: true,
+        _meta: { runtimeId: 'runtime-1' },
+        result: {
+          ok: false,
+          refusal: {
+            code: 'agent_session_checkpoint_stale',
+            message: 'runtime fence advanced',
+            currentFence: 4
+          }
+        }
+      })
+      .mockResolvedValueOnce({
+        id: 'handoff-started',
+        ok: true,
+        _meta: { runtimeId: 'runtime-1' },
+        result: {
+          ok: true,
+          replayed: false,
+          fence: 3,
+          cursor: { epoch: 'epoch-1', sequence: 2 },
+          value: {
+            status: {
+              owner: 'native',
+              direction: 'to-tui',
+              phase: 'switching',
+              stage: 'preparing',
+              operationId: 'second-operation'
+            }
+          }
+        }
+      })
+
+    await act(async () => {
+      expect(await api!.requestHandoff('to-tui', 'now')).toBe(false)
+      expect(await api!.requestHandoff('to-tui', 'now')).toBe(true)
+    })
+
+    const operationIds = sendRequest.mock.calls.map(
+      ([, params]) =>
+        (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
+    )
+    expect(operationIds[0]).toMatch(/-00000000000040008000000000000001$/)
+    expect(operationIds[1]).toMatch(/-00000000000040008000000000000002$/)
+    expect(operationIds[1]).not.toBe(operationIds[0])
+  })
+
   it('isolates mutation ids and late errors across session changes', async () => {
     const first = deferred<RpcSuccess>()
     sendRequest.mockImplementationOnce(() => first.promise).mockResolvedValueOnce(accepted('b'))

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { AppState, type AppStateStatus } from 'react-native'
 import type {
   AgentSessionHistoryResult,
+  AgentSessionHandoffStatus,
   AgentSessionSubscribeEvent
 } from '../../../src/shared/agent-session-wire'
 import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
@@ -57,6 +58,7 @@ export function useMobileStructuredAgentSession(args: {
   hasOlder: boolean
   loadingOlder: boolean
   loadOlder: () => Promise<boolean>
+  handoff: AgentSessionHandoffStatus | null
 } {
   const { client, sessionId } = args
   const [state, dispatch] = useReducer(reduceStructuredAgentSession, EMPTY_STRUCTURED_AGENT_SESSION)
@@ -134,14 +136,22 @@ export function useMobileStructuredAgentSession(args: {
         }
       })
     }
-    void client
-      .sendRequest('agentSession.history', { sessionId, direction: 'tail', limit: 40 })
-      .then((response) => {
+    void Promise.all([
+      client.sendRequest('agentSession.history', { sessionId, direction: 'tail', limit: 40 }),
+      client.sendRequest('agentSession.handoffStatus', { sessionId }).catch(() => null)
+    ])
+      .then(([response, handoffResponse]) => {
         if (closed) {
           return
         }
         if (!response.ok) {
           throw new Error(response.error.message)
+        }
+        if (handoffResponse?.ok) {
+          dispatch({
+            type: 'handoff',
+            handoff: handoffResponse.result as AgentSessionHandoffStatus
+          })
         }
         const result = response.result as AgentSessionHistoryResult
         if (result.ok) {
@@ -240,6 +250,7 @@ export function useMobileStructuredAgentSession(args: {
     error: state.error || undefined,
     hasOlder: state.hasOlder,
     loadingOlder,
-    loadOlder
+    loadOlder,
+    handoff: state.handoff
   }
 }

@@ -31,6 +31,7 @@ export function useMobileStructuredSessionWrites(args: {
   sessionId: string | null
   fence: number | null
   submissions: readonly AgentJournalSubmission[]
+  handoffOperationId?: string | null
 }): MobileStructuredSessionWrites {
   const { client, connected, sessionId, fence, submissions } = args
   const [outbox, setOutbox] = useState<MobileStructuredOutboxEntry[]>([])
@@ -49,6 +50,7 @@ export function useMobileStructuredSessionWrites(args: {
     client,
     sessionId,
     fence,
+    handoffOperationId: args.handoffOperationId,
     onRefusal: setError
   })
   const outboxMutations = useMobileStructuredOutboxMutations({

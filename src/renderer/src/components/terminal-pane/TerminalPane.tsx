@@ -246,6 +246,13 @@ import {
 } from './regular-terminal-focus-ownership'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
+import { useTerminalStructuredHandoff } from '@/runtime/structured-agent-session-handoff-store'
+import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import {
+  createStructuredAgentSessionOperationId,
+  structuredAgentSessionPayloadFingerprint
+} from '../../../../shared/structured-agent-session-mutation'
 
 type TerminalPaneProps = {
   tabId: string
@@ -343,6 +350,34 @@ function TerminalPane(
   const isRendererVisible = isVisible && isWorktreeActive
   const isVisibleRef = useRef(isRendererVisible)
   isVisibleRef.current = isRendererVisible
+  const structuredHandoff = useTerminalStructuredHandoff(tabId)
+  const returnStructuredSession = useCallback(() => {
+    if (!structuredHandoff) {
+      return
+    }
+    const direction = 'to-native' as const
+    const mode = 'after-turn' as const
+    const action = 'start' as const
+    const sessionId = structuredHandoff.sessionId
+    const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
+    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId })
+    const clientOperationId = createStructuredAgentSessionOperationId(() => crypto.randomUUID())
+    void callStructuredAgentSession(target, 'agentSession.requestHandoff', {
+      envelope: {
+        sessionId,
+        clientOperationId,
+        expectedRuntimeFence: structuredHandoff.fence,
+        payloadFingerprint: structuredAgentSessionPayloadFingerprint({
+          method: 'agentSession.requestHandoff',
+          sessionId,
+          fields: { direction, mode, action }
+        })
+      },
+      direction,
+      mode,
+      action
+    })
+  }, [structuredHandoff, worktreeId])
   const {
     nativeChatTranscriptIsLocalReadable,
     sshReconnectEnvironmentId,
@@ -3184,6 +3219,8 @@ function TerminalPane(
         canToggleNativeChat={activePaneCanToggleChat}
         isChatViewMode={activePaneIsChatLeaf}
         onToggleNativeChat={handleToggleNativeChat}
+        canReturnStructuredSession={structuredHandoff?.status.owner === 'tui'}
+        onReturnStructuredSession={returnStructuredSession}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)

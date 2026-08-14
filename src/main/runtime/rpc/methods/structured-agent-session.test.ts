@@ -191,7 +191,7 @@ describe('capability gating', () => {
     for (const method of STRUCTURED_AGENT_SESSION_METHODS) {
       expect(names).toContain(method.name)
     }
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(13)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(14)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -316,16 +316,35 @@ describe('method routing', () => {
     ])
   })
 
-  it('does not register the structured handoff mutation', async () => {
-    const response = await call('agentSession.requestHandoff', {
+  it('routes a mobile reverse request through the host-owned handoff coordinator', async () => {
+    const params = {
+      envelope: envelope(),
+      direction: 'to-native',
+      mode: 'after-turn',
+      action: 'start'
+    }
+    const response = await call('agentSession.requestHandoff', params, {
+      ...STRUCTURED_CLIENT,
+      clientId: 'mobile-device-a'
+    })
+
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.requestHandoff).toHaveBeenCalledWith({ callerKey: 'mobile-device-a' }, params)
+  })
+
+  it('accepts manual proof recovery at the RPC boundary', async () => {
+    const params = {
       envelope: envelope(),
       direction: 'to-tui',
       mode: 'now',
-      action: 'start'
-    })
+      action: 'recover'
+    }
 
-    expect(response).toMatchObject({ ok: false, error: { code: 'method_not_found' } })
-    expect(hostCalls.requestHandoff).not.toHaveBeenCalled()
+    await expect(call('agentSession.requestHandoff', params)).resolves.toMatchObject({ ok: true })
+    expect(hostCalls.requestHandoff).toHaveBeenCalledWith(
+      { callerKey: 'trusted-local:runtime' },
+      params
+    )
   })
 })
 

@@ -50,6 +50,7 @@ function options(): MobileNativeChatSessionOptionsController {
 describe('MobileStructuredAgentSessionView command seam', () => {
   let renderer: ReactTestRenderer | null = null
   const onSend = vi.fn(async () => true)
+  const onTuiSend = vi.fn(async () => true)
   let controller: MobileNativeChatSessionOptionsController
 
   function props(
@@ -63,6 +64,7 @@ describe('MobileStructuredAgentSessionView command seam', () => {
       onLoadOlder: async () => false,
       outbox: [],
       onSend,
+      onTuiSend,
       onTakeQueuedForEdit: async () => null,
       onRetry: async () => {},
       onRespondToPrompt: async () => true,
@@ -72,6 +74,8 @@ describe('MobileStructuredAgentSessionView command seam', () => {
       onAttachImage: () => {},
       onRemoveAttachment: () => {},
       onCancel: async () => true,
+      handoff: null,
+      onRequestHandoff: async () => true,
       ...overrides
     }
   }
@@ -85,6 +89,7 @@ describe('MobileStructuredAgentSessionView command seam', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     onSend.mockClear()
+    onTuiSend.mockClear()
     controller = options()
     render()
   })
@@ -109,6 +114,27 @@ describe('MobileStructuredAgentSessionView command seam', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
+  it('disables zero-turn TUI resume with truthful guidance', () => {
+    render({
+      handoff: {
+        owner: 'native',
+        direction: null,
+        phase: 'idle',
+        stage: null,
+        operationId: null
+      }
+    })
+
+    const label = renderer!.root
+      .findAllByType('Text')
+      .find((node) => node.children.includes('Open agent TUI'))
+    expect(label?.parent?.props).toMatchObject({
+      disabled: true,
+      accessibilityState: { disabled: true },
+      accessibilityHint: 'Send a message first to open the agent TUI.'
+    })
+  })
+
   it('renders an explicit refusal for unsupported advertised commands', async () => {
     await submit('/review')
 
@@ -118,9 +144,87 @@ describe('MobileStructuredAgentSessionView command seam', () => {
     ).toEqual(['/review is not available in chat sessions.'])
   })
 
+  it('keeps the composer enabled and routes stable TUI ownership through its bridge', async () => {
+    act(() => {
+      renderer!.update(
+        createElement(
+          MobileStructuredAgentSessionView,
+          props({
+            handoff: {
+              owner: 'tui',
+              direction: null,
+              phase: 'idle',
+              stage: null,
+              operationId: null,
+              terminal: { handle: 'term-tui', tabId: 'tab-tui', paneKey: 'pane-tui' }
+            }
+          })
+        )
+      )
+    })
+
+    expect(renderer!.root.findByType('MobileNativeChatComposer').props.disabled).toBe(false)
+    await submit('hello from mobile')
+    expect(onTuiSend).toHaveBeenCalledWith('hello from mobile', [])
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('routes stable TUI slash commands to typed terminal dispatch', async () => {
+    act(() => {
+      renderer!.update(
+        createElement(
+          MobileStructuredAgentSessionView,
+          props({
+            handoff: {
+              owner: 'tui',
+              direction: null,
+              phase: 'idle',
+              stage: null,
+              operationId: null,
+              terminal: { handle: 'term-tui', tabId: 'tab-tui', paneKey: 'pane-tui' }
+            }
+          })
+        )
+      )
+    })
+
+    await submit('/model')
+    expect(onTuiSend).toHaveBeenCalledWith('/model', [])
+    expect(controller.invokeAction).not.toHaveBeenCalled()
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('disables and refuses composer sends while ownership is switching', async () => {
+    act(() => {
+      renderer!.update(
+        createElement(
+          MobileStructuredAgentSessionView,
+          props({
+            handoff: {
+              owner: 'native',
+              direction: 'to-tui',
+              phase: 'switching',
+              stage: 'preparing',
+              operationId: 'handoff-1'
+            }
+          })
+        )
+      )
+    })
+
+    const composer = renderer!.root.findByType('MobileNativeChatComposer')
+    expect(composer.props.disabled).toBe(true)
+    await act(async () => {
+      expect(await composer.props.onSend('racing send')).toBe(false)
+    })
+    expect(onSend).not.toHaveBeenCalled()
+    expect(onTuiSend).not.toHaveBeenCalled()
+  })
+
   it('keeps native ownership on the structured agent-session send path', async () => {
     await submit('native message')
 
     expect(onSend).toHaveBeenCalledWith('native message', [])
+    expect(onTuiSend).not.toHaveBeenCalled()
   })
 })

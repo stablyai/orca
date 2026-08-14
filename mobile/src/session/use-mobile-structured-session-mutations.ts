@@ -6,6 +6,8 @@ import type {
   AgentJournalRenderItem
 } from '../../../src/shared/agent-session-journal-types'
 import type {
+  AgentSessionHandoffDirection,
+  AgentSessionHandoffMode,
   AgentSessionMutationResult,
   AgentSessionOptionResult,
   AgentSessionPromptResult
@@ -27,12 +29,18 @@ export type MobileStructuredSessionMutations = {
   respondToPrompt: (item: MobileStructuredPromptItem, optionId: string) => Promise<boolean>
   setOption: (key: string, value: string) => Promise<AgentSessionOptionResult | null>
   cancel: (turnId: string) => Promise<boolean>
+  requestHandoff: (
+    direction: AgentSessionHandoffDirection,
+    mode: AgentSessionHandoffMode,
+    action?: 'start' | 'cancel-queued' | 'retry' | 'recover'
+  ) => Promise<boolean>
 }
 
 export function useMobileStructuredSessionMutations(args: {
   client: RpcClient | null
   sessionId: string | null
   fence: number | null
+  handoffOperationId?: string | null
   onRefusal: (message: string | null) => void
 }): MobileStructuredSessionMutations {
   const operationIdsRef = useRef(new Map<string, string>())
@@ -134,9 +142,22 @@ export function useMobileStructuredSessionMutations(args: {
           value
         }),
       cancel: async (turnId: string) =>
-        Boolean(await mutate('agentSession.cancel', 'agentSession.cancel', { turnId }))
+        Boolean(await mutate('agentSession.cancel', 'agentSession.cancel', { turnId })),
+      requestHandoff: async (
+        direction: AgentSessionHandoffDirection,
+        mode: AgentSessionHandoffMode,
+        action: 'start' | 'cancel-queued' | 'retry' | 'recover' = 'start'
+      ) =>
+        Boolean(
+          await mutate(
+            'agentSession.requestHandoff',
+            'agentSession.requestHandoff',
+            { direction, mode, action },
+            action === 'retry' ? args.handoffOperationId : null
+          )
+        )
     }),
-    [mutate]
+    [args.handoffOperationId, mutate]
   )
 }
 

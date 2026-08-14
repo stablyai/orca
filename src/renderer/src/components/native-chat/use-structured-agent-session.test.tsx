@@ -259,6 +259,65 @@ describe('useStructuredAgentSession options', () => {
     expect(mocks.operationId).toHaveBeenCalledTimes(1)
   })
 
+  it('mints a fresh handoff operation after a settled refusal', async () => {
+    let attempts = 0
+    mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options') {
+        return Promise.resolve(OPTIONS)
+      }
+      attempts += 1
+      return Promise.resolve(
+        attempts === 1
+          ? {
+              ok: false,
+              refusal: {
+                code: 'agent_session_checkpoint_stale',
+                message: 'runtime fence advanced',
+                currentFence: 4
+              }
+            }
+          : {
+              ok: true,
+              replayed: false,
+              value: {
+                status: {
+                  owner: 'native',
+                  direction: 'to-tui',
+                  phase: 'switching',
+                  stage: 'preparing',
+                  operationId: 'operation-2'
+                }
+              }
+            }
+      )
+    })
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'codex'
+      })
+    )
+    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+
+    await act(async () => {
+      expect(await result.current.requestHandoff('to-tui', 'now')).toBeNull()
+      expect(await result.current.requestHandoff('to-tui', 'now')).toMatchObject({
+        status: { phase: 'switching' }
+      })
+    })
+
+    const mutations = mocks.call.mock.calls.filter(
+      ([, method]) => method === 'agentSession.requestHandoff'
+    )
+    expect(
+      mutations.map(
+        ([, , params]) =>
+          (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
+      )
+    ).toEqual(['operation-1', 'operation-2'])
+  })
+
   it('ignores an option failure from a superseded fence', async () => {
     let reject!: (error: Error) => void
     const pending = new Promise<never>((_resolve, rejectPromise) => {
