@@ -185,6 +185,32 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
+    it.each(['pending', 'dispatched'] as const)(
+      'rejects reopening a task while its dispatch is %s',
+      async (dispatchStatus) => {
+        setup()
+        const task = db.createTask({ spec: 'work' })
+        const dispatch =
+          dispatchStatus === 'pending'
+            ? db.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} }).dispatch
+            : db.createDispatchContext(task.id, 'term_a')
+
+        await expect(
+          call('orchestration.taskUpdate', {
+            id: task.id,
+            status: 'ready'
+          })
+        ).rejects.toMatchObject({
+          code: 'request_mismatch',
+          data: { taskId: task.id, dispatchId: dispatch.id }
+        })
+
+        expect(db.getTask(task.id)?.status).toBe('dispatched')
+        expect(db.getDispatchContext(task.id)?.status).toBe(dispatchStatus)
+        expect(db.getDispatchContext(task.id)?.id).toBe(dispatch.id)
+      }
+    )
+
     it('throws on nonexistent task', async () => {
       setup()
       await expect(

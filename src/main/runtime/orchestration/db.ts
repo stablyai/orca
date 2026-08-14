@@ -4582,6 +4582,23 @@ export class OrchestrationDb {
   }
 
   updateTaskStatus(id: string, status: TaskStatus, result?: string): TaskRow | undefined {
+    if (status === 'ready') {
+      const activeDispatch = this.db
+        .prepare(
+          `SELECT id FROM dispatch_contexts
+           WHERE task_id = ? AND status IN ('pending', 'dispatched')
+           ORDER BY rowid DESC
+           LIMIT 1`
+        )
+        .get(id) as Pick<DispatchContextRow, 'id'> | undefined
+      if (activeDispatch) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `Task ${id} has active dispatch ${activeDispatch.id}; settle or release it before returning the task to ready.`
+        )
+      }
+    }
+
     const completedAt =
       status === 'completed' || status === 'failed' ? new Date().toISOString() : null
     this.db
