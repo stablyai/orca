@@ -3,7 +3,6 @@ import type { RoomDelivery, RoomEvent, RoomMessage, RoomParticipant } from '../.
 import type { RoomDatabase } from './database'
 import type { RoomHarnessAdapter, RoomHarnessLifecycleEvent } from './harness-adapter'
 import type { RoomHarnessTurnUserMessage } from './harness-lifecycle'
-import { roomDeliveryAttemptsFromTurn } from './delivery-prompt'
 import { roomParticipantHarnessBinding } from './participant-harness-binding'
 import { providerMessageId, RoomTranscriptTurnState } from './transcript-turn-state'
 
@@ -118,6 +117,27 @@ export class RoomTranscriptBridge {
     return this.activeDeliveries.get(participantId) ?? null
   }
 
+  currentTurnDeliveryIdForConversation(conversationId: string): string | null {
+    let current: RoomDelivery | null = null
+    for (const [participantId, watcher] of this.watchers) {
+      if (watcher.providerSessionId === conversationId) {
+        const deliveryId = this.activeDeliveries.get(participantId)
+        if (!deliveryId) {
+          continue
+        }
+        try {
+          const delivery = this.db.messages.deliveries.get(deliveryId)
+          if ((delivery.deliveredAt ?? 0) > (current?.deliveredAt ?? 0)) {
+            current = delivery
+          }
+        } catch {
+          continue
+        }
+      }
+    }
+    return current?.id ?? null
+  }
+
   ingestStatus(participantId: string, event: RoomHarnessLifecycleEvent | null): void {
     if (event) {
       this.ingestLifecycle(participantId, event)
@@ -172,9 +192,7 @@ export class RoomTranscriptBridge {
       }
       if (event.userMessage) {
         const confirmed = this.confirmTurn(participantId, event.userMessage)
-        if (confirmed || roomDeliveryAttemptsFromTurn(event.userMessage.text).length === 0) {
-          this.activeDeliveries.set(participantId, confirmed?.id ?? null)
-        }
+        this.activeDeliveries.set(participantId, confirmed?.id ?? null)
       }
       const delivery = this.activeDelivery(participantId)
       if (this.suppressedControls.has(participantId)) {
@@ -214,11 +232,15 @@ export class RoomTranscriptBridge {
           event,
           this.onSettled
         )
-        participant = this.updateParticipant(participant, 'online', event.timestamp)
-        this.turnState.removeActivity(participant.id)
-        this.emit(participant.roomId, { type: 'activity.cleared', participantId: participant.id })
         if (settled) {
-          this.activeDeliveries.delete(participant.id)
+          participant = this.updateParticipant(participant, 'online', event.timestamp)
+          this.turnState.removeActivity(participant.id)
+          this.emit(participant.roomId, {
+            type: 'activity.cleared',
+            participantId: participant.id
+          })
+        } else {
+          participant = this.updateParticipant(participant, 'busy', event.timestamp)
         }
       } else {
         participant = this.updateParticipant(
@@ -226,19 +248,34 @@ export class RoomTranscriptBridge {
           event.type === 'failed' ? 'error' : 'online',
           event.timestamp
         )
+        const retainPartial =
+          event.type === 'interrupted' &&
+          event.messages.some(
+            (message) =>
+              message.role === 'assistant' &&
+              message.blocks.some((block) => block.type === 'text' && block.text.trim())
+          )
+        if (retainPartial) {
+          this.turnState.emitActivity(participant, event)
+        } else {
+          this.turnState.removeActivity(participant.id)
+        }
         this.turnState.ignorePending(participant.id, session.id)
-        this.turnState.removeActivity(participant.id)
+        if (retainPartial) {
+          this.turnState.disposeParticipant(participant.id)
+        }
         const failed = this.db.messages.deliveries.failResponse(
           delivery.id,
           event.type === 'failed' ? 'room_turn_failed' : 'room_turn_interrupted',
           event.timestamp
         )
         this.emit(participant.roomId, { type: 'delivery.updated', delivery: failed })
-        this.emit(participant.roomId, {
-          type: 'activity.cleared',
-          participantId: participant.id
-        })
-        this.activeDeliveries.delete(participant.id)
+        if (!retainPartial) {
+          this.emit(participant.roomId, {
+            type: 'activity.cleared',
+            participantId: participant.id
+          })
+        }
         this.onSettled()
       }
       void this.refreshContext(participant).catch(() => {})

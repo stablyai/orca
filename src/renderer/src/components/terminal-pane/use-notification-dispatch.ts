@@ -61,6 +61,11 @@ export type TerminalNotificationEvent = {
   roomDeliveryId?: string
 }
 
+export type WorktreeNotificationEvent = Omit<
+  NotificationDispatchRequest,
+  'worktreeId' | 'repoLabel' | 'worktreeLabel' | 'hasMultipleActiveRepos' | 'isActiveWorktree'
+>
+
 export function dispatchNotification(event: NotificationDispatchRequest): void {
   const notifications = useAppStore.getState().settings?.notifications
   void window.api.notifications
@@ -77,6 +82,25 @@ export function dispatchNotification(event: NotificationDispatchRequest): void {
     })
     .catch((error) => console.warn('Failed to dispatch notification:', error))
 }
+
+export function dispatchWorktreeNotification(
+  worktreeId: string,
+  event: WorktreeNotificationEvent
+): void {
+  const state = useAppStore.getState()
+  const worktree =
+    state.getKnownWorktreeById?.(worktreeId) ?? getWorktreeMapFromState(state).get(worktreeId)
+  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
+  dispatchNotification({
+    ...event,
+    worktreeId,
+    repoLabel: repo?.displayName,
+    worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
+    hasMultipleActiveRepos: countReposNeedingNotificationDisambiguation(state) > 1,
+    isActiveWorktree: state.activeWorktreeId === worktreeId
+  })
+}
+
 /**
  * Returns a stable dispatch function for terminal notifications.
  * Reads repo/worktree labels from the store at dispatch time rather
@@ -212,10 +236,6 @@ export function dispatchTerminalNotification(
   // construction; coupling the notification dispatcher to it would silently
   // drop the repo label if that format ever changes. The worktree object
   // itself is the source of truth for its owning repo.
-  const worktree = getWorktreeMapFromState(state).get(worktreeId)
-  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
-  const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
-  const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
   // Why: pane keys are reused across turns. A rich OS notification must not
   // expose the previous turn's prompt if the current turn has no fresh hook snapshot yet.
   const agentSnapshot = agentStatus
@@ -241,34 +261,13 @@ export function dispatchTerminalNotification(
         })
       : null
 
-  void window.api.notifications
-    .dispatch({
-      source: event.source,
-      ...(notificationId ? { notificationId } : {}),
-      worktreeId,
-      paneKey: event.paneKey,
-      repoLabel: repo?.displayName,
-      worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
-      hasMultipleActiveRepos: countReposNeedingNotificationDisambiguation(state) > 1,
-      terminalTitle: event.terminalTitle,
-      isActiveWorktree: state.activeWorktreeId === worktreeId,
-      ...agentSnapshot
-    })
-    .then((result) => {
-      if (result.delivered) {
-        void playDesktopNotificationSound(customSoundId, customSoundVolume)
-        return
-      }
-      // Why: macOS is silently swallowing notifications (permission off or
-      // prompt unanswered) — surface an in-app pointer at the fix instead of
-      // letting the alert vanish without a trace.
-      if (result.reason === 'blocked-by-system') {
-        showBlockedNotificationFallbackToast()
-      }
-    })
-    .catch((err) => {
-      console.warn('Failed to dispatch notification:', err)
-    })
+  dispatchWorktreeNotification(worktreeId, {
+    source: event.source,
+    ...(notificationId ? { notificationId } : {}),
+    paneKey: event.paneKey,
+    terminalTitle: event.terminalTitle,
+    ...agentSnapshot
+  })
 }
 
 export function useNotificationDispatch(

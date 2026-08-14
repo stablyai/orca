@@ -5,6 +5,7 @@ import { roomRpc, subscribeRoom } from '@/runtime/runtime-rooms-client'
 import { EMPTY_ACTIVE_ROOM, reduceRoomEvent } from './room-event-reducer'
 import { closeRoomTabs, useRoomTabs } from './use-room-tabs'
 import { closeRoomTabsForEnd } from './room-deletion-lifecycle'
+import { RoomActivityFrameProjector } from './room-activity-frame-projector'
 
 export function useRoomData(
   target: RuntimeClientTarget,
@@ -64,26 +65,28 @@ export function useRoomData(
     }
     let disposed = false
     let unsubscribe = (): void => {}
+    const applyEvent = (event: RoomEvent): void => {
+      if (disposed) {
+        return
+      }
+      if (event.type === 'end') {
+        closeRoomTabsForEnd(event, roomId)
+        return
+      }
+      snapshotRef.current = updateSnapshotRef(snapshotRef.current, event)
+      dispatch(event)
+      if (event.type === 'room.updated') {
+        setRooms((current) =>
+          current.map((room) => (room.id === event.room.id ? event.room : room))
+        )
+      }
+    }
+    const projector = new RoomActivityFrameProjector(applyEvent)
     void subscribeRoom(
       target,
       roomId,
       readerKey,
-      (event) => {
-        if (disposed) {
-          return
-        }
-        if (event.type === 'end') {
-          closeRoomTabsForEnd(event, roomId)
-          return
-        }
-        snapshotRef.current = updateSnapshotRef(snapshotRef.current, event)
-        dispatch(event)
-        if (event.type === 'room.updated') {
-          setRooms((current) =>
-            current.map((room) => (room.id === event.room.id ? event.room : room))
-          )
-        }
-      },
+      (event) => !disposed && projector.push(event),
       (cause) => {
         if (!disposed) {
           const text = message(cause)
@@ -106,6 +109,7 @@ export function useRoomData(
     )
     return () => {
       disposed = true
+      projector.dispose()
       unsubscribe()
     }
   }, [roomId, target])

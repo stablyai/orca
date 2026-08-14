@@ -1,10 +1,14 @@
 import type { NativeChatMessage } from './native-chat-types'
 import type {
+  StructuredProviderInput,
+  StructuredProviderPermission
+} from './structured-agent-provider'
+import type {
   AgentSessionCompactionState,
   AgentSessionContextSnapshot
 } from './agent-session-context'
 
-export const ROOM_HARNESS_AGENTS = ['claude', 'openclaude', 'codex', 'grok'] as const
+export const ROOM_HARNESS_AGENTS = ['claude', 'openclaude', 'codex', 'grok', 'omp'] as const
 export type RoomHarnessAgent = (typeof ROOM_HARNESS_AGENTS)[number]
 export type RoomActorKind = 'user' | 'agent' | 'system'
 export type RoomParticipantState = 'starting' | 'online' | 'busy' | 'sleeping' | 'offline' | 'error'
@@ -23,6 +27,8 @@ export type RoomAgentActivity = {
   state: 'working' | 'failed' | 'interrupted'
   kind: RoomActivityKind
   detail?: string
+  permission?: StructuredProviderPermission
+  input?: StructuredProviderInput
   messages: NativeChatMessage[]
   startedAt: number
   updatedAt: number
@@ -40,6 +46,8 @@ export type RoomProviderSession = {
   key: 'session_id' | 'conversation_id'
   id: string
   transcriptPath?: string
+  transport?: 'machine'
+  sourceSessionId?: string
 }
 export type RoomContextSnapshot = AgentSessionContextSnapshot
 export type Room = {
@@ -107,6 +115,7 @@ export type RoomExistingAgentCandidate = {
   terminalHandle?: string
   paneKey?: string
   historyId?: string
+  conversationId?: string
 }
 
 export type RoomAttachment = {
@@ -224,5 +233,11 @@ export type RoomEvent =
   | { type: 'pin.updated'; pin: RoomPin | null; messageId: string }
   | { type: 'unread.updated'; unread: RoomUnread }
   | { type: 'end'; reason?: 'deleted' }
+
+export type RoomNotificationReplayPage = {
+  events: Extract<RoomEvent, { type: 'message.created' }>[]
+  cursor: number
+  hasMore: boolean
+}
 
 export { EMPTY_ROOM_CONTEXT } from './room-context'

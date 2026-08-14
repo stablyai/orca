@@ -17,6 +17,11 @@ export function selectRoomTranscriptFinal(
   pending: PendingProviderMessage[],
   explicitBody: string | null
 ): { candidate: PendingProviderMessage | null; body: string | null } {
+  const classified = pending.filter(({ message }) => message.assistantPhase !== undefined)
+  if (classified.length > 0) {
+    const final = classified.findLast(({ message }) => message.assistantPhase === 'final') ?? null
+    return { candidate: final, body: final ? assistantBody(final.message) : null }
+  }
   const matching = explicitBody
     ? pending.findLast(({ message }) => finalBodyMatches(assistantBody(message), explicitBody))
     : null
@@ -84,6 +89,8 @@ export class RoomTranscriptTurnState {
       state: event.type === 'failed' || event.type === 'interrupted' ? event.type : 'working',
       kind: event.activity?.kind ?? 'working',
       ...(event.activity?.detail ? { detail: event.activity.detail } : {}),
+      ...(event.permission ? { permission: event.permission } : {}),
+      ...(event.input ? { input: event.input } : {}),
       messages: pending.map(({ message }) => message),
       startedAt: this.startedAt.get(participant.id) ?? event.timestamp,
       updatedAt: event.timestamp,
@@ -120,12 +127,8 @@ export class RoomTranscriptTurnState {
     event: RoomHarnessLifecycleEvent
   ): void {
     const participantId = participant.id
-    const messageStart = event.messages
-      .map((message) => message.timestamp)
-      .filter((timestamp): timestamp is number => timestamp !== null)
-      .reduce((earliest, timestamp) => Math.min(earliest, timestamp), event.timestamp)
     if (!this.startedAt.has(participantId)) {
-      this.startedAt.set(participantId, messageStart)
+      this.startedAt.set(participantId, delivery.deliveredAt ?? event.timestamp)
     }
     if (!this.anchorSequence.has(participantId)) {
       this.anchorSequence.set(participantId, this.db.messages.get(delivery.messageId).sequence)
@@ -150,9 +153,11 @@ export class RoomTranscriptTurnState {
         undefined
       )
     const startedAt = this.startedAt.get(participantId) ?? messageStart
-    return startedAt === undefined
-      ? null
-      : { state: 'completed', messages, startedAt, completedAt: event.timestamp }
+    const completedAt =
+      finalMessage?.message.assistantPhase === 'final'
+        ? (finalMessage.message.timestamp ?? event.timestamp)
+        : event.timestamp
+    return startedAt === undefined ? null : { state: 'completed', messages, startedAt, completedAt }
   }
 
   ignorePending(
@@ -189,8 +194,8 @@ export class RoomTranscriptTurnState {
       ? providerMessageId(candidate.message)
       : `status:${event.turnId ?? event.timestamp}`
     const completedActivity = this.completed(participant.id, pending, candidate, event)
-    this.ignorePending(participant.id, providerSessionId, finalProviderMessageId)
     if (candidate?.message.providerError) {
+      this.ignorePending(participant.id, providerSessionId)
       const failed = this.db.messages.deliveries.failResponse(
         delivery.id,
         'room_provider_error',
@@ -204,6 +209,7 @@ export class RoomTranscriptTurnState {
       if (event.source === 'status') {
         return false
       }
+      this.ignorePending(participant.id, providerSessionId)
       const failed = this.db.messages.deliveries.failResponse(
         delivery.id,
         'room_empty_response',
@@ -216,6 +222,7 @@ export class RoomTranscriptTurnState {
     const roomParticipants = this.db.participants.list(participant.roomId)
     const reply = extractRoomReplyRecipients(body, roomParticipants, participant.identity)
     if (reply.silent) {
+      this.ignorePending(participant.id, providerSessionId, finalProviderMessageId)
       this.db.transaction(() => {
         this.db.providerMessages.ignore(participant.id, providerSessionId, finalProviderMessageId)
         this.db.messages.deliveries.markResponded(delivery.id, null, event.timestamp)
@@ -240,6 +247,7 @@ export class RoomTranscriptTurnState {
     if (!message) {
       return false
     }
+    this.ignorePending(participant.id, providerSessionId, finalProviderMessageId)
     this.emit(participant.roomId, {
       type: 'delivery.updated',
       delivery: this.db.messages.deliveries.get(delivery.id)
@@ -255,7 +263,11 @@ export function providerMessageId(message: NativeChatMessage): string {
 }
 
 function isActivityMessage(message: NativeChatMessage): boolean {
-  return message.role === 'assistant' || message.role === 'reasoning' || message.role === 'tool'
+  return (
+    (message.role === 'assistant' && message.assistantPhase !== 'final') ||
+    message.role === 'reasoning' ||
+    message.role === 'tool'
+  )
 }
 
 function assistantBody(message: NativeChatMessage): string | null {

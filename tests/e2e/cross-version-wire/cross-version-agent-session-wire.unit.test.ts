@@ -69,6 +69,7 @@ const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false, value: { sessionId: SESSION } }
   },
   { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
+  { method: 'agentSession.steer', hostMethod: 'steer', result: { ok: true, replayed: false } },
   { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
   { method: 'agentSession.close', hostMethod: 'close', result: { ok: true } },
   {
@@ -195,9 +196,13 @@ function createIntentParams(): Record<string, unknown> {
   return { envelope: envelope({ method: 'agentSession.create', fields, fence: null }), ...fields }
 }
 
-function sendParams(text: string, fence: number): Record<string, unknown> {
+function sendParams(
+  text: string,
+  fence: number,
+  method = 'agentSession.send'
+): Record<string, unknown> {
   const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
-  return { envelope: envelope({ method: 'agentSession.send', fields: { body }, fence }), body }
+  return { envelope: envelope({ method, fields: { body }, fence }), body }
 }
 
 /** Schema-valid params per method; values only need to survive validation. */
@@ -212,6 +217,8 @@ function paramsFor(method: string): unknown {
       return attachParams(fence)
     case 'agentSession.send':
       return sendParams('hi', fence)
+    case 'agentSession.steer':
+      return sendParams('steer', fence, method)
     case 'agentSession.cancel':
       return {
         envelope: envelope({ method: 'agentSession.cancel', fields: { turnId: 'turn-1' }, fence }),
@@ -324,6 +331,7 @@ function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
     // `ensure` refuse for the harness's own reason rather than the location's.
     supportsCreate: vi.fn(() => true),
     send: vi.fn(async () => ({ ok: true, replayed: false })),
+    steer: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
     revealSession: vi.fn(async () => ({

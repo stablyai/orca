@@ -12,7 +12,7 @@ import { showRoomActionError } from './room-action-error'
 import { RoomMessageAttachments } from './RoomAttachments'
 import { RoomAuthorAvatar } from './RoomAuthorAvatar'
 import { RoomCompletedActivityTimeline } from './RoomActivityTimeline'
-import { completedRoomActivity } from './room-activity-timeline'
+import { completedRoomActivity, roomFinalFadeId } from './room-activity-timeline'
 import { isRoomLoopLimitSuppression } from './room-delivery-state'
 import { AgentSubagentTurnLink } from '../agent-subagents/AgentSubagentContext'
 
@@ -254,6 +254,14 @@ export function RoomMessageRow({
           variant="document"
           className="text-sm"
           allowFileUriLinks
+          streamingFade={
+            activity && message.senderId
+              ? {
+                  id: roomFinalFadeId(message.senderId, activity.startedAt),
+                  start: false
+                }
+              : undefined
+          }
         />
       ) : null}
       <RoomMessageAttachments data={data} message={message} />

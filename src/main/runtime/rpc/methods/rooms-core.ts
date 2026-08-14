@@ -10,7 +10,9 @@ import {
   RoomIdentity,
   RoomSubscription
 } from './rooms-schemas'
-import { withoutRoomAgentOwners } from '../../rooms/participant-ownership'
+import { ROOM_WORK_METHODS } from './rooms-work'
+import { ROOM_NOTIFICATION_METHODS } from './rooms-notifications'
+import { ROOM_EXISTING_PARTICIPANT_METHOD } from './rooms-participant-existing'
 
 const Unsubscribe = z.object({ subscriptionId: z.string().trim().min(1).max(256) }).strict()
 
@@ -176,33 +178,16 @@ export const ROOM_CORE_METHODS: readonly RpcAnyMethod[] = [
         displayName: z.string().trim().min(1).max(120),
         agent: HarnessAgent,
         roleId: z.string().uuid().nullable().optional(),
-        connection: ParticipantConnection
+        connection: ParticipantConnection,
+        machineStreaming: z.boolean().optional(),
+        trusted: z.boolean().optional()
       })
       .strict(),
     handler: async (params, { runtime }) => ({
       participant: await runtime.getRoomService().addParticipant(params)
     })
   }),
-  defineMethod({
-    name: 'rooms.participants.existing',
-    params: z
-      .object({
-        worktreeId: z.string().trim().min(1).max(1024),
-        agent: HarnessAgent
-      })
-      .strict(),
-    handler: async (params, { runtime }) => {
-      const service = runtime.getRoomService()
-      return {
-        participants: withoutRoomAgentOwners(
-          service.db.participants,
-          await runtime.listRoomExistingAgents(params.worktreeId, params.agent),
-          params.worktreeId,
-          params.agent
-        )
-      }
-    }
-  }),
+  ROOM_EXISTING_PARTICIPANT_METHOD,
   defineMethod({
     name: 'rooms.participants.remove',
     params: z.object({ participantId: ParticipantId }).strict(),
@@ -287,18 +272,6 @@ export const ROOM_CORE_METHODS: readonly RpcAnyMethod[] = [
       return { retried: true }
     }
   }),
-  defineMethod({
-    name: 'rooms.work.stop',
-    params: z.object({ roomId: RoomId }).strict(),
-    handler: async (params, { runtime }) => ({
-      stopped: await runtime.getRoomService().stopRoom(params.roomId)
-    })
-  }),
-  defineMethod({
-    name: 'rooms.work.resume',
-    params: z.object({ roomId: RoomId }).strict(),
-    handler: async (params, { runtime }) => ({
-      resumed: await runtime.getRoomService().resumeRoom(params.roomId)
-    })
-  })
+  ...ROOM_WORK_METHODS,
+  ...ROOM_NOTIFICATION_METHODS
 ]

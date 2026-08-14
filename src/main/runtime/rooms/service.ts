@@ -35,7 +35,7 @@ export class RoomService {
   readonly attachmentTransfers: RoomAttachmentTransferStore
   private readonly adapters
   private readonly deliveryWorker: RoomDeliveryWorker
-  private readonly transcriptBridge: RoomTranscriptBridge
+  readonly transcriptBridge: RoomTranscriptBridge
   readonly participantController: RoomParticipantController
   private readonly events: RoomEventBus
   private readonly messageController: RoomMessageController

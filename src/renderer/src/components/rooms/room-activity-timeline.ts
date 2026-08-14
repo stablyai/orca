@@ -21,6 +21,7 @@ export type RoomActivitySection =
 export function buildRoomActivitySections(messages: NativeChatMessage[]): RoomActivitySection[] {
   const sections: RoomActivitySection[] = []
   const pendingResults: RoomActivityToolStep[] = []
+  const pendingById = new Map<string, RoomActivityToolStep>()
   let resultCursor = 0
 
   for (const message of [...messages].sort(compareMessages)) {
@@ -52,13 +53,24 @@ export function buildRoomActivitySections(messages: NativeChatMessage[]): RoomAc
           sections.push({ kind: 'tools', id: `${message.id}:tools`, tools: [tool] })
         }
         pendingResults.push(tool)
+        if (block.toolCallId) {
+          pendingById.set(block.toolCallId, tool)
+        }
         continue
       }
       if (block.type === 'tool-result') {
-        const pending = pendingResults[resultCursor]
+        let pending = block.toolCallId ? pendingById.get(block.toolCallId) : undefined
+        if (!block.toolCallId) {
+          while (pendingResults[resultCursor]?.call.toolCallId) {
+            resultCursor += 1
+          }
+          pending = pendingResults[resultCursor]
+        }
         if (pending) {
           pending.result = block
-          resultCursor += 1
+          if (!block.toolCallId) {
+            resultCursor += 1
+          }
         }
       }
     }
@@ -83,6 +95,10 @@ export function completedRoomActivity(
     return null
   }
   return activity as RoomCompletedActivity
+}
+
+export function roomFinalFadeId(participantId: string, startedAt: number): string {
+  return `room:${participantId}:${startedAt}`
 }
 
 export function formatRoomActivityDuration(startedAt: number, completedAt: number): string {

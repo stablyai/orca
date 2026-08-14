@@ -7,6 +7,7 @@ import type { RoomAttachmentManager } from './attachments'
 import { deliveryFailureState, suppressPausedDelivery } from './delivery-selection'
 import { stageRoomDeliveryAttachments } from './delivery-attachments'
 import { RoomDeliveryConfirmations } from './delivery-confirmations'
+import { roomParticipantHarnessBinding } from './participant-harness-binding'
 
 const MAX_DELIVERY_ATTEMPTS = 5
 const MAX_RETRY_DELAY_MS = 60_000
@@ -261,13 +262,6 @@ export class RoomDeliveryWorker {
   }
 
   private binding(participant: RoomParticipant): RoomHarnessBinding | null {
-    return participant.terminalHandle && participant.paneKey && participant.worktreeId
-      ? {
-          worktreeId: participant.worktreeId,
-          terminalHandle: participant.terminalHandle,
-          paneKey: participant.paneKey,
-          providerSession: participant.providerSession
-        }
-      : null
+    return roomParticipantHarnessBinding(participant)
   }
 }

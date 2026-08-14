@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
+import { StreamingMarkdownFadeRoot } from '@/components/sidebar/streaming-markdown-fade'
 import { translate } from '@/i18n/i18n'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
 import type {
@@ -175,7 +176,7 @@ export function RoomMessageFeed({
   }, [])
 
   return (
-    <div
+    <StreamingMarkdownFadeRoot
       ref={parentRef}
       className="relative min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
       onScroll={(event) => {
@@ -224,6 +225,7 @@ export function RoomMessageFeed({
                     key={item.activities.length > 1 ? 'stack' : 'single'}
                     activities={item.activities}
                     participants={participants}
+                    target={data.target}
                   />
                 )}
               </div>
@@ -247,6 +249,6 @@ export function RoomMessageFeed({
           })}
         </Button>
       ) : null}
-    </div>
+    </StreamingMarkdownFadeRoot>
   )
 }

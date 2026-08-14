@@ -31,7 +31,7 @@ export async function stopRoomParticipants(
 }
 
 export async function stopRoomParticipantProcess(
-  adapter: RoomHarnessAdapter,
+  adapter: Pick<RoomHarnessAdapter, 'stop' | 'locate'>,
   binding: RoomHarnessBinding
 ): Promise<void> {
   const stopped = await adapter

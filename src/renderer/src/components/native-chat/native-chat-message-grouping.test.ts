@@ -82,6 +82,51 @@ describe('buildNativeChatRenderItems', () => {
     expect(step.step.result?.output).toBe('file.txt')
   })
 
+  it('pairs parallel tool results by provider id', () => {
+    const items = buildNativeChatRenderItems([
+      msg({
+        id: 'calls',
+        timestamp: 1,
+        blocks: [
+          { type: 'tool-call', toolCallId: 'one', name: 'One', input: {} },
+          { type: 'tool-call', toolCallId: 'two', name: 'Two', input: {} }
+        ]
+      }),
+      msg({
+        id: 'results',
+        role: 'tool',
+        timestamp: 2,
+        blocks: [
+          { type: 'tool-result', toolCallId: 'two', output: 'second' },
+          { type: 'tool-result', toolCallId: 'one', output: 'first' }
+        ]
+      })
+    ]).filter((item) => item.kind === 'tool-step')
+
+    expect(items.map((item) => item.step.result?.output)).toEqual(['first', 'second'])
+  })
+
+  it('does not attach a legacy result to an unmatched provider call', () => {
+    const items = buildNativeChatRenderItems([
+      msg({
+        id: 'calls',
+        timestamp: 1,
+        blocks: [
+          { type: 'tool-call', toolCallId: 'missing', name: 'Exact', input: {} },
+          { type: 'tool-call', name: 'Legacy', input: {} }
+        ]
+      }),
+      msg({
+        id: 'result',
+        role: 'tool',
+        timestamp: 2,
+        blocks: [{ type: 'tool-result', output: 'legacy' }]
+      })
+    ]).filter((item) => item.kind === 'tool-step')
+
+    expect(items.map((item) => item.step.result?.output ?? null)).toEqual([null, 'legacy'])
+  })
+
   it('leaves an unanswered tool-call in flight (result null)', () => {
     const items = buildNativeChatRenderItems([
       msg({
@@ -120,6 +165,38 @@ describe('buildNativeChatRenderItems', () => {
 })
 
 describe('buildNativeChatConversationItems', () => {
+  it('closes activity when an explicit final starts while the turn is still working', () => {
+    const turn = buildNativeChatConversationItems(
+      [
+        msg({ id: 'u', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'go' }] }),
+        msg({
+          id: 'commentary',
+          timestamp: 2,
+          source: 'stream',
+          assistantPhase: 'commentary',
+          blocks: [{ type: 'text', text: 'Checking' }]
+        }),
+        msg({
+          id: 'final',
+          timestamp: 5,
+          source: 'stream',
+          assistantPhase: 'final',
+          blocks: [{ type: 'text', text: 'Partial final' }]
+        })
+      ],
+      true,
+      1
+    )[1]
+
+    expect(turn).toMatchObject({
+      kind: 'assistant-turn',
+      working: true,
+      completedAt: 5,
+      finalMessage: { id: 'final' },
+      activityMessages: [{ id: 'commentary' }]
+    })
+  })
+
   it('keeps reasoning and tools chronological before the final answer', () => {
     const items = buildNativeChatConversationItems(
       [
@@ -185,6 +262,28 @@ describe('buildNativeChatConversationItems', () => {
     expect(turn.startedAt).toBe(10)
     expect(turn.activityMessages.map((message) => message.id)).toEqual(['r'])
     expect(turn.finalMessage?.id).toBe(NATIVE_CHAT_STREAMING_ID)
+  })
+
+  it('uses a provider stream item as the live final answer', () => {
+    const turn = buildNativeChatConversationItems(
+      [
+        msg({ id: 'u', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'go' }] }),
+        msg({
+          id: 'provider-message',
+          timestamp: 2,
+          source: 'stream',
+          blocks: [{ type: 'text', text: 'partial' }]
+        })
+      ],
+      true,
+      10
+    )[1]
+
+    expect(turn).toMatchObject({
+      kind: 'assistant-turn',
+      finalMessage: { id: 'provider-message' },
+      activityMessages: []
+    })
   })
 
   it('creates a new live turn after a fresh user message instead of reopening the prior turn', () => {

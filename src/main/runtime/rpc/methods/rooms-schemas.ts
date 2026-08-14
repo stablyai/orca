@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ROOM_HARNESS_AGENTS } from '../../../../shared/rooms'
+import { SessionId } from './structured-agent-session-schemas'
 
 export const RoomId = z.string().uuid()
 export const ParticipantId = z.string().uuid()
@@ -13,12 +14,13 @@ const ExistingParticipantConnection = z
     worktreeId: z.string().min(1).max(32_768),
     terminalHandle: z.string().min(1).max(128).optional(),
     paneKey: z.string().min(1).max(512).optional(),
-    historyId: z.string().trim().min(1).max(32_768).optional()
+    historyId: z.string().trim().min(1).max(32_768).optional(),
+    conversationId: SessionId.optional()
   })
   .strict()
   .superRefine((connection, context) => {
     const hasTerminal = Boolean(connection.terminalHandle && connection.paneKey)
-    if (!hasTerminal && !connection.historyId) {
+    if (!hasTerminal && !connection.historyId && !connection.conversationId) {
       context.addIssue({ code: 'custom', message: 'Existing session identity is required.' })
     }
     if (Boolean(connection.terminalHandle) !== Boolean(connection.paneKey)) {

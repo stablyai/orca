@@ -21,11 +21,20 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
 import type { RoomExistingAgentCandidate, RoomHarnessAgent } from '../../../../shared/rooms'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import {
+  runtimeEnvironmentSupportsCapability,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-rpc-client'
 import { showRoomActionError } from './room-action-error'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { isStructuredMachineAgent } from '../../../../shared/structured-agent-provider'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import {
+  ROOM_EXISTING_STRUCTURED_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 
-const AGENTS: RoomHarnessAgent[] = ['claude', 'openclaude', 'codex', 'grok']
+const AGENTS: RoomHarnessAgent[] = ['claude', 'openclaude', 'codex', 'grok', 'omp']
 type Mode = 'new' | 'existing'
 const MODE_LABELS: Record<Mode, [string, string]> = {
   new: ['rooms.addAgent.mode.new', 'New'],
@@ -45,7 +54,8 @@ export function RoomAddAgentDialog({
   roomId,
   worktreeId,
   worktrees,
-  target
+  target,
+  machineStreaming
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -53,7 +63,9 @@ export function RoomAddAgentDialog({
   worktreeId: string | null
   worktrees: Worktree[]
   target: RuntimeClientTarget
+  machineStreaming: boolean
 }): React.JSX.Element {
+  const confirm = useConfirmationDialog()
   const [agent, setAgent] = useState<RoomHarnessAgent>('claude')
   const [mode, setMode] = useState<Mode>('new')
   const [identity, setIdentity] = useState('claude')
@@ -63,6 +75,7 @@ export function RoomAddAgentDialog({
   const [loadingChoices, setLoadingChoices] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [choosing, setChoosing] = useState(false)
+  const [existingMachineSupported, setExistingMachineSupported] = useState(false)
   const worktree = worktrees.find((item) => item.id === worktreeId)
   useEffect(() => setIdentity(agent), [agent])
   useEffect(() => {
@@ -71,39 +84,75 @@ export function RoomAddAgentDialog({
     }
     let disposed = false
     setChoices([])
+    setExistingMachineSupported(false)
     setLoadingChoices(true)
     setLoadError('')
-    void roomRpc<{ participants: RoomExistingAgentCandidate[] }>(
-      target,
-      'rooms.participants.existing',
-      { worktreeId: worktree.id, agent }
-    ).then(
-      ({ participants }) => {
-        if (disposed) {
-          return
+    const load = async (): Promise<void> => {
+      const machineSupported =
+        machineStreaming &&
+        isStructuredMachineAgent(agent) &&
+        (target.kind === 'local' ||
+          (await runtimeEnvironmentSupportsCapability(
+            target.environmentId,
+            ROOM_EXISTING_STRUCTURED_SESSION_RUNTIME_CAPABILITY
+          )))
+      const { participants } = await roomRpc<{ participants: RoomExistingAgentCandidate[] }>(
+        target,
+        'rooms.participants.existing',
+        {
+          worktreeId: worktree.id,
+          agent,
+          ...(machineSupported ? { machineStreaming: true } : {})
         }
+      )
+      if (!disposed) {
+        setExistingMachineSupported(machineSupported)
         setChoices(participants)
         setLoadingChoices(false)
-      },
-      (error) => {
-        if (disposed) {
-          return
-        }
+      }
+    }
+    void load().catch((error) => {
+      if (!disposed) {
         setChoices([])
         setLoadingChoices(false)
         setLoadError(error instanceof Error ? error.message : 'Failed to load sessions')
       }
-    )
+    })
     return () => {
       disposed = true
     }
-  }, [agent, mode, open, target, worktree?.id])
+  }, [agent, machineStreaming, mode, open, target, worktree?.id])
 
   const add = async (): Promise<void> => {
     if (!roomId || !worktree || !identity.trim()) {
       return
     }
     const selected = choices.find((item) => item.id === selection)
+    const useMachineStreaming =
+      mode === 'existing'
+        ? existingMachineSupported
+        : machineStreaming &&
+          isStructuredMachineAgent(agent) &&
+          (target.kind === 'local' ||
+            (await runtimeEnvironmentSupportsCapability(
+              target.environmentId,
+              STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+            )))
+    const trusted =
+      !useMachineStreaming ||
+      (agent !== 'claude' && agent !== 'openclaude') ||
+      (await confirm({
+        title: translate('rooms.addAgent.trustTitle', 'Trust this workspace?'),
+        description: translate(
+          'rooms.addAgent.trustDescription',
+          'Claude project settings, instructions, and hooks may run from {{path}}.',
+          { path: worktree.path }
+        ),
+        confirmLabel: translate('rooms.addAgent.trustConfirm', 'Trust and continue')
+      }))
+    if (!trusted) {
+      return
+    }
     const connection =
       mode === 'new'
         ? { kind: 'new', worktreeId: worktree.id }
@@ -114,7 +163,10 @@ export function RoomAddAgentDialog({
               ...(selected.terminalHandle
                 ? { terminalHandle: selected.terminalHandle, paneKey: selected.paneKey }
                 : {}),
-              ...(selected.historyId ? { historyId: selected.historyId } : {})
+              ...(selected.historyId ? { historyId: selected.historyId } : {}),
+              ...(useMachineStreaming && selected.conversationId
+                ? { conversationId: selected.conversationId }
+                : {})
             }
           : null
     if (!connection) {
@@ -127,7 +179,8 @@ export function RoomAddAgentDialog({
         identity: identity.trim(),
         displayName: identity.trim(),
         agent,
-        connection
+        connection,
+        ...(useMachineStreaming ? { machineStreaming: true, trusted: true } : {})
       })
       onOpenChange(false)
       setSelection('')

@@ -12,13 +12,19 @@ export function listStructuredProviderSessionOwnership(
   records: readonly AgentSessionRecord[]
 ): StructuredProviderSessionOwnership[] {
   return records.flatMap((record) =>
-    record.providerHandleChain.map((link) => ({
-      sessionId: record.sessionId,
-      workspaceId: record.location.workspaceId,
-      provider: record.provider,
-      providerSessionId:
-        link.handle.provider === 'codex' ? link.handle.threadId : link.handle.sessionId,
-      lease: record.lease
-    }))
+    record.providerHandleChain.flatMap((link) =>
+      link.handle.provider === 'acp'
+        ? []
+        : [
+            {
+              sessionId: record.sessionId,
+              workspaceId: record.location.workspaceId,
+              provider: link.handle.provider,
+              providerSessionId:
+                link.handle.provider === 'codex' ? link.handle.threadId : link.handle.sessionId,
+              lease: record.lease
+            }
+          ]
+    )
   )
 }

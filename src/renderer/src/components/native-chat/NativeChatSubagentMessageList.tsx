@@ -10,12 +10,17 @@ export function NativeChatSubagentMessageList({
   subagents,
   ...messageListProps
 }: React.ComponentProps<typeof NativeChatMessageList> & {
-  subagents: readonly [string, string | null, string | null, AgentStatusEntry | undefined]
+  subagents:
+    | readonly [string, string | null, string | null, AgentStatusEntry | undefined]
+    | AgentSubagentSource
 }): React.JSX.Element {
-  const [paneKey, transcriptPath, runtimeEnvironmentId, agentStatus] = subagents
   const { agent } = messageListProps.session
-  const sources = useMemo<AgentSubagentSource[]>(
-    () => [
+  const sources = useMemo<AgentSubagentSource[]>(() => {
+    if ('key' in subagents) {
+      return [subagents]
+    }
+    const [paneKey, transcriptPath, runtimeEnvironmentId, agentStatus] = subagents
+    return [
       {
         key: 'native-chat',
         identity: agent,
@@ -30,20 +35,11 @@ export function NativeChatSubagentMessageList({
         liveSubagents: agentStatus?.subagents ?? [],
         working: messageListProps.isWorking
       }
-    ],
-    [
-      agent,
-      agentStatus?.subagents,
-      messageListProps.isWorking,
-      messageListProps.session.sessionId,
-      paneKey,
-      runtimeEnvironmentId,
-      transcriptPath
     ]
-  )
+  }, [agent, messageListProps.isWorking, messageListProps.session.sessionId, subagents])
   return (
     <AgentSubagentProvider sources={sources}>
-      <NativeChatMessageList {...messageListProps} subagentSourceKey="native-chat" />
+      <NativeChatMessageList {...messageListProps} subagentSourceKey={sources[0]?.key} />
     </AgentSubagentProvider>
   )
 }

@@ -39,6 +39,24 @@ describe('room activity timeline', () => {
     })
   })
 
+  it('pairs parallel room tools by provider id', () => {
+    const sections = buildRoomActivitySections([
+      message('calls', 'assistant', 1, [
+        { type: 'tool-call', toolCallId: 'one', name: 'Read', input: {} },
+        { type: 'tool-call', toolCallId: 'two', name: 'Bash', input: {} }
+      ]),
+      message('results', 'tool', 2, [
+        { type: 'tool-result', toolCallId: 'two', output: 'second' },
+        { type: 'tool-result', toolCallId: 'one', output: 'first' }
+      ])
+    ])
+
+    expect(sections[0]).toMatchObject({
+      kind: 'tools',
+      tools: [{ result: { output: 'first' } }, { result: { output: 'second' } }]
+    })
+  })
+
   it('reads durable metadata and formats elapsed time', () => {
     const activity = {
       state: 'completed' as const,

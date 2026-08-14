@@ -1,3 +1,5 @@
+import type { AgentJournalTurn } from '../../shared/agent-session-journal-types'
+import { claudeRecord } from './claude-structured-item-translation'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError
@@ -29,8 +31,8 @@ import {
   restoredClaudeStructuredSessionOptions
 } from './claude-structured-options'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { createClaudeSessionJournalTranslator } from './claude-structured-journal-translation'
-import { readClaudeSettingsEffort } from './claude-structured-session-options'
+import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import { createClaudeSessionPublication } from './claude-structured-session-publication'
 import {
   cancelClaudeAcquisitionAttempt,
@@ -71,17 +73,19 @@ export async function acquireClaudeSession({
   }
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
-  const translator = createClaudeSessionJournalTranslator(
-    input.events,
-    prompts,
-    String(input.fence)
-  )
+  const translator = input.events
+    ? createClaudeJournalTranslator({
+        sink: input.events,
+        fallbackIdPrefix: String(input.fence),
+        bindPromptItemId: (itemId, promptKey, questionId) =>
+          prompts.bindJournalItemId(itemId, promptKey, questionId)
+      })
+    : null
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
   let liveSession: ClaudeSession | null = null
   let observedLeafUuid: string | null = null,
     expectedProviderSessionId: string | null = null
-  // Frames are admitted only after launch resolution proves the provider session
-  // this acquisition owns. Keep the check ahead of every stateful consumer.
+  // Quarantine frames until launch resolution proves their provider session.
   const initTimeoutMs = deps.initTimeoutMs ?? CLAUDE_STRUCTURED_INIT_TIMEOUT_MS
   const initDeadline = createClaudeInitDeadline(sessionId, initTimeoutMs)
 
@@ -97,9 +101,7 @@ export async function acquireClaudeSession({
     }
     if (init) {
       initDeadline.resolve(init)
-      // Every turn opens with an init frame naming the model the CLI is actually
-      // running; set_model answers success for a model it never resolves, so this
-      // report is the session's only adoption evidence.
+      // A turn report outranks set_model, which can accept an unresolved model.
       if (liveSession && init.model) {
         liveSession.reportedOptions.model = init.model
         liveSession.reportedModelMutation = liveSession.optionMutationSequence
@@ -109,13 +111,19 @@ export async function acquireClaudeSession({
     if (liveSession) {
       liveSession.leafUuid = observedLeafUuid
     }
-    const startsTurn = liveSession ? resolveClaudeReplayWaiter(liveSession, message) : false
+    let turn: AgentJournalTurn | undefined
+    const startsTurn = liveSession
+      ? resolveClaudeReplayWaiter(liveSession, message, (observed) => {
+          turn = observed
+        })
+      : false
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {
         type: 'message',
         sessionId,
         message,
-        ...(startsTurn ? { startsTurn: true } : {})
+        ...(startsTurn ? { startsTurn: true } : {}),
+        ...(turn ? { turn } : {})
       })
     )
   }
@@ -251,7 +259,8 @@ export async function acquireClaudeSession({
       claudeConfigDir: launch.claudeConfigDir,
       leafUuid: observedLeafUuid,
       fence: input.fence,
-      effort: readClaudeSettingsEffort(settings),
+      settings,
+      launchModel: launch.options.model,
       resumed: launch.resumed,
       prompts,
       translator,
@@ -266,12 +275,24 @@ export async function acquireClaudeSession({
     const acquired: AgentSessionAcquisition = publication.acquisition
     liveSession = publication.session
     await restoreClaudeStructuredSessionOptions(liveSession, deps.requestTimeoutMs)
+    await readClaudeStructuredSessionOptions(liveSession, deps.requestTimeoutMs, initialization)
+    // Buffered startup frames predate the restored options and their readback.
+    const restoredFastMode = liveSession.contextActivity?.context.fastMode
     acquisitions.assertCurrent(sessionId, attempt)
     acquisitions.deleteIfCurrent(sessionId, attempt)
     sessions.set(sessionId, liveSession)
     attempt.published = true
     for (const event of attempt.buffered.splice(0)) {
       event()
+    }
+    const fastMode =
+      typeof restoredFastMode === 'boolean'
+        ? restoredFastMode
+          ? 'on'
+          : 'off'
+        : readClaudeFrameString(claudeRecord(initialization) ?? {}, 'fast_mode_state')
+    if (fastMode !== null) {
+      liveSession.contextActivity?.setInitialFastMode(fastMode)
     }
     return acquired
   } catch (error) {

@@ -136,6 +136,9 @@ export class RoomProviderMessageStore {
            WHERE participant_id = ? AND provider_session_id = ? AND provider_message_id = ?`
         )
         .run(message.id, input.participant.id, input.providerSessionId, input.providerMessageId)
+      this.db
+        .prepare('DELETE FROM room_agent_activity WHERE participant_id = ?')
+        .run(input.participant.id)
       this.db.exec('RELEASE room_provider_reply')
       return message
     } catch (error) {

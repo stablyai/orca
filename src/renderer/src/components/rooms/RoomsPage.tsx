@@ -258,6 +258,7 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
           }
           worktrees={worktrees}
           target={target}
+          machineStreaming={settings?.experimentalStructuredNativeChat === true}
         />
         {settingsOpen ? (
           <RoomSettingsDialog

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_ROOM_CONTEXT } from '../../../shared/room-context'
 import { ROOM_HARNESS_AGENTS, type RoomHarnessAgent } from '../../../shared/rooms'
 import {
@@ -6,6 +6,11 @@ import {
   transcriptLifecycleEvent,
   type RoomHarnessRuntime
 } from './harness-adapter'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+
+afterEach(() => setStructuredAgentSessionHost(null))
 
 function runtimeStub(): RoomHarnessRuntime {
   return {
@@ -86,6 +91,177 @@ function runtimeStub(): RoomHarnessRuntime {
     )
   }
 }
+
+function structuredAttachParams(
+  agent: RoomHarnessAgent,
+  sessionId: string
+): AgentSessionAttachParams {
+  const provider =
+    agent === 'grok' || agent === 'omp' ? 'acp' : agent === 'openclaude' ? 'claude' : agent
+  return {
+    envelope: {
+      sessionId,
+      clientOperationId: '1800000000000-00000000000000000000000000000001',
+      expectedRuntimeFence: null,
+      payloadFingerprint: ''
+    },
+    location: {
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      wslDistro: null,
+      workspaceId: 'worktree-1',
+      workspaceKind: 'git-worktree' as const
+    },
+    provider,
+    agent,
+    accountHome: {
+      variable: provider === 'codex' ? ('CODEX_HOME' as const) : ('HOME' as const),
+      path: '/tmp/provider'
+    },
+    runtimeKind: 'native' as const
+  }
+}
+
+function structuredHostStub() {
+  return {
+    attach: vi.fn(async () => ({ ok: true })),
+    hold: vi.fn(async () => undefined),
+    close: vi.fn(async () => undefined),
+    readConfiguration: vi.fn(() => null)
+  }
+}
+
+describe('machine room harness', () => {
+  it('uses the structured transport only when explicitly enabled', async () => {
+    const runtime = runtimeStub()
+    const host = structuredHostStub()
+    setStructuredAgentSessionHost(host as never)
+    runtime.ensureStructuredAgentSessionHost = vi.fn(async () => undefined)
+    runtime.resolveStructuredAgentSessionCreateIntent = vi.fn(async (input) =>
+      structuredAttachParams(input.agent, input.envelope.sessionId)
+    )
+
+    const binding = await createRoomHarnessAdapters(runtime).codex.launch('worktree-1', {
+      machineStreaming: true,
+      trusted: true
+    })
+
+    expect(binding).toMatchObject({
+      transport: 'machine',
+      providerSession: {
+        key: 'session_id',
+        transport: 'machine'
+      }
+    })
+    if (binding.transport !== 'machine') {
+      throw new Error('expected machine binding')
+    }
+    expect(binding.conversationId).toMatch(/^room_[A-Za-z0-9_]+$/)
+    expect(host.attach).toHaveBeenCalledOnce()
+    expect(host.hold).toHaveBeenCalledOnce()
+    expect(runtime.createAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('hands an idle existing terminal session to the machine transport', async () => {
+    const runtime = runtimeStub()
+    const host = structuredHostStub()
+    setStructuredAgentSessionHost(host as never)
+    runtime.ensureStructuredAgentSessionHost = vi.fn(async () => undefined)
+    runtime.resolveStructuredAgentSessionCreateIntent = vi.fn(async (input) =>
+      structuredAttachParams(input.agent, input.envelope.sessionId)
+    )
+
+    const binding = await createRoomHarnessAdapters(runtime).codex.connectExisting(
+      {
+        worktreeId: 'worktree-1',
+        terminalHandle: 'term_codex',
+        paneKey: 'tab:codex'
+      },
+      { machineStreaming: true, trusted: true }
+    )
+
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_codex', {
+      force: true,
+      waitForExit: true
+    })
+    expect(runtime.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'codex', providerSessionId: 'live-codex' })
+    )
+    expect(binding).toMatchObject({
+      transport: 'machine',
+      providerSession: { sourceSessionId: 'live-codex' },
+      handoffFrom: { terminalHandle: 'term_codex' }
+    })
+  })
+
+  it('adopts an existing structured session without attaching another owner', async () => {
+    const runtime = runtimeStub()
+    const host = {
+      ...structuredHostStub(),
+      hasSession: vi.fn(() => true),
+      restoreReadableSessions: vi.fn(async () => undefined),
+      listSessionTabs: vi.fn(() => [
+        { sessionId: 'room_session_1', workspaceId: 'worktree-1', agent: 'codex' }
+      ]),
+      history: vi.fn(() => ({ providerSession: { id: 'provider-1' } }))
+    }
+    setStructuredAgentSessionHost(host as never)
+    runtime.ensureStructuredAgentSessionHost = vi.fn(async () => undefined)
+
+    const binding = await createRoomHarnessAdapters(runtime).codex.connectExisting(
+      { worktreeId: 'worktree-1', conversationId: 'room_session_1' },
+      { machineStreaming: true, trusted: true }
+    )
+
+    expect(binding).toMatchObject({
+      transport: 'machine',
+      conversationId: 'room_session_1',
+      disposition: 'adopted',
+      providerSession: { sourceSessionId: 'provider-1' }
+    })
+    expect(host.attach).not.toHaveBeenCalled()
+    expect(host.hold).toHaveBeenCalledOnce()
+  })
+
+  it('restores an existing terminal when machine handoff fails', async () => {
+    const runtime = runtimeStub()
+    const running = await runtime.listRoomRunningAgents('worktree-1')
+    runtime.listRoomRunningAgents = vi.fn().mockResolvedValueOnce(running).mockResolvedValueOnce([])
+    setStructuredAgentSessionHost(structuredHostStub() as never)
+    runtime.ensureStructuredAgentSessionHost = vi.fn(async () => undefined)
+    runtime.resolveStructuredAgentSessionCreateIntent = vi.fn(async () => {
+      throw new Error('machine_failed')
+    })
+
+    await expect(
+      createRoomHarnessAdapters(runtime).codex.connectExisting(
+        {
+          worktreeId: 'worktree-1',
+          terminalHandle: 'term_codex',
+          paneKey: 'tab:codex'
+        },
+        { machineStreaming: true, trusted: true }
+      )
+    ).rejects.toThrow('machine_failed')
+
+    expect(runtime.ensureAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'codex',
+        providerSession: expect.objectContaining({ id: 'live-codex' })
+      })
+    )
+  })
+
+  it('keeps untrusted Claude launches on the trust-owning terminal transport', async () => {
+    const runtime = runtimeStub()
+
+    const binding = await createRoomHarnessAdapters(runtime).claude.launch('worktree-1', {
+      machineStreaming: true,
+      trusted: false
+    })
+
+    expect(binding.transport).toBe('terminal')
+  })
+})
 
 it('registers the canonical idle wait before interrupting a room agent', async () => {
   const runtime = runtimeStub()

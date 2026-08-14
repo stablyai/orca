@@ -1,3 +1,4 @@
+import { agentSessionRecordAgent } from '../../../shared/agent-session-record'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
@@ -20,6 +21,6 @@ export function adapterSupportsRecord(
   record: AgentSessionRecord
 ): boolean {
   return adapter.supportsCreate
-    ? adapter.supportsCreate(record.location, record.provider)
+    ? adapter.supportsCreate(record.location, agentSessionRecordAgent(record))
     : record.provider === 'codex'
 }

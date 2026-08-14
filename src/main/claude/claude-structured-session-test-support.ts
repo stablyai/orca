@@ -81,6 +81,10 @@ export function fakeClaude(
       closeCount: 0,
       pid: 4321,
       closed: false,
+      reinitialize: async () => {
+        connection.calls.push({ subtype: 'reinitialize' })
+        return routed('reinitialize') ?? {}
+      },
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
         if (options.exitBeforeInit) {

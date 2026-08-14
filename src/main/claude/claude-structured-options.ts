@@ -10,8 +10,9 @@ import {
   readClaudeSettingsEffort
 } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { applyClaudeFastMode } from './claude-structured-fast-mode'
 
-const OPTION_ORDER = ['model', 'effort', 'permissionMode'] as const
+const OPTION_ORDER = ['model', 'effort', 'permissionMode', 'fastMode'] as const
 
 /**
  * Efforts the settings readback cannot report. `max` applies for the rest of the
@@ -48,7 +49,9 @@ export async function setClaudeStructuredOption(
                 { effortLevel: input.value as EffortLevel },
                 { timeoutMs }
               )
-          : null
+          : input.key === 'fastMode'
+            ? () => applyClaudeFastMode(session, input.value, timeoutMs)
+            : null
   if (!apply) {
     throw new AgentSessionOptionRejectedError(
       `claude stream-json has no session option named ${input.key}`
@@ -91,7 +94,9 @@ export async function setClaudeStructuredOption(
           .getSettings({ timeoutMs })
           .then(readClaudeSettingsEffort)
           .catch(() => null)
-      : null
+      : input.key === 'fastMode'
+        ? input.value
+        : null
   if (mutationSequence !== session.optionMutationSequence) {
     return Object.fromEntries(session.options)
   }

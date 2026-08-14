@@ -8,6 +8,7 @@ import { RoomParticipantStore } from './participants'
 import { RoomProviderMessageStore } from './provider-messages'
 import { RoomActivityStore } from './activities'
 import { RoomDeliveryConfigurationStore } from './delivery-configuration'
+import { RoomNotificationReplayStore } from './notification-replay'
 
 export type RoomDeletionManifest = {
   roomId: string
@@ -25,6 +26,7 @@ export class RoomDatabase {
   readonly providerMessages: RoomProviderMessageStore
   readonly activities: RoomActivityStore
   readonly deliveryConfiguration: RoomDeliveryConfigurationStore
+  readonly notificationReplay: RoomNotificationReplayStore
 
   constructor(path: string) {
     this.db = new SyncDatabase(path)
@@ -36,6 +38,7 @@ export class RoomDatabase {
     this.providerMessages = new RoomProviderMessageStore(this.db, this.messages)
     this.activities = new RoomActivityStore(this.db)
     this.deliveryConfiguration = new RoomDeliveryConfigurationStore(this.db)
+    this.notificationReplay = new RoomNotificationReplayStore(this.db)
   }
 
   close(): void {

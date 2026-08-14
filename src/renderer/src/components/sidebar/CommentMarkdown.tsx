@@ -14,6 +14,7 @@ import {
   type CommentMarkdownLinkClickHandler
 } from './comment-markdown-element-renderers'
 import { remarkNativeChatFileLinks } from './comment-markdown-native-chat-file-links'
+import { type StreamingMarkdownFade, useStreamingMarkdownFade } from './streaming-markdown-fade'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -188,6 +189,7 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   allowFileUriLinks?: boolean
   linkifyFilePaths?: boolean
   expandImages?: boolean
+  streamingFade?: StreamingMarkdownFade
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -204,11 +206,13 @@ const CommentMarkdown = React.memo(
       allowFileUriLinks = false,
       linkifyFilePaths = false,
       expandImages = false,
+      streamingFade,
       ...rest
     },
     ref
   ) {
-    const components = React.useMemo(() => {
+    const fade = useStreamingMarkdownFade(streamingFade, content)
+    const baseComponents = React.useMemo(() => {
       if (!onLinkClick) {
         return variant === 'document'
           ? documentCommentMarkdownComponents
@@ -220,12 +224,20 @@ const CommentMarkdown = React.memo(
         ? createDocumentCommentMarkdownComponents(onLinkClick)
         : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
     }, [expandImages, variant, onLinkClick])
+    const components = React.useMemo(
+      () => (fade.component ? { ...baseComponents, span: fade.component } : baseComponents),
+      [baseComponents, fade.component]
+    )
     const activeRemarkPlugins = React.useMemo(() => {
       const plugins = linkifyFilePaths
         ? [...remarkPlugins, remarkNativeChatFileLinks]
         : remarkPlugins
       return githubRepo ? [...plugins, remarkGitHubReferences(githubRepo)] : plugins
     }, [githubRepo, linkifyFilePaths])
+    const activeRehypePlugins = React.useMemo(
+      () => (fade.plugin ? [...rehypePlugins, fade.plugin] : rehypePlugins),
+      [fade.plugin]
+    )
 
     return (
       <div
@@ -242,7 +254,7 @@ const CommentMarkdown = React.memo(
       >
         <Markdown
           remarkPlugins={activeRemarkPlugins}
-          rehypePlugins={rehypePlugins}
+          rehypePlugins={activeRehypePlugins}
           components={components}
           urlTransform={
             allowFileUriLinks ? commentMarkdownFileUriUrlTransform : commentMarkdownUrlTransform

@@ -15,8 +15,7 @@ import {
 import { readRoomContext, readRoomTranscriptMtime } from './context-reader'
 import { roomHarnessStatusEvent, type RoomHarnessLifecycleEvent } from './harness-lifecycle'
 import type {
-  RoomHarnessAdapter,
-  RoomHarnessBinding,
+  RoomTerminalHarnessBinding,
   RoomHarnessReadResult,
   RoomHarnessRuntime,
   RoomHarnessSubscriptionCallbacks
@@ -35,8 +34,9 @@ export type {
   RoomHarnessReadResult,
   RoomHarnessRuntime
 } from './harness-adapter-types'
+export { createRoomHarnessAdapters } from './routed-harness-adapter'
 
-export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
+export class PtyRoomHarnessAdapter {
   constructor(
     readonly agent: RoomHarnessAgent,
     private readonly runtime: RoomHarnessRuntime
@@ -45,7 +45,7 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
   async launch(
     worktreeId: string,
     preferences?: AgentLaunchPreferences
-  ): Promise<RoomHarnessBinding> {
+  ): Promise<RoomTerminalHarnessBinding> {
     return this.launchAt(worktreeId, preferences)
   }
 
@@ -53,7 +53,7 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
     worktreeId: string,
     preferences?: AgentLaunchPreferences,
     paneKey = ''
-  ): Promise<RoomHarnessBinding> {
+  ): Promise<RoomTerminalHarnessBinding> {
     const surface = resolveRoomTerminalRestorationSurface(this.runtime, worktreeId, paneKey)
     const result = await this.runtime.createAgentSession({
       clientOperationId: `${Date.now()}-${randomBytes(16).toString('hex')}`,
@@ -75,7 +75,7 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
     terminalHandle?: string
     paneKey?: string
     historyId?: string
-  }): Promise<RoomHarnessBinding> {
+  }): Promise<RoomTerminalHarnessBinding> {
     if (input.terminalHandle && input.paneKey) {
       const match = (await this.runtime.listRoomRunningAgents(input.worktreeId)).find(
         (candidate) =>
@@ -111,7 +111,7 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
     })
   }
 
-  read(binding: RoomHarnessBinding, limit = 200): Promise<RoomHarnessReadResult> {
+  read(binding: RoomTerminalHarnessBinding, limit = 200): Promise<RoomHarnessReadResult> {
     const session = binding.providerSession
     if (!session) {
       return Promise.resolve({ error: 'Transcript unavailable', notFound: true })
@@ -125,7 +125,7 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
   }
 
   send(
-    binding: RoomHarnessBinding,
+    binding: RoomTerminalHarnessBinding,
     prompt: string,
     options?: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
@@ -138,11 +138,11 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
       : this.runtime.sendTerminalAgentPrompt(binding.terminalHandle, prompt)
   }
 
-  async interrupt(binding: RoomHarnessBinding): Promise<void> {
+  async interrupt(binding: RoomTerminalHarnessBinding): Promise<void> {
     await interruptRoomHarness(this.runtime, binding)
   }
 
-  async prepareControl(binding: RoomHarnessBinding, command: string): Promise<void> {
+  async prepareControl(binding: RoomTerminalHarnessBinding, command: string): Promise<void> {
     if (this.agent !== 'claude' || !/^\/fast (?:on|off)$/.test(command.trim())) {
       return
     }
@@ -155,7 +155,7 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
     }
   }
 
-  stop(binding: RoomHarnessBinding): Promise<RuntimeTerminalClose> {
+  stop(binding: RoomTerminalHarnessBinding): Promise<RuntimeTerminalClose> {
     return this.runtime.closeTerminal(binding.terminalHandle, {
       force: true,
       waitForExit: true
@@ -165,7 +165,7 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
   /** Foreground-verified lookup of the live pane hosting this binding's agent.
    *  Provider session survives pane replacement; pane identity is the fallback
    *  before the provider has assigned one. */
-  async locate(binding: RoomHarnessBinding): Promise<RoomHarnessBinding | null> {
+  async locate(binding: RoomTerminalHarnessBinding): Promise<RoomTerminalHarnessBinding | null> {
     const current = (await this.runtime.listRoomRunningAgents(binding.worktreeId)).find(
       (candidate) =>
         candidate.agent === this.agent &&
@@ -190,9 +190,9 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
   }
 
   async restore(
-    binding: RoomHarnessBinding,
+    binding: RoomTerminalHarnessBinding,
     preferences?: AgentLaunchPreferences
-  ): Promise<RoomHarnessBinding> {
+  ): Promise<RoomTerminalHarnessBinding> {
     const current = await this.locate(binding)
     if (current) {
       return current
@@ -209,9 +209,9 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
   }
 
   async reconfigure(
-    binding: RoomHarnessBinding,
+    binding: RoomTerminalHarnessBinding,
     preferences: AgentLaunchPreferences
-  ): Promise<RoomHarnessBinding> {
+  ): Promise<RoomTerminalHarnessBinding> {
     const surface = resolveRoomTerminalRestorationSurface(
       this.runtime,
       binding.worktreeId,
@@ -245,7 +245,7 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
     return { ...ensured, disposition: 'created' }
   }
 
-  status(binding: RoomHarnessBinding): Promise<RuntimeTerminalAgentStatus> {
+  status(binding: RoomTerminalHarnessBinding): Promise<RuntimeTerminalAgentStatus> {
     // Rooms paste prompts and block deliveries based on this status: title and
     // screen text survive an agent's death, so demand live-process evidence.
     return this.runtime.getTerminalAgentStatus(binding.terminalHandle, {
@@ -253,36 +253,39 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
     })
   }
 
-  incarnation(binding: RoomHarnessBinding): string | null {
+  incarnation(binding: RoomTerminalHarnessBinding): string | null {
     return this.runtime.getTerminalProcessIncarnation(binding.terminalHandle)
   }
 
-  awaitReady(binding: RoomHarnessBinding): Promise<RuntimeTerminalWait> {
+  awaitReady(binding: RoomTerminalHarnessBinding): Promise<RuntimeTerminalWait> {
     return this.runtime.waitForTerminal(binding.terminalHandle, { condition: 'tui-idle' })
   }
 
-  awaitInputReady(binding: RoomHarnessBinding): Promise<boolean> {
+  awaitInputReady(binding: RoomTerminalHarnessBinding): Promise<boolean> {
     return this.runtime.waitForTerminalAgentInputReady(binding.terminalHandle, this.agent)
   }
 
-  context(binding: RoomHarnessBinding, current: RoomContextSnapshot): Promise<RoomContextSnapshot> {
+  context(
+    binding: RoomTerminalHarnessBinding,
+    current: RoomContextSnapshot
+  ): Promise<RoomContextSnapshot> {
     return binding.providerSession
       ? readRoomContext(this.agent, binding.providerSession, current)
       : Promise.resolve(current)
   }
 
-  lastTranscriptActivityAt(binding: RoomHarnessBinding): Promise<number | null> {
+  lastTranscriptActivityAt(binding: RoomTerminalHarnessBinding): Promise<number | null> {
     return binding.providerSession
       ? readRoomTranscriptMtime(this.agent, binding.providerSession)
       : Promise.resolve(null)
   }
 
-  compact(binding: RoomHarnessBinding): Promise<RuntimeTerminalSend> {
+  compact(binding: RoomTerminalHarnessBinding): Promise<RuntimeTerminalSend> {
     return this.runtime.compactTerminalAgentSession(binding.terminalHandle)
   }
 
   stageAttachment(
-    binding: RoomHarnessBinding,
+    binding: RoomTerminalHarnessBinding,
     attachment: Pick<RoomAttachment, 'id' | 'fileName' | 'localPath'>
   ): Promise<string> {
     return this.runtime.stageRoomAttachment(binding.worktreeId, binding.terminalHandle, attachment)
@@ -295,20 +298,9 @@ export class PtyRoomHarnessAdapter implements RoomHarnessAdapter {
   }
 
   subscribe(
-    binding: RoomHarnessBinding,
+    binding: RoomTerminalHarnessBinding,
     callbacks: RoomHarnessSubscriptionCallbacks
   ): Promise<NativeChatTranscriptSubscription> {
     return subscribeRoomHarnessTranscript(this.agent, binding, callbacks)
-  }
-}
-
-export function createRoomHarnessAdapters(
-  runtime: RoomHarnessRuntime
-): Record<RoomHarnessAgent, RoomHarnessAdapter> {
-  return {
-    claude: new PtyRoomHarnessAdapter('claude', runtime),
-    openclaude: new PtyRoomHarnessAdapter('openclaude', runtime),
-    codex: new PtyRoomHarnessAdapter('codex', runtime),
-    grok: new PtyRoomHarnessAdapter('grok', runtime)
   }
 }

@@ -217,7 +217,12 @@ describe('Claude structured journal translation', () => {
     run?.()
     expect(state.items.at(-1)).toEqual({
       identity: streamedIdentity,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: turn.text }] }
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        assistantPhase: 'commentary',
+        blocks: [{ type: 'text', text: turn.text }]
+      }
     })
 
     translator.handle(turn.final)
@@ -227,7 +232,12 @@ describe('Claude structured journal translation', () => {
     const assistant = assistantMessages(state.items)
     expect(assistant.at(-1)).toEqual({
       identity: streamedIdentity,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: turn.text }] }
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        assistantPhase: 'commentary',
+        blocks: [{ type: 'text', text: turn.text }]
+      }
     })
     expect(new Set(assistant.map((item) => agentJournalItemKey(item.identity))).size).toBe(1)
     expect(providerFrameKinds(state.items)).toEqual([])
@@ -287,6 +297,7 @@ describe('Claude structured journal translation', () => {
     expect(assistant[0]?.body).toEqual({
       kind: 'message',
       role: 'assistant',
+      assistantPhase: 'commentary',
       blocks: [{ type: 'text', text: numbers.join('\n') }]
     })
     expect(providerFrameKinds(items)).toEqual([])
@@ -350,8 +361,12 @@ describe('Claude structured journal translation', () => {
       state.items.some((item) => item.body.kind === 'status' && !item.body.turnLifecycle)
     ).toBe(false)
     expect(
-      state.tombstones.flatMap((identity) =>
-        identity.provider === 'legacy' ? [identity.recordId] : []
+      state.items.flatMap(({ identity, body }) =>
+        identity.provider === 'legacy' &&
+        body.kind === 'status' &&
+        body.turnLifecycle?.state === 'completed'
+          ? [identity.recordId]
+          : []
       )
     ).toEqual(['turn-lifecycle:user-replay-1', 'turn-lifecycle:user-interrupt'])
   })
@@ -374,12 +389,19 @@ describe('Claude structured journal translation', () => {
 
     liveTranslator.handle({ ...replay, startsTurn: true })
     liveTranslator.handle(resultFrame('success', { is_error: false, result: '' }))
-    expect(live.tombstones).toContainEqual({
-      provider: 'legacy',
-      agent: 'claude',
-      sessionId: 'claude-session',
-      recordId: 'turn-lifecycle:picker-command-1'
-    })
+    expect(live.items).toContainEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          turnLifecycle: { turnId: 'picker-command-1', state: 'completed', outcome: 'completed' }
+        }),
+        identity: expect.objectContaining({
+          provider: 'legacy',
+          agent: 'claude',
+          sessionId: 'claude-session',
+          recordId: 'turn-lifecycle:picker-command-1'
+        })
+      })
+    )
     liveTranslator.dispose()
 
     const restarted = sinkState()
@@ -417,14 +439,20 @@ describe('Claude structured journal translation', () => {
     )
 
     expect(providerFrameKinds(state.items)).toEqual(['message:result:success'])
-    expect(state.items.at(-1)?.body).toMatchObject({
+    expect(
+      state.items.find((item) => item.body.kind === 'status' && item.body.providerFrame)?.body
+    ).toMatchObject({
       kind: 'status',
       text: 'API Error: 529 upstream overloaded'
     })
     // The turn still settles: the error is an extra row, not a stuck lifecycle.
     expect(
-      state.tombstones.flatMap((identity) =>
-        identity.provider === 'legacy' ? [identity.recordId] : []
+      state.items.flatMap(({ identity, body }) =>
+        identity.provider === 'legacy' &&
+        body.kind === 'status' &&
+        body.turnLifecycle?.state === 'completed'
+          ? [identity.recordId]
+          : []
       )
     ).toEqual(['turn-lifecycle:user-1'])
   })
@@ -557,10 +585,10 @@ describe('Claude structured journal translation', () => {
       sessionId: 'orca-session',
       message: { type: 'result', session_id: 'claude-session', uuid: 'result-1' }
     })
-    expect(state.tombstones.at(-1)).toMatchObject({
-      provider: 'legacy',
-      agent: 'claude',
-      recordId: 'turn-lifecycle:user-1'
+    expect(
+      state.items.findLast((item) => item.body.kind === 'status' && item.body.turnLifecycle)?.body
+    ).toMatchObject({
+      turnLifecycle: { turnId: 'user-1', state: 'completed' }
     })
   })
 
@@ -572,8 +600,11 @@ describe('Claude structured journal translation', () => {
     translator.handle(message('assistant', 'assistant-thinking', [{ type: 'thinking', thinking }]))
 
     expect(state.items.at(-1)?.body).toEqual({
-      kind: 'status',
-      text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [
+        { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+      ]
     })
   })
 

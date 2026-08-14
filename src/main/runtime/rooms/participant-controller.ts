@@ -11,6 +11,7 @@ import {
 } from './participant-hibernation'
 import {
   hideRoomParticipantRendererStatus,
+  roomParticipantFieldsFromBinding,
   roomParticipantHarnessBinding
 } from './participant-harness-binding'
 import { roomParticipantRestartPreferences } from './participant-restart-preferences'
@@ -163,9 +164,7 @@ export class RoomParticipantController {
       const located = await adapter.locate(binding)
       if (located) {
         participant = this.db.participants.update(participant.id, {
-          terminalHandle: located.terminalHandle,
-          paneKey: located.paneKey,
-          ...(located.providerSession ? { providerSession: located.providerSession } : {})
+          ...roomParticipantFieldsFromBinding(located)
         })
         hideRoomParticipantRendererStatus(participant, this.hideRendererStatus)
         const status = await adapter.status(located).catch(() => null)
@@ -244,6 +243,7 @@ export class RoomParticipantController {
     this.emit(current.roomId, { type: 'participant.updated', participant: current })
     try {
       const canResume =
+        binding.transport === 'machine' ||
         !binding.providerSession ||
         this.db.providerMessages.hasObservedSession(participant.id, binding.providerSession.id)
       const restored = await adapter.restore(
@@ -259,10 +259,7 @@ export class RoomParticipantController {
           incarnation !== null &&
           incarnation !== participant.processIncarnation)
       current = this.db.participants.update(participant.id, {
-        worktreeId: restored.worktreeId,
-        paneKey: restored.paneKey,
-        terminalHandle: restored.terminalHandle,
-        providerSession: restored.providerSession,
+        ...roomParticipantFieldsFromBinding(restored),
         // Never erase a known incarnation with a transient null.
         ...(incarnation !== null ? { processIncarnation: incarnation } : {})
       })

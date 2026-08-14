@@ -37,3 +37,12 @@ export function readCodexTurnId(payload: unknown): string | null {
   }
   return nonEmptyString(record(root.turn)?.id) ?? nonEmptyString(root.turnId)
 }
+
+export function readCodexTurnOutcome(payload: unknown): 'completed' | 'failed' | 'interrupted' {
+  const root = record(payload)
+  const status = nonEmptyString(record(root?.turn)?.status) ?? nonEmptyString(root?.status)
+  if (status === 'interrupted' || status === 'cancelled' || status === 'canceled') {
+    return 'interrupted'
+  }
+  return status === 'failed' ? 'failed' : 'completed'
+}

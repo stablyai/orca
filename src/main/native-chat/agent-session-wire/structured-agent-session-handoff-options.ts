@@ -17,7 +17,7 @@ export async function readNativeHandoffSessionOptions(input: {
   const { model: _model, effort: _effort, ...restored } = priorOptions ?? {}
   return {
     ...restored,
-    model: reported.current.model,
+    ...(reported.current.model ? { model: reported.current.model } : {}),
     ...(reported.current.effort ? { effort: reported.current.effort } : {})
   }
 }

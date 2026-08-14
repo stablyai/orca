@@ -4,6 +4,10 @@ import { isNoiseMessage } from '../../../shared/native-chat-noise'
 import { isSubagentToolName } from '../../../shared/native-chat-tool-name'
 import { briefToolArg } from '../../../shared/native-chat-tool-summary'
 import { roomActivityKindFromTool } from '../../../shared/room-activity'
+import type {
+  StructuredProviderInput,
+  StructuredProviderPermission
+} from '../../../shared/structured-agent-provider'
 
 export type RoomHarnessActivityKind =
   | 'thinking'
@@ -27,6 +31,8 @@ export type RoomHarnessLifecycleEvent = {
   replay?: true
   activity?: { kind: RoomHarnessActivityKind; detail?: string }
   text?: string
+  permission?: StructuredProviderPermission | null
+  input?: StructuredProviderInput | null
 }
 
 export function roomHarnessStatusEvent(
@@ -151,7 +157,7 @@ function toolActivityMessage(
   }
 }
 
-function activityFromMessages(messages: NativeChatMessage[]): {
+export function activityFromMessages(messages: NativeChatMessage[]): {
   kind: RoomHarnessActivityKind
   detail?: string
 } {

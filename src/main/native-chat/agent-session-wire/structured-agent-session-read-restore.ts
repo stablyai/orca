@@ -1,3 +1,4 @@
+import { agentSessionRecordAgent } from '../../../shared/agent-session-record'
 import type {
   AgentSessionOwnerRuntimeKind,
   AgentSessionRecord
@@ -88,7 +89,7 @@ export function attachParamsForRecord(
     },
     location: record.location,
     provider: record.provider,
-    agent: record.provider,
+    agent: agentSessionRecordAgent(record),
     accountHome: record.accountHome,
     runtimeKind: input.runtimeKind ?? record.lease.runtimeKind
   }

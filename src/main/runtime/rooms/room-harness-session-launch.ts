@@ -1,6 +1,6 @@
 import type { AgentLaunchPreferences } from '../../../shared/agent-session-host-authority'
 import type { RoomHarnessAgent } from '../../../shared/rooms'
-import type { RoomHarnessBinding, RoomHarnessRuntime } from './harness-adapter-types'
+import type { RoomHarnessRuntime, RoomTerminalHarnessBinding } from './harness-adapter-types'
 import { roomHarnessBindingFromTerminal } from './participant-harness-binding'
 import { resolveRoomTerminalRestorationSurface } from './room-terminal-restoration-surface'
 
@@ -12,10 +12,10 @@ export const ROOM_AGENT_EXTRA_ARGS: Partial<Record<RoomHarnessAgent, string>> = 
 export async function ensureLiveRoomHarnessSession(args: {
   agent: RoomHarnessAgent
   runtime: RoomHarnessRuntime
-  binding: RoomHarnessBinding
+  binding: RoomTerminalHarnessBinding
   preferences?: AgentLaunchPreferences
   surface?: ReturnType<typeof resolveRoomTerminalRestorationSurface>
-}): Promise<RoomHarnessBinding> {
+}): Promise<RoomTerminalHarnessBinding> {
   const { agent, runtime, binding, preferences } = args
   const providerSession = binding.providerSession
   if (!providerSession) {

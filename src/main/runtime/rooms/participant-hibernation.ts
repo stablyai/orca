@@ -1,8 +1,10 @@
 import type { RoomEvent, RoomHarnessAgent, RoomParticipant } from '../../../shared/rooms'
 import type { RoomDatabase } from './database'
-import type { RoomHarnessAdapter, RoomHarnessBinding } from './harness-adapter'
+import type { RoomHarnessAdapter } from './harness-adapter'
+import type { RoomTerminalHarnessBinding } from './harness-adapter-types'
 import {
   hideRoomParticipantRendererStatus,
+  roomParticipantFieldsFromBinding,
   roomParticipantHarnessBinding
 } from './participant-harness-binding'
 
@@ -25,7 +27,12 @@ export async function hibernateIdleRoomParticipants(args: {
     }
     const adapter = participant.agent ? args.adapters[participant.agent] : null
     const binding = roomParticipantHarnessBinding(participant)
-    if (!adapter || !binding || args.restoring.has(participant.id)) {
+    if (
+      !adapter ||
+      !binding ||
+      binding.transport === 'machine' ||
+      args.restoring.has(participant.id)
+    ) {
       continue
     }
     await hibernateParticipant(args, adapter, participant, binding).catch(() => {})
@@ -36,7 +43,7 @@ async function hibernateParticipant(
   args: Parameters<typeof hibernateIdleRoomParticipants>[0],
   adapter: RoomHarnessAdapter,
   participant: RoomParticipant,
-  binding: RoomHarnessBinding
+  binding: RoomTerminalHarnessBinding
 ): Promise<void> {
   let current = binding
   let status: Awaited<ReturnType<RoomHarnessAdapter['status']>>
@@ -44,15 +51,13 @@ async function hibernateParticipant(
     status = await adapter.status(binding)
   } catch {
     const located = await adapter.locate(binding)
-    if (!located) {
+    if (!located || located.transport === 'machine') {
       markRoomParticipantSleeping(args.db, args.emit, participant)
       return
     }
     current = located
     participant = args.db.participants.update(participant.id, {
-      terminalHandle: located.terminalHandle,
-      paneKey: located.paneKey,
-      ...(located.providerSession ? { providerSession: located.providerSession } : {})
+      ...roomParticipantFieldsFromBinding(located)
     })
     hideRoomParticipantRendererStatus(participant, args.hideRendererStatus)
     status = await adapter.status(located)
