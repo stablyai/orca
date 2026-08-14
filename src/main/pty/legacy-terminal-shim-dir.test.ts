@@ -705,6 +705,22 @@ describe('legacy terminal shim neutralization', () => {
     expect(posixEnv).toEqual({ PATH: '' })
   })
 
+  it('strips legacy shim entries that carry a trailing separator', () => {
+    // Why: without normalizing the trailing separator the entry does not match, so Orca's own
+    // scrub leaves the legacy shim directory on the spawned PATH and the wrapper stays reachable.
+    const posix: Record<string, string> = {
+      PATH: '/home/u/.orca/orca-terminal-attribution/posix/:/usr/bin'
+    }
+    stripLegacyTerminalShimEnv(posix, 'linux')
+    expect(posix.PATH).toBe('/usr/bin')
+
+    const win: Record<string, string> = {
+      Path: 'C:\\Users\\u\\orca-terminal-attribution\\win32\\;C:\\Windows'
+    }
+    stripLegacyTerminalShimEnv(win, 'win32')
+    expect(win.Path).toBe('C:\\Windows')
+  })
+
   it('keeps neighbouring directories that merely share the name prefix', () => {
     const env: Record<string, string> = {
       PATH: '/opt/orca-terminal-attribution:/opt/orca-terminal-attribution/custom-tools:/home/u/orca-terminal-attribution-notes/bin:/usr/bin'
