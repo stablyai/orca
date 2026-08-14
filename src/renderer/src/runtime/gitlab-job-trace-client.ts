@@ -4,7 +4,7 @@ import {
   gitLabJobTraceToCheckRunDetails
 } from '../../../shared/gitlab-job-trace-check-details'
 import type { GitLabJobTraceResult, GitLabProjectRef } from '../../../shared/gitlab-types'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 import { getActiveRuntimeTarget } from './runtime-client-target'
 import { callRuntimeRpc } from './runtime-rpc-client'
 

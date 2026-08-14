@@ -9,7 +9,7 @@ import {
   type GitHistoryItem,
   type GitHistoryResult
 } from '../../../../shared/git-history'
-import type { GitBranchChangeEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
 import {
   buildDefaultGitHistoryColorMap,
   buildGitHistoryViewModels

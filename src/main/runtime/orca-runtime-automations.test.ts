@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { Automation } from '../../shared/automations-types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 
 const repo: Repo = {
   id: 'repo-1',

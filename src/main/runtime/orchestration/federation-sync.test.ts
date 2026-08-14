@@ -13,6 +13,7 @@ function createIdleSyncHarness() {
   let remoteRuntimeEpoch = 'remote_epoch_1'
   let blockedAck: { reached: () => void; released: Promise<void> } | null = null
   let blockedPull: { reached: () => void; released: Promise<void> } | null = null
+  let relayEligible = true
   const federated = {
     environment_id: 'environment_windows',
     environment_name: 'windows',
@@ -27,6 +28,7 @@ function createIdleSyncHarness() {
       getDispatchContextById: () => ({ run_id: 'run_home', task_id: 'task_home' }),
       getWorkerDispatch: () => ({ state: 'ready' }),
       listPendingFederationRelay: () => [],
+      isFederatedDispatchRelayEligible: () => relayEligible,
       recordFederatedHomeAcknowledgment: (params: {
         remoteRuntimeEpoch: string
         sequence: number
@@ -75,6 +77,9 @@ function createIdleSyncHarness() {
     },
     restartRemote: () => {
       remoteRuntimeEpoch = 'remote_epoch_2'
+    },
+    settleDispatch: () => {
+      relayEligible = false
     },
     replaceDb: () => runtime.setOrchestrationDb(createDb()),
     blockAck: () => {
@@ -335,6 +340,39 @@ describe('federation relay acknowledgments', () => {
     expect(
       remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
     ).toHaveLength(2)
+  })
+
+  it('releases the checkpoint once a dispatch is no longer relay eligible', async () => {
+    const { runtime, settleDispatch } = createIdleSyncHarness()
+    const identity: FederationAckIdentity = {
+      environmentId: 'environment_windows',
+      peerFingerprint: 'windows_peer_fingerprint',
+      remoteRuntimeEpoch: 'remote_epoch_1'
+    }
+    const ackedThrough = () =>
+      getFederationAckedThrough(acquireFederationAckLease(runtime, 'dispatch_remote'), identity)
+
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    expect(ackedThrough()).toBe(2)
+
+    settleDispatch()
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    expect(ackedThrough()).toBe(0)
+  })
+
+  it('leaves the durable watermark suppressing acks after the checkpoint is released', async () => {
+    const { runtime, remoteCall, settleDispatch } = createIdleSyncHarness()
+    const ackCalls = () =>
+      remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
+
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    expect(ackCalls()).toHaveLength(1)
+
+    settleDispatch()
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+
+    expect(ackCalls()).toHaveLength(1)
   })
 
   it('matches checkpoints only to their exact remote identity and never moves backward', () => {

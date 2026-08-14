@@ -1,5 +1,5 @@
 import { ghExecFileAsync } from '../git/runner'
-import type { GitHubOwnerRepo } from '../../shared/types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions

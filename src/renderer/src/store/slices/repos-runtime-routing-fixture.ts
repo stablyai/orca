@@ -1,6 +1,6 @@
 import { beforeEach, vi, type Mock } from 'vitest'
 import { toast } from 'sonner'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest

@@ -11,7 +11,7 @@ import {
   type MobileCommitRow
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
-import type { GitBranchChangeEntry } from '../../../src/shared/types'
+import type { GitBranchChangeEntry } from '../../../src/shared/git-diff-compare-types'
 
 type Props = {
   client: RpcClient | null

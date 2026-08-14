@@ -1,5 +1,5 @@
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {

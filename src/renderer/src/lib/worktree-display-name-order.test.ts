@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from './worktree-display-name-order'
 
 // displayName is typed `string`, but crash 99657ab1 proved it arrives undefined

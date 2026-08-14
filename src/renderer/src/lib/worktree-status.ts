@@ -6,9 +6,9 @@ import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab,
-  TuiAgent
-} from '../../../shared/types'
+  TerminalTab
+} from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 
 export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'

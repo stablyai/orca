@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

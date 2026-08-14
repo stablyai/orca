@@ -3,7 +3,7 @@ import {
   isLockedWorktreeRemovalError,
   isProvenLivePtyRemovalError,
   type WorktreeForceDeleteReason
-} from '../../../../shared/worktree-removal'
+} from '../../../../shared/worktree/removal'
 export type DeleteWorktreeToastCopy = {
   title: string
   description?: string

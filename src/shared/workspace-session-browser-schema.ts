@@ -3,7 +3,7 @@
  * schemas themselves are unchanged apart from the per-entry tolerance the
  * session schema now declares everywhere. */
 import { z } from 'zod'
-import type { BrowserWorkspace } from './types'
+import type { BrowserWorkspace } from './browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { salvagingArray } from './zod-salvage'
 

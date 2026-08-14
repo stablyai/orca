@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { OrcaHooks } from '../../../shared/types'
+import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import {

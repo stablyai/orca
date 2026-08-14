@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearClientForWorkspace } from './client'
-import type { LinearWorkspace } from '../../shared/types'
+import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 
 const getClients = vi.fn()
 const getStatus = vi.fn()

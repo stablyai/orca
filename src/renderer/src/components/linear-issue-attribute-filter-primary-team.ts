@@ -1,4 +1,4 @@
-import type { LinearTeam } from '../../../shared/types'
+import type { LinearTeam } from '../../../shared/linear/workspace-types'
 
 function compareTeamNameId(a: LinearTeam, b: LinearTeam): number {
   const nameCmp = a.name.localeCompare(b.name)

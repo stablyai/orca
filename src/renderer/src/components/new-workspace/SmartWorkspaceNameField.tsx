@@ -74,14 +74,11 @@ import {
 } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../shared/new-workspace/smart-workspace-source-query'
 import { filterAvailableTaskProviders } from '../../../../shared/task-providers'
-import type {
-  BaseRefSearchResult,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  JiraIssue,
-  JiraSite,
-  LinearIssue
-} from '../../../../shared/types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
 import { translate } from '@/i18n/i18n'
@@ -96,7 +93,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getGitHubRuntimeRepoId,

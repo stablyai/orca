@@ -1,5 +1,5 @@
-import type { LinearErrorCode, LinearWorkspaceCandidate } from '../../shared/linear-agent-access'
-import type { LinearWorkspace } from '../../shared/types'
+import type { LinearErrorCode, LinearWorkspaceCandidate } from '../../shared/linear/agent-access'
+import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 import { getClients, getStatus, type LinearClientForWorkspace } from './client'
 import {
   LinearAgentAccessError,

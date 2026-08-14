@@ -13,7 +13,7 @@ import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefDetails
 } from '@/runtime/runtime-repo-client'
-import type { Repo, BaseRefSearchResult } from '../../../../shared/types'
+import type { BaseRefSearchResult, Repo } from '../../../../shared/repo-types'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import { normalizeHostedReviewBaseRef } from '../../../../shared/hosted-review-refs'
 import {

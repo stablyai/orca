@@ -1,4 +1,4 @@
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import type { getPRForBranch } from '../github/client'
 

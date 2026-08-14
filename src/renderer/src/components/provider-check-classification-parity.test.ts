@@ -9,7 +9,8 @@ import {
   summarizeProviderChecks
 } from '../../../shared/provider-check-summary'
 import type { GitLabPipelineJob } from '../../../shared/gitlab-types'
-import type { PRCheckDetail, ProviderCheckSummary } from '../../../shared/types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
+import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'
 
 function completed(conclusion: string): PRCheckDetail {
   return {

@@ -2,7 +2,7 @@
 import { createRoot, type Root } from 'react-dom/client'
 import { act, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 
 const statuses: WorkspaceStatusDefinition[] = [{ id: 'todo', label: 'Todo' }]
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

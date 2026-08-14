@@ -1,5 +1,6 @@
 import type { Store } from './persistence'
-import type { Project, Repo } from '../shared/types'
+import type { Project } from '../shared/project-types'
+import type { Repo } from '../shared/repo-types'
 import {
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
@@ -10,7 +11,7 @@ import {
   hasCachedWslAvailability,
   hasCachedWslDistros
 } from './wsl'
-import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 
 function canResolveProjectRuntimeForRepo(store: Store): boolean {

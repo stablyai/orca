@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { parseDocument } from 'yaml'
-import type { TerminalColorOverrides } from '../../shared/types'
+import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import {
   hasUsableTerminalThemeColors,
   makeCustomTerminalThemeSelection,

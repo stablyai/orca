@@ -1,4 +1,5 @@
-import type { GitPushTarget, GitUpstreamStatus } from '../../shared/types'
+import type { GitUpstreamStatus } from '../../shared/git-status-types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../../shared/git-upstream-status'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import { getEffectiveGitUpstreamStatus } from '../../shared/git-effective-upstream'

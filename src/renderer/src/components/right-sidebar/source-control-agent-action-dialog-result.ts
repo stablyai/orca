@@ -1,7 +1,7 @@
 import type { getAgentCatalog } from '@/lib/agent-catalog'
 import type { useAppStore } from '@/store'
 import type { useRepoById } from '@/store/selectors'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 
 export type SourceControlAgentScopeNote = {

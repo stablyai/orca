@@ -68,7 +68,7 @@ import type {
   BrowserLoadError,
   BrowserPage as BrowserPageState,
   BrowserWorkspace as BrowserWorkspaceState
-} from '../../../../shared/types'
+} from '../../../../shared/browser-workspace-types'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,

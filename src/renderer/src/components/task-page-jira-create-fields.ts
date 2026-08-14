@@ -1,5 +1,5 @@
 import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
-import type { JiraCreateField } from '../../../shared/types'
+import type { JiraCreateField } from '../../../shared/jira-types'
 
 const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
 

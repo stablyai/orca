@@ -1,4 +1,4 @@
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
 import { getDefaultWslDistro, getWslHome, parseWslPath, toLinuxPath } from '../wsl'
 import { clearSkillRootScanCache, discoverSkills } from './discovery'

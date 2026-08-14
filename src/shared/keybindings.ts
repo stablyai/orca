@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: keep the shortcut registry, parser, formatter, and conflict detector in one shared module so main/renderer/browser/Settings can't drift. */
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { ALL_TUI_AGENTS, TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 export type KeybindingScope =

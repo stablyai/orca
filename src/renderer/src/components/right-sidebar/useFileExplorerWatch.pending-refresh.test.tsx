@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FsChangedPayload } from '../../../../shared/types'
+import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type {
   FileExplorerOperationOwner,
   FileExplorerTreeRefreshOutcome

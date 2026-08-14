@@ -29,7 +29,8 @@ import {
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
-import type { PersistedTrustedOrcaHooks, TuiAgent } from '../../../src/shared/types'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
 import {
   NEW_WORKTREE_AGENT_OPTIONS as AGENT_OPTIONS,

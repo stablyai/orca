@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
-import type { WorktreeHeadIdentity } from '../../shared/types'
+import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
 
 // Why: the whole point of this reader is replacing `git worktree list` fanout
 // with bounded metadata-file reads, so head freshness never re-creates the

@@ -1,4 +1,8 @@
-import type { PRCheckDetail, PRState, ProviderCheckSummary } from '../../../../src/shared/types'
+import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+import type {
+  PRState,
+  ProviderCheckSummary
+} from '../../../../src/shared/github/pull-request-types'
 import {
   classifyCheckOutcome,
   summarizeProviderChecks,

@@ -1,6 +1,8 @@
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
-import type { Repo, Worktree, WorktreeMeta } from '../../shared/types'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { Worktree } from '../../shared/worktree/types'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
 
 export function getRuntimeFolderWorkspaceRootId(repo: Repo): string {

@@ -31,6 +31,103 @@ describe('CandidateRow', () => {
     container = null
   })
 
+  it('does not present cleanup policy tiers as workspace facts', () => {
+    const candidate = makeCandidate({ tier: 'ready' })
+
+    act(() => {
+      root?.render(
+        <CandidateRow
+          candidate={candidate}
+          expanded={false}
+          last
+          lastActivityLabel="1d ago"
+          reviewInfo={{
+            hasReview: false,
+            label: null,
+            provider: null,
+            state: null,
+            title: null
+          }}
+          selected
+          onIgnore={vi.fn()}
+          onRemove={vi.fn()}
+          onToggleExpanded={vi.fn()}
+          onToggleSelected={vi.fn()}
+          onView={vi.fn()}
+        />
+      )
+    })
+
+    expect(container?.textContent).not.toContain('Ready')
+    expect(container?.textContent).not.toContain('Status unavailable')
+  })
+
+  it('shows factual status, disk size, activity, and git state before expansion', () => {
+    const candidate = makeCandidate({ tier: 'ready' })
+
+    act(() => {
+      root?.render(
+        <CandidateRow
+          candidate={candidate}
+          expanded={false}
+          last
+          lastActivityLabel="1d ago"
+          sizeLabel="4.00 MB"
+          workspaceStatusLabel="In progress"
+          reviewInfo={{
+            hasReview: false,
+            label: null,
+            provider: null,
+            state: null,
+            title: null
+          }}
+          selected
+          onIgnore={vi.fn()}
+          onRemove={vi.fn()}
+          onToggleExpanded={vi.fn()}
+          onToggleSelected={vi.fn()}
+          onView={vi.fn()}
+        />
+      )
+    })
+
+    expect(container?.textContent).toContain('In progress')
+    expect(container?.textContent).toContain('4.00 MB')
+    expect(container?.textContent).toContain('1d')
+    expect(container?.textContent).toContain('Clean')
+  })
+
+  it('uses an external-link action to open the workspace', () => {
+    const candidate = makeCandidate()
+
+    act(() => {
+      root?.render(
+        <CandidateRow
+          candidate={candidate}
+          expanded={false}
+          last
+          lastActivityLabel="1d ago"
+          reviewInfo={{
+            hasReview: false,
+            label: null,
+            provider: null,
+            state: null,
+            title: null
+          }}
+          selected
+          onIgnore={vi.fn()}
+          onRemove={vi.fn()}
+          onToggleExpanded={vi.fn()}
+          onToggleSelected={vi.fn()}
+          onView={vi.fn()}
+        />
+      )
+    })
+
+    const openButton = container?.querySelector(`[aria-label="Open ${candidate.displayName}"]`)
+    expect(openButton?.querySelector('.lucide-external-link')).not.toBeNull()
+  })
+
   it('hides selection and remove controls while the workspace is already deleting', () => {
     const candidate = makeCandidate()
 

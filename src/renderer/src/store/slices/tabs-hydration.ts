@@ -1,9 +1,5 @@
-import type {
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { adoptGrouplessTabs, layoutSpanningGroups } from './tab-group-reference-repair'

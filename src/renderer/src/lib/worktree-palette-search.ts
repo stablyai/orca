@@ -4,7 +4,8 @@ import {
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment-snippet'
 import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
 import { matchWorktreePaletteReview } from './worktree-palette-review-match'

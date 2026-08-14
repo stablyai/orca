@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'

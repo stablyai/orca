@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Github, Gitlab } from 'lucide-react'
-import type { GlobalSettings, TaskProvider } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import {
   TASK_PROVIDERS,
   normalizeVisibleTaskProviders,

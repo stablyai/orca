@@ -3,7 +3,7 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 export type DashboardAgentRow = {
   /** Row identity. For 'subagent' rows this is a synthetic key (the child has

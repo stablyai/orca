@@ -1,5 +1,5 @@
 import type { HostedReviewProvider } from '../../../../shared/hosted-review'
-import type { GitHubPRRefreshReason } from '../../../../shared/types'
+import type { GitHubPRRefreshReason } from '../../../../shared/github/pull-request-refresh-types'
 
 type ChecksPanelPRRefreshRequestInput = {
   cachedHasPR: boolean | null

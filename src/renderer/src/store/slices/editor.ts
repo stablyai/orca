@@ -28,29 +28,33 @@ import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
+import type { SearchResult } from '../../../../shared/code-search-types'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
-  GitCommitCompareSummary,
+  GitCommitCompareSummary
+} from '../../../../shared/git-diff-compare-types'
+import type {
+  GitBranchLineTotal,
   GitConflictKind,
   GitConflictOperation,
   GitConflictResolutionStatus,
   GitConflictStatusSource,
-  GlobalSettings,
-  GitPushTarget,
   GitStatusEntry,
   GitStatusResult,
-  PersistedOpenFile,
-  Tab,
-  TabGroup,
-  GitUpstreamStatus,
+  GitUpstreamStatus
+} from '../../../../shared/git-status-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type {
   ActiveRightSidebarTab,
-  RightSidebarExplorerView,
-  SearchResult,
-  WorkspaceSessionState,
-  WorkspaceVisibleTabType
-} from '../../../../shared/types'
-import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
+  RightSidebarExplorerView
+} from '../../../../shared/ui-chrome-types'
+import type {
+  PersistedOpenFile,
+  WorkspaceSessionState
+} from '../../../../shared/workspace-session-state-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import {
@@ -116,7 +120,7 @@ export type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView,
   RightSidebarTab
-} from '../../../../shared/types'
+} from '../../../../shared/ui-chrome-types'
 
 const DEFAULT_FILE_SEARCH_STATE = {
   query: '',

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { assertTaskPageGitHubDialogStateAuthority } from './task-page-github-dialog-state-authority'
 import {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRemoteExec } from './worktree-push-target-cleanup'
 import {
   configureCreatedWorktreePushTargetWithExec,

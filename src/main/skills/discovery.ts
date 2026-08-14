@@ -2,7 +2,7 @@ import { open, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,

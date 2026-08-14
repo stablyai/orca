@@ -1,4 +1,5 @@
-import type { GitWorktreeInfo, Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { listWorktrees } from './git/worktree'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'

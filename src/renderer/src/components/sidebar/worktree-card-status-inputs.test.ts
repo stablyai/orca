@@ -4,7 +4,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-tab-types'
 import {
   selectLivePtyIdsForWorktree,
   selectTerminalLayoutRootsForWorktree,

@@ -4,7 +4,7 @@ import {
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
 import type { Row } from './worktree-list-groups'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 export type ProjectHeaderDragBucketKey = string
 

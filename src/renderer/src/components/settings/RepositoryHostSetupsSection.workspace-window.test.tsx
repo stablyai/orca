@@ -9,7 +9,8 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 

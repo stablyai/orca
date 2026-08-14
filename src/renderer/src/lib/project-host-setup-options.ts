@@ -11,7 +11,8 @@ import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
-import type { ProjectHostSetup, Repo } from '../../../shared/types'
+import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 
 export type ProjectHostSetupOption =
   | {

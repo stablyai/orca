@@ -1,5 +1,8 @@
 import type { HostedReviewCreationBlockedReason } from '../../../../shared/hosted-review'
-import type { GitHubPRRefreshSkippedReason, PRRefreshErrorType } from '../../../../shared/types'
+import type {
+  GitHubPRRefreshSkippedReason,
+  PRRefreshErrorType
+} from '../../../../shared/github/pull-request-refresh-types'
 import type { ChecksPanelReviewLookup } from './checks-panel-review-lookup-authority'
 
 /**

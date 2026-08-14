@@ -9,7 +9,7 @@
  * bytes (dispatcher sidecars) registers delivery
  * interest, which suppresses the gate for that PTY.
  */
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
   GlobalSettings,

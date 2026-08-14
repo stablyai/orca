@@ -9,7 +9,9 @@ import type {
   SourceControlActionRecipe
 } from '../../../shared/source-control-ai-actions'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 export function readSourceControlLaunchRecipeAgentId(
   recipe: Pick<SourceControlActionRecipe, 'agentId'> | null | undefined

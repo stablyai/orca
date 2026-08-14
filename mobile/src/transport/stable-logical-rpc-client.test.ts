@@ -146,8 +146,9 @@ describe('stable logical RPC client', () => {
     await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
   })
 
-  it('lets the physical close settle in-flight requests on suspend, preserving delivery marks', async () => {
+  it('preserves delivery ambiguity without replaying a mutation after relay replacement', async () => {
     const session = new FakeSession('connected')
+    const replacement = new FakeSession('connected')
     const inFlight = deferred<RpcResponse>()
     session.sendRequest.mockReturnValue(inFlight.promise)
     // Mirror the real physical contract: close() rejects post-write pendings
@@ -161,8 +162,10 @@ describe('stable logical RPC client', () => {
 
     await expect(request).rejects.toBe(closeError)
     await expect(request.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
-    // New requests while suspended still fail definitively before any write.
-    await expect(client.sendRequest('status.get')).rejects.toThrow('Client suspended')
+    await client.migrateTo(replacement, 'relay')
+    expect(replacement.sendRequest).not.toHaveBeenCalled()
+    replacement.sendRequest.mockResolvedValue(success('next'))
+    await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
   })
 
   it('lets the physical close settle in-flight requests on close, keeping pre-write failures definite', async () => {

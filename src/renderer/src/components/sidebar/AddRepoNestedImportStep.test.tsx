@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AddRepoNestedImportStep } from './AddRepoNestedImportStep'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Dialog } from '@/components/ui/dialog'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 
 const scan: NestedRepoScanResult = {
   selectedPath: '/workspace/platform',

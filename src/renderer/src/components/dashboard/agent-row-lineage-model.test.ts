@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DashboardAgentRow } from './useDashboardData'
 import { buildAgentRowLineageTree } from './agent-row-lineage-model'
 

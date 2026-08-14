@@ -10,7 +10,8 @@ import {
   compactSourceControlTree,
   flattenSourceControlTree
 } from '@/components/right-sidebar/source-control-tree'
-import type { GitBranchChangeEntry, GitStagingArea, GitStatusEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
+import type { GitStagingArea, GitStatusEntry } from '../../../../shared/git-status-types'
 import {
   getEntryExtension,
   getFilteredCombinedDiffFileTreeEntries,

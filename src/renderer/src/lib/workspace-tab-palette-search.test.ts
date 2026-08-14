@@ -4,7 +4,9 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { OpenFile } from '@/store/slices/editor'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import type { Tab, TabGroup, TerminalTab, Worktree } from '../../../shared/types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-tab-palette-search'
 
 const WT_ROOT = path.join('tmp', 'wt-1')

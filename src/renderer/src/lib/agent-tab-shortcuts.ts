@@ -5,7 +5,7 @@ import {
 } from '../../../shared/keybindings'
 import { ALL_TUI_AGENTS } from '../../../shared/tui-agent-display-names'
 import { normalizeDisabledTuiAgents, pickTuiAgent } from '../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 export type BoundAgentTabAction = {
   agent: TuiAgent

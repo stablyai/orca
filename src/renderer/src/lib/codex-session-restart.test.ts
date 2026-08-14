@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   CODEX_ACCOUNT_RESTART_STARTUP,
   markLiveCodexSessionsForRestart,

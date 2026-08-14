@@ -19,12 +19,10 @@ function routerFixture() {
   const router = new MobileEndpointNudgeRouter({
     logical,
     controller: { handleActiveNudge } as unknown as RelayReconnectController,
-    now: () => 20_000,
     isStopped: () => false,
     isForeground: () => foreground,
     setForeground,
     replaceRelay: vi.fn(),
-    recoverAfterDeadProbe: vi.fn(),
     scheduleDirectProbe
   })
   return { handleActiveNudge, logical, router, scheduleDirectProbe, setForeground }
@@ -38,9 +36,7 @@ describe('MobileEndpointNudgeRouter', () => {
 
     expect(fixture.setForeground).toHaveBeenCalledWith(true)
     expect(fixture.handleActiveNudge).toHaveBeenCalledWith(fixture.logical, 'focus')
-    expect(fixture.logical.sendRequest).toHaveBeenCalledWith('status.get', null, {
-      timeoutMs: 4000
-    })
+    expect(fixture.logical.sendRequest).not.toHaveBeenCalled()
     expect(fixture.scheduleDirectProbe).toHaveBeenCalledOnce()
   })
 

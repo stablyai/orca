@@ -80,10 +80,15 @@ new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
 \`orca orchestration check\`. The coordinator has already recorded your
 completion and expects no further output.
 
+A direct instruction from the user takes precedence over this idle rule.
+Treat it as new user-owned work: follow it without coordinator approval or a
+fresh Dispatch, and do not send lifecycle messages using the settled task or
+Dispatch IDs. Never refuse a direct user request because you were a worker.
+
 Do not exit the shell. Your terminal stays available, and if the
 coordinator has more for you it will re-engage this terminal with a fresh
-preamble + TASK block, which arrives as new input. When that happens,
-reset and start the new task; ignore the previous task's follow-ups.
+preamble + TASK block, which arrives as new input. Treat that as supervised
+work under the new Dispatch; ignore stale follow-ups from the settled task.
 
 === TASK ===
 TASK_BODY"

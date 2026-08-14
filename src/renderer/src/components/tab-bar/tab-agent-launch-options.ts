@@ -1,6 +1,6 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent

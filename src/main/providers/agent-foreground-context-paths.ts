@@ -1,4 +1,4 @@
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 
 export function getAgentForegroundContextPaths(options: {
   cwd?: string

@@ -76,7 +76,7 @@ import {
   type AgentQuestionAnsweredInferenceRequest
 } from '../../shared/agent-question-answered-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
+import type { LegacyPaneKeyAliasEntry } from '../../shared/persisted-state-types'
 import {
   getAgentResumeArgv,
   normalizeAgentProviderSession,
@@ -448,7 +448,7 @@ function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload): boole
   if (next.payload.state !== 'working') {
     return false
   }
-  if (next.payload.agentType !== 'claude') {
+  if (next.payload.agentType !== 'claude' && next.payload.agentType !== 'codex') {
     return false
   }
   // Why: a same-prompt retry is another UserPromptSubmit, while late post-Ctrl+C progress arrives as tool lifecycle work.
@@ -1260,6 +1260,9 @@ export class AgentHookServer {
         (effectivePayload.hasExplicitPrompt !== true &&
           Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS))
     ) {
+      if (effectivePayload.payload.agentType === 'codex') {
+        markCodexLeadTurnInterrupted(this.state, effectivePayload.paneKey)
+      }
       return previous
     }
     if (
@@ -1274,7 +1277,12 @@ export class AgentHookServer {
     }
     const cachedPayload = resolveCachedClaudeCompactOwnership(previous, effectivePayload)
     const enriched = this.attachStatusTiming(cachedPayload, now)
-    this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
+    // Why: an identity-matched event can still leave the aggregate backed only by another restored child; keep liveness reconciliation eligible.
+    if (enriched.restoredUnconfirmed) {
+      this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
+    } else {
+      this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
+    }
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()

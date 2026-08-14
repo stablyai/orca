@@ -4,7 +4,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 

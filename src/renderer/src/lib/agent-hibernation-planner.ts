@@ -7,7 +7,8 @@ import {
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from './pi-compatible-live-recovery-record'
-import type { GlobalSettings, TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
 export const DEFAULT_AGENT_HIBERNATION_IDLE_MS = 30 * 60 * 1000

@@ -1,12 +1,10 @@
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserTab as BrowserTabState,
-  GitFileStatus,
-  TerminalTab,
-  TuiAgent
-} from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OpenFile } from '../../store/slices/editor'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import BrowserTab from './BrowserTab'

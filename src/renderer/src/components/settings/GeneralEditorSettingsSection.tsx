@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,

@@ -16,7 +16,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-tab-types'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import {
   buildTitleDerivedAgentRows,

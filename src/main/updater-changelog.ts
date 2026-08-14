@@ -1,5 +1,5 @@
 import { net } from 'electron'
-import type { ChangelogData } from '../shared/types'
+import type { ChangelogData } from '../shared/update-status-types'
 import { compareVersions } from './updater-fallback'
 
 type ChangelogEntry = {

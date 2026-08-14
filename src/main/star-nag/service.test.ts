@@ -3,7 +3,7 @@ Electron/IPC harness; splitting the narrow service suite would duplicate setup
 and make the prompt-session edge cases harder to compare. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
-import type { PersistedUIState } from '../../shared/types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import { StarNagService } from './service'

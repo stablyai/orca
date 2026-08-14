@@ -22,7 +22,7 @@ import {
   hasActiveEditorPathMoves,
   isActiveMoveSourcePath
 } from '@/components/editor/editor-path-move-inflight'
-import type { FsChangedPayload } from '../../../shared/types'
+import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
 import { readRuntimeFileContent, subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'

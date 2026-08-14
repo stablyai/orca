@@ -1,4 +1,5 @@
-import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
+import type { PRCheckDetail } from '../../shared/github/check-types'
+import type { CheckStatus, IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
 import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
 // ── REST API check-runs mapping ───────────────────────────────────────

@@ -547,12 +547,12 @@ describe('agent map layout', () => {
     expect(agentMapDurationMinutes(finished, NOW)).toBe(10)
   })
 
-  it('maps acknowledged completions to idle independently from elapsed time', () => {
+  it('maps acknowledged completions to done-seen independently from elapsed time', () => {
     for (const dotState of ['working', 'blocked', 'waiting', 'idle'] as const) {
       expect(agentMapNodeStatus(card({ dotState }))).toBe(dotState)
     }
     expect(agentMapNodeStatus(card({ dotState: 'done', unseen: true }))).toBe('done')
-    expect(agentMapNodeStatus(card({ dotState: 'done', unseen: false }))).toBe('idle')
+    expect(agentMapNodeStatus(card({ dotState: 'done', unseen: false }))).toBe('done-seen')
     const shortBlocked = card({ dotState: 'blocked', startedAt: NOW - 60_000 })
     const longBlocked = card({ dotState: 'blocked', startedAt: NOW - 45 * 60_000 })
     expect(agentMapNodeStatus(shortBlocked)).toBe(agentMapNodeStatus(longBlocked))

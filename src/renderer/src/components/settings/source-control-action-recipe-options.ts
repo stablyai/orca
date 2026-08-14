@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionId

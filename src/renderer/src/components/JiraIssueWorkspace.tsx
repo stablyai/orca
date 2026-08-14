@@ -45,7 +45,7 @@ import type {
   JiraPriority,
   JiraTransition,
   JiraUser
-} from '../../../shared/types'
+} from '../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'

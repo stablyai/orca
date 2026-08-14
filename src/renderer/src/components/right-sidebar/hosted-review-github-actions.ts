@@ -1,4 +1,5 @@
-import type { GitHubPRMergeMethod, PRInfo, Repo } from '../../../../shared/types'
+import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 

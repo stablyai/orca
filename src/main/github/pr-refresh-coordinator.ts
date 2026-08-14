@@ -7,7 +7,7 @@ import type {
   GitHubPRRefreshReason,
   GitHubPRRefreshSkippedReason,
   PRRefreshOutcome
-} from '../../shared/types'
+} from '../../shared/github/pull-request-refresh-types'
 import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
 import { getOriginGitHubApiRepository } from './github-api-repository'
 import { ghRepoExecOptions, githubRepoContext } from './gh-utils'

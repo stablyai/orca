@@ -1,4 +1,6 @@
-import type { FolderWorkspace, ProjectGroup, Worktree } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getProjectGroupHeaderKey } from './worktree-list-groups'

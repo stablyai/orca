@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeFeatureInteractions } from '../shared/feature-interactions'
-import type { PersistedState } from '../shared/types'
+import type { PersistedState } from '../shared/persisted-state-types'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },

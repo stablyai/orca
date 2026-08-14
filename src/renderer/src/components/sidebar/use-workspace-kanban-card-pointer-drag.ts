@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
-import type { WorkspaceStatus, Worktree } from '../../../../shared/types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import {
   CARD_SELECTOR,
   getCardDropTarget,

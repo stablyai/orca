@@ -17,7 +17,7 @@ import type {
   LinearViewer,
   LinearWorkspace,
   LinearWorkspaceSelection
-} from '../../shared/types'
+} from '../../shared/linear/workspace-types'
 
 // ── Concurrency limiter — max 4 parallel Linear API calls ────────────
 const MAX_CONCURRENT = 4

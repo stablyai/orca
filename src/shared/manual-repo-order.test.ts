@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ManualRepoOrderEntry, Repo } from './types'
+import type { Repo } from './repo-types'
+import type { ManualRepoOrderEntry } from './ui-chrome-types'
 import {
   applyManualRepoOrder,
   getManualRepoOrder,

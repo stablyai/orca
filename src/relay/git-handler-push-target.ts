@@ -1,6 +1,6 @@
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { gitRefTargetsBranchOnRemote } from '../shared/git-remote-branch-name'
-import type { GitPushTarget } from '../shared/types'
+import type { GitPushTarget } from '../shared/worktree/types'
 
 type RelayGit = (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
 

@@ -1,7 +1,8 @@
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { Tab, TerminalTab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '../types'
 
 export type TerminalTabTitleUpdate = { tabId: string; title: string }

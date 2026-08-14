@@ -3,7 +3,7 @@ import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 
 import { describe, expect, it, vi } from 'vitest'
 

@@ -72,34 +72,59 @@ describe('agent interrupt inference', () => {
 
   it.each([
     ['plain-escape', 'gemini'],
-    ['ctrl-c', 'gemini']
-  ] as const)(
-    'emits a strict baseline request for %s from Gemini immediately',
-    (intent, agentType) => {
-      vi.useFakeTimers()
-      let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
-      const inferInterrupt = vi.fn()
-      const tracker = createAgentInterruptInference({
-        paneKey: PANE_KEY,
-        getStatusEntry: () => entry,
-        inferInterrupt,
-        now: () => 1_100
-      })
+    ['ctrl-c', 'gemini'],
+    ['plain-escape', 'codex']
+  ] as const)('emits a strict baseline request for %s from %s immediately', (intent, agentType) => {
+    vi.useFakeTimers()
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => entry,
+      inferInterrupt,
+      now: () => 1_100
+    })
 
-      tracker.observeInputIntent(intent)
+    tracker.observeInputIntent(intent)
 
-      expect(inferInterrupt).toHaveBeenCalledWith({
-        paneKey: PANE_KEY,
-        baselineUpdatedAt: 1_000,
-        baselineStateStartedAt: 900,
-        baselinePrompt: 'write tests',
-        baselineAgentType: agentType,
-        intent
-      })
-      tracker.dispose()
-      entry = undefined
-    }
-  )
+    expect(inferInterrupt).toHaveBeenCalledWith({
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: 1_000,
+      baselineStateStartedAt: 900,
+      baselinePrompt: 'write tests',
+      baselineAgentType: agentType,
+      intent
+    })
+    tracker.dispose()
+    entry = undefined
+  })
+
+  it('records a Codex Escape before its immediate done hook replaces the working row', () => {
+    vi.useFakeTimers()
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'codex' })
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => entry,
+      inferInterrupt,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent('plain-escape')
+    entry = makeEntry({ state: 'done', updatedAt: 1_101, stateStartedAt: 1_101 })
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).toHaveBeenCalledTimes(1)
+    expect(inferInterrupt).toHaveBeenCalledWith({
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: 1_000,
+      baselineStateStartedAt: 900,
+      baselinePrompt: 'write tests',
+      baselineAgentType: 'codex',
+      intent: 'plain-escape'
+    })
+    tracker.dispose()
+  })
 
   it('reports Escape while Claude is waiting on AskUserQuestion', () => {
     vi.useFakeTimers()
@@ -344,7 +369,7 @@ describe('agent interrupt inference', () => {
   it('cancels when a newer hook update arrives during the settle window', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
-    let entry: AgentStatusEntry | undefined = makeEntry()
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'custom-agent' })
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,

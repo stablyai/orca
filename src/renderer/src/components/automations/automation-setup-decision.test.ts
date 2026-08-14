@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   getAutomationSetupDecisionDraftValue,
   getVisibleAutomationSetupDecision,

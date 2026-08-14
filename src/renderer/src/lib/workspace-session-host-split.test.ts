@@ -6,13 +6,10 @@ import {
 } from './workspace-session-host-split'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type {
-  BrowserPage,
-  Tab,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  WorkspaceSessionState
-} from '../../../shared/types'
+import type { BrowserPage } from '../../../shared/browser-workspace-types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 const RUNTIME_A: ExecutionHostId = 'runtime:env-a'
 const RUNTIME_B: ExecutionHostId = 'runtime:env-b'

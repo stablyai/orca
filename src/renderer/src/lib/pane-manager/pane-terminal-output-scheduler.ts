@@ -188,6 +188,7 @@ type TerminalOutputSchedulerDebugSnapshot = {
   peakQueuedCharsByTerminal: number
   droppedBacklogCount: number
   drainWrites: number[]
+  drainHighPriority: boolean[]
 }
 
 type TerminalOutputSchedulerDebugApi = {
@@ -209,7 +210,8 @@ const debugState: TerminalOutputSchedulerDebugSnapshot = {
   peakQueuedChars: 0,
   peakQueuedCharsByTerminal: 0,
   droppedBacklogCount: 0,
-  drainWrites: []
+  drainWrites: [],
+  drainHighPriority: []
 }
 
 function resetDebugState(): void {
@@ -227,6 +229,7 @@ function resetDebugState(): void {
   debugState.peakQueuedCharsByTerminal = 0
   debugState.droppedBacklogCount = 0
   debugState.drainWrites = []
+  debugState.drainHighPriority = []
 }
 
 function readQueueDebugSnapshot(): {
@@ -279,7 +282,8 @@ function exposeDebugApi(): void {
       recordQueueDebugPressure()
       return {
         ...debugState,
-        drainWrites: [...debugState.drainWrites]
+        drainWrites: [...debugState.drainWrites],
+        drainHighPriority: [...debugState.drainHighPriority]
       }
     }
   }
@@ -1036,9 +1040,8 @@ function drainQueuedOutput(): void {
   drainTimerDelayMs = null
   let writes = 0
   const startedAt = getDrainNow()
-  const maxWrites = hasHighPriorityBacklog()
-    ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN
-    : MAX_WRITES_PER_DRAIN
+  const highPriority = hasHighPriorityBacklog()
+  const maxWrites = highPriority ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN : MAX_WRITES_PER_DRAIN
 
   while (queuedByTerminal.size > 0 && writes < maxWrites) {
     const entry = takeNextDrainableEntry()
@@ -1071,6 +1074,7 @@ function drainQueuedOutput(): void {
 
   if (debugEnabled && writes > 0) {
     debugState.drainWrites.push(writes)
+    debugState.drainHighPriority.push(highPriority)
   }
   recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {

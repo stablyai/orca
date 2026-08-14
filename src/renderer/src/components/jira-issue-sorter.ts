@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraPriority } from '../../../shared/types'
+import type { JiraIssue, JiraPriority } from '../../../shared/jira-types'
 import { compareNumericLocaleText } from '@/lib/locale-text-collators'
 
 export type JiraIssueSortColumn = 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'

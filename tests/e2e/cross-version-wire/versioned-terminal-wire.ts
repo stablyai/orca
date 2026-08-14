@@ -1,4 +1,4 @@
-import { materializeReleaseCheckout, REPO_ROOT, type ReleaseCheckout } from './release-checkout'
+import { materializeReleaseCheckout, type ReleaseCheckout } from './release-checkout'
 
 /**
  * Structural views of the three modules that make up the remote terminal wire.
@@ -136,22 +136,6 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWire
     },
     client: client as ClientWire
   }
-}
-
-/**
- * Import one `src/…`-relative module from a build. Lets a skew case reach code the
- * fixed {@link TerminalWireBuild} surface does not name — e.g. the SSH provider that
- * publishes a failure token, or the client that decides what to do with it.
- */
-export async function importBuildModule(
-  ref: string,
-  pathUnderSrc: string
-): Promise<Record<string, unknown>> {
-  if (ref === WORKING_TREE) {
-    return await importFromCheckout(`${REPO_ROOT}/src/${pathUnderSrc}`)
-  }
-  const checkout = materializeReleaseCheckout(ref)
-  return await importFromCheckout(`${checkout.root}/src/${pathUnderSrc}`)
 }
 
 /**

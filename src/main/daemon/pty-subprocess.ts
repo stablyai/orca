@@ -69,7 +69,7 @@ import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables

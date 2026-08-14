@@ -1,5 +1,5 @@
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   isFreshNonDoneAgentStatus,
   type AgentStatusEntry

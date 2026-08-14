@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: cookie import is one pipeline (detect → decrypt → stage → swap) that must stay together to keep encryption/schema/staging in sync. */
-import { app, type BrowserWindow, type Cookie, dialog, session } from 'electron'
+import { app, type BrowserWindow, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
 import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
 import {
@@ -72,7 +72,7 @@ import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
   BrowserSessionProfileSource
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 import { browserSessionRegistry } from './browser-session-registry'
 import {
   isGoogleSourceBoundCookie,
@@ -81,8 +81,8 @@ import {
   normalizeCookieDomain,
   normalizeCookieImportDomain,
   replaceCookiesForImportedDomains,
-  restoreImportedDomainCookies,
-  type CookieImportMode
+  type CookieImportMode,
+  type ReplacedImportedDomainCookies
 } from './browser-cookie-import-policy'
 import { removeTransplantableCookies, withCookieClearLock } from './browser-cookie-import-clear'
 import { openCookieClearStore } from './browser-cookie-clear-store'
@@ -594,97 +594,112 @@ async function importValidatedCookies(
   let importedCount = 0
   let skipped = totalInput - importableCookies.length
   const domainSet = new Set<string>()
-  let replacedCookies: Cookie[] | null = null
+  let replaced: ReplacedImportedDomainCookies | null = null
+  // Why (STA-4097): the rollback below has to put back cookies this import already deleted, and
+  // only CDP identities carry partitionKey — rebuilding them with cookies.set drops it silently.
+  const cookieClearStore =
+    mode === 'replace-imported-domains' && importableCookies.length > 0
+      ? openCookieClearStore(targetSession)
+      : null
 
-  if (mode === 'replace-imported-domains' && importableCookies.length > 0) {
-    try {
-      replacedCookies = await replaceCookiesForImportedDomains(
-        targetSession.cookies,
-        importableCookies.map((cookie) => cookie.domain)
-      )
-      diag(`  removed ${replacedCookies.length} existing cookies in imported domain scopes`)
-    } catch (err) {
-      diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+  try {
+    if (cookieClearStore) {
+      try {
+        replaced = await replaceCookiesForImportedDomains(
+          cookieClearStore,
+          importableCookies.map((cookie) => cookie.domain)
+        )
+        diag(`  removed ${replaced.removed.length} existing cookies in imported domain scopes`)
+      } catch (err) {
+        diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+        return {
+          ok: false,
+          reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
+        }
+      }
+    }
+
+    // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
+    const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
+    const importedCookieKeys: { url: string; name: string }[] = []
+    let setFailure: unknown = null
+
+    for (const cookie of importableCookies) {
+      try {
+        // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
+        const isHostPrefixed = cookie.name.startsWith('__Host-')
+        const path = isHostPrefixed ? '/' : cookie.path
+        await targetSession.cookies.set({
+          url: cookie.url,
+          name: cookie.name,
+          value: stripNonPrintable(cookie.value),
+          ...(isHostPrefixed ? {} : { domain: cookie.domain }),
+          path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite,
+          expirationDate: cookie.expirationDate
+        })
+        const removalUrl = new URL(cookie.url)
+        removalUrl.pathname = path.startsWith('/') ? path : '/'
+        importedCookieKeys.push({ url: removalUrl.toString(), name: cookie.name })
+        importedCount++
+        // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
+        const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
+        domainSet.add(cleanDomain)
+      } catch (err) {
+        skipped++
+        setFailure = err
+        if (skipped <= 5) {
+          // Find the exact offending character position and code
+          const val = cookie.value
+          let badInfo = 'none found'
+          for (let i = 0; i < val.length; i++) {
+            const code = val.charCodeAt(i)
+            if (code < 0x20 || code > 0x7e) {
+              badInfo = `pos=${i} char=U+${code.toString(16).padStart(4, '0')}`
+              break
+            }
+          }
+          diag(
+            `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
+          )
+        }
+        if (replaced) {
+          break
+        }
+      }
+    }
+
+    // Why: replaced is only ever set alongside cookieClearStore, which owns the CDP restore.
+    if (setFailure && replaced && cookieClearStore) {
+      const rollbackFailures: unknown[] = []
+      for (const cookie of importedCookieKeys.toReversed()) {
+        try {
+          await targetSession.cookies.remove(cookie.url, cookie.name)
+        } catch (err) {
+          rollbackFailures.push(err)
+        }
+      }
+      // Why: restoreClearIdentities attaches the debugger before it iterates, so an empty
+      // restore set would spin up a hidden BrowserWindow to put nothing back.
+      if (replaced.identities.length > 0) {
+        try {
+          await cookieClearStore.restoreClearIdentities(replaced.identities.toReversed())
+        } catch (err) {
+          rollbackFailures.push(err)
+        }
+      }
+      if (rollbackFailures.length > 0) {
+        diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
+      }
       return {
         ok: false,
-        reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
+        reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
       }
     }
-  }
-
-  // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
-  const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
-  const importedCookieKeys: { url: string; name: string }[] = []
-  let setFailure: unknown = null
-
-  for (const cookie of importableCookies) {
-    try {
-      // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
-      const isHostPrefixed = cookie.name.startsWith('__Host-')
-      const path = isHostPrefixed ? '/' : cookie.path
-      await targetSession.cookies.set({
-        url: cookie.url,
-        name: cookie.name,
-        value: stripNonPrintable(cookie.value),
-        ...(isHostPrefixed ? {} : { domain: cookie.domain }),
-        path,
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        sameSite: cookie.sameSite,
-        expirationDate: cookie.expirationDate
-      })
-      const removalUrl = new URL(cookie.url)
-      removalUrl.pathname = path.startsWith('/') ? path : '/'
-      importedCookieKeys.push({ url: removalUrl.toString(), name: cookie.name })
-      importedCount++
-      // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
-      const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
-      domainSet.add(cleanDomain)
-    } catch (err) {
-      skipped++
-      setFailure = err
-      if (skipped <= 5) {
-        // Find the exact offending character position and code
-        const val = cookie.value
-        let badInfo = 'none found'
-        for (let i = 0; i < val.length; i++) {
-          const code = val.charCodeAt(i)
-          if (code < 0x20 || code > 0x7e) {
-            badInfo = `pos=${i} char=U+${code.toString(16).padStart(4, '0')}`
-            break
-          }
-        }
-        diag(
-          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
-        )
-      }
-      if (replacedCookies) {
-        break
-      }
-    }
-  }
-
-  if (setFailure && replacedCookies) {
-    const rollbackFailures: unknown[] = []
-    for (const cookie of importedCookieKeys.toReversed()) {
-      try {
-        await targetSession.cookies.remove(cookie.url, cookie.name)
-      } catch (err) {
-        rollbackFailures.push(err)
-      }
-    }
-    try {
-      await restoreImportedDomainCookies(targetSession.cookies, replacedCookies)
-    } catch (err) {
-      rollbackFailures.push(err)
-    }
-    if (rollbackFailures.length > 0) {
-      diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
-    }
-    return {
-      ok: false,
-      reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
-    }
+  } finally {
+    cookieClearStore?.dispose()
   }
 
   diag(

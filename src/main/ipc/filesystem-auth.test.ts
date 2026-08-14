@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type * as RepoWorktrees from '../repo-worktrees'
 import { listRepoWorktrees } from '../repo-worktrees'
-import type { FolderWorkspace, GitWorktreeInfo, ProjectGroup, Repo } from '../../shared/types'
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../shared/project-group-types'
+import type { Repo } from '../../shared/repo-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import {
   AUTHORIZED_EXTERNAL_PATHS_MAX,
   authorizeExternalPath,

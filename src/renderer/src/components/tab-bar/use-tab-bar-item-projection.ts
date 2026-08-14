@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import type { GitFileStatus, Tab } from '../../../../shared/types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
 import {
   buildOrderedTabItems,

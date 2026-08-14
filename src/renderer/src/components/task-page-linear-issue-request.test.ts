@@ -7,7 +7,7 @@ import {
   shouldForceLinearIssueListRead,
   teamDerivedFacetsForPrimaryTeamChange
 } from './task-page-linear-issue-request'
-import type { LinearIssueAttributeFilter } from '../../../shared/linear-issue-attribute-filter'
+import type { LinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
 
 const filter: LinearIssueAttributeFilter = {
   stateIds: ['s1'],

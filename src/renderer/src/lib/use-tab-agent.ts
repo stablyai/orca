@@ -19,7 +19,8 @@ import {
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
 import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 // A shell name or the tab's neutral default title (where inferred-interrupt reset parks it); blank titles are no evidence.
 function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {

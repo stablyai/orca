@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hostedReviewInfoFromGitHubPRInfo } from './hosted-review-github'
-import type { PRInfo } from './types'
+import type { PRInfo } from './github/pull-request-types'
 
 const pr: PRInfo = {
   number: 12,

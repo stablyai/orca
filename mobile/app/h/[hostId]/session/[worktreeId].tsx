@@ -277,7 +277,8 @@ import {
 import { colors } from '../../../../src/theme/mobile-theme'
 import { QuickCommandsTabButton } from '../../../../src/session/QuickCommandsTabButton'
 import { styles } from '../../../../src/session/mobile-session-styles'
-import type { DiffComment, TerminalQuickCommand } from '../../../../../src/shared/types'
+import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { TerminalQuickCommand } from '../../../../../src/shared/terminal-quick-command-types'
 import type {
   DiffCommentActions,
   DiffNotesDelivery,

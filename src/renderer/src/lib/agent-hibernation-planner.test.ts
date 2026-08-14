@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
   MAX_AGENT_HIBERNATION_IDLE_MS,

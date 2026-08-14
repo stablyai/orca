@@ -1,6 +1,6 @@
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export const RESUMABLE_TUI_AGENTS = [
   'claude',

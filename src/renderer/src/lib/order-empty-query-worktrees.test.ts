@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { orderEmptyQueryWorktrees } from './order-empty-query-worktrees'
 
 function wt(overrides: Partial<Worktree> & { id: string; displayName: string }): Worktree {

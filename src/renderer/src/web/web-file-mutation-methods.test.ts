@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
 
 function resolvedFile(

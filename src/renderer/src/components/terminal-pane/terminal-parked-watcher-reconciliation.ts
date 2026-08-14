@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { useAppStore } from '@/store'
 import {
   collectLeafIdsInOrder,

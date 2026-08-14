@@ -39,7 +39,7 @@ vi.mock('electron', () => ({
 }))
 
 import { registerPetHandlers } from './pet'
-import type { CustomPet } from '../../shared/types'
+import type { CustomPet } from '../../shared/pet-types'
 
 describe('registerPetHandlers', () => {
   let tempDir: string

@@ -1,10 +1,10 @@
-import type { LinearIssue } from '../types'
+import type { LinearIssue } from '../linear/issue-types'
 import {
   parseLinearIssueInput,
   parseLinearIssueUrlIntent,
   type LinearIssueUrlIntent,
   type ParsedLinearIssueInput
-} from '../linear-links'
+} from '../linear/links'
 import { isSmartWorkspaceSourceQueryWithinLimit } from './smart-workspace-source-query'
 
 type SmartWorkspaceLinearMode = 'smart' | 'linear' | (string & {})

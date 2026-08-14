@@ -783,7 +783,8 @@ jobs:
           {
             echo "## Release E2E Signal"
             echo ""
-            echo "- Platform golden E2E is release-blocking: terminal rendering and restrictive-umask profile writes on Linux/macOS, plus fresh startup on Windows."
+            echo "- Platform golden E2E is release-blocking: terminal rendering, restrictive-umask profile writes, source control, and agent TUI launch on Linux/macOS, plus fresh startup and source control on Windows."
+            echo "- Exception: every golden except terminal rendering runs with \`--if-present\`, so it is skipped (not failed) on older tags that predate its script."
             echo "- Full E2E runs separately after publication and cannot change the release result."
             echo "- Terminal rendering release evidence is diagnostic/non-blocking."
             echo ""
@@ -876,14 +877,32 @@ jobs:
       - name: Run terminal rendering golden on Linux
         if: runner.os == 'Linux'
         run: |
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
+
+      - name: Run source-control golden on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
       - name: Run terminal rendering golden on macOS
         if: runner.os == 'macOS'
         run: |
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
+
+      - name: Run agent TUI golden on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
+
+      - name: Run agent TUI golden on macOS
+        if: runner.os == 'macOS'
+        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
+
+      - name: Run source-control golden on macOS
+        if: runner.os == 'macOS'
+        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
       - name: Run fresh-startup golden on Windows
         if: runner.os == 'Windows'
@@ -891,7 +910,9 @@ jobs:
         run: |
           $env:SKIP_BUILD = '1'
           $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          pnpm run --if-present test:e2e:workspace-session-golden
           pnpm run --if-present test:e2e:windows-fresh-startup-golden
+          pnpm run --if-present test:e2e:source-control-golden
 
       - name: Upload Playwright traces
         if: failure()

@@ -4,7 +4,9 @@ import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
-import type { Tab, TabContentType, TabGroup, TerminalTab, Worktree } from '../../../shared/types'
+import type { Tab, TabContentType, TabGroup } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   buildAgentMetadataTabIndex,
   collectAgentMetadataFromIndex,

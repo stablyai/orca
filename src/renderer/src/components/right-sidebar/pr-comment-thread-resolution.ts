@@ -1,4 +1,4 @@
-import type { PRComment } from '../../../../shared/types'
+import type { PRComment } from '../../../../shared/github/comment-types'
 
 export function markPRCommentThreadResolved(
   comments: PRComment[],

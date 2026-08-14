@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { buildHydratedTabState } from './tabs-hydration'
 
 vi.stubGlobal('crypto', { randomUUID: () => `uuid-${Math.random().toString(36).slice(2, 8)}` })

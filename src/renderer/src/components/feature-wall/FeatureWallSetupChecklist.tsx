@@ -23,7 +23,7 @@ import {
 import { AgentStep } from '../onboarding/AgentStep'
 import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
 

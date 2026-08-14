@@ -1,4 +1,7 @@
-import type { ProviderCheckSummary, PRMergeableState } from '../../../src/shared/types'
+import type {
+  PRMergeableState,
+  ProviderCheckSummary
+} from '../../../src/shared/github/pull-request-types'
 import { getProviderChecksLabel } from '../../../src/shared/provider-check-summary'
 
 export type MobileHostedReviewStatus = {

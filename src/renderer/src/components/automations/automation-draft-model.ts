@@ -1,7 +1,7 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
 import { buildAutomationCronSchedule } from '../../../../shared/automation-schedules'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
 export const AUTOMATION_DEFAULT_TIME = '09:00'

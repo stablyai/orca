@@ -1,6 +1,6 @@
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { isWslUncPath } from '../../../shared/wsl-paths'
-import { splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 
 export type OrchestrationCliCommand = 'orca' | 'orca-ide'
 

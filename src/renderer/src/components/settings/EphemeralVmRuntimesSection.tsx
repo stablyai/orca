@@ -9,18 +9,24 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { cn } from '@/lib/utils'
 
-const CLEANED_STATUSES = new Set<EphemeralVmRuntimeRecord['status']>(['cleaned'])
+function hasCleanupFailed(runtime: EphemeralVmRuntimeRecord): boolean {
+  return (
+    runtime.cleanupStatus === 'failed' ||
+    runtime.status === 'cleanup_failed' ||
+    (runtime.status === 'cleaned' && runtime.sshTargetId !== undefined)
+  )
+}
 
 export function getVisibleEphemeralVmRuntimes(
   runtimes: readonly EphemeralVmRuntimeRecord[]
 ): EphemeralVmRuntimeRecord[] {
   return runtimes
-    .filter((runtime) => !CLEANED_STATUSES.has(runtime.status))
+    .filter((runtime) => runtime.status !== 'cleaned' || runtime.sshTargetId !== undefined)
     .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
 }
 
 export function getEphemeralVmRuntimeStatusLabel(runtime: EphemeralVmRuntimeRecord): string {
-  if (runtime.cleanupStatus === 'failed') {
+  if (hasCleanupFailed(runtime)) {
     return translate(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupFailed',
       'Cleanup failed'
@@ -88,7 +94,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
     setCleaningId(runtime.id)
     try {
       const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
-      if (cleaned.cleanupStatus === 'failed') {
+      if (hasCleanupFailed(cleaned)) {
         throw new Error(
           cleaned.cleanupLastError ??
             translate(
@@ -247,7 +253,8 @@ function EphemeralVmRuntimeRow({
   onCopyCleanupCommand: () => void
 }): React.JSX.Element {
   const statusLabel = getEphemeralVmRuntimeStatusLabel(runtime)
-  const hasError = runtime.cleanupStatus === 'failed' || runtime.status === 'failed'
+  const cleanupFailed = hasCleanupFailed(runtime)
+  const hasError = cleanupFailed || runtime.status === 'failed'
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div
@@ -297,7 +304,7 @@ function EphemeralVmRuntimeRow({
           disabled={disabled}
         >
           {isCleaning ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
-          {runtime.cleanupStatus === 'failed'
+          {cleanupFailed
             ? translate(
                 'auto.components.settings.EphemeralVmRuntimesSection.retry',
                 'Retry cleanup'

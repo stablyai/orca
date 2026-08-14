@@ -202,17 +202,19 @@ import {
   isBehindOnlyUpstream,
   shouldForcePushWithLeaseForUpstream
 } from '../../../../shared/git-upstream-status'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type {
-  DiffComment,
   GitBranchChangeEntry,
-  GitBranchCompareSummary,
+  GitBranchCompareSummary
+} from '../../../../shared/git-diff-compare-types'
+import type {
   GitConflictOperation,
-  GitPushTarget,
   GitStatusEntry,
-  GitUpstreamStatus,
-  SourceControlViewMode,
-  TuiAgent
-} from '../../../../shared/types'
+  GitUpstreamStatus
+} from '../../../../shared/git-status-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SourceControlViewMode } from '../../../../shared/ui-chrome-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewInfo,

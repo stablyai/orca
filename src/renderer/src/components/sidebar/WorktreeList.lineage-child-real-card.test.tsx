@@ -4,12 +4,10 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type {
-  Repo,
-  Worktree,
-  WorktreeCardProperty,
-  WorktreeLineage
-} from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   FLUSH_CARD_MIN_CONTENT_INSET,
   LINEAGE_CHILDREN_INLINE_OFFSET,

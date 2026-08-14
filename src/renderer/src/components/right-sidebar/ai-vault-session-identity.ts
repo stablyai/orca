@@ -1,5 +1,5 @@
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
-import { areValuesEqual } from '@/store/slices/repo-identity-reconcile'
+import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { reuseEqualCatalogRows } from '@/store/slices/worktree-catalog-reconciliation'
 
 // One instance is shared by every mounted hook, so it is frozen: an in-place
@@ -24,7 +24,9 @@ export function reuseAiVaultListResult(
     return incoming
   }
   const sessions = reuseEqualCatalogRows(current.sessions, incoming.sessions)
-  const issues = areValuesEqual(current.issues, incoming.issues) ? current.issues : incoming.issues
+  const issues = structuralValuesEqual(current.issues, incoming.issues)
+    ? current.issues
+    : incoming.issues
   if (
     sessions === current.sessions &&
     issues === current.issues &&

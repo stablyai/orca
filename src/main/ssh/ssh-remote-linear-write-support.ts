@@ -1,6 +1,6 @@
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { isLinearUuid } from '../../shared/linear-uuid'
+import { isLinearUuid } from '../../shared/linear/uuid'
 
 type ParsedRemoteCli = {
   commandPath: string[]

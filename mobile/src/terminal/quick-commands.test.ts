@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
   buildMobileQuickCommandLaunch,
   getQuickCommandDisplayPreview,

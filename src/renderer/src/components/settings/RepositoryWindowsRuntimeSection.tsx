@@ -1,4 +1,5 @@
-import type { GlobalSettings, Project, ProjectUpdateArgs } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Project, ProjectUpdateArgs } from '../../../../shared/project-types'
 import { SearchableSetting } from './SearchableSetting'
 import type { SettingsSearchEntry } from './settings-search'
 import { matchesSettingsSearch } from './settings-search'

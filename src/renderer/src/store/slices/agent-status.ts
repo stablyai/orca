@@ -27,7 +27,7 @@ import {
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId

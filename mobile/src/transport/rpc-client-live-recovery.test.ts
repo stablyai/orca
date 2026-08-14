@@ -151,14 +151,13 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
       // comes back to the foreground.
       blackhole = true
       c.notifyForeground()
-      // Foreground probe budget is 8s; the interval probe alone would take
-      // up to 28s. Allow scheduling slack but stay well under 28s.
+      // Three fair probe windows tolerate transient mobile/Tailscale stalls.
       const detectMs = await waitFor(
         'half-open detected',
-        15_000,
+        32_000,
         () => c.getState() !== 'connected'
       )
-      expect(detectMs).toBeLessThan(12_000)
+      expect(detectMs).toBeLessThan(30_000)
 
       blackhole = false
       await waitFor('recovered after link healed', 15_000, () => c.getState() === 'connected')

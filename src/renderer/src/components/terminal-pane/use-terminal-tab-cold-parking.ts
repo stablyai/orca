@@ -7,7 +7,7 @@
  * render a slot as null.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import {
   findActivityTerminalPortal,

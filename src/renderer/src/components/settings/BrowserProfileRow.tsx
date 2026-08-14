@@ -1,7 +1,10 @@
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
-import type { BrowserCookieImportSummary, BrowserSessionProfile } from '../../../../shared/types'
+import type {
+  BrowserCookieImportSummary,
+  BrowserSessionProfile
+} from '../../../../shared/browser-workspace-types'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,

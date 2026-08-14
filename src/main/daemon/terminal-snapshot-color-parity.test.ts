@@ -21,7 +21,7 @@ async function restoreSerializedTerminal(source: ParityTerminal): Promise<Parity
   const restored = createRendererParityTerminal({ cols: snapshot.cols, rows: snapshot.rows })
   const preamble =
     snapshot.alternateScreen && snapshot.scrollbackAnsi !== undefined
-      ? `\x1b[?1049l\x1b[2J\x1b[3J\x1b[H${snapshot.scrollbackAnsi}${SNAPSHOT_REPLAY_PREAMBLE_ALT}`
+      ? `${SNAPSHOT_REPLAY_PREAMBLE_NORMAL}${snapshot.scrollbackAnsi}${SNAPSHOT_REPLAY_PREAMBLE_ALT}`
       : snapshot.alternateScreen
         ? SNAPSHOT_REPLAY_PREAMBLE_ALT
         : SNAPSHOT_REPLAY_PREAMBLE_NORMAL

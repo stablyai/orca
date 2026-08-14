@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   areWorktreeSelectionsEqual,
   getWorktreeSelectionIntent,

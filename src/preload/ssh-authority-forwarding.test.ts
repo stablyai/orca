@@ -5,7 +5,7 @@ import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs
 } from '../shared/detected-worktree-provider-contract'
-import type { DetectedWorktreeListResult } from '../shared/types'
+import type { DetectedWorktreeListResult } from '../shared/worktree/types'
 
 function listDetectedVariableTypeProbe(api: PreloadApi, args: ListDetectedWorktreesArgs) {
   return api.worktrees.listDetected(args)

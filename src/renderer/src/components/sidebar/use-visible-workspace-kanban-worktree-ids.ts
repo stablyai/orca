@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'

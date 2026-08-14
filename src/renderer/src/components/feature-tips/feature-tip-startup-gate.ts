@@ -5,7 +5,8 @@ import {
 } from '../../../../shared/feature-tips'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
-import type { GlobalSettings, OnboardingState } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { shouldShowOnboarding } from '../onboarding/should-show-onboarding'
 
 export type FeatureTipsAppOpenDecision =

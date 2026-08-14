@@ -1,5 +1,5 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId

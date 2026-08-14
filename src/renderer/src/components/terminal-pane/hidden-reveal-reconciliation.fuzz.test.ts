@@ -133,7 +133,7 @@ async function revealFromSnapshot(
     // The pending escape tail must be the FINAL replay write (mirrors applyMainBufferSnapshot); a later ESC would abort the dangling sequence.
     const preamble =
       alt && snapshot.scrollbackAnsi !== undefined
-        ? `\x1b[?1049l\x1b[2J\x1b[3J\x1b[H${snapshot.scrollbackAnsi}${SNAPSHOT_REPLAY_PREAMBLE_ALT}`
+        ? `${SNAPSHOT_REPLAY_PREAMBLE_NORMAL}${snapshot.scrollbackAnsi}${SNAPSHOT_REPLAY_PREAMBLE_ALT}`
         : alt
           ? SNAPSHOT_REPLAY_PREAMBLE_ALT
           : SNAPSHOT_REPLAY_PREAMBLE_NORMAL

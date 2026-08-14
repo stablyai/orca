@@ -12,7 +12,7 @@ import {
   statRuntimePath,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import {

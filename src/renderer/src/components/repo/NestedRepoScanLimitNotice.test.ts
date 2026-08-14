@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import { nestedRepoScanLimitText } from './NestedRepoScanLimitNotice'
 
 describe('nestedRepoScanLimitText', () => {

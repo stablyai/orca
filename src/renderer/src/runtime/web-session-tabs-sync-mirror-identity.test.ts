@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createStore } from 'zustand/vanilla'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import type { BrowserCertificateFailure } from '../../../shared/types'
+import type { BrowserCertificateFailure } from '../../../shared/browser-workspace-types'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,

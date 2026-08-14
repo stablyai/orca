@@ -1,7 +1,7 @@
 import React from 'react'
 import { CalendarClock, PlayCircle } from 'lucide-react'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { AutomationWorkspaceProvenance } from '../../../../shared/types'
+import type { AutomationWorkspaceProvenance } from '../../../../shared/worktree/types'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent

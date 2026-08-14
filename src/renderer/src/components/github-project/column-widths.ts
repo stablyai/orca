@@ -7,7 +7,7 @@
 // the grid always fit its container exactly. Resize redistributes
 // weights between a column pair so the total stays constant and the
 // table never grows beyond its container.
-import type { GitHubProjectField } from '../../../../shared/github-project-types'
+import type { GitHubProjectField } from '../../../../shared/github/project-types'
 
 const STORAGE_KEY = 'orca.githubProject.columnWidths'
 

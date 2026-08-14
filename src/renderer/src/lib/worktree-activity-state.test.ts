@@ -5,7 +5,7 @@ import {
   hasActiveWorkspaceActivity,
   isInactiveWorkspace
 } from './worktree-activity-state'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 
 const NOW = 10_000_000

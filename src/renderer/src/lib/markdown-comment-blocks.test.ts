@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DiffComment } from '../../../shared/types'
+import type { DiffComment } from '../../../shared/diff-comment-types'
 import { mapMarkdownCommentsToBlocks, type MarkdownCommentBlock } from './markdown-comment-blocks'
 
 function makeComment(overrides: Partial<DiffComment> = {}): DiffComment {

@@ -6,7 +6,7 @@
  * before the dedupe and 1 after.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 const updateWebRuntimePaneLayout = vi.fn()
 vi.mock('@/runtime/web-runtime-session', () => ({

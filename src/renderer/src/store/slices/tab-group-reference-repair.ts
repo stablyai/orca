@@ -1,4 +1,4 @@
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
 function collectLayoutGroupIds(node: TabGroupLayoutNode, groupIds: Set<string>): void {

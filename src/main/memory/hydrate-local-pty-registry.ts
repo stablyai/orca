@@ -16,7 +16,7 @@ import type { SessionInfo } from '../daemon/types'
 import { listRegisteredPtys, registerPty } from './pty-registry'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import type { Store } from '../persistence'
 
 // Why: macOS dock reactivation reruns setup; avoid repeating Git I/O and daemon RPC.

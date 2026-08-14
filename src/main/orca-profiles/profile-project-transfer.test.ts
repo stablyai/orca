@@ -7,7 +7,9 @@ import {
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
 } from '../../shared/orca-profiles'
-import type { PersistedState, Repo, WorktreeMeta } from '../../shared/types'
+import type { PersistedState } from '../../shared/persisted-state-types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const testState = { dir: '' }

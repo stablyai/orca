@@ -1,4 +1,4 @@
-import type { IssueSourcePreference } from '../../shared/types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { pickPreferredGitRemote } from '../../shared/preferred-git-remote'
 import { getDefaultRemote } from '../git/repo'
 import { getGitHubApiRepositoryForRemote } from './github-api-repository'

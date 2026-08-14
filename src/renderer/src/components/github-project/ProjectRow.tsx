@@ -11,8 +11,8 @@ import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
-} from '../../../../shared/github-project-types'
-import type { GlobalSettings } from '../../../../shared/types'
+} from '../../../../shared/github/project-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =

@@ -12,7 +12,8 @@ import {
   type ResolvedSourceControlAiGenerationParams
 } from '../../../../shared/source-control-ai'
 import type { SourceControlTextActionId } from '../../../../shared/source-control-ai-actions'
-import type { GlobalSettings, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { buildBranchNamePrompt } from '../../../../shared/branch-name-from-work'
 import { buildCommitMessagePrompt } from '../../../../shared/commit-message-generation'

@@ -1,4 +1,4 @@
-import type { LinearComment, LinearIssue } from '../../../shared/types'
+import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
 
 export const LINEAR_ISSUE_CONTEXT_CAPS = {
   descriptionChars: 3000,

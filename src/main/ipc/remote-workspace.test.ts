@@ -6,7 +6,7 @@ import type {
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 const {
   getActiveMultiplexerMock,

@@ -224,6 +224,8 @@ export async function openWorkspaceBrowserTab(
       environmentId,
       url: request.url,
       targetGroupId: request.targetGroupId,
+      // Owner-pinned links need the host tab published before client reconciliation.
+      ...(expectedEnvironmentId !== null ? { waitForRegistration: true } : {}),
       // Why: the tab is opened from this workspace's tab bar, so surface that
       // workspace — otherwise a background worktree looks like nothing happened.
       selectWorktree: true,

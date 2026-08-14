@@ -1,4 +1,4 @@
-import type { ProcessMemoryMetric } from '../../../../shared/types'
+import type { ProcessMemoryMetric } from '../../../../shared/process-stats-types'
 import { translate } from '@/i18n/i18n'
 
 export type ResourceMemoryMetricCopy = {

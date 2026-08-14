@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../shared/constants'
-import type { ChangelogData, UpdateStatus } from '../../../shared/types'
+import type { ChangelogData, UpdateStatus } from '../../../shared/update-status-types'
 import { createUISlice } from '../store/slices/ui'
 import type { AppState } from '../store/types'
 import { isHttp2ProtocolError } from './UpdateCard'

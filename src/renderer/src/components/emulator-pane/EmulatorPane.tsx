@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'

@@ -28,7 +28,7 @@ import {
   win32 as pathWin32
 } from 'node:path'
 import { app } from 'electron'
-import type { CodexManagedAccount } from '../../shared/types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { Store } from '../persistence'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'

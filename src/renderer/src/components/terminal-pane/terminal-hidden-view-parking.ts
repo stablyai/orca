@@ -3,7 +3,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
 // flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible

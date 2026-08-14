@@ -138,6 +138,17 @@ describe('resolveMobileFileTabDoc', () => {
     })
   })
 
+  // Why: the host now caps oversized diffs with an error envelope, and a client that knows nothing
+  // about the code must still surface the message instead of rendering an empty diff.
+  it('propagates a host diff_too_large failure instead of rendering an empty diff', async () => {
+    const client = clientOf({
+      'git.diff': fail('diff_too_large', 'This diff is too large to open over a remote connection.')
+    })
+    await expect(
+      resolveMobileFileTabDoc(client, { ...WT, relativePath: 'a.ts', diffSource: 'staged' })
+    ).rejects.toThrow('This diff is too large to open over a remote connection.')
+  })
+
   it('propagates the RPC error message when a read fails', async () => {
     const client = clientOf({ 'files.read': fail('EIO', 'file_too_large') })
     await expect(

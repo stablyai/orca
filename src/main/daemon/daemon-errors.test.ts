@@ -4,10 +4,8 @@ import {
   decodeDaemonResponseError,
   isDaemonEndpointGoneError,
   SessionNotFoundError,
-  TerminalHostGoneError,
-  TerminalSessionOwnerUnverifiedError
+  TerminalHostGoneError
 } from './daemon-errors'
-import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { mapRuntimeError } from '../runtime/rpc/errors'
 
 function socketError(code: string, syscall: string): Error & { code: string; syscall: string } {
@@ -66,29 +64,5 @@ describe('isDaemonEndpointGoneError', () => {
     )
 
     expect(response.error).toEqual({ code: 'runtime_error', message: 'terminal_host_gone' })
-  })
-})
-
-describe('TerminalSessionOwnerUnverifiedError classification', () => {
-  const error = new TerminalSessionOwnerUnverifiedError('pty-1')
-
-  it('reads as an unavailable write, so a throw mid-paste reaches the renderer', () => {
-    // Without this the remaining chunks are dropped with no pty:writeUnavailable, and the pane
-    // never re-attaches — a silent truncation the user has no way to attribute.
-    expect(isPtyWriteUnavailableError(error)).toBe(true)
-  })
-
-  it('does not read as an already-gone session', () => {
-    // The reason this is not a SessionNotFoundError: pty.ts's isPtyAlreadyGoneError matches
-    // /Session not found/i and synthesizes an exit, which would report a session as dead
-    // precisely when we could not establish that it was. Matching that predicate's shape here
-    // rather than importing it, because it is private to the IPC layer.
-    expect(/Session not found/i.test(error.message)).toBe(false)
-    expect(/Session not found/i.test(new SessionNotFoundError('pty-1').message)).toBe(true)
-  })
-
-  it('keeps its own identity for callers that match on it', () => {
-    expect(error).toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
-    expect(error.name).toBe('TerminalSessionOwnerUnverifiedError')
   })
 })

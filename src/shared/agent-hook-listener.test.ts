@@ -3866,6 +3866,9 @@ describe('shared agent-hook-listener', () => {
     })
 
     it('scopes TeammateIdle to the exact teammate name for hyphen-prefix names', () => {
+      // Anchor the emit to a completed lead; no-lead idle events deliberately make no status claim.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn lanes' })
+      claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
       claudeEvent({
         hook_event_name: 'SubagentStart',
         agent_id: 'alane-hooks-6d3cb5b5',

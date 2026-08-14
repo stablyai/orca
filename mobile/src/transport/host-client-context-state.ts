@@ -1,4 +1,6 @@
 import type { RpcClient } from './rpc-client'
+import type { HostClientOpenRegistry } from './host-client-open-registry'
+import type { HostClientStoreEntry } from './host-entry-opener'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
@@ -59,6 +61,30 @@ export function listHostClients(
 export function primeHostProfiles(cache: Map<string, HostProfile>, hosts: HostProfile[]): void {
   for (const host of hosts) {
     cache.set(host.id, host)
+  }
+}
+
+export function createHostClientSelectors(
+  entries: ReadonlyMap<string, HostClientStoreEntry>,
+  pendingOpens: HostClientOpenRegistry
+) {
+  const getKnownState = (hostId: string): ConnectionState | null => {
+    const entry = entries.get(hostId)
+    if (entry) {
+      return entry.state
+    }
+    // Why: the Keychain pass predates the store entry; this window is connecting.
+    return pendingOpens.getActivePromise(hostId) ? 'connecting' : null
+  }
+  return {
+    getKnownState,
+    getState: (hostId: string): ConnectionState => getKnownState(hostId) ?? 'disconnected',
+    getReconnectAttempt: (hostId: string): number =>
+      entries.get(hostId)?.client.getReconnectAttempt() ?? 0,
+    getLastConnectedAt: (hostId: string): number | null =>
+      entries.get(hostId)?.client.getLastConnectedAt() ?? null,
+    getActivePath: (hostId: string): MobileConnectionPath =>
+      clientActivePath(entries.get(hostId)?.client)
   }
 }
 

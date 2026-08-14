@@ -7,7 +7,8 @@ import {
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { getProviderRuntimeContextKey } from './provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {

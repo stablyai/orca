@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   GLOBAL_WORKSPACE_SESSION_FIELDS,

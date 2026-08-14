@@ -1,4 +1,4 @@
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import {
   DEFAULT_MOBILE_WORKSPACE_STATUSES,
   coerceMobileWorkspaceStatuses,

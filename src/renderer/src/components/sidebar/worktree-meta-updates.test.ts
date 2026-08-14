@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorktreeMeta } from '../../../../shared/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
   buildWorktreeMetaUpdates,
   type WorktreeMetaDraft,

@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import type { RemoveWorktreeResult } from '../../../../shared/types'
+import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { showPreservedBranchToast } from './preserved-branch-toast'
 
 vi.mock('sonner', () => ({

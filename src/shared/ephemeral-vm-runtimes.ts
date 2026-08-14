@@ -32,6 +32,7 @@ const EphemeralVmRuntimeRecipeSchema = z
     id: z.string().min(1),
     name: z.string().min(1),
     create: z.string().min(1),
+    checkoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
     description: z.string().min(1).optional(),
     suspend: z.string().min(1).optional(),
     resume: z.string().min(1).optional(),

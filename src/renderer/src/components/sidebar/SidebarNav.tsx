@@ -3,7 +3,7 @@ import { Bell, CalendarClock, EyeOff, Files, Search, Smartphone } from 'lucide-r
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'

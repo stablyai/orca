@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REPO_SEARCH_QUERY_MAX_BYTES, isRepoSearchQueryTooLarge, searchRepos } from './repo-search'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {

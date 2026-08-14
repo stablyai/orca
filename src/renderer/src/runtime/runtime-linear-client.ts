@@ -1,24 +1,25 @@
 /* eslint-disable max-lines -- Why: the renderer Linear client mirrors the
    preload/RPC Linear namespace so local and remote runtime routing stays in
    one auditable boundary. */
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { LinearIssueUpdate } from '../../../shared/issue-mutation-types'
+import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
 import type {
-  GlobalSettings,
-  LinearComment,
-  LinearCollectionResult,
-  LinearConnectionStatus,
   LinearCustomViewModel,
   LinearCustomViewSummary,
-  LinearIssue,
-  LinearIssueUpdate,
+  LinearProjectDetail,
+  LinearProjectSummary
+} from '../../../shared/linear/project-types'
+import type {
+  LinearCollectionResult,
+  LinearConnectionStatus,
   LinearLabel,
   LinearMember,
-  LinearProjectDetail,
-  LinearProjectSummary,
   LinearTeam,
   LinearViewer,
-  LinearWorkspaceSelection,
-  LinearWorkflowState
-} from '../../../shared/types'
+  LinearWorkflowState,
+  LinearWorkspaceSelection
+} from '../../../shared/linear/workspace-types'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -29,11 +30,11 @@ import {
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
-import type { LinearIssueAttributeFilter } from '../../../shared/linear-issue-attribute-filter'
+import type { LinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
 import {
   canonicalizeLinearIssueAttributeFilter,
   isEmptyLinearIssueAttributeFilter
-} from '../../../shared/linear-issue-attribute-filter'
+} from '../../../shared/linear/issue-attribute-filter'
 import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 export type RuntimeLinearSettings =

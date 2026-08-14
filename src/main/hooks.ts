@@ -23,12 +23,14 @@ import { addWorktreeSetupWslInteropEnv } from './pty/wsl-orca-env'
 import type {
   HookCommandSourcePolicy,
   OrcaHooks,
-  Repo,
-  SetupDecision,
-  SetupRunPolicy,
+  SetupRunPolicy
+} from '../shared/orca-yaml-hook-types'
+import type { Repo } from '../shared/repo-types'
+import type { SetupDecision } from '../shared/worktree/create-types'
+import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../shared/types'
+} from '../shared/worktree/launch-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { SetupRunnerShell } from '../shared/setup-runner-command'
 

@@ -10,9 +10,9 @@ import type {
   GitLabPipelineJob,
   GitLabWorkItem,
   GitLabWorkItemDetails,
-  IssueSourcePreference,
   MRComment
-} from '../../shared/types'
+} from '../../shared/gitlab-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
 import {
   acquire,

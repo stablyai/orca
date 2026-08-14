@@ -1,10 +1,10 @@
 import { useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
-import type { LinearWorkspace } from '../../../shared/types'
+import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import {
   buildLinearPersonalApiKeySettingsUrl,
   buildLinearWorkspaceApiSettingsUrl
-} from '../../../shared/linear-links'
+} from '../../../shared/linear/links'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'

@@ -1,5 +1,5 @@
 import type { Store } from './persistence'
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import { resolveLocalProjectRuntimeForRepo } from './local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 

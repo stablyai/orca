@@ -5,7 +5,7 @@ import {
 import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from '../../shared/git-remote-branch-name'
 import { resolveGitRemoteRebaseSource } from '../../shared/git-rebase-source'
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { validateGitPushTarget } from './push-target-validation'

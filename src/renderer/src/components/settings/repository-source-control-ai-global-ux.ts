@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import type {
   RepoSourceControlAiOverrides,

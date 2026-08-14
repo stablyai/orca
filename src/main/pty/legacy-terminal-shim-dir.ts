@@ -1,6 +1,14 @@
 import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { renderLegacyTerminalPosixTombstone } from './legacy-terminal-posix-tombstone'
+import {
+  readVerifiedShebangInterpreter,
+  renderLegacyTerminalPosixTombstone,
+  resolvePosixTombstoneInterpreter
+} from './legacy-terminal-posix-tombstone'
+import {
+  renderLegacyTerminalWindowsCmdTombstone,
+  renderLegacyTerminalWindowsPowerShellTombstone
+} from './legacy-terminal-windows-tombstone'
 
 const LEGACY_TERMINAL_ATTRIBUTION_ENABLE_ENV_KEY = 'ORCA_ENABLE_GIT_ATTRIBUTION'
 const LEGACY_TERMINAL_ATTRIBUTION_BYPASS_ENV_KEY = 'ORCA_ATTRIBUTION_BYPASS'
@@ -24,78 +32,6 @@ export const LEGACY_TERMINAL_SHIM_ENV_KEYS = [
 export const LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS = [
   LEGACY_TERMINAL_ATTRIBUTION_ENABLE_ENV_KEY
 ] as const
-
-const WIN32_PASSTHROUGH_WRAPPER = String.raw`@echo off
-setlocal
-set "orca_real=%ORCA_REAL___ORCA_UPPER_COMMAND__%"
-set "orca_wrapper_dir=%~dp0"
-set "orca_legacy_wrapper_dir=%ORCA_ATTRIBUTION_SHIM_DIR%"
-set "orca_clean_path="
-for %%P in ("%PATH:;=" "%") do call :orca_append_path "%%~P"
-set "PATH=%orca_clean_path%"
-set "ORCA_ENABLE_GIT_ATTRIBUTION="
-set "ORCA_GIT_COMMIT_TRAILER="
-set "ORCA_GH_PR_FOOTER="
-set "ORCA_GH_ISSUE_FOOTER="
-set "ORCA_ATTRIBUTION_SHIM_DIR="
-set "ORCA_ATTRIBUTION_BYPASS="
-set "ORCA_REAL_GIT="
-set "ORCA_REAL_GH="
-if defined orca_real for %%G in ("%orca_real%") do if /I "%%~dpG"=="%~dp0" set "orca_real="
-rem Why: clear a captured path that no longer exists, or the where.exe fallback below is skipped.
-if defined orca_real if not exist "%orca_real%" set "orca_real="
-if defined orca_real goto run
-for /f "delims=" %%G in ('where.exe __ORCA_COMMAND__.exe 2^>nul') do if not defined orca_real set "orca_real=%%G"
-if not defined orca_real (
-  echo Orca compatibility wrapper could not locate __ORCA_COMMAND__ on PATH. 1>&2
-  exit /b 127
-)
-:run
-"%orca_real%" %*
-exit /b %ERRORLEVEL%
-
-:orca_append_path
-for %%G in ("%~1") do set "orca_path_entry_dir=%%~fG\"
-if /I "%orca_path_entry_dir%"=="%orca_wrapper_dir%" exit /b
-if defined orca_legacy_wrapper_dir for %%G in ("%orca_legacy_wrapper_dir%") do if /I "%orca_path_entry_dir%"=="%%~fG\" exit /b
-if defined orca_clean_path (set "orca_clean_path=%orca_clean_path%;%~1") else set "orca_clean_path=%~1"
-exit /b
-`
-
-const POWERSHELL_PASSTHROUGH_WRAPPER = String.raw`$ErrorActionPreference = 'Stop'
-$commandName = '__ORCA_COMMAND__'
-$realCommand = [Environment]::GetEnvironmentVariable('ORCA_REAL___ORCA_UPPER_COMMAND__')
-$wrapperDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$legacyWrapperDir = $env:ORCA_ATTRIBUTION_SHIM_DIR
-$wrapperDirs = @($wrapperDir, $legacyWrapperDir) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') }
-$env:PATH = (($env:PATH -split ';') | Where-Object {
-  $pathEntry = $_
-  $pathEntry -and -not ($wrapperDirs | Where-Object {
-    [string]::Equals($_, $pathEntry.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
-  })
-}) -join ';'
-'ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_GIT_COMMIT_TRAILER', 'ORCA_GH_PR_FOOTER', 'ORCA_GH_ISSUE_FOOTER', 'ORCA_ATTRIBUTION_SHIM_DIR', 'ORCA_REAL_GIT', 'ORCA_REAL_GH', 'ORCA_ATTRIBUTION_BYPASS' | ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
-if ($realCommand) {
-  try {
-    $capturedDir = Split-Path -Parent ([IO.Path]::GetFullPath($realCommand))
-    if ([string]::Equals($capturedDir.TrimEnd('\'), $wrapperDir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {
-      $realCommand = $null
-    }
-  } catch {
-    $realCommand = $null
-  }
-}
-if (-not $realCommand -or -not (Test-Path -LiteralPath $realCommand)) {
-  $resolved = Get-Command "$commandName.exe" -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  $realCommand = if ($resolved) { $resolved.Source } else { $null }
-}
-if (-not $realCommand) {
-  [Console]::Error.WriteLine("Orca compatibility wrapper could not locate $commandName on PATH.")
-  exit 127
-}
-& $realCommand @args
-exit $LASTEXITCODE
-`
 
 let neutralized = false
 let neutralizationRetryTimer: ReturnType<typeof setTimeout> | null = null
@@ -163,26 +99,30 @@ function writeNeutralWrappers(rootDir: string): void {
   const win32Dir = join(rootDir, 'win32')
   mkdirSync(posixDir, { recursive: true })
   mkdirSync(win32Dir, { recursive: true })
+  // Why: a tombstone with no verifiable absolute interpreter would need an ambient shebang and
+  // could take bash from the current directory. Falling back to the shebang of the wrapper being
+  // replaced keeps a shell that has the path hashed working -- deleting the file strands it on
+  // 127 rather than falling through to PATH. Deleting is the last resort, not the first.
+  const interpreter = resolvePosixTombstoneInterpreter()
   for (const command of ['git', 'gh'] as const) {
-    const upperCommand = command.toUpperCase()
-    writeFileAtomically(join(posixDir, command), renderLegacyTerminalPosixTombstone(command), 0o755)
+    const posixPath = join(posixDir, command)
+    const resolved = interpreter ?? readVerifiedShebangInterpreter(posixPath)
+    if (resolved === null) {
+      rmSync(posixPath, { force: true })
+    } else {
+      writeFileAtomically(posixPath, renderLegacyTerminalPosixTombstone(command, resolved), 0o755)
+    }
     writeFileAtomically(
       join(win32Dir, `${command}.cmd`),
-      renderWindowsWrapper(WIN32_PASSTHROUGH_WRAPPER, command, upperCommand),
+      renderLegacyTerminalWindowsCmdTombstone(command),
       0o755
     )
     writeFileAtomically(
       join(win32Dir, `${command}-wrapper.ps1`),
-      renderWindowsWrapper(POWERSHELL_PASSTHROUGH_WRAPPER, command, upperCommand),
+      renderLegacyTerminalWindowsPowerShellTombstone(command),
       0o755
     )
   }
-}
-
-function renderWindowsWrapper(template: string, command: string, upperCommand: string): string {
-  return template
-    .replaceAll('__ORCA_UPPER_COMMAND__', upperCommand)
-    .replaceAll('__ORCA_COMMAND__', command)
 }
 
 function writeFileAtomically(filePath: string, contents: string, mode: number): void {
@@ -201,12 +141,60 @@ function writeFileAtomically(filePath: string, contents: string, mode: number): 
   }
 }
 
+// Why: the captured directory and the PATH entry naming it can differ by a trailing separator (or
+// its slash style on Windows). A literal compare missed that and left the shim dir on PATH. The
+// literal compare itself has to stay: a shim path may contain the PATH delimiter, which splitting
+// would fragment.
+function pathEntrySpellings(dir: string, windows: boolean): string[] {
+  const base = stripTrailingSeparators(dir, windows)
+  if (!base) {
+    return [dir]
+  }
+  const spellings = new Set<string>([dir, base, `${base}/`])
+  if (windows) {
+    spellings.add(`${base}\\`)
+  }
+  return [...spellings]
+}
+
+// Why purely lexical, and why `..` is deliberately not collapsed: collapsing it textually is not
+// the same as resolving it. If `<shim>/posix` is a symlink, `<shim>/posix/../posix` resolves
+// somewhere else entirely, and treating it as the shim directory deletes a legitimate PATH entry
+// and leaves git unresolvable. Resolving for real is not an option either: this env is also built
+// for remote and WSL panes, where these paths do not name anything on the local filesystem.
+// A `..` spelling that does slip through costs nothing at runtime -- the directory now holds the
+// pass-through tombstone, and the tombstone excludes its own directory by -ef, so the lookup still
+// reaches the real git.
 export function isLegacyTerminalShimPathEntry(entry: string): boolean {
-  const normalized = entry.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+  // Why `windows` unconditionally here: this classifier only ever matches Orca's own
+  // `orca-terminal-attribution/{posix,win32}` layout, and a Windows PATH can reach it through the
+  // remote env, so both slash styles must be understood regardless of the local platform.
+  const normalized = stripTrailingSeparators(entry.replaceAll('\\', '/'), true).toLowerCase()
   return (
     normalized.endsWith(`/${LEGACY_SHIM_ROOT_DIR}/posix`) ||
     normalized.endsWith(`/${LEGACY_SHIM_ROOT_DIR}/win32`)
   )
+}
+
+// Why: `pathEntrySpellings` can only enumerate one added separator, so an entry repeating it
+// survived the literal removal. Comparing separator-stripped forms covers any number of them.
+// Why platform-specific: a backslash is a legal filename character on POSIX, so treating it as a
+// separator there made `/tmp/captured\` and `/tmp/captured` compare equal and deleted a real
+// directory from PATH.
+function stripTrailingSeparators(value: string, windows: boolean): string {
+  return value.replace(windows ? /[\\/]+$/ : /\/+$/, '')
+}
+
+function namesCapturedShimDir(entry: string, shimDirs: string[], windows: boolean): boolean {
+  const candidate = stripTrailingSeparators(entry, windows)
+  return shimDirs.some((shimDir) => {
+    const target = stripTrailingSeparators(shimDir, windows)
+    return target
+      ? windows
+        ? candidate.toLowerCase() === target.toLowerCase()
+        : candidate === target
+      : false
+  })
 }
 
 export function stripLegacyTerminalShimEnv(
@@ -239,12 +227,21 @@ export function stripLegacyTerminalShimEnv(
       continue
     }
     const withoutExplicitDirs = explicitShimDirs.reduce(
-      (pathValue, shimDir) => removeLiteralPathEntry(pathValue, shimDir, delimiter, windows),
+      (pathValue, shimDir) =>
+        pathEntrySpellings(shimDir, windows).reduce(
+          (value, spelling) => removeLiteralPathEntry(value, spelling, delimiter, windows),
+          pathValue
+        ),
       current
     )
     const cleaned = withoutExplicitDirs
       .split(delimiter)
-      .filter((entry) => entry && !isLegacyTerminalShimPathEntry(entry))
+      .filter(
+        (entry) =>
+          entry &&
+          !isLegacyTerminalShimPathEntry(entry) &&
+          !namesCapturedShimDir(entry, explicitShimDirs, windows)
+      )
       .join(delimiter)
     if (cleaned) {
       env[pathKey] = cleaned

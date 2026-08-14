@@ -1,5 +1,5 @@
 import type { HostedReviewInfo } from './hosted-review'
-import type { PRInfo } from './types'
+import type { PRInfo } from './github/pull-request-types'
 
 export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
   return {

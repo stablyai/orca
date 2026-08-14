@@ -10,7 +10,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/types'
+} from '../../../../../shared/managed-account-types'
 import { getFeatureWallUsageProviderConnection } from '../feature-wall-usage-tracking'
 import { translate } from '@/i18n/i18n'
 

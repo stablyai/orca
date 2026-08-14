@@ -1,5 +1,5 @@
-import type { LinearCollectionMeta, LinearIssueRelation } from '../../shared/linear-agent-access'
-import { LINEAR_RELATIONS_CAP } from '../../shared/linear-agent-access'
+import type { LinearCollectionMeta, LinearIssueRelation } from '../../shared/linear/agent-access'
+import { LINEAR_RELATIONS_CAP } from '../../shared/linear/agent-access'
 import type { ResolvedIssue } from './issue-context-client'
 import { getRequiredEntry, withLinearRead } from './issue-context-client'
 import { readConnectionPages } from './issue-context-pagination'

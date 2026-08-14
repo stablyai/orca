@@ -1,17 +1,18 @@
 /* eslint-disable max-lines -- Why: groups the PR/Issue fetch paths and file-contents resolver so caching/rate-limit strategy lives in one place. */
+import type { PRCheckDetail } from '../../shared/github/check-types'
+import type {
+  GitHubIssueTimelineItem,
+  GitHubIssueTimelineTarget,
+  PRComment
+} from '../../shared/github/comment-types'
 import type {
   GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
-  GitHubPRFileViewedState,
-  GitHubIssueTimelineItem,
-  GitHubIssueTimelineTarget,
-  GitHubWorkItem,
-  GitHubWorkItemDetails,
-  IssueSourcePreference,
-  PRCheckDetail,
-  PRComment
-} from '../../shared/types'
+  GitHubPRFileViewedState
+} from '../../shared/github/pull-request-types'
+import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../shared/github/work-item-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import {
   ghExecFileAsync,
   acquire,

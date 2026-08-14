@@ -4,7 +4,7 @@ import {
   type WorkItemsCacheError,
   type WorkItemsCacheSources
 } from '@/store/slices/github'
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,

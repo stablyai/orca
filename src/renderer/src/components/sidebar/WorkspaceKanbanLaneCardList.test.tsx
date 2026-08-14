@@ -11,7 +11,8 @@
 import { cleanup, render } from '@testing-library/react'
 import { createRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 const WINDOW_START = 20
 const WINDOW_END = 25

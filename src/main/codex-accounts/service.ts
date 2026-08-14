@@ -11,7 +11,7 @@ import type {
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
-} from '../../shared/types'
+} from '../../shared/managed-account-types'
 import type {
   CodexRateLimitResetOutcome,
   CodexRateLimitResetResult,

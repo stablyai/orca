@@ -4,7 +4,8 @@ import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsuppor
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../../../shared/agent-detection'
-import type { TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStateHistoryEntry,

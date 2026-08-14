@@ -5,11 +5,11 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  GitPullRequestDraft,
-  MessageCircleQuestion
+  GitPullRequestDraft
 } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -203,9 +203,9 @@ export const AgentKanbanCard = memo(
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
-    // Why: the two outcomes worth scanning for get a tinted card — amber for
-    // "answer me", green for "finished, look at it". Everything else stays
-    // neutral so the tint keeps meaning something.
+    // Why: the two outcomes worth scanning for get a tinted card — the
+    // --agent-question accent for "answer me", green for "finished, look at
+    // it". Everything else stays neutral so the tint keeps meaning something.
     const needsYou = card.bucket === 'attention'
     const displayState = dashboardCardDisplayState(card)
     const isDone = displayState === 'done'
@@ -224,7 +224,7 @@ export const AgentKanbanCard = memo(
         className={cn(
           'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
           needsYou
-            ? 'border-amber-500/40 bg-amber-500/[0.06] hover:border-amber-500/60 hover:bg-amber-500/10'
+            ? 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
             : isDone
               ? 'border-emerald-500/40 bg-emerald-500/[0.06] hover:border-emerald-500/60 hover:bg-emerald-500/10'
               : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
@@ -277,8 +277,8 @@ export const AgentKanbanCard = memo(
           ) : null}
 
           {card.askSummary ? (
-            <div className="flex w-full items-start gap-1 rounded-md bg-amber-500/15 px-1.5 py-1 text-[11px] text-amber-600 ring-1 ring-inset ring-amber-500/25 dark:text-amber-400">
-              <MessageCircleQuestion className="mt-px size-3 shrink-0" aria-hidden />
+            <div className="flex w-full items-start gap-1 rounded-md bg-agent-question/15 px-1.5 py-1 text-[11px] text-agent-question-text ring-1 ring-inset ring-agent-question/25">
+              <AgentQuestionIcon className="mt-px size-3 shrink-0" />
               <span className="line-clamp-2">{card.askSummary}</span>
             </div>
           ) : null}

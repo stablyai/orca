@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { buildByIdIndex, buildWorktreeByIdIndex } from './worktree-by-id-index'
 
 function worktree(id: string, repoId: string): Worktree {

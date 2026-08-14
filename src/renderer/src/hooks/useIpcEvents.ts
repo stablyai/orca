@@ -28,9 +28,9 @@ import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-fon
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type {
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  UpdateStatus
-} from '../../../shared/types'
+  TerminalPaneLayoutNode
+} from '../../../shared/terminal-tab-types'
+import type { UpdateStatus } from '../../../shared/update-status-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
 import {
@@ -940,14 +940,20 @@ export function useIpcEvents(): void {
         // Why: the host emits one reposChanged for group/folder-workspace edits too, so those
         // catalogs go stale without this; groups first because folder workspaces resolve owners from them.
         const runtimeOwner = { runtimeEnvironmentId: environmentId }
-        await useAppStore.getState().fetchProjectGroups(runtimeOwner)
-        await useAppStore.getState().fetchFolderWorkspaces(runtimeOwner)
-        await refreshRuntimeProjectWorktreesAndLineage(
-          environmentId,
-          repos,
-          (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
-          (options) => useAppStore.getState().fetchWorktreeLineage(options)
-        )
+        // Why: catalogs and worktrees are independent; serializing them put two 15s RPC
+        // timeouts ahead of worktree/lineage convergence on a wedged host.
+        await Promise.all([
+          (async () => {
+            await useAppStore.getState().fetchProjectGroups(runtimeOwner)
+            await useAppStore.getState().fetchFolderWorkspaces(runtimeOwner)
+          })(),
+          refreshRuntimeProjectWorktreesAndLineage(
+            environmentId,
+            repos,
+            (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
+            (options) => useAppStore.getState().fetchWorktreeLineage(options)
+          )
+        ])
       },
       onError: (error) => {
         console.error('Failed to refresh runtime projects:', error)
@@ -2316,6 +2322,7 @@ export function useIpcEvents(): void {
           // Agent/automation opens stay in the background (activate:false) in the active browser group.
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
+            browserPageId: data.browserPageId,
             targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
             sessionPartition: data.sessionPartition,
@@ -2404,6 +2411,17 @@ export function useIpcEvents(): void {
           }
           const store = useAppStore.getState()
           const explicitTargetId = data.tabId ?? null
+          const replyBrowserTabNotFound = (tabId: string): void => {
+            window.api.ui.replyTabClose({
+              requestId: data.requestId,
+              code: 'browser_tab_not_found',
+              error: translate(
+                'auto.hooks.useIpcEvents.0e3cf53060',
+                'Browser tab {{value0}} not found',
+                { value0: tabId }
+              )
+            })
+          }
           const replyPinnedBrowserCloseCanceled = (tabId: string): void => {
             window.api.ui.replyTabClose({
               requestId: data.requestId,
@@ -2455,11 +2473,15 @@ export function useIpcEvents(): void {
             )
             if (owningWorkspace) {
               const [workspaceId, pages] = owningWorkspace
+              const owningWorktreeId =
+                Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
+                  tabs.some((tab) => tab.id === workspaceId)
+                )?.[0] ?? null
+              if (data.worktreeId && owningWorktreeId !== data.worktreeId) {
+                replyBrowserTabNotFound(tabToClose)
+                return
+              }
               if (pages.length <= 1) {
-                const owningWorktreeId =
-                  Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
-                    tabs.some((tab) => tab.id === workspaceId)
-                  )?.[0] ?? null
                 if (owningWorktreeId) {
                   closeBrowserWorkspaceWithReply(owningWorktreeId, workspaceId)
                   return
@@ -2477,18 +2499,15 @@ export function useIpcEvents(): void {
               tabs.some((tab) => tab.id === tabToClose)
             )?.[0] ?? null
           if (owningWorktreeId) {
+            if (data.worktreeId && owningWorktreeId !== data.worktreeId) {
+              replyBrowserTabNotFound(tabToClose)
+              return
+            }
             closeBrowserWorkspaceWithReply(owningWorktreeId, tabToClose)
             return
           }
           if (explicitTargetId) {
-            window.api.ui.replyTabClose({
-              requestId: data.requestId,
-              error: translate(
-                'auto.hooks.useIpcEvents.0e3cf53060',
-                'Browser tab {{value0}} not found',
-                { value0: explicitTargetId }
-              )
-            })
+            replyBrowserTabNotFound(explicitTargetId)
             return
           }
           store.closeBrowserTab(tabToClose)

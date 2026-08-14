@@ -24,9 +24,16 @@ import { getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS } from './terminal-history-seed-chunks'
 
-const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
-  getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
-}))
+const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
+  () => ({
+    getMacDaemonSystemResolverHealthMock: vi.fn(
+      async (): Promise<'unknown' | 'unhealthy'> => 'unknown'
+    ),
+    getMacDaemonTccAttributionHealthMock: vi.fn(
+      async (): Promise<'intact' | 'severed' | 'unknown'> => 'unknown'
+    )
+  })
+)
 
 const itOnPosix = process.platform === 'win32' ? it.skip : it
 
@@ -34,7 +41,8 @@ vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
   return {
     ...actual,
-    getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
+    getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
+    getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
   }
 })
 
@@ -137,6 +145,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     lastSpawnOpts = null
     getMacDaemonSystemResolverHealthMock.mockReset()
     getMacDaemonSystemResolverHealthMock.mockResolvedValue('unknown')
+    getMacDaemonTccAttributionHealthMock.mockReset()
+    getMacDaemonTccAttributionHealthMock.mockResolvedValue('unknown')
   })
 
   it('reports whether its daemon protocol can participate in agent claims', () => {
@@ -1908,20 +1918,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.listProcesses()
 
       expect(adapter.hasPty(staleId)).toBe(false)
-      expect(adapter.hasPty(id)).toBe(true)
-    })
-
-    // Why: off-socket the cache can only be missing exits it never received, so a
-    // miss is ignorance. Answering false there authorizes a respawn over a live shell.
-    it('answers unknown, not absent, for an uncached id while disconnected', async () => {
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-      const unknownId = 'repo::/repo/unknown@@deadbeef'
-      expect(adapter.hasPty(unknownId)).toBe(false)
-
-      await server.shutdown()
-      await waitFor(() => !(adapter as unknown as { client: DaemonClient }).client.isConnected())
-
-      expect(adapter.hasPty(unknownId)).toBe(null)
       expect(adapter.hasPty(id)).toBe(true)
     })
 
@@ -3937,6 +3933,101 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(respawnFn).not.toHaveBeenCalled()
 
       respawnAdapter.dispose()
+    })
+
+    it('preserves a severed-TCC daemon that still owns live sessions before a new spawn', async () => {
+      const respawnFn = vi.fn()
+      const respawnAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        runtimeDir: dir,
+        packagedAppVersion: '1.4.178',
+        respawn: respawnFn
+      })
+      // One live session in this adapter — the zero-session gate must fail closed.
+      await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+      getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonTccAttributionHealthMock).toHaveBeenCalledWith(
+        dir,
+        socketPath,
+        tokenPath,
+        '1.4.178',
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(next.id).toBeDefined()
+
+      respawnAdapter.dispose()
+    })
+
+    it('preserves a severed-TCC daemon when its live session inventory is unavailable', async () => {
+      const respawnFn = vi.fn()
+      const respawnAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        runtimeDir: dir,
+        packagedAppVersion: '1.4.178',
+        respawn: respawnFn
+      })
+      const internals = respawnAdapter as unknown as {
+        client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+      }
+      const originalRequest = internals.client.request.bind(internals.client)
+      vi.spyOn(internals.client, 'request').mockImplementation((type, payload) => {
+        if (type === 'listSessions') {
+          return Promise.reject(new Error('inventory unavailable'))
+        }
+        return originalRequest(type, payload)
+      })
+      getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(next.id).toBeDefined()
+
+      respawnAdapter.dispose()
+    })
+
+    it('replaces a severed-TCC daemon before a fresh session when no sessions are active', async () => {
+      let respawnServer: DaemonServer | undefined
+      const respawnFn = vi.fn(async () => {
+        await server.shutdown()
+        rmSync(socketPath, { force: true })
+        respawnServer = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => createMockSubprocess()
+        })
+        await respawnServer.start()
+      })
+      const respawnAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        runtimeDir: dir,
+        packagedAppVersion: '1.4.178',
+        respawn: respawnFn
+      })
+      getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
+
+      const replacement = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonTccAttributionHealthMock).toHaveBeenCalledWith(
+        dir,
+        socketPath,
+        tokenPath,
+        '1.4.178',
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).toHaveBeenCalledTimes(1)
+      expect(respawnFn).toHaveBeenCalledWith('severed_tcc_attribution')
+      expect(replacement.id).toBeDefined()
+
+      respawnAdapter.dispose()
+      await respawnServer?.shutdown()
     })
 
     it('propagates respawn failure to the caller', async () => {

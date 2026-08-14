@@ -1,4 +1,4 @@
-import type { WorkspaceStatus } from '../../../../shared/types'
+import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import {
   resolveWorkspaceKanbanVirtualLaneDropIndex,
   resolveWorkspaceKanbanVirtualLaneDropIndicatorY

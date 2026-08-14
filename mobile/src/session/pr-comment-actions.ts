@@ -1,4 +1,5 @@
-import type { GitHubOwnerRepo, PRComment, PRState } from '../../../src/shared/types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
+import type { GitHubOwnerRepo, PRState } from '../../../src/shared/github/pull-request-types'
 
 // Pure helpers for the interactive PR comment timeline (reply / resolve / add
 // root comment). Kept free of React/native imports so they unit-test under the

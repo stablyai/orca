@@ -45,6 +45,7 @@ describe('AgentMapScene project labels', () => {
           selectedPaneKey={null}
           allowAggregation
           showOrchestrationLinks
+          recentFlareStatuses={new Map()}
           nodeRefs={{ current: new Map() }}
           onSelectAgent={vi.fn()}
           onAgentKeyDown={vi.fn()}
@@ -81,7 +82,14 @@ describe('AgentMapScene project labels', () => {
               y: 120,
               radius: 48,
               agents: [],
-              statusCounts: { working: 0, blocked: 0, waiting: 0, done: 0, idle: 0 },
+              statusCounts: {
+                working: 0,
+                blocked: 0,
+                waiting: 0,
+                done: 0,
+                'done-seen': 0,
+                idle: 0
+              },
               quiet: true
             }
           ]
@@ -101,6 +109,7 @@ describe('AgentMapScene project labels', () => {
             selectedPaneKey={null}
             allowAggregation
             showOrchestrationLinks
+            recentFlareStatuses={new Map()}
             nodeRefs={{ current: new Map() }}
             onSelectAgent={vi.fn()}
             onAgentKeyDown={vi.fn()}

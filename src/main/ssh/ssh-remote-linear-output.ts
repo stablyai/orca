@@ -16,11 +16,11 @@ import type {
   LinearAttachResult,
   LinearCreateResult,
   LinearSaveIssueResult
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import {
   formatLinearProjectListRows,
   linearProjectListWarningLines
-} from '../../shared/linear-project-list-format'
+} from '../../shared/linear/project-list-format'
 import {
   isLinearAttachResult,
   isLinearCommentAddResult,

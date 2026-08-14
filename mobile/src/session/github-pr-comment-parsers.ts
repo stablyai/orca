@@ -1,4 +1,8 @@
-import type { GitHubReaction, GitHubReactionContent, PRComment } from '../../../src/shared/types'
+import type {
+  GitHubReaction,
+  GitHubReactionContent,
+  PRComment
+} from '../../../src/shared/github/comment-types'
 import { isRecord, readBoolean, readNumber, readString } from './github-pr-value-readers'
 
 // Defensive parsers for the PR conversation comments carried by

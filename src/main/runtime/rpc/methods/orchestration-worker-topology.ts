@@ -1,5 +1,5 @@
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 

@@ -3,7 +3,7 @@ import type { SshPtyOutputDataEvent } from './ssh-pty-output-intake'
 import {
   createSshPtyOutputIntakeHarness as createHarness,
   sshPtyOutputEvent as event
-} from './__tests__/ssh-pty-output-intake-test-harness'
+} from './ssh-pty-output-intake-test-harness'
 
 // Production-shaped ids: bare relay id on the wire side, prefixed app id in intake.
 const APP_ID = 'ssh:conn@@pty-1'

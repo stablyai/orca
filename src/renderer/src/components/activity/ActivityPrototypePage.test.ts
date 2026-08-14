@@ -6,7 +6,9 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {

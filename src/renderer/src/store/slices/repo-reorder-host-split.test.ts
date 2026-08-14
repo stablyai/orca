@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { splitRepoReorderByHost } from './repo-reorder-host-split'
 
 function repo(id: string, executionHostId: string | null): Repo {

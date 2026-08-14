@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import {
   MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
   MOBILE_TUI_AGENT_FAVICON_DOMAINS,

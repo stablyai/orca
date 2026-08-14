@@ -1,4 +1,5 @@
-import type { Worktree, WorktreeLineage } from './types'
+import type { WorktreeLineage } from './worktree/lineage-types'
+import type { Worktree } from './worktree/types'
 
 export type WorktreeWithResolvedLineage<T extends Worktree = Worktree> = T & {
   parentWorktreeId: string | null

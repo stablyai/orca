@@ -6,7 +6,7 @@ import {
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import type {
   WorkspaceSpaceItem,

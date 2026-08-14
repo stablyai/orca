@@ -3,7 +3,8 @@ import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 
 export function useDeleteWorktreeStatusHydration({

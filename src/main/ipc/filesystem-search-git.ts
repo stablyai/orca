@@ -1,4 +1,4 @@
-import type { SearchOptions, SearchResult } from '../../shared/types'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import {
   buildGitGrepArgs,
   buildSubmatchRegex,

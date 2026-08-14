@@ -2,7 +2,7 @@ import type React from 'react'
 import { useLayoutEffect, useState } from 'react'
 import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
 
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 import { AppearanceSection } from './AppearanceSection'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'

@@ -4,7 +4,10 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { shell } from 'electron'
-import type { LinuxPackageInstallRecovery, LinuxRootPackageType } from '../shared/types'
+import type {
+  LinuxPackageInstallRecovery,
+  LinuxRootPackageType
+} from '../shared/update-status-types'
 import { getLinuxRootPackageType } from './linux-update-package-type'
 import { buildLinuxPackageInstallCommand } from './linux-package-install-command'
 

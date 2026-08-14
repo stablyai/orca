@@ -73,7 +73,9 @@ test('keeps conventional commit-message lines intact in the history tooltip', as
 
   const row = orcaPage.getByTestId('git-history-row').filter({ hasText: subject })
   await expect(row).toBeVisible({ timeout: 10_000 })
+  await expect(row).not.toHaveAttribute('title')
   const trigger = row.locator('[data-slot="tooltip-trigger"]').filter({ hasText: subject })
+  await expect(trigger).not.toHaveAttribute('title')
   await trigger.hover({ position: { x: 20, y: 10 } })
   await trigger.hover({ position: { x: 40, y: 10 } })
 

@@ -1,5 +1,5 @@
 import { gitLabJobTraceToLogExcerpt } from './gitlab-job-log-excerpt'
-import type { PRCheckDetail, PRCheckRunDetails } from './types'
+import type { PRCheckDetail, PRCheckRunDetails } from './github/check-types'
 
 export type GitLabJobTraceCheckDetailsStrings = {
   /** Shown for a job with no log: never ran, waiting on a human, or log erased/expired. */

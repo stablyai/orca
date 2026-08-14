@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { GitHubAssignableUser } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 
 /** In-progress "New GitHub issue" composer draft. Session-only (never
  *  `persist`-wrapped, no disk surface): it exists so an accidental dismissal

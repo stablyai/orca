@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getLocalCommandSourcePolicyNotice, RepositoryHooksSection } from './RepositoryHooksSection'
 
 vi.mock('@/store', () => ({

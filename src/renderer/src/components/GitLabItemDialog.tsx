@@ -44,12 +44,12 @@ import {
 import { useAppStore } from '@/store'
 import type {
   GitLabAssignableUser,
-  GitLabPipelineJob,
   GitLabMRUpdate,
+  GitLabPipelineJob,
   GitLabWorkItem,
   GitLabWorkItemDetails,
   MRComment
-} from '../../../shared/types'
+} from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 

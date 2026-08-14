@@ -1,4 +1,5 @@
-import type { Tab, TerminalTab } from './types'
+import type { Tab } from './tab-types'
+import type { TerminalTab } from './terminal-tab-types'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 
 export function resolveTerminalTabTitle(

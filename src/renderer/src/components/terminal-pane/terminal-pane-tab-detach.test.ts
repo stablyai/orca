@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   detachTerminalPaneToTab,
   resolveTerminalTabStripDropTarget,

@@ -1,5 +1,8 @@
 import { ipcMain } from 'electron'
-import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
+import type {
+  PathSource,
+  ShellHydrationFailureReason
+} from '../../shared/shell-path-hydration-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'

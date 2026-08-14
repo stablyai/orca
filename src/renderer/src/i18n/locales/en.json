@@ -717,7 +717,8 @@
         "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
       },
       "ephemeralVmWorkspaceTarget": {
-        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
+        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime.",
+        "provisionedRootRequiresSsh": "Provisioned-root recipes currently require a direct SSH connection."
       },
       "blocked": {
         "notification": {
@@ -789,6 +790,9 @@
             "additionalErrors": "{{count}} additional images could not be attached."
           }
         }
+      },
+      "ephemeralVmWorktreeCreation": {
+        "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
       }
     },
     "hooks": {
@@ -935,6 +939,12 @@
         "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
         "openSettings": "Open Settings",
         "dismiss": "Don't show again"
+      },
+      "useMacTccAttributionSeveredNotice": {
+        "title": "macOS permissions may not reach Orca terminals",
+        "description": "Running Orca terminals are hosted by a daemon started by a previous Orca installation. macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions to them. Restart the daemon from Manage Sessions to restore access. This will close all running Orca terminals.",
+        "openManageSessions": "Open Manage Sessions",
+        "dismiss": "Dismiss"
       }
     },
     "components": {
@@ -1351,6 +1361,7 @@
         "519c3587f3": "Add to project",
         "openAttachedWorkspace": "Open workspace attached to issue",
         "openWorkspace": "Open workspace",
+        "openOnLinear": "Open on Linear",
         "moreWorkspaceActions": "More issue workspace actions",
         "startNewWorkspace": "Start new workspace",
         "workspaceSection": "Workspace",
@@ -2138,7 +2149,9 @@
         "pluginCommandFailed": "Could not run the plugin command.",
         "recentChatsTerminalsHeader": "Recent Chats & Terminals",
         "27f10cca63": "Search chats, terminals, worktrees, settings, and actions...",
-        "2770f02910": "Search chats, terminals, worktrees, settings, and actions"
+        "2770f02910": "Search chats, terminals, worktrees, settings, and actions",
+        "paletteOpenTabBranch": "Branch name",
+        "paletteOpenTabWorkspace": "Workspace name"
       },
       "github": {
         "pr": {
@@ -2615,7 +2628,7 @@
             "2b31bf68de": "inactive",
             "ac5ba84cc1": "selected",
             "8b74d4ea6e": "Scanning worktrees and git state, then combining open tab, terminal, live agent, and remote availability signals before suggesting deletions.",
-            "7eee951968": "Checking workspace safety",
+            "7eee951968": "Scanning workspaces",
             "191f0bc98e": "Close",
             "7ae2ad30f4": "Refresh",
             "e0b5a4deaa": "Review inactive workspaces before deleting their local files and Orca state.",
@@ -2631,16 +2644,16 @@
             "ee81adfcef": "View",
             "4d0b72481c": "Ignore",
             "9cc26c019d": "Remove",
-            "0e2d235c63": "Inactive workspace scan ready",
+            "0e2d235c63": "Workspace scan ready",
             "4a35c08764": "Review",
-            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
-            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
+            "47123d0108": "Collecting workspace information. You can close this and come back.",
+            "9a3be9f2df": "Scanning workspaces. New rows appear here as they finish. You can close this and come back.",
             "3d957ff117": "No workspaces match these filters.",
             "e94b1f8bb4": "Clear filters",
             "efb3843e75": "Filter and sort workspaces",
             "93b7381d50": "Filters",
             "a615e24679": "Sort",
-            "4cc5b73efe": "Finding inactive workspaces...",
+            "4cc5b73efe": "Finding workspaces...",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
             "searchPlaceholder": "Search workspaces",
             "ageFilter": "Age",
@@ -2863,7 +2876,8 @@
             "5c8ce20be6": "If this persists, please",
             "cc6d997c65": "Restart the terminal daemon from here to clear stale daemon state.",
             "7ee11bc0db": "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry.",
-            "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue."
+            "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.",
+            "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
           },
           "TerminalPane": {
             "ac112e9036": "Remove title",
@@ -3008,20 +3022,16 @@
             "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
             "removeWorkspaceButton": "Remove workspace"
           },
-          "TerminalQuickCommandsSubmenu": {
-            "3ccc7981bb": "Host unavailable",
-            "54f29b7c0d": "Loading host…"
-          },
-          "TerminalPaneDisconnectedBanner": {
-            "sshPaneTitle": "Terminal disconnected",
-            "sshPaneBody": "Orca cannot reach this terminal right now. The shell may still be running on the host, so starting a new one leaves it alone.",
-            "tryAgainButton": "Try again",
-            "startNewTerminalButton": "Start a new terminal",
+          "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
+          },
+          "TerminalQuickCommandsSubmenu": {
+            "3ccc7981bb": "Host unavailable",
+            "54f29b7c0d": "Loading host…"
           }
         }
       },
@@ -3301,7 +3311,7 @@
             "67c4ecda49": "Force-quits this terminal. Any unsaved work in the pane is lost. This can't be undone.",
             "4bb076fa89": "Kill",
             "996295bff2": "orphan terminal",
-            "92924a14e3": "Review inactive workspaces ({{value0}})",
+            "92924a14e3": "Clean up workspaces",
             "27a74f91f0": "Nothing running right now",
             "1b24a32d3a": "Memory",
             "298f4be7f2": "CPU",
@@ -4890,8 +4900,12 @@
         "WorktreeVisibilityHelpPopover": {
           "c41f2d7e90": "Which worktrees are hidden by default?",
           "8db4e19a26": "This setting never hides worktrees created through Orca.",
-          "54a7c2f183": "For newly added repositories, worktrees created manually or by another tool are hidden by default to avoid unexpected sidebar clutter.",
-          "b9e0d43675": "Always show includes current and future non-Orca worktrees, including agent worktrees under .claude/worktrees/* and .gsd-workspaces/*. When it is off, use Show below to add one individually."
+          "ec1e6a10fb": "Other worktrees start hidden to avoid unexpected sidebar clutter.",
+          "1c68c9cf77": "Enable a source for all current and future worktrees, or show individual worktrees below."
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "Show one without enabling its source.",
+          "showWorktree": "Show {{value0}} at {{value1}}"
         },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Non-Orca worktrees",
@@ -4905,10 +4919,18 @@
           "b8d24e61f5": "Could not list this repo's worktrees.",
           "c5e70a93b1": "Try again",
           "7d21c5e848": "Hidden worktrees ({{value0}})",
-          "9b53f7a160": "Choose which hidden worktrees to show individually.",
           "2f80cd4b97": "Showing…",
           "e64b81d3a9": "Show",
-          "d40d436fc2": "Could not update worktree visibility. Try again."
+          "d40d436fc2": "Could not update worktree visibility. Try again.",
+          "unsupportedHost": "This host doesn't support source-specific worktree visibility. Update Orca on the host to change this setting.",
+          "search": "Search hidden worktrees",
+          "searchPlaceholder": "Search {{value0}} worktrees…",
+          "noMatches": "No matching worktrees",
+          "allShown": "All discovered worktrees are shown",
+          "noneFound": "No non-Orca worktrees found",
+          "tryDifferentSearch": "Try a different name or path.",
+          "disableSource": "Disable a source to manage its worktrees individually.",
+          "appearWhenDetected": "New worktrees will appear here when Orca detects them."
         },
         "add": {
           "repo": {
@@ -5205,14 +5227,11 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Hide external worktrees permanently for {{value0}}",
-          "d9f7b2a14c": "Collapse new externally-created worktrees for {{value0}}",
-          "e2c4a8d91f": "Expand new externally-created worktrees for {{value0}}",
-          "7c4e9b2a81": "New externally-created worktrees",
           "5e1b8d3f62": "Hide external worktrees permanently",
-          "4d7a1c9e53": "These worktrees were created outside of Orca.",
-          "8b3f2e1d74": "Import",
-          "1c9e7a4b28": "Keep hidden",
-          "6f2d8c1e95": "Import all",
+          "2a6f31d8c7": "hidden worktree",
+          "5b90e4a2f6": "hidden worktrees",
+          "7f18c5b0d3": "Review {{value0}} hidden worktree in {{value1}}",
+          "4e2b7a9c05": "Review {{value0}} hidden worktrees in {{value1}}",
           "c3e8a1f4b2": "Don't show again"
         },
         "newExternalWorktreesInboxActions": {
@@ -5406,6 +5425,26 @@
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Jump to top"
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "Other locations",
+          "custom": "Custom location",
+          "otherPath": "Outside listed sources",
+          "invalidPath": "Enter an absolute path for this host.",
+          "duplicatePath": "This location is already listed.",
+          "limit": "Remove a custom location before adding another.",
+          "sources": "Sources",
+          "sourcesDescription": "Enabled sources include current and future worktrees in the sidebar.",
+          "found": "{{value0}} found",
+          "remove": "Remove {{value0}}",
+          "removeLocation": "Remove custom location",
+          "toggle": "Show current and future worktrees from {{value0}}",
+          "addLocation": "Add location",
+          "worktreeRoot": "Worktree root",
+          "add": "Add",
+          "rootHelp": "Orca will recognize worktrees beneath this folder."
         }
       },
       "shared": {
@@ -7599,6 +7638,10 @@
           "16c471ee03": "on",
           "typographyAdvanced": "Typography",
           "dimUnfocusedPanes": "Dim unfocused panes."
+        },
+        "TerminalAdvancedTypographyControls": {
+          "f5fa1a08f1": "Bold Font Weight",
+          "0e0d1ee15a": "Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged."
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -10648,11 +10691,6 @@
               "disconnectFailed": "Could not remove the saved Bitbucket credential."
             }
           }
-        },
-        "DaemonDegradedNotice": {
-          "title": "New terminals aren’t being saved",
-          "body": "The terminal host stopped responding. Orca kept it rather than ending anything it might still be hosting, but it can’t reach those terminals until the host responds again — reopening a pane retries, and works once it does. New terminals open outside the host and close when you quit Orca. Restarting the host usually clears this, and ends every terminal — both the ones it is still holding and the ones running outside it.",
-          "action": "Restart host"
         }
       },
       "right": {
@@ -15206,6 +15244,7 @@
           "high": "High",
           "xhigh": "Extra high",
           "max": "Max",
+          "ultra": "Ultra",
           "on": "On",
           "off": "Off"
         }
@@ -15293,6 +15332,170 @@
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
+        },
+        "browse": {
+          "noSizes": "No workspace sizes measured yet.",
+          "noSizesDescription": "Sizes appear after disk usage has been measured.",
+          "measureSizes": "Scan",
+          "measureSizesTitle": "Scan workspace sizes",
+          "measureSizesDescription": "Scan disk usage to compare, sort, and filter workspaces by size.",
+          "sizeOnDisk": "Size on disk: {{value0}}",
+          "checkingGitRow": "Checking git status",
+          "searchPlaceholder": "Search name, repo, branch, path, host",
+          "searchLabel": "Search workspaces",
+          "filters": "Filters",
+          "showingCount": "Showing {{value0}} of {{value1}}",
+          "clearFilters": "Clear filters",
+          "checkingGit": "Checking git status: {{value0}} left",
+          "facet": {
+            "git": "Git",
+            "review": "Review",
+            "ticket": "Tickets",
+            "location": "Location",
+            "safety": "Safety",
+            "activity": "Activity",
+            "size": "Size on disk",
+            "status": "Workspace status",
+            "agent": "Agent",
+            "context": "Local context"
+          },
+          "minAhead": "Commits ahead ≥",
+          "minBehind": "Commits behind ≥",
+          "branchQuery": "Branch contains",
+          "prunable": "Prunable",
+          "locked": "Locked",
+          "reviewPresence": "PR / MR",
+          "reviewProvider": "Provider",
+          "ticketPresence": "Linked ticket",
+          "host": "Host",
+          "repo": "Repository",
+          "pathPrefix": "Path starts with",
+          "tier": {
+            "ready": "Ready",
+            "review": "Needs review",
+            "protected": "Protected"
+          },
+          "blockerMode": "Blocker match",
+          "blockerModeAny": "Has any",
+          "blockerModeNone": "Has none",
+          "blockers": "Blockers",
+          "dismissed": "Ignored",
+          "selectableOnly": "Only workspaces I can delete now",
+          "idleSignal": {
+            "lastVisited": "Not opened",
+            "lastActivity": "No activity",
+            "created": "Created before"
+          },
+          "idleMinDays": "Idle for at least",
+          "days": "days",
+          "neverVisited": "Never opened",
+          "minSize": "At least",
+          "maxSize": "At most",
+          "includeUnsized": "Include unmeasured workspaces",
+          "matchStatusless": "Include workspaces with no status",
+          "archived": "Archived",
+          "pinned": "Pinned",
+          "unread": "Unread",
+          "comment": "Has comment",
+          "retainedDoneAgents": "Finished agent transcripts",
+          "contextPresence": "Open tabs, terminals, comments",
+          "completelyEmpty": "Nothing left to lose",
+          "noWorkspaces": "No workspaces found.",
+          "noMatches": "No workspaces match these filters.",
+          "noMatchesDescription": "Every workspace is in one list — widen a facet or clear the filters.",
+          "selectAll": "Select all matching workspaces",
+          "sortBy": "Sort by",
+          "sortByField": "Sort by {{value0}}",
+          "sort": {
+            "lastActivity": "Last activity",
+            "lastVisited": "Last opened",
+            "created": "Created",
+            "size": "Size",
+            "name": "Workspace",
+            "repo": "Repository",
+            "path": "Path",
+            "host": "Host",
+            "workspaceStatus": "Status",
+            "agent": "Agent",
+            "git": "Git",
+            "ahead": "Ahead",
+            "behind": "Behind",
+            "branch": "Branch",
+            "review": "Review",
+            "ticket": "Ticket",
+            "localContext": "Open context",
+            "tier": "Safety",
+            "blockerCount": "Blockers"
+          },
+          "git": {
+            "clean": "Clean",
+            "dirty": "Uncommitted changes",
+            "unpushed": "Unpushed commits",
+            "unknown": "Not checked"
+          },
+          "agent": {
+            "working": "Working",
+            "permission": "Waiting on you",
+            "idle": "Idle"
+          },
+          "review": {
+            "open": "Open",
+            "draft": "Draft",
+            "merged": "Merged",
+            "closed": "Closed",
+            "unknown": "Unknown",
+            "otherProvider": "Other"
+          },
+          "ticket": {
+            "workItem": "Work item",
+            "linear": "Linear",
+            "issue": "Issue"
+          },
+          "triState": {
+            "any": "Any",
+            "only": "Only",
+            "exclude": "Exclude"
+          },
+          "presence": {
+            "any": "Any",
+            "some": "Has one",
+            "none": "Has none"
+          },
+          "tierField": "Cleanup tier",
+          "idleSignalField": "Idle signal",
+          "selectionVanishedOne": "1 selected workspace no longer exists.",
+          "selectionVanished": "{{value0}} selected workspaces no longer exist.",
+          "updatedAgo": "Updated {{value0}}",
+          "refreshing": "Refreshing…",
+          "refreshingProgress": "Refreshing {{value0}}/{{value1}}",
+          "notMeasured": "Not measured",
+          "openWorkspaceNamed": "Open {{value0}}",
+          "openWorkspace": "Open workspace",
+          "workspaceStatus": "Workspace status: {{value0}}",
+          "measuringSizesProgress": "Scanning {{value0}}/{{value1}}",
+          "measuringSizes": "Scanning sizes",
+          "measureSizesFailed": "Could not scan workspace sizes",
+          "selectedCount": "{{value0}} selected"
+        },
+        "scan": {
+          "progress": "Scanning workspaces ({{value0}}/{{value1}})",
+          "singleError": "Could not check {{value0}}: {{value1}}. Some workspaces may be missing. Refresh to try again.",
+          "moreErrors": ", +{{value0}} more",
+          "multipleErrors": "Could not check {{value0}} repositories ({{value1}}{{value2}}). Some workspaces may be missing. Refresh to try again.",
+          "noWorkspaces": "No workspaces found.",
+          "readyOneOne": "1 workspace found, with 1 cleanup suggestion.",
+          "readyOneMany": "1 workspace found, with {{value0}} cleanup suggestions.",
+          "readyManyOne": "{{value0}} workspaces found, with 1 cleanup suggestion.",
+          "readyManyMany": "{{value0}} workspaces found, with {{value1}} cleanup suggestions.",
+          "fallbackRepository": "a repository",
+          "gitListFailed": "Git could not list worktrees"
+        },
+        "relativeTime": {
+          "never": "Never",
+          "justNow": "Just now",
+          "minutesAgo": "{{value0}}m ago",
+          "hoursAgo": "{{value0}}h ago",
+          "daysAgo": "{{value0}}d ago"
         }
       }
     },
@@ -15321,6 +15524,13 @@
       "sent": "Session context sent to {{agent}} in a new session.",
       "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
       "launchFailed": "Could not start a new {{agent}} session."
+    },
+    "status": {
+      "bar": {
+        "workspaceSpace": {
+          "otherTopLevelItems": "Other top-level items ({{value0}})"
+        }
+      }
     }
   },
   "dashboardPopout": {
@@ -15331,7 +15541,6 @@
     },
     "map": {
       "host": {
-        "all": "All hosts",
         "local": "Local",
         "ssh": "SSH",
         "wsl": "WSL",
@@ -15339,13 +15548,31 @@
       },
       "filters": {
         "showStates": "Agent states",
-        "canvasSummary": "{{shown}} of {{total}} agents shown",
         "agentlessWorkspaces": "Workspaces without agents",
         "orchestrationLinks": "Orchestration links",
-        "workspaceVisibility": "Map content"
+        "orchestrationLinksHidden": "Orchestration links hidden",
+        "workspaceVisibility": "Map content",
+        "title": "Map controls",
+        "reset": "Reset",
+        "ofTotalAgents": "of {{total}} agents shown",
+        "quickViews": "Quick views",
+        "agents": "Agents",
+        "time": "Time",
+        "lifespan": "Session lifespan",
+        "sinceMessage": "Since last message",
+        "timeInState": "Time in current state",
+        "timeMinimum": "{{label}} minimum",
+        "timeMaximum": "{{label}} maximum",
+        "timeAny": "any",
+        "timeRangeCount": "{{count}} ranges",
+        "resetRanges": "Reset ranges",
+        "summaryAll": "All",
+        "summaryCount": "{{shown}} of {{total}}",
+        "summarySelected": "{{count}} selected",
+        "workspace": "Workspace",
+        "stateChip": "State: {{states}}"
       },
       "liveContainmentMap": "Live containment map",
-      "hostFilter": "Host filter",
       "empty": "No agents match the current filters.",
       "canvasLabel": "Nested project, workspace, and agent map",
       "zoomOut": "Zoom out",
@@ -15364,7 +15591,20 @@
       "agentCount": "{{count}} agents",
       "agentCount_one": "{{count}} agent",
       "agentCount_other": "{{count}} agents",
-      "noWorkspaceAgents": "No agents in this workspace."
+      "noWorkspaceAgents": "No agents in this workspace.",
+      "status": {
+        "doneSeen": "Done, seen"
+      },
+      "quickView": {
+        "everything": "Everything",
+        "attention": "Needs me",
+        "stuck": "Stuck",
+        "unread": "Unread",
+        "recent": "Last 30 min",
+        "longRunning": "Long runners",
+        "stale": "Stale > 3d",
+        "orchestration": "Orchestration"
+      }
     },
     "placeholder": {
       "title": "Agent dashboard",
@@ -15427,7 +15667,8 @@
       "project": "Project",
       "workspaceStatus": "Workspace status",
       "reviewStatus": "PR / MR status",
-      "clearAll": "Clear all filters"
+      "clearAll": "Clear all filters",
+      "removeChip": "Remove {{filter}}"
     },
     "search": {
       "placeholder": "Search worktree, project, or agent…",

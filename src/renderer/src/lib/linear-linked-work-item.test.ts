@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { LinearIssue } from '../../../shared/types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
 import {
   buildLinearIssueLinkedWorkItem,
   getLinearLinkedWorkItemBranchName,

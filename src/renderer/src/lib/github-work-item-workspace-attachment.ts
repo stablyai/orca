@@ -1,4 +1,5 @@
-import type { GitHubWorkItem, Worktree } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { getWorktreeAttachmentLabel } from './worktree-attachment-label'
 
 type GitHubWorkItemType = GitHubWorkItem['type']

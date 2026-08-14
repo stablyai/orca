@@ -1,4 +1,4 @@
-import type { BrowserTab } from '../../../shared/types'
+import type { BrowserTab } from '../../../shared/browser-workspace-types'
 
 export function buildDuplicatedBrowserTabOptions(
   source: Pick<BrowserTab, 'title' | 'sessionProfileId' | 'sessionPartition'>

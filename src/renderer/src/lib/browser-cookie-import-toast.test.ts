@@ -9,7 +9,7 @@ vi.mock('sonner', () => ({
   toast: { success: successToastMock, warning: warningToastMock }
 }))
 
-import type { BrowserCookieImportSummary } from '../../../shared/types'
+import type { BrowserCookieImportSummary } from '../../../shared/browser-workspace-types'
 import { emitBrowserCookieImportToast } from './browser-cookie-import-toast'
 
 const summary: BrowserCookieImportSummary = {

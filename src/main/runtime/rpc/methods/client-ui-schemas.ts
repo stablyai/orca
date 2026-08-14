@@ -16,11 +16,12 @@ import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-
 import {
   normalizeWorktreeCardProperties,
   WORKTREE_CARD_PROPERTIES
-} from '../../../../shared/worktree-card-properties'
+} from '../../../../shared/worktree/card-properties'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields'
 import { TaskResumeState } from './task-resume-state-schema'
+import { WorkspaceCleanup } from './workspace-cleanup-ui-schema'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'
 
 const NullableString = z.string().nullable()
@@ -77,19 +78,6 @@ const WorkspaceStatusDefinition = z.object({
   color: z.string().optional(),
   icon: z.string().optional()
 })
-const WorkspaceCleanupDismissal = z
-  .object({
-    worktreeId: z.string(),
-    dismissedAt: z.number().finite(),
-    fingerprint: z.string(),
-    classifierVersion: z.number().finite()
-  })
-  .strict()
-const WorkspaceCleanup = z
-  .object({
-    dismissals: z.record(z.string(), WorkspaceCleanupDismissal)
-  })
-  .strict()
 const FeatureInteractionRecord = z
   .object({
     firstInteractedAt: z.number().finite().nonnegative(),

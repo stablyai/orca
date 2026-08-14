@@ -6,7 +6,7 @@ import {
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
 } from '../../../shared/terminal-quick-commands'
-import type { TerminalQuickCommand } from '../../../shared/types'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 export type RunQuickCommandInNewTabArgs = {
   command: TerminalQuickCommand

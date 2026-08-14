@@ -1,6 +1,8 @@
 import type { IGitProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
-import type { Repo, Worktree } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
+import type { Worktree } from '../../shared/worktree/types'
+import { getWorktreeExecutionHostId } from '../../shared/execution-host'
 import {
   applyWorkspaceCleanupPolicy,
   createWorkspaceCleanupFingerprint,
@@ -23,8 +25,9 @@ export async function buildWorkspaceCleanupCandidate(args: {
   provider: IGitProvider | null
   skipGit: boolean
   forceGitCheck: boolean
+  signal?: AbortSignal
 }): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, provider, skipGit, forceGitCheck } = args
+  const { repo, worktree, scannedAt, provider, skipGit, forceGitCheck, signal } = args
   const blockers: WorkspaceCleanupBlocker[] = []
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
   const repoIsFolder = isFolderRepo(repo)
@@ -50,7 +53,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
 
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
-    : await readWorkspaceCleanupGitEvidence(worktree, repo, provider)
+    : await readWorkspaceCleanupGitEvidence(worktree, repo, provider, signal)
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
@@ -58,6 +61,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
     repoId: repo.id,
     repoName: repo.displayName,
     connectionId: repo.connectionId ?? null,
+    executionHostId: getWorktreeExecutionHostId(worktree, repo),
     displayName: worktree.displayName,
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
@@ -102,6 +106,7 @@ export function buildWorkspaceCleanupCandidateFromError(
     repoId: repo.id,
     repoName: repo.displayName,
     connectionId: repo.connectionId ?? null,
+    executionHostId: getWorktreeExecutionHostId(worktree, repo),
     displayName: worktree.displayName,
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,

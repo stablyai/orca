@@ -3,7 +3,7 @@ import { ipcMain, type WebContents } from 'electron'
 import * as path from 'node:path'
 import { stat } from 'node:fs/promises'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import type { FsChangeEvent, FsChangedPayload } from '../../shared/types'
+import type { FsChangeEvent, FsChangedPayload } from '../../shared/filesystem-entry-types'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison

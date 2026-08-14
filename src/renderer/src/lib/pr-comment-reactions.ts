@@ -1,4 +1,8 @@
-import type { GitHubReaction, GitHubReactionContent, PRComment } from '../../../shared/types'
+import type {
+  GitHubReaction,
+  GitHubReactionContent,
+  PRComment
+} from '../../../shared/github/comment-types'
 
 export const GITHUB_REACTION_ORDER: readonly GitHubReactionContent[] = [
   '+1',

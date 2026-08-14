@@ -9,7 +9,9 @@ import {
   searchNewWorkspaceProjectOptions,
   type NewWorkspaceProjectOption
 } from './new-workspace-project-options'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {

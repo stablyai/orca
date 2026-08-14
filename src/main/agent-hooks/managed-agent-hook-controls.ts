@@ -4,7 +4,7 @@ import {
   isManagedAgentHookTarget
 } from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_INSTALLERS,
@@ -15,6 +15,7 @@ import {
 } from './managed-agent-hook-registry'
 
 export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
+export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
 
 type ManagedHookSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>

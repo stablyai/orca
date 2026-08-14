@@ -8,7 +8,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { AgentIcon } from '@/lib/agent-catalog'

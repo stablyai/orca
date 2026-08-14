@@ -4,7 +4,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../shared/types'
+} from '../../../shared/terminal-tab-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 

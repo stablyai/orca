@@ -3,13 +3,13 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { LinearTeam } from '../../../shared/types'
+import type { LinearTeam } from '../../../shared/linear/workspace-types'
 import {
   clearLinearIssueAttributeFacet,
   countLinearIssueAttributeFilters,
   linearIssueAttributeFilterPillLabels
 } from './linear-issue-attribute-filter-sections'
-import type { LinearIssueAttributeFilter } from '../../../shared/linear-issue-attribute-filter'
+import type { LinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
 import LinearIssueAttributeFilterDropdowns from './linear-issue-attribute-filter-dropdowns'
 
 const metadataMocks = vi.hoisted(() => ({

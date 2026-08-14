@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/runtime-git-client'
-import type { GitStatusResult } from '../../../../shared/types'
+import type { GitStatusResult } from '../../../../shared/git-status-types'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 export function useGitStatusUpstreamRefWatch(args: {

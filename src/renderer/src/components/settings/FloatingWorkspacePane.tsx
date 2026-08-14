@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
-import type { FloatingTerminalTriggerLocation, GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { FloatingTerminalTriggerLocation } from '../../../../shared/ui-chrome-types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'

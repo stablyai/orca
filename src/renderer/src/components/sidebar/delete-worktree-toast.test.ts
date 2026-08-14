@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
-import { classifyWorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
+import { classifyWorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 
 // Why: production never hands this function a literal reason — the store derives it from
 // classifyWorktreeForceDeleteReason (store/slices/worktrees.ts). Passing one in would let a

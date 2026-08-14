@@ -6,7 +6,7 @@ import {
 } from './setup-script-prompt-render-state'
 import type { SetupScriptPromptInspection } from '@/lib/setup-script-prompt'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 function repoIdentity(repoId: string, hostId: string): string {
   return getRepoHostIdentityForParts(repoId, hostId)

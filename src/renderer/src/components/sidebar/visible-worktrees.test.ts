@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { getPairedDeviceIdsByEnvironment } from './workspace-creator-visibility'
-import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {

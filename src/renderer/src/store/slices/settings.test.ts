@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
-import type { WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { toast } from 'sonner'
 import {

@@ -1,4 +1,4 @@
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 
 export const DEFAULT_MOBILE_WORKSPACE_STATUS_ID = 'in-progress'
 

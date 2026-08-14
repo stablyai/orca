@@ -1,5 +1,5 @@
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
-import type { LinearIssue } from '../../../shared/types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
 import { getUsableLinearBranchName } from '../../../shared/new-workspace/workspace-source'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 

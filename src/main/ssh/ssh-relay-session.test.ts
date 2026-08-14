@@ -531,8 +531,26 @@ describe('SshRelaySession', () => {
     )
   })
 
-  // New relays prioritize incarnation; old relays ignore that additive field and need this fence.
-  it('preserves pane identity for relays that predate incarnation fencing', async () => {
+  it('forwards a lease tab identity to reattach so a reset relay cannot cross-wire it', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const mockAttach = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: mockAttach,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      { targetId: 'target-1', ptyId: 'pty-1', state: 'detached', tabId: 'tab-a' }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+
+    expect(mockAttach).toHaveBeenCalledWith('pty-1', { tabId: 'tab-a' })
+  })
+
+  it('forwards a lease pane identity when leaf identity is available', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
@@ -549,40 +567,7 @@ describe('SshRelaySession', () => {
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
 
-    expect(mockAttach).toHaveBeenCalledWith('pty-1', undefined, undefined, {
-      paneKey: `tab-a:${leafId}`,
-      tabId: 'tab-a'
-    })
-  })
-
-  // This is the path that reattaches every known pty when a relay comes back — precisely when ids
-  // have been reissued from pty-1 — so it is the one that most needs to say which shell it means.
-  // The shell's own identity is authoritative; pane identity remains the fallback for old relays.
-  it('forwards the shell identity its lease recorded when reattaching', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const { getSshPtyProvider } = await import('../ipc/pty')
-    const mockAttach = vi.fn().mockResolvedValue(undefined)
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
-    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
-      {
-        targetId: 'target-1',
-        ptyId: 'pty-1',
-        state: 'detached',
-        tabId: 'tab-a',
-        leafId,
-        incarnationId: 'inc-host-1'
-      }
-    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
-
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-    await session.establish(mockConn)
-
-    expect(mockAttach).toHaveBeenCalledWith('pty-1', undefined, 'inc-host-1', {
+    expect(mockAttach).toHaveBeenCalledWith('pty-1', {
       paneKey: `tab-a:${leafId}`,
       tabId: 'tab-a'
     })
@@ -617,10 +602,13 @@ describe('SshRelaySession', () => {
 
     await session.reconnect(mockConn)
 
+    expect(mockAttach).toHaveBeenCalledWith('pty-1', {
+      paneKey: `tab-old:${staleLeafId}`,
+      tabId: 'tab-old'
+    })
     expect(clearProviderPtyState).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
     expect(deletePtyOwnership).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('target-1', 'pty-1', 'expired')
-    expect(mockAttach).toHaveBeenCalledOnce()
     expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', {
       id: 'ssh:target-1@@pty-1',
       code: -1
@@ -683,11 +671,7 @@ describe('SshRelaySession', () => {
     expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 
-  // INVERTED for STA-3077 step E-0. This case previously asserted that a PTY the relay reports as
-  // not-found is invalidated and broadcast as an exit. A not-found is not proof of death, so the
-  // broadcast was a fabricated one; what must still hold is that the healthy sibling reattaches and
-  // the unproven one is left alone rather than written off.
-  it('leaves an unreattachable remote PTY alone while its sibling reattaches', async () => {
+  it('invalidates and broadcasts remote PTYs that cannot reattach after relay reconnect', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
@@ -709,9 +693,12 @@ describe('SshRelaySession', () => {
 
     expect(mockAttach).toHaveBeenCalledWith('pty-stale')
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
-    expect(clearProviderPtyState).not.toHaveBeenCalledWith('ssh:target-1@@pty-stale')
-    expect(deletePtyOwnership).not.toHaveBeenCalledWith('ssh:target-1@@pty-stale')
-    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', expect.anything())
+    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
+    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+      id: 'ssh:target-1@@pty-stale',
+      code: -1
+    })
   })
 
   it('retries transient reattach failure without tearing down provider registration', async () => {

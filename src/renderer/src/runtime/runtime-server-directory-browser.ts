@@ -1,4 +1,4 @@
-import type { DirEntry, FilesystemPathFlavor } from '../../../shared/types'
+import type { DirEntry, FilesystemPathFlavor } from '../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../shared/file-name-sort'
 import { callRuntimeRpc } from './runtime-rpc-client'
 

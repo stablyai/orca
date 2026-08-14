@@ -41,7 +41,9 @@ import { getConnectionIdForFile } from '@/lib/connection-context'
 import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { detectLanguage } from '@/lib/language-detect'
-import type { DiffComment, MarkdownDocument, Worktree } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   fileUrlToAbsolutePath,
   getMarkdownPreviewLinkTarget,

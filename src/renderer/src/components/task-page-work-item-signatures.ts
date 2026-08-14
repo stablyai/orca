@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 export function taskPageWorkItemKey(item: GitHubWorkItem): string {
   return `${item.repoId}\u0000${item.id}`

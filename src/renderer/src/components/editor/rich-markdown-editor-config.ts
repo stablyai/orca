@@ -29,7 +29,7 @@ import {
 } from './rich-markdown-image-context'
 import { getRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import {

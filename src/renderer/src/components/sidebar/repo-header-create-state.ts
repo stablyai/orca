@@ -1,5 +1,5 @@
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getSelectedRepoSshGate } from '../../lib/new-workspace-ssh-gate'
 import { translate } from '@/i18n/i18n'

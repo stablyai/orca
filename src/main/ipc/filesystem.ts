@@ -9,25 +9,24 @@ import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync, wslAwareSpawn } 
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type {
-  DirEntry,
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type {
   GitConflictOperation,
-  GitDiffResult,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GlobalSettings,
   GitStagingArea,
-  GitPushTarget,
-  GitUpstreamStatus,
   GitStatusResult,
-  MarkdownDocument,
-  SearchOptions,
-  SearchResult,
-  Repo,
-  TuiAgent
-} from '../../shared/types'
+  GitUpstreamStatus
+} from '../../shared/git-status-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -135,7 +134,7 @@ import {
 import { listRepoWorktrees } from '../repo-worktrees'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { registerLocalLogTailHandlers } from './local-log-tail'

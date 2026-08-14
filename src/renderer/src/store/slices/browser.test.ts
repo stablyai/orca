@@ -164,6 +164,22 @@ function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotat
 }
 
 describe('createBrowserSlice annotations', () => {
+  it('keeps a requested canonical page identity distinct from its workspace', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {
+      browserPageId: 'page-canonical'
+    })
+
+    expect(tab.id).not.toBe('page-canonical')
+    expect(tab.activePageId).toBe('page-canonical')
+    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id).toBe('page-canonical')
+    expect(() =>
+      store.getState().createBrowserTab('wt-1', 'about:blank', {
+        browserPageId: 'page-canonical'
+      })
+    ).toThrow('Browser page page-canonical already exists')
+  })
+
   it('records browser-tab-created only for the explicit new-tab action', async () => {
     const store = createTestStore()
 

@@ -7,7 +7,7 @@ import type {
   UpdateCheckOptions,
   UpdateSource,
   UpdateStatus
-} from '../shared/types'
+} from '../shared/update-status-types'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,

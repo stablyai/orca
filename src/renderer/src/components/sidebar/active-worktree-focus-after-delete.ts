@@ -2,7 +2,8 @@ import { useAppStore } from '@/store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 

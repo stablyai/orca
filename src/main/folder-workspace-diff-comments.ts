@@ -1,4 +1,5 @@
-import type { DiffComment, FolderWorkspace } from '../shared/types'
+import type { DiffComment } from '../shared/diff-comment-types'
+import type { FolderWorkspace } from '../shared/folder-workspace-types'
 
 // Why shape-only: this replaces folder-workspaces.ts's verbatim `Array.isArray(raw.diffComments)` read.
 // Filtering members would make the fix itself a new deletion path for user-authored prose.

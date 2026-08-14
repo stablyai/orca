@@ -48,7 +48,7 @@ describe('orchestration worker release recovery', () => {
     vi.spyOn(runtime, 'showTerminal').mockImplementation(
       async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
     )
-    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
+    vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
       id: 'repo::worktree'
     } as never)
     vi.spyOn(runtime, 'createTerminal').mockResolvedValue({

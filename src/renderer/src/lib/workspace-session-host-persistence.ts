@@ -1,4 +1,8 @@
-import type { Repo, WorkspaceSessionPatch, WorkspaceSessionState } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../shared/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -6,7 +10,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   mergeWorkspaceSessionsFromHosts,
   splitWorkspaceSessionByHost,

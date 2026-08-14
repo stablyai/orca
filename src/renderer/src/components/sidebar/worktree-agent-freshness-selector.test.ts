@@ -4,7 +4,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { createWorktreeAgentFreshnessSelector } from './worktree-agent-freshness-selector'
 
 const WT_1_PANE = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')

@@ -1,4 +1,5 @@
-import type { TuiAgent, GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import {

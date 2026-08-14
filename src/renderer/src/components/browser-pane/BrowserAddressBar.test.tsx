@@ -3,7 +3,7 @@
 import { act, type ReactNode, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserHistoryEntry } from '../../../../shared/types'
+import type { BrowserHistoryEntry } from '../../../../shared/browser-workspace-types'
 import BrowserAddressBar from './BrowserAddressBar'
 
 const mocks = vi.hoisted(() => ({

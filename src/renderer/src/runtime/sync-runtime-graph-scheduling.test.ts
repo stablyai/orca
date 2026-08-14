@@ -9,7 +9,7 @@ import {
   setRuntimeGraphSyncEnabled
 } from './sync-runtime-graph'
 import type { AppState } from '../store/types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -78,14 +78,16 @@ describe('runtime terminal registration ownership', () => {
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     const second = registerRuntimeTerminalTab({
       tabId: 'term-replaced',
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
 
     first()
@@ -115,7 +117,8 @@ describe('scheduleRuntimeGraphSync', () => {
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     setRuntimeGraphStoreStateGetter(() =>
       makeState({
@@ -151,7 +154,8 @@ describe('scheduleRuntimeGraphSync', () => {
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     setRuntimeGraphStoreStateGetter(() =>
       makeState({

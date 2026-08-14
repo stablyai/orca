@@ -1,5 +1,7 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId

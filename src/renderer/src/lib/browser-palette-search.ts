@@ -1,5 +1,6 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
-import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import { resolveWorktreeDisplayName } from './worktree-default-display-name'

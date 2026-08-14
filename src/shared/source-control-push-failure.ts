@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from './types'
+import type { GitStatusEntry } from './git-status-types'
 
 const FALLBACK_PUSH_FAILURE_SUMMARY = 'Push failed.'
 const LINT_PUSH_FAILURE_SUMMARY = 'Lint failed during push.'

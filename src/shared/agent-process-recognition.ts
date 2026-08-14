@@ -1,7 +1,7 @@
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import type { AgentType } from './agent-status-types'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
 

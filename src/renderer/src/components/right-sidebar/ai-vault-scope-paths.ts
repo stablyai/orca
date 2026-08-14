@@ -3,8 +3,9 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import type { ProjectHostSetup, Worktree } from '../../../../shared/types'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 
 export function deriveAiVaultWorkspaceScopePaths(
   activeWorktree: Pick<Worktree, 'id' | 'path' | 'priorWorktreeIds' | 'repoId'> | null,

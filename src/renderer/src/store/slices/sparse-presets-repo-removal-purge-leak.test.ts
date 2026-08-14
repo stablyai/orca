@@ -9,7 +9,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import type { Repo, SparsePreset } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 
 const repo1: Repo = { id: 'repo-1', path: '/r1', displayName: 'R1', badgeColor: '#000', addedAt: 1 }
 const repo2: Repo = { id: 'repo-2', path: '/r2', displayName: 'R2', badgeColor: '#111', addedAt: 2 }

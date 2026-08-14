@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
 
 describe('sanitizeWebRuntimeWorkspaceSession', () => {

@@ -6,7 +6,7 @@
  * is reachable — and since #11994 every paired device now learns about it immediately.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
 function makeRepos(): Repo[] {

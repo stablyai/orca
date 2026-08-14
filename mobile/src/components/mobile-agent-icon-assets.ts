@@ -1,5 +1,5 @@
 import type { ImageSourcePropType } from 'react-native'
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 
 // Why: mobile previously rendered these agent icons from Google's favicon
 // service, which is unreachable in some regions (e.g. mainland China) and

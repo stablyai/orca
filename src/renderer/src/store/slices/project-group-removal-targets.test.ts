@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectGroup, Repo } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 
 const rootGroup: ProjectGroup = {

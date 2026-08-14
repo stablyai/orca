@@ -1,4 +1,5 @@
-import type { FolderWorkspace, ProjectGroup } from './types'
+import type { FolderWorkspace } from './folder-workspace-types'
+import type { ProjectGroup } from './project-group-types'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'

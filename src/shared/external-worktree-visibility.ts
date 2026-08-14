@@ -1,5 +1,5 @@
 import { normalizeRuntimePathSeparators } from './cross-platform-path'
-import type { ExternalWorktreeVisibility, Repo } from './types'
+import type { ExternalWorktreeVisibility, Repo } from './repo-types'
 
 export const EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT = Date.UTC(2026, 4, 23)
 export const UNKNOWN_EXTERNAL_WORKTREE_PARENT_PATH = 'Unknown location'

@@ -6,7 +6,7 @@ import {
   SEARCH_ENGINE_LABELS,
   type SearchEngine
 } from '../../../../shared/browser-url'
-import type { BrowserHistoryEntry } from '../../../../shared/types'
+import type { BrowserHistoryEntry } from '../../../../shared/browser-workspace-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { translate } from '@/i18n/i18n'
 

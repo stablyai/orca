@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { FolderWorkspace, ProjectGroup, TerminalTab } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 

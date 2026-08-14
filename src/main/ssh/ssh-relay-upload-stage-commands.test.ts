@@ -115,26 +115,30 @@ describe.each([
     RemoteHostPlatform
   ])[])
 ])('%s relay upload stage commands', (_label, host) => {
-  it.each([0, 1, 7, 8, 9])('bounds reservation with %i occupied entries', (count) => {
-    const pool = createPool()
-    for (let index = 0; index < Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT); index += 1) {
-      createStage(host, pool, index)
-    }
-    if (count > RELAY_UPLOAD_STAGE_SLOT_COUNT) {
-      mkdirSync(join(pool, 'foreign-extra'))
-    }
+  it.each([0, 1, 7, 8, 9])(
+    'bounds reservation with %i occupied entries',
+    (count) => {
+      const pool = createPool()
+      for (let index = 0; index < Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT); index += 1) {
+        createStage(host, pool, index)
+      }
+      if (count > RELAY_UPLOAD_STAGE_SLOT_COUNT) {
+        mkdirSync(join(pool, 'foreign-extra'))
+      }
 
-    const result = runCommand(host, reserveRelayUploadStageCommand(host, pool, owner))
-    if (count < RELAY_UPLOAD_STAGE_SLOT_COUNT) {
-      expect(result.status, result.stderr).toBe(0)
-      expect(parseReservedRelayUploadStage(host, pool, owner, result.stdout).slotName).toBe(
-        `slot-${count}`
-      )
-    } else {
-      expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain('staging quota is full')
-    }
-  })
+      const result = runCommand(host, reserveRelayUploadStageCommand(host, pool, owner))
+      if (count < RELAY_UPLOAD_STAGE_SLOT_COUNT) {
+        expect(result.status, result.stderr).toBe(0)
+        expect(parseReservedRelayUploadStage(host, pool, owner, result.stdout).slotName).toBe(
+          `slot-${count}`
+        )
+      } else {
+        expect(result.status).not.toBe(0)
+        expect(result.stderr).toContain('staging quota is full')
+      }
+    },
+    120_000
+  )
 
   it('promotes only the post-claim owned payload and removes its fixed stage', () => {
     const pool = createPool()
@@ -201,7 +205,7 @@ describe.each([
     expect(existsSync(join(pool, 'slot-0'))).toBe(true)
     expect(existsSync(join(pool, 'slot-1'))).toBe(true)
     expect(existsSync(join(pool, 'slot-2'))).toBe(false)
-  })
+  }, 120_000)
 
   it('drains fixed stale claim and delete states across repeated deployments', () => {
     const pool = createPool()

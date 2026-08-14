@@ -28,15 +28,15 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
     const runtimes = await window.api.ephemeralVm.listRuntimes()
     const matchingRuntimes = runtimes.filter(
       (runtime) =>
-        runtime.cleanupStatus !== 'succeeded' &&
+        (runtime.cleanupStatus !== 'succeeded' || runtime.sshTargetId !== undefined) &&
         ((runtime.workspaceId !== undefined && workspaceIdSet.has(runtime.workspaceId)) ||
           (runtime.sshTargetId !== undefined && sshTargetIdSet.has(runtime.sshTargetId)))
     )
     for (const runtime of matchingRuntimes) {
-      if (runtime.sshTargetId) {
+      const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
+      if (runtime.sshTargetId && !cleaned.sshTargetId) {
         destroyedSshTargetIds.push(runtime.sshTargetId)
       }
-      await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
     }
   } catch (error) {
     console.error('Failed to clean up ephemeral VM runtime for deleted workspace:', error)

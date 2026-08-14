@@ -7,7 +7,7 @@ import {
 import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runtime-types'
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
 

@@ -1,4 +1,4 @@
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import { resolveLocalGitUsernameDetailed } from './git/git-username'
 
 type RepoUsernameStore = {

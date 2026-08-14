@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
-import type { Worktree, WorktreeLineage } from './types'
+import type { WorktreeLineage } from './worktree/lineage-types'
+import type { Worktree } from './worktree/types'
 import { projectResolvedWorktreeLineage } from './resolved-worktree-lineage'
 
 function worktree(id: string, instanceId: string, overrides: Partial<Worktree> = {}): Worktree {

@@ -1,7 +1,7 @@
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { PullRequestLinkedIssue } from '../../shared/pull-request-generation'
 import { isLinkedIssueNumber } from '../../shared/source-control-ai-action-variables'
-import type { WorkspaceLinkedItem } from '../../shared/types'
+import type { WorkspaceLinkedItem } from '../../shared/worktree/types'
 import { getIssue as getGitHubIssue } from '../github/issues'
 import { getIssue as getGitLabIssue } from '../gitlab/issues'
 

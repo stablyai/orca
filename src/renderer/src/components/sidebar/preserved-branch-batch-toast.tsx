@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { Button } from '../ui/button'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 

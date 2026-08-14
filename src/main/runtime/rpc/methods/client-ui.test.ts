@@ -7,8 +7,8 @@ import {
   MAX_QUICK_COMMAND_REPO_ID_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
 } from '../../../../shared/terminal-quick-commands'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
-import type { PersistedUIState } from '../../../../shared/types'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'

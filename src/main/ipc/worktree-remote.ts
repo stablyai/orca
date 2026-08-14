@@ -6,21 +6,25 @@ import { posix, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type {
+  LocalBaseRefRefreshResult,
+  LocalBaseRefUpdateSuggestion
+} from '../../shared/worktree/base-ref-drift-types'
+import type {
+  CreateWorktreeArgs,
+  CreateWorktreeResult,
+  WorktreeCreateBaseFallback
+} from '../../shared/worktree/create-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
-  CreateWorktreeArgs,
-  CreateWorktreeResult,
   GitPushTarget,
-  GlobalSettings,
-  LocalBaseRefRefreshResult,
-  LocalBaseRefUpdateSuggestion,
-  Repo,
   Worktree,
-  WorktreeCreateBaseFallback,
-  WorktreeHeadIdentity,
-  WorktreeMeta
-} from '../../shared/types'
+  WorktreeHeadIdentity
+} from '../../shared/worktree/types'
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
@@ -32,7 +36,7 @@ import {
 import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -88,7 +92,7 @@ import {
 } from './worktree-logic'
 import { findCreatedWorktree } from './created-worktree-reconciliation'
 import type { BranchPrefixSettings } from '../../shared/branch-prefix'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,

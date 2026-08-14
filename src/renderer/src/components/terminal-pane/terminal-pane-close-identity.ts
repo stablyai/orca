@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 export function shouldClearLaunchAgentForClosedPane(
   tab: Pick<TerminalTab, 'launchAgent' | 'ptyId'> | null | undefined,

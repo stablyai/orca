@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()

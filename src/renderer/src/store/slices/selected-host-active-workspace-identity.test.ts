@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 

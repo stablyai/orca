@@ -39,7 +39,7 @@ import {
 } from 'lucide-react'
 import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import { useAppStore } from '@/store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'

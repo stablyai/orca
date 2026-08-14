@@ -1,10 +1,4 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import {
-  capturePublishedRestoreRequiredFailure,
-  driveClientReattachFailure,
-  SKEW_PANE,
-  type ClientReattachFailureOutcome
-} from './reattach-failure-publication-skew'
 import { resolveBaselineReleaseRef, selectLatestStableReleaseTag } from './release-checkout'
 import {
   JOURNEY_INPUTS,
@@ -148,101 +142,6 @@ describe('cross-version remote terminal wire', () => {
       expect(record.hostRevision).toBe(baseline.revision)
       expectJourneyActuallyRan(record)
       expectWireCompatible(record)
-    },
-    SUITE_TIMEOUT_MS
-  )
-})
-
-/**
- * The opcode journey above proves frames survive skew. It cannot see this: the
- * failure token a reattach publishes is a plain string on an existing error
- * channel, so nothing is rejected and nothing negotiates — yet the token decides
- * whether the receiving client asks the host to REPLACE the pane's shell.
- */
-function expectDriveActuallyRan(outcome: ClientReattachFailureOutcome): void {
-  expect(outcome.connectedBeforeFault).toBe(true)
-  expect(outcome.subscribedHandles[0]).toBe(SKEW_PANE.handle)
-  expect(outcome.methodsAfterFailure).toContain('terminal.resolvePane')
-}
-
-describe('cross-version reattach failure publication', () => {
-  let currentPublication: string
-  let baselinePublication: string
-
-  beforeAll(async () => {
-    currentPublication = await capturePublishedRestoreRequiredFailure(current)
-    baselinePublication = await capturePublishedRestoreRequiredFailure(baseline)
-  }, SUITE_TIMEOUT_MS)
-
-  it(
-    'the two builds publish different tokens for the same live-shell reattach',
-    () => {
-      // Guards the whole block: identical publications would make every case below
-      // pass for a reason that has nothing to do with skew.
-      expect(currentPublication).not.toBe(baselinePublication)
-      expect(baselinePublication).toContain('SSH_SESSION_EXPIRED')
-      expect(currentPublication).not.toContain('SSH_SESSION_EXPIRED')
-    },
-    SUITE_TIMEOUT_MS
-  )
-
-  it(
-    'the new host publication mutates nothing on an old client',
-    async () => {
-      const outcome = await driveClientReattachFailure({
-        clientBuild: baseline,
-        publishedFailure: currentPublication
-      })
-      expectDriveActuallyRan(outcome)
-      // The old client has no branch for this token, so it stops at its error
-      // surface — unsupported semantics failing before mutation, not adopting a
-      // replacement shell it was never granted. It fails visibly rather than
-      // silently, which is the difference between "fenced" and "dropped".
-      expect(outcome.paneReplacementRequests).toEqual([])
-      expect(outcome.subscribedHandles).not.toContain(SKEW_PANE.replacementHandle)
-      expect(outcome.surfacedErrors).toHaveLength(1)
-    },
-    SUITE_TIMEOUT_MS
-  )
-
-  it(
-    'the new host publication mutates nothing on a new client',
-    async () => {
-      const outcome = await driveClientReattachFailure({
-        clientBuild: current,
-        publishedFailure: currentPublication
-      })
-      expectDriveActuallyRan(outcome)
-      expect(outcome.paneReplacementRequests).toEqual([])
-      expect(outcome.subscribedHandles).not.toContain(SKEW_PANE.replacementHandle)
-      expect(outcome.surfacedErrors).toHaveLength(1)
-    },
-    SUITE_TIMEOUT_MS
-  )
-
-  it(
-    'the old host publication still replaces the pane on both clients',
-    async () => {
-      // The control that keeps the two cases above honest. The same driver, the
-      // same fault, the same clients: only the publishing build differs, and the
-      // legacy token still authorizes `terminal.recoverPane`. If the current host
-      // regressed to publishing expiry for a live shell, the cases above would
-      // look exactly like this one and fail.
-      for (const clientBuild of [baseline, current]) {
-        const outcome = await driveClientReattachFailure({
-          clientBuild,
-          publishedFailure: baselinePublication
-        })
-        expectDriveActuallyRan(outcome)
-        expect(outcome.paneReplacementRequests).toEqual([
-          {
-            paneKey: SKEW_PANE.paneKey,
-            worktreeId: SKEW_PANE.worktreeId,
-            expectedTerminal: SKEW_PANE.handle
-          }
-        ])
-        expect(outcome.subscribedHandles).toContain(SKEW_PANE.replacementHandle)
-      }
     },
     SUITE_TIMEOUT_MS
   )

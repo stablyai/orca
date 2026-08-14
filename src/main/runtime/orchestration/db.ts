@@ -39,7 +39,7 @@ import type {
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
-import { isEquivalentPaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { OrchestrationError } from './orchestration-error'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import {
@@ -65,6 +65,16 @@ import {
   ensureMutationReceiptCapacity,
   migrateMutationReceiptCapacity
 } from './mutation-receipt-capacity'
+
+// Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
+function isEquivalentPaneKey(a: string, b: string): boolean {
+  if (a === b) {
+    return true
+  }
+  const aLeaf = parsePaneKey(a)?.leafId
+  const bLeaf = parsePaneKey(b)?.leafId
+  return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
+}
 
 function parseWorkerTerminalPriorOwnerIds(value: string): string[] | null {
   try {
@@ -3510,6 +3520,18 @@ export class OrchestrationDb {
     )
   }
 
+  getUndeliveredUnreadMailboxHandles(): string[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT DISTINCT to_handle FROM messages
+           WHERE read = 0 AND delivered_at IS NULL
+             AND delivery_contract = 'current_delivery'`
+        )
+        .all() as { to_handle: string }[]
+    ).map((row) => row.to_handle)
+  }
+
   getAllMessages(toHandle: string, limit = 20): MessageRow[] {
     return exposeMessageListTimestamps(
       this.db
@@ -3784,8 +3806,6 @@ export class OrchestrationDb {
     }
     const id = generateId('task')
     const depsJson = JSON.stringify(task.deps ?? [])
-    const hasDeps = (task.deps ?? []).length > 0
-    const status: TaskStatus = hasDeps ? 'pending' : 'ready'
     const display = buildOrchestrationTaskDisplayMetadata({
       spec: task.spec,
       taskTitle: task.taskTitle,
@@ -3797,7 +3817,18 @@ export class OrchestrationDb {
            id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
            created_by_process_incarnation, created_by_run_generation,
            task_title, display_name, spec, status, deps
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         ) VALUES (
+           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           CASE WHEN EXISTS (
+             SELECT 1
+             FROM json_each(?) requested
+             LEFT JOIN tasks dependency ON dependency.id = requested.value
+             WHERE dependency.id IS NULL
+                OR dependency.run_id <> ?
+                OR dependency.status <> 'completed'
+           ) THEN 'pending' ELSE 'ready' END,
+           ?
+         )`
       )
       .run(
         id,
@@ -3810,7 +3841,8 @@ export class OrchestrationDb {
         display.taskTitle || null,
         display.displayName || null,
         task.spec,
-        status,
+        depsJson,
+        runId,
         depsJson
       )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow

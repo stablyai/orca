@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRInfo } from '../../../../src/shared/types'
+import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import {
   buildMergeabilityRefreshCommands,
   hasMergeConflicts,

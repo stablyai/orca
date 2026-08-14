@@ -151,6 +151,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     }
   }
   const store = {
+    getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     getRepos: vi.fn(),
     getRepo: vi.fn(),
     getProjects: vi.fn(),

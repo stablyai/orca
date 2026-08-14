@@ -2,7 +2,7 @@ import {
   buildLinearIssueLinkUpdates,
   LINEAR_ISSUE_LINK_CLEARED,
   type LinearIssueLinkUpdates
-} from '../../shared/linear-links'
+} from '../../shared/linear/links'
 import { RuntimeClientError } from '../runtime-client'
 
 export function getOptionalLinearIssueLinkFlag(

@@ -47,11 +47,11 @@ import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mod
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
 import type {
-  BrowserViewportOverride,
   BrowserCertificateFailure,
   BrowserLoadError,
-  BrowserSessionUserAgentMode
-} from '../../shared/types'
+  BrowserSessionUserAgentMode,
+  BrowserViewportOverride
+} from '../../shared/browser-workspace-types'
 import {
   type BrowserAnnotationViewportBridgeOptions,
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,

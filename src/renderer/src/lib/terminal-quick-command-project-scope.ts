@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getTerminalQuickCommandScope } from '../../../shared/terminal-quick-commands'
-import type { ProjectHostSetup, TerminalQuickCommand } from '../../../shared/types'
+import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 type TerminalQuickCommandProjectContext = {
   commandHostId: ExecutionHostId

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-projection'
 import {
   getReorderedWorktreeIdsToUnnest,

@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 import {
   compareAppVersions,
   isPrereleaseAppVersion,

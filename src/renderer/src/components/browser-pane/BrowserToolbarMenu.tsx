@@ -4,7 +4,7 @@ import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
-import type { BrowserViewportPresetId } from '../../../../shared/types'
+import type { BrowserViewportPresetId } from '../../../../shared/browser-workspace-types'
 import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset

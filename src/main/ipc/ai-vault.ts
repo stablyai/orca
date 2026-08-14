@@ -28,8 +28,8 @@ import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostScope,
   parseExecutionHostId,
+  requestedExecutionHostScope,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostScope
@@ -91,9 +91,7 @@ async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
-  const executionHostScope = normalizeExecutionHostScope(
-    args?.executionHostScope ?? LOCAL_EXECUTION_HOST_ID
-  )
+  const executionHostScope = requestedExecutionHostScope(args?.executionHostScope)
   // Scope paths change the result set, so they must be part of the cache key.
   // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
   // can share a snapshot regardless of which worktree was selected first.

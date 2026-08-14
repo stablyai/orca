@@ -1,4 +1,4 @@
-import type { TabContentType } from '../../../../shared/types'
+import type { TabContentType } from '../../../../shared/tab-types'
 import {
   hasUnroutableTerminalWorktreeOwner,
   resolveTerminalWorktreeRoute

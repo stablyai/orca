@@ -13,7 +13,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../src/shared/tui-agent-launch-defaults'
 import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import type { RpcClient } from '../transport/rpc-client'

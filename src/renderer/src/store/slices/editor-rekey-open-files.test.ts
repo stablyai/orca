@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFilePathRekey } from './editor'
-import type { Tab, TabGroup } from '../../../../shared/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 // Stage-1 foundation: rekeyOpenFilesForPathChange atomically retargets an open
 // edit session across an Orca-owned move (no close/reopen), preserving all

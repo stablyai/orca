@@ -18,7 +18,8 @@ import {
 } from './workspace-space-presentation'
 import { getWorkspaceDecisionDetails } from './WorkspaceSpaceManagerPanel'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 function row(overrides: Partial<WorkspaceSpaceWorktree>): WorkspaceSpaceWorktree {
   return {

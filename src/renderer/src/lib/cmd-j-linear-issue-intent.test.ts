@@ -4,7 +4,7 @@ import {
   findLinearIssueWorkspaceLookupIds,
   isLinearIssueUrlResolutionMatch,
   parseLinearIssueUrlIntent
-} from '../../../shared/linear-links'
+} from '../../../shared/linear/links'
 
 describe('Cmd+J Linear issue intent', () => {
   it('accepts canonical Linear issue URLs with optional slugs', () => {

@@ -1,6 +1,7 @@
 import type { vi } from 'vitest'
-import type { GlobalSettings, Repo } from '../../shared/types'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 import type {
   FirstWorkBranchRenameDeps,
   FirstWorkBranchRenameEvent

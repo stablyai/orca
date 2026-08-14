@@ -15,7 +15,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   isUserManagedRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment

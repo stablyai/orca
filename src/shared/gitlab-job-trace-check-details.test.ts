@@ -5,7 +5,7 @@ import {
 } from './gitlab-job-trace-check-details'
 import { gitLabPipelineJobsToPRChecks } from './gitlab-pipeline-checks'
 import type { GitLabPipelineJob } from './gitlab-types'
-import type { PRCheckDetail } from './types'
+import type { PRCheckDetail } from './github/check-types'
 
 const STRINGS = { emptyTrace: 'No log is available for this GitLab job.' }
 

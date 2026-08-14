@@ -19,7 +19,7 @@ import {
 } from '../shell-prompt-readiness-probe'
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import {

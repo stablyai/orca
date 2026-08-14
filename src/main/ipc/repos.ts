@@ -6,14 +6,14 @@ import { homedir } from 'node:os'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type {
-  BaseRefSearchResult,
-  Project,
-  Repo,
+  NestedRepoScanResult,
   ProjectGroup,
-  FolderWorkspace,
-  ProjectGroupImportResult,
-  ProjectUpdateArgs,
+  ProjectGroupImportResult
+} from '../../shared/project-group-types'
+import type {
+  Project,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
   ProjectHostSetupDeleteArgs,
@@ -22,10 +22,10 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
-  NestedRepoScanResult,
-  BaseRefDefaultResult,
-  SparsePreset
-} from '../../shared/types'
+  ProjectUpdateArgs
+} from '../../shared/project-types'
+import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type { SparsePreset } from '../../shared/worktree/create-types'
 import type { FolderWorkspacePathStatusRequest } from '../../shared/folder-workspace-path-status'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
@@ -118,6 +118,10 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import {
+  normalizeCustomWorktreeVisibilitySources,
+  normalizeWorktreeVisibilitySourcePreferences
+} from '../../shared/worktree/visibility-sources'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import { isCurrentSshProviderAuthority } from '../ssh/ssh-provider-authority'
@@ -2127,6 +2131,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'externalWorktreeInboxBaselinePaths'
             | 'importedExternalWorktreePaths'
             | 'agentWorktreeVisibility'
+            | 'customWorktreeVisibilitySources'
+            | 'worktreeVisibilitySourcePreferences'
             | 'projectGroupId'
             | 'projectGroupOrder'
           >
@@ -2204,6 +2210,26 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.agentWorktreeVisibility !== 'show'
       ) {
         delete updates.agentWorktreeVisibility
+      }
+      if ('customWorktreeVisibilitySources' in updates) {
+        const normalized = normalizeCustomWorktreeVisibilitySources(
+          updates.customWorktreeVisibilitySources
+        )
+        if (!normalized) {
+          delete updates.customWorktreeVisibilitySources
+        } else {
+          updates.customWorktreeVisibilitySources = normalized
+        }
+      }
+      if ('worktreeVisibilitySourcePreferences' in updates) {
+        const normalized = normalizeWorktreeVisibilitySourcePreferences(
+          updates.worktreeVisibilitySourcePreferences
+        )
+        if (!normalized) {
+          delete updates.worktreeVisibilitySourcePreferences
+        } else {
+          updates.worktreeVisibilitySourcePreferences = normalized
+        }
       }
       if (
         'externalWorktreeVisibilityPromptDismissedAt' in updates &&

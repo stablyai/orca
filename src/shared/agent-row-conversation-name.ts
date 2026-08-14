@@ -11,7 +11,7 @@ import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoratio
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
-import type { TerminalTab } from './types'
+import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,

@@ -1,5 +1,5 @@
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   parseExplicitFileLinkTarget,
   resolveExplicitFileLinkTarget

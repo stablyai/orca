@@ -6,7 +6,7 @@ import {
   resolveSourceControlActionRecipe,
   resolveSourceControlAiForOperation
 } from './source-control-ai'
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')

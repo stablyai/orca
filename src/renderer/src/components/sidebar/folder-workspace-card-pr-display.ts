@@ -1,5 +1,7 @@
 import type { AppState } from '@/store/types'
-import type { Repo, Worktree, WorktreeLineage, WorkspaceLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   buildParentPrChecksRows,

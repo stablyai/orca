@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll, vi } from 'vitest'
-import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 
 // ---------------------------------------------------------------------------
 // Provide a minimal HTMLElement so `instanceof HTMLElement` passes in Node env

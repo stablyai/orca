@@ -1,10 +1,9 @@
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type {
-  BrowserPage,
-  BrowserWorkspace,
   PersistedOpenFile,
-  WorkspaceSessionState,
-  WorkspaceVisibleTabType
-} from '../../../shared/types'
+  WorkspaceSessionState
+} from '../../../shared/workspace-session-state-types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import type { AppState } from '../store'

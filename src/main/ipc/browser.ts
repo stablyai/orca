@@ -23,13 +23,13 @@ import type {
   BrowserExtractHoverResult
 } from '../../shared/browser-grab-types'
 import type {
-  BrowserCookieImportResult,
   BrowserCertificateProceedResult,
+  BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserViewportOverride
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 import {
   isValidBrowserAnnotationViewportBridgeMarkers,
   isValidBrowserAnnotationViewportBridgeToken,

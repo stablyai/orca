@@ -13,7 +13,9 @@ import {
 } from './palette-results'
 import { hasCmdJProjectSearchCandidates, searchCmdJProjectResults } from './palette-project-results'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 const noopRun: CmdJQuickAction['run'] = async () => ({ status: 'ok' })
 const available: CmdJQuickAction['isAvailable'] = () => ({ available: true })

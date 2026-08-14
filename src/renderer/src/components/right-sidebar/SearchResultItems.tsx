@@ -12,7 +12,7 @@ import {
   ContextMenuItem
 } from '@/components/ui/context-menu'
 import { normalizeSearchFileMatchCount } from '../../../../shared/search-match-count'
-import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
+import type { SearchFileResult, SearchMatch } from '../../../../shared/code-search-types'
 import { translate } from '@/i18n/i18n'
 
 // ─── Toggle Button ────────────────────────────────────────

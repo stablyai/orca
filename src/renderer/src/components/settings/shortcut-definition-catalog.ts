@@ -5,7 +5,7 @@ import {
   type KeybindingDefinition,
   type KeybindingOverrides
 } from '../../../../shared/keybindings'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'

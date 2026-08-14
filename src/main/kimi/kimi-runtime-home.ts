@@ -5,7 +5,7 @@ import {
   resolveLocalAccountRuntimeTarget,
   type LocalAccountRuntimeTarget
 } from '../../shared/local-account-runtime'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 
 export type KimiHomeResolution = LocalAccountRuntimeTarget & {

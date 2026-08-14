@@ -1,4 +1,5 @@
-import type { StatusBarItem, TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
 // Why: CLI-backed usage bars are surface noise when the underlying
 // CLI isn't installed (e.g. a fresh Ubuntu install showing "Gemini Usage"

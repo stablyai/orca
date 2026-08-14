@@ -4,7 +4,7 @@ import type {
   LinearIssueCommentNode,
   LinearIssueContextResult,
   LinearIssueSummary
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import { collectInlineMedia } from './issue-context'
 
 function summary(overrides: Partial<LinearIssueSummary>): LinearIssueSummary {

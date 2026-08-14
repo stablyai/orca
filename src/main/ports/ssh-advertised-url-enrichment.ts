@@ -7,7 +7,7 @@
 
 import type { DetectedPort, EnrichedDetectedPort, PortForwardEntry } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import {
   advertisedUrlWatcher,
   type AdvertisedUrl,

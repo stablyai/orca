@@ -179,7 +179,14 @@ describe('git RPC methods', () => {
       })
     )
 
-    expect(runtime.getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'src/index.ts', false, true)
+    // A local dispatch sets no clientKind, so the transport budget stays undefined.
+    expect(runtime.getRuntimeGitDiff).toHaveBeenCalledWith(
+      'id:wt-1',
+      'src/index.ts',
+      false,
+      true,
+      undefined
+    )
     expect(response).toMatchObject({
       ok: true,
       result: { kind: 'text', modifiedContent: 'hello' }

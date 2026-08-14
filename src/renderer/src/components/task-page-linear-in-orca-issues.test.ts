@@ -7,7 +7,7 @@ import {
   linkedLinearIssueRefsSignature,
   readLinkedLinearIssuesWithLimit
 } from './task-page-linear-in-orca-issues'
-import type { LinearIssue } from '../../../shared/types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
 
 function issue(
   partial: Partial<LinearIssue> & Pick<LinearIssue, 'id' | 'identifier'>

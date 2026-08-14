@@ -4,7 +4,8 @@ import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session-
 import { makePaneKey } from '../../src/shared/stable-pane-id'
 import { tokenizeStartupCommand } from '../../src/shared/tui-agent-startup-shell'
 import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
-import type { TerminalTab, Worktree } from '../../src/shared/types'
+import type { TerminalTab } from '../../src/shared/terminal-tab-types'
+import type { Worktree } from '../../src/shared/worktree/types'
 import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { RpcContext } from '../../src/main/runtime/rpc/core'
@@ -269,7 +270,7 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
       : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-  vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({ id: WORKTREE_ID } as never)
+  vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({ id: WORKTREE_ID } as never)
   vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
     handle: TERMINAL_HANDLE,
     worktreeId: WORKTREE_ID,

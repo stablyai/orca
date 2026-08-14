@@ -1,6 +1,6 @@
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { readRemoteUrl } from '../git/remote-url-probe'
-import type { GitHubOwnerRepo } from '../../shared/types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {

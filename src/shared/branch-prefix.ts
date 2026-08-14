@@ -1,4 +1,4 @@
-import type { BranchPrefixStrategy } from './types'
+import type { BranchPrefixStrategy } from './ui-chrome-types'
 
 /** The branch-prefix settings slice the prefix helpers read. */
 export type BranchPrefixSettings = {

@@ -203,14 +203,6 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
-  /**
-   * The shell this record names, as the HOST identified it. `ptyId` alone cannot: a replaced relay
-   * restarts its ids at `pty-1`, so the same id can name somebody else's shell. Only a host-attested
-   * value is stored — a locally synthesized stand-in is not stable across reconnects and would read
-   * as a different shell. Absent on legacy rows and on hosts that report none, which stays
-   * adoption-eligible and must never act as a claim that subtracts a shell.
-   */
-  incarnationId?: string
 }
 
 /** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */

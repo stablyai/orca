@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
@@ -129,7 +129,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           )
           appendFederationSetupEffect(effects, setup)
         } else {
-          worktree = await runtime.showManagedWorktree(params.worktree).catch(() => {
+          worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
             throw new OrchestrationError(
               'worktree_not_found_on_server',
               `Worktree ${params.worktree} was not found on the selected worker server.`
