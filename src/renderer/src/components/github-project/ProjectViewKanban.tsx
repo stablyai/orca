@@ -5,13 +5,13 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { GitPullRequest, GripVertical, Lock, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { sortRows } from '../../../../shared/github-project-group-sort'
+import { sortRows } from '../../../../shared/github/project-group-sort'
 import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow,
   GitHubProjectTable
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import { translate } from '@/i18n/i18n'
 
 type Props = {

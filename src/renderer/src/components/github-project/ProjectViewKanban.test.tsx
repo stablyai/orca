@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import ProjectViewKanban from './ProjectViewKanban'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github-project-types'
+import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 
 afterEach(cleanup)
 

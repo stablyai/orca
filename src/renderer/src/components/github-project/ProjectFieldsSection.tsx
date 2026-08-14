@@ -11,7 +11,7 @@ import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import type { GlobalSettings } from '../../../../shared/types'
 
 type Props = {

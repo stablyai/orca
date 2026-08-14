@@ -9,7 +9,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow,
   GitHubProjectTable
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import type { GlobalSettings } from '../../../../shared/types'
 
 /** Fields managed by the dialog itself — not re-rendered as project fields. */

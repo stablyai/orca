@@ -29,7 +29,7 @@ import {
   resolveBoardGroupByFallback,
   resolveProjectRef
 } from './project-view'
-import type { GitHubProjectField } from '../../shared/github-project-types'
+import type { GitHubProjectField } from '../../shared/github/project-types'
 
 describe('classifyProjectError', () => {
   it('classifies HTTP 404 as not_found', () => {
