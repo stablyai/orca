@@ -28,7 +28,7 @@ import {
   win32 as pathWin32
 } from 'node:path'
 import { app } from 'electron'
-import type { CodexManagedAccount } from '../../shared/types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { Store } from '../persistence'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
@@ -83,6 +83,7 @@ import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-mi
 import { CodexCredentialAbsenceGrace } from './codex-credential-absence-grace'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import {
+  getCodexPaneAccount,
   hasRecordedLegacySharedCodexPane,
   type CodexPaneHomeRoute
 } from '../codex/codex-pane-account-registry'
@@ -543,6 +544,40 @@ export class CodexRuntimeHomeService {
       return 'account-home'
     }
     return this.isHostSystemDefaultRealHome() ? 'real-home' : 'shared-home'
+  }
+
+  getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[] {
+    const settings = this.store.getSettings()
+    const homes = new Map<string, string>()
+    for (const ptyId of ptyIds) {
+      const record = getCodexPaneAccount(ptyId)
+      if (!record || record.selectionKey !== 'host') {
+        continue
+      }
+      if (
+        record.homeRoute === undefined ||
+        record.homeRoute === 'shared-home' ||
+        record.homeRoute === 'custom-home'
+      ) {
+        const homePath = this.getRuntimeHomePath()
+        homes.set(normalizeRuntimePathForComparison(homePath), homePath)
+        continue
+      }
+      if (record.homeRoute !== 'account-home' || !record.accountId) {
+        continue
+      }
+      const account = settings.codexManagedAccounts.find(
+        (candidate) => candidate.id === record.accountId
+      )
+      if (!account || this.getWslManagedHomePath(account)) {
+        continue
+      }
+      const homePath = this.getTrustedSelfContainedManagedHomePath(account)
+      if (homePath) {
+        homes.set(normalizeRuntimePathForComparison(homePath), homePath)
+      }
+    }
+    return [...homes.values()]
   }
 
   // Why: the real-home hook installer flips this gate off when the trust-grant

@@ -259,6 +259,26 @@ describe('registerAppMenu', () => {
     }
   )
 
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'preserves terminal undo and redo chords on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const expectedRegistration = platform === 'darwin' ? undefined : false
+      const undoItem = editSubmenu.find((item) => item.role === 'undo')
+      const redoItem = editSubmenu.find((item) => item.role === 'redo')
+
+      expect(undoItem?.accelerator).toBeUndefined()
+      expect(redoItem?.accelerator).toBeUndefined()
+      expect(undoItem && 'registerAccelerator' in undoItem).toBe(platform !== 'darwin')
+      expect(redoItem && 'registerAccelerator' in redoItem).toBe(platform !== 'darwin')
+      expect(undoItem?.registerAccelerator).toBe(expectedRegistration)
+      expect(redoItem?.registerAccelerator).toBe(expectedRegistration)
+    }
+  )
+
   it('keeps selection actions native in a focused guest webview', () => {
     const send = vi.fn()
     const guestContents = { copy: vi.fn(), selectAll: vi.fn() }

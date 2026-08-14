@@ -40,10 +40,22 @@ import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import { normalizeProxyUrl } from '../shared/network-proxy'
 import { normalizeKagiSessionLink } from '../shared/browser-url'
+import type { FolderWorkspace, WorkspaceKey } from '../shared/folder-workspace-types'
+import type { GlobalSettings, OrcaWorkspaceLayout } from '../shared/global-settings-types'
+import type { NotificationSettings } from '../shared/notification-settings-types'
 import type {
-  PersistedState,
+  OnboardingChecklistState,
+  OnboardingOutcome,
+  OnboardingState
+} from '../shared/onboarding-state-types'
+import type {
+  LegacyPaneKeyAliasEntry,
+  PersistedMobileClientTabSelections,
+  PersistedState
+} from '../shared/persisted-state-types'
+import type { ProjectGroup } from '../shared/project-group-types'
+import type {
   Project,
-  ProjectUpdateArgs,
   ProjectHostSetup,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -51,34 +63,28 @@ import type {
   ProjectHostSetupDeleteResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
-  RepoProjectHostSetupMethod,
-  Repo,
-  ProjectGroup,
-  FolderWorkspace,
-  SparsePreset,
-  PersistedMobileClientTabSelections,
-  WorktreeMeta,
-  WorktreeLineage,
-  WorkspaceLineage,
-  WorkspaceKey,
-  GlobalSettings,
-  OrcaWorkspaceLayout,
-  NotificationSettings,
-  OnboardingChecklistState,
-  OnboardingOutcome,
-  OnboardingState,
-  LegacyPaneKeyAliasEntry,
-  TerminalPaneLayoutNode,
+  ProjectUpdateArgs,
+  RepoProjectHostSetupMethod
+} from '../shared/project-types'
+import type { Repo } from '../shared/repo-types'
+import type {
   TerminalLayoutSnapshot,
-  TerminalTab,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../shared/terminal-tab-types'
+import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../shared/types'
+} from '../shared/workspace-session-state-types'
+import type { SparsePreset } from '../shared/worktree/create-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import { carryProjectStateThroughIdentityChange } from '../shared/project-identity-succession'
 import { isPluginPanelTabKey } from '../shared/plugins/plugin-manifest'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
@@ -134,9 +140,13 @@ import {
   ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
-import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
+import {
+  normalizeCustomWorktreeVisibilitySources,
+  normalizeWorktreeVisibilitySourcePreferences
+} from '../shared/worktree/visibility-sources'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
@@ -168,7 +178,7 @@ import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
-} from '../shared/worktree-id'
+} from '../shared/worktree/id'
 import {
   isPathInsideOrEqual,
   isWindowsAbsolutePathLike,
@@ -176,6 +186,7 @@ import {
 } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
+import { mergeWorkspaceCleanupUIState } from '../shared/workspace-cleanup-ui-state'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import {
   addMobilePairingCustomAddress,
@@ -215,7 +226,7 @@ import {
 } from '../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../shared/combined-diff-file-tree-width'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree/ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
 import {
@@ -256,6 +267,10 @@ import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
 import { ActiveViewPreference } from './active-view-preference'
+import {
+  collectFolderWorkspaceDiffComments,
+  normalizeFolderWorkspaceDiffComments
+} from './folder-workspace-diff-comments'
 import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
@@ -555,15 +570,27 @@ function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatc
   )
 }
 
+function workspaceSessionSalvageLogDetails(result: {
+  droppedCount: number
+  droppedPaths: string[]
+}): { count: number; fields: string[]; detailsTruncated: boolean } {
+  return {
+    count: result.droppedCount,
+    fields: [...new Set(result.droppedPaths.map((path) => path.split('.', 1)[0]))],
+    detailsTruncated: result.droppedCount > result.droppedPaths.length
+  }
+}
+
 /** Normalize non-'local' host partitions; 'local' (the legacy workspaceSession blob) is dropped so the two surfaces never diverge.
  *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. Idempotent. */
 function parseWorkspaceSessionsByHostId(
   raw: unknown,
   defaults: WorkspaceSessionState
-): Partial<Record<ExecutionHostId, WorkspaceSessionState>> {
+): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; repaired: boolean } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {}
+    return { partitions: {}, repaired: raw !== undefined }
   }
+  let repaired = false
   const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const hostId = normalizeExecutionHostId(key)
@@ -571,17 +598,25 @@ function parseWorkspaceSessionsByHostId(
     if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
       continue
     }
-    const result = parseWorkspaceSession(value)
+    const result = parseWorkspaceSessionSalvaging(value)
     if (!result.ok) {
+      repaired = true
       console.error(
         `[persistence] Corrupt workspace session for host ${hostId}, using defaults:`,
         result.error
       )
       continue
     }
+    if (result.droppedCount > 0) {
+      console.warn(
+        `[persistence] Salvaged workspace session for host ${hostId}; dropped corrupt entries:`,
+        workspaceSessionSalvageLogDetails(result)
+      )
+      repaired = true
+    }
     partitions[hostId] = { ...defaults, ...result.value }
   }
-  return partitions
+  return { partitions, repaired }
 }
 
 function backupPath(dataFile: string, index: number): string {
@@ -631,6 +666,11 @@ type LegacyTerminalScrollbackSettings = {
   terminalScrollbackBytes?: unknown
 }
 
+type RetiredGlobalSettings = {
+  terminalScrollbackBytes?: unknown
+  enableGitHubAttribution?: unknown
+}
+
 const LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT = 3
 
 function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminalScrollbackSettings {
@@ -639,12 +679,16 @@ function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminal
     : {}
 }
 
-function stripLegacyTerminalScrollbackBytes(
+function stripRetiredGlobalSettings(
   settings: Partial<GlobalSettings> | undefined
 ): Partial<GlobalSettings> {
-  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...rest } = (settings ??
-    {}) as Partial<GlobalSettings> & { terminalScrollbackBytes?: unknown }
+  const {
+    terminalScrollbackBytes: _legacyScrollbackBytes,
+    enableGitHubAttribution: _legacyGitHubAttribution,
+    ...rest
+  } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _legacyScrollbackBytes
+  void _legacyGitHubAttribution
   return rest
 }
 
@@ -653,11 +697,8 @@ function migrateTerminalScrollbackRows(settings: unknown): {
   needsSave: boolean
 } {
   const legacySettings = readLegacyTerminalScrollbackSettings(settings)
-  const hasRows = Object.prototype.hasOwnProperty.call(legacySettings, 'terminalScrollbackRows')
-  const hasLegacyBytes = Object.prototype.hasOwnProperty.call(
-    legacySettings,
-    'terminalScrollbackBytes'
-  )
+  const hasRows = Object.hasOwn(legacySettings, 'terminalScrollbackRows')
+  const hasLegacyBytes = Object.hasOwn(legacySettings, 'terminalScrollbackBytes')
   const rows = hasRows
     ? normalizeDesktopTerminalScrollbackRows(legacySettings.terminalScrollbackRows)
     : legacyTerminalScrollbackBytesToRows(legacySettings.terminalScrollbackBytes)
@@ -1446,6 +1487,8 @@ function sanitizeRepoUpdatesForPersistence<
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
+      | 'customWorktreeVisibilitySources'
+      | 'worktreeVisibilitySourcePreferences'
     >
   >
 >(updates: T): T {
@@ -1504,6 +1547,26 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.forkSyncMode
     } else {
       sanitized.forkSyncMode = forkSyncMode
+    }
+  }
+  if ('customWorktreeVisibilitySources' in sanitized) {
+    const sources = normalizeCustomWorktreeVisibilitySources(
+      sanitized.customWorktreeVisibilitySources
+    )
+    if (!sources) {
+      delete sanitized.customWorktreeVisibilitySources
+    } else {
+      sanitized.customWorktreeVisibilitySources = sources
+    }
+  }
+  if ('worktreeVisibilitySourcePreferences' in sanitized) {
+    const preferences = normalizeWorktreeVisibilitySourcePreferences(
+      sanitized.worktreeVisibilitySourcePreferences
+    )
+    if (!preferences) {
+      delete sanitized.worktreeVisibilitySourcePreferences
+    } else {
+      sanitized.worktreeVisibilitySourcePreferences = preferences
     }
   }
   return sanitized
@@ -1665,7 +1728,7 @@ type LayoutLeafNormalization = {
 
 function collectLayoutLeafCounts(
   node: TerminalPaneLayoutNode,
-  counts: Map<string, number> = new Map()
+  counts = new Map<string, number>()
 ): Map<string, number> {
   if (node.type === 'leaf') {
     counts.set(node.leafId, (counts.get(node.leafId) ?? 0) + 1)
@@ -2410,19 +2473,26 @@ function mergeProjectHostSetupCompatibilityState(
   repos: readonly Repo[]
 ): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
   const projection = projectHostSetupProjectionFromRepos(repos)
-  const existingProjectsById = new Map(
-    (state.projects ?? []).map((project) => [project.id, project])
+  const succession = carryProjectStateThroughIdentityChange(
+    projection.projects,
+    state.projects ?? []
   )
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
   // Why: legacy/repo-backed setup rows reuse the repo id; keep only independent rows so repo deletion leaves no ghosts.
-  const independentSetups = (state.projectHostSetups ?? []).filter((setup) => {
-    if (projectedSetupIds.has(setup.id)) {
-      return false
-    }
-    return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
-  })
+  const independentSetups = (state.projectHostSetups ?? [])
+    .filter((setup) => {
+      if (projectedSetupIds.has(setup.id)) {
+        return false
+      }
+      return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
+    })
+    // Why: follow the repo's project through a derived-id change so no ghost project row survives.
+    .map((setup) => {
+      const remappedProjectId = succession.remappedProjectIds.get(setup.projectId)
+      return remappedProjectId ? { ...setup, projectId: remappedProjectId } : setup
+    })
   const independentProjectIds = new Set(independentSetups.map((setup) => setup.projectId))
   const independentProjects = (state.projects ?? [])
     .filter(
@@ -2432,18 +2502,8 @@ function mergeProjectHostSetupCompatibilityState(
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
-  const projectedProjects = projection.projects.map((project) => {
-    const existingProject = existingProjectsById.get(project.id)
-    return existingProject?.localWindowsRuntimePreference
-      ? {
-          ...project,
-          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
-          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
-        }
-      : project
-  })
   return {
-    projects: [...projectedProjects, ...independentProjects],
+    projects: [...succession.projects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }
 }
@@ -2763,6 +2823,14 @@ export type StoreOptions = {
   dataFile?: string
 }
 
+export type PtyBindingSourceExpectation = {
+  worktreeId?: string
+  tabId: string
+  leafId: string
+  ptyId: string
+  incarnationId?: string
+}
+
 export class Store {
   private state: PersistedState
   private readonly dataFile: string
@@ -2824,6 +2892,7 @@ export class Store {
     // profile avoids serializing the multi-MB recovery store on navigation.
     this.activeViewPreference = new ActiveViewPreference(this.dataFile, this.state.ui?.activeView)
     const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
+    this.hydrateFolderWorkspaceDiffComments()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
@@ -2842,6 +2911,33 @@ export class Store {
       // Why: rewrite legacy pane:1 leaves so older renderer writes can't revive them; other migrations also set loadNeedsSave.
       this.scheduleSave()
     }
+  }
+
+  // Why: notes live top-level on disk so an older build's field-by-field
+  // normalizeFolderWorkspaces can't drop them; re-attach them to the in-memory records here.
+  private hydrateFolderWorkspaceDiffComments(): void {
+    const stored = this.state.folderWorkspaceDiffComments
+    let relocatedInline = false
+    for (const workspace of this.state.folderWorkspaces ?? []) {
+      if (Array.isArray(workspace.diffComments) && workspace.diffComments.length > 0) {
+        // Inline wins: an intervening rollback to a #14112 build writes notes inline and leaves the
+        // older map untouched, so inline is the last notes-aware write. Also makes the relocation
+        // durable even if the user never edits anything this session.
+        relocatedInline = true
+        continue
+      }
+      const comments = stored?.[workspace.id]
+      // Not `??`: a degenerate `{ id: [] }` entry must not delete an intact inline value.
+      if (Array.isArray(comments) && comments.length > 0) {
+        workspace.diffComments = comments
+      }
+    }
+    if (relocatedInline) {
+      this.loadNeedsSave = true
+    }
+    // Write-only projection: buildStateToSave() is the only producer, so leaving the loaded map in
+    // state would make it a stale second source of truth that getDurableState() spreads back out.
+    delete this.state.folderWorkspaceDiffComments
   }
 
   private adaptFlatFolderScanProjectGroups(): boolean {
@@ -3124,6 +3220,13 @@ export class Store {
         if (migratedTerminalScrollback.needsSave) {
           this.loadNeedsSave = true
         }
+        if (
+          parsed.settings &&
+          typeof parsed.settings === 'object' &&
+          Object.hasOwn(parsed.settings, 'enableGitHubAttribution')
+        ) {
+          this.loadNeedsSave = true
+        }
         const migratedTerminalTuiScrollSensitivity = migrateTerminalTuiScrollSensitivityDefault(
           parsed.settings
         )
@@ -3224,6 +3327,13 @@ export class Store {
           parsed.settings
         )
         const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
+        if (
+          parsed.settings?.terminalCursorStyle !==
+            migratedTerminalCursorStyle.terminalCursorStyle ||
+          parsed.settings?.terminalCursorStyleDefaultedToBlock !== true
+        ) {
+          this.loadNeedsSave = true
+        }
         const migratedTerminalLineHeight = normalizeTerminalLineHeight(
           parsed.settings?.terminalLineHeight
         )
@@ -3379,6 +3489,9 @@ export class Store {
             parsed.folderWorkspaces,
             normalizedProjectGroups
           ),
+          folderWorkspaceDiffComments: normalizeFolderWorkspaceDiffComments(
+            parsed.folderWorkspaceDiffComments
+          ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
             parsed.mobileClientTabSelectionsByDeviceId
@@ -3389,7 +3502,7 @@ export class Store {
           settings: {
             ...defaults.settings,
             // Why (#7977): keep persisted experimentalNewWorktreeCardStyle:true — v1.4.130's onboarding auto-wrote it as a plain boolean, so it's indistinguishable from a real opt-in; only the default changed.
-            ...stripLegacyTerminalScrollbackBytes(parsed.settings),
+            ...stripRetiredGlobalSettings(parsed.settings),
             prBotAuthorOverrides: normalizePRBotAuthorOverrides(
               parsed.settings?.prBotAuthorOverrides
             ),
@@ -3651,7 +3764,7 @@ export class Store {
             if (parsed.workspaceSession === undefined) {
               return defaults.workspaceSession
             }
-            const result = parseWorkspaceSession(parsed.workspaceSession)
+            const result = parseWorkspaceSessionSalvaging(parsed.workspaceSession)
             if (!result.ok) {
               console.error(
                 '[persistence] Corrupt workspace session, using defaults:',
@@ -3659,13 +3772,28 @@ export class Store {
               )
               return defaults.workspaceSession
             }
+            if (result.droppedCount > 0) {
+              console.warn(
+                '[persistence] Salvaged workspace session; dropped corrupt entries:',
+                workspaceSessionSalvageLogDetails(result)
+              )
+              // Why: salvage repairs only the in-memory session; without a save the corrupt entries stay on disk and get re-dropped every launch.
+              this.loadNeedsSave = true
+            }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
           // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
-          workspaceSessionsByHostId: parseWorkspaceSessionsByHostId(
-            parsed.workspaceSessionsByHostId,
-            defaults.workspaceSession
-          ),
+          workspaceSessionsByHostId: (() => {
+            const { partitions, repaired } = parseWorkspaceSessionsByHostId(
+              parsed.workspaceSessionsByHostId,
+              defaults.workspaceSession
+            )
+            if (repaired) {
+              // Why: salvage repairs only the in-memory partitions; without a save the corrupt entries stay on disk and get re-dropped every launch.
+              this.loadNeedsSave = true
+            }
+            return partitions
+          })(),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
           deletedSshConfigAliases: Array.isArray(parsed.deletedSshConfigAliases)
             ? parsed.deletedSshConfigAliases.filter(
@@ -3958,6 +4086,13 @@ export class Store {
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
+      // Why both keys unconditionally: the explicit keys always win over the spread, and
+      // JSON.stringify drops the `undefined` value so a note-free profile gains no key on disk.
+      // The strip builds a new array here only; this.state records keep their notes in memory.
+      folderWorkspaces: (this.state.folderWorkspaces ?? []).map(
+        ({ diffComments: _relocated, ...rest }) => rest
+      ),
+      folderWorkspaceDiffComments: collectFolderWorkspaceDiffComments(this.state.folderWorkspaces),
       sshPtyConsumerRecoveries: (this.state.sshPtyConsumerRecoveries ?? []).map((record) => ({
         ...record,
         ownerLease: encryptToSentinel(
@@ -3966,7 +4101,7 @@ export class Store {
         )
       })),
       settings: {
-        ...this.state.settings,
+        ...stripRetiredGlobalSettings(this.state.settings),
         opencodeSessionCookie: encryptToSentinel(
           PROTECTED_SECRET_SLOT.opencodeSessionCookie,
           this.state.settings.opencodeSessionCookie
@@ -4178,6 +4313,10 @@ export class Store {
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
+
+  getProfileStorageDirectory(): string {
+    return dirname(this.dataFile)
+  }
 
   getRepos(): Repo[] {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
@@ -4438,6 +4577,7 @@ export class Store {
     linkedTask?: FolderWorkspace['linkedTask']
     linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
     connectionId?: string | null
+    creatorProvenance?: FolderWorkspace['creatorProvenance']
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }): FolderWorkspace {
@@ -4460,6 +4600,7 @@ export class Store {
       name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
       folderPath,
       connectionId: input.connectionId ?? group.connectionId ?? null,
+      ...(input.creatorProvenance ? { creatorProvenance: input.creatorProvenance } : {}),
       linkedTask,
       linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
         ? sourceContext
@@ -4502,6 +4643,7 @@ export class Store {
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
+        | 'diffComments'
       >
     >
   ): FolderWorkspace | null {
@@ -4574,6 +4716,9 @@ export class Store {
     }
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
+    }
+    if (updates.diffComments !== undefined) {
+      workspace.diffComments = updates.diffComments
     }
     workspace.updatedAt = Date.now()
     this.scheduleSave()
@@ -4866,6 +5011,9 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
+        | 'agentWorktreeVisibility'
+        | 'customWorktreeVisibilitySources'
+        | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
@@ -4884,6 +5032,20 @@ export class Store {
       return null
     }
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    if (
+      'agentWorktreeVisibility' in sanitizedUpdates &&
+      !('worktreeVisibilitySourcePreferences' in sanitizedUpdates) &&
+      (sanitizedUpdates.agentWorktreeVisibility === 'hide' ||
+        sanitizedUpdates.agentWorktreeVisibility === 'show')
+    ) {
+      sanitizedUpdates.worktreeVisibilitySourcePreferences = {
+        ...repo.worktreeVisibilitySourcePreferences,
+        builtIn: {
+          claude: sanitizedUpdates.agentWorktreeVisibility,
+          gsd: sanitizedUpdates.agentWorktreeVisibility
+        }
+      }
+    }
     if ('projectGroupId' in sanitizedUpdates) {
       const nextGroupId = sanitizedUpdates.projectGroupId
       if (
@@ -5049,6 +5211,8 @@ export class Store {
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
       forkSyncMode: rawForkSyncMode,
+      customWorktreeVisibilitySources: rawCustomWorktreeVisibilitySources,
+      worktreeVisibilitySourcePreferences: rawWorktreeVisibilitySourcePreferences,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
@@ -5057,6 +5221,12 @@ export class Store {
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
+    const customWorktreeVisibilitySources = normalizeCustomWorktreeVisibilitySources(
+      rawCustomWorktreeVisibilitySources
+    )
+    const worktreeVisibilitySourcePreferences = normalizeWorktreeVisibilitySourcePreferences(
+      rawWorktreeVisibilitySourcePreferences
+    )
     // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
     const gitUsername = isFolderRepo(repo)
       ? ''
@@ -5070,6 +5240,10 @@ export class Store {
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
+      ...(customWorktreeVisibilitySources !== undefined ? { customWorktreeVisibilitySources } : {}),
+      ...(worktreeVisibilitySourcePreferences !== undefined
+        ? { worktreeVisibilitySourcePreferences }
+        : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -5743,7 +5917,7 @@ export class Store {
     }
   }
 
-  // Why: UI view-state is written from both desktop and mobile (ui.set RPC), so notify to keep bi-directional sync (desktop hydrates UI only once).
+  // Why: renderer-visible UI state is written from desktop and mobile, so notify to keep bi-directional sync.
   onUIChanged(listener: (ui: PersistedState['ui']) => void): () => void {
     this.uiChangeListeners.add(listener)
     return () => {
@@ -5765,7 +5939,7 @@ export class Store {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
-    const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
+    const sanitizedUpdates = stripRetiredGlobalSettings(updates)
     if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
       this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
     }
@@ -5802,6 +5976,15 @@ export class Store {
     if ('terminalCustomThemes' in updates) {
       sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
         updates.terminalCustomThemes
+      )
+    }
+    if ('terminalCursorStyle' in updates) {
+      Object.assign(
+        sanitizedUpdates,
+        normalizeTerminalCursorStyleDefault(
+          { terminalCursorStyle: updates.terminalCursorStyle },
+          { preserveExplicitValue: true }
+        )
       )
     }
     if ('terminalScrollbackRows' in updates) {
@@ -6041,6 +6224,10 @@ export class Store {
     const nextUI = {
       ...currentUI,
       ...durableUpdates,
+      workspaceCleanup: mergeWorkspaceCleanupUIState(
+        currentUI.workspaceCleanup,
+        durableUpdates.workspaceCleanup
+      ),
       groupBy: durableUpdates.groupBy
         ? normalizeGroupBy(durableUpdates.groupBy)
         : normalizeGroupBy(this.state.ui?.groupBy),
@@ -6154,7 +6341,8 @@ export class Store {
       (lastEmittedBucket === null ||
         compareFeatureInteractionUsageBuckets(nextBucket, lastEmittedBucket) > 0)
 
-    this.updateUI({
+    this.state.ui = {
+      ...this.state.ui,
       featureInteractions: {
         ...featureInteractions,
         [id]: {
@@ -6162,11 +6350,15 @@ export class Store {
           interactionCount: nextCount
         }
       }
-    })
+    }
     this.state.featureInteractionTelemetryBuckets = shouldEmit
       ? { ...telemetryBuckets, [id]: nextBucket }
       : telemetryBuckets
     this.scheduleSave()
+    // Why: live UI only consumes the seen transition; count-only telemetry must not re-hydrate the renderer.
+    if (!existing) {
+      this.notifyUIChanged()
+    }
 
     if (shouldEmit) {
       track('feature_interaction_usage_bucket_reached', {
@@ -6715,15 +6907,37 @@ export class Store {
       incarnationId?: string
       startupCwd?: string
       expectedBinding?: { ptyId: string; incarnationId?: string }
+      expectedSourceBinding?: PtyBindingSourceExpectation
     },
     hostId?: string | null
   ): boolean {
     const resolvedHostId = this.resolveHostId(hostId)
     const session = this.getWorkspaceSession(resolvedHostId)
     const paneKey = `${args.tabId}:${args.leafId}`
+    const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
+    if (args.expectedSourceBinding) {
+      const expected = args.expectedSourceBinding
+      if (expected.tabId !== args.tabId) {
+        return false
+      }
+      const sourceTab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
+        (candidate) => candidate.id === expected.tabId && candidate.worktreeId === bindingWorktreeId
+      )
+      const sourceLayout = session.terminalLayoutsByTabId?.[expected.tabId]
+      const sourcePaneKey = `${expected.tabId}:${expected.leafId}`
+      if (
+        !sourceTab ||
+        sourceLayout?.ptyIdsByLeafId?.[expected.leafId] !== expected.ptyId ||
+        !layoutContainsLeafId(sourceLayout.root, expected.leafId) ||
+        (expected.incarnationId !== undefined &&
+          session.terminalPtyIncarnationsByPaneKey?.[sourcePaneKey] !== expected.incarnationId)
+      ) {
+        return false
+      }
+    }
     if (args.expectedBinding) {
-      const tab = session.tabsByWorktree?.[args.worktreeId]?.find(
-        (candidate) => candidate.id === args.tabId && candidate.worktreeId === args.worktreeId
+      const tab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
+        (candidate) => candidate.id === args.tabId && candidate.worktreeId === bindingWorktreeId
       )
       const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
       if (
@@ -6746,9 +6960,13 @@ export class Store {
       args.incarnationId !== args.expectedBinding.incarnationId
     let terminalMembershipChanged = false
     const advanceTopologyFence = (): void => {
-      const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+      const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
       const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-      if (!reconciledIncarnation && (!terminalMembershipChanged || currentRevision <= 0)) {
+      const establishesSplitAuthority = args.expectedSourceBinding !== undefined
+      if (
+        !reconciledIncarnation &&
+        (!terminalMembershipChanged || (currentRevision <= 0 && !establishesSplitAuthority))
+      ) {
         return
       }
       // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
@@ -6779,7 +6997,7 @@ export class Store {
         delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
       }
     }
-    const tabs = session.tabsByWorktree?.[args.worktreeId]
+    const tabs = session.tabsByWorktree?.[bindingWorktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
       tab.ptyId = args.ptyId
@@ -6790,18 +7008,19 @@ export class Store {
         ...(tabs ?? []),
         createMinimalPersistedTerminalTab({
           ...args,
+          worktreeId: bindingWorktreeId,
           existingTabCount: tabs?.length ?? 0
         })
       ]
       session.tabsByWorktree = {
         ...session.tabsByWorktree,
-        [args.worktreeId]: nextTabs
+        [bindingWorktreeId]: nextTabs
       }
-      session.activeWorktreeId ??= args.worktreeId
+      session.activeWorktreeId ??= bindingWorktreeId
       session.activeTabId ??= args.tabId
       session.activeTabIdByWorktree = {
         ...session.activeTabIdByWorktree,
-        [args.worktreeId]: session.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId
+        [bindingWorktreeId]: session.activeTabIdByWorktree?.[bindingWorktreeId] ?? args.tabId
       }
     }
     if (!isTerminalLeafId(args.leafId)) {
@@ -7168,14 +7387,14 @@ export class Store {
       (entry) =>
         entry.targetId === normalizedLease.targetId && entry.ptyId === normalizedLease.ptyId
     )
-    const existing = existingIndex >= 0 ? this.state.sshRemotePtyLeases[existingIndex] : undefined
+    const existing = existingIndex !== -1 ? this.state.sshRemotePtyLeases[existingIndex] : undefined
     const next: SshRemotePtyLease = {
       ...existing,
       ...normalizedLease,
       createdAt: existing?.createdAt ?? normalizedLease.createdAt ?? now,
       updatedAt: normalizedLease.updatedAt ?? now
     }
-    if (existingIndex >= 0) {
+    if (existingIndex !== -1) {
       this.state.sshRemotePtyLeases[existingIndex] = next
     } else {
       this.state.sshRemotePtyLeases.push(next)

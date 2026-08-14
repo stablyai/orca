@@ -1,6 +1,6 @@
 import { resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isSafeGitStatusUpstreamRef } from '../../shared/git-status-upstream-ref'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   pathRelativeToWorktreeWatchRoot,
   type WorktreeBaseWatchTarget

@@ -1,11 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
-import type {
-  OrcaHooks,
-  Project,
-  ProjectUpdateArgs,
-  Repo,
-  RepoHookSettings
-} from '../../../../shared/types'
+import type { OrcaHooks, RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
+import type { Project, ProjectUpdateArgs } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { Button } from '../ui/button'

@@ -14,7 +14,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-tab-types'
 import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
@@ -285,7 +285,7 @@ function resolveLeafIdForTitleFallback(args: {
   }
 
   const paneIndex = args.paneTitleEntries.findIndex(([paneId]) => Number(paneId) === args.paneId)
-  return paneIndex >= 0 ? (leafIds[paneIndex] ?? null) : null
+  return paneIndex !== -1 ? (leafIds[paneIndex] ?? null) : null
 }
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null): string[] {

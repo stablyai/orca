@@ -1,4 +1,4 @@
-import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../shared/linear-issue-read-limits'
+import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../shared/linear/issue-read-limits'
 
 export type LinearPageVariables = { first: number; after?: string }
 

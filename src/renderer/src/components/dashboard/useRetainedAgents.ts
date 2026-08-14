@@ -4,7 +4,10 @@ import { useAppStore } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { DashboardAgentRow } from './useDashboardData'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import type { FolderWorkspace, Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import {
@@ -22,9 +25,9 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 type RetainedAgentSnapshot = Map<string, { row: DashboardAgentRow; worktreeId: string }>
 
 type RetainedAgentsSyncInputs = {
-  repos: Repo[]
+  repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
-  folderWorkspaces: FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[]
   tabsByWorktree: Record<string, TerminalTab[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
 }
@@ -38,9 +41,9 @@ function paneKeyTabId(paneKey: string): string | null {
 }
 
 function buildLiveTabIndex(args: {
-  repos: Repo[]
+  repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
-  folderWorkspaces: FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[]
   tabsByWorktree: Record<string, TerminalTab[]>
 }): {
   existingWorktreeIds: Set<string>

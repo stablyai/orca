@@ -1,7 +1,7 @@
 import type { AgentType } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 /**
  * Serializable contract for the pop-out agent dashboard. The main renderer owns
@@ -65,6 +65,8 @@ export type DashboardWorkspace = {
   parentWorktreeId?: string
   hostKind: DashboardCardHostKind
   executionHostId: ExecutionHostId
+  /** Friendly saved-host name for compact host tooltips. */
+  hostLabel?: string
   workspaceKind: DashboardCardWorkspaceKind
   workspaceStatusId?: string
   workspaceStatusLabel?: string
@@ -103,6 +105,8 @@ export type DashboardCard = {
   hostKind?: DashboardCardHostKind
   /** Exact owner used by in-window workspace actions when IDs collide across hosts. */
   executionHostId?: ExecutionHostId
+  /** Friendly saved-host name for compact host tooltips. */
+  hostLabel?: string
   /** Folder workspaces share the ring hierarchy without pretending to be git worktrees. */
   workspaceKind?: DashboardCardWorkspaceKind
   workspaceStatusId?: string

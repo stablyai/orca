@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { getVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
 import type { AppState } from '@/store/types'
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const initialState = useAppStore.getInitialState()

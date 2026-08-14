@@ -7,6 +7,7 @@ import {
 } from './pane-terminal-foreground-render-settle'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { flattenRetainedSlice } from '@/lib/flatten-retained-slice'
 import {
   discardInFlightTerminalOutputAckCredits,
   registerTerminalOutputAckCredits
@@ -49,6 +50,8 @@ type WriteTerminalOutputOptions = {
 
 type QueueChunk = {
   data: string
+  // Tracks the backing data still reachable through this queue slot.
+  retainedChars: number
   foreground: boolean
   forceForegroundRefresh: boolean
   followupForegroundRefresh: boolean
@@ -185,6 +188,7 @@ type TerminalOutputSchedulerDebugSnapshot = {
   peakQueuedCharsByTerminal: number
   droppedBacklogCount: number
   drainWrites: number[]
+  drainHighPriority: boolean[]
 }
 
 type TerminalOutputSchedulerDebugApi = {
@@ -206,7 +210,8 @@ const debugState: TerminalOutputSchedulerDebugSnapshot = {
   peakQueuedChars: 0,
   peakQueuedCharsByTerminal: 0,
   droppedBacklogCount: 0,
-  drainWrites: []
+  drainWrites: [],
+  drainHighPriority: []
 }
 
 function resetDebugState(): void {
@@ -224,6 +229,7 @@ function resetDebugState(): void {
   debugState.peakQueuedCharsByTerminal = 0
   debugState.droppedBacklogCount = 0
   debugState.drainWrites = []
+  debugState.drainHighPriority = []
 }
 
 function readQueueDebugSnapshot(): {
@@ -276,7 +282,8 @@ function exposeDebugApi(): void {
       recordQueueDebugPressure()
       return {
         ...debugState,
-        drainWrites: [...debugState.drainWrites]
+        drainWrites: [...debugState.drainWrites],
+        drainHighPriority: [...debugState.drainHighPriority]
       }
     }
   }
@@ -631,6 +638,16 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
       data += chunk.data
       remaining -= chunk.data.length
       entry.queuedChars -= chunk.data.length
+      // Clear drained slots before the 64-chunk compaction can release them.
+      entry.chunks[entry.chunkIndex] = {
+        data: '',
+        retainedChars: 0,
+        foreground: chunk.foreground,
+        forceForegroundRefresh: false,
+        followupForegroundRefresh: false,
+        shouldRefreshForegroundSynchronously: ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
+        stripTransientCursorShows: false
+      }
       entry.chunkIndex += 1
       if (chunk.onParsed) {
         parsedCallbacks.push(chunk.onParsed)
@@ -642,9 +659,13 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
     }
 
     data += chunk.data.slice(0, remaining)
+    const residual = chunk.data.slice(remaining)
+    // Geometric flattening bounds retained parents while keeping total copy work linear.
+    const flatten = residual.length * 2 <= chunk.retainedChars
     entry.chunks[entry.chunkIndex] = {
       ...chunk,
-      data: chunk.data.slice(remaining)
+      data: flatten ? flattenRetainedSlice(residual) : residual,
+      retainedChars: flatten ? residual.length : chunk.retainedChars
     }
     entry.queuedChars -= remaining
     remaining = 0
@@ -719,8 +740,11 @@ function enqueueChunk(
     ackCredit?: () => void
   }
 ): void {
+  // Own queued data so producer slices cannot pin larger PTY or restore buffers.
+  const owned = flattenRetainedSlice(data)
   entry.chunks.push({
-    data,
+    data: owned,
+    retainedChars: owned.length,
     foreground: options?.foreground === true,
     forceForegroundRefresh: options?.forceForegroundRefresh === true,
     followupForegroundRefresh: options?.followupForegroundRefresh === true,
@@ -783,6 +807,7 @@ function replaceBacklogWithWarning(
   entry.chunks = [
     {
       data: warning,
+      retainedChars: warning.length,
       foreground: false,
       forceForegroundRefresh: false,
       followupForegroundRefresh: false,
@@ -1015,9 +1040,8 @@ function drainQueuedOutput(): void {
   drainTimerDelayMs = null
   let writes = 0
   const startedAt = getDrainNow()
-  const maxWrites = hasHighPriorityBacklog()
-    ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN
-    : MAX_WRITES_PER_DRAIN
+  const highPriority = hasHighPriorityBacklog()
+  const maxWrites = highPriority ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN : MAX_WRITES_PER_DRAIN
 
   while (queuedByTerminal.size > 0 && writes < maxWrites) {
     const entry = takeNextDrainableEntry()
@@ -1050,6 +1074,7 @@ function drainQueuedOutput(): void {
 
   if (debugEnabled && writes > 0) {
     debugState.drainWrites.push(writes)
+    debugState.drainHighPriority.push(highPriority)
   }
   recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {

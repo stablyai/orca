@@ -78,7 +78,6 @@ describe('HostProtocolGate', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     nativeTestState.openUrl.mockClear()
     nativeTestState.platform.OS = 'ios'
     probeMounts.count = 0

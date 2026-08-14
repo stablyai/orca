@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 
 // Why: mobile tests run from the mobile package only, so runtime imports of
 // desktop shared modules can break Vitest transforms in CI. Keep this list

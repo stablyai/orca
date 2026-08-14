@@ -1,4 +1,4 @@
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from './worktree-display-name-order'
 
 export type OrderEmptyQueryInputs = {

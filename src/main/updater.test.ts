@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as UpdaterModule from './updater'
 import type * as RecoveryModule from './linux-package-update-recovery'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 
 type RevalidationVerdict = Awaited<
   ReturnType<typeof RecoveryModule.revalidateLinuxPackageForInstall>
@@ -301,6 +301,7 @@ describe('updater', () => {
 
   it.each([
     ['hourly', 'v1.4.160-hourly.202607281400', 'Hourly builds are produced only for macOS.'],
+    ['daily', 'v1.4.160-daily.202607281300', 'Daily builds are produced only for macOS.'],
     ['adhoc', 'v1.4.160-adhoc.20260728140533', 'Adhoc builds are produced only for macOS.']
   ] as const)(
     'uses the display label in the mac-only %s pinned-build error',

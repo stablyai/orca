@@ -1,4 +1,7 @@
-import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
@@ -21,19 +24,12 @@ import {
 } from './worktree-lineage-projection'
 import { computeRenderedSidebarWorktreeOrder } from './rendered-sidebar-worktree-order'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
-
-/**
- * Whether a worktree represents the repo's default-branch row that the
- * "Hide Default Branch Workspace" setting targets. Folder-mode projects are
- * main worktrees with branch === '' and are intentionally preserved.
- *
- * Why a shared helper: this predicate gates visibility in both the sidebar
- * pipeline (computeVisibleWorktreeIds) and the Cmd+J jump palette. Keeping
- * the definition in one place prevents the two surfaces from drifting.
- */
-export function isDefaultBranchWorkspace(worktree: Worktree): boolean {
-  return worktree.isMainWorktree && worktree.branch.trim() !== ''
-}
+import {
+  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+  getPairedDeviceIdsByEnvironment,
+  isWorkspaceFromOtherDevice
+} from './workspace-creator-visibility'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
 
 /**
  * Whether the "Hide sleeping" sweep must keep this row (#8873).
@@ -94,6 +90,7 @@ export type SidebarFilterState = {
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
   hideDetachedHeadWorkspaces: boolean
+  hideWorkspacesFromOtherDevices: boolean
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep; absent means on. */
   alwaysShowDefaultBranchWorkspace?: boolean
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
@@ -117,6 +114,7 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
     state.hideAutomationGeneratedWorkspaces ||
     state.hideCliCreatedWorkspaces ||
     state.hideDetachedHeadWorkspaces ||
+    state.hideWorkspacesFromOtherDevices ||
     // Why: turning this off is the only way to narrow the list below the
     // default, so Clear Filters must be able to undo it like any other filter.
     state.alwaysShowDefaultBranchWorkspace === false ||
@@ -134,6 +132,7 @@ export type ClearFilterActions = {
   resetHideAutomationGeneratedWorkspaces: boolean
   resetHideCliCreatedWorkspaces: boolean
   resetHideDetachedHeadWorkspaces: boolean
+  resetHideWorkspacesFromOtherDevices: boolean
   resetAlwaysShowDefaultBranchWorkspace: boolean
   resetVisibleWorkspaceHostIds: boolean
 }
@@ -156,6 +155,7 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
     resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     resetHideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
     resetHideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
+    resetHideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
     resetAlwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace === false,
     resetVisibleWorkspaceHostIds:
       state.visibleWorkspaceHostIds != null ||
@@ -177,7 +177,7 @@ export function computeVisibleWorktreeIds(
   worktreesByRepo: Record<string, Worktree[]>,
   sortedIds: string[],
   opts: {
-    filterRepoIds: string[]
+    filterRepoIds: readonly string[]
     showSleepingWorkspaces: boolean
     tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
     ptyIdsByTabId: Record<string, string[]> | null
@@ -193,6 +193,8 @@ export function computeVisibleWorktreeIds(
     hideAutomationGeneratedWorkspaces: boolean
     hideCliCreatedWorkspaces: boolean
     hideDetachedHeadWorkspaces: boolean
+    hideWorkspacesFromOtherDevices: boolean
+    pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
     // Why optional here, against the "why required" rule above: omitting it
     // must fail *open*. A caller that forgets the flag then shows an extra row
     // instead of silently re-hiding the project's entry point, which is the
@@ -215,6 +217,12 @@ export function computeVisibleWorktreeIds(
   // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
   // every other valid ancestor can bypass filters so children never orphan.
   const lineageAncestorById = new Map(all.map((w) => [w.id, w]))
+
+  if (opts.hideWorkspacesFromOtherDevices) {
+    all = all.filter(
+      (worktree) => !isWorkspaceFromOtherDevice(worktree, opts.pairedDeviceIdsByEnvironment)
+    )
+  }
 
   if (opts.hideDefaultBranchWorkspace) {
     all = all.filter((w) => !isDefaultBranchWorkspace(w))
@@ -416,6 +424,13 @@ export function getVisibleWorktreeIds(): string[] {
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
+    hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
+    pairedDeviceIdsByEnvironment: state.hideWorkspacesFromOtherDevices
+      ? getPairedDeviceIdsByEnvironment(
+          state.runtimeEnvironments,
+          state.runtimeStatusByEnvironmentId
+        )
+      : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
     repoMap,
     workspaceHostScope: state.workspaceHostScope,

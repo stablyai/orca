@@ -11,7 +11,8 @@ import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { basename, dirname } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { formatGitHistoryTimestamp } from './git-history-format'
-import type { GitBranchChangeEntry, GitFileStatus } from '../../../../shared/types'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
 
 export type GitHistoryCommitFilesState =
   | { status: 'loading' }

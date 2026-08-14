@@ -130,6 +130,13 @@ export type JsonRpcNotification = {
 
 export type JsonRpcMessage = JsonRpcRequest | JsonRpcResponse | JsonRpcNotification
 
+const JSON_RPC_PAYLOAD_BYTES = Symbol('jsonRpcPayloadBytes')
+
+export type PreparedJsonRpcPayload = Readonly<{
+  byteLength: number
+  [JSON_RPC_PAYLOAD_BYTES]: Buffer
+}>
+
 export function encodeFrame(
   type: number,
   id: number,
@@ -145,11 +152,23 @@ export function encodeFrame(
 }
 
 export function encodeJsonRpcFrame(msg: JsonRpcMessage, id: number, ack: number): Buffer {
+  return encodePreparedJsonRpcFrame(prepareJsonRpcPayload(msg), id, ack)
+}
+
+export function prepareJsonRpcPayload(msg: JsonRpcMessage): PreparedJsonRpcPayload {
   const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
   if (payload.length > MAX_MESSAGE_SIZE) {
     throw new Error(`Message too large: ${payload.length} bytes`)
   }
-  return encodeFrame(MessageType.Regular, id, ack, payload)
+  return Object.freeze({ byteLength: payload.length, [JSON_RPC_PAYLOAD_BYTES]: payload })
+}
+
+export function encodePreparedJsonRpcFrame(
+  payload: PreparedJsonRpcPayload,
+  id: number,
+  ack: number
+): Buffer {
+  return encodeFrame(MessageType.Regular, id, ack, payload[JSON_RPC_PAYLOAD_BYTES])
 }
 
 export function encodeKeepAliveFrame(id: number, ack: number): Buffer {

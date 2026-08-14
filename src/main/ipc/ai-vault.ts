@@ -24,12 +24,12 @@ import {
   type AiVaultSubagentListArgs,
   type AiVaultSubagentListResult
 } from '../../shared/ai-vault-types'
-import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-read'
+import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-handler'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostScope,
   parseExecutionHostId,
+  requestedExecutionHostScope,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostScope
@@ -71,7 +71,6 @@ type AiVaultHandlerOptions = AiVaultSessionSources &
     getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
     resolveRuntimeAiVaultSessionTitles?: RuntimeAiVaultSessionTitleResolver
-    getSessionLiveness?: Parameters<typeof deleteAiVaultSession>[1]['getSessionLiveness']
   }
 
 let scanCoordinator = new AiVaultScanCoordinator()
@@ -80,10 +79,7 @@ const listCancellations = createSenderScopedRequestCancellations()
 // Shared by the IPC registration and the test internals: a delete must drop
 // the multi-host leg cache, which this module owns the only caller of.
 const aiVaultDeleteDeps = {
-  invalidateMultiHostListCache: invalidateAiVaultHostLegCache,
-  getSessionLiveness: (
-    target: Parameters<NonNullable<AiVaultHandlerOptions['getSessionLiveness']>>[0]
-  ) => handlerOptions.getSessionLiveness?.(target) ?? Promise.resolve('unknown' as const)
+  invalidateMultiHostListCache: invalidateAiVaultHostLegCache
 }
 
 const resolveAiVaultSessionTitles = (
@@ -95,9 +91,7 @@ async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
-  const executionHostScope = normalizeExecutionHostScope(
-    args?.executionHostScope ?? LOCAL_EXECUTION_HOST_ID
-  )
+  const executionHostScope = requestedExecutionHostScope(args?.executionHostScope)
   // Scope paths change the result set, so they must be part of the cache key.
   // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
   // can share a snapshot regardless of which worktree was selected first.
@@ -143,7 +137,7 @@ async function scanAiVaultSessionsByHostScope(
   const depth = requestedAiVaultSessionDepth(args)
   const scopePaths = args?.scopePaths ?? []
   if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
-    return scanLocalAiVaultSessions(args, signal)
+    return scanLocalAiVaultSessionsAsIssue(args, signal)
   }
   if (executionHostScope === 'all') {
     const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
@@ -153,7 +147,7 @@ async function scanAiVaultSessionsByHostScope(
       ...(sshHosts.issue ? [sshHosts.issue] : [])
     ]
     const scannedResults = await Promise.all([
-      scanLocalAiVaultSessionsForAllScope(args, signal),
+      scanLocalAiVaultSessionsAsIssue(args, signal),
       ...sshHosts.hostInfos.map((hostInfo) =>
         scanHostLegWithCache({
           cacheKey: `${cacheKey}|${toSshExecutionHostId(hostInfo.targetId)}`,
@@ -230,8 +224,10 @@ function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targ
 
 // Why: the SSH legs already degrade to an issue row so one bad host can't take
 // the shared Promise.all down; the local leg can throw too (parse-cache load,
-// WSL home resolution) and would otherwise discard every host's sessions.
-async function scanLocalAiVaultSessionsForAllScope(
+// WSL home resolution, scanner service supervision) and would otherwise discard
+// every host's sessions under 'all', or replace the list with a raw error string
+// under single-host scope.
+async function scanLocalAiVaultSessionsAsIssue(
   args: AiVaultListArgs | undefined,
   signal: AbortSignal | undefined
 ): Promise<AiVaultListResult> {

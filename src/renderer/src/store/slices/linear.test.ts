@@ -3,15 +3,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type {
-  LinearConnectionStatus,
-  LinearCollectionResult,
-  LinearIssue,
   LinearProjectDetail,
-  LinearProjectSummary,
+  LinearProjectSummary
+} from '../../../../shared/linear/project-types'
+import type {
+  LinearCollectionResult,
+  LinearConnectionStatus,
   LinearTeam,
   LinearViewer
-} from '../../../../shared/types'
+} from '../../../../shared/linear/workspace-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

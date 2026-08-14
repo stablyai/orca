@@ -1,4 +1,5 @@
-import type { TerminalTab, Worktree } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 export function getUnreadBadgeCount({
   worktreesByRepo,

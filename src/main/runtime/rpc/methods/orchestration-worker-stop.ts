@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { syncFederatedDispatch } from '../../orchestration/federation-sync'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
 import {
@@ -49,7 +48,9 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           }
           if (remote.state === 'succeeded' || remote.state === 'failed') {
             db.resumeFederatedWorkerForTerminalRelay(params.dispatch)
-            await syncFederatedDispatch(runtime, params.dispatch).catch(() => undefined)
+            await runtime
+              .syncOrchestrationFederatedDispatchAfterCurrent(params.dispatch)
+              .catch(() => undefined)
             return {
               dispatchId: params.dispatch,
               state: db.getWorkerDispatch(params.dispatch)?.state ?? remote.state,

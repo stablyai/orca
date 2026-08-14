@@ -14,7 +14,8 @@ import {
   selectMenuScopedMap,
   shouldRevealWorktreeDeveloperMenu
 } from './WorktreeContextMenu'
-import type { Worktree, WorktreeLineage, WorkspaceStatusDefinition } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 
 describe('shouldRevealWorktreeDeveloperMenu', () => {
   it('stays hidden for an ordinary right-click', () => {

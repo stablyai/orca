@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GhosttyImportPreview } from '../../../../shared/types'
+import type { GhosttyImportPreview } from '../../../../shared/global-settings-types'
 import { GhosttyImportModal } from './GhosttyImportModal'
 import { Button } from '../ui/button'
 

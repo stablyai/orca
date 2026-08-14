@@ -305,7 +305,7 @@ async function readPromptState(page: Page): Promise<TerminalPromptState | null> 
     .filter((value): value is string => value !== null)
   const promptIndex = content.lastIndexOf(PROMPT)
   const liveLine =
-    promptIndex >= 0 ? (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '') : ''
+    promptIndex !== -1 ? (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '') : ''
   return {
     model: liveLine.trimEnd(),
     cursor: Array.from(liveLine.trimEnd()).length,

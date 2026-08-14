@@ -3,7 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { translate } from '@/i18n/i18n'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import {
   CHECK_COLOR,
   CHECK_ICON,
@@ -128,6 +128,7 @@ export function FolderWorkspacePrChecksRow({
             checksLoading={row.isRefreshing}
             checkDetailsContextKey={row.refreshIdentity}
             onLoadCheckDetails={onLoadCheckDetails}
+            githubRepository={row.githubRepository ?? null}
             worktreeId={row.worktree.id}
             detailsStickySurface="card"
           />

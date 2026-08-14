@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
@@ -275,6 +275,7 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  hostId: OptionalString,
   force: OptionalBoolean,
   // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
   // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
@@ -284,6 +285,7 @@ export const WorktreeRemove = WorktreeSelector.extend({
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
+  hostId: OptionalString,
   branchName: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))

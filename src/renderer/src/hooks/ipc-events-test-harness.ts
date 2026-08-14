@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -125,6 +125,7 @@ export type IpcEventsHarness = {
   /** Fire a main-process digit chord (zero-based index). */
   jumpToWorktreeIndex: (index: number) => void
   jumpToTabIndex: (index: number) => void
+  navigationUpdate: (event: { browserPageId: string; url: string; title: string }) => void
   /** Standard (non-palette) target of a workspace digit chord. */
   activateAndRevealWorkspace: ReturnType<typeof vi.fn>
 }
@@ -146,6 +147,9 @@ export async function loadIpcEventsHarness(
   const activateAndRevealWorkspace = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
+  let navigationUpdateListener:
+    | ((event: { browserPageId: string; url: string; title: string }) => void)
+    | null = null
   const indexJumpListeners = new Map<string, (index: number) => void>()
 
   vi.resetModules()
@@ -243,6 +247,14 @@ export async function loadIpcEventsHarness(
           onStatus: () => () => {},
           onClearDismissal: () => () => {}
         },
+        browser: createApiNamespaceStub({
+          onNavigationUpdate: (
+            listener: (event: { browserPageId: string; url: string; title: string }) => void
+          ) => {
+            navigationUpdateListener = listener
+            return () => {}
+          }
+        }),
         mobile: createApiNamespaceStub({
           consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false)
         }),
@@ -270,6 +282,12 @@ export async function loadIpcEventsHarness(
     replyTerminalCreate,
     jumpToWorktreeIndex: (index) => fireIndexJump(indexJumpListeners, 'worktree', index),
     jumpToTabIndex: (index) => fireIndexJump(indexJumpListeners, 'tab', index),
+    navigationUpdate: (event) => {
+      if (typeof navigationUpdateListener !== 'function') {
+        throw new Error('Expected the browser navigation listener to be registered')
+      }
+      navigationUpdateListener(event)
+    },
     activateAndRevealWorkspace
   }
 }

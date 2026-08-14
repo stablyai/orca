@@ -4,7 +4,7 @@ import type {
   EphemeralVmRecipeDoctorCheck,
   EphemeralVmRecipeDoctorResult
 } from './ephemeral-vm-recipes'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 
 export function doctorEphemeralVmRecipe(args: {
   repoPath: string

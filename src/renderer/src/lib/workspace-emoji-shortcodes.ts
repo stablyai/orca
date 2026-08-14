@@ -25,7 +25,7 @@ const MATCH_TIER = { exact: 0, prefix: 1, wordStart: 2, substring: 3 } as const
 
 function matchTier(shortcode: string, query: string): number | null {
   const index = shortcode.indexOf(query)
-  if (index < 0) {
+  if (index === -1) {
     return null
   }
   if (index === 0) {

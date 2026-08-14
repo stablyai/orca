@@ -1,4 +1,5 @@
-import type { GitBranchCompareSummary, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
+import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { translate } from '@/i18n/i18n'
 

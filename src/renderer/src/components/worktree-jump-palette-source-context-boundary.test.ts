@@ -13,15 +13,15 @@ function sourceBetween(startPattern: string, endPattern: string): string {
 }
 
 describe('WorktreeJumpPalette source-context boundaries', () => {
-  it('defers pasted GitHub URL resolution to the composer so cross-project detection runs', () => {
-    // Why: pasting a cross-project URL must surface the same "Switch project?"
-    // prompt as Cmd+N. The palette hands the raw URL to the composer's name
-    // field instead of pre-resolving it against an arbitrary repo, which
-    // silently linked cross-project items to the wrong project.
+  it('attaches a resolved GitHub URL entity and leaves GitLab/Jira as raw URLs', () => {
+    // Why: GitHub create reuses the Cmd+J preview (lookup lives in the effect,
+    // not Case 1). GitLab/Jira still hand the raw URL to the composer.
     const githubLinkSection = sourceBetween(
-      '// Case 1: user pasted a GH issue/PR URL.',
+      '// Case 1: user pasted a GH/GitLab/Jira URL.',
       '// Case 2: user typed a raw issue number.'
     )
+    expect(githubLinkSection).toContain('linkedWorkItem')
+    expect(githubLinkSection).toContain('initialGitHubWorkItem: item')
     expect(githubLinkSection).toContain('prefilledName: trimmed')
     expect(githubLinkSection).not.toContain('lookupGitHubWorkItemByOwnerRepoForSource')
   })

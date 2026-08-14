@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { checkIgnoredPaths } from './check-ignored-paths'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { loadHooks } from '../hooks'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 
 // Why: a fresh worktree has no node_modules/.cache, and copying them is slow and
 // duplicates disk; `orca.yaml` names the ones every worktree should share instead.

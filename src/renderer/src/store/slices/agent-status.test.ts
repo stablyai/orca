@@ -598,7 +598,10 @@ describe('agent status tool + assistant fields', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const setGeneratedTabTitleFromAgentPrompt = vi.fn()
-    store.setState({ setGeneratedTabTitleFromAgentPrompt } as Partial<AppState>)
+    store.setState({
+      settings: { ...store.getState().settings, tabAutoGenerateTitle: true },
+      setGeneratedTabTitleFromAgentPrompt
+    } as Partial<AppState>)
     store
       .getState()
       .setAgentStatus(
@@ -803,6 +806,29 @@ describe('agent status tool + assistant fields', () => {
     // change smart-sort class, so only the status/retention epoch should tick.
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch)
+  })
+
+  it('bumps sort epoch when a same-state done update changes completion eligibility', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'done', prompt: 'p1', agentType: 'claude', interrupted: true },
+        'claude',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'claude' }, 'claude', {
+        updatedAt: 2_000,
+        stateStartedAt: 1_000
+      })
+
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
 
   it('bumps global epochs when a stale same-state entry refreshes', () => {

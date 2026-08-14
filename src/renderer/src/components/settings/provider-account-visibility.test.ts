@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../shared/types'
+} from '../../../../shared/managed-account-types'
 import {
   getProviderAccountActiveIdForView,
   getProviderAccountRuntime,

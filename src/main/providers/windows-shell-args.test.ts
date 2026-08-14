@@ -219,7 +219,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
   it('starts Git Bash as an interactive login shell with UTF-8 console setup', () => {
     const result = resolveWindowsShellLaunchArgs(
       'C:\\Program Files\\Git\\bin\\bash.exe',
-      'C:\\Users\\alice\\code',
+      '/c',
       'C:\\Users\\alice'
     )
 
@@ -237,8 +237,8 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // Must stay fail-open: `;` (not `&&`) so a missing chcp.com can't abort the
     // exec and kill the terminal on startup.
     expect(bashCommand).not.toContain('&&')
-    expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
-    expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
+    expect(result.effectiveCwd).toBe('C:\\')
+    expect(result.validationCwd).toBe('C:\\')
   })
 
   it('does not apply Git Bash launch args to unrelated bash.exe paths', () => {
@@ -280,13 +280,17 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(existsSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'))).toBe(true)
     expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
 
-    // Why: the point of materializing wrappers for WSL is that a typed `omp`
-    // picks up Orca's status extension; pin that shim end to end.
+    // Why: typed OMP keeps its existing shell integration, while typed Prime
+    // commands must reach the user's binary without Orca rewriting argv.
     const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
     const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     for (const wrapperFile of [bashRcfile, zshLogin]) {
       expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
       expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
+      expect(wrapperFile).not.toContain('prime-agent()')
+      expect(wrapperFile).not.toContain('__orca_prime_agent')
+      expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+      expect(wrapperFile).not.toContain('command prime-agent --extension')
     }
   })
 
@@ -304,17 +308,15 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
   })
 
-  it('does not treat MSYS drive cwd as a WSL POSIX cwd', () => {
-    const result = resolveWindowsShellLaunchArgs(
-      'wsl.exe',
-      '/c/Users/alice/project',
-      'C:\\Users\\alice',
-      { distro: 'Ubuntu', treatPosixCwdAsWsl: true }
-    )
+  it.each(['/a', '/c'])('keeps a selected WSL runtime single-letter cwd exact (%s)', (cwd) => {
+    const result = resolveWindowsShellLaunchArgs('wsl.exe', cwd, 'C:\\Users\\alice', {
+      distro: 'Ubuntu',
+      treatPosixCwdAsWsl: true
+    })
 
-    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/project', 'Ubuntu'))
+    expect(result.shellArgs).toEqual(expectedWslArgs(cwd, 'Ubuntu'))
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
-    expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
+    expect(result.validationCwd).toBe(`\\\\wsl.localhost\\Ubuntu\\${cwd.slice(1)}`)
   })
 
   it('escapes single quotes when translating a WSL cwd', () => {

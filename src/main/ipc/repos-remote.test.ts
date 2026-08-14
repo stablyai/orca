@@ -18,6 +18,7 @@ const {
   mockFilesystemProvider,
   mockMultiplexer,
   gitExecFileAsyncMock,
+  gitSpawnAfterWindowsEnvironmentReadyMock,
   gitSpawnMock,
   listWorktreeGraphMock,
   invalidateAuthorizedRootsCacheMock,
@@ -69,6 +70,7 @@ const {
     notify: vi.fn()
   },
   gitSpawnMock: vi.fn(),
+  gitSpawnAfterWindowsEnvironmentReadyMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   listWorktreeGraphMock: vi.fn(),
   invalidateAuthorizedRootsCacheMock: vi.fn(),
@@ -104,7 +106,8 @@ vi.mock('../git/runner', async () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileAsyncBuffer: vi.fn(),
   gitStreamStdout: vi.fn(),
-  gitSpawn: gitSpawnMock
+  gitSpawn: gitSpawnMock,
+  gitSpawnAfterWindowsEnvironmentReady: gitSpawnAfterWindowsEnvironmentReadyMock
 }))
 
 vi.mock('../git/worktree', () => ({
@@ -1149,7 +1152,7 @@ describe('repos:addRemote', () => {
     gitSpawnMock.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
-      queueMicrotask(() => proc.emit('close', 0, null))
+      setImmediate(() => proc.emit('close', 0, null))
       return proc
     })
     mockWindow.webContents.send.mockReset()
@@ -1849,11 +1852,14 @@ describe('repos:add + repos:clone', () => {
     mockStore.updateProjectHostSetup.mockReset()
     mockWindow.webContents.send.mockReset()
     gitSpawnMock.mockReset()
+    gitSpawnAfterWindowsEnvironmentReadyMock
+      .mockReset()
+      .mockImplementation(async (...args) => gitSpawnMock(...args))
     invalidateAuthorizedRootsCacheMock.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = createMockCloneProcess()
-      queueMicrotask(() => proc.emit('close', 0, null))
+      setImmediate(() => proc.emit('close', 0, null))
       return proc
     })
 
@@ -2161,6 +2167,61 @@ describe('repos:add + repos:clone', () => {
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
+  it('persists agent worktree visibility through local repos:update', () => {
+    const updated = {
+      id: 'repo-agent-visibility',
+      path: '/tmp/repo-agent-visibility',
+      displayName: 'repo-agent-visibility',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      agentWorktreeVisibility: 'show'
+    }
+    mockStore.updateRepo.mockReturnValue(updated)
+
+    const result = handlers.get('repos:update')!(null, {
+      repoId: updated.id,
+      updates: { agentWorktreeVisibility: 'show' }
+    })
+
+    expect(result).toBe(updated)
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+      agentWorktreeVisibility: 'show'
+    })
+  })
+
+  it('validates source definitions and preferences through local repos:update', () => {
+    const updated = {
+      id: 'repo-source-visibility',
+      path: '/tmp/repo-source-visibility',
+      displayName: 'repo-source-visibility',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    mockStore.updateRepo.mockReturnValue(updated)
+
+    handlers.get('repos:update')!(null, {
+      repoId: updated.id,
+      updates: {
+        customWorktreeVisibilitySources: [
+          { id: 'team', rootPath: ' /srv/team ' },
+          { id: 'bad id', rootPath: '/srv/other' }
+        ],
+        worktreeVisibilitySourcePreferences: {
+          builtIn: { claude: 'show', gsd: 'invalid' },
+          custom: { team: 'hide' }
+        }
+      }
+    })
+
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team' }],
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show' },
+        custom: { team: 'hide' }
+      }
+    })
+  })
+
   it('prepares and invalidates roots when project host setup update changes worktree base path', () => {
     const repo = {
       id: 'repo-setup-update-root',
@@ -2243,7 +2304,7 @@ describe('repos:add + repos:clone', () => {
     )
     gitSpawnMock.mockImplementationOnce(() => {
       const proc = createMockCloneProcess()
-      queueMicrotask(() => {
+      setImmediate(() => {
         cloned = true
         proc.emit('close', 0, null)
       })
@@ -2388,6 +2449,84 @@ describe('repos:add + repos:clone', () => {
 
   it('treats cloneAbort with no active clone as a no-op', async () => {
     await expect(handlers.get('repos:cloneAbort')!(null, undefined)).resolves.toBeUndefined()
+  })
+
+  it('cancels a local clone before Git starts when environment readiness is pending', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    gitSpawnAfterWindowsEnvironmentReadyMock.mockImplementation(
+      (_args: string[], options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          const abort = (): void => {
+            reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+          }
+          if (options.signal?.aborted) {
+            abort()
+          } else {
+            options.signal?.addEventListener('abort', abort, { once: true })
+          }
+        })
+    )
+
+    const clonePromise = Promise.resolve(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/orca.git',
+        destination
+      })
+    )
+    const rejection = expect(clonePromise).rejects.toThrow('Clone failed')
+    await waitForAssertion(() =>
+      expect(gitSpawnAfterWindowsEnvironmentReadyMock).toHaveBeenCalledOnce()
+    )
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+    await rejection
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+    expect(existsSync(clonePath)).toBe(false)
+  })
+
+  it('cancels every concurrent local clone waiting for environment readiness', async () => {
+    const firstDestination = await createTempRoot()
+    const secondDestination = await createTempRoot()
+    gitSpawnAfterWindowsEnvironmentReadyMock.mockImplementation(
+      (_args: string[], options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          const abort = (): void => {
+            reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+          }
+          if (options.signal?.aborted) {
+            abort()
+          } else {
+            options.signal?.addEventListener('abort', abort, { once: true })
+          }
+        })
+    )
+
+    const firstClone = Promise.resolve(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/first.git',
+        destination: firstDestination
+      })
+    )
+    const secondClone = Promise.resolve(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/second.git',
+        destination: secondDestination
+      })
+    )
+    const firstRejection = expect(firstClone).rejects.toThrow('Clone failed')
+    const secondRejection = expect(secondClone).rejects.toThrow('Clone failed')
+    await waitForAssertion(() =>
+      expect(gitSpawnAfterWindowsEnvironmentReadyMock).toHaveBeenCalledTimes(2)
+    )
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+
+    await Promise.all([firstRejection, secondRejection])
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+    expect(existsSync(join(firstDestination, 'first'))).toBe(false)
+    expect(existsSync(join(secondDestination, 'second'))).toBe(false)
   })
 
   it('does not remove an existing target directory when aborting a pending clone', async () => {

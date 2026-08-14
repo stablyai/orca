@@ -22,7 +22,7 @@ import {
   searchAgentPickerEntries
 } from '@/lib/agent-picker-search'
 import { cn } from '@/lib/utils'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   createAgentComboboxCommandState,
   resolveAgentComboboxCommandState,

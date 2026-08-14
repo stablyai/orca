@@ -1,5 +1,5 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export function canCommandCodeOutputOwnPane(args: {
   foregroundAgent?: TuiAgent | null

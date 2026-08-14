@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Tab, TabContentType } from '../../../../shared/types'
+import type { Tab, TabContentType } from '../../../../shared/tab-types'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 
 function tab(id: string, entityId: string, contentType: TabContentType, sortOrder: number): Tab {

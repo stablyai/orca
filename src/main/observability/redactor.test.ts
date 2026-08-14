@@ -333,7 +333,7 @@ function makeSpan(overrides: Partial<RedactableSpan>): RedactableSpan {
     kind: 'internal',
     startTimeUnixNano: '1000',
     endTimeUnixNano: '2000',
-    durationMs: 1.0,
+    durationMs: 1,
     attributes: {},
     events: [],
     exit: { _tag: 'Success' },

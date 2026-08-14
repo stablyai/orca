@@ -13,6 +13,7 @@ import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
+import { remoteRpcContentBudget } from '../../shared/remote-rpc-content-budget'
 import { parsePairingCode } from '../../shared/pairing'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import {
@@ -3299,7 +3300,14 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(abortRuntimeGitRebase).toHaveBeenCalledWith('id:wt-1')
     expect(bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
     expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
-    expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)
+    // A mobile WebSocket client is transport-capped; a local caller gets undefined here.
+    expect(getRuntimeGitDiff).toHaveBeenCalledWith(
+      'id:wt-1',
+      'docs/readme.md',
+      false,
+      undefined,
+      remoteRpcContentBudget('req_git_diff')
+    )
     expect(browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
     expect(browserSetViewport).toHaveBeenCalledWith({
       worktree: 'id:wt-1',
@@ -6026,7 +6034,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     const wideStartGate = new Promise<void>((resolve) => {
       releaseWideStart = resolve
     })
-    let wideStopSpy: ReturnType<typeof vi.spyOn> | null = null
+    let wideStopSpy: ReturnType<typeof vi.spyOn> = null
     vi.spyOn(target, 'startWebSocketTransport').mockImplementation(async (opts) => {
       if (opts.host === '0.0.0.0') {
         // Why: hold the widen mid-flight (loopback already stopped) so stop() must race the rebind.

@@ -6,7 +6,7 @@ import {
   resolveVanishedNewIssueRepoReset
 } from './task-page-new-issue-draft'
 import type { NewIssueDraft } from '@/store/slices/new-issue-draft'
-import type { GitHubAssignableUser } from '../../../shared/types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 
 const assignee: GitHubAssignableUser = { login: 'octocat', name: 'Octo', avatarUrl: '' }
 

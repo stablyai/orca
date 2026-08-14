@@ -41,33 +41,4 @@ public enum PermissionTrustSettling {
             waitedMs += interval
         }
     }
-
-    public static func settleWithFallback(
-        initialTimeoutMs: Int = defaultTimeoutMs,
-        finalTimeoutMs: Int,
-        intervalMs: Int = defaultIntervalMs,
-        sleepMs: (Int) -> Void = { interval in
-            Thread.sleep(forTimeInterval: TimeInterval(interval) / 1_000)
-        },
-        probe: () -> Bool,
-        fallbackProbe: () -> Bool
-    ) -> Bool {
-        if settle(
-            timeoutMs: initialTimeoutMs,
-            intervalMs: intervalMs,
-            sleepMs: sleepMs,
-            probe: probe
-        ).settled {
-            return true
-        }
-        if fallbackProbe() {
-            return true
-        }
-        return settle(
-            timeoutMs: finalTimeoutMs,
-            intervalMs: intervalMs,
-            sleepMs: sleepMs,
-            probe: probe
-        ).settled
-    }
 }
