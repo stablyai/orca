@@ -1,4 +1,4 @@
-import { ipcMain, Menu, type BrowserWindow } from 'electron'
+import { app, ipcMain, Menu, type BrowserWindow } from 'electron'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
   richMarkdownContextMenuTargetChannel,
@@ -21,6 +21,7 @@ import {
   retireBrowserClientPageRenderer
 } from '../browser/browser-client-page-renderer-runtime'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
+import { installContextMenuWindowActivation } from './context-menu-window-activation'
 
 export type MainWindowFocusLifecycle = {
   dispose: () => void
@@ -114,6 +115,11 @@ export function installMainWindowFocusLifecycle(args: {
     Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
   }
   mainWindow.webContents.on('context-menu', onMainContextMenu)
+  installContextMenuWindowActivation({
+    webContents: mainWindow.webContents,
+    window: mainWindow,
+    app
+  })
 
   // Why: a dead renderer can't clear its focus mirror; default-deny carve-outs so it can't disable app shortcuts in a later lifecycle.
   const resetMarkdownEditorFocus = (): void => {
