@@ -147,7 +147,23 @@ describe('legacy terminal shim neutralization', () => {
       // Why: the rooted check must reject drive-relative 'C:foo', which still resolves against
       // the cwd — so the IsPathRooted call must be gone, replaced by an explicit prefix match.
       expect(powershell).not.toContain('[IO.Path]::IsPathRooted(')
-      expect(powershell).toContain("-notmatch '^([A-Za-z]:")
+      // Why the full pattern, not a prefix: `^([A-Za-z]:|\\\\)` also starts with this and would
+      // accept drive-relative `C:foo`, which still resolves against the cwd on that drive.
+      expect(powershell).toContain("-notmatch '^([A-Za-z]:[\\\\/]|\\\\\\\\)'")
+      // Why: trailing-separator normalization is what makes wrapper self-exclusion work; every
+      // one of these survived mutation with the suite green.
+      expect(powershell).toContain("ForEach-Object { $_.TrimEnd('\\') }")
+      expect(powershell).toContain("$pathEntry.TrimEnd('\\')")
+      expect(powershell).toContain("$dir.TrimEnd('\\')")
+      expect(powershell).toContain("$capturedDir.TrimEnd('\\')")
+      // Why: the fallback loop must skip wrapper dirs, or the wrapper can resolve to itself.
+      expect(powershell).toContain(
+        "$dir.TrimEnd('\\'), [StringComparison]::OrdinalIgnoreCase) }) { continue }"
+      )
+      // Why: `C:/Program Files/Git/cmd` style entries are legitimate and must stay accepted.
+      expect(cmd).toContain('if "%orca_candidate:~1,2%"==":/" goto orca_candidate_rooted')
+      // Why: the legacy-dir compare needs the same trailing-separator strip as its twins.
+      expect(cmd).toContain('if "%orca_legacy_norm:~-1%"=="%orca_sep%"')
       expect(powershell).toContain('if (-not $dir) { continue }')
       expect(powershell).toContain('Test-Path -LiteralPath $candidate -PathType Leaf')
     }
@@ -315,6 +331,38 @@ describe('legacy terminal shim neutralization', () => {
     // dirname left the substitution empty and cd into it silently made wrapper_dir the cwd.
     expect(wrapper).not.toMatch(/\$\(dirname\b/)
     expect(wrapper).toContain('CDPATH= cd -P --')
+  })
+
+  itOnPosix('rejects a distinct legacy shim directory named by the environment', () => {
+    // Why: ORCA_ATTRIBUTION_SHIM_DIR can name a *different* directory than the wrapper's own (an
+    // older install's dir inherited by a pre-upgrade pane). Nothing exercised that reject, so
+    // neutering it left the suite green.
+    const userData = makeUserDataDir()
+    const posixDir = join(userData, 'orca-terminal-attribution', 'posix')
+    const legacyDir = join(userData, 'legacy-shim')
+    const realBin = join(userData, 'real-bin')
+    for (const dir of [posixDir, legacyDir, realBin]) {
+      mkdirSync(dir, { recursive: true })
+    }
+    writeFileSync(join(posixDir, 'git'), 'legacy attribution wrapper')
+
+    neutralizeLegacyTerminalShimDir(userData)
+
+    writeFileSync(join(legacyDir, 'git'), "#!/bin/bash\nprintf 'HOSTILE\\n'\n", { mode: 0o755 })
+    writeFileSync(join(realBin, 'git'), "#!/bin/bash\nprintf 'REAL\\n'\n", { mode: 0o755 })
+
+    const run = spawnSync(join(posixDir, 'git'), ['--version'], {
+      env: {
+        ...process.env,
+        ORCA_ATTRIBUTION_SHIM_DIR: legacyDir,
+        PATH: `${legacyDir}:${realBin}:/usr/bin:/bin`
+      },
+      encoding: 'utf8',
+      timeout: 20_000
+    })
+
+    expect(run.stdout).toContain('REAL')
+    expect(run.stdout).not.toContain('HOSTILE')
   })
 
   itOnPosix('does not let the cwd supply the script interpreter', async () => {
