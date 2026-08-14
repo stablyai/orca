@@ -374,6 +374,16 @@ describe('getPiAgentStatusExtensionSource', () => {
         payload: { hook_event_name: 'agent_start' }
       })
     )
+    await harness.callHook('tool_approval_requested', {
+      toolName: 'bash',
+      reason: 'Runs an external command'
+    })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'tool_approval_requested',
+      tool_name: 'bash',
+      reason: 'Runs an external command'
+    })
   })
 
   it('tracks persistent OMP sessions and clears ephemeral session ids', async () => {
@@ -829,7 +839,7 @@ describe('getPiAgentStatusExtensionSource', () => {
   it('keeps reporting Pi-compatible agents once their agent_end handlers settle', async () => {
     vi.useFakeTimers()
     try {
-      for (const kind of ['pi', 'omp', 'prime-agent'] as const) {
+      for (const kind of ['pi', 'prime-agent'] as const) {
         const harness = createHarness({ kind })
         let idle = false
         const context = { isIdle: vi.fn(() => idle) }
@@ -846,6 +856,20 @@ describe('getPiAgentStatusExtensionSource', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it.each([
+    ['configured OMP', { kind: 'omp' as const }],
+    ['runtime-routed OMP', { kind: 'pi' as const, title: 'omp' }]
+  ])('reports only terminal agent_end for %s', async (_label, options) => {
+    const harness = createHarness(options)
+    const context = { isIdle: vi.fn(() => false) }
+
+    await harness.callHook('agent_end', { willContinue: true }, context)
+    expect(harness.fetchMock).not.toHaveBeenCalled()
+
+    await harness.callHook('agent_end', {}, context)
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
   })
 
   it('keeps immediate agent_end fallback for runtimes without an idle context', async () => {

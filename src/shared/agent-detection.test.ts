@@ -232,6 +232,7 @@ describe('Pi-compatible title detection', () => {
     expect(status.agentType).toBe('omp')
     expect(status.terminalTitle).toBe('\u280b OMP')
     expect(resolveCompatibleAgentTypeForOwner('codex', 'omp')).toBe('codex')
+    expect(resolveCompatibleAgentTypeForOwner('omp', 'pi')).toBe('omp')
   })
 
   it.each(['~/omp/working', 'omp-harness ready', '~/pi/working', 'pi-scratch ready'])(

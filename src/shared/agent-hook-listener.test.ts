@@ -578,6 +578,50 @@ describe('shared agent-hook-listener', () => {
     expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
   })
 
+  it('maps OMP approval requests to blocked until resolved', () => {
+    const base = { paneKey: PANE_KEY }
+    const blocked = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_approval_requested',
+          tool_name: 'bash'
+        }
+      },
+      'production'
+    )
+
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'omp'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(
+      JSON.stringify({
+        approval: { tool: 'bash', summary: '' }
+      })
+    )
+
+    const resolved = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_approval_resolved',
+          tool_name: 'bash',
+          approved: true
+        }
+      },
+      'production'
+    )
+
+    expect(resolved?.payload.state).toBe('working')
+    expect(resolved?.payload.toolInput).toBeUndefined()
+    expect(resolved?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('keeps Pi regular tool_call notifications as working', () => {
     const working = normalizeHookPayload(
       state,
@@ -801,7 +845,7 @@ describe('shared agent-hook-listener', () => {
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('maps OMP ask to blocked without publishing a native prompt', () => {
+  it('maps OMP ask to blocked with an interactive prompt', () => {
     const tool = normalizeHookPayload(
       state,
       'omp',
@@ -831,7 +875,9 @@ describe('shared agent-hook-listener', () => {
       agentType: 'omp',
       toolName: 'ask'
     })
-    expect(tool?.payload.interactivePrompt).toBeUndefined()
+    expect(tool?.payload.interactivePrompt).toBe(
+      JSON.stringify({ questions: [{ question: 'Choose', options: ['x', 'y'] }] })
+    )
   })
 
   it('captures Pi session ids on Pi-compatible status events', () => {
