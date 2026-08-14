@@ -154,7 +154,20 @@ export type WorkerDispatchRow = {
   effects: string
   residual_resources: string
   start_options: string
+  resume_source_dispatch_id: string | null
   last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type WorkerResumeCheckpointRow = {
+  source_dispatch_id: string
+  worktree_id: string
+  host_scope: string
+  process_incarnation: string
+  agent: string
+  provider_session: string
+  resumed_by_dispatch_id: string | null
   created_at: string
   updated_at: string
 }

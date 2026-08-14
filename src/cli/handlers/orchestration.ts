@@ -22,7 +22,10 @@ import type {
 } from '../../shared/orchestration-worker-output'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeStatus, RuntimeTerminalRead } from '../../shared/runtime-types'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_SESSION_RESUME_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
@@ -856,9 +859,11 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
-    if (model || effort) {
+    const resumeDispatch = getOptionalStringFlag(flags, 'resume-dispatch')
+    if (model || effort || resumeDispatch) {
       const status = await client.call<RuntimeStatus>('status.get')
       if (
+        (model || effort) &&
         !status.result.capabilities?.includes(
           ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
         )
@@ -866,6 +871,17 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         throw new RuntimeClientError(
           'incompatible_runtime',
           'The connected Orca runtime does not support worker model or effort overrides. Update or restart Orca and try again.'
+        )
+      }
+      if (
+        resumeDispatch &&
+        !status.result.capabilities?.includes(
+          ORCHESTRATION_WORKER_SESSION_RESUME_RUNTIME_CAPABILITY
+        )
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support native worker session resume. Update or restart Orca and try again.'
         )
       }
     }
@@ -893,6 +909,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       model,
       effort,
       terminal: getOptionalStringFlag(flags, 'terminal'),
+      resumeDispatch,
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
       run: getOptionalStringFlag(flags, 'run'),

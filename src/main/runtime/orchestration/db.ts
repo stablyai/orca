@@ -31,6 +31,7 @@ import type {
   MutationState,
   WorkerDispatchRow,
   WorkerDispatchState,
+  WorkerResumeCheckpointRow,
   LegacyWorkerTerminalRecoveryRow,
   FederatedDispatchRow,
   RemoteDispatchAttachmentRow,
@@ -298,7 +299,7 @@ type RunListCursor = {
 }
 
 // Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments.
-const SCHEMA_VERSION = 27
+const SCHEMA_VERSION = 28
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -420,10 +421,15 @@ export class OrchestrationDb {
         effects                TEXT NOT NULL DEFAULT '[]',
         residual_resources     TEXT NOT NULL DEFAULT '[]',
         start_options          TEXT NOT NULL DEFAULT '{}',
+        resume_source_dispatch_id TEXT,
         last_error             TEXT,
         created_at             TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
       );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_dispatch_resume_source
+        ON worker_dispatches(resume_source_dispatch_id)
+        WHERE resume_source_dispatch_id IS NOT NULL;
 
       CREATE TABLE IF NOT EXISTS worker_terminal_resources (
         id                       TEXT PRIMARY KEY,
@@ -469,6 +475,22 @@ export class OrchestrationDb {
         content       TEXT NOT NULL,
         created_at    TEXT NOT NULL DEFAULT (datetime('now'))
       );
+
+      CREATE TABLE IF NOT EXISTS worker_resume_checkpoints (
+        source_dispatch_id       TEXT PRIMARY KEY,
+        worktree_id              TEXT NOT NULL,
+        host_scope               TEXT NOT NULL,
+        process_incarnation      TEXT NOT NULL,
+        agent                    TEXT NOT NULL,
+        provider_session         TEXT NOT NULL,
+        resumed_by_dispatch_id   TEXT,
+        created_at               TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at               TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_resume_checkpoint_claim
+        ON worker_resume_checkpoints(resumed_by_dispatch_id)
+        WHERE resumed_by_dispatch_id IS NOT NULL;
 
       CREATE TABLE IF NOT EXISTS federated_dispatches (
         dispatch_id             TEXT PRIMARY KEY,
@@ -1011,6 +1033,30 @@ export class OrchestrationDb {
         this.db.exec(
           'ALTER TABLE federated_dispatches ADD COLUMN to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0'
         )
+      }
+      if (current < 28) {
+        if (!this.hasColumn('worker_dispatches', 'resume_source_dispatch_id')) {
+          this.db.exec('ALTER TABLE worker_dispatches ADD COLUMN resume_source_dispatch_id TEXT')
+        }
+        this.db.exec(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_dispatch_resume_source
+            ON worker_dispatches(resume_source_dispatch_id)
+            WHERE resume_source_dispatch_id IS NOT NULL;
+          CREATE TABLE IF NOT EXISTS worker_resume_checkpoints (
+            source_dispatch_id       TEXT PRIMARY KEY,
+            worktree_id              TEXT NOT NULL,
+            host_scope               TEXT NOT NULL,
+            process_incarnation      TEXT NOT NULL,
+            agent                    TEXT NOT NULL,
+            provider_session         TEXT NOT NULL,
+            resumed_by_dispatch_id   TEXT,
+            created_at               TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at               TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_resume_checkpoint_claim
+            ON worker_resume_checkpoints(resumed_by_dispatch_id)
+            WHERE resumed_by_dispatch_id IS NOT NULL;
+        `)
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -3990,6 +4036,8 @@ export class OrchestrationDb {
     launchTokenHash?: string
     retryOf?: string
     runtimeEpoch?: string
+    resumeSourceDispatchId?: string
+    claimResumeCheckpoint?: boolean
     federation?: {
       environmentId: string
       environmentName: string
@@ -4058,6 +4106,22 @@ export class OrchestrationDb {
       }
 
       const id = generateId('ctx')
+      const existingResume = params.resumeSourceDispatchId
+        ? (this.db
+            .prepare(
+              'SELECT dispatch_id FROM worker_dispatches WHERE resume_source_dispatch_id = ?'
+            )
+            .get(params.resumeSourceDispatchId) as { dispatch_id: string } | undefined)
+        : undefined
+      if (existingResume) {
+        throw new OrchestrationError(
+          'resume_checkpoint_claimed',
+          `Dispatch ${params.resumeSourceDispatchId} has already been resumed by another worker Dispatch.`
+        )
+      }
+      if (params.resumeSourceDispatchId && params.claimResumeCheckpoint) {
+        this.claimWorkerResumeCheckpointStatement(params.resumeSourceDispatchId, id)
+      }
       if (params.mutationReceipt) {
         this.db
           .prepare(
@@ -4081,10 +4145,15 @@ export class OrchestrationDb {
       this.db
         .prepare(
           `INSERT INTO worker_dispatches (
-             dispatch_id, runtime_epoch, state, stage, start_options
-           ) VALUES (?, ?, 'starting', 'accepted', ?)`
+             dispatch_id, runtime_epoch, state, stage, start_options, resume_source_dispatch_id
+           ) VALUES (?, ?, 'starting', 'accepted', ?, ?)`
         )
-        .run(id, params.runtimeEpoch ?? null, JSON.stringify(params.startOptions))
+        .run(
+          id,
+          params.runtimeEpoch ?? null,
+          JSON.stringify(params.startOptions),
+          params.resumeSourceDispatchId ?? null
+        )
       if (params.federation) {
         this.db
           .prepare(
@@ -4506,6 +4575,85 @@ export class OrchestrationDb {
       .get(dispatchId) as WorkerDispatchRow | undefined
   }
 
+  storeWorkerResumeCheckpoint(params: {
+    sourceDispatchId: string
+    worktreeId: string
+    hostScope: string
+    processIncarnation: string
+    agent: string
+    providerSession: unknown
+  }): WorkerResumeCheckpointRow {
+    this.db
+      .prepare(
+        `INSERT INTO worker_resume_checkpoints (
+           source_dispatch_id, worktree_id, host_scope, process_incarnation, agent,
+           provider_session
+         ) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(source_dispatch_id) DO UPDATE SET
+           worktree_id = excluded.worktree_id,
+           host_scope = excluded.host_scope,
+           process_incarnation = excluded.process_incarnation,
+           agent = excluded.agent,
+           provider_session = excluded.provider_session,
+           updated_at = datetime('now')
+         WHERE worker_resume_checkpoints.resumed_by_dispatch_id IS NULL`
+      )
+      .run(
+        params.sourceDispatchId,
+        params.worktreeId,
+        params.hostScope,
+        params.processIncarnation,
+        params.agent,
+        JSON.stringify(params.providerSession)
+      )
+    return this.getWorkerResumeCheckpoint(params.sourceDispatchId) as WorkerResumeCheckpointRow
+  }
+
+  getWorkerResumeCheckpoint(sourceDispatchId: string): WorkerResumeCheckpointRow | undefined {
+    return this.db
+      .prepare('SELECT * FROM worker_resume_checkpoints WHERE source_dispatch_id = ?')
+      .get(sourceDispatchId) as WorkerResumeCheckpointRow | undefined
+  }
+
+  releaseUnacceptedWorkerResumeSourceClaim(params: {
+    dispatchId: string
+    sourceDispatchId: string
+  }): void {
+    this.db
+      .prepare(
+        `UPDATE worker_dispatches
+         SET resume_source_dispatch_id = NULL, updated_at = datetime('now')
+         WHERE dispatch_id = ? AND resume_source_dispatch_id = ? AND state = 'failed'`
+      )
+      .run(params.dispatchId, params.sourceDispatchId)
+  }
+
+  private claimWorkerResumeCheckpointStatement(
+    sourceDispatchId: string,
+    resumedByDispatchId: string
+  ): void {
+    const claimed = this.db
+      .prepare(
+        `UPDATE worker_resume_checkpoints
+         SET resumed_by_dispatch_id = ?, updated_at = datetime('now')
+         WHERE source_dispatch_id = ? AND resumed_by_dispatch_id IS NULL`
+      )
+      .run(resumedByDispatchId, sourceDispatchId)
+    if (claimed.changes === 1) {
+      return
+    }
+    if (!this.getWorkerResumeCheckpoint(sourceDispatchId)) {
+      throw new OrchestrationError(
+        'resume_checkpoint_missing',
+        `Dispatch ${sourceDispatchId} has no durable provider-session resume checkpoint.`
+      )
+    }
+    throw new OrchestrationError(
+      'resume_checkpoint_claimed',
+      `Dispatch ${sourceDispatchId} has already been resumed by another worker Dispatch.`
+    )
+  }
+
   listLegacyWorkerTerminalRecoveryRows(): LegacyWorkerTerminalRecoveryRow[] {
     return this.db
       .prepare(
@@ -4661,6 +4809,7 @@ export class OrchestrationDb {
     homePeerFingerprint: string
     protocolVersion: number
     runtimeEpoch: string
+    resumeSourceDispatchId?: string
     mutationReceipt: {
       callerFingerprint: string
       requestId: string
@@ -4690,6 +4839,9 @@ export class OrchestrationDb {
         )
       }
       ensureMutationReceiptCapacity(this.db)
+      if (params.resumeSourceDispatchId) {
+        this.claimWorkerResumeCheckpointStatement(params.resumeSourceDispatchId, params.dispatchId)
+      }
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
@@ -7057,6 +7209,7 @@ export class OrchestrationDb {
       DELETE FROM remote_dispatch_attachments;
       DELETE FROM federated_dispatches;
       DELETE FROM worker_terminal_archives;
+      DELETE FROM worker_resume_checkpoints;
       DELETE FROM worker_terminal_resources;
       DELETE FROM worker_dispatches;
       DELETE FROM dispatch_contexts;
@@ -7083,6 +7236,7 @@ export class OrchestrationDb {
       DELETE FROM remote_dispatch_attachments;
       DELETE FROM federated_dispatches;
       DELETE FROM worker_terminal_archives;
+      DELETE FROM worker_resume_checkpoints;
       DELETE FROM worker_terminal_resources;
       DELETE FROM worker_dispatches;
       DELETE FROM dispatch_contexts;

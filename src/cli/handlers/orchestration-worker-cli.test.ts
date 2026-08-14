@@ -8,7 +8,10 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_SESSION_RESUME_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 
 describe('orchestration worker-start CLI contract', () => {
   beforeEach(() => {
@@ -74,6 +77,7 @@ describe('orchestration worker-start CLI contract', () => {
         setup: 'run',
         agent: 'codex',
         terminal: undefined,
+        resumeDispatch: undefined,
         retryOf: undefined,
         timeoutMs: 90_000,
         run: 'run_1',
@@ -83,6 +87,62 @@ describe('orchestration worker-start CLI contract', () => {
       { orchestrationRequestId: 'request_1' }
     )
     expect(process.exitCode).toBeUndefined()
+  })
+
+  it('capability-gates and forwards a prior Dispatch resume request', async () => {
+    callMock
+      .mockResolvedValueOnce({
+        result: { capabilities: [ORCHESTRATION_WORKER_SESSION_RESUME_RUNTIME_CAPABILITY] }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          runId: 'run_1',
+          taskId: 'task_new',
+          dispatchId: 'ctx_new',
+          state: 'ready',
+          effects: [],
+          residualResources: []
+        }
+      })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_new'],
+        ['resume-dispatch', 'ctx_closed'],
+        ['from', 'term_coord'],
+        ['retry-request', 'resume_request_1']
+      ])
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'orchestration.workerStart',
+      expect.objectContaining({
+        task: 'task_new',
+        resumeDispatch: 'ctx_closed',
+        agent: undefined,
+        terminal: undefined,
+        from: 'term_coord'
+      }),
+      { orchestrationRequestId: 'resume_request_1' }
+    )
+  })
+
+  it('rejects resume before worker-start when an older runtime would strip the selector', async () => {
+    callMock.mockResolvedValueOnce({ result: { capabilities: [] } })
+
+    await expect(
+      invokeWorkerStart(
+        new Map<string, string | boolean>([
+          ['task', 'task_new'],
+          ['resume-dispatch', 'ctx_closed'],
+          ['from', 'term_coord']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+
+    expect(callMock).toHaveBeenCalledTimes(1)
   })
 
   it('capability-gates and forwards per-invocation launch preferences', async () => {

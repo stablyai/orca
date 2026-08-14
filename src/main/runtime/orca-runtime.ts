@@ -21377,6 +21377,19 @@ export class OrcaRuntimeService {
     return target.managedWorktree
   }
 
+  async getOrchestrationWorkspaceHostScope(
+    worktreeSelector: string
+  ): Promise<WorkerTerminalHostScope> {
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    if (workspace.connectionId) {
+      return { kind: 'ssh', targetId: workspace.connectionId }
+    }
+    const wsl = parseWslUncPath(workspace.path)
+    return wsl
+      ? { kind: 'wsl', hostId: 'local', distro: wsl.distro }
+      : { kind: 'local', hostId: 'local' }
+  }
+
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {
     return scanWorkspacePortProbes(await this.getWorkspacePortProbes(repoId))
   }
