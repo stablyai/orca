@@ -243,6 +243,35 @@ describe('KimiAccountService', () => {
     ).toContain('secret')
   })
 
+  it.each([
+    ['', 'empty'],
+    ['{}', 'missing token'],
+    ['not-json', 'invalid json']
+  ])('rolls back a login whose credential file is %s', async (contents) => {
+    const root = tempRoot()
+    const store = createStore()
+    const login = vi.fn(async (homePath: string) => {
+      mkdirSync(join(homePath, 'credentials'), { recursive: true })
+      writeFileSync(join(homePath, 'credentials', 'kimi-code.json'), contents)
+    })
+    const service = new KimiAccountService(
+      store,
+      join(root, 'managed'),
+      () => ({ state: 'installed', detail: null }),
+      login
+    )
+
+    const failure = await service
+      .addAccountWithLogin('Work', async () => 'continue')
+      .then(() => null)
+      .catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(Error)
+    expect((failure as Error).message).toMatch(/credential/i)
+    expect((failure as Error).message).not.toContain(root)
+    expect(store.getSettings().kimiManagedAccounts).toEqual([])
+  })
+
   it('rolls back a login that exits without credentials', async () => {
     const root = tempRoot()
     const store = createStore()

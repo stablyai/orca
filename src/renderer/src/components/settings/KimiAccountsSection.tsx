@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import type { KimiManagedAccountsState } from '../../../../shared/managed-account-types'
 import type { InactiveAccountUsage, ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import {
+  normalizeUsagePercentageDisplay,
+  type UsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
 import { translate } from '@/i18n/i18n'
+import { formatUsagePercentageLabel } from '../status-bar/usage-percentage-label'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -38,7 +43,8 @@ function errorMessage(error: unknown): string {
 
 function usageSummary(
   limits: ProviderRateLimits | null | undefined,
-  inactive?: InactiveAccountUsage
+  inactive: InactiveAccountUsage | undefined,
+  display: UsagePercentageDisplay
 ): string | null {
   if (inactive?.isFetching) {
     return translate('auto.components.settings.KimiAccountsSection.usageLoading', 'Loading usage…')
@@ -48,7 +54,9 @@ function usageSummary(
     (window): window is NonNullable<ProviderRateLimits['session']> => Boolean(window)
   )
   if (windows.length > 0) {
-    return windows.map((window) => `${Math.round(window.usedPercent)}% used`).join(' · ')
+    return windows
+      .map((window) => formatUsagePercentageLabel(window.usedPercent, display))
+      .join(' · ')
   }
   if (snapshot?.status === 'error' || snapshot?.status === 'unavailable') {
     return translate(
@@ -64,6 +72,9 @@ export function KimiAccountsSection(): React.JSX.Element {
   const inactiveKimiAccountState = useAppStore((store) => store.rateLimits.inactiveKimiAccounts)
   const inactiveKimiAccounts = inactiveKimiAccountState ?? EMPTY_INACTIVE_USAGE
   const fetchInactiveKimiAccountUsage = useAppStore((store) => store.fetchInactiveKimiAccountUsage)
+  const usagePercentageDisplay = normalizeUsagePercentageDisplay(
+    useAppStore((store) => store.usagePercentageDisplay)
+  )
   const [state, setState] = useState<KimiManagedAccountsState>(EMPTY_STATE)
   const [label, setLabel] = useState('')
   const [loading, setLoading] = useState(true)
@@ -72,15 +83,26 @@ export function KimiAccountsSection(): React.JSX.Element {
   const [removeTarget, setRemoveTarget] = useState<
     KimiManagedAccountsState['accounts'][number] | null
   >(null)
+  const loadGeneration = useRef(0)
 
   const load = useCallback(async (): Promise<void> => {
+    const generation = loadGeneration.current
     try {
-      setState(await window.api.kimiAccounts.list())
+      const next = await window.api.kimiAccounts.list()
+      if (generation !== loadGeneration.current) {
+        return
+      }
+      setState(next)
       setError(null)
     } catch (loadError) {
+      if (generation !== loadGeneration.current) {
+        return
+      }
       setError(errorMessage(loadError))
     } finally {
-      setLoading(false)
+      if (generation === loadGeneration.current) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -89,10 +111,14 @@ export function KimiAccountsSection(): React.JSX.Element {
     void fetchInactiveKimiAccountUsage()
   }, [fetchInactiveKimiAccountUsage, load])
 
+  const busy = loading || action !== null
+
   const run = async (
     key: string,
     operation: () => Promise<KimiManagedAccountsState>
   ): Promise<void> => {
+    loadGeneration.current += 1
+    setLoading(false)
     setAction(key)
     setError(null)
     try {
@@ -186,7 +212,7 @@ export function KimiAccountsSection(): React.JSX.Element {
               maxLength={120}
               onChange={(event) => setLabel(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && label.trim() && action === null) {
+                if (event.key === 'Enter' && label.trim() && !busy) {
                   void loginAccount()
                 }
               }}
@@ -194,12 +220,12 @@ export function KimiAccountsSection(): React.JSX.Element {
                 'auto.components.settings.KimiAccountsSection.99743f7be2',
                 'Work or Personal'
               )}
-              disabled={action !== null}
+              disabled={busy}
             />
             <Button
               className="w-32"
               onClick={() => void loginAccount()}
-              disabled={!label.trim() || action !== null}
+              disabled={!label.trim() || busy}
             >
               {action === 'login' ? <Loader2 className="animate-spin" /> : null}
               {action === 'login'
@@ -210,7 +236,7 @@ export function KimiAccountsSection(): React.JSX.Element {
               variant="outline"
               className="w-36"
               onClick={() => void importAccount()}
-              disabled={!label.trim() || action !== null}
+              disabled={!label.trim() || busy}
             >
               {action === 'import' ? <Loader2 className="animate-spin" /> : null}
               {action === 'import'
@@ -253,7 +279,7 @@ export function KimiAccountsSection(): React.JSX.Element {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={action !== null}
+                disabled={busy}
                 onClick={() =>
                   void run('select:system', () =>
                     window.api.kimiAccounts.select({ accountId: null })
@@ -280,7 +306,11 @@ export function KimiAccountsSection(): React.JSX.Element {
             const inactiveUsage = inactiveKimiAccounts.find(
               (entry) => entry.accountId === account.id
             )
-            const usage = usageSummary(active ? kimiUsage : null, inactiveUsage)
+            const usage = usageSummary(
+              active ? kimiUsage : null,
+              inactiveUsage,
+              usagePercentageDisplay
+            )
             return (
               <div key={account.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                 <div className="min-w-0">
@@ -305,7 +335,7 @@ export function KimiAccountsSection(): React.JSX.Element {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={action !== null}
+                      disabled={busy}
                       onClick={() =>
                         void run(`select:${account.id}`, () =>
                           window.api.kimiAccounts.select({ accountId: account.id })
@@ -323,7 +353,7 @@ export function KimiAccountsSection(): React.JSX.Element {
                       'auto.components.settings.KimiAccountsSection.214d83fdea',
                       'Remove Kimi account'
                     )}
-                    disabled={action !== null}
+                    disabled={busy}
                     onClick={() => setRemoveTarget(account)}
                   >
                     <Trash2 />
@@ -357,7 +387,7 @@ export function KimiAccountsSection(): React.JSX.Element {
             </Button>
             <Button
               variant="destructive"
-              disabled={action !== null}
+              disabled={busy}
               onClick={() => {
                 const target = removeTarget
                 if (!target) {

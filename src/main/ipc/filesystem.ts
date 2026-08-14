@@ -1566,6 +1566,12 @@ export function registerFilesystemHandlers(
       const agentId = args.agentId
       const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
       if (args.connectionId) {
+        if (args.ptyId) {
+          return {
+            success: false,
+            error: 'Pinned PTY account scoping is not supported for remote model discovery.'
+          }
+        }
         if (!args.worktreePath) {
           return { success: false, error: 'Missing worktree path for remote model discovery.' }
         }

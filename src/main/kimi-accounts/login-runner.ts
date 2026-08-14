@@ -5,6 +5,8 @@ import { getSpawnArgsForWindows } from '../win32-utils'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
+export const KIMI_LOGIN_EXIT_WAIT_MS = 3_000
+export const KIMI_LOGIN_FORCE_KILL_WAIT_MS = 2_000
 const MAX_LOGIN_OUTPUT_CHARS = 8_000
 const MAX_INSTRUCTION_CHARS = 1_200
 const URL_PATTERN = /https:\/\/[^\s<>"']+/i
@@ -62,23 +64,35 @@ export function parseKimiLoginInstructions(
   return { verificationUrl, message }
 }
 
-function terminateLogin(child: ChildProcess): void {
+function signalLoginProcess(child: ChildProcess, signal: NodeJS.Signals): void {
   if (process.platform === 'win32' && child.pid) {
     spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
       stdio: 'ignore',
       windowsHide: true
-    }).once('error', () => child.kill())
+    }).once('error', () => child.kill(signal))
     return
   }
   if (child.pid) {
     try {
-      process.kill(-child.pid, 'SIGTERM')
+      process.kill(-child.pid, signal)
       return
     } catch {
       // Fall back to the direct child when a process group is unavailable.
     }
   }
-  child.kill()
+  child.kill(signal)
+}
+
+function terminateLogin(child: ChildProcess): void {
+  signalLoginProcess(child, 'SIGTERM')
+}
+
+function forceKillLogin(child: ChildProcess): void {
+  signalLoginProcess(child, 'SIGKILL')
+}
+
+function hasExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null
 }
 
 export function runKimiLogin(
@@ -94,28 +108,27 @@ export function runKimiLogin(
       detached: process.platform !== 'win32',
       env: { ...process.env, KIMI_CODE_HOME: managedHomePath }
     })
-    const stdout = child.stdout
-    const stderr = child.stderr
-    if (!stdout || !stderr) {
-      terminateLogin(child)
-      reject(new Error('Kimi sign-in could not open its output streams.'))
-      return
-    }
-
     let settled = false
     let prompted = false
+    let pendingError: Error | null = null
+    let forceKillTimer: ReturnType<typeof setTimeout> | null = null
+    let abandonTimer: ReturnType<typeof setTimeout> | null = null
     let output = ''
+    const stdout = child.stdout
+    const stderr = child.stderr
     const stdoutDecoder = new StringDecoder('utf8')
     const stderrDecoder = new StringDecoder('utf8')
-    const timeout = setTimeout(() => {
-      terminateLogin(child)
-      settle(() => reject(new Error('Kimi sign-in took too long to finish.')))
-    }, LOGIN_TIMEOUT_MS)
 
     const cleanup = (): void => {
       clearTimeout(timeout)
-      stdout.off('data', onStdout)
-      stderr.off('data', onStderr)
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer)
+      }
+      if (abandonTimer) {
+        clearTimeout(abandonTimer)
+      }
+      stdout?.off('data', onStdout)
+      stderr?.off('data', onStderr)
       child.off('error', onError)
       child.off('close', onClose)
     }
@@ -127,6 +140,29 @@ export function runKimiLogin(
       cleanup()
       complete()
     }
+    const rejectAfterExit = (error: Error): void => {
+      if (settled) {
+        return
+      }
+      pendingError = error
+      terminateLogin(child)
+      if (hasExited(child)) {
+        settle(() => reject(error))
+        return
+      }
+      forceKillTimer = setTimeout(() => {
+        if (settled) {
+          return
+        }
+        forceKillLogin(child)
+        abandonTimer = setTimeout(() => {
+          settle(() => reject(pendingError ?? error))
+        }, KIMI_LOGIN_FORCE_KILL_WAIT_MS)
+      }, KIMI_LOGIN_EXIT_WAIT_MS)
+    }
+    const timeout = setTimeout(() => {
+      rejectAfterExit(new Error('Kimi sign-in took too long to finish.'))
+    }, LOGIN_TIMEOUT_MS)
     const consumeDecoded = (text: string): void => {
       output = retainRecentLoginOutput(`${output}${text}`)
       if (prompted) {
@@ -140,14 +176,12 @@ export function runKimiLogin(
       void onInstructions(instructions).then(
         (decision) => {
           if (decision === 'cancel' && !settled) {
-            terminateLogin(child)
-            settle(() => reject(new Error('Kimi sign-in was cancelled.')))
+            rejectAfterExit(new Error('Kimi sign-in was cancelled.'))
           }
         },
         () => {
           if (!settled) {
-            terminateLogin(child)
-            settle(() => reject(new Error('Kimi sign-in prompt could not be shown.')))
+            rejectAfterExit(new Error('Kimi sign-in prompt could not be shown.'))
           }
         }
       )
@@ -170,6 +204,10 @@ export function runKimiLogin(
       )
     }
     const onClose = (code: number | null): void => {
+      if (pendingError) {
+        settle(() => reject(pendingError))
+        return
+      }
       settle(() => {
         if (code === 0) {
           resolve()
@@ -179,9 +217,13 @@ export function runKimiLogin(
       })
     }
 
-    stdout.on('data', onStdout)
-    stderr.on('data', onStderr)
     child.once('error', onError)
     child.once('close', onClose)
+    if (!stdout || !stderr) {
+      rejectAfterExit(new Error('Kimi sign-in could not open its output streams.'))
+      return
+    }
+    stdout.on('data', onStdout)
+    stderr.on('data', onStderr)
   })
 }

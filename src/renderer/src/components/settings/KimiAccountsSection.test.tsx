@@ -20,7 +20,8 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, vars?: { value0?: string }) =>
+    fallback.replace('{{value0}}', vars?.value0 ?? '')
 }))
 
 vi.mock('../../store', () => ({
@@ -43,7 +44,8 @@ vi.mock('../../store', () => ({
         },
         inactiveKimiAccounts: []
       },
-      fetchInactiveKimiAccountUsage: mocks.fetchInactiveKimi
+      fetchInactiveKimiAccountUsage: mocks.fetchInactiveKimi,
+      usagePercentageDisplay: 'used'
     })
 }))
 
@@ -110,6 +112,27 @@ describe('KimiAccountsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose home…' }))
 
     await waitFor(() => expect(mocks.importAccount).toHaveBeenCalledWith({ label: 'Personal' }))
+  })
+
+  it('disables account actions until the initial list resolves', async () => {
+    let resolveList:
+      | ((value: { accounts: typeof account[]; activeAccountId: string }) => void)
+      | undefined
+    mocks.list.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveList = resolve
+        })
+    )
+
+    render(<KimiAccountsSection />)
+    fireEvent.change(screen.getByLabelText('Account label'), { target: { value: 'Personal' } })
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Choose home…' })).toBeDisabled()
+
+    resolveList?.({ accounts: [account], activeAccountId: account.id })
+    expect(await screen.findByText('Work')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
   })
 
   it('starts device-code sign-in with the required user label', async () => {

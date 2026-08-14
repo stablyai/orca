@@ -4,6 +4,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   writeFileSync
@@ -23,9 +24,57 @@ export type RunManagedKimiLogin = (
   onInstructions: KimiLoginInstructionHandler
 ) => Promise<void>
 
+const INVALID_CREDENTIAL_FILE = 'Kimi sign-in completed without a valid credential file.'
+const MAX_CREDENTIAL_FILE_BYTES = 1024 * 1024
+const MAX_ACCESS_TOKEN_LENGTH = 32_768
+
 function hardenDirectory(path: string): void {
   if (process.platform !== 'win32') {
     chmodSync(path, 0o700)
+  }
+}
+
+function assertKimiCredentialFile(credentialsDir: string, credentialPath: string): void {
+  const credentialsStat = lstatSync(credentialsDir)
+  const credentialStat = lstatSync(credentialPath)
+  if (
+    !credentialsStat.isDirectory() ||
+    credentialsStat.isSymbolicLink() ||
+    !credentialStat.isFile() ||
+    credentialStat.isSymbolicLink() ||
+    credentialStat.size <= 0 ||
+    credentialStat.size > MAX_CREDENTIAL_FILE_BYTES
+  ) {
+    throw new Error(INVALID_CREDENTIAL_FILE)
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(credentialPath, 'utf-8'))
+  } catch {
+    throw new Error(INVALID_CREDENTIAL_FILE)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(INVALID_CREDENTIAL_FILE)
+  }
+  const accessToken = (parsed as { access_token?: unknown }).access_token
+  if (
+    typeof accessToken !== 'string' ||
+    !accessToken.trim() ||
+    accessToken.length > MAX_ACCESS_TOKEN_LENGTH ||
+    accessToken.includes('\u0000') ||
+    /[\r\n]/.test(accessToken)
+  ) {
+    throw new Error(INVALID_CREDENTIAL_FILE)
+  }
+}
+
+function removeIncompleteHome(path: string): void {
+  try {
+    if (existsSync(path)) {
+      rmSync(path, { recursive: true, force: true })
+    }
+  } catch (error) {
+    console.warn('[kimi-accounts] failed to remove incomplete managed home', error)
   }
 }
 
@@ -51,18 +100,9 @@ export async function provisionKimiManagedLogin(args: {
     const credentialsDir = join(pendingHome, 'credentials')
     const credentialPath = join(credentialsDir, 'kimi-code.json')
     if (!existsSync(credentialPath)) {
-      throw new Error('Kimi sign-in completed without a valid credential file.')
+      throw new Error(INVALID_CREDENTIAL_FILE)
     }
-    const credentialsStat = lstatSync(credentialsDir)
-    const credentialStat = lstatSync(credentialPath)
-    if (
-      !credentialsStat.isDirectory() ||
-      credentialsStat.isSymbolicLink() ||
-      !credentialStat.isFile() ||
-      credentialStat.isSymbolicLink()
-    ) {
-      throw new Error('Kimi sign-in completed without a valid credential file.')
-    }
+    assertKimiCredentialFile(credentialsDir, credentialPath)
     if (process.platform !== 'win32') {
       chmodSync(join(pendingHome, 'credentials'), 0o700)
       chmodSync(credentialPath, 0o600)
@@ -93,10 +133,8 @@ export async function provisionKimiManagedLogin(args: {
     args.persist(account)
     return account
   } catch (error) {
-    rmSync(pendingRoot, { recursive: true, force: true })
-    if (existsSync(accountRoot)) {
-      rmSync(accountRoot, { recursive: true, force: true })
-    }
+    removeIncompleteHome(pendingRoot)
+    removeIncompleteHome(accountRoot)
     const message = error instanceof Error ? error.message : 'Kimi sign-in failed.'
     throw new Error(
       message
