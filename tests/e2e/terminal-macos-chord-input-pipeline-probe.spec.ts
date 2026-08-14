@@ -1,3 +1,5 @@
+// Hand-run probe: needs real macOS input sources, so no workflow calls it. It records the
+// traces replayed by keyboard-handlers.issue-12871-command-release-traces.ts.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'

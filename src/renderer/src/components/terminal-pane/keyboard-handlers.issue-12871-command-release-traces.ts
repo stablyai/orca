@@ -25,6 +25,8 @@ export const COMMAND_RELEASE_TRACE_CASES: InAppRecordedCase[] = [
     name: 'Japanese, Cmd+ArrowLeft over a live さ preedit, ended by the Command release',
     expectCalls: ['\x01'],
     expectEmitted: ['\x01'],
+    // Kotoeri is still converting when the capture stops.
+    commitsAfterCapture: true,
     rows: [
       { t: 'keydown', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true, meta: true },
       {
@@ -46,9 +48,9 @@ export const COMMAND_RELEASE_TRACE_CASES: InAppRecordedCase[] = [
     // recovery can break — that neither release fires anything on a committing input source.
     name: 'Korean 2-Set, Cmd+ArrowLeft commits the syllable and neither release fires',
     expectCalls: [],
-    // xterm's own commit of the preedit, not the handler's doing — `expectCalls` staying empty
-    // is what says the handler kept out of it.
-    expectEmitted: ['ㄴ'],
+    // Empty because the capture opens mid-gesture: xterm commits nothing for a session it never
+    // saw begin. What this case pins is `expectCalls` — neither release fired.
+    expectEmitted: [],
     rows: [
       { t: 'keydown', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true, meta: true },
       {

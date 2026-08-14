@@ -15,7 +15,8 @@ import {
   getTerminalImeModifiedEnterKind,
   isTerminalImeConsumedKey,
   isTerminalImeEnterKeyUp,
-  isTerminalImeProcessEnter
+  isTerminalImeProcessEnter,
+  sendTerminalInputAfterComposition
 } from './terminal-ime-deferred-newline'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
@@ -84,9 +85,8 @@ type PendingImeChord = Parameters<typeof resolveTerminalShortcutAction>[0] &
  *   - Japanese conversion swallowed the chord whole: no commit, no replay, and the
  *     composition is still live at release. Nothing else will ever deliver it.
  *
- * So a still-composing release means the chord has no other route to the shell. xterm queues
- * the bytes behind the preedit and flushes them on commit, so sending them cannot reorder them
- * ahead of the text being composed.
+ * So a still-composing release means the chord has no other route to the shell. Its bytes take
+ * the transport, which bypasses xterm, so the release holds them until the composition commits.
  *
  * The snapshot is what makes reading the release safe. A `KeyboardEvent`'s modifier flags
  * describe the moment it fired, and releasing `Cmd` before `←` leaves the arrow's keyup with
@@ -700,7 +700,9 @@ export function useTerminalKeyboardShortcuts({
         return
       }
       runShortcutAction(e, action, manager, (pane, sendResolvedInput) => {
-        if (!((e.isComposing || hasPendingImeComposition) && (e.key === 'Enter' || imeProcessEnter))) {
+        if (
+          !((e.isComposing || hasPendingImeComposition) && (e.key === 'Enter' || imeProcessEnter))
+        ) {
           return false
         }
         if (isWindows) {
@@ -726,9 +728,9 @@ export function useTerminalKeyboardShortcuts({
       e: ShortcutActionEvent,
       action: NonNullable<ReturnType<typeof resolveShortcutEvent>>,
       manager: PaneManager,
-      // Why a callback: deferring a composing Enter reads the live keydown and its
-      // imeProcessEnter, which a chord recovered from a release has neither of — and never is.
-      deferComposingEnter?: (pane: ManagedPane, sendResolvedInput: () => void) => boolean
+      // Why a callback: a composing Enter reads the live keydown and its imeProcessEnter, which
+      // a chord recovered from a release has neither of — and never is.
+      deferSend?: (pane: ManagedPane, sendResolvedInput: () => void) => boolean
     ): void {
       if (action.type === 'switchInputSource') {
         // Why: the OS must receive its default action, while xterm must receive
@@ -746,7 +748,7 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         const sendResolvedInput = createCapturedInputSender(pane, action.data)
-        if (deferComposingEnter?.(pane, sendResolvedInput)) {
+        if (deferSend?.(pane, sendResolvedInput)) {
           return
         }
         sendResolvedInput()
@@ -1125,7 +1127,16 @@ export function useTerminalKeyboardShortcuts({
       if (!action || action.type === 'switchInputSource') {
         return
       }
-      runShortcutAction(pressed, action, manager)
+      runShortcutAction(pressed, action, manager, (pane, sendResolvedInput) => {
+        // Composing here by definition, and these bytes bypass xterm: sending now puts the chord
+        // ahead of the text still being composed — 가나 + 다 in the preedit yields 다가나. A chord
+        // remapped onto a pane command skips this and stays immediate, or the commit lands after
+        // the pane is already cleared.
+        sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput, {
+          fallbackMs: null
+        })
+        return true
+      })
     }
 
     window.addEventListener('keydown', onModifierDown, { capture: true })

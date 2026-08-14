@@ -1,3 +1,4 @@
+// Hand-run probe: needs Kotoeri installed on a real macOS host, so no workflow calls it.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'

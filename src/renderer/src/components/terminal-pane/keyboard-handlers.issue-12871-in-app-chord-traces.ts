@@ -44,6 +44,8 @@ export type InAppRecordedCase = {
   expectCalls: string[]
   expectEmitted: string[]
   rows: InAppRecordedRow[]
+  /** Rows end mid-composition: assert nothing sent yet, then drive a commit and check again. */
+  commitsAfterCapture?: true
 }
 
 export const IN_APP_TRACE_CASES: InAppRecordedCase[] = [

@@ -60,6 +60,7 @@ type RecordedCase = {
   expectCalls: string[]
   expectEmitted: string[]
   rows: RecordedRow[]
+  commitsAfterCapture?: true
 }
 
 const CASES: RecordedCase[] = [
@@ -296,6 +297,8 @@ function openRig(overrides: Record<string, unknown> = {}): Rig {
     throw new Error('xterm helper textarea was not created')
   }
 
+  // Both records are channel-agnostic: chord bytes take the transport, not terminal.input, so
+  // watching only the latter would report zero for every one of them.
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
   const inputCalls: string[] = []
@@ -307,7 +310,11 @@ function openRig(overrides: Record<string, unknown> = {}): Rig {
 
   const transport = {
     getPtyId: () => 'pty-1',
-    sendInput: vi.fn(() => true)
+    sendInput: vi.fn((data: string) => {
+      inputCalls.push(data)
+      emitted.push(data)
+      return true
+    })
   } as unknown as PtyTransport
   const pane = { id: 1, leafId: '00000000-0000-4000-8000-000000000001', terminal }
   const manager = {
@@ -415,6 +422,16 @@ async function replay(textarea: HTMLTextAreaElement, rows: RecordedRow[]): Promi
   await macrotask()
 }
 
+// Authored, unlike every row in the tables above: the commit a mid-composition capture never
+// got to record.
+async function commitComposition(textarea: HTMLTextAreaElement, committed: string): Promise<void> {
+  const end = new CompositionEvent('compositionend', { bubbles: true })
+  Object.defineProperty(end, 'data', { value: committed })
+  textarea.dispatchEvent(end)
+  await macrotask()
+  await macrotask()
+}
+
 const JAPANESE_CASE = 'Japanese, a bare arrow and four chords across one live preedit'
 
 // By name, not by index: each test below needs a particular gesture, and inserting a case
@@ -449,8 +466,15 @@ describe('recorded macOS chord traces during an IME composition', () => {
     const rig = openRig()
     await replay(rig.textarea, testCase.rows)
 
+    if (testCase.commitsAfterCapture) {
+      // Held, not dropped: nothing yet, and the same expectations must hold once it commits.
+      expect(rig.inputCalls).toEqual([])
+      await commitComposition(rig.textarea, 'さ')
+    }
     expect(rig.inputCalls).toEqual(testCase.expectCalls)
-    expect(rig.emitted).toEqual(testCase.expectEmitted)
+    // Joined: the captures were taken when xterm flushed preedit and chord as one payload, and
+    // the transport writes each on its own.
+    expect(rig.emitted.join('')).toEqual(testCase.expectEmitted.join(''))
     rig.unmount()
   })
 
@@ -723,6 +747,8 @@ describe('constructed shapes the macOS captures do not contain', () => {
       { t: 'keyup', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, isComposing: true }
     ])
 
+    expect(rig.inputCalls).toEqual([])
+    await commitComposition(rig.textarea, '日本語')
     expect(rig.inputCalls).toEqual(['\x01'])
     rig.unmount()
   })
@@ -780,10 +806,11 @@ describe('constructed shapes the macOS captures do not contain', () => {
       { t: 'compositionend', data: '' }
     ])
 
-    // The chord was aimed at the shell's line, not at the preedit, so cancelling the text does
-    // not retract it. Only the composed characters are dropped.
+    // The chord was aimed at the shell's line, not the preedit, so cancelling does not retract it.
     expect(rig.inputCalls).toEqual(['\x01'])
-    expect(rig.emitted).toEqual(['\x01'])
+    // Whether the cancelled text reaches the pty is xterm's call and deliberately not pinned —
+    // the bundled build now commits it from its own buffer. The chord must be last either way.
+    expect(rig.emitted.at(-1)).toBe('\x01')
     rig.unmount()
   })
 })

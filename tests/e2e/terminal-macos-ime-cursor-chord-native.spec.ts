@@ -1,3 +1,5 @@
+// Hand-run: needs a real macOS input source, so no workflow calls it. A red run here is a
+// local environment or an IME behaviour change, not necessarily a regression.
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
