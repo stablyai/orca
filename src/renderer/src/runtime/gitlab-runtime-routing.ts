@@ -64,6 +64,23 @@ function toRpcParams(
   return params
 }
 
+// Why: window.api.gl.* runs glab in main with no subprocess timeout, so an
+// unreachable GitLab host would leave the UI spinning forever. Bound the local
+// branch the way callRuntimeRpc bounds the remote one. Rejects only the pending
+// promise — the main-process call is not cancellable from here, but this is
+// enough to surface an error instead of a stuck spinner.
+function withTimeout<T>(pending: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    pending,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('GitLab request timed out')), timeoutMs)
+    })
+  ]).finally(() => {
+    clearTimeout(timer)
+  })
+}
+
 function dispatch<A extends GitLabSelectorArgs, R>(
   localCall: (args: A) => Promise<R>,
   rpcMethod: string,
@@ -72,7 +89,7 @@ function dispatch<A extends GitLabSelectorArgs, R>(
 ): Promise<R> {
   const target = getGitLabTaskRuntimeTarget(args)
   if (target.kind === 'local') {
-    return localCall(args)
+    return withTimeout(localCall(args), RUNTIME_RPC_TIMEOUT_MS)
   }
   return callRuntimeRpc<R>(
     { kind: 'environment', environmentId: target.environmentId },
