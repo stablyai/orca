@@ -51,6 +51,7 @@ import type {
   MRComment
 } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
@@ -404,7 +405,7 @@ export default function GitLabItemDialog({
     let stale = false
     setLoading(true)
     setError(null)
-    void window.api.gl
+    void routedGitLab
       .workItemDetails({ ...repoSelector, iid: item.number, type: item.type })
       .then((data) => {
         if (stale) {
@@ -463,7 +464,7 @@ export default function GitLabItemDialog({
     }
     setLabelOptionsLoading(true)
     try {
-      const labels = await window.api.gl.listLabels(repoSelector)
+      const labels = await routedGitLab.listLabels(repoSelector)
       if (mountedRef.current) {
         setLabelOptions(normalizeGitLabLabels(labels))
       }
@@ -484,7 +485,7 @@ export default function GitLabItemDialog({
     }
     setReviewerOptionsLoading(true)
     try {
-      const users = await window.api.gl.listAssignableUsers(repoSelector)
+      const users = await routedGitLab.listAssignableUsers(repoSelector)
       if (mountedRef.current) {
         setReviewerOptions(dedupeGitLabUsers(users))
       }
@@ -556,7 +557,7 @@ export default function GitLabItemDialog({
 
     setDetailsSaving(true)
     try {
-      const res = await window.api.gl.updateMR({ ...repoSelector, iid: item.number, updates })
+      const res = await routedGitLab.updateMR({ ...repoSelector, iid: item.number, updates })
       if (res.ok) {
         if (mountedRef.current) {
           setDetails((current) =>
@@ -611,7 +612,7 @@ export default function GitLabItemDialog({
         [job.id]: { loading: true }
       }))
       try {
-        const result = await window.api.gl.jobTrace({
+        const result = await routedGitLab.jobTrace({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
@@ -647,7 +648,7 @@ export default function GitLabItemDialog({
       }
       setRetryingJobId(job.id)
       try {
-        const result = await window.api.gl.retryJob({
+        const result = await routedGitLab.retryJob({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
@@ -705,7 +706,7 @@ export default function GitLabItemDialog({
       }
       setReviewerUpdating(true)
       try {
-        const result = await window.api.gl.updateMRReviewers({
+        const result = await routedGitLab.updateMRReviewers({
           ...repoSelector,
           iid: item.number,
           reviewerIds,
@@ -771,7 +772,7 @@ export default function GitLabItemDialog({
     }
     setInlineCommentSubmitting(true)
     try {
-      const result = await window.api.gl.addMRInlineComment({
+      const result = await routedGitLab.addMRInlineComment({
         ...repoSelector,
         iid: item.number,
         projectRef: details.item.projectRef ?? item.projectRef ?? null,
@@ -821,7 +822,7 @@ export default function GitLabItemDialog({
     }
     setActionInFlight('close')
     try {
-      const res = await window.api.gl.closeMR({ ...repoSelector, iid: item.number })
+      const res = await routedGitLab.closeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -850,7 +851,7 @@ export default function GitLabItemDialog({
     }
     setActionInFlight('reopen')
     try {
-      const res = await window.api.gl.reopenMR({ ...repoSelector, iid: item.number })
+      const res = await routedGitLab.reopenMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -879,7 +880,7 @@ export default function GitLabItemDialog({
     }
     setActionInFlight('merge')
     try {
-      const res = await window.api.gl.mergeMR({ ...repoSelector, iid: item.number })
+      const res = await routedGitLab.mergeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -922,12 +923,12 @@ export default function GitLabItemDialog({
       // Branch on the item type to hit the right channel.
       const res =
         item.type === 'mr'
-          ? await window.api.gl.addMRComment({
+          ? await routedGitLab.addMRComment({
               ...repoSelector,
               iid: item.number,
               body: bodyState.body
             })
-          : await window.api.gl.addIssueComment({
+          : await routedGitLab.addIssueComment({
               ...repoSelector,
               number: item.number,
               body: bodyState.body
@@ -961,7 +962,7 @@ export default function GitLabItemDialog({
       }
       setResolvingThreadId(threadId)
       try {
-        const res = await window.api.gl.resolveMRDiscussion({
+        const res = await routedGitLab.resolveMRDiscussion({
           ...repoSelector,
           iid: item.number,
           discussionId: threadId,
