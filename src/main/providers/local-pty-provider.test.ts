@@ -1458,6 +1458,15 @@ describe('LocalPtyProvider', () => {
       expect(mockProc.write).toHaveBeenCalledWith('hello')
     })
 
+    it('forwards Shift+F3 at a shell even though its bytes collide with CPR', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      mockProc.process = 'zsh'
+
+      provider.write(id, '\x1b[1;2R')
+
+      expect(mockProc.write).toHaveBeenCalledWith('\x1b[1;2R')
+    })
+
     it('is a no-op for unknown PTY ids', () => {
       provider.write('nonexistent', 'hello')
       expect(mockProc.write).not.toHaveBeenCalled()

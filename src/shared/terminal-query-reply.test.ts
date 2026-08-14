@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   extractOnlyCookedEchoSafeQueryReplies,
   isTerminalQueryReply,
-  needsCookedEchoSafeQueryReply,
-  shouldInjectQueryReply
+  needsCookedEchoSafeQueryReply
 } from './terminal-query-reply'
+import { shouldInjectQueryReplyForOwner } from './terminal-query-owner'
 
 describe('isTerminalQueryReply', () => {
   it('matches synthetic query replies that must be sent immediately', () => {
@@ -127,39 +127,21 @@ describe('isTerminalQueryReply', () => {
   })
 })
 
-describe('shouldInjectQueryReply', () => {
-  const osc11 = '\x1b]11;rgb:2828/2c2c/3434\x07'
-  const osc10 = '\x1b]10;rgb:ffff/ffff/ffff\x07'
-  const cpr = '\x1b[3;1R'
-  const da1 = '\x1b[?1;2c'
-  const kitty = '\x1b[?7u'
-
-  it('drops OSC/DA/CPR/kitty replies once a shell owns the tty', () => {
-    for (const reply of [osc11, osc10, cpr, da1, kitty]) {
-      expect(shouldInjectQueryReply(reply, 'zsh')).toBe(false)
-      expect(shouldInjectQueryReply(reply, 'bash')).toBe(false)
-      expect(shouldInjectQueryReply(reply, '/bin/zsh')).toBe(false)
-    }
+describe('shouldInjectQueryReplyForOwner', () => {
+  it('delivers a reply only while the recorded query owner still owns the tty', () => {
+    expect(shouldInjectQueryReplyForOwner('gh', 'gh')).toBe(true)
+    expect(shouldInjectQueryReplyForOwner('gh', 'node')).toBe(false)
+    expect(shouldInjectQueryReplyForOwner('gh', 'zsh')).toBe(false)
   })
 
-  it('delivers those replies while a non-shell querier still owns the tty', () => {
-    for (const reply of [osc11, osc10, cpr, da1, kitty]) {
-      expect(shouldInjectQueryReply(reply, 'gh')).toBe(true)
-      expect(shouldInjectQueryReply(reply, 'printf')).toBe(true)
-      expect(shouldInjectQueryReply(reply, 'codex')).toBe(true)
-    }
+  it('falls back to the shell boundary when query ownership was unavailable', () => {
+    expect(shouldInjectQueryReplyForOwner(undefined, 'gh')).toBe(true)
+    expect(shouldInjectQueryReplyForOwner(null, 'zsh')).toBe(false)
   })
 
   it('fails open when foreground is unknown so a live querier is not starved', () => {
-    expect(shouldInjectQueryReply(osc11, null)).toBe(true)
-    expect(shouldInjectQueryReply(osc11, undefined)).toBe(true)
-    expect(shouldInjectQueryReply(osc11, '')).toBe(true)
-    expect(shouldInjectQueryReply(cpr, null)).toBe(true)
-  })
-
-  it('does not block ordinary typed input even at a shell prompt', () => {
-    expect(shouldInjectQueryReply('y', 'zsh')).toBe(true)
-    expect(shouldInjectQueryReply('11;rgb:2828/2c2c/3434', 'zsh')).toBe(true)
-    expect(shouldInjectQueryReply('\x1b[A', 'zsh')).toBe(true)
+    expect(shouldInjectQueryReplyForOwner('gh', null)).toBe(true)
+    expect(shouldInjectQueryReplyForOwner('gh', undefined)).toBe(true)
+    expect(shouldInjectQueryReplyForOwner('gh', '')).toBe(true)
   })
 })

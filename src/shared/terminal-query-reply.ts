@@ -1,4 +1,3 @@
-import { isShellProcess } from './shell-process-detection'
 // Why this module exists: xterm's public onData stream mixes real keystrokes
 // with the parser's synthetic replies to terminal queries a program embedded in
 // its output (CPR/DSR cursor + device-status reports, DA device attributes,
@@ -144,33 +143,4 @@ export function answerEachCookedEchoSafeQueryReply(
     }
   }
   return accepted
-}
-
-/**
- * Why: a late OSC/CSI reply cannot help a querier that has already left, and
- * writing it is strictly harmful (zsh self-inserts `11;rgb:…`). Unknown
- * foreground fails open so a still-blocked reader is not starved.
- */
-export function shouldInjectQueryReply(
-  data: string,
-  foregroundProcess: string | null | undefined
-): boolean {
-  if (!isTerminalQueryReply(data) && extractOnlyCookedEchoSafeQueryReplies(data) === null) {
-    return true
-  }
-  if (foregroundProcess == null || foregroundProcess === '') {
-    return true
-  }
-  return !isShellProcess(foregroundProcess)
-}
-
-export function shouldInjectQueryReplyFromProcess(
-  data: string,
-  readForegroundProcess: (() => string | null | undefined) | undefined
-): boolean {
-  try {
-    return shouldInjectQueryReply(data, readForegroundProcess?.())
-  } catch {
-    return true
-  }
 }

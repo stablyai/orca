@@ -1,6 +1,11 @@
 import type { PtyOwnerBackend } from './pty-owner-backend'
-import type { PtyStartupIngressOptions } from './pty-startup-ingress-contract'
-import { shouldInjectQueryReplyFromProcess } from './terminal-query-reply'
+import type { PtySlaveEchoProbe } from './pty-slave-line-discipline-echo'
+import type { PtyIngressSourceSpan } from './pty-startup-ingress-contract'
+import {
+  shouldInjectQueryReplyForOwnerFromProcess,
+  type ForegroundProcessReader,
+  TerminalQueryOwnerTracker
+} from './terminal-query-owner'
 
 // Why this module exists: a startup color reply is written to the PTY master, so
 // whatever line discipline sits between Orca and the querying program can echo it
@@ -76,7 +81,7 @@ const ECHO_PROBE_MAX_STARTS_PER_SECOND = 10
 
 type ExpectedEcho = { projections: readonly string[]; remainingBytes: number }
 // oxfmt-ignore
-type PendingWrite = { reply: string; onFailed: (() => void) | undefined; verifyForeground: boolean }
+type PendingWrite = { reply: string; onFailed: (() => void) | undefined; queryOwner: string | null | undefined; verifyForeground: boolean }
 type ActiveEchoProbe = { timer: ReturnType<typeof setTimeout> | null }
 
 /** Only a POSIX tty both echoes the reply and still delivers a deferred write. */
@@ -179,17 +184,23 @@ export class PtyStartupReplyDelivery {
   private echoProbeWindowStartedAt: number | null = null
   private echoProbeStartsInWindow = 0
   private closed = false
+  private readonly queryOwner: TerminalQueryOwnerTracker
 
   constructor(
     private readonly ownerBackend: PtyOwnerBackend,
-    private readonly options: Pick<
-      PtyStartupIngressOptions,
-      'write' | 'echoProbe' | 'readForegroundProcess'
-    >
-  ) {}
+    private readonly writeProvider: (data: string) => void,
+    private readonly echoProbe?: PtySlaveEchoProbe,
+    private readonly foregroundProcessReader?: ForegroundProcessReader
+  ) {
+    this.queryOwner = new TerminalQueryOwnerTracker(foregroundProcessReader)
+  }
 
   get hasExpectedEcho(): boolean {
     return this.expectedEchoes.length > 0
+  }
+
+  observeQuery(span: PtyIngressSourceSpan): void {
+    this.queryOwner.accept(span)
   }
 
   /**
@@ -200,6 +211,7 @@ export class PtyStartupReplyDelivery {
    * write later throws. Scoped per reply because the replies to one query are
    * written independently — one failing says nothing about the ones that landed.
    */
+  // oxfmt-ignore
   answer(reply: string, onFailed?: () => void, verifyForeground = false): boolean {
     if (this.closed) {
       return false
@@ -216,7 +228,12 @@ export class PtyStartupReplyDelivery {
     if (this.pendingWrites.length === 0) {
       this.echoPollDeadline = Date.now() + ECHO_POLL_BUDGET_MS
     }
-    this.pendingWrites.push({ reply, onFailed, verifyForeground })
+    this.pendingWrites.push({
+      reply,
+      onFailed,
+      queryOwner: verifyForeground ? this.queryOwner.owner : undefined,
+      verifyForeground
+    })
     this.armWriteTimer()
     return true
   }
@@ -296,11 +313,7 @@ export class PtyStartupReplyDelivery {
     if (this.closed || this.pendingWrites.length === 0) {
       return
     }
-    if (
-      !this.options.echoProbe ||
-      Date.now() >= this.echoPollDeadline ||
-      !this.claimEchoProbeStart()
-    ) {
+    if (!this.echoProbe || Date.now() >= this.echoPollDeadline || !this.claimEchoProbeStart()) {
       this.flushPendingWrites()
       return
     }
@@ -317,8 +330,7 @@ export class PtyStartupReplyDelivery {
     )
     active.timer.unref?.()
     this.activeEchoProbe = active
-    void this.options
-      .echoProbe()
+    void this.echoProbe()
       .catch(() => 'unknown' as const)
       .then((state) => {
         if (this.activeEchoProbe !== active) {
@@ -341,12 +353,8 @@ export class PtyStartupReplyDelivery {
     this.clearWriteTimer()
     this.clearActiveEchoProbe()
     for (const pending of this.pendingWrites.splice(0)) {
-      this.writeReply(
-        pending.reply,
-        pending.onFailed,
-        kernelEchoImpossible,
-        pending.verifyForeground
-      )
+      // oxfmt-ignore
+      this.writeReply(pending.reply, pending.onFailed, kernelEchoImpossible, pending.verifyForeground, pending.queryOwner)
     }
   }
 
@@ -385,12 +393,8 @@ export class PtyStartupReplyDelivery {
     return true
   }
 
-  private writeReply(
-    reply: string,
-    onFailed?: () => void,
-    kernelEchoImpossible = false,
-    verifyForeground = false
-  ): boolean {
+  // oxfmt-ignore
+  private writeReply(reply: string, onFailed?: () => void, kernelEchoImpossible = false, verifyForeground = false, queryOwner?: string | null): boolean {
     if (this.closed) {
       return false
     }
@@ -398,7 +402,7 @@ export class PtyStartupReplyDelivery {
     if (
       verifyForeground &&
       this.ownerBackend === 'posix-pty' &&
-      !shouldInjectQueryReplyFromProcess(reply, this.options.readForegroundProcess)
+      !shouldInjectQueryReplyForOwnerFromProcess(queryOwner, this.foregroundProcessReader)
     ) {
       return false
     }
@@ -410,7 +414,7 @@ export class PtyStartupReplyDelivery {
       this.expectedEchoes.push(expected)
     }
     try {
-      this.options.write(reply)
+      this.writeProvider(reply)
       if (this.expectedEchoes.length > MAX_TRACKED_REPLIES) {
         this.expectedEchoes.shift()
       }

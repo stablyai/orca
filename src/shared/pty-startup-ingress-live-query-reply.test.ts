@@ -252,6 +252,25 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
+  it('drops an OSC 11 reply after ownership transfers between non-shell processes', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    let foreground = 'gh'
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => foreground
+    })
+
+    ingress.accept('\x1b]11;?\x07')
+    foreground = 'node'
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
   it('keeps Windows-owned WSL replies even when a shell owns the tty', () => {
     const writes: string[] = []
     const ingress = new PtyStartupIngress({

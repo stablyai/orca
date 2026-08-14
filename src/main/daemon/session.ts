@@ -27,10 +27,7 @@ import {
   type PtyIngressEmission,
   type PtyStartupIngressIntent
 } from '../../shared/pty-startup-ingress'
-import {
-  extractOnlyCookedEchoSafeQueryReplies,
-  shouldInjectQueryReplyFromProcess
-} from '../../shared/terminal-query-reply'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -268,13 +265,6 @@ export class Session {
 
   write(data: string): void {
     if (this._state === 'exited' || this._disposed) {
-      return
-    }
-
-    if (
-      process.platform !== 'win32' &&
-      !shouldInjectQueryReplyFromProcess(data, () => this.subprocess.getForegroundProcess())
-    ) {
       return
     }
 

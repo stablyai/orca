@@ -55,7 +55,8 @@ export class PtyStartupIngress {
   constructor(options: PtyStartupIngressOptions) {
     this.intent = options.intent
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
-    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options)
+    // oxfmt-ignore
+    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write, options.echoProbe, options.readForegroundProcess)
     this.onEmission = options.onEmission
     this.queryOpen = options.intent !== undefined
     if (options.intent) {
@@ -94,11 +95,9 @@ export class PtyStartupIngress {
   }
 
   // Live color replies reuse startup's cooked-echo containment (#13137).
+  // oxfmt-ignore
   answerLiveQueryReply(reply: string): boolean {
-    // oxfmt-ignore
-    return !this.closed && reply.length > 0
-      ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answer(part, undefined, true))
-      : false
+    return !this.closed && reply.length > 0 ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answer(part, undefined, true)) : false
   }
 
   drainAndClose(): number {
@@ -128,6 +127,7 @@ export class PtyStartupIngress {
   private applyOperation(operation: PtyStartupIngressOperation): void {
     switch (operation.kind) {
       case 'data':
+        this.delivery.observeQuery(operation.chunk)
         this.processEchoSpan(operation.chunk)
         return
       case 'close-query':

@@ -68,10 +68,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
-import {
-  extractOnlyCookedEchoSafeQueryReplies,
-  shouldInjectQueryReplyFromProcess
-} from '../../shared/terminal-query-reply'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
@@ -1163,13 +1160,6 @@ export class LocalPtyProvider implements IPtyProvider {
   write(id: string, data: string): void {
     const proc = ptyProcesses.get(id)
     const ingress = startupIngressByPty.get(id)
-    // Why: querier gone => drop, including immediate DA/CPR on POSIX inject paths.
-    if (
-      process.platform !== 'win32' &&
-      !shouldInjectQueryReplyFromProcess(data, () => proc?.process)
-    ) {
-      return
-    }
     // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
     if (extractOnlyCookedEchoSafeQueryReplies(data)) {
       if (ingress?.answerLiveQueryReply(data)) {
