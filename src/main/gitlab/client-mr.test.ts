@@ -805,7 +805,9 @@ describe('gitlab client — MR operations', () => {
       expect(result.items[0].isCrossRepository).toBe(true)
     })
 
-    it('falls back to glab mr list when project ref is unresolved', async () => {
+    it('falls back to glab mr list when local project ref is unresolved', async () => {
+      // Why (#6263): cwd inference still serves valid self-hosted repos whose
+      // host is not yet in knownHosts; only SSH skips this path.
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,
         fellBack: false
@@ -881,6 +883,25 @@ describe('gitlab client — MR operations', () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
       const result = await listMergeRequests('/repo', 'opened')
       expect(result.error?.type).toBe('permission_denied')
+      expect(result.items).toEqual([])
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+    })
+
+    it('soft-classifies GITLAB_HOST remote mismatch from the cwd fallback as not_found', async () => {
+      // Why (#13817): soft-skip migrated remotes in multi-project aggregates.
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockRejectedValueOnce(
+        new Error(
+          'ERROR None of the git remotes configured for this repository correspond to the GITLAB_HOST environment variable.\n' +
+            'GITLAB_HOST is currently set to gitlab.example.com\n' +
+            'Configured remotes: 10.0.0.5.'
+        )
+      )
+      const result = await listMergeRequests('/migrated-repo', 'opened')
+      expect(result.error?.type).toBe('not_found')
       expect(result.items).toEqual([])
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
     })

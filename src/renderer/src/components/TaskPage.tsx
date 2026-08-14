@@ -320,6 +320,17 @@ import {
   normalizeTaskRepoSelection
 } from '@/components/task-page-default-repo-selection'
 import {
+  aggregateGitLabMultiProjectResults,
+  toGitLabProjectFetchResult,
+  type GitLabProjectFetchResult
+} from '@/components/task-page-gitlab-multi-project'
+import {
+  collectGitLabNotFoundRepoIds,
+  getGitLabTaskDisplayRepos,
+  mergeProviderScopedPickerSelection,
+  pruneRepoSelectionToEligible
+} from '@/components/task-page-gitlab-selection'
+import {
   getRepoBackedProviderAvailability,
   type RuntimeProviderPreflightStatus
 } from '@/components/task-source-provider-availability'
@@ -3062,6 +3073,10 @@ export default function TaskPage(): React.JSX.Element {
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
+  // Why: per-repo backend not_found is host-correct evidence a project is not GitLab (#13817).
+  const [gitlabNotFoundRepoIds, setGitlabNotFoundRepoIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
 
   // Why: initial selection precedence — explicit preselection > persisted defaultRepoSelection > all eligible; preselection wins so "open tasks for this repo" lands single-repo.
   const resolvedInitialSelection = useMemo<ReadonlySet<string>>(() => {
@@ -3081,63 +3096,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])
 
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(resolvedInitialSelection)
-  const taskPickerGroups = useMemo(
-    () => getTaskProjectPickerGroups(eligibleRepos, repoSelection),
-    [eligibleRepos, repoSelection]
-  )
-  const taskPickerRepos = useMemo(
-    () => taskPickerGroups.map((group) => group.repo),
-    [taskPickerGroups]
-  )
 
-  // Why: prune removed repos and preserve sticky-all (selection == all projects stays == all), without recreating the Set each time and churning the fetch effect.
-  const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
-  useEffect(() => {
-    const prevCount = prevTaskPickerCountRef.current
-    prevTaskPickerCountRef.current = taskPickerRepos.length
-    const eligibleIds = new Set(eligibleRepos.map((r) => r.id))
-    const wasAll = repoSelection.size === prevCount && prevCount > 0
-    const pruned = new Set<string>()
-    for (const id of repoSelection) {
-      if (eligibleIds.has(id)) {
-        pruned.add(id)
-      }
-    }
-    if (wasAll) {
-      const allNow = new Set(taskPickerRepos.map((repo) => repo.id))
-      if (!areStringSetsEqual(allNow, repoSelection)) {
-        setRepoSelection(allNow)
-      }
-      return
-    }
-    if (pruned.size === 0 && eligibleIds.size === 0) {
-      return
-    }
-    const normalized = normalizeTaskRepoSelection(eligibleRepos, pruned)
-    if (!areStringSetsEqual(normalized, repoSelection)) {
-      setRepoSelection(normalized)
-    }
-  }, [eligibleRepos, repoSelection, taskPickerRepos])
-
-  const selectedRepos = useMemo(
-    () => eligibleRepos.filter((r) => repoSelection.has(r.id)),
-    [eligibleRepos, repoSelection]
-  )
-
-  // Why: see buildSelectedReposKey — array-identity deps re-fire on every
-  // repos:changed even when the selection is unchanged. The context part is
-  // resolved as GitHub, but every provider-independent field (projectId,
-  // hostId, projectHostSetupId, repoId) is identical across providers, so the
-  // GitLab effect can key off this too — it passes no gitlabProjectRef, so its
-  // context carries no providerIdentity of its own. Thread a projectRef into
-  // that call and this key needs a GitLab-scoped part.
-  const selectedReposKey = useMemo(
-    () => buildSelectedReposKey(selectedRepos, (r) => getTaskPageRepoSourceContext(r, 'github')),
-    [selectedRepos]
-  )
-
-  // Why: many affordances need *a* repo; use the first selected as default, while cross-repo dialogs still let the user override per-action.
-  const primaryRepo = selectedRepos[0] ?? null
   const linearWorkspaces = linearStatus.workspaces ?? []
   const selectedLinearWorkspaceId =
     linearStatus.selectedWorkspaceId ??
@@ -3227,6 +3186,96 @@ export default function TaskPage(): React.JSX.Element {
   const [taskSource, setTaskSource] = useState<TaskProvider>(
     resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
   )
+
+  // Why: GitLab picker hides proven not_found peers without mutating full selection (#13817).
+  const taskPickerSourceRepos = useMemo(() => {
+    if (taskSource !== 'gitlab') {
+      return eligibleRepos
+    }
+    return getGitLabTaskDisplayRepos(eligibleRepos, gitlabNotFoundRepoIds)
+  }, [taskSource, eligibleRepos, gitlabNotFoundRepoIds])
+
+  const taskPickerGroups = useMemo(
+    () => getTaskProjectPickerGroups(taskPickerSourceRepos, repoSelection),
+    [taskPickerSourceRepos, repoSelection]
+  )
+  const taskPickerRepos = useMemo(
+    () => taskPickerGroups.map((group) => group.repo),
+    [taskPickerGroups]
+  )
+
+  // Why: prune only against full eligibleRepos so provider switches never drop hidden selections.
+  const prevEligibleCountRef = useRef(eligibleRepos.length)
+  useEffect(() => {
+    const prevCount = prevEligibleCountRef.current
+    prevEligibleCountRef.current = eligibleRepos.length
+    const eligibleIds = new Set(eligibleRepos.map((r) => r.id))
+    const wasAll = repoSelection.size === prevCount && prevCount > 0
+    const pruned = pruneRepoSelectionToEligible(repoSelection, eligibleRepos)
+    if (wasAll) {
+      const allNow = new Set(eligibleRepos.map((repo) => repo.id))
+      if (!areStringSetsEqual(allNow, repoSelection)) {
+        setRepoSelection(allNow)
+      }
+      return
+    }
+    if (pruned.size === 0 && eligibleIds.size === 0) {
+      return
+    }
+    const normalized = normalizeTaskRepoSelection(eligibleRepos, pruned)
+    if (!areStringSetsEqual(normalized, repoSelection)) {
+      setRepoSelection(normalized)
+    }
+  }, [eligibleRepos, repoSelection])
+
+  // Why: drop not_found marks for repos that left the workspace entirely.
+  useEffect(() => {
+    const eligibleIds = new Set(eligibleRepos.map((repo) => repo.id))
+    let changed = false
+    const next = new Set<string>()
+    for (const id of gitlabNotFoundRepoIds) {
+      if (eligibleIds.has(id)) {
+        next.add(id)
+      } else {
+        changed = true
+      }
+    }
+    if (changed) {
+      setGitlabNotFoundRepoIds(next)
+    }
+  }, [eligibleRepos, gitlabNotFoundRepoIds])
+
+  const selectedRepos = useMemo(
+    () => taskPickerSourceRepos.filter((r) => repoSelection.has(r.id)),
+    [taskPickerSourceRepos, repoSelection]
+  )
+
+  // Why: see buildSelectedReposKey — array-identity deps re-fire on every
+  // repos:changed even when the selection is unchanged. The context part is
+  // resolved as GitHub, but every provider-independent field (projectId,
+  // hostId, projectHostSetupId, repoId) is identical across providers, so the
+  // GitLab effect can key off this too — it passes no gitlabProjectRef, so its
+  // context carries no providerIdentity of its own. Thread a projectRef into
+  // that call and this key needs a GitLab-scoped part.
+  const selectedReposKey = useMemo(
+    () => buildSelectedReposKey(selectedRepos, (r) => getTaskPageRepoSourceContext(r, 'github')),
+    [selectedRepos]
+  )
+
+  // Why: GitLab fan-out must track full selection ∩ baseline-eligible, not only picker-visible rows.
+  const gitlabQuerySelectionKey = useMemo(
+    () =>
+      eligibleRepos
+        .filter((repo) => repoSelection.has(repo.id))
+        .map((repo) => repo.id)
+        .sort()
+        .join('\0'),
+    [eligibleRepos, repoSelection]
+  )
+
+  // Why: many affordances need *a* repo; use the first selected as default, while cross-repo dialogs still let the user override per-action.
+  const primaryRepo = selectedRepos[0] ?? null
+
   const runtimePreflightMountedRef = useRef(true)
   const runtimePreflightRequestedHostIdsRef = useRef<Set<TaskSourceContext['hostId']>>(new Set())
   const [runtimePreflightStatusByHostId, setRuntimePreflightStatusByHostId] = useState<
@@ -4939,9 +4988,12 @@ export default function TaskPage(): React.JSX.Element {
     ) {
       return
     }
-    // Why: folder-mode repos lack remotes to derive a GitLab project from; SSH-backed repos use the same provider-aware IPC path.
-    const eligibleRepos = selectedRepos
-    if (eligibleRepos.length === 0) {
+    // Why: skip proven not_found peers until refresh clears them; host evidence is per-repo backend.
+    const gitlabQueryRepos = getGitLabTaskDisplayRepos(
+      eligibleRepos.filter((repo) => repoSelection.has(repo.id)),
+      gitlabNotFoundRepoIds
+    )
+    if (gitlabQueryRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
       setGitlabError(null)
@@ -4953,7 +5005,7 @@ export default function TaskPage(): React.JSX.Element {
 
     const fetchItems =
       gitlabView === 'issues'
-        ? (repo: (typeof eligibleRepos)[0]) => {
+        ? (repo: (typeof gitlabQueryRepos)[0]) => {
             const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
             return window.api.gl
               .listIssues({
@@ -4964,17 +5016,9 @@ export default function TaskPage(): React.JSX.Element {
                 assignee: isAssignedToMe ? '@me' : undefined,
                 limit: 50
               })
-              .then((result) => {
-                const typed = result as {
-                  items: GitLabWorkItem[]
-                  error?: { type?: string; message: string }
-                }
-                // Why: not_found just means the repo isn't a GitLab project (mixed selection); drop it so the list shows no false errors.
-                const error = typed.error?.type === 'not_found' ? undefined : typed.error
-                return { repoId: repo.id, items: typed.items, error }
-              })
+              .then((result) => toGitLabProjectFetchResult(repo.id, result))
           }
-        : (repo: (typeof eligibleRepos)[0]) =>
+        : (repo: (typeof gitlabQueryRepos)[0]) =>
             window.api.gl
               .listMRs({
                 repoPath: repo.path,
@@ -4984,40 +5028,33 @@ export default function TaskPage(): React.JSX.Element {
                 page: 1,
                 perPage: 50
               })
-              .then((result) => {
-                const typed = result as {
-                  items: GitLabWorkItem[]
-                  error?: { type?: string; message: string }
-                }
-                const error = typed.error?.type === 'not_found' ? undefined : typed.error
-                return { repoId: repo.id, items: typed.items, error }
-              })
+              .then((result) => toGitLabProjectFetchResult(repo.id, result))
 
-    void Promise.allSettled(eligibleRepos.map(fetchItems))
+    void Promise.allSettled(gitlabQueryRepos.map(fetchItems))
       .then((results) => {
         if (stale) {
           return
         }
-        const merged: GitLabWorkItem[] = []
-        const errs: string[] = []
-        for (const r of results) {
-          if (r.status !== 'fulfilled') {
-            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
-            continue
+        const projectResults: GitLabProjectFetchResult[] = results.map((r, index) => {
+          if (r.status === 'fulfilled') {
+            return r.value
           }
-          for (const item of r.value.items) {
-            merged.push({ ...item, repoId: r.value.repoId })
+          return {
+            repoId: gitlabQueryRepos[index]?.id ?? 'unknown',
+            items: [],
+            error: {
+              type: 'unknown' as const,
+              message: r.reason instanceof Error ? r.reason.message : String(r.reason)
+            }
           }
-          if (r.value.error) {
-            errs.push(r.value.error.message)
-          }
-        }
-        merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
-        setGitlabItems(merged)
-        // Why: only banner when every eligible repo failed; a partial one would hide working rows in a mixed (non-GitLab) selection.
-        if (errs.length > 0 && merged.length === 0) {
-          setGitlabError(errs[0])
-        }
+        })
+        setGitlabNotFoundRepoIds((previous) => {
+          const next = collectGitLabNotFoundRepoIds(previous, projectResults)
+          return areStringSetsEqual(previous, next) ? previous : next
+        })
+        const aggregate = aggregateGitLabMultiProjectResults(projectResults)
+        setGitlabItems(aggregate.items)
+        setGitlabError(aggregate.bannerError)
       })
       .finally(() => {
         if (!stale) {
@@ -5027,8 +5064,15 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       stale = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers every selectedRepos field read above (see its GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gitlabQuerySelectionKey covers eligibleRepos ∩ repoSelection.
+  }, [
+    taskSource,
+    gitlabView,
+    activeGitlabFilter,
+    gitlabRefreshNonce,
+    gitlabQuerySelectionKey,
+    gitlabNotFoundRepoIds
+  ])
 
   // Why: Todos fetch has its own effect — different trigger (no chip filter) and data path (gl.todos is user-scoped, not repo-scoped).
   useEffect(() => {
@@ -9118,7 +9162,13 @@ export default function TaskPage(): React.JSX.Element {
                         selected={repoSelection}
                         getRepoHostLabel={getTaskPickerRepoHostLabel}
                         onChange={(next) => {
-                          const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                          // Why: keep provider-hidden ids (e.g. GitHub) when editing the GitLab picker.
+                          const merged = mergeProviderScopedPickerSelection({
+                            fullSelection: repoSelection,
+                            pickerRepoIds: new Set(taskPickerSourceRepos.map((repo) => repo.id)),
+                            nextPickerSelection: next
+                          })
+                          const normalized = normalizeTaskRepoSelection(eligibleRepos, merged)
                           setRepoSelection(normalized)
                           void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
                             () => {
@@ -9132,9 +9182,19 @@ export default function TaskPage(): React.JSX.Element {
                           )
                         }}
                         onSelectAll={() => {
-                          const allIds = new Set(taskPickerRepos.map((r) => r.id))
-                          setRepoSelection(allIds)
-                          void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                          const merged = mergeProviderScopedPickerSelection({
+                            fullSelection: repoSelection,
+                            pickerRepoIds: new Set(taskPickerSourceRepos.map((repo) => repo.id)),
+                            nextPickerSelection: new Set(taskPickerRepos.map((r) => r.id))
+                          })
+                          setRepoSelection(merged)
+                          // Why: sticky-all only when every eligible project is selected, not just the provider slice.
+                          const allEligibleSelected =
+                            eligibleRepos.length > 0 &&
+                            eligibleRepos.every((repo) => merged.has(repo.id))
+                          void updateSettings({
+                            defaultRepoSelection: allEligibleSelected ? null : [...merged]
+                          }).catch(() => {
                             toast.error(
                               translate(
                                 'auto.components.TaskPage.dfd72673e7',
@@ -9879,7 +9939,12 @@ export default function TaskPage(): React.JSX.Element {
                           selected={repoSelection}
                           getRepoHostLabel={getTaskPickerRepoHostLabel}
                           onChange={(next) => {
-                            const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                            const merged = mergeProviderScopedPickerSelection({
+                              fullSelection: repoSelection,
+                              pickerRepoIds: new Set(taskPickerSourceRepos.map((repo) => repo.id)),
+                              nextPickerSelection: next
+                            })
+                            const normalized = normalizeTaskRepoSelection(eligibleRepos, merged)
                             setRepoSelection(normalized)
                             void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
                               () => {
@@ -9893,9 +9958,18 @@ export default function TaskPage(): React.JSX.Element {
                             )
                           }}
                           onSelectAll={() => {
-                            const allIds = new Set(taskPickerRepos.map((r) => r.id))
-                            setRepoSelection(allIds)
-                            void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                            const merged = mergeProviderScopedPickerSelection({
+                              fullSelection: repoSelection,
+                              pickerRepoIds: new Set(taskPickerSourceRepos.map((repo) => repo.id)),
+                              nextPickerSelection: new Set(taskPickerRepos.map((r) => r.id))
+                            })
+                            setRepoSelection(merged)
+                            const allEligibleSelected =
+                              eligibleRepos.length > 0 &&
+                              eligibleRepos.every((repo) => merged.has(repo.id))
+                            void updateSettings({
+                              defaultRepoSelection: allEligibleSelected ? null : [...merged]
+                            }).catch(() => {
                               toast.error(
                                 translate(
                                   'auto.components.TaskPage.dfd72673e7',
@@ -9927,6 +10001,7 @@ export default function TaskPage(): React.JSX.Element {
                                       type="button"
                                       onClick={() => {
                                         setGitlabFilter(id)
+                                        setGitlabNotFoundRepoIds(new Set())
                                         setGitlabRefreshNonce((n) => n + 1)
                                       }}
                                       className={cn(
@@ -9952,7 +10027,10 @@ export default function TaskPage(): React.JSX.Element {
                               <Button
                                 variant="outline"
                                 size="icon"
-                                onClick={() => setGitlabRefreshNonce((n) => n + 1)}
+                                onClick={() => {
+                                  setGitlabNotFoundRepoIds(new Set())
+                                  setGitlabRefreshNonce((n) => n + 1)
+                                }}
                                 disabled={gitlabLoading || gitlabTodosLoading}
                                 aria-label={
                                   gitlabView === 'todos'

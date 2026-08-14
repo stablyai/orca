@@ -431,7 +431,7 @@ export async function listMergeRequests(
   )
   if (!projectRef) {
     if (connectionId) {
-      // Why: SSH-backed repos have no local cwd; a cwd-less glab could resolve an unrelated project.
+      // Why: SSH has no local cwd; bare glab could resolve an unrelated project.
       return {
         items: [],
         page,
@@ -444,9 +444,8 @@ export async function listMergeRequests(
         }
       }
     }
-    // Why: fallback — let glab infer the project from cwd when the host isn't in getGlabKnownHosts.
+    // Why: cwd inference for unresolved self-hosted local repos (#6263); GITLAB_HOST mismatch soft-classifies as not_found (#13817).
     const stateFlag = mrListStateFlags(state)
-    // Why: apply the same search as the API path, else queries are silently ignored on cwd-inferred repos (#6263).
     const searchFlag = query?.trim() ? ['--search', query.trim()] : []
     await acquire()
     try {
@@ -474,7 +473,6 @@ export async function listMergeRequests(
         items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
         page,
         perPage,
-        // Why: the CLI omits x-total headers, so totals are approximate.
         totalCount: data.length,
         totalPages: data.length < perPage ? page : page + 1
       }

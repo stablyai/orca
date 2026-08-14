@@ -21,6 +21,7 @@ import {
   classifyListIssuesError,
   getIssueProjectRef,
   parseGlabJsonList,
+  isGitLabHostRemoteMismatchError,
   isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
@@ -401,6 +402,24 @@ describe('glab error classification', () => {
   it('classifies 404 / project not found as not_found', () => {
     expect(classifyGlabError('HTTP 404 Not Found').type).toBe('not_found')
     expect(classifyGlabError('Project Not Found').type).toBe('not_found')
+  })
+
+  it('soft-classifies GITLAB_HOST remote-mismatch only on list reads (#13817)', () => {
+    const stderr =
+      'ERROR None of the git remotes configured for this repository correspond to the GITLAB_HOST environment variable.\n' +
+      'Try adding a matching remote or unsetting the variable.\n' +
+      'GITLAB_HOST is currently set to gitlab.example.com\n' +
+      'Configured remotes: 10.0.0.5.'
+    // Why: generic classifier must not map host mismatch to not_found — job traces treat not_found as empty log.
+    expect(classifyGlabError(stderr).type).toBe('unknown')
+    expect(isGitLabHostRemoteMismatchError(stderr)).toBe(true)
+    expect(classifyListIssuesError(stderr)).toEqual({
+      type: 'not_found',
+      message: 'Project not found.'
+    })
+    expect(classifyListFetchError(new Error(stderr)).type).toBe('not_found')
+    expect(isMissingJobLogError(stderr)).toBe(false)
+    expect(classifyJobLogError(stderr).type).toBe('unknown')
   })
 
   it('classifies 422 / unprocessable as validation_error', () => {
