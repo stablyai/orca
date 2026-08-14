@@ -65,6 +65,7 @@ import {
   ensureMutationReceiptCapacity,
   migrateMutationReceiptCapacity
 } from './mutation-receipt-capacity'
+import { getFederationTerminalRecoveryDelayMs } from './federation-terminal-recovery-policy'
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -297,8 +298,8 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments.
-const SCHEMA_VERSION = 27
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable terminal acknowledgment recovery.
+const SCHEMA_VERSION = 28
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -481,6 +482,11 @@ export class OrchestrationDb {
         remote_terminal_handle  TEXT,
         to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
         to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
+        terminal_ack_recovery_state TEXT NOT NULL DEFAULT 'pending'
+          CHECK(terminal_ack_recovery_state IN ('pending', 'retryable', 'terminal')),
+        terminal_ack_recovery_attempts INTEGER NOT NULL DEFAULT 0,
+        terminal_ack_recovery_next_at_ms INTEGER NOT NULL DEFAULT 0,
+        terminal_ack_recovery_error_code TEXT,
         created_at              TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -885,6 +891,11 @@ export class OrchestrationDb {
             remote_terminal_handle  TEXT,
             to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
             to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
+            terminal_ack_recovery_state TEXT NOT NULL DEFAULT 'pending'
+              CHECK(terminal_ack_recovery_state IN ('pending', 'retryable', 'terminal')),
+            terminal_ack_recovery_attempts INTEGER NOT NULL DEFAULT 0,
+            terminal_ack_recovery_next_at_ms INTEGER NOT NULL DEFAULT 0,
+            terminal_ack_recovery_error_code TEXT,
             created_at              TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
           );
@@ -1011,6 +1022,28 @@ export class OrchestrationDb {
         this.db.exec(
           'ALTER TABLE federated_dispatches ADD COLUMN to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0'
         )
+      }
+      if (current < 28) {
+        if (!this.hasColumn('federated_dispatches', 'terminal_ack_recovery_state')) {
+          this.db.exec(
+            "ALTER TABLE federated_dispatches ADD COLUMN terminal_ack_recovery_state TEXT NOT NULL DEFAULT 'pending' CHECK(terminal_ack_recovery_state IN ('pending', 'retryable', 'terminal'))"
+          )
+        }
+        if (!this.hasColumn('federated_dispatches', 'terminal_ack_recovery_attempts')) {
+          this.db.exec(
+            'ALTER TABLE federated_dispatches ADD COLUMN terminal_ack_recovery_attempts INTEGER NOT NULL DEFAULT 0'
+          )
+        }
+        if (!this.hasColumn('federated_dispatches', 'terminal_ack_recovery_next_at_ms')) {
+          this.db.exec(
+            'ALTER TABLE federated_dispatches ADD COLUMN terminal_ack_recovery_next_at_ms INTEGER NOT NULL DEFAULT 0'
+          )
+        }
+        if (!this.hasColumn('federated_dispatches', 'terminal_ack_recovery_error_code')) {
+          this.db.exec(
+            'ALTER TABLE federated_dispatches ADD COLUMN terminal_ack_recovery_error_code TEXT'
+          )
+        }
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -4596,7 +4629,8 @@ export class OrchestrationDb {
   }
 
   findNextTerminalFederatedDispatchPendingAcknowledgment(
-    afterRowId: number
+    afterRowId: number,
+    nowMs = Date.now()
   ): { dispatchId: string; rowId: number } | undefined {
     return this.db
       .prepare(
@@ -4605,14 +4639,87 @@ export class OrchestrationDb {
          INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
          WHERE wd.state NOT IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
            AND fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
+           AND fd.terminal_ack_recovery_state != 'terminal'
+           AND fd.terminal_ack_recovery_next_at_ms <= ?
            AND fd.rowid > ?
          ORDER BY fd.rowid
          LIMIT 1`
       )
-      .get(afterRowId) as { dispatchId: string; rowId: number } | undefined
+      .get(nowMs, afterRowId) as { dispatchId: string; rowId: number } | undefined
   }
 
-  isFederatedDispatchRelayEligible(dispatchId: string): boolean {
+  getNextTerminalFederatedDispatchRecoveryAt(): number | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT MIN(fd.terminal_ack_recovery_next_at_ms) AS nextAt
+         FROM federated_dispatches fd
+         INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
+         WHERE wd.state NOT IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
+           AND fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
+           AND fd.terminal_ack_recovery_state != 'terminal'`
+      )
+      .get() as { nextAt: number | null }
+    return row.nextAt ?? undefined
+  }
+
+  capFederatedTerminalRecoveryDeadlines(latestNextAtMs: number): void {
+    this.db
+      .prepare(
+        `UPDATE federated_dispatches
+         SET terminal_ack_recovery_next_at_ms = ?
+         WHERE terminal_ack_recovery_state != 'terminal'
+           AND to_home_acknowledged_sequence < to_home_imported_sequence
+           AND terminal_ack_recovery_next_at_ms > ?`
+      )
+      .run(latestNextAtMs, latestNextAtMs)
+  }
+
+  recordFederatedTerminalRecoveryFailure(params: {
+    dispatchId: string
+    errorCode: string | null
+    terminal: boolean
+    nowMs: number
+  }): void {
+    const current = this.getFederatedDispatch(params.dispatchId)
+    if (!current || current.to_home_acknowledged_sequence >= current.to_home_imported_sequence) {
+      return
+    }
+    const attempts = current.terminal_ack_recovery_attempts + 1
+    const nextAt = params.terminal
+      ? 0
+      : params.nowMs + getFederationTerminalRecoveryDelayMs(attempts)
+    this.db
+      .prepare(
+        `UPDATE federated_dispatches
+         SET terminal_ack_recovery_state = ?, terminal_ack_recovery_attempts = ?,
+             terminal_ack_recovery_next_at_ms = ?, terminal_ack_recovery_error_code = ?,
+             updated_at = datetime('now')
+         WHERE dispatch_id = ?
+           AND to_home_acknowledged_sequence < to_home_imported_sequence`
+      )
+      .run(
+        params.terminal ? 'terminal' : 'retryable',
+        attempts,
+        nextAt,
+        params.errorCode,
+        params.dispatchId
+      )
+  }
+
+  recordFederatedTerminalRecoverySuccess(dispatchId: string, nowMs: number): void {
+    this.db
+      .prepare(
+        `UPDATE federated_dispatches
+         SET terminal_ack_recovery_state = 'pending', terminal_ack_recovery_attempts = 0,
+             terminal_ack_recovery_next_at_ms = CASE
+               WHEN to_home_acknowledged_sequence < to_home_imported_sequence THEN ? ELSE 0 END,
+             terminal_ack_recovery_error_code = NULL, updated_at = datetime('now')
+         WHERE dispatch_id = ?`
+      )
+      .run(nowMs + getFederationTerminalRecoveryDelayMs(1), dispatchId)
+  }
+
+  isFederatedDispatchActive(dispatchId: string): boolean {
     return Boolean(
       this.db
         .prepare(
@@ -4620,12 +4727,7 @@ export class OrchestrationDb {
            FROM federated_dispatches fd
            INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
            WHERE fd.dispatch_id = ?
-             AND (
-               wd.state IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
-               OR (
-                 fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
-               )
-             )`
+             AND wd.state IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')`
         )
         .get(dispatchId)
     )
@@ -5309,6 +5411,10 @@ export class OrchestrationDb {
                  THEN MAX(to_home_acknowledged_sequence, ?)
                ELSE ?
              END,
+             terminal_ack_recovery_state = 'pending',
+             terminal_ack_recovery_attempts = 0,
+             terminal_ack_recovery_next_at_ms = 0,
+             terminal_ack_recovery_error_code = NULL,
              updated_at = datetime('now')
          WHERE dispatch_id = ?`
       )

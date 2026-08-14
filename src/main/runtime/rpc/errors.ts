@@ -78,6 +78,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'source_changed',
   'transcript_required',
   'server_required',
+  'environment_not_found',
   'worktree_not_found_on_server',
   'resource_server_mismatch',
   'peer_changed',

@@ -26,7 +26,11 @@ const POST_V6_COLUMNS = [
 ] as const
 
 const VERSIONED_POST_V6_COLUMNS = [
-  { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' }
+  { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' },
+  { version: 28, table: 'federated_dispatches', column: 'terminal_ack_recovery_state' },
+  { version: 28, table: 'federated_dispatches', column: 'terminal_ack_recovery_attempts' },
+  { version: 28, table: 'federated_dispatches', column: 'terminal_ack_recovery_next_at_ms' },
+  { version: 28, table: 'federated_dispatches', column: 'terminal_ack_recovery_error_code' }
 ] as const
 
 const POST_V6_INDEXES = [

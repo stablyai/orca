@@ -183,6 +183,10 @@ export type FederatedDispatchRow = {
   remote_terminal_handle: string | null
   to_home_imported_sequence: number
   to_home_acknowledged_sequence: number
+  terminal_ack_recovery_state: 'pending' | 'retryable' | 'terminal'
+  terminal_ack_recovery_attempts: number
+  terminal_ack_recovery_next_at_ms: number
+  terminal_ack_recovery_error_code: string | null
   created_at: string
   updated_at: string
 }

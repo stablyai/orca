@@ -32,6 +32,13 @@ export class RuntimeEnvironmentStoreError extends Error {
   }
 }
 
+export class RuntimeEnvironmentNotFoundError extends RuntimeEnvironmentStoreError {
+  constructor(selector: string) {
+    super('invalid_argument', `Unknown environment: ${selector}`)
+    this.name = 'RuntimeEnvironmentNotFoundError'
+  }
+}
+
 export function getEnvironmentStorePath(userDataPath: string): string {
   return join(userDataPath, ENVIRONMENTS_FILE)
 }
@@ -223,7 +230,7 @@ function resolveEnvironmentFromStore(
       `Environment name "${selector}" is ambiguous; use the environment id.`
     )
   }
-  throw new RuntimeEnvironmentStoreError('invalid_argument', `Unknown environment: ${selector}`)
+  throw new RuntimeEnvironmentNotFoundError(selector)
 }
 
 function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {

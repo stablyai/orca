@@ -77,7 +77,10 @@ import {
   type OrchestrationEnvironmentTransport
 } from './runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
-import { resolveEnvironment } from '../shared/runtime-environment-store'
+import {
+  resolveEnvironment,
+  RuntimeEnvironmentNotFoundError
+} from '../shared/runtime-environment-store'
 import { getPreferredPairingOffer } from '../shared/runtime-environments'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import {
@@ -88,6 +91,7 @@ import { resolveAdvertisedPairingEndpoint } from './runtime/pairing-endpoint'
 import { ServeReadinessPublisher } from './server/serve-readiness'
 import { reserveServeStdoutForReadiness } from './server/serve-stdout-boundary'
 import { DesktopRelayService } from './runtime/relay/desktop-relay-service'
+import { OrchestrationError } from './runtime/orchestration/orchestration-error'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -2488,7 +2492,18 @@ void app.whenReady().then(async () => {
   })
   const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => {
-      const environment = resolveEnvironment(app.getPath('userData'), selector)
+      let environment: ReturnType<typeof resolveEnvironment>
+      try {
+        environment = resolveEnvironment(app.getPath('userData'), selector)
+      } catch (error) {
+        if (error instanceof RuntimeEnvironmentNotFoundError) {
+          throw new OrchestrationError(
+            'environment_not_found',
+            `Saved worker environment ${selector} no longer exists.`
+          )
+        }
+        throw error
+      }
       const pairing = getPreferredPairingOffer(environment)
       return {
         environmentId: environment.id,
