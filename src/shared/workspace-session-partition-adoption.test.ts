@@ -497,4 +497,35 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
       adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id) ?? []
     ).not.toContain('tab-1')
   })
+
+  it('keeps a close-emptied worktree closed against a stale pty-bound partition copy', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [] },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 163 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@pty-dead')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@pty-dead') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-stale' },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: WORKTREE_ID,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'session-stale' },
+          prompt: 'stale',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(adoption.sourceAuthoritativeWorktreeIds).toEqual([])
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(adoption.session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
+  })
 })

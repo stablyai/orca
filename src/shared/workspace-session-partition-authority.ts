@@ -5,6 +5,7 @@ import {
   collectWorkspaceKeys,
   hasPtyBoundPane,
   paneTabId,
+  topologyRevisionAuthority,
   WORKTREE_RECORD_FIELDS
 } from './workspace-session-partition-provenance'
 
@@ -187,31 +188,25 @@ export function workspaceTerminalAuthority(
   const repoId = repoIdForWorkspaceKey(workspaceKey)
   const baseRevision = repoId ? base.terminalTopologyRevisionByRepoId?.[repoId] : undefined
   const sourceRevision = repoId ? source.terminalTopologyRevisionByRepoId?.[repoId] : undefined
-  const revisionAuthority =
-    baseRevision !== undefined && sourceRevision !== undefined
-      ? sourceRevision !== baseRevision
-        ? sourceRevision > baseRevision
-          ? ('source' as const)
-          : ('base' as const)
-        : null
-      : baseRevision !== undefined
-        ? ('base' as const)
-        : sourceRevision !== undefined
-          ? ('source' as const)
-          : null
+  const revisionAuthority = topologyRevisionAuthority(baseRevision, sourceRevision)
   if (revisionAuthority) {
-    // Why the pty-bound veto: the counter is keyed per repo and bumped only by the
-    // process that runs the topology-authority code path, so it can outrank the other
-    // side — or exist where the other has none — without describing this workspace's
-    // terminals at all. A winner with no pty-bound pane yields to a loser holding one:
-    // preferring the counter there drops the running terminals from the adopted view
-    // and duplicates their agent sessions through cold restore. Deliberately closed
-    // panes stay closed either way — tombstones fence resurrection, not the counter.
+    // Why the pty-bound veto: the counter is per repo and bumped only by the process
+    // running the topology-authority code path, so it can outrank the other side
+    // without describing this workspace's terminals at all. A winner holding only
+    // dormant tab rows (or no record for the key) yields to a loser holding a
+    // pty-bound pane — preferring the counter there duplicates the running terminals'
+    // agent sessions through cold restore. An explicitly empty winner list is a close
+    // fenced by the counter alone (tombstones are legacy): it keeps authority, so a
+    // stale pty-bound copy elsewhere cannot resurrect what the user closed.
     const winner = revisionAuthority === 'base' ? base : source
     const loser = revisionAuthority === 'base' ? source : base
-    const winnerTabs = winner.tabsByWorktree[workspaceKey] ?? []
+    const winnerTabs = winner.tabsByWorktree[workspaceKey]
     const loserTabs = loser.tabsByWorktree[workspaceKey] ?? []
-    if (!hasPtyBoundPane(winner, winnerTabs) && hasPtyBoundPane(loser, loserTabs)) {
+    if (
+      (winnerTabs === undefined || winnerTabs.length > 0) &&
+      !hasPtyBoundPane(winner, winnerTabs ?? []) &&
+      hasPtyBoundPane(loser, loserTabs)
+    ) {
       return revisionAuthority === 'base' ? 'source' : 'base'
     }
     return revisionAuthority

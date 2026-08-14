@@ -20,12 +20,12 @@ export const WORKTREE_RECORD_FIELDS = [
 
 export function paneTabId(paneKey: string): string {
   const separator = paneKey.indexOf(':')
-  return separator < 0 ? paneKey : paneKey.slice(0, separator)
+  return separator === -1 ? paneKey : paneKey.slice(0, separator)
 }
 
 export function paneLeafId(paneKey: string): string {
   const separator = paneKey.indexOf(':')
-  return separator < 0 ? '' : paneKey.slice(separator + 1)
+  return separator === -1 ? '' : paneKey.slice(separator + 1)
 }
 
 export function collectWorkspaceKeys(session: WorkspaceSessionState): Set<string> {
@@ -53,6 +53,22 @@ export function collectWorkspaceKeys(session: WorkspaceSessionState): Set<string
     keys.add(tombstone.worktreeId)
   }
   return keys
+}
+
+// Which side a recorded-revision comparison prefers: magnitude when both sides record
+// a revision for the repo, the recorded side when only one does, null on a tie or when
+// neither records one.
+export function topologyRevisionAuthority(
+  baseRevision: number | undefined,
+  sourceRevision: number | undefined
+): 'base' | 'source' | null {
+  if (baseRevision === undefined) {
+    return sourceRevision === undefined ? null : 'source'
+  }
+  if (sourceRevision === undefined || baseRevision === sourceRevision) {
+    return sourceRevision === undefined ? 'base' : null
+  }
+  return sourceRevision > baseRevision ? 'source' : 'base'
 }
 
 export function hasPtyBoundPane(

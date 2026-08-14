@@ -148,6 +148,31 @@ describe('workspaceTerminalAuthority', () => {
     expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('ambiguous')
   })
 
+  it('keeps authority with a revision winner whose tab list is explicitly empty', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [] },
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 163 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('stale-1', 'ssh:target@@pty-dead')] },
+      terminalLayoutsByTabId: { 'stale-1': layout('ssh:target@@pty-dead') }
+    })
+
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('base')
+  })
+
+  it('vetoes a revision winner that has no record at all for the workspace key', () => {
+    const base = session({
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 12 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('live-1', 'ssh:target@@pty-3')] },
+      terminalLayoutsByTabId: { 'live-1': layout('ssh:target@@pty-3') }
+    })
+
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('source')
+  })
+
   it('still prefers the only populated side when the other has the key with no tabs', () => {
     const base = session({
       tabsByWorktree: { [WORKTREE_ID]: [tab('a')] },
