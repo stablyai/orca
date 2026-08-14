@@ -197,6 +197,12 @@ __orca_normalize_prompt_command() {
     done
     PROMPT_COMMAND="$__orca_joined"
   fi
+  # Why: an integration such as zoxide, or a RHEL-family /etc/bashrc, can leave
+  # PROMPT_COMMAND ending in a ";"/whitespace separator; trim it so the append
+  # below never forms ";;", which bash rejects for the whole PROMPT_COMMAND.
+  while [[ "\${PROMPT_COMMAND:-}" == *[[:space:]\\;] ]]; do
+    PROMPT_COMMAND="\${PROMPT_COMMAND%?}"
+  done
 }
 __orca_normalize_prompt_command
 PROMPT_COMMAND="__orca_osc133_precmd\${PROMPT_COMMAND:+;\${PROMPT_COMMAND}};__orca_osc133_epilogue"
