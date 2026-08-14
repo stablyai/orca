@@ -327,7 +327,6 @@ inline src/shared/runtime-types.ts
 inline src/shared/source-control-ai.ts
 inline src/shared/telemetry-events.ts
 inline src/shared/text-search.ts
-inline src/shared/types.ts
 inline tests/e2e/helpers/terminal.ts
 inline tests/e2e/terminal-panes.spec.ts
 mobile-config app/h/*/files/*.tsx
