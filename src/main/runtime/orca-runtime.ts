@@ -1859,6 +1859,17 @@ const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 const WORKTREE_CREATE_RESULT_TTL_MS = 60_000
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
+// Why this long: one frame inside the window is what separates a working pane
+// from an idle one, so it must clear any agent's spinner repaint period.
+// Sampled against live Claude panes: working repaints every ~340ms (worst gap
+// observed 451ms), while an idle pane emits nothing at all. This leaves >4x
+// headroom over the worst measured gap, and only delays mail on a restored pane.
+const RESTORED_IDLE_QUIESCENCE_MS = 2_000
+// Why bounded retries: a restored pane replays buffered output, so the first
+// window often loses to a byte that says nothing about the agent. Retrying lets
+// it converge once the pane truly settles; the bound stops a genuinely working
+// pane from being polled for the life of the message.
+const RESTORED_IDLE_PROBE_ATTEMPTS = 5
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
@@ -16840,6 +16851,10 @@ export class OrcaRuntimeService {
   // Why: probe dedupe shares one promise across callers, but each caller's
   // continuation would re-deliver the same unread rows; arm one per pty.
   private readonly probeDeferredDeliveryPtyIds = new Set<string>()
+  // Why: mail arriving in a burst would otherwise open one quiescence window
+  // per message against the same pane. Keyed by handle, not pty, because the
+  // probe also covers the window where the pane has no bound leaf yet.
+  private readonly restoredIdleProbeHandles = new Set<string>()
 
   private controllerKnowsPtyIsLive(ptyId: string): boolean {
     try {
@@ -32305,19 +32320,136 @@ export class OrcaRuntimeService {
       }
       terminalHandle = coordinatorHandle
     }
-    try {
-      const { leaf } = this.getLiveLeafForHandle(terminalHandle)
-      // Why lastAgentStatusObservedLive: a cold restore seeds `idle` from the
-      // title persisted at snapshot time, so an agent that went busy across the
-      // relaunch still reads idle until its first live frame. Pushing on that
-      // would type a message plus Enter into a working agent. Seeded state waits
-      // for a live observation to authorize it.
-      if (leaf.lastAgentStatus === 'idle' && leaf.lastAgentStatusObservedLive) {
-        this.deliverPendingMessages(leaf, { mailboxHandle: handle, reservedTypes })
-      }
-    } catch {
-      // Unknown/stale handles can't be pointed now; the persisted message stays available via explicit check or future idle delivery.
+    const leaf = this.tryGetLiveLeafForHandle(terminalHandle)
+    // Why lastAgentStatusObservedLive: a cold restore seeds `idle` from the
+    // title persisted at snapshot time, so an agent that went busy across the
+    // relaunch still reads idle until its first live frame. Pushing on that
+    // would type a message plus Enter into a working agent. Seeded state waits
+    // for a live observation to authorize it.
+    if (leaf?.lastAgentStatus === 'idle' && leaf.lastAgentStatusObservedLive) {
+      this.deliverPendingMessages(leaf, { mailboxHandle: handle, reservedTypes })
+      return
     }
+    // Why a missing leaf probes rather than returns: a pane comes back
+    // addressable before its leaf is bound, and this is the only delivery
+    // attempt this message ever gets — dropping it here strands the row until
+    // unrelated mail happens to arrive. The probe re-resolves per attempt.
+    //
+    // Why null status counts: a cold relaunch returns its restore payload
+    // before the renderer publishes the graph, so the seeded status lands on a
+    // pty with no leaves and the pane comes back carrying no status at all.
+    // That is the commonest shape of this bug, not the seeded idle. 'working'
+    // and 'permission' are positive evidence of not-idle and never probe.
+    if (!leaf || leaf.lastAgentStatus === 'idle' || leaf.lastAgentStatus === null) {
+      this.confirmRestoredIdleThenDeliver(terminalHandle, handle)
+    }
+  }
+
+  private tryGetLiveLeafForHandle(handle: string): RuntimeLeafRecord | null {
+    try {
+      return this.getLiveLeafForHandle(handle).leaf
+    } catch {
+      // Unknown, stale, or not-yet-bound; callers decide whether to wait.
+      return null
+    }
+  }
+
+  /**
+   * Authorize a seeded `idle` that no live frame will ever confirm.
+   *
+   * Why this exists: an idle agent TUI is silent. Claude paints its title on
+   * the working→idle edge and then emits nothing until it is given work, so a
+   * pane restored while its agent sits at the prompt never produces the live
+   * observation the seeded gate waits for, and its mail strands for as long as
+   * the pane stays idle. Quiescence plus a recognized foreground agent
+   * establishes the same fact the missing title would have carried: a byte in
+   * the window means a spinner, tool output, or a human typing — none of which
+   * are safe to submit into — and a foreground that is not a known agent means
+   * there is nothing there to wake.
+   */
+  private confirmRestoredIdleThenDeliver(terminalHandle: string, mailboxHandle: string): void {
+    if (!this.ptyController || this.restoredIdleProbeHandles.has(terminalHandle)) {
+      return
+    }
+    this.restoredIdleProbeHandles.add(terminalHandle)
+
+    /** One window; resolves true once quiescence and the foreground both hold. */
+    const observeQuietWindow = async (baseline: number | null): Promise<boolean> => {
+      await new Promise((resolve) => setTimeout(resolve, RESTORED_IDLE_QUIESCENCE_MS))
+      // Why re-resolve every attempt: the pane may not have been bound when the
+      // mail landed, and a graph resync replaces leaf objects wholesale.
+      const settled = this.tryGetLiveLeafForHandle(terminalHandle)
+      if (
+        !settled ||
+        !settled.ptyId ||
+        (settled.lastAgentStatus !== 'idle' && settled.lastAgentStatus !== null) ||
+        settled.lastAgentStatusObservedLive
+      ) {
+        return false
+      }
+      const ptyId = settled.ptyId
+      if (settled.lastOutputAt !== baseline) {
+        return false
+      }
+      // Why direct recognition and not isRecognizedForegroundAgentProcess: that
+      // helper re-polls a wrapper name (`node`, `python`) for seconds waiting
+      // for it to exec into the real agent. A pane silent for the whole window
+      // is not mid-launch, so the retry settles on the same answer after ~40
+      // more process inspections, once per message that arrives.
+      const foregroundProcess = await this.ptyController?.getForegroundProcess(ptyId)
+      if (recognizeAgentProcess(foregroundProcess) === null) {
+        return false
+      }
+      // Why re-check after the await: the foreground read is itself slow enough
+      // for the pane to start working underneath it.
+      const confirmed = this.tryGetLiveLeafForHandle(terminalHandle)
+      if (
+        !confirmed ||
+        confirmed.ptyId !== ptyId ||
+        (confirmed.lastAgentStatus !== 'idle' && confirmed.lastAgentStatus !== null) ||
+        confirmed.lastOutputAt !== baseline
+      ) {
+        return false
+      }
+      // The probe IS the live observation, so later mail for this pane delivers
+      // immediately instead of paying the window again.
+      confirmed.lastAgentStatusObservedLive = true
+      // Why no reservedTypes: that snapshot guards a sub-millisecond race with a
+      // check resolving in the same drain, which this window has long outlived.
+      // Replaying it here could suppress a type forever; deliverPendingMessages
+      // re-reads the waiters that are still live.
+      this.deliverPendingMessages(confirmed, { mailboxHandle })
+      return true
+    }
+
+    void (async () => {
+      try {
+        // Why re-arm instead of one attempt: a pane coming back replays buffered
+        // output, and a single byte landing mid-window would otherwise defer
+        // this row until unrelated mail happened to arrive. Each retry rebases
+        // on the output it just saw, so a pane that is genuinely working simply
+        // keeps failing the window until it stops.
+        for (let attempt = 0; attempt < RESTORED_IDLE_PROBE_ATTEMPTS; attempt += 1) {
+          const baseline = this.tryGetLiveLeafForHandle(terminalHandle)?.lastOutputAt ?? null
+          if (await observeQuietWindow(baseline)) {
+            return
+          }
+          const current = this.tryGetLiveLeafForHandle(terminalHandle)
+          // Keep waiting while the pane is still unbound — that is the state
+          // this retry exists for. Stop once it is visibly busy or a live frame
+          // took over the delivery path.
+          if (
+            current &&
+            (current.lastAgentStatusObservedLive ||
+              (current.lastAgentStatus !== 'idle' && current.lastAgentStatus !== null))
+          ) {
+            return
+          }
+        }
+      } finally {
+        this.restoredIdleProbeHandles.delete(terminalHandle)
+      }
+    })()
   }
 
   private scheduleRestoredMessageRepoints(): void {

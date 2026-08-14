@@ -35056,6 +35056,348 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('delivers to a restored idle pane whose agent never emits another title', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        // The agent is genuinely there and at its prompt — this is what
+        // separates a restored idle from a restored maybe-working pane.
+        getForegroundProcess: async () => 'claude'
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      // A real Claude idle title, captured from a live pane.
+      runtime.seedTerminalRestoreTail('pty-1', {
+        lastTitle: '✳ Resuming session after a break'
+      })
+      const message = db.insertMessage({
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'DO NOT SHIP PR 250',
+        type: 'worker_done'
+      })
+
+      runtime.notifyMessageArrived(terminal.handle, 'worker_done')
+      await Promise.resolve()
+
+      // Why no live frame follows: an idle agent TUI is silent. Claude paints
+      // its title on the working→idle edge and then emits nothing until it is
+      // given work, so the liveness edge the seeded gate waits for never comes
+      // and the row strands for as long as the pane stays idle.
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
+      await vi.advanceTimersByTimeAsync(600)
+      expect(write).toHaveBeenCalledWith('pty-1', '\r')
+      expect(message.delivered_at).toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('delivers to a restored pane that came back with no agent status at all', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => 'claude'
+      })
+      // Why no seed: a cold relaunch returns its restore payload before the
+      // renderer publishes the graph, so the seeded title never reaches a leaf
+      // and the pane comes back with lastAgentStatus null. This is the shape the
+      // restart e2e reproduces, and the seeded-idle case above does not cover it.
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      const message = db.insertMessage({
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'restored with no status',
+        type: 'worker_done'
+      })
+
+      runtime.notifyMessageArrived(terminal.handle, 'worker_done')
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
+      expect(message.delivered_at).toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('holds a restored pane while it keeps emitting and delivers once it settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => 'claude'
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+      db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'restored but busy' })
+
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
+
+      // A working agent repaints its spinner several times a second, so every
+      // window it opens loses. Measured against live Claude panes: ~340ms
+      // median between frames, 451ms worst — well inside a 2s window.
+      for (let frame = 0; frame < 16; frame += 1) {
+        await vi.advanceTimersByTimeAsync(400)
+        runtime.onPtyData('pty-1', '.', 100 + frame)
+      }
+      expect(write).not.toHaveBeenCalled()
+
+      // Releasing the gate proves the silence above was the output and not a
+      // probe that never armed: once the agent stops, the pane is deliverable.
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for a pane that is addressable before its leaf is bound', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => 'claude'
+      })
+      syncSinglePty(runtime)
+      const [terminal] = (await runtime.listTerminals()).terminals
+
+      // A restart republishes the graph in stages, so for a moment the handle
+      // resolves while its leaf does not. Staged directly because the real
+      // window is milliseconds wide: driving it through syncWindowGraph mints a
+      // fresh handle instead of reproducing the split, and the e2e that hits it
+      // naturally only lost the race about one run in three — too thin to guard
+      // a regression with. Mail landing here used to be dropped on the
+      // unresolvable leaf, and since delivery is only attempted on arrival, the
+      // row stranded until unrelated mail happened to come in.
+      const runtimeInternals = runtime as unknown as {
+        getLiveLeafForHandle: (handle: string) => { leaf: unknown }
+      }
+      const resolveLeaf = runtimeInternals.getLiveLeafForHandle.bind(runtime)
+      let leafIsBound = false
+      const resolveSpy = vi
+        .spyOn(runtimeInternals, 'getLiveLeafForHandle')
+        .mockImplementation((handle: string) => {
+          if (!leafIsBound) {
+            throw new Error('terminal_not_live')
+          }
+          return resolveLeaf(handle)
+        })
+
+      db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'arrived unbound' })
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(2_500)
+      expect(write).not.toHaveBeenCalled()
+
+      leafIsBound = true
+      await vi.advanceTimersByTimeAsync(10_000)
+      resolveSpy.mockRestore()
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('abandons the window when the pane wakes during the foreground read', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      const foregroundResolvers: ((process: string) => void)[] = []
+      const getForegroundProcess = vi.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            foregroundResolvers.push(resolve)
+          })
+      )
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({ write, kill: vi.fn(), getForegroundProcess })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+      db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'woke mid-read' })
+
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
+      // The window closes quiet, so the probe commits to reading the foreground.
+      await vi.advanceTimersByTimeAsync(2_500)
+      expect(getForegroundProcess).toHaveBeenCalledTimes(1)
+
+      // Reading a foreground process is a round trip to the OS, and on a remote
+      // pane a network hop — long enough for the agent to start a turn. The
+      // window's own verdict is stale by the time the read returns.
+      runtime.onPtyData('pty-1', 'thinking...', 500)
+      foregroundResolvers[0]?.('claude')
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(write).not.toHaveBeenCalled()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads a wrapper foreground once per bounded attempt instead of re-polling it', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      // `node` is a wrapper name, not an agent. The review-note path re-polls it
+      // for seconds in case it execs into one, which is wasted here: the pane
+      // was silent for the whole window, so it is not mid-launch.
+      const getForegroundProcess = vi.fn().mockResolvedValue('node')
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({ write, kill: vi.fn(), getForegroundProcess })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+      db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'wrapper foreground' })
+
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      // One read per bounded attempt. The review-note helper would instead
+      // re-poll this same wrapper name every 150ms for 6.5s per attempt, which
+      // is ~45 process inspections for an answer that cannot change.
+      expect(getForegroundProcess).toHaveBeenCalledTimes(5)
+      expect(write).not.toHaveBeenCalled()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not push to a restored idle pane whose foreground is not an agent', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        // The agent exited across the restart and the shell owns the pane; the
+        // seeded title is all that is left of it.
+        getForegroundProcess: async () => 'bash'
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+      db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'no agent left' })
+
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(write).not.toHaveBeenCalled()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('opens one quiescence window for a burst of mail to a restored idle pane', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      // Why a pending promise and not mockResolvedValue: a probe that settles
+      // before the next window opens would hide a missing guard behind the
+      // early return on the flag it sets. Holding every probe in flight is what
+      // makes the count mean "windows opened".
+      const foregroundResolvers: ((process: string) => void)[] = []
+      const getForegroundProcess = vi.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            foregroundResolvers.push(resolve)
+          })
+      )
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({ write, kill: vi.fn(), getForegroundProcess })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+      for (let index = 0; index < 5; index += 1) {
+        db.insertMessage({ from: 'sender', to: terminal.handle, subject: `burst ${index}` })
+        runtime.notifyMessageArrived(terminal.handle, 'status')
+      }
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(2_500)
+
+      // Five arrivals, one probe — otherwise a busy Run spawns a foreground
+      // read per message against the same pane, each able to retry for seconds.
+      expect(getForegroundProcess).toHaveBeenCalledTimes(1)
+
+      foregroundResolvers[0]?.('claude')
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 5 orchestration messages')
+      )
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('lets a resolved check consume its rows before a later same-tick notify pushes', async () => {
     vi.useFakeTimers()
     try {

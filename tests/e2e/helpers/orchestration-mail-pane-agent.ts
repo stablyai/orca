@@ -21,7 +21,15 @@
  * OSC title, and PTY liveness), so a foreground process in a mounted pane
  * exercises the same code with none of that startup race.
  */
-import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -111,13 +119,32 @@ process.once('exit', () => {
   }
 })
 
+/**
+ * Launch node under `processName` so the pane's foreground process is one Orca
+ * recognizes as an agent. Bare `node` is only a wrapper name, and delivery paths
+ * that require a *recognized* agent refuse it — so a spec asserting one of those
+ * cannot use the default launcher. The kernel records the path used at exec, so
+ * a link is enough to change what `getForegroundProcess` reports.
+ */
+function linkNodeAs(dir: string, processName: string): string {
+  const linkPath = path.join(dir, processName)
+  try {
+    symlinkSync(process.execPath, linkPath)
+  } catch {
+    // Windows needs a privilege for symlinks; a copy reports the same name.
+    copyFileSync(process.execPath, linkPath)
+  }
+  return linkPath
+}
+
 /** One isolated agent: its own script copy, ledger, and control file. */
-export function createMailPaneAgent(): MailPaneAgent {
+export function createMailPaneAgent(options: { processName?: string } = {}): MailPaneAgent {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-mail-agent-'))
   agentDirs.push(dir)
   const scriptPath = path.join(dir, 'agent.cjs')
   const ledgerPath = path.join(dir, 'ledger.jsonl')
   const controlPath = path.join(dir, 'title')
+  const nodePath = options.processName ? linkNodeAs(dir, options.processName) : 'node'
   writeFileSync(scriptPath, AGENT_SOURCE)
   writeFileSync(ledgerPath, '')
 
@@ -143,7 +170,12 @@ export function createMailPaneAgent(): MailPaneAgent {
   }
 
   return {
-    launchCommand: `node ${quote(scriptPath)} ${quote(ledgerPath)} ${quote(controlPath)}`,
+    launchCommand: [
+      options.processName ? quote(nodePath) : nodePath,
+      quote(scriptPath),
+      quote(ledgerPath),
+      quote(controlPath)
+    ].join(' '),
     setTitle: (title: string) => writeFileSync(controlPath, title),
     readLedger,
     readStdin: () =>
