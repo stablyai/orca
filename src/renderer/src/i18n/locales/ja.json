@@ -2859,7 +2859,7 @@
             "removedBody": "このワークスペースの SSH ホストが削除されたため、接続できません。ワークスペースを削除してクリアしてください — リモートファイルはそのまま残ります。",
             "removeWorkspaceButton": "ワークスペースを削除"
           },
-          "TerminalPaneDisconnectedBanner": {
+          "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "リモートランタイムに再接続中",
             "disconnectedTitle": "リモートランタイムが切断されました",
             "retryingBody": "Orca は最大1分間再試行します。接続が復元されると、このターミナルが再開されます。",

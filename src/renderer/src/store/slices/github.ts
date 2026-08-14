@@ -2787,7 +2787,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               ...(errorForCache
                 ? {
                     error:
-                      errorUnchanged && previousError !== undefined ? previousError : errorForCache
+                      errorUnchanged && previousError !== undefined
+                        ? previousError
+                        : errorForCache
                   }
                 : {}),
               ...(nextFellBack ? { issueSourceFellBack: true } : {})

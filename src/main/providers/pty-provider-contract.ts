@@ -123,8 +123,7 @@ export type IPtyProvider = {
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
-  /** Three-valued: null means the provider cannot see this id right now — absence is unproven, never dead. */
-  hasPty?: (id: string) => boolean | null
+  hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): void

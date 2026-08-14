@@ -3600,9 +3600,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           killedTabIds.add(tab.id)
           for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
             if (!ptyId.startsWith('remote:')) {
-              // Why swallow: an unreachable terminal host rejects instead of reporting a
-              // close it did not perform; removal proceeds either way.
-              void Promise.resolve(window.api.pty.kill(ptyId)).catch(() => {})
+              window.api.pty.kill(ptyId)
             }
           }
         }

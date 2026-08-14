@@ -537,33 +537,6 @@ describe('DaemonPtyRouter', () => {
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
-  // Why: an unreachable generation cannot certify that another generation's session
-  // is gone — collapsing its null to false hands a respawn a fabricated death.
-  it('answers unknown when any adapter cannot see the session', () => {
-    const current = createAdapter('current')
-    const legacy = createAdapter('legacy')
-    legacy.hasPty = vi.fn(() => null)
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-
-    expect(router.hasPty('unmapped-session')).toBe(null)
-  })
-
-  it('does not report terminal_gone for inspection when an adapter cannot answer', async () => {
-    const current = createAdapter('current')
-    const legacy = createAdapter('legacy')
-    legacy.hasPty = vi.fn(() => null)
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-
-    await expect(router.inspectProcess('unmapped-session')).resolves.toEqual({
-      foregroundProcess: null,
-      hasChildProcesses: false
-    })
-
-    // Unproven routes must not be memoized as an owner.
-    const unanimous = new DaemonPtyRouter({ current: createAdapter('c2'), legacy: [] })
-    await expect(unanimous.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
-  })
-
   it('discovers an unmapped live session from one coalesced inventory', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['surviving-session'])

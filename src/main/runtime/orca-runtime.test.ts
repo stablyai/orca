@@ -2858,9 +2858,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  // Inverted for STA-3077 S8: the replacement grant this pinned was unreachable in production
-  // (relay-native lease ptyId vs app-form runtime ptyId) and has been deleted.
-  it('refuses to replace a disconnected SSH pane, even inside the lease grace window', async () => {
+  it('recovers a disconnected pane through one HUB-owned replacement', async () => {
     const tabId = 'tab-recover'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
@@ -2882,8 +2880,18 @@ describe('OrcaRuntimeService', () => {
 
     await expect(
       runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).rejects.toThrow('terminal_not_recoverable')
-    expect(createTerminal).not.toHaveBeenCalled()
+    ).resolves.toMatchObject({
+      handle: 'term-replacement',
+      tabId,
+      leafId: HEADLESS_LEAF_ID,
+      worktreeId: TEST_WORKTREE_ID
+    })
+    expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
+      tabId,
+      leafId: HEADLESS_LEAF_ID,
+      focus: false,
+      persistHostSessionBinding: true
+    })
   })
 
   it('rejects missing host panes without authoritative expired binding evidence', async () => {
@@ -2949,9 +2957,7 @@ describe('OrcaRuntimeService', () => {
     expect(createTerminal).not.toHaveBeenCalled()
   })
 
-  // Inverted for STA-3077 S8: this was the only consumer of the recovery-dedup map, which existed
-  // solely to de-duplicate the (unreachable, now deleted) replacement grant. Scenario kept.
-  it('concurrent recovery requests for one disconnected pane both refuse and create nothing', async () => {
+  it('deduplicates concurrent pane recovery across stale viewer handles', async () => {
     const tabId = 'tab-concurrent'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
@@ -2961,23 +2967,30 @@ describe('OrcaRuntimeService', () => {
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit('pty-expired', 0)
-    // Never settles: a resurrected grant would hang the assertion rather than quietly pass.
-    const createTerminal = vi
-      .spyOn(runtime, 'createTerminal')
-      .mockReturnValue(new Promise<RuntimeTerminalCreate>(() => {}))
+    let finishCreate!: (result: RuntimeTerminalCreate) => void
+    const pendingCreate = new Promise<RuntimeTerminalCreate>((resolve) => {
+      finishCreate = resolve
+    })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockReturnValue(pendingCreate)
 
     const first = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
     const second = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, 'term-other-viewer')
+    finishCreate({
+      handle: 'term-replacement',
+      tabId,
+      paneKey,
+      ptyId: 'pty-replacement',
+      worktreeId: TEST_WORKTREE_ID,
+      title: null,
+      surface: 'background'
+    })
 
-    await expect(first).rejects.toThrow('terminal_not_recoverable')
-    // The second viewer's handle never mapped to this pane, so it still fails the identity guard.
+    await expect(first).resolves.toEqual(expect.objectContaining({ handle: 'term-replacement' }))
     await expect(second).rejects.toThrow('terminal_not_found')
-    expect(createTerminal).not.toHaveBeenCalled()
+    expect(createTerminal).toHaveBeenCalledOnce()
   })
 
-  // Inverted for STA-3077 S8: it pinned retry-after-a-failed-grant, and the grant (unreachable at
-  // the pty-id shapes production mints) is deleted, so there is nothing left to retry into.
-  it('a repeated recovery request never accumulates a grant', async () => {
+  it('clears a failed pane recovery so a later reconnect can retry', async () => {
     const tabId = 'tab-retry'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
@@ -2987,7 +3000,6 @@ describe('OrcaRuntimeService', () => {
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit('pty-expired', 0)
-    // A fully working createTerminal stays armed across both calls to prove neither one reaches it.
     const createTerminal = vi
       .spyOn(runtime, 'createTerminal')
       .mockRejectedValueOnce(new Error('relay_reconnecting'))
@@ -3003,16 +3015,13 @@ describe('OrcaRuntimeService', () => {
 
     await expect(
       runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).rejects.toThrow('terminal_not_recoverable')
+    ).rejects.toThrow('relay_reconnecting')
     await expect(
       runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).rejects.toThrow('terminal_not_recoverable')
-    expect(createTerminal).toHaveBeenCalledTimes(0)
+    ).resolves.toMatchObject({ handle: 'term-retry' })
+    expect(createTerminal).toHaveBeenCalledTimes(2)
   })
 
-  // STA-3077 S8: no longer discriminating — since the grant was deleted, an 'expired' lease refuses
-  // identically (see the grace-window case above), so 'terminated' no longer selects the outcome.
-  // Retained only as a regression guard: if a replacement path ever returns, this must stay a refusal.
   it('does not recover a pane whose authoritative SSH lease was terminated', async () => {
     const tabId = 'tab-terminated'
     const runtime = createRuntimeWithSshLease('pty-terminated', tabId, 'terminated')

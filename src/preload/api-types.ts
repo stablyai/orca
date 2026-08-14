@@ -1473,8 +1473,6 @@ export type PreloadApi = {
       rows: number
       cwd?: string
       cwdFallback?: 'worktree'
-      /** Create a shell for this pane instead of adopting the one it records; see pty.ts. */
-      createFreshShellForUnreachablePane?: boolean
       env?: Record<string, string>
       envToDelete?: string[]
       command?: string

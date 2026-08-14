@@ -983,10 +983,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return providerSequence ? { providerSequence } : undefined
   }
 
-  hasPty(id: string): boolean | null {
-    // Why null off-socket: the cache only tracks exits it received, so a miss while
-    // disconnected (or before the first listSessions) is ignorance, not absence.
-    return this.activeSessionIds.has(id) ? true : this.client.isConnected() ? false : null
+  hasPty(id: string): boolean {
+    return this.activeSessionIds.has(id)
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {

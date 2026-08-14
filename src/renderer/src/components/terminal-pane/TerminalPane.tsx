@@ -190,7 +190,7 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
-import { TerminalPaneDisconnectedBanner } from './TerminalPaneDisconnectedBanner'
+import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import {
@@ -2920,10 +2920,6 @@ function TerminalPane(
     resolveAgentForLeaf(contextMenuLeafId)
   )
   // Each toggle gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
-  // The pane-level disconnected card owns the bottom strip while it is up; see the error toast below.
-  const activePaneShowsUnreachableCard = Boolean(
-    activePane && ptyRecoveryStatesByPaneId[activePane.id]?.unreachablePane
-  )
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   return (
@@ -2991,12 +2987,8 @@ function TerminalPane(
         )
       })}
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
-          toast was painting over it (same bottom strip) with the raw ssh:connect failure.
-          The pane's own disconnected card owns the same strip and the same story, and the toast
-          outranks it at z-50 — so it covered BOTH of its actions and made the affordance
-          unclickable. Naming only the connection overlay here was the gap: the card is raised for
-          a per-pane failure that leaves the connection up, which is exactly when this fires. */}
-      {terminalError && isActive && !showSshReconnectOverlay && !activePaneShowsUnreachableCard ? (
+          toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
+      {terminalError && isActive && !showSshReconnectOverlay ? (
         <TerminalErrorToast
           error={terminalError}
           onDismiss={dismissTerminalError}
@@ -3211,20 +3203,12 @@ function TerminalPane(
               return null
             }
             return createPortal(
-              <TerminalPaneDisconnectedBanner
+              <TerminalRemoteRuntimeReconnectBanner
                 key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
                 phase={recoveryState.phase}
-                variant={recoveryState.unreachablePane ? 'ssh-pane' : 'remote-runtime'}
                 onReconnect={() => {
-                  const unreachable = recoveryState.unreachablePane
-                  if (unreachable) {
-                    unreachable.onRetry()
-                    return
-                  }
                   paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
                 }}
-                onStartNewTerminal={recoveryState.unreachablePane?.onStartNewTerminal}
-                onRestoreTerminalFocus={() => pane.terminal.focus()}
               />,
               pane.container,
               `remote-runtime-reconnect-${pane.id}`

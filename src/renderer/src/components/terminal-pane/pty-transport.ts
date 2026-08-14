@@ -13,7 +13,6 @@ import {
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
-import { SSH_SESSION_EXPIRED_ERROR } from '../../../../shared/ssh-pty-failure-tokens'
 import {
   ptyDataHandlers,
   ptyReplayHandlers,
@@ -72,6 +71,7 @@ export type {
 } from './pty-transport-types'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
+const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 // Why: main rejects a session reattached under a different SSH connection with this phrase; treat as stale (spawn fresh), not a crash.
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
 const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
@@ -796,14 +796,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return { id: options.sessionId, exitedBeforeAttach: true } satisfies PtyConnectResult
       }
 
-      // A session id IS the instruction to attach: the provider reattaches on it before any
-      // pane-owner logic runs. So refusing adoption has to drop it here, at the last gate before
-      // the IPC — skipping owner resolution in main is not enough, and left this action still
-      // attaching the very shell it could not reach.
       const admittedSessionId =
-        options.sessionId &&
-        !options.createFreshShellForUnreachablePane &&
-        !isPreHandlerPtyStateDiscarded(options.sessionId)
+        options.sessionId && !isPreHandlerPtyStateDiscarded(options.sessionId)
           ? options.sessionId
           : undefined
 
@@ -816,66 +810,35 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         // Why: cwd fallback is only for fresh local spawns — reattach keeps the session's cwd and SSH transports resolve cwd on the remote host.
         const shouldSendLocalCwdFallback =
           cwdFallback === 'worktree' && !connectionId && !admittedSessionId
-        // Every constructor value that can launch or resume an agent is suppressed together.
-        const saved = options.suppressSavedStartup
-          ? ({} as Partial<{
-              command: typeof command
-              commandDelivery: typeof commandDelivery
-              launchConfig: typeof launchConfig
-              resumeProviderSession: typeof resumeProviderSession
-              launchToken: typeof launchToken
-              launchAgent: typeof launchAgent
-              startupCommandDelivery: typeof startupCommandDelivery
-            }>)
-          : {
-              command,
-              commandDelivery,
-              launchConfig,
-              resumeProviderSession,
-              launchToken,
-              launchAgent,
-              startupCommandDelivery
-            }
-        let spawnEnv = options.env ?? env
-        if (options.suppressSavedStartup && spawnEnv?.ORCA_AGENT_LAUNCH_TOKEN !== undefined) {
-          spawnEnv = { ...spawnEnv }
-          delete spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
-        }
         const result = await window.api.pty.spawn({
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
           cwd,
           ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
-          ...(options.createFreshShellForUnreachablePane
-            ? { createFreshShellForUnreachablePane: true }
-            : {}),
-          env: spawnEnv,
+          env: options.env ?? env,
           ...((options.envToDelete ?? envToDelete)
             ? { envToDelete: options.envToDelete ?? envToDelete }
             : {}),
-          command: options.command ?? saved.command,
-          ...((options.commandDelivery ?? saved.commandDelivery)
-            ? { commandDelivery: options.commandDelivery ?? saved.commandDelivery }
+          command: options.command ?? command,
+          ...((options.commandDelivery ?? commandDelivery)
+            ? { commandDelivery: options.commandDelivery ?? commandDelivery }
             : {}),
-          ...((options.launchConfig ?? saved.launchConfig)
-            ? { launchConfig: options.launchConfig ?? saved.launchConfig }
+          ...((options.launchConfig ?? launchConfig)
+            ? { launchConfig: options.launchConfig ?? launchConfig }
             : {}),
-          ...((options.resumeProviderSession ?? saved.resumeProviderSession)
+          ...((options.resumeProviderSession ?? resumeProviderSession)
             ? {
-                resumeProviderSession: options.resumeProviderSession ?? saved.resumeProviderSession
+                resumeProviderSession: options.resumeProviderSession ?? resumeProviderSession
               }
             : {}),
-          ...((options.launchToken ?? saved.launchToken)
-            ? { launchToken: options.launchToken ?? saved.launchToken }
+          ...((options.launchToken ?? launchToken)
+            ? { launchToken: options.launchToken ?? launchToken }
             : {}),
-          ...((options.launchAgent ?? saved.launchAgent)
-            ? { launchAgent: options.launchAgent ?? saved.launchAgent }
+          ...((options.launchAgent ?? launchAgent)
+            ? { launchAgent: options.launchAgent ?? launchAgent }
             : {}),
-          ...((options.startupCommandDelivery ?? saved.startupCommandDelivery)
-            ? {
-                startupCommandDelivery:
-                  options.startupCommandDelivery ?? saved.startupCommandDelivery
-              }
+          ...((options.startupCommandDelivery ?? startupCommandDelivery)
+            ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
             : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
@@ -1078,9 +1041,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       inputWriteQueue.clear()
       if (ptyId) {
         const id = ptyId
-        // Why swallow: an unreachable terminal host rejects rather than pretending the
-        // session closed, and teardown must still run — but nothing here can act on it.
-        void Promise.resolve(window.api.pty.kill(id)).catch(() => {})
+        window.api.pty.kill(id)
         connected = false
         ptyId = null
         unregisterPtyHandlers(id)
