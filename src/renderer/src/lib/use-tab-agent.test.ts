@@ -246,18 +246,6 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('openclaude')
   })
 
-  it('lets an explicit title override stale launch identity after the pane shows newer activity', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '✳ Claude Code',
-        hookAgent: null,
-        launchAgent: 'codex'
-      })
-    ).toBe('claude')
-  })
-
   // Why: #8478 — OpenCode native `OC | …` titles must reclaim a stale Claude
   // launch identity so the tab icon is OpenCode, not Claude.
   it('uses OpenCode native session titles to replace stale Claude launch identity', () => {
@@ -294,16 +282,6 @@ describe('resolveTabAgentFromSignals', () => {
         ).toBe('opencode')
       }
     }
-    // Real pane reuse: the title PRESENTS Claude, so it still reclaims the pane.
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '✳ Claude Code',
-        hookAgent: null,
-        launchAgent: 'opencode'
-      })
-    ).toBe('claude')
   })
 
   it('does not let an explicit title override launch identity before any activity is observed', () => {
@@ -313,14 +291,13 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
-
         launchAgent: 'codex'
       })
     ).toBe('codex')
   })
 
-  // Pi/OMP identity (shared title-identity group, launchAgent-loss flicker)
-  // lives in use-tab-agent-pi-identity.test.ts.
+  // Pi/OMP identity → use-tab-agent-pi-identity.test.ts
+  // Nested Claude↔Codex ownership → use-tab-agent-nested-identity.test.ts
 
   it('prefers explicit hook identity over a conflicting title mention', () => {
     expect(

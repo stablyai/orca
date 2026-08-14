@@ -174,10 +174,8 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
     ).toBe('omp')
   })
 
-  it('still lets a genuine cross-group foreground process reclaim a reused OMP pane', () => {
-    // Scope guard: a different-group process (Codex is not Pi-compatible) is
-    // real-time proof the pane was reused, so it overrides the OMP launch owner
-    // instead of collapsing onto it.
+  it('keeps OMP launch ownership when a nested cross-group process is foreground (#13341)', () => {
+    // Why: nested Codex under OMP is not pane reuse while launch ownership remains.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -186,6 +184,19 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
         hookAgent: null,
         processAgent: 'codex',
         launchAgent: 'omp'
+      })
+    ).toBe('omp')
+  })
+
+  it('lets a cross-group process own the icon once launch ownership has cleared', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        processAgent: 'codex',
+        launchAgent: undefined
       })
     ).toBe('codex')
   })

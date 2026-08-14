@@ -42,7 +42,9 @@ async function setPaneForeground(entry: PaneForegroundAgentEntry): Promise<void>
 }
 
 describe('resolveTabAgentFromSignals process identity', () => {
-  it('ranks the recognized foreground process above title and launch bootstrap', () => {
+  it('ranks the recognized foreground process above title when no launch owner remains', () => {
+    // Why (#13341): a different-group process under an active launch is nested, not
+    // reuse — process may own the icon only after launch ownership has exited.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -51,6 +53,16 @@ describe('resolveTabAgentFromSignals process identity', () => {
         hookAgent: null,
         processAgent: 'aider',
         launchAgent: 'codex'
+      })
+    ).toBe('codex')
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '✦ Gemini CLI',
+        hookAgent: null,
+        processAgent: 'aider',
+        launchAgent: undefined
       })
     ).toBe('aider')
   })

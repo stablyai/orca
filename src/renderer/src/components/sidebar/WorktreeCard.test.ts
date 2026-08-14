@@ -52,8 +52,9 @@ describe('getWorktreeStatus', () => {
         livePtyIds
       )
     ).toBe('permission')
+    // Why: status must be agent-attributable (identity or spinner+launch), not a bare keyword.
     expect(
-      getWorktreeStatus([makeTerminalTab('mimo working')], [{ id: 'browser-1' }], livePtyIds)
+      getWorktreeStatus([makeTerminalTab('✦ Codex')], [{ id: 'browser-1' }], livePtyIds)
     ).toBe('working')
   })
 })
