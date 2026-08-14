@@ -3126,7 +3126,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "STA-4327 used two byte-identical oracles across reported v1.4.180 (0b62333cf1), latest main (9bb8836bb6), candidate (121e112d77), and candidate with the relevant fix disabled. Runtime oracle cd248b67cc10ef64f2def315b86c3b0236b102639d03c65a0c5d9519e538d3af failed the same three durability/continuity checks on both affected revisions and disabled fix, while candidate passed 5/5. Renderer oracle 3b0949eef8b792cf5b09cfa55341f4216c08714f158e4b132e988e8114636cea failed both explicit-empty hydration/fallback checks on both affected revisions and disabled fix, while candidate passed 2/2."
+        "evidence": "STA-4327 used two byte-identical oracles. Runtime oracle cd248b67cc10ef64f2def315b86c3b0236b102639d03c65a0c5d9519e538d3af failed the same three durability/continuity checks on reported v1.4.180 (0b62333cf1), latest main (9bb8836bb6), and disabled fix; runtime candidate 3cf8a37447 passed 5/5, and final code candidate 121e112d77 separately passed its expanded 6/6 oracle. Renderer oracle 3b0949eef8b792cf5b09cfa55341f4216c08714f158e4b132e988e8114636cea failed both explicit-empty hydration/fallback checks on v1.4.180, latest main, and disabled fix, while renderer candidate 121e112d77 passed 2/2."
       },
       "performanceBudget": {
         "required": true,
