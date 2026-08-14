@@ -12,7 +12,8 @@ import {
   mergeTerminalLayout,
   mergeWorkspaceRecord,
   paneLeafId,
-  paneTabId
+  paneTabId,
+  tabIsPtyBound
 } from './workspace-session-partition-provenance'
 
 export type WorkspaceSessionPartitionAdoption = {
@@ -45,7 +46,7 @@ export function adoptOrphanedWorkspaceSessionPartition(
   const baseKeys = collectWorkspaceKeys(base)
   const baseAuthorityIndex = createWorkspaceSessionAuthorityIndex(base)
   const sourceAuthorityIndex = createWorkspaceSessionAuthorityIndex(source)
-  const authorityByWorkspaceKey = new Map(
+  const decisionByWorkspaceKey = new Map(
     [...sourceKeys].map((key) => [
       key,
       workspaceTerminalAuthority(
@@ -67,28 +68,51 @@ export function adoptOrphanedWorkspaceSessionPartition(
     ...findWorkspaceTabIdOwnerCollisions([base, source]),
     ...[...sourceKeys].filter(
       (key) =>
-        options.preserveWorkspaceKeys?.has(key) || authorityByWorkspaceKey.get(key) === 'ambiguous'
+        options.preserveWorkspaceKeys?.has(key) ||
+        decisionByWorkspaceKey.get(key)?.authority === 'ambiguous'
     )
   ])
   const sourceAuthority = new Set(
     [...sourceKeys].filter(
-      (key) => !ambiguousWorktreeIds.has(key) && authorityByWorkspaceKey.get(key) === 'source'
+      (key) =>
+        !ambiguousWorktreeIds.has(key) && decisionByWorkspaceKey.get(key)?.authority === 'source'
     )
   )
+  // Keys where the pty-bound veto overturned base's revision win. Base's own tab rows
+  // must survive for these: base is the side that runs the topology-authority code
+  // path, so its list reflects deliberate closes the source never observed. The
+  // source's pty-bound strays are grafted in additively below instead of replacing
+  // the list, and every other per-key field keeps base priority.
+  const grafted = new Set(
+    [...sourceAuthority].filter(
+      (key) => decisionByWorkspaceKey.get(key)?.ptyBoundVetoFlip && base.tabsByWorktree[key]
+    )
+  )
+  const sourceFieldAuthority = new Set([...sourceAuthority].filter((key) => !grafted.has(key)))
   const reconciledKeys = new Set([...sourceKeys].filter((key) => !ambiguousWorktreeIds.has(key)))
   const tabsByWorktree = mergeWorkspaceRecord(
     base.tabsByWorktree,
     source.tabsByWorktree,
     reconciledKeys,
-    sourceAuthority
+    sourceFieldAuthority
   ) ?? { ...base.tabsByWorktree }
+  for (const key of grafted) {
+    const baseTabs = base.tabsByWorktree[key] ?? []
+    const baseTabIds = new Set(baseTabs.map((tab) => tab.id))
+    const strays = (source.tabsByWorktree[key] ?? []).filter(
+      (tab) => !baseTabIds.has(tab.id) && tabIsPtyBound(source, tab)
+    )
+    if (strays.length > 0) {
+      tabsByWorktree[key] = [...baseTabs, ...strays]
+    }
+  }
   const { liveTabIds, touchedTabIds, sourceWorkspaceKeyByTabId, sourcePaneAuthority } =
     collectTerminalProvenance(base, source, tabsByWorktree, reconciledKeys, sourceAuthority)
   const sourcePaneAuthoritativeTabIds = new Set(
     [...sourcePaneAuthority].map((paneKey) => paneTabId(paneKey))
   )
   for (const key of reconciledKeys) {
-    if (sourceAuthority.has(key)) {
+    if (sourceFieldAuthority.has(key)) {
       continue
     }
     const sourceTabsById = new Map(
@@ -227,7 +251,7 @@ export function adoptOrphanedWorkspaceSessionPartition(
     base,
     source,
     reconciledKeys,
-    sourceAuthority,
+    sourceAuthority: sourceFieldAuthority,
     ambiguousWorktreeIds,
     tabsByWorktree,
     terminalLayoutsByTabId,

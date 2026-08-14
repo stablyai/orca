@@ -46,7 +46,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalLayoutsByTabId: { 'live-1': layout('ssh:target@@pty-34') }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('source')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('source')
   })
 
   it('mirrors the pty-bound tiebreak toward a live base against a revisionless source', () => {
@@ -60,7 +60,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 7 }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('base')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('base')
   })
 
   it('yields a higher two-sided revision to the side holding pty-bound panes', () => {
@@ -75,7 +75,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 5 }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('source')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('source')
   })
 
   it('keeps two-sided revision precedence when both sides hold pty-bound panes', () => {
@@ -90,7 +90,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 4 }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('base')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('base')
   })
 
   it('keeps revision precedence when both partitions record a revision', () => {
@@ -105,7 +105,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 9 }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('source')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('source')
   })
 
   it('counts a pane bound through its layout when the tab record carries no ptyId', () => {
@@ -119,7 +119,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalLayoutsByTabId: { 'live-1': layout('ssh:target@@pty-9') }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('source')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('source')
   })
 
   it('stays ambiguous when neither side holds a pty-bound pane and bundles differ', () => {
@@ -132,7 +132,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalLayoutsByTabId: { b: layout(null) }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('ambiguous')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('ambiguous')
   })
 
   it('stays ambiguous when both sides hold pty-bound panes and bundles differ', () => {
@@ -145,7 +145,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalLayoutsByTabId: { b: layout('ssh:target@@pty-2') }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('ambiguous')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('ambiguous')
   })
 
   it('keeps authority with a revision winner whose tab list is explicitly empty', () => {
@@ -158,7 +158,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalLayoutsByTabId: { 'stale-1': layout('ssh:target@@pty-dead') }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('base')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('base')
   })
 
   it('vetoes a revision winner that has no record at all for the workspace key', () => {
@@ -170,7 +170,7 @@ describe('workspaceTerminalAuthority', () => {
       terminalLayoutsByTabId: { 'live-1': layout('ssh:target@@pty-3') }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('source')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('source')
   })
 
   it('still prefers the only populated side when the other has the key with no tabs', () => {
@@ -182,6 +182,6 @@ describe('workspaceTerminalAuthority', () => {
       tabsByWorktree: { [WORKTREE_ID]: [] }
     })
 
-    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID)).toBe('base')
+    expect(workspaceTerminalAuthority(base, source, WORKTREE_ID).authority).toBe('base')
   })
 })

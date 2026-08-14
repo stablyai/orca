@@ -75,10 +75,13 @@ export function hasPtyBoundPane(
   state: WorkspaceSessionState,
   tabs: readonly TerminalTab[]
 ): boolean {
-  return tabs.some(
-    (tab) =>
-      Boolean(tab.ptyId) ||
-      Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).some(Boolean)
+  return tabs.some((tab) => tabIsPtyBound(state, tab))
+}
+
+export function tabIsPtyBound(state: WorkspaceSessionState, tab: TerminalTab): boolean {
+  return (
+    Boolean(tab.ptyId) ||
+    Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).some(Boolean)
   )
 }
 
@@ -122,8 +125,14 @@ export function collectTerminalProvenance(
       sourcePaneAuthority.add(paneKey)
     }
   }
+  // Why the liveTabIds gates: a grafted workspace key carries only part of the
+  // source's tab list, so panes of source tabs that did not land in the adopted view
+  // must not adopt layouts, incarnations, or sleeping-agent records.
   for (const key of sourceAuthority) {
     for (const tab of source.tabsByWorktree[key] ?? []) {
+      if (!liveTabIds.has(tab.id)) {
+        continue
+      }
       for (const leafId of Object.keys(
         source.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
       )) {
@@ -132,7 +141,7 @@ export function collectTerminalProvenance(
     }
   }
   for (const [paneKey, record] of Object.entries(source.sleepingAgentSessionsByPaneKey ?? {})) {
-    if (sourceAuthority.has(record.worktreeId)) {
+    if (sourceAuthority.has(record.worktreeId) && (!record.tabId || liveTabIds.has(record.tabId))) {
       sourcePaneAuthority.add(paneKey)
     }
   }

@@ -460,13 +460,45 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
     const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
 
     expect(adoption.sourceAuthoritativeWorktreeIds).toEqual([WORKTREE_ID])
-    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
-      'tab-1'
-    ])
-    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.[0]?.ptyId).toBe('ssh:one@@pty-34')
+    const adoptedIds = adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)
+    expect(adoptedIds).toContain('tab-1')
+    expect(adoptedIds).toContain('ghost-1')
+    expect(adoptedIds).toContain('ghost-2')
+    const adoptedLive = adoption.session.tabsByWorktree[WORKTREE_ID]?.find(
+      (entry) => entry.id === 'tab-1'
+    )
+    expect(adoptedLive?.ptyId).toBe('ssh:one@@pty-34')
     expect(adoption.session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]?.providerSession?.id).toBe(
       'session-live'
     )
+    expect(adoption.session.terminalPtyIncarnationsByPaneKey?.[PANE_KEY]).toBe('inc-live')
+  })
+
+  it('keeps the winner tab list intact when the veto grafts a stray live pane', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('kept-dormant')] },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 162 }
+    })
+    const source = session({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          tab('kept-dormant'),
+          tab('stray-dormant'),
+          tab('tab-1', WORKTREE_ID, 'ssh:one@@pty-40')
+        ]
+      },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@pty-40') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-live' }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    // The graft is additive: the winner's own row survives, only the source's
+    // pty-bound stray joins it, and dormant strays stay out of the adopted view.
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'kept-dormant',
+      'tab-1'
+    ])
     expect(adoption.session.terminalPtyIncarnationsByPaneKey?.[PANE_KEY]).toBe('inc-live')
   })
 

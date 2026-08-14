@@ -175,6 +175,19 @@ export function workspaceSessionBundlesEquivalent(
 
 export type WorkspaceTerminalAuthority = 'base' | 'source' | 'equivalent' | 'ambiguous'
 
+function undisputed(authority: WorkspaceTerminalAuthority): WorkspaceTerminalAuthorityDecision {
+  return { authority, ptyBoundVetoFlip: false }
+}
+
+export type WorkspaceTerminalAuthorityDecision = {
+  authority: WorkspaceTerminalAuthority
+  // Set when the pty-bound veto overturned a revision-based winner. Adoption uses it
+  // to graft the loser's pty-bound tabs into the winner's list instead of replacing
+  // the list wholesale, so the winner's own rows (including its closes of dormant
+  // tabs) survive the flip.
+  ptyBoundVetoFlip: boolean
+}
+
 export function workspaceTerminalAuthority(
   base: WorkspaceSessionState,
   source: WorkspaceSessionState,
@@ -184,7 +197,7 @@ export function workspaceTerminalAuthority(
     base: WorkspaceSessionAuthorityIndex
     source: WorkspaceSessionAuthorityIndex
   }
-): WorkspaceTerminalAuthority {
+): WorkspaceTerminalAuthorityDecision {
   const repoId = repoIdForWorkspaceKey(workspaceKey)
   const baseRevision = repoId ? base.terminalTopologyRevisionByRepoId?.[repoId] : undefined
   const sourceRevision = repoId ? source.terminalTopologyRevisionByRepoId?.[repoId] : undefined
@@ -207,27 +220,24 @@ export function workspaceTerminalAuthority(
       !hasPtyBoundPane(winner, winnerTabs ?? []) &&
       hasPtyBoundPane(loser, loserTabs)
     ) {
-      return revisionAuthority === 'base' ? 'source' : 'base'
+      return {
+        authority: revisionAuthority === 'base' ? 'source' : 'base',
+        ptyBoundVetoFlip: true
+      }
     }
-    return revisionAuthority
+    return undisputed(revisionAuthority)
   }
   const baseIndex = indexes?.base ?? createWorkspaceSessionAuthorityIndex(base)
   const sourceIndex = indexes?.source ?? createWorkspaceSessionAuthorityIndex(source)
   const baseHasKey = presence?.base ?? baseIndex.workspaceKeys.has(workspaceKey)
   const sourceHasKey = presence?.source ?? sourceIndex.workspaceKeys.has(workspaceKey)
-  if (sourceHasKey && !baseHasKey) {
-    return 'source'
-  }
-  if (baseHasKey && !sourceHasKey) {
-    return 'base'
+  if (sourceHasKey !== baseHasKey) {
+    return undisputed(sourceHasKey ? 'source' : 'base')
   }
   const baseTabs = base.tabsByWorktree[workspaceKey] ?? []
   const sourceTabs = source.tabsByWorktree[workspaceKey] ?? []
-  if (sourceTabs.length > 0 && baseTabs.length === 0) {
-    return 'source'
-  }
-  if (baseTabs.length > 0 && sourceTabs.length === 0) {
-    return 'base'
+  if (sourceTabs.length > 0 !== baseTabs.length > 0) {
+    return undisputed(sourceTabs.length > 0 ? 'source' : 'base')
   }
   // Why pty-bound wins: a persisted pty binding is the partition's proof that it
   // tracked a running terminal; a copy with none describes only dormant surfaces.
@@ -236,11 +246,13 @@ export function workspaceTerminalAuthority(
   const basePtyBound = hasPtyBoundPane(base, baseTabs)
   const sourcePtyBound = hasPtyBoundPane(source, sourceTabs)
   if (sourcePtyBound !== basePtyBound) {
-    return sourcePtyBound ? 'source' : 'base'
+    return undisputed(sourcePtyBound ? 'source' : 'base')
   }
-  return indexedWorkspaceSessionBundlesEquivalent(baseIndex, sourceIndex, workspaceKey)
-    ? 'equivalent'
-    : 'ambiguous'
+  return undisputed(
+    indexedWorkspaceSessionBundlesEquivalent(baseIndex, sourceIndex, workspaceKey)
+      ? 'equivalent'
+      : 'ambiguous'
+  )
 }
 
 export function findAmbiguousWorkspaceSessionKeys(
@@ -266,7 +278,7 @@ export function findAmbiguousWorkspaceSessionKeys(
               base: indexes[left],
               source: indexes[right]
             }
-          ) === 'ambiguous'
+          ).authority === 'ambiguous'
         ) {
           ambiguous.add(key)
         }
