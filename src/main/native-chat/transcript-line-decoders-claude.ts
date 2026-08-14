@@ -88,12 +88,8 @@ function parseTimestamp(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-// Claude writes several bookkeeping `type:"system"` lines — `stop_hook_summary`,
-// `turn_duration`, and others — that are internal telemetry the user never
-// needs to see; they stay silently dropped (return null), same as before this
-// notice path existed. `subtype:"informational"` is the one shape that carries
-// agent-authored copy meant for the user (e.g. a login/device-trust nudge), so
-// it alone gets decoded into a bannerable notice.
+// Only `subtype:"informational"` carries user-facing copy (e.g. a login
+// nudge); other system subtypes are internal telemetry and stay dropped.
 function decodeClaudeSystemNotice(
   record: Record<string, unknown>,
   fallbackId: string

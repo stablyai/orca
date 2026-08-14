@@ -9,9 +9,7 @@ export type NativeChatAgentAccountReauthResult = { ok: true } | { ok: false; mes
 export type NativeChatAgentNoticeBannerProps = {
   message: NativeChatMessage
   text: string
-  /** Present only when the notice is `noticeKind: 'login-required'` for an
-   *  agent this view knows how to reauthenticate (Claude, for now). Absent
-   *  notices/agents fall back to the plain descriptive banner with no CTA. */
+  /** Only for a `login-required` notice on an agent we can reauthenticate. */
   onReauthenticateAccount?: () => Promise<NativeChatAgentAccountReauthResult>
   onSwitchToTerminal?: () => void
 }
@@ -21,11 +19,8 @@ type ReauthState =
   | { kind: 'pending' }
   | { kind: 'done'; result: NativeChatAgentAccountReauthResult }
 
-/** Inline banner for a provider notice the user must actually see — as opposed
- *  to the quiet, chrome-free system asides other transcript markers render as
- *  (see `MessageRow`'s plain `isSystem` branch). A `login-required` notice adds
- *  a "reauthenticate" action; everything else is a plain descriptive banner,
- *  which alone already beats today's silence. */
+/** Inline banner for a provider notice the user must actually see (unlike the
+ *  quiet system asides `MessageRow` otherwise renders chrome-free). */
 export function NativeChatAgentNoticeBanner({
   message,
   text,

@@ -168,9 +168,8 @@ function MessageRow({
     return null
   }
 
-  // A notice worth its own banner (e.g. a login-required nudge the agent
-  // wrote to its transcript) — checked before the quiet `isSystem` styling
-  // below so it never collapses into a chrome-free aside.
+  // Checked before the quiet `isSystem` styling below so it never collapses
+  // into a chrome-free aside.
   if (isAgentNoticeMessage(message)) {
     return (
       <div ref={rowRef}>
@@ -278,8 +277,7 @@ export function NativeChatMessageList({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
-  /** Wired only for agents this view knows how to reauthenticate (Claude, for
-   *  now) — see `NativeChatAgentNoticeBanner`. */
+  /** See `NativeChatAgentNoticeBanner`. */
   onReauthenticateAccount?: () => Promise<NativeChatAgentAccountReauthResult>
   onSwitchToTerminal?: () => void
 }): React.JSX.Element {
