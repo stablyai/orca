@@ -55,8 +55,9 @@ export async function recoverStaleServeSingleton(
   if (!initialHealth) {
     return { state: 'not-recoverable', reason: 'health_probe_failed' }
   }
-  if (initialHealth.healthy) {
-    return { state: 'active-owner', runtimeId: initialHealth.runtimeId }
+  const initialRuntimeId = getConfirmedLiveRuntimeId(initialHealth)
+  if (initialRuntimeId) {
+    return { state: 'active-owner', runtimeId: initialRuntimeId }
   }
 
   const localHostname = options.localHostname ?? hostname()
@@ -86,8 +87,9 @@ export async function recoverStaleServeSingleton(
     if (!confirmedHealth) {
       return { state: 'not-recoverable', reason: 'health_probe_failed' }
     }
-    if (confirmedHealth.healthy) {
-      return { state: 'active-owner', runtimeId: confirmedHealth.runtimeId }
+    const confirmedRuntimeId = getConfirmedLiveRuntimeId(confirmedHealth)
+    if (confirmedRuntimeId) {
+      return { state: 'active-owner', runtimeId: confirmedRuntimeId }
     }
     const confirmedOwner = await readSingletonOwner(userDataPath)
     if (
@@ -128,6 +130,11 @@ export async function recoverStaleServeSingleton(
   } finally {
     await mutex.release()
   }
+}
+
+function getConfirmedLiveRuntimeId(health: ServeRuntimeHealth): string | null {
+  // Why: a matching authenticated runtime and WebSocket still own the profile while its graph loads.
+  return health.healthy || health.reason === 'graph_not_ready' ? health.runtimeId : null
 }
 
 async function probeRecoveryHealth(

@@ -136,7 +136,7 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
     expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
   })
 
-  it('does not touch a live or ambiguous lock owner when runtime health is unavailable', async () => {
+  it('does not touch an authenticated runtime whose graph is not ready', async () => {
     const root = await createProfile(4101)
 
     const result = await recoverStaleServeSingleton(root, {
@@ -146,13 +146,43 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
         reason: 'graph_not_ready',
         runtimeId: 'runtime-current'
       }),
-      isProcessAlive: () => true,
+      isProcessAlive: () => false,
       wait: async () => undefined,
       quarantineSuffix: 'must-not-exist'
     })
 
-    expect(result).toMatchObject({ state: 'not-recoverable', reason: 'owner_process_alive' })
+    expect(result).toEqual({ state: 'active-owner', runtimeId: 'runtime-current' })
     expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-4101`)
+    expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
+  })
+
+  it('does not touch a runtime that becomes graph-not-ready during confirmation', async () => {
+    const root = await createProfile(4101)
+    const probeHealth = vi
+      .fn()
+      .mockResolvedValueOnce({ healthy: false, reason: 'metadata_missing' })
+      .mockResolvedValueOnce({
+        healthy: false,
+        reason: 'graph_not_ready',
+        runtimeId: 'runtime-current'
+      })
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth,
+      isProcessAlive: () => false,
+      wait: async () => undefined,
+      quarantineSuffix: 'must-not-exist'
+    })
+
+    expect(result).toEqual({ state: 'active-owner', runtimeId: 'runtime-current' })
+    expect(probeHealth).toHaveBeenCalledTimes(2)
+    expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-4101`)
+    expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
   })
 
   it('preserves a replacement owner that appears after confirmation', async () => {
