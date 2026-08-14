@@ -8484,14 +8484,15 @@
       "coveredProviders": ["local", "daemon"],
       "coverageNotes": "Runtime and provider-contract tests on macOS cover exact-PTY authorization, verified managed-Claude launch identity, local/daemon fresh confirmation, exact ConPTY membership, and unsupported-provider fail-closed behavior. Physical Windows, live Linux, SSH, WSL, and remote-runtime validation remain explicit gaps; providers without confirmation preserve conservative refusal when no verified launch identity exists.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/8303"],
-      "invariant": "A guarded note send writes only to the exact PTY binding checked by the guard and only while permission/wait evidence allows input; a generic busy title requires independent agent identity from the title, a verified managed launch bound to the current PTY incarnation, or the foreground process; fresh hook state conflicting with an ordinary shell foreground requires fresh provider confirmation of a recognized agent in that PTY.",
-      "oracle": "A quarter-circle Claude task title authorizes without a provider lookup only on the exact PTY incarnation carrying verified managed-Claude launch identity; the same title in a bare pane, with an unverified launch hint, or after PTY incarnation replacement is refused while current Claude activity remains a working signal. Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
+      "invariant": "A guarded note send writes only to the exact PTY binding checked by the guard and only while permission/wait evidence allows input; a generic busy title (quarter-circle or braille) requires independent agent identity from the title, a verified managed launch bound to the current PTY incarnation, or the foreground process; fresh hook state conflicting with an ordinary shell foreground requires fresh provider confirmation of a recognized agent in that PTY.",
+      "oracle": "A quarter-circle Claude task title or a braille-only task title authorizes without a provider lookup only on the exact PTY incarnation carrying verified managed launch identity; the same title in a bare pane, with an unverified launch hint, or after PTY incarnation replacement is refused while current spinner activity remains a working signal. Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts src/main/runtime/braille-title-send-authorization.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "testFiles": [
         "src/main/runtime/quarter-circle-title-send-authorization.test.ts",
+        "src/main/runtime/braille-title-send-authorization.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/terminal-send.test.ts",
         "src/main/ipc/pty.test.ts",
@@ -8509,7 +8510,19 @@
           "assertions": [
             "a verified managed-Claude launch authorizes a task-text quarter-circle title without foreground-process work",
             "a bare pane, an unverified launch hint, and a replacement PTY incarnation remain refused",
-            "quarter circles remain working signals and braille authorization is unchanged"
+            "quarter circles remain working signals",
+            "a braille-only title without identity is refused the same way"
+          ]
+        },
+        {
+          "file": "src/main/runtime/braille-title-send-authorization.test.ts",
+          "assertions": [
+            "a verified managed-agent launch authorizes a braille-only title without foreground-process work",
+            "a bare pane, an unverified launch hint, and a replacement PTY incarnation remain refused",
+            "SSH, folder-workspace, and WSL surfaces share the same incarnation-bound authority",
+            "braille glyphs remain working signals and named/synthetic agent titles stay authorized",
+            "Orca synthesized Droid working titles stay authorized and android path titles stay refused",
+            "a mixed braille and quarter-circle title without identity is refused"
           ]
         },
         {
@@ -8583,10 +8596,10 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts src/main/runtime/braille-title-send-authorization.test.ts",
           "result": "passed",
-          "durationSeconds": 20.9,
-          "summary": "The focused file passed 9 tests, including current-incarnation managed-Claude authorization with zero foreground calls and fail-closed bare, unverified, and replacement-incarnation quarter-circle titles."
+          "durationSeconds": 35.91,
+          "summary": "Both focused files passed 28 tests: quarter-circle STA-4028 cases plus braille-only fail-closed titles, verified managed-agent launches, replacement-incarnation refusal, SSH/folder/WSL host-parity refusals, synthesized Droid identity versus android-path refusal, and mixed braille/quarter-circle refusal."
         },
         {
           "date": "2026-07-11",

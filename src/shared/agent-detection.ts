@@ -25,6 +25,7 @@ export {
   clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
+  isBrailleSpinnerOnlyAgentTitle,
   isQuarterCircleSpinnerOnlyAgentTitle,
   normalizeTerminalTitle
 } from './agent-title-status'

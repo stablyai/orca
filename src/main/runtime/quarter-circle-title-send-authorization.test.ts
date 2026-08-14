@@ -199,10 +199,10 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
     await expect(guardedSendResult(runtime, handle)).resolves.toBe(AUTHORIZED)
   })
 
-  it('leaves braille-spinner authorization unchanged', async () => {
+  it('refuses a braille-only title the same way as a quarter-circle-only title (STA-4048)', async () => {
     const { runtime, handle } = await createRuntimeWithTitle(BRAILLE_SPINNER_ONLY_TITLE, null)
 
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe(AUTHORIZED)
+    await expect(guardedSendResult(runtime, handle)).resolves.toBe('terminal_guard_no_agent')
   })
 
   it('keeps the quarter-circle glyph a working activity signal (#13889)', async () => {

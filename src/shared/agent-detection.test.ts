@@ -5,6 +5,7 @@ import {
   extractAllOscTitles,
   extractLastOscTitle,
   getAgentLabel,
+  isBrailleSpinnerOnlyAgentTitle,
   isCursorAgentTitle,
   MAX_OSC_TITLE_CHARS,
   MAX_OSC_TITLES_PER_CHUNK,
@@ -287,5 +288,22 @@ describe('Cursor agent title identity', () => {
     undefined
   ])('rejects the non-Cursor title %j', (title) => {
     expect(isCursorAgentTitle(title)).toBe(false)
+  })
+})
+
+describe('braille spinner-only title identity (STA-4048)', () => {
+  it('treats a braille frame with no agent token as activity only', () => {
+    expect(isBrailleSpinnerOnlyAgentTitle('⠙ Deploying release 4.2')).toBe(true)
+    expect(isBrailleSpinnerOnlyAgentTitle('⠋ android build')).toBe(true)
+    expect(isBrailleSpinnerOnlyAgentTitle('⠙◑ Deploying release 4.2')).toBe(true)
+  })
+
+  it('keeps named and Orca-synthesized agent titles as identity', () => {
+    expect(isBrailleSpinnerOnlyAgentTitle('⠂ Claude Code')).toBe(false)
+    expect(isBrailleSpinnerOnlyAgentTitle('⠋ Cursor Agent')).toBe(false)
+    expect(isBrailleSpinnerOnlyAgentTitle('⠇ Pi')).toBe(false)
+    expect(isBrailleSpinnerOnlyAgentTitle('⠋ Droid')).toBe(false)
+    expect(isBrailleSpinnerOnlyAgentTitle('⠙ Factory Droid')).toBe(false)
+    expect(isBrailleSpinnerOnlyAgentTitle('⠋ Hermes')).toBe(false)
   })
 })
