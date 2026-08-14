@@ -3125,8 +3125,8 @@
         "evidence": "The Electron gate passed three times locally, including the final review-fix head through the registered fresh-build command; CI and soak history are not yet available."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "The test exercises the original parked-view failure shape and passed with the retirement boundary; an archived intentional-break run is not yet attached."
+        "status": "complete",
+        "evidence": "STA-4327 used two byte-identical oracles across reported v1.4.180 (0b62333cf1), latest main (9bb8836bb6), candidate (121e112d77), and candidate with the relevant fix disabled. Runtime oracle cd248b67cc10ef64f2def315b86c3b0236b102639d03c65a0c5d9519e538d3af failed the same three durability/continuity checks on both affected revisions and disabled fix, while candidate passed 5/5. Renderer oracle 3b0949eef8b792cf5b09cfa55341f4216c08714f158e4b132e988e8114636cea failed both explicit-empty hydration/fallback checks on both affected revisions and disabled fix, while candidate passed 2/2."
       },
       "performanceBudget": {
         "required": true,
