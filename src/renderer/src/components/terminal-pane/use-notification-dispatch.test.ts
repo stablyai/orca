@@ -10,6 +10,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 type MockState = {
   activeWorktreeId: string | null
   activeTabId: string | null
+  agentDashboardDrawerOpen: boolean
   tabsByWorktree: Record<string, { id: string; ptyId?: string | null }[]>
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, boolean>
@@ -102,6 +103,7 @@ describe('dispatchTerminalNotification', () => {
     mockState = {
       activeWorktreeId: 'wt-secondary',
       activeTabId: 'tab-1',
+      agentDashboardDrawerOpen: false,
       tabsByWorktree: {
         'wt-primary': [{ id: 'tab-1', ptyId: 'pty-1' }]
       },
@@ -277,6 +279,25 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
     expect(mockState.markAgentCompletionPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('dispatches a focused active-worktree completion while the agent dashboard is open', () => {
+    mockState.activeWorktreeId = 'wt-primary'
+    mockState.agentDashboardDrawerOpen = true
+    stubDocumentFocus({ visibilityState: 'visible', focused: true })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        isActiveWorktree: false
+      })
+    )
   })
 
   it('marks a hidden tab in the focused worktree unread', () => {
