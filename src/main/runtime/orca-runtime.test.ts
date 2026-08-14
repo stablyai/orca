@@ -19697,6 +19697,138 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('delivers pending orchestration messages to an already-idle background PTY', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        spawn,
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+
+      // Why: background create returns a synthetic handle; no renderer leaf is adopted.
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'codex',
+        title: 'reviewer'
+      })
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex done\x07', 101)
+      db.insertMessage({ from: 'term_sender', to: handle, subject: 'review please' })
+
+      runtime.deliverPendingMessagesForHandle(handle)
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-bg',
+        expect.stringContaining('Subject: review please')
+      )
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).toHaveBeenCalledWith('pty-bg', '\r')
+
+      const unread = db.getUnreadMessages(handle)
+      expect(unread).toHaveLength(1)
+      expect(unread[0].read).toBe(0)
+      expect(unread[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('delivers queued orchestration messages when a background PTY becomes idle', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        spawn,
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'codex',
+        title: 'reviewer'
+      })
+      // Message stays undelivered while busy; working→idle pushes automatically.
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex working\x07', 100)
+      db.insertMessage({ from: 'term_sender', to: handle, subject: 'queued review' })
+
+      runtime.deliverPendingMessagesForHandle(handle)
+      expect(write).not.toHaveBeenCalled()
+
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex done\x07', 101)
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-bg',
+        expect.stringContaining('Subject: queued review')
+      )
+      expect(write).toHaveBeenCalledWith('pty-bg', '\r')
+      const unread = db.getUnreadMessages(handle)
+      expect(unread).toHaveLength(1)
+      expect(unread[0].read).toBe(0)
+      expect(unread[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('injects background PTY orchestration messages for Cursor Agent without auto-submitting', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        spawn,
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'cursor-agent',
+        title: 'cursor-bg'
+      })
+      runtime.onPtyData('pty-bg', '\x1b]0;\u280b Cursor Agent\x07', 100)
+      runtime.onPtyData('pty-bg', '\x1b]0;Cursor ready\x07', 101)
+      db.insertMessage({ from: 'term_sender', to: handle, subject: 'hello cursor bg' })
+
+      runtime.deliverPendingMessagesForHandle(handle)
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-bg',
+        expect.stringContaining('Subject: hello cursor bg')
+      )
+      await vi.advanceTimersByTimeAsync(500)
+      const submitWrites = write.mock.calls.filter(
+        ([ptyId, text]) => ptyId === 'pty-bg' && text === '\r'
+      )
+      expect(submitWrites).toHaveLength(0)
+
+      const unread = db.getUnreadMessages(handle)
+      expect(unread).toHaveLength(1)
+      expect(unread[0].read).toBe(0)
+      expect(unread[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('adopts preallocated ORCA_TERMINAL_HANDLE as a valid runtime handle', async () => {
     const runtime = new OrcaRuntimeService(store)
     const handle = runtime.preAllocateHandleForPty('pty-1')

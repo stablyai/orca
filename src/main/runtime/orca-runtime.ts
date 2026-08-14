@@ -10607,6 +10607,8 @@ export class OrcaRuntimeService {
       ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
       if (agentStatus === 'idle' && prevStatus !== 'idle') {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
+        // Why: renderer-leaf delivery never sees synthetic background PTY handles.
+        this.deliverPendingMessagesToBackgroundPty(pty)
       }
       const shouldDelayMobileSnapshot =
         ptyRecordChanged &&
@@ -32315,6 +32317,15 @@ export class OrcaRuntimeService {
       if (leaf.lastAgentStatus === 'idle' && leaf.lastAgentStatusObservedLive) {
         this.deliverPendingMessages(leaf, { mailboxHandle: handle, reservedTypes })
       }
+      return
+    } catch {
+      // Why: synthetic background-PTY handles never appear as renderer leaves.
+    }
+    try {
+      const livePty = this.getLivePtyForHandle(handle)
+      if (livePty?.pty.connected && livePty.pty.lastAgentStatus === 'idle') {
+        this.deliverPendingMessagesToBackgroundPty(livePty.pty, handle)
+      }
     } catch {
       // Unknown/stale handles can't be pointed now; the persisted message stays available via explicit check or future idle delivery.
     }
@@ -32345,6 +32356,96 @@ export class OrcaRuntimeService {
     const run = this._orchestrationDb.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
     if (run) {
       this.deliverPendingMessages(leaf, { mailboxHandle: `run:${run.id}` })
+    }
+  }
+
+  // Why: background CLI PTYs use synthetic handles (tabId pty:<id>) and never
+  // mint a renderer leaf. Reuse the retained handle identity — do not issue a
+  // fresh handle during delivery, or the message target would diverge.
+  private deliverPendingMessagesToBackgroundPty(
+    pty: RuntimePtyWorktreeRecord,
+    handleOverride?: string
+  ): void {
+    if (!this._orchestrationDb) {
+      return
+    }
+
+    const handle =
+      handleOverride ?? this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
+    if (!handle) {
+      return
+    }
+
+    // Why: when the same handle is adopted onto a renderer leaf, leaf delivery owns it.
+    const handleRecord = this.handles.get(handle)
+    if (handleRecord && !handleRecord.tabId.startsWith('pty:')) {
+      return
+    }
+    for (const leafHandle of this.handleByLeafKey.values()) {
+      if (leafHandle === handle) {
+        return
+      }
+    }
+
+    if (this.messageDeliveryFlightsByPtyId.has(pty.ptyId)) {
+      return
+    }
+
+    const unread = this._orchestrationDb.getUndeliveredUnreadMessages(handle)
+    if (unread.length === 0 || !pty.connected) {
+      return
+    }
+
+    const deliveryPtyId = pty.ptyId
+    const flight: { enterTimer: ReturnType<typeof setTimeout> | null } = { enterTimer: null }
+    this.messageDeliveryFlightsByPtyId.set(deliveryPtyId, flight)
+    let settlesInEnterCallback = false
+    try {
+      const payload = formatMessagesForInjection(unread)
+      const wrote = this.ptyController?.write(deliveryPtyId, payload) ?? false
+      if (!wrote) {
+        return
+      }
+
+      // The active coordinator prompt is user-owned input, so push-on-idle must not synthesize Enter.
+      if (this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle === handle) {
+        this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
+        return
+      }
+
+      if ([pty.lastOscTitle, pty.managementTitle, pty.title].some(isCursorAgentTitle)) {
+        // Why: Cursor Agent treats injected PTY text as editable prompt input, so submitting must stay under user control.
+        this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
+        return
+      }
+
+      // Why: Claude Code treats a large PTY write as a paste and swallows a \r in the same write; send Enter separately after a delay, stamping delivered_at only once \r is confirmed.
+      // Important (design doc §3.2, feedback #2): stamp delivered_at, not read — read means "a check-caller consumed this"; flipping it would hide the message from check --unread.
+      const messageIds = unread.map((m) => m.id)
+      flight.enterTimer = setTimeout(() => {
+        try {
+          if (this.messageDeliveryFlightsByPtyId.get(deliveryPtyId) !== flight) {
+            return
+          }
+          const current = this.ptysById.get(deliveryPtyId)
+          if (!current?.connected) {
+            return
+          }
+          const submitted = this.ptyController?.write(deliveryPtyId, '\r') ?? false
+          if (submitted) {
+            this._orchestrationDb?.markAsDelivered(messageIds)
+          }
+        } catch {
+          // Terminal may have closed during the delay — messages stay queued (delivered_at NULL) and re-deliver on next idle.
+        } finally {
+          this.settlePendingMessageDelivery(deliveryPtyId, flight)
+        }
+      }, 500)
+      settlesInEnterCallback = true
+    } finally {
+      if (!settlesInEnterCallback) {
+        this.settlePendingMessageDelivery(deliveryPtyId, flight)
+      }
     }
   }
 
