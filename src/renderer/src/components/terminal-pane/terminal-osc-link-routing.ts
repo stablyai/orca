@@ -3,6 +3,16 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from '../../../../shared/terminal-file-url-target'
 import {
+  getTerminalFileContext,
+  isHtmlFilePath,
+  isTerminalFileLinkModifierInverted,
+  mapTerminalFilePath,
+  shouldOpenTerminalFileWithSystemDefault,
+  terminalLinkWslDistro
+} from './terminal-file-open-routing'
+import { getTerminalFileLinkHoverHint } from './terminal-link-open-hints'
+import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
 } from './terminal-link-activation'
@@ -41,21 +51,105 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
   return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
 }
 
+type OscLinkFileDeps = Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
+  Partial<
+    Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro'>
+  >
+
+type OscLinkFileTarget = {
+  filePath: string
+  line: number | null
+  column: number | null
+}
+
+/**
+ * The three OSC 8 target shapes that name a file, in the order they must be tried.
+ * `new URL("C:\\path\\file.ts")` succeeds with protocol `c:`, so a Windows path has
+ * to be claimed before generic URL parsing.
+ */
+function resolveOscLinkFileTarget(
+  rawText: string,
+  deps: OscLinkFileDeps
+): OscLinkFileTarget | null {
+  const linkCwd = deps.startupCwd || deps.worktreePath
+  const resolveAsPath = (): OscLinkFileTarget | null => {
+    const resolved = resolveTerminalFileLinkText(rawText, linkCwd, deps.terminalHomePath)
+    return resolved
+      ? { filePath: resolved.absolutePath, line: resolved.line, column: resolved.column }
+      : null
+  }
+
+  if (isWindowsAbsolutePathLike(rawText) && isWindowsAbsolutePathLike(linkCwd)) {
+    const windowsTarget = resolveAsPath()
+    if (windowsTarget) {
+      return windowsTarget
+    }
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(rawText)
+  } catch {
+    return resolveAsPath()
+  }
+
+  if (parsed.protocol !== 'file:') {
+    return null
+  }
+  // Why: file:// URIs open inside Orca, not via the OS default editor. Remote file
+  // hosts stay rejected; Windows LAN shares are the exception because their standard
+  // URI form is file://server/share/path.
+  const allowUncHost =
+    navigator.userAgent.includes('Windows') &&
+    isWindowsAbsolutePathLike(deps.worktreePath) &&
+    !deps.runtimeEnvironmentId
+  const resolved = resolveTerminalFileUrlTarget(parsed, { allowUncHost })
+  return resolved
+    ? { filePath: resolved.filePath, line: resolved.line, column: resolved.column }
+    : null
+}
+
+/**
+ * Why: the OSC 8 hover otherwise describes every target with URL copy, so a file
+ * target advertised "system browser" while the click routed it into Orca. Returns
+ * null for non-file targets so the caller falls back to the URL hint.
+ */
+export function getTerminalOscLinkFileHoverHint(
+  rawText: string,
+  deps: OscLinkFileDeps & { showActions: boolean }
+): string | null {
+  const target = resolveOscLinkFileTarget(rawText, deps)
+  if (!target) {
+    return null
+  }
+  const mappedPath = mapTerminalFilePath(
+    target.filePath,
+    deps.worktreePath,
+    terminalLinkWslDistro(deps.wslDistro, deps.runtimeEnvironmentId)
+  )
+  const fileContext = getTerminalFileContext(
+    deps.worktreeId,
+    deps.worktreePath,
+    deps.runtimeEnvironmentId
+  )
+  return getTerminalFileLinkHoverHint({
+    canOpenWithSystemDefault: shouldOpenTerminalFileWithSystemDefault(fileContext, mappedPath),
+    isWorktreeRoot: resolveKnownWorktreeRootPathLink(mappedPath) !== null,
+    isHtmlFile: isHtmlFilePath(mappedPath),
+    showActions: deps.showActions,
+    modifierInverts: isTerminalFileLinkModifierInverted()
+  })
+}
+
 export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
-  deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
-    Partial<
-      Pick<
-        LinkHandlerDeps,
-        'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro'
-      >
-    > & {
-      sourceOwner?: HttpLinkSourceOwner
-      requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
-      linkActionContext?: TerminalLinkActionContext | null
-      actionDestinations?: TerminalHttpLinkActionDestinations
-    }
+  deps: OscLinkFileDeps & {
+    sourceOwner?: HttpLinkSourceOwner
+    requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+    linkActionContext?: TerminalLinkActionContext | null
+    actionDestinations?: TerminalHttpLinkActionDestinations
+  }
 ): boolean {
   if (!isDesktopOscLinkActivation(event)) {
     return false
@@ -68,46 +162,14 @@ export function handleOscLink(
     return handled
   }
 
-  const openDetectedPathLink = (): boolean => {
-    const resolved = resolveTerminalFileLinkText(
-      rawText,
-      deps.startupCwd || deps.worktreePath,
-      deps.terminalHomePath
-    )
-    if (!resolved) {
-      return false
-    }
-    return finish(
-      handleTerminalFileLink(
-        resolved.absolutePath,
-        resolved.line,
-        resolved.column,
-        event as MouseEvent,
-        deps,
-        deps.linkActionContext,
-        rawText
-      )
-    )
-  }
-
-  if (
-    isWindowsAbsolutePathLike(rawText) &&
-    isWindowsAbsolutePathLike(deps.startupCwd || deps.worktreePath) &&
-    openDetectedPathLink()
-  ) {
-    // Why: `new URL("C:\\path\\file.ts")` succeeds with protocol `c:`;
-    // Windows OSC links need file-path routing before generic URL parsing.
-    return true
-  }
-
-  let parsed: URL
+  let parsed: URL | null = null
   try {
     parsed = new URL(rawText)
   } catch {
-    return openDetectedPathLink()
+    parsed = null
   }
 
-  if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+  if (parsed && (parsed.protocol === 'http:' || parsed.protocol === 'https:')) {
     return finish(
       handleTerminalHttpLink(parsed.toString(), event as MouseEvent, {
         worktreeId: deps.worktreeId,
@@ -124,31 +186,19 @@ export function handleOscLink(
     )
   }
 
-  if (parsed.protocol === 'file:') {
-    // Why: file:// URIs should open inside Orca, not via the OS default editor
-    // (shell.openPath). We extract the path from the URI and route it through
-    // the same openDetectedFilePath logic used for detected file-path links.
-    // Remote file hosts stay rejected; Windows LAN shares are the
-    // exception because their standard URI form is file://server/share/path.
-    const allowUncHost =
-      navigator.userAgent.includes('Windows') &&
-      isWindowsAbsolutePathLike(deps.worktreePath) &&
-      !deps.runtimeEnvironmentId
-    const resolved = resolveTerminalFileUrlTarget(parsed, { allowUncHost })
-    if (!resolved) {
-      return false
-    }
-    return finish(
-      handleTerminalFileLink(
-        resolved.filePath,
-        resolved.line,
-        resolved.column,
-        event as MouseEvent,
-        deps,
-        deps.linkActionContext,
-        rawText
-      )
-    )
+  const fileTarget = resolveOscLinkFileTarget(rawText, deps)
+  if (!fileTarget) {
+    return false
   }
-  return false
+  return finish(
+    handleTerminalFileLink(
+      fileTarget.filePath,
+      fileTarget.line,
+      fileTarget.column,
+      event as MouseEvent,
+      deps,
+      deps.linkActionContext,
+      rawText
+    )
+  )
 }
