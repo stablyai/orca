@@ -123,6 +123,30 @@ export const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: ()
         'auto.components.contextual.tours.contextual.tour.step.localized.copy.be99666806',
         'Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace.'
       )
+  },
+  'workspace-board-plan': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.a1b2c3d4e5',
+        'Plan work on the board'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.f6g7h8i9j0',
+        'Use the board when you want to see workspaces by status instead of by project.'
+      )
+  },
+  'workspace-board-lanes': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.k1l2m3n4o5',
+        'Move work through lanes'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.p6q7r8s9t0',
+        'Drag workspaces between lanes as their status changes.'
+      )
   }
 }
 

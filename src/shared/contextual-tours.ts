@@ -57,6 +57,7 @@ export const CONTEXTUAL_TOURS = [
     id: 'workspace-board',
     steps: [
       {
+        id: 'workspace-board-plan',
         title: 'Plan work on the board',
         body: 'Use the board when you want to see workspaces by status instead of by project.',
         targetSelector: '[data-contextual-tour-target="workspace-board-center"]',
@@ -64,6 +65,7 @@ export const CONTEXTUAL_TOURS = [
         preferredPlacement: 'bottom'
       },
       {
+        id: 'workspace-board-lanes',
         title: 'Move work through lanes',
         body: 'Drag workspaces between lanes as their status changes.',
         targetSelector:

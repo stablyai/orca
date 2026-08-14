@@ -14706,6 +14706,10 @@
                     "15ea06d23f": "Use presets and search to narrow issues, reviews, merge requests, or tasks.",
                     "819bcf6f00": "Start from work items",
                     "be99666806": "Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace.",
+                    "a1b2c3d4e5": "Plan work on the board",
+                    "f6g7h8i9j0": "Use the board when you want to see workspaces by status instead of by project.",
+                    "k1l2m3n4o5": "Move work through lanes",
+                    "p6q7r8s9t0": "Drag workspaces between lanes as their status changes.",
                     "31ca5cb3e0": "Split terminal",
                     "012036e8ca": "Next"
                   }

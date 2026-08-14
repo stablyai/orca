@@ -13334,6 +13334,14 @@
               "step": {
                 "localized": {
                   "copy": {
+                    "dc2d7ebbfa": "¿Qué es una automatización?",
+                    "1a9ac96bc5": "Las automatizaciones ejecutan trabajo de agentes según un cronograma. Agrega una automatización haciendo clic en este botón.",
+                    "e69e126045": "Encuentra los resultados",
+                    "65a7cf9b63": "Las ejecuciones muestran cuándo se ejecutaron las automatizaciones, qué sucedió y dónde inspeccionar su salida.",
+                    "a1b2c3d4e5": "Planifica el trabajo en el tablero",
+                    "f6g7h8i9j0": "Usa el tablero cuando quieras ver espacios de trabajo por estado en lugar de por proyecto.",
+                    "k1l2m3n4o5": "Mueve el trabajo entre carriles",
+                    "p6q7r8s9t0": "Arrastra espacios de trabajo entre carriles a medida que cambie su estado.",
                     "012036e8ca": "Próximo"
                   }
                 }
