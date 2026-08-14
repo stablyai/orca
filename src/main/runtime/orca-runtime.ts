@@ -29448,7 +29448,6 @@ export class OrcaRuntimeService {
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
-    const now = Date.now()
     const metaById = this.store.getAllWorktreeMeta() ?? {}
     const repos = this.store.getRepos()
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
@@ -29529,11 +29528,13 @@ export class OrcaRuntimeService {
       this.store?.getAllWorktreeLineage?.() ?? {}
     )
     // Why: short TTL avoids shelling out on every frequent poll while still catching worktree changes made outside Orca.
+    // Why stamped on completion, not entry: a compute that spent longer than the TTL would otherwise publish an
+    // already-expired entry, so the very next poll recomputes and every caller repeats the same slow path.
     if (generation === this.resolvedWorktreeGeneration) {
       this.resolvedWorktreeCache = {
         worktrees,
         platformByRepoId,
-        expiresAt: now + RESOLVED_WORKTREE_CACHE_TTL_MS
+        expiresAt: Date.now() + RESOLVED_WORKTREE_CACHE_TTL_MS
       }
     }
     return { worktrees, platformByRepoId }
@@ -36055,13 +36056,15 @@ const WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS = 5 * 60_000
 // edits are invisible to it and a tip living in packed-refs or reftable only gets an mtime + size
 // stamp, so a real scan still runs on this interval even while the probe reports "unchanged".
 export const WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS = 5 * 60_000
-// Why so generous: a healthy but slow host (100+ linked worktrees, Windows Defender, cold dentry
-// cache, cloud placeholders) must still get to reuse its scan. Well under WORKTREE_LIST_TIMEOUT_MS,
-// and expiring yields `null` — the existing "cannot prove unchanged" sentinel, so a real scan runs.
-// Exceeding RESOLVED_WORKTREE_REPO_TIMEOUT_MS is deliberate, not a bug: the payoff is skipping a
-// `git worktree list` subprocess, not cutting this caller's latency — that caller is already capped.
-export const WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS = 10_000
-const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
+export const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
+// Why a slice of RESOLVED_WORKTREE_REPO_TIMEOUT_MS and not a generous absolute: this wait runs
+// *inside* that budget, so outlasting it buys the caller nothing — it has already given up and
+// restored persisted rows — while converting a reusable scan into a full-budget stall that repeats
+// on every TTL expiry. What is left of the budget covers the fallback `git worktree list`, so a
+// probe that expires still returns fresh rows. Expiring yields `null`, the existing "cannot prove
+// unchanged" sentinel. A healthy but slow host (100+ linked worktrees, Windows Defender, cold
+// dentry cache, cloud placeholders) still fits: the probe is subprocess-free stats, not Git.
+export const WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS = 2000
 
 export function resolveWorktreeScanCacheTtlMs(repo: Pick<Repo, 'path' | 'connectionId'>): number {
   return !repo.connectionId && isAgentScratchRepoRootPath(repo.path)
