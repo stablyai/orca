@@ -192,12 +192,16 @@ async function findMirroredPageId(
   )
 }
 
-async function openLinkFromRemotePane(page: Page): Promise<void> {
+async function openLinkFromRemotePane(page: Page, testInfo: TestInfo): Promise<void> {
   const frame = page.locator('[data-testid="remote-browser-frame"]:visible').first()
   await expect(frame).toBeVisible({ timeout: 60_000 })
   await frame.click({ button: 'right', position: { x: 60, y: 60 }, force: true })
   const open = page.getByRole('menuitem', { name: 'Open Link In Orca Browser' })
   await expect(open).toBeVisible({ timeout: 30_000 })
+  await page.screenshot({
+    path: testInfo.outputPath('sta-4231-owner-pinned-link-route.png'),
+    fullPage: true
+  })
   await open.click()
 }
 
@@ -336,7 +340,7 @@ test('opens the held URL through the owner-pinned remote-pane link route @headfu
     )
     const baselineHostPageIds = await readHostBrowserPageIds(hostClient, worktreeId)
 
-    await openLinkFromRemotePane(client.page)
+    await openLinkFromRemotePane(client.page, testInfo)
     await expect.poll(fixture.pendingCount, { timeout: 30_000 }).toBe(1)
     const createdPageId = await expect
       .poll(async () => {

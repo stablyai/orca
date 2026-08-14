@@ -1604,12 +1604,12 @@ export class RuntimeBrowserCommands {
     worktree?: string
   }): Promise<{ closed: boolean }> {
     const bridge = this.requireAgentBrowserBridge()
-    const pageTarget =
-      typeof params.page === 'string' && params.page.length > 0
-        ? await this.resolveBrowserCommandTarget({ worktree: params.worktree, page: params.page })
-        : null
-    const worktreeId =
-      pageTarget?.worktreeId ?? (await this.resolveBrowserWorktreeId(params.worktree))
+    const explicitPage = typeof params.page === 'string' && params.page.length > 0
+    const worktreeId = explicitPage
+      ? params.worktree
+        ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+        : undefined
+      : await this.resolveBrowserWorktreeId(params.worktree)
 
     let tabId: string | null = null
     if (typeof params.page === 'string' && params.page.length > 0) {
@@ -1632,9 +1632,8 @@ export class RuntimeBrowserCommands {
     }
 
     // Why: headless serve has no renderer to ask, so destroy the offscreen page directly.
-    const offscreen = this.host.getAvailableAuthoritativeWindow()
-      ? null
-      : this.host.getOffscreenBrowserBackend()
+    const authoritativeWindow = this.host.getAvailableAuthoritativeWindow()
+    const offscreen = authoritativeWindow ? null : this.host.getOffscreenBrowserBackend()
     if (offscreen) {
       // Why: resolve the active page for implicit close so we don't report success while closing nothing.
       const resolvedTabId = tabId ?? bridge.getActivePageId(worktreeId)
@@ -1645,7 +1644,12 @@ export class RuntimeBrowserCommands {
       return { closed: true }
     }
 
-    const win = this.host.getAuthoritativeWindow()
+    if (!authoritativeWindow && tabId && !bridge.getRegisteredTabs(worktreeId).has(tabId)) {
+      const scope = worktreeId ? ' in this worktree' : ''
+      throw new BrowserError('browser_tab_not_found', `Browser page ${tabId} was not found${scope}`)
+    }
+
+    const win = authoritativeWindow ?? this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
