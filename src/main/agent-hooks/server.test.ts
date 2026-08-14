@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this suite exercises the full hook HTTP surface (Claude/Codex/Gemini parsing, transcript chunked scan, paneKey dispatch) and keeping the scenarios co-located avoids fixture drift across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -18,6 +18,7 @@ import {
   AgentHookServer,
   agentHookServer,
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
+  PROVIDER_SESSION_IDENTITIES_MAX,
   _internals
 } from './server'
 import {
@@ -6966,6 +6967,156 @@ describe('Last-status persistence', () => {
       ).toBeNull()
     } finally {
       retired.stop()
+    }
+  })
+
+  it('retains the pane provider-session binding through a transient SSH clear and restart', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const transcriptPath = 'C:\\Users\\me\\.claude\\projects\\x\\sess-1.jsonl'
+    // Why: a file written by the current app (no providerSessionIdentities section) must still restore the binding.
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: 'ssh-target',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            providerSession: { key: 'session_id', id: 'sess-1', transcriptPath },
+            payload: {
+              state: 'working',
+              prompt: 'remote conversation',
+              agentType: 'claude'
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const first = new AgentHookServer()
+    await first.start({ env: 'production', userDataPath })
+    expect(first.getProviderSessionIdentities()).toEqual([
+      { paneKey: PANE, sessionId: 'sess-1', transcriptPath, worktreeId: 'wt-1' }
+    ])
+    first.clearStatusEntriesForConnection('ssh-target')
+    first.flushStatusPersistSync()
+    first.stop()
+
+    const afterClear = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+
+    const restored = new AgentHookServer()
+    await restored.start({ env: 'production', userDataPath })
+    try {
+      expect(restored.getStatusSnapshotForPane(PANE)).toEqual([])
+      expect(restored.getProviderSessionIdentities()).toEqual([
+        { paneKey: PANE, sessionId: 'sess-1', transcriptPath, worktreeId: 'wt-1' }
+      ])
+      expect(restored.getProviderSessionForPane(PANE)).toEqual({
+        paneKey: PANE,
+        sessionId: 'sess-1',
+        transcriptPath,
+        worktreeId: 'wt-1'
+      })
+      // Why: an older build only reads version/entries/authorityCommitments, so the new section must ride alongside them.
+      expect(afterClear.version).toBe(2)
+      expect(afterClear.entries).toEqual({})
+      expect(afterClear.providerSessionIdentities?.[PANE]).toMatchObject({
+        agent: 'claude',
+        sessionId: 'sess-1',
+        transcriptPath,
+        connectionId: 'ssh-target',
+        observedAt: expect.any(Number)
+      })
+    } finally {
+      restored.stop()
+    }
+  })
+
+  it('drops the retained provider-session binding on explicit pane retirement', async () => {
+    const first = new AgentHookServer()
+    await first.start({ env: 'production', userDataPath })
+    first.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSession: { key: 'session_id', id: 'sess-retire' },
+        payload: { state: 'working', prompt: 'remote conversation', agentType: 'claude' }
+      },
+      'ssh-target'
+    )
+    first.retirePaneAuthority(PANE)
+    first.flushStatusPersistSync()
+    first.stop()
+
+    const restored = new AgentHookServer()
+    await restored.start({ env: 'production', userDataPath })
+    try {
+      expect(restored.getProviderSessionForPane(PANE)).toBeNull()
+      expect(restored.getProviderSessionIdentities()).toEqual([])
+    } finally {
+      restored.stop()
+    }
+  })
+
+  it('drops retained provider-session identities past the hydrate TTL', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {},
+        providerSessionIdentities: {
+          [PANE]: {
+            agent: 'claude',
+            sessionKey: 'session_id',
+            sessionId: 'sess-stale',
+            connectionId: 'ssh-target',
+            observedAt: Date.now() - 8 * 24 * 60 * 60 * 1000
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getProviderSessionForPane(PANE)).toBeNull()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('bounds retained provider-session identities', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const overflow = PROVIDER_SESSION_IDENTITIES_MAX + 2
+      for (let index = 0; index < overflow; index += 1) {
+        server.ingestRemote(
+          {
+            paneKey: makePaneKey(`tab-${index}`, randomUUID()),
+            worktreeId: 'wt-1',
+            providerSession: { key: 'session_id', id: `sess-${index}` },
+            payload: { state: 'done', agentType: 'claude' }
+          },
+          'ssh-target'
+        )
+      }
+      server.clearStatusEntriesForConnection('ssh-target')
+      const retained = server.getProviderSessionIdentities()
+      expect(retained.length).toBe(PROVIDER_SESSION_IDENTITIES_MAX)
+      expect(retained.some((identity) => identity.sessionId === 'sess-0')).toBe(false)
+      expect(retained.some((identity) => identity.sessionId === `sess-${overflow - 1}`)).toBe(true)
+    } finally {
+      server.stop()
     }
   })
 
