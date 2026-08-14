@@ -165,6 +165,45 @@ describe('webview registry drag listeners', () => {
     expect(isBrowserPageRendererRecoveryPending('page-1')).toBe(false)
   })
 
+  it('flags renderer recovery when the guest is destroyed under a still-attached webview', async () => {
+    const { isBrowserPageRendererRecoveryPending, registerPersistentWebview } =
+      await import('./webview-registry')
+    const webview = createWebview({ isConnected: true })
+    registerPersistentWebview('page-1', webview)
+
+    webview.dispatchEvent(new Event('destroyed'))
+    expect(isBrowserPageRendererRecoveryPending('page-1')).toBe(true)
+
+    webview.dispatchEvent(new Event('dom-ready'))
+    expect(isBrowserPageRendererRecoveryPending('page-1')).toBe(false)
+  })
+
+  it('ignores guest destruction caused by intentional webview removal', async () => {
+    const { isBrowserPageRendererRecoveryPending, registerPersistentWebview } =
+      await import('./webview-registry')
+    const webview = createWebview({ isConnected: false })
+    registerPersistentWebview('page-1', webview)
+
+    webview.dispatchEvent(new Event('destroyed'))
+
+    expect(isBrowserPageRendererRecoveryPending('page-1')).toBe(false)
+  })
+
+  it('stops listening for guest destruction after unregistration', async () => {
+    const {
+      isBrowserPageRendererRecoveryPending,
+      registerPersistentWebview,
+      unregisterPersistentWebview
+    } = await import('./webview-registry')
+    const webview = createWebview({ isConnected: true })
+    registerPersistentWebview('page-1', webview)
+    unregisterPersistentWebview('page-1')
+
+    webview.dispatchEvent(new Event('destroyed'))
+
+    expect(isBrowserPageRendererRecoveryPending('page-1')).toBe(false)
+  })
+
   it('preserves the viewport and zoom only while replacing a guest', async () => {
     const { destroyPersistentWebview, registerPersistentWebview, replacePersistentWebview } =
       await import('./webview-registry')

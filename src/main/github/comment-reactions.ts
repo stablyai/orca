@@ -13,6 +13,7 @@ type GitHubGraphQLReactionContent =
 export type GitHubGraphQLReactionGroup = {
   content?: string | null
   reactors?: { totalCount?: number | null } | null
+  viewerHasReacted?: boolean | null
 }
 
 const GRAPHQL_REACTION_CONTENT: Record<GitHubGraphQLReactionContent, GitHubReactionContent> = {
@@ -37,10 +38,27 @@ const REACTION_ORDER: GitHubReactionContent[] = [
   'eyes'
 ]
 
+const REACTION_CONTENT_TO_GRAPHQL: Record<GitHubReactionContent, GitHubGraphQLReactionContent> = {
+  '+1': 'THUMBS_UP',
+  '-1': 'THUMBS_DOWN',
+  laugh: 'LAUGH',
+  confused: 'CONFUSED',
+  heart: 'HEART',
+  hooray: 'HOORAY',
+  rocket: 'ROCKET',
+  eyes: 'EYES'
+}
+
+export function toGraphQLReactionContent(
+  content: GitHubReactionContent
+): GitHubGraphQLReactionContent {
+  return REACTION_CONTENT_TO_GRAPHQL[content]
+}
+
 export function mapGraphQLReactionGroups(
   groups?: GitHubGraphQLReactionGroup[] | null
 ): GitHubReaction[] | undefined {
-  const counts = new Map<GitHubReactionContent, number>()
+  const reactionsByContent = new Map<GitHubReactionContent, GitHubReaction>()
   for (const group of groups ?? []) {
     const content =
       group.content && group.content in GRAPHQL_REACTION_CONTENT
@@ -50,12 +68,20 @@ export function mapGraphQLReactionGroups(
     if (!content || count <= 0) {
       continue
     }
-    counts.set(content, (counts.get(content) ?? 0) + count)
+    const existing = reactionsByContent.get(content)
+    const viewerHasReacted = Boolean(existing?.viewerHasReacted || group.viewerHasReacted)
+    reactionsByContent.set(content, {
+      content,
+      count: (existing?.count ?? 0) + count,
+      ...(existing?.viewerHasReacted !== undefined || group.viewerHasReacted != null
+        ? { viewerHasReacted }
+        : {})
+    })
   }
 
   const reactions = REACTION_ORDER.flatMap((content) => {
-    const count = counts.get(content) ?? 0
-    return count > 0 ? [{ content, count }] : []
+    const reaction = reactionsByContent.get(content)
+    return reaction ? [reaction] : []
   })
   return reactions.length > 0 ? reactions : undefined
 }

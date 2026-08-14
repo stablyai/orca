@@ -266,6 +266,35 @@ describe('repo slice project runtime updates', () => {
     expect(projectsUpdate).not.toHaveBeenCalled()
   })
 
+  // Why: a host whose repos carry no `addedAt` projects createdAt 0, which means unknown, not
+  // epoch. Merging it with the host that does know the timestamp must keep the real one.
+  it('prefers a known createdAt over an unknown 0 when merging the same project id', async () => {
+    const project: Project = {
+      id: 'github:stablyai/orca',
+      displayName: 'Orca',
+      badgeColor: '#000',
+      sourceRepoIds: ['remote-repo'],
+      createdAt: 0,
+      updatedAt: 0
+    }
+    projectsUpdate.mockResolvedValue({
+      ...project,
+      sourceRepoIds: ['local-repo'],
+      createdAt: 100,
+      updatedAt: 100,
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
+    const store = createTestStore()
+    store.setState({ projects: [project] })
+
+    await store.getState().updateProject(project.id, {
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
+
+    expect(store.getState().projects[0]?.createdAt).toBe(100)
+    expect(store.getState().projects[0]?.updatedAt).toBe(100)
+  })
+
   it('preserves shared project source repos when updating local runtime preferences', async () => {
     const project: Project = {
       id: 'github:stablyai/orca',

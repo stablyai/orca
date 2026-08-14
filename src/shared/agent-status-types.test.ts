@@ -421,6 +421,20 @@ Fix dispatch fallback preview for normalized status prompts`
     }
   })
 
+  it('preserves sessionBoundary=true only on done (stale-signal suppression like interrupted)', () => {
+    expect(
+      parseAgentStatusPayload('{"state":"done","sessionBoundary":true}')!.sessionBoundary
+    ).toBe(true)
+    for (const state of ['working', 'blocked', 'waiting'] as const) {
+      const result = parseAgentStatusPayload(`{"state":"${state}","sessionBoundary":true}`)
+      expect(result!.sessionBoundary).toBeUndefined()
+    }
+    // Why: parser uses `=== true`, so truthy sentinels don't count.
+    expect(
+      parseAgentStatusPayload('{"state":"done","sessionBoundary":"true"}')!.sessionBoundary
+    ).toBeUndefined()
+  })
+
   it('requires strict boolean true for interrupted (rejects truthy non-boolean)', () => {
     // Why: parser uses `=== true`, so truthy string/number sentinels don't count.
     expect(

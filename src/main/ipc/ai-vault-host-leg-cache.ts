@@ -18,6 +18,11 @@ type CachedHostLeg = {
 // open. Legs are cached individually and the failing host is the only one
 // rescanned.
 const cachedHostLegs = new Map<string, CachedHostLeg>()
+// Bumped on every invalidation. A leg scan that started before an invalidation
+// carries the old generation and must not write its (now stale) result back —
+// otherwise a delete's invalidation is silently undone by a scan that resolves
+// just after it.
+let cacheGeneration = 0
 
 /** Serves one host's leg from the per-host TTL cache, and stores it only when
  * that host answered without a host issue — a failing host is retried on the
@@ -30,6 +35,7 @@ export async function scanHostLegWithCache(args: {
   scan: () => Promise<AiVaultListResult>
 }): Promise<AiVaultListResult> {
   const now = Date.now()
+  const startGeneration = cacheGeneration
   const cached = cachedHostLegs.get(args.cacheKey)
   if (
     !args.force &&
@@ -40,6 +46,11 @@ export async function scanHostLegWithCache(args: {
     return truncateAiVaultListResult(cached.result, args.depth, args.scopePaths)
   }
   const result = await args.scan()
+  // A delete's invalidation landed while this leg was scanning; caching a
+  // pre-delete result would resurrect the deleted session for the TTL.
+  if (startGeneration !== cacheGeneration) {
+    return result
+  }
   if (result.issues.some((issue) => issue.kind === 'host')) {
     const current = cachedHostLegs.get(args.cacheKey)
     if (!current || current.expiresAt <= Date.now()) {
@@ -73,6 +84,15 @@ function pruneExpiredHostLegs(now: number): void {
   }
 }
 
-export function resetAiVaultHostLegCacheForTests(): void {
+// Drops every cached host leg after a session is deleted so a non-force list
+// call within the TTL can't still serve the trashed session. Scan discovery
+// walks disk first, so a deleted file is never rediscovered — this only guards
+// the cached RESULT.
+export function invalidateAiVaultHostLegCache(): void {
+  cacheGeneration++
   cachedHostLegs.clear()
+}
+
+export function resetAiVaultHostLegCacheForTests(): void {
+  invalidateAiVaultHostLegCache()
 }

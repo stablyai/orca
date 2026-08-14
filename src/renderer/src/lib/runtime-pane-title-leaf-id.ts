@@ -78,7 +78,7 @@ export function resolveRuntimePaneTitleLeafResolution(
   let hasMultiplePaneTitles = false
 
   for (const runtimePaneId in titlesByPaneId) {
-    if (!Object.prototype.hasOwnProperty.call(titlesByPaneId, runtimePaneId)) {
+    if (!Object.hasOwn(titlesByPaneId, runtimePaneId)) {
       continue
     }
 

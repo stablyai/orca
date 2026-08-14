@@ -57,6 +57,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
+import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -80,6 +81,8 @@ function FileExplorerFiles(): React.JSX.Element {
     [nameFilterQuery, showRightSidebarFiles, showRightSidebarSearch]
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const canOpenWorkspaceFileBrowserForPath =
+    useWorkspaceFileBrowserActionPredicate(activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const supportsFolderDownload = useAppStore((s) => {
@@ -504,6 +507,7 @@ function FileExplorerFiles(): React.JSX.Element {
       toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
       loadDir,
       statPath,
+      authorizeExternalPath: window.api.fs.authorizeExternalPath,
       markPathAsDirectory,
       setSelectedPath: setSingleSelectedPath,
       scrollRef
@@ -777,6 +781,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 connectionId={activeRepo?.connectionId ?? null}
                 runtimeDownloadContext={runtimeDownloadContext}
                 supportsFolderDownload={supportsFolderDownload}
+                canOpenInOrcaBrowser={canOpenWorkspaceFileBrowserForPath}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
                 onViewFile={handleClick}

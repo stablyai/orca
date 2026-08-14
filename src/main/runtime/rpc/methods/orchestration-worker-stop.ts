@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { syncFederatedDispatch } from '../../orchestration/federation-sync'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
 import {
@@ -49,7 +48,9 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           }
           if (remote.state === 'succeeded' || remote.state === 'failed') {
             db.resumeFederatedWorkerForTerminalRelay(params.dispatch)
-            await syncFederatedDispatch(runtime, params.dispatch).catch(() => undefined)
+            await runtime
+              .syncOrchestrationFederatedDispatchAfterCurrent(params.dispatch)
+              .catch(() => undefined)
             return {
               dispatchId: params.dispatch,
               state: db.getWorkerDispatch(params.dispatch)?.state ?? remote.state,
@@ -78,6 +79,18 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
       const begun = db.beginWorkerStop(params.dispatch)
       if (begun.disposition === 'already_settled') {
         return settledReceipt(params.dispatch, begun.worker.state)
+      }
+      if (begun.disposition === 'context_only') {
+        if (!begun.alreadySettled) {
+          runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+        }
+        return {
+          dispatchId: params.dispatch,
+          state: begun.state,
+          alreadySettled: begun.alreadySettled,
+          processAction: 'none' as const,
+          warning: contextOnlyStopWarning(begun)
+        }
       }
       const handle = begun.worker.agent_terminal_handle
       if (!handle) {
@@ -131,6 +144,19 @@ type RemoteStopReceipt = {
 
 function settledReceipt(dispatchId: string, state: string) {
   return { dispatchId, state, alreadySettled: true, processAction: 'none' }
+}
+
+function contextOnlyStopWarning(result: {
+  state: string
+  alreadySettled: boolean
+  releasedCurrentTask: boolean
+}): string {
+  if (result.alreadySettled) {
+    return `Dispatch was already ${result.state}; no terminal process changed.`
+  }
+  return result.releasedCurrentTask
+    ? 'The assignment was stopped without closing its unsupervised terminal process.'
+    : 'The superseded assignment was stopped without changing the current Task or terminal process.'
 }
 
 function unknownReceipt(

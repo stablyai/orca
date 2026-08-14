@@ -41,6 +41,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const repos = useAppStore((s) => s.repos)
@@ -92,6 +93,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     hideAutomationGeneratedWorkspaces ||
     hideCliCreatedWorkspaces ||
     hideDetachedHeadWorkspaces ||
+    hideWorkspacesFromOtherDevices ||
     hasSleepingExemptionFilter ||
     hasRepoFilter ||
     hasHostVisibilityFilter
@@ -101,6 +103,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     (hideAutomationGeneratedWorkspaces ? 1 : 0) +
     (hideCliCreatedWorkspaces ? 1 : 0) +
     (hideDetachedHeadWorkspaces ? 1 : 0) +
+    (hideWorkspacesFromOtherDevices ? 1 : 0) +
     (hasSleepingExemptionFilter ? 1 : 0) +
     (hasHostVisibilityFilter ? 1 : 0) +
     selectedCount
@@ -168,16 +171,28 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
-        {showHostScopeControls && (
-          <SidebarHostScopeMenuSection
-            hostOptionsCount={hostOptions.length}
-            hostVisibilityLabel={hostVisibilityLabel}
-            hostOptions={hostOptions}
-            preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
-            setWorkspaceHostScope={setWorkspaceHostScope}
-            visibleWorkspaceHostIds={visibleWorkspaceHostIds}
-            setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
-          />
+        {/* Why: host + project filters share one section and the same single-row
+            shell as Sort by (label left, value right) so the menu stays flat. */}
+        {(showHostScopeControls || repos.length > 1) && (
+          <>
+            <DropdownMenuLabel>
+              {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
+            </DropdownMenuLabel>
+            {showHostScopeControls && (
+              <SidebarHostScopeMenuSection
+                hostVisibilityLabel={hostVisibilityLabel}
+                hostOptions={hostOptions}
+                preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+                setWorkspaceHostScope={setWorkspaceHostScope}
+                visibleWorkspaceHostIds={visibleWorkspaceHostIds}
+                setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
+              />
+            )}
+            <SidebarRepositoryFilterSection
+              preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+            />
+            <DropdownMenuSeparator />
+          </>
         )}
 
         <DropdownMenuLabel>
@@ -286,9 +301,6 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
 
         <DropdownMenuSeparator />
         <SidebarWorkspaceFilterSection />
-
-        <DropdownMenuSeparator />
-        <SidebarRepositoryFilterSection />
       </DropdownMenuContent>
     </DropdownMenu>
   )

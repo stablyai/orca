@@ -1,12 +1,79 @@
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
-import { getConnectionId } from '@/lib/connection-context'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
 
 export type PreviewableLanguage = 'html'
 export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'Open in Orca Browser is only available for local files.'
+const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
+
+type WorkspaceFileBrowserActionMode = 'local-client' | 'paired-runtime' | null
+
+function getWorkspaceFileBrowserActionMode(
+  state: AppState,
+  worktreeId: string
+): WorkspaceFileBrowserActionMode {
+  const availability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+  if (availability.state !== 'enabled') {
+    return null
+  }
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  return environmentId
+    ? availability.provider === 'paired-runtime'
+      ? 'paired-runtime'
+      : null
+    : 'local-client'
+}
+
+export function canShowWorkspaceFileBrowserAction(
+  state: AppState,
+  worktreeId: string,
+  filePath: string
+): boolean {
+  const mode = getWorkspaceFileBrowserActionMode(state, worktreeId)
+  return mode !== null && getConnectionIdForFileFromState(state, worktreeId, filePath) === null
+}
+
+export function useWorkspaceFileBrowserActionPredicate(
+  worktreeId: string | null
+): (filePath: string) => boolean {
+  const inputs = useAppStore(
+    useShallow((state) => ({
+      mode: worktreeId ? getWorkspaceFileBrowserActionMode(state, worktreeId) : null,
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      repos: state.repos,
+      worktreesByRepo: state.worktreesByRepo
+    }))
+  )
+  return useCallback(
+    (filePath: string) =>
+      inputs.mode !== null &&
+      getConnectionIdForFileFromState(inputs, worktreeId, filePath) === null,
+    [inputs, worktreeId]
+  )
+}
+
+function reportRemoteFileBrowserOpen(result: Promise<boolean>): void {
+  void result
+    .then((created) => {
+      if (!created) {
+        toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+      }
+    })
+    .catch(() => {
+      toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+    })
+}
 
 export type WorkspaceFileBrowserOpenTarget =
   | {
@@ -24,7 +91,7 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
   filePath: string
   worktreeId: string
 }): WorkspaceFileBrowserOpenTarget {
-  if (getConnectionId(params.worktreeId)) {
+  if (getConnectionIdForFile(params.worktreeId, params.filePath) !== null) {
     // Why: Chromium resolves file:// URLs on the local machine. Remote files
     // need an Orca-served URL before the browser can render them correctly.
     return {
@@ -51,6 +118,30 @@ export function openFileInBrowserTab(params: {
   }
 
   const state = useAppStore.getState()
+  const browserAvailability = getClientCreationActionPolicy(state, params.worktreeId)[
+    'managed-browser'
+  ]
+  if (browserAvailability.state !== 'enabled') {
+    toast.error(browserAvailability.reason)
+    return target
+  }
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, params.worktreeId)
+  if (environmentId) {
+    if (browserAvailability.provider !== 'paired-runtime') {
+      toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+      return target
+    }
+    reportRemoteFileBrowserOpen(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: params.worktreeId,
+        environmentId,
+        url: target.url,
+        stagedTitle: target.title,
+        stagedFocusAddressBar: false
+      })
+    )
+    return target
+  }
 
   state.createBrowserTab(params.worktreeId, target.url, {
     title: target.title,
@@ -79,6 +170,24 @@ export function openFilePreviewToSide(params: {
 
   const state = useAppStore.getState()
   const worktreeId = params.worktreeId
+  const target = getWorkspaceFileBrowserOpenTarget({
+    filePath: params.filePath,
+    worktreeId
+  })
+  if (target.status === 'unsupported') {
+    toast.error(target.message)
+    return
+  }
+  const browserAvailability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+  if (browserAvailability.state !== 'enabled') {
+    toast.error(browserAvailability.reason)
+    return
+  }
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  if (environmentId && browserAvailability.provider !== 'paired-runtime') {
+    toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+    return
+  }
 
   // Resolve the group this action originated from. Prefer the caller-supplied
   // id (the tab's own group under split-pane layouts), fall back to the
@@ -105,12 +214,19 @@ export function openFilePreviewToSide(params: {
     return
   }
 
-  const target = getWorkspaceFileBrowserOpenTarget({
-    filePath: params.filePath,
-    worktreeId
-  })
-  if (target.status === 'unsupported') {
-    toast.error(target.message)
+  if (environmentId) {
+    reportRemoteFileBrowserOpen(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId,
+        environmentId,
+        url: target.url,
+        clientTargetGroupId: targetGroupId,
+        clientTargetGroupCreated: !existingSibling,
+        focusOnCreate: false,
+        stagedTitle: target.title,
+        stagedFocusAddressBar: false
+      })
+    )
     return
   }
 

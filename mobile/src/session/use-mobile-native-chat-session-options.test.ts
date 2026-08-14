@@ -14,7 +14,7 @@ describe('useMobileNativeChatSessionOptions', () => {
   let renderer: ReactTestRenderer | null = null
   let api: MobileNativeChatSessionOptionsController | null = null
   let hookArgs: HookArgs
-  const dispatchCommand = vi.fn<(command: string) => Promise<MobileNativeChatSendOutcome>>()
+  const dispatchCommand = vi.fn<HookArgs['dispatchCommand']>()
   const onAgentPicker = vi.fn()
 
   function Probe(): null {
@@ -44,7 +44,6 @@ describe('useMobileNativeChatSessionOptions', () => {
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     clearMobileSessionOptionRecordsForTests()
     dispatchCommand.mockReset()
     dispatchCommand.mockResolvedValue('accepted')
@@ -98,14 +97,23 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
-  it('routes Codex model changes through the agent picker action', async () => {
+  it('types the Codex picker command and switches to the terminal', async () => {
     mount({ agent: 'codex' })
-    expect(api!.snapshot[0]).toMatchObject({ action: { type: 'agent-picker' } })
+    expect(api!.snapshot[0]?.action).toEqual({ type: 'agent-picker' })
     await act(async () => {
       await api!.invokeAction('model')
     })
-    expect(dispatchCommand).toHaveBeenCalledWith('/model')
-    expect(onAgentPicker).toHaveBeenCalledTimes(1)
+    expect(dispatchCommand).toHaveBeenCalledWith('/model', { delivery: 'type' })
+    expect(onAgentPicker).toHaveBeenCalledOnce()
+  })
+
+  it('types the Codex effort picker command', async () => {
+    mount({ agent: 'codex', reportedModel: 'gpt-5.5' })
+    await act(async () => {
+      await api!.invokeAction('effort')
+    })
+    expect(dispatchCommand).toHaveBeenCalledWith('/model', { delivery: 'type' })
+    expect(onAgentPicker).toHaveBeenCalledOnce()
   })
 
   it('seeds the current model from a hook-reported provider model', () => {

@@ -43,14 +43,14 @@ function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolea
   // every picker token prevents one context variant from confirming another.
   const labelTokens = modelLabel.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
   const successStart = text.lastIndexOf('setmodelto')
-  if (successStart < 0 || labelTokens.length === 0) {
+  if (successStart === -1 || labelTokens.length === 0) {
     return false
   }
   const successText = text.slice(successStart)
   let tokenEnd = 0
   for (const token of labelTokens) {
     const tokenStart = successText.indexOf(token, tokenEnd)
-    if (tokenStart < 0) {
+    if (tokenStart === -1) {
       return false
     }
     tokenEnd = tokenStart + token.length

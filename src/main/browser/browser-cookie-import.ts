@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: cookie import is one pipeline (detect → decrypt → stage → swap) that must stay together to keep encryption/schema/staging in sync. */
-import { app, type BrowserWindow, dialog, session } from 'electron'
+import { app, type BrowserWindow, type Cookie, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
 import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
 import {
@@ -74,7 +74,18 @@ import type {
   BrowserSessionProfileSource
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
-import { setupClientHintsOverride } from './browser-session-ua'
+import {
+  isGoogleSourceBoundCookie,
+  isNonTransplantableCookieDomain,
+  NON_TRANSPLANTABLE_HOST_KEY_SQL,
+  normalizeCookieDomain,
+  normalizeCookieImportDomain,
+  replaceCookiesForImportedDomains,
+  restoreImportedDomainCookies,
+  type CookieImportMode
+} from './browser-cookie-import-policy'
+import { removeTransplantableCookies, withCookieClearLock } from './browser-cookie-import-clear'
+import { openCookieClearStore } from './browser-cookie-clear-store'
 import {
   createChromiumCookieSnapshot,
   type ChromiumCookieSnapshot
@@ -500,13 +511,13 @@ function normalizeSameSite(raw: unknown): 'unspecified' | 'no_restriction' | 'la
 
 // Why: cookies.set() needs a url to scope the cookie; derive it from domain + secure flag.
 function deriveUrl(domain: string, secure: boolean): string | null {
-  const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain
-  if (!cleanDomain || cleanDomain.includes(' ')) {
+  const normalizedDomain = normalizeCookieDomain(domain)
+  if (!normalizedDomain) {
     return null
   }
   const protocol = secure ? 'https' : 'http'
   try {
-    const url = new URL(`${protocol}://${cleanDomain}/`)
+    const url = new URL(`${protocol}://${normalizedDomain}/`)
     return url.toString()
   } catch {
     return null
@@ -552,40 +563,86 @@ function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
 async function importValidatedCookies(
   cookies: ValidatedCookie[],
   totalInput: number,
-  targetPartition: string
+  targetPartition: string,
+  mode: CookieImportMode
 ): Promise<BrowserCookieImportResult> {
+  const importDomainCache = new Map<string, boolean>()
+  const validDomainCookies = cookies.filter((cookie) => {
+    let valid = importDomainCache.get(cookie.domain)
+    if (valid === undefined) {
+      valid = normalizeCookieImportDomain(cookie.domain) !== null
+      importDomainCache.set(cookie.domain, valid)
+    }
+    return valid
+  })
+  const sourceBoundFiltered = validDomainCookies.filter(
+    (cookie) => !isGoogleSourceBoundCookie(cookie.name, cookie.domain)
+  )
+  // Why: dropping these before the replace scope is computed is what keeps the existing
+  // Google session intact — replaceCookiesForImportedDomains only clears domains we import.
+  const importableCookies = sourceBoundFiltered.filter(
+    (cookie) => !isNonTransplantableCookieDomain(cookie.domain)
+  )
+  const integritySkipped = validDomainCookies.length - sourceBoundFiltered.length
+  const nonTransplantableSkipped = sourceBoundFiltered.length - importableCookies.length
+  const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
+  const invalidDomainSkipped = cookies.length - validDomainCookies.length
   diag(
-    `importValidatedCookies: ${cookies.length} validated of ${totalInput} total, partition="${targetPartition}"`
+    `importValidatedCookies: ${cookies.length} validated, ${invalidDomainSkipped} unsafe-domain skipped, ${integritySkipped} source-bound skipped, ${nonTransplantableSkipped} non-transplantable skipped of ${totalInput} total, partition="${targetPartition}"`
   )
   const targetSession = session.fromPartition(targetPartition)
   let importedCount = 0
-  let skipped = totalInput - cookies.length
+  let skipped = totalInput - importableCookies.length
   const domainSet = new Set<string>()
+  let replacedCookies: Cookie[] | null = null
+
+  if (mode === 'replace-imported-domains' && importableCookies.length > 0) {
+    try {
+      replacedCookies = await replaceCookiesForImportedDomains(
+        targetSession.cookies,
+        importableCookies.map((cookie) => cookie.domain)
+      )
+      diag(`  removed ${replacedCookies.length} existing cookies in imported domain scopes`)
+    } catch (err) {
+      diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+      return {
+        ok: false,
+        reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
+      }
+    }
+  }
 
   // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
   const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
+  const importedCookieKeys: { url: string; name: string }[] = []
+  let setFailure: unknown = null
 
-  for (const cookie of cookies) {
+  for (const cookie of importableCookies) {
     try {
       // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
       const isHostPrefixed = cookie.name.startsWith('__Host-')
+      const path = isHostPrefixed ? '/' : cookie.path
       await targetSession.cookies.set({
         url: cookie.url,
         name: cookie.name,
         value: stripNonPrintable(cookie.value),
         ...(isHostPrefixed ? {} : { domain: cookie.domain }),
-        path: isHostPrefixed ? '/' : cookie.path,
+        path,
         secure: cookie.secure,
         httpOnly: cookie.httpOnly,
         sameSite: cookie.sameSite,
         expirationDate: cookie.expirationDate
       })
+      const removalUrl = new URL(cookie.url)
+      removalUrl.pathname = path.startsWith('/') ? path : '/'
+      importedCookieKeys.push({ url: removalUrl.toString(), name: cookie.name })
       importedCount++
       // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
       const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
       domainSet.add(cleanDomain)
     } catch (err) {
       skipped++
+      setFailure = err
       if (skipped <= 5) {
         // Find the exact offending character position and code
         const val = cookie.value
@@ -601,6 +658,32 @@ async function importValidatedCookies(
           `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
         )
       }
+      if (replacedCookies) {
+        break
+      }
+    }
+  }
+
+  if (setFailure && replacedCookies) {
+    const rollbackFailures: unknown[] = []
+    for (const cookie of importedCookieKeys.toReversed()) {
+      try {
+        await targetSession.cookies.remove(cookie.url, cookie.name)
+      } catch (err) {
+        rollbackFailures.push(err)
+      }
+    }
+    try {
+      await restoreImportedDomainCookies(targetSession.cookies, replacedCookies)
+    } catch (err) {
+      rollbackFailures.push(err)
+    }
+    if (rollbackFailures.length > 0) {
+      diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
+    }
+    return {
+      ok: false,
+      reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
     }
   }
 
@@ -612,6 +695,7 @@ async function importValidatedCookies(
     totalCookies: totalInput,
     importedCookies: importedCount,
     skippedCookies: skipped,
+    ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
     domains: [...domainSet].sort()
   }
 
@@ -690,73 +774,12 @@ export async function importCookiesFromFile(
     }
   }
 
-  return importValidatedCookies(validated, parsed.length, targetPartition)
-}
-
-// ---------------------------------------------------------------------------
-// Direct import from installed Chromium browser
-// ---------------------------------------------------------------------------
-
-// Why: services bind auth cookies to the creating User-Agent, so build a UA matching the source browser's real version.
-export function getUserAgentForBrowser(
-  family: BrowserSessionProfileSource['browserFamily']
-): string | null {
-  // Why: UA version comes from macOS-only plist reading; elsewhere the default Electron UA is acceptable.
-  if (process.platform !== 'darwin') {
-    return null
-  }
-
-  const platform = 'Macintosh; Intel Mac OS X 10_15_7'
-  const chromeBase = 'AppleWebKit/537.36 (KHTML, like Gecko)'
-
-  function readBrowserVersion(
-    appPath: string,
-    plistKey = 'CFBundleShortVersionString'
-  ): string | null {
-    try {
-      return (
-        execFileSync('defaults', ['read', `${appPath}/Contents/Info`, plistKey], {
-          encoding: 'utf-8',
-          timeout: 5_000
-        }).trim() || null
-      )
-    } catch {
-      return null
-    }
-  }
-
-  switch (family) {
-    case 'chrome': {
-      const v = readBrowserVersion('/Applications/Google Chrome.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'edge': {
-      const v = readBrowserVersion('/Applications/Microsoft Edge.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36 Edg/${v}` : null
-    }
-    case 'arc': {
-      const v = readBrowserVersion('/Applications/Arc.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'chromium': {
-      const v = readBrowserVersion('/Applications/Brave Browser.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'comet': {
-      // Why: Comet is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Comet.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'helium': {
-      // Why: Helium is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Helium.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'firefox':
-    case 'safari':
-    case 'manual':
-      return null
-  }
+  return importValidatedCookies(
+    validated,
+    parsed.length,
+    targetPartition,
+    'replace-imported-domains'
+  )
 }
 
 const PBKDF2_ITERATIONS = 1003
@@ -891,7 +914,7 @@ export function buildChromiumCookieInsertParams(
       return decryptedValue
     }
 
-    const sourceHasColumn = Object.prototype.hasOwnProperty.call(sourceRow, column.name)
+    const sourceHasColumn = Object.hasOwn(sourceRow, column.name)
     const sourceValue = sourceHasColumn ? normalizeSqliteCookieValue(sourceRow[column.name]) : null
     if (sourceValue !== null) {
       return sourceValue
@@ -1338,7 +1361,12 @@ async function importCookiesFromFirefox(
       return { ok: false, reason: 'No valid cookies found in Firefox.' }
     }
 
-    return importValidatedCookies(validated, rows.length, targetPartition)
+    return importValidatedCookies(
+      validated,
+      rows.length,
+      targetPartition,
+      'replace-imported-domains'
+    )
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
     diag(`  Firefox import failed: ${String(err)}`)
@@ -1392,7 +1420,12 @@ async function importCookiesFromSafari(
       return { ok: false, reason: 'All Safari cookies are expired.' }
     }
 
-    return importValidatedCookies(valid, cookies.length, targetPartition)
+    return importValidatedCookies(
+      valid,
+      cookies.length,
+      targetPartition,
+      'replace-imported-domains'
+    )
   } catch (err) {
     diag(`  Safari import failed: ${String(err)}`)
     return { ok: false, reason: 'Could not import cookies from Safari.' }
@@ -1527,7 +1560,10 @@ export async function importCookiesFromBrowser(
         const targetCols: string[] = targetColumnInfo.map((r) => r.name)
         colList = targetCols.join(', ')
         placeholders = targetCols.map(() => '?').join(', ')
-        stagingDb.exec('DELETE FROM cookies')
+        // Why: the staged DB replaces the whole live DB at cold start, so it is a clear step
+        // like any other — keep the live non-transplantable rows in it rather than replaying
+        // a wipe the in-memory path was not allowed to perform.
+        stagingDb.exec(`DELETE FROM cookies WHERE NOT (${NON_TRANSPLANTABLE_HOST_KEY_SQL})`)
       } catch (err) {
         diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
         stagingAvailable = false
@@ -1557,7 +1593,12 @@ export async function importCookiesFromBrowser(
 
     const needsSourceKey = sourceRows.some((sourceRow) => {
       const encRaw = sourceRow.encrypted_value
-      return encRaw instanceof Uint8Array && encRaw.length > 0
+      if (!(encRaw instanceof Uint8Array) || encRaw.length === 0) {
+        return false
+      }
+      const domain = sourceRow.host_key as string
+      const name = sourceRow.name as string
+      return !(isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain))
     })
     const sourceKey = needsSourceKey
       ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
@@ -1572,25 +1613,10 @@ export async function importCookiesFromBrowser(
       }
     }
 
-    // Why: Google integrity cookies are bound to the source browser's TLS/env; importing them triggers CookieMismatch, so skip and let Google reissue.
-    const INTEGRITY_COOKIE_NAMES = new Set([
-      'SIDCC',
-      '__Secure-1PSIDCC',
-      '__Secure-3PSIDCC',
-      '__Secure-STRP',
-      'AEC'
-    ])
-    function isIntegrityCookie(name: string, domain: string): boolean {
-      if (!INTEGRITY_COOKIE_NAMES.has(name)) {
-        return false
-      }
-      const d = domain.startsWith('.') ? domain.slice(1) : domain
-      return d === 'google.com' || d.endsWith('.google.com')
-    }
-
     let imported = 0
     let skipped = 0
     let integritySkipped = 0
+    let nonTransplantableSkipped = 0
     let memoryLoaded = 0
     let memoryFailed = 0
     const domainSet = new Set<string>()
@@ -1608,6 +1634,7 @@ export async function importCookiesFromBrowser(
     }
 
     const decryptedCookies: DecryptedCookie[] = []
+    const sourceDomainValidity = new Map<string, boolean>()
 
     // Why: staging only backs the cold-restart replay, so any failure writing it disables that
     // fallback instead of aborting an import whose in-memory half still works.
@@ -1634,6 +1661,20 @@ export async function importCookiesFromBrowser(
     }
 
     for (const sourceRow of sourceRows) {
+      const domain = sourceRow.host_key as string
+      const name = sourceRow.name as string
+
+      if (isGoogleSourceBoundCookie(name, domain)) {
+        integritySkipped++
+        continue
+      }
+
+      // Why: transplanting these replaces a working sign-in with a session the site rejects.
+      if (isNonTransplantableCookieDomain(domain)) {
+        nonTransplantableSkipped++
+        continue
+      }
+
       const encRaw = sourceRow.encrypted_value
       // Why: node:sqlite returns BLOBs as Uint8Array; treat any other type as missing, not an empty buffer that would silently blank the cookie value.
       const encBuf = encRaw instanceof Uint8Array ? Buffer.from(encRaw) : null
@@ -1655,11 +1696,13 @@ export async function importCookiesFromBrowser(
         decryptedValue = Buffer.alloc(0)
       }
 
-      const domain = sourceRow.host_key as string
-      const name = sourceRow.name as string
-
-      if (isIntegrityCookie(name, domain)) {
-        integritySkipped++
+      let validDomain = sourceDomainValidity.get(domain)
+      if (validDomain === undefined) {
+        validDomain = normalizeCookieImportDomain(domain) !== null
+        sourceDomainValidity.set(domain, validDomain)
+      }
+      if (!validDomain) {
+        skipped++
         continue
       }
 
@@ -1702,7 +1745,26 @@ export async function importCookiesFromBrowser(
       // the optional staging DB is unavailable.
       imported++
     }
-    diag(`  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC)`)
+    diag(
+      `  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC) and ${nonTransplantableSkipped} non-transplantable-domain cookies`
+    )
+    const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
+
+    if (decryptedCookies.length === 0) {
+      closeStagingDb()
+      discardStagingFile()
+      return {
+        ok: true,
+        profileId: '',
+        summary: {
+          totalCookies: sourceRows.length,
+          importedCookies: 0,
+          skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
+          ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
+          domains: []
+        }
+      }
+    }
 
     if (stagingDb) {
       try {
@@ -1716,8 +1778,23 @@ export async function importCookiesFromBrowser(
       diag(`  staging skipped: ${imported} cookies will load in-memory only`)
     }
 
-    // Why: clear stale cookies first; mixing them with the imported set makes sites like Google reject the session.
-    await targetSession.clearStorageData({ storages: ['cookies'] })
+    // Why: clear stale cookies first; mixing them with the imported set makes sites reject the
+    // session. Non-transplantable families are exempt — nothing was imported for them, and their
+    // live session is the only one that works.
+    const cookieClearStore = openCookieClearStore(targetSession)
+    try {
+      await withCookieClearLock(targetSession, () =>
+        removeTransplantableCookies({
+          cookies: cookieClearStore,
+          clearData: (options) => targetSession.clearData(options),
+          snapshotClearIdentities: (cookies) => cookieClearStore.snapshotClearIdentities(cookies),
+          restoreClearIdentities: (identities) =>
+            cookieClearStore.restoreClearIdentities(identities)
+        })
+      )
+    } finally {
+      cookieClearStore.dispose()
+    }
     diag(
       `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
     )
@@ -1775,18 +1852,18 @@ export async function importCookiesFromBrowser(
       diag(`  all cookies loaded in-memory — no restart needed`)
     }
 
-    const ua = getUserAgentForBrowser(browser.family)
-    if (ua) {
-      targetSession.setUserAgent(ua)
-      setupClientHintsOverride(targetSession, ua)
-      browserSessionRegistry.persistUserAgent(targetPartition, ua)
-      diag(`  set UA for partition: ${ua.substring(0, 80)}...`)
-    }
+    // Why: the session keeps the UA the registry set at startup (clean or native).
+    // Imports must not impersonate the source browser — the synthesized UA read a
+    // fork's marketing version as a Chromium version (STA-3514), and Google binds
+    // sessions to the re-import, not the UA (#12884), so it bought nothing.
+    // Google-bound integrity cookies are already excluded by
+    // isGoogleSourceBoundCookie, which is what actually prevents CookieMismatch.
 
     const summary: BrowserCookieImportSummary = {
       totalCookies: sourceRows.length,
       importedCookies: imported,
-      skippedCookies: skipped,
+      skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
+      ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
       domains: [...domainSet].sort(),
       ...(warning ? { warning } : {})
     }

@@ -1,17 +1,20 @@
-import { createReadStream } from 'node:fs'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { normalizePromptField } from '../../shared/agent-status-field-normalization'
 import {
-  addPreviewContent,
   cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import {
+  consumeCodexCompletedMessage,
+  consumeCodexLegacyEventMessage,
+  consumeCodexResponseMessage
+} from './session-scanner-codex-message-records'
 import type {
   CodexUsageSnapshot,
   FileWithMtime,
@@ -22,7 +25,6 @@ import type {
 import {
   addCodexUsage,
   asRecord,
-  extractContentText,
   extractGitBranch,
   extractModel,
   extractString,
@@ -40,7 +42,7 @@ export async function parseCodexSessionFile(
   executionHostId?: ExecutionHostId
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
 
@@ -80,6 +82,7 @@ type CodexSessionParseState = {
   previousTotals: CodexUsageSnapshot | null
   rejectedWorkerSession: boolean
   sawSessionMeta: boolean
+  historyMode: string | null
   // Which source set the current title; an index-file title outranks the raw
   // first user prompt, so finalize must know whether 'meta' already won.
   titleSource: 'meta' | 'user' | null
@@ -95,6 +98,7 @@ function createCodexParseState(file: FileWithMtime): CodexSessionParseState {
     previousTotals: null,
     rejectedWorkerSession: false,
     sawSessionMeta: false,
+    historyMode: null,
     titleSource: null
   }
 }
@@ -128,6 +132,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
       return
     }
     state.sawSessionMeta = true
+    state.historyMode = extractString(payload.history_mode)
     const sessionId = extractString(payload.id)
     if (sessionId) {
       accumulator.sessionId = sessionId
@@ -162,17 +167,12 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   }
 
   if (record.type === 'response_item' && payload.type === 'message') {
-    accumulator.messageCount++
-    if (payload.role === 'user' && !accumulator.title) {
-      accumulator.title = extractContentText(payload.content)
-      state.titleSource = accumulator.title ? 'user' : state.titleSource
+    if (state.historyMode === 'paginated') {
+      return
     }
-    addPreviewContent(
-      accumulator,
-      payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : 'unknown',
-      payload.content,
-      record.timestamp
-    )
+    if (consumeCodexResponseMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
+    }
     return
   }
 
@@ -180,23 +180,17 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
-  if (payload.type === 'user_message') {
-    accumulator.messageCount++
-    const prompt = normalizePromptField(payload.message)
-    if (prompt) {
-      accumulator.lastUserPrompt = prompt
+  if (state.historyMode === 'paginated' && payload.type === 'item_completed') {
+    if (consumeCodexCompletedMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
     }
-    if (!accumulator.title) {
-      accumulator.title = extractContentText(payload.message)
-      state.titleSource = accumulator.title ? 'user' : state.titleSource
-    }
-    addPreviewContent(accumulator, 'user', payload.message, record.timestamp)
     return
   }
 
-  if (payload.type === 'agent_message') {
-    accumulator.messageCount++
-    addPreviewContent(accumulator, 'assistant', payload.message, record.timestamp)
+  if (payload.type === 'user_message' || payload.type === 'agent_message') {
+    if (consumeCodexLegacyEventMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
+    }
     return
   }
 

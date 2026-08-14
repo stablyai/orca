@@ -396,6 +396,46 @@ describe('configureElectronNetworkCompatibility', () => {
   })
 })
 
+describe('disableUnsupportedChromiumFeatures', () => {
+  it('disables FedCM before Chromium sessions are created', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-features', 'FedCm')
+  })
+
+  it('preserves existing disabled Chromium features', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce('ExistingFeature')
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      'FedCm,ExistingFeature'
+    )
+  })
+
+  it('does not duplicate FedCM when disable-features already includes it', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce('FedCm,ExistingFeature')
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      'FedCm,ExistingFeature'
+    )
+  })
+})
+
 describe('enableMainProcessGpuFeatures', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR

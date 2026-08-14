@@ -14,7 +14,6 @@ describe('useMobileNativeChatStop', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     sendRequest.mockReset().mockResolvedValue({
       ok: true,
       result: { send: { accepted: true } }

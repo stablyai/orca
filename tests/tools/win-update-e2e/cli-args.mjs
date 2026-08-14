@@ -190,7 +190,7 @@ function validate(opts, installDirFlagPresent) {
 
 function takeValue(argv, flag) {
   const idx = argv.indexOf(flag)
-  if (idx < 0) {
+  if (idx === -1) {
     return undefined
   }
   const value = argv[idx + 1]

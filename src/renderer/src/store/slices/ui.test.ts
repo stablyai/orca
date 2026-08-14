@@ -1,7 +1,11 @@
 /* eslint-disable max-lines */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState, getWorktreeCardModeProperties } from '../../../../shared/constants'
+import {
+  getDefaultSettings,
+  getDefaultUIState,
+  getWorktreeCardModeProperties
+} from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
   JiraIssue,
@@ -781,6 +785,26 @@ describe('createUISlice hydratePersistedUI', () => {
         ...makePersistedUI(),
         activeView: undefined as unknown as PersistedUIState['activeView']
       },
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  // Why: the Skills page was removed after being unreachable since #4535, so a
+  // profile written before then can still carry `activeView: 'skills'` on disk.
+  // Dropping it from TopLevelView is what demotes it — this pins that the removal
+  // is a migration and not a blank main surface on next launch.
+  it('demotes a persisted skills view to terminal now that the page is gone', () => {
+    const store = createUIStore()
+    // Why: the default is already 'terminal', so seed a different view first —
+    // otherwise this passes whether hydration demoted the value or never ran.
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'skills' as unknown as PersistedUIState['activeView']
+      }),
       'startup'
     )
 
@@ -1673,6 +1697,23 @@ describe('createUISlice hydratePersistedUI', () => {
       linearQuery: 'label:bug',
       jiraPreset: 'reported'
     })
+  })
+
+  // Why: the Linear issue view is device-local now. A host that still holds one from
+  // an older build must not reintroduce the key the strict ui.set schema rejects.
+  it('ignores a stale host-persisted Linear issue view during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          linearQuery: 'label:bug',
+          linearIssueView: { viewMode: 'board', groupBy: 'assignee' }
+        } as unknown as PersistedUIState['taskResumeState']
+      })
+    )
+
+    expect(store.getState().taskResumeState).toEqual({ linearQuery: 'label:bug' })
   })
 
   it('restores acknowledgedAgentsByPaneKey from persisted UI state', () => {
@@ -3445,6 +3486,31 @@ describe('createUISlice space navigation', () => {
     store.getState().closeSpacePage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('returns to the originating view after closing Artifacts', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openArtifactsPage()
+
+    expect(store.getState().activeView).toBe('artifacts')
+    expect(store.getState().previousViewBeforeArtifacts).toBe('tasks')
+
+    store.getState().closeArtifactsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('opens and restores Artifacts when its sidebar shortcut is hidden', () => {
+    const store = createUIStore()
+    store.setState({ settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: false } })
+
+    store.getState().openArtifactsPage()
+    expect(store.getState().activeView).toBe('artifacts')
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
+    expect(store.getState().activeView).toBe('artifacts')
   })
 })
 

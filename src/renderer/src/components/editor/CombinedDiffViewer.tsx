@@ -13,6 +13,8 @@ import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
+import { openFilePreviewToSide, useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
+import { canOpenDiffSectionPreviewToSide } from './diff-section-preview'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { getCombinedDiffSectionConnectionId } from './combined-diff-section-connection'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -245,6 +247,7 @@ export default function CombinedDiffViewer({
     selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
+  const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -1180,10 +1183,7 @@ export default function CombinedDiffViewer({
       if (!detail || detail.worktreeId !== file.worktreeId) {
         return
       }
-      const hasRuntimeOwnerFilter = Object.prototype.hasOwnProperty.call(
-        detail,
-        'runtimeEnvironmentId'
-      )
+      const hasRuntimeOwnerFilter = Object.hasOwn(detail, 'runtimeEnvironmentId')
       const targetRuntimeOwner = detail.runtimeEnvironmentId?.trim() || null
       const fileRuntimeOwner = file.runtimeEnvironmentId?.trim() || null
       if (hasRuntimeOwnerFilter && targetRuntimeOwner !== fileRuntimeOwner) {
@@ -1281,6 +1281,49 @@ export default function CombinedDiffViewer({
       openBranchDiff,
       openCommitDiff,
       openFile
+    ]
+  )
+
+  // Why: match single-file HTML diffs — preview the on-disk working tree file
+  // beside the combined view when the section is still present on disk.
+  const openSectionPreview = useCallback(
+    (section: DiffSection) => {
+      if (
+        !canOpenDiffSectionPreviewToSide({
+          path: section.path,
+          status: section.status,
+          isCommitSurface: isCommitMode,
+          canOpenWorkspaceFileBrowser: canOpenWorkspaceFileBrowserForPath(
+            joinPath(file.filePath, section.path)
+          )
+        })
+      ) {
+        return
+      }
+      // Why: use this combined-diff tab's group, not worktree activeGroupId —
+      // in a multi-pane layout the active group may be a different split.
+      const state = useAppStore.getState()
+      const sourceGroupId =
+        (state.unifiedTabsByWorktree[file.worktreeId] ?? []).find(
+          (tab) =>
+            tab.entityId === file.id && (tab.contentType === 'diff' || tab.contentType === 'editor')
+        )?.groupId ??
+        activeGroupId ??
+        null
+      openFilePreviewToSide({
+        language: detectLanguage(section.path),
+        filePath: joinPath(file.filePath, section.path),
+        worktreeId: file.worktreeId,
+        sourceGroupId
+      })
+    },
+    [
+      activeGroupId,
+      canOpenWorkspaceFileBrowserForPath,
+      file.filePath,
+      file.id,
+      file.worktreeId,
+      isCommitMode
     ]
   )
 
@@ -2023,6 +2066,18 @@ export default function CombinedDiffViewer({
                         openSection={openSection}
                         openSectionTitle={
                           isAllMode || isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                        }
+                        onOpenPreview={
+                          canOpenDiffSectionPreviewToSide({
+                            path: section.path,
+                            status: section.status,
+                            isCommitSurface: isCommitMode,
+                            canOpenWorkspaceFileBrowser: canOpenWorkspaceFileBrowserForPath(
+                              joinPath(file.filePath, section.path)
+                            )
+                          })
+                            ? openSectionPreview
+                            : undefined
                         }
                         setSectionHeights={setSectionHeights}
                         setSections={setSections}

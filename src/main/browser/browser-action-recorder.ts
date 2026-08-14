@@ -97,12 +97,11 @@ export class BrowserActionRecorder {
         this.enabled = false
       }
       return attached
-    } else {
-      const observer = this.observer
-      this.observer = null
-      void observer?.stop()
-      return true
     }
+    const observer = this.observer
+    this.observer = null
+    void observer?.stop()
+    return true
   }
 
   /**

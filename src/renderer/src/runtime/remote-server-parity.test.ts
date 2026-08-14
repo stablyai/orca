@@ -304,7 +304,13 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
   it('honors focus intent for a newly created browser session tab', () => {
     const pageId = 'browser-page-1'
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
-    recordWebSessionFocusIntent({ environmentId: ENV }, WT, pageId)
+    recordWebSessionFocusIntent(
+      { environmentId: ENV },
+      WT,
+      pageId,
+      undefined,
+      toWebTerminalSurfaceTabId('host-tab-1')
+    )
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([{ parentTab: 'host-tab-1', leaf: LEAF_A, active: false }], {

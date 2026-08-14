@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
+import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
 
 const {
   existsSyncMock,
@@ -13,7 +14,10 @@ const {
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
   readWindowsConptyProcessIdsMock,
-  killWithDescendantSweepMock
+  killWithDescendantSweepMock,
+  isWslAvailableAsyncMock,
+  wslUncDirectoryExistsMock,
+  createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -24,7 +28,10 @@ const {
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
   readWindowsConptyProcessIdsMock: vi.fn(),
-  killWithDescendantSweepMock: vi.fn()
+  killWithDescendantSweepMock: vi.fn(),
+  isWslAvailableAsyncMock: vi.fn(),
+  wslUncDirectoryExistsMock: vi.fn(),
+  createShellPromptReadinessProbeMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -97,10 +104,14 @@ vi.mock('../wsl', () => ({
   toWindowsWslPath: (path: string, distro: string) =>
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
-  isWslAvailable: () => true,
+  isWslAvailableAsync: () => isWslAvailableAsyncMock(),
   // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
   // cwds that are meant to exist, so report them present without spawning wsl.exe.
-  wslUncDirectoryExists: () => true
+  wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
+}))
+
+vi.mock('../shell-prompt-readiness-probe', () => ({
+  createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
 
 import {
@@ -166,6 +177,11 @@ describe('LocalPtyProvider', () => {
     )
     readWindowsConptyProcessIdsMock.mockReset()
     readWindowsConptyProcessIdsMock.mockResolvedValue(null)
+    isWslAvailableAsyncMock.mockReset()
+    isWslAvailableAsyncMock.mockResolvedValue(true)
+    wslUncDirectoryExistsMock.mockReset()
+    wslUncDirectoryExistsMock.mockReturnValue(true)
+    createShellPromptReadinessProbeMock.mockReset()
 
     exitCb = undefined
     mockProc = {
@@ -526,6 +542,24 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('verifies shell identity against the exact spawn PATH', async () => {
+      provider.configure({
+        buildSpawnEnv: (_id, env) => ({ ...env, PATH: '/post-hook/bin' })
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        command: 'printf ready',
+        env: { PATH: '/pre-hook/bin' }
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe('/post-hook/bin')
+      expect(createShellPromptReadinessProbeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ shellPathEnv: '/post-hook/bin' })
+      )
+    })
+
     it('does not inherit NODE_ENV from the Orca process env', async () => {
       // Why: NODE_ENV in Orca's process is Orca's build mode (electron-vite sets
       // `development` in dev runs); leaking it breaks `next build` and Vitest.
@@ -543,7 +577,9 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.NODE_ENV).toBeUndefined()
-      expect(spawnCall[2].env.PATH).toBe(process.env.PATH)
+      const expectedEnv = { PATH: process.env.PATH ?? '' }
+      stripLegacyTerminalShimEnv(expectedEnv, process.platform)
+      expect(spawnCall[2].env.PATH).toBe(expectedEnv.PATH)
     })
 
     it('keeps an explicitly requested NODE_ENV for spawned terminals', async () => {
@@ -625,6 +661,23 @@ describe('LocalPtyProvider', () => {
       }
     })
 
+    it.each([
+      ['after the ready marker', ['\x1b]777;orca-shell-ready\x07', '\x1b[?2004hfish> ']],
+      ['after the ESC introducer', ['\x1b]777;orca-shell-ready\x07\x1b', '[?2004hfish> ']]
+    ])('preserves Fish bracketed-paste output split %s', async (_boundary, chunks) => {
+      process.env.SHELL = '/usr/bin/fish'
+      const received: string[] = []
+      provider.configure({ onData: (_id, data) => received.push(data) })
+
+      await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+      const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+      for (const chunk of chunks) {
+        dataCallback(chunk)
+      }
+
+      expect(received.join('')).toBe('\x1b[?2004hfish> ')
+    })
+
     it('releases held marker-prefix bytes when local shell readiness times out', async () => {
       vi.useFakeTimers()
       const onData = vi.fn()
@@ -677,8 +730,8 @@ describe('LocalPtyProvider', () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {
           env.TERM_PROGRAM = 'Orca'
-          env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-attribution'
-          env.PATH = `/tmp/orca-attribution:${env.PATH ?? ''}`
+          env.ORCA_STALE_TEST_ENV = '/tmp/orca-stale'
+          env.PATH = `/tmp/orca-stale:${env.PATH ?? ''}`
           return env
         }
       })
@@ -691,7 +744,7 @@ describe('LocalPtyProvider', () => {
           PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
           ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
         },
-        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+        envToDelete: ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
       })
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
@@ -699,7 +752,20 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.TERM).toBe('screen-256color')
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
-      expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_STALE_TEST_ENV).toBeUndefined()
+    })
+
+    it('does not re-promote a legacy attribution path for Agent Teams', async () => {
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          PATH: '/tmp/orca-terminal-attribution/posix:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        }
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe('/usr/bin')
     })
 
     it('drops stale inherited Git config indices behind a smaller explicit count', async () => {
@@ -809,9 +875,9 @@ describe('LocalPtyProvider', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({
         buildSpawnEnv: (_id, env) => {
-          // Why: attribution collapses Windows PATH onto `Path` and prepends its own shim dir.
+          // Why: host env collapses Windows PATH onto `Path` and prepends its own shim dir.
           delete env.PATH
-          env.Path = `/tmp/orca-attribution:${env.Path ?? ''}`
+          env.Path = `/tmp/orca-stale:${env.Path ?? ''}`
           return env
         }
       })
@@ -974,6 +1040,52 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
+    it.each(['/home/jin/repo', '/a', '/c'])(
+      'preserves a POSIX cwd through the preferred WSL distro (%s)',
+      async (cwd) => {
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          worktreeId: 'repo-1::C:\\Users\\jin\\repo',
+          cwd,
+          prevalidatedCwd: `\\\\wsl.localhost\\Debian${cwd.replaceAll('/', '\\')}`,
+          shellOverride: 'wsl.exe',
+          terminalWindowsWslDistro: 'Debian'
+        })
+
+        const spawnCall = spawnMock.mock.calls.at(-1)!
+        expect(spawnCall[0]).toBe('wsl.exe')
+        expect(spawnCall[1]).toEqual([
+          '-d',
+          'Debian',
+          '--',
+          'sh',
+          '-c',
+          expect.stringContaining(`cd '${cwd}'`)
+        ])
+        expect(spawnCall[2].cwd).not.toBe(cwd)
+        expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+      }
+    )
+
+    it('revalidates when cwd evidence does not exactly match the resolved WSL path', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'repo-1::C:\\Users\\jin\\repo',
+        cwd: '/a',
+        prevalidatedCwd: '\\\\wsl.localhost\\Debian\\c',
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian'
+      })
+
+      expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith('\\\\wsl.localhost\\Debian\\a')
+    })
+
     it('resolves and persists the default distro for Windows cwd WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const buildSpawnEnv = vi.fn(
@@ -1032,6 +1144,32 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[0]).toBe(PWSH7_ABS)
       expect(spawnCall[1]).toContain('-EncodedCommand')
       expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
+    it('awaits PowerShell availability before resolving an automatic Windows shell', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      let resolveAvailability!: (available: boolean) => void
+      const pwshAvailable = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveAvailability = resolve
+          })
+      )
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'auto',
+        pwshAvailable
+      })
+
+      const callsBeforeSpawn = spawnMock.mock.calls.length
+      const spawn = provider.spawn({ cols: 80, rows: 24, cwd: 'C:\\Users\\jin\\repo' })
+      await Promise.resolve()
+      expect(spawnMock).toHaveBeenCalledTimes(callsBeforeSpawn)
+
+      resolveAvailability(true)
+      await spawn
+      expect(spawnMock).toHaveBeenCalledTimes(callsBeforeSpawn + 1)
+      expect(spawnMock.mock.calls.at(-1)?.[0]).toBe(PWSH7_ABS)
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
@@ -2005,6 +2143,30 @@ describe('LocalPtyProvider', () => {
           process.env.SHELL = originalShell
         }
       }
+    })
+  })
+
+  describe('getProfiles', () => {
+    it('awaits asynchronous WSL availability on Windows', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      let resolveAvailability!: (available: boolean) => void
+      isWslAvailableAsyncMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveAvailability = resolve
+        })
+      )
+
+      const profiles = provider.getProfiles()
+      let settled = false
+      void profiles.then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      expect(settled).toBe(false)
+
+      resolveAvailability(true)
+      await expect(profiles).resolves.toContainEqual({ name: 'WSL', path: 'wsl.exe' })
+      expect(isWslAvailableAsyncMock).toHaveBeenCalledOnce()
     })
   })
 

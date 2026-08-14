@@ -17,6 +17,7 @@ import { launchOrcaApp } from './launch'
 import { addEnvironmentFromPairingCode } from './environments'
 import { RuntimeClientError } from './types'
 import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
@@ -61,7 +62,10 @@ describe('CLI remote WebSocket transport', () => {
     expect(response.result.runtimeId).toBe('runtime-ws-1')
     expect(runtime.authFrames).toContainEqual(
       expect.objectContaining({
-        clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+        clientCapabilities: [
+          SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+          AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+        ]
       })
     )
   })

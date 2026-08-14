@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
@@ -39,10 +40,12 @@ type LocalProjectRuntimeWslContext = {
   availableWslDistros?: readonly string[] | null
 }
 
+/** Extracts a WSL distribution name from supported UNC path forms. */
 export function getWslDistroFromPath(path?: string | null): string | null {
   return path ? (parseWslUncPath(path)?.distro ?? null) : null
 }
 
+/** Resolves the owning local project's Windows runtime for project-scoped targets. */
 export function getLocalProjectExecutionRuntimeContext(
   state: LocalProjectRuntimeState,
   worktreeId?: string | null,
@@ -53,6 +56,9 @@ export function getLocalProjectExecutionRuntimeContext(
     return undefined
   }
 
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return undefined
+  }
   const worktree = getLocalWorktree(state, worktreeId)
   const repo = getLocalRuntimeRepoForWorktree(state, worktree)
   if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(worktree)) {
@@ -163,6 +169,10 @@ export function getLocalAgentPreflightContext(
   wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext(),
   worktreeId?: string | null
 ): LocalPreflightContext {
+  // Why: Floating owns native host authority and must not inherit any agent runtime fallback.
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return undefined
+  }
   const projectRuntime = getLocalProjectExecutionRuntimeContext(
     state,
     worktreeId,

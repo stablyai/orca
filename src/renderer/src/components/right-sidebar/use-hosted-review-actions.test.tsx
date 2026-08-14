@@ -46,10 +46,14 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   } as Repo
 }
 
-function HookProbe(props: { repo: Repo; onRefreshReview: () => Promise<void> }): null {
+function HookProbe(props: {
+  repo: Repo
+  onRefreshReview: () => Promise<void>
+  pullRequest?: PRInfo
+}): null {
   latest = useHostedReviewActions({
     review,
-    githubPR,
+    githubPR: props.pullRequest ?? githubPR,
     repo: props.repo,
     isGitLab: false,
     shortLabel: 'PR',
@@ -61,12 +65,16 @@ function HookProbe(props: { repo: Repo; onRefreshReview: () => Promise<void> }):
   return null
 }
 
-async function renderHook(repo: Repo, onRefreshReview = vi.fn().mockResolvedValue(undefined)) {
+async function renderHook(
+  repo: Repo,
+  onRefreshReview = vi.fn().mockResolvedValue(undefined),
+  pullRequest?: PRInfo
+) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(HookProbe, { repo, onRefreshReview }))
+    root?.render(createElement(HookProbe, { repo, onRefreshReview, pullRequest }))
   })
   return { onRefreshReview }
 }
@@ -115,7 +123,7 @@ describe('useHostedReviewActions', () => {
         method: 'squash',
         prRepo
       },
-      { timeoutMs: 30_000 }
+      { timeoutMs: 4 * 60_000 }
     )
     expect(window.api.gh.mergePR).not.toHaveBeenCalled()
     expect(onRefreshReview).toHaveBeenCalledTimes(1)
@@ -139,5 +147,104 @@ describe('useHostedReviewActions', () => {
     })
     expect(runtimeRpcMocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(onRefreshReview).toHaveBeenCalledTimes(1)
+  })
+
+  it('confirms the downstack merge scope before merging a registered stack', async () => {
+    const stackedPR = {
+      ...githubPR,
+      stack: {
+        number: 51,
+        position: 2,
+        size: 3,
+        baseRefName: 'main',
+        entries: [
+          {
+            position: 1,
+            number: 1014,
+            title: 'Models',
+            url: 'https://github.com/stablyai/orca/pull/1014',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          },
+          {
+            position: 2,
+            number: 1015,
+            title: 'API',
+            url: 'https://github.com/stablyai/orca/pull/1015',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          },
+          {
+            position: 3,
+            number: 1016,
+            title: 'UI',
+            url: 'https://github.com/stablyai/orca/pull/1016',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          }
+        ]
+      }
+    } as PRInfo
+    await renderHook(makeRepo(), undefined, stackedPR)
+
+    await act(async () => {
+      await latest?.handleMerge('squash')
+    })
+
+    expect(confirmationMocks.confirm).toHaveBeenCalledWith({
+      title: 'Merge through #1015?',
+      description:
+        'Included: #1014, #1015. GitHub will merge 2 pull requests atomically using squash. If any cannot merge, none will.',
+      confirmLabel: 'Merge 2 PRs'
+    })
+    expect(window.api.gh.mergePR).toHaveBeenCalledTimes(1)
+  })
+
+  it('describes merge-queue stack behavior without promising atomicity or a method', async () => {
+    const stackedPR = {
+      ...githubPR,
+      mergeQueueRequired: true,
+      stack: {
+        number: 51,
+        position: 2,
+        size: 2,
+        baseRefName: 'main',
+        entries: [
+          {
+            position: 1,
+            number: 1014,
+            title: 'Models',
+            url: 'https://github.com/stablyai/orca/pull/1014',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          },
+          {
+            position: 2,
+            number: 1015,
+            title: 'API',
+            url: 'https://github.com/stablyai/orca/pull/1015',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          }
+        ]
+      }
+    } as PRInfo
+    await renderHook(makeRepo(), undefined, stackedPR)
+
+    await act(async () => {
+      await latest?.handleMerge('squash')
+    })
+
+    expect(confirmationMocks.confirm).toHaveBeenCalledWith({
+      title: 'Queue through #1015?',
+      description:
+        'Included: #1014, #1015. GitHub will add 2 pull requests to the merge queue together. The queue chooses the merge method and may merge them in separate groups.',
+      confirmLabel: 'Queue 2 PRs'
+    })
   })
 })

@@ -74,7 +74,7 @@ function disposeRendererCrashDiagnostics(): void {
   rendererSurface = 'main'
 }
 
-if (typeof import.meta !== 'undefined' && import.meta.hot) {
+if (import.meta !== undefined && import.meta.hot) {
   // Why: Vite can replace this module without a full renderer reload. Remove
   // global diagnostics hooks so dev sessions do not accumulate listeners.
   import.meta.hot.dispose(disposeRendererCrashDiagnostics)

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   findKeybindingConflictsForDefinitions,
   formatKeybindingList,
@@ -14,22 +15,12 @@ import { EMPTY_DISABLED_TUI_AGENTS } from './shortcut-groups'
 import { useAppStore } from '../../store'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
-import { getShortcutTerminalStatus } from './shortcut-terminal-status'
 import {
   hasCommonBindingOverride,
-  hasOwnBindingOverride,
   removeBindingOverride,
   sameBindings
 } from './keybinding-override-edits'
-import {
-  buildShortcutGlobalSearchMatcher,
-  matchesShortcutFilter,
-  matchesShortcutLocalSearch,
-  normalizeShortcutLocalSearchQuery,
-  ShortcutFilterRail,
-  type ShortcutFilter,
-  type ShortcutRowsByGroup
-} from './ShortcutFilterRail'
+import { ShortcutFilterRail, type ShortcutFilter } from './ShortcutFilterRail'
 import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
@@ -45,6 +36,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useEditablePluginCommands } from '@/store/plugin-panels'
 import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -68,23 +61,28 @@ export function ShortcutsPane(): React.JSX.Element {
   const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
   const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
   const pluginCommands = useEditablePluginCommands()
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
+    useShallow((state) => {
+      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
+      return [
+        policy['managed-browser'].state === 'enabled',
+        policy['mobile-emulator'].state === 'enabled'
+      ] as const
+    })
+  )
   const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
-  // Which binding index of the recording action is being captured. Equals the
-  // effective length when capturing a brand-new (appended) binding.
+  // The effective length targets a new appended binding.
   const [recordingBindingIndex, setRecordingBindingIndex] = useState<number | null>(null)
-  // Bindings an action had right before it was disabled, so "Enable" can restore
-  // them in one click instead of forcing a reset-to-default.
+  // Preserve disabled bindings so Enable can restore them.
   const [disableMemory, setDisableMemory] = useState<Partial<Record<KeybindingActionId, string[]>>>(
     {}
   )
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
 
-  // Why: tell the main process to suspend global shortcut dispatch while any row
-  // is recording, so the captured chord lands in the editor instead of firing.
-  // One source of truth here avoids races between per-row recorder effects.
+  // Why: suspend global dispatch so a captured chord reaches the editor.
   useEffect(() => {
     window.api.ui.setShortcutRecorderFocused(recordingActionId !== null)
     return () => window.api.ui.setShortcutRecorderFocused(false)
@@ -110,55 +108,31 @@ export function ShortcutsPane(): React.JSX.Element {
     const definition = definitionForAction(actionId)
     return definition ? getEffectiveKeybindingsForDefinition(definition, platform, overrides) : []
   }
-  const shortcutGroups = useMemo<ShortcutRowsByGroup[]>(
+  const { filterCounts, shortcutRows, visibleShortcutCount, visibleShortcutGroups } = useMemo(
     () =>
-      groups.map((group) => ({
-        title: group.title,
-        rows: group.items.map((item) => {
-          const effective = getEffectiveKeybindingsForDefinition(item, platform, keybindings)
-          const modified = hasOwnBindingOverride(keybindings, item.id)
-          const warnings = conflictByAction.get(item.id) ?? []
-          return {
-            item,
-            groupTitle: group.title,
-            effective,
-            modified,
-            warnings,
-            terminalStatus: getShortcutTerminalStatus(
-              item,
-              terminalShortcutPolicy,
-              effective.length > 0
-            )
-          }
-        })
-      })),
-    [conflictByAction, groups, keybindings, terminalShortcutPolicy]
-  )
-  const shortcutSearchQuery = normalizeShortcutLocalSearchQuery(shortcutQuery)
-  const shortcutRows = shortcutGroups.flatMap((group) => group.rows)
-  const matchesShortcutGlobalSearch = buildShortcutGlobalSearchMatcher(shortcutRows, searchQuery)
-  const matchesShortcutSearch = (row: ShortcutRowsByGroup['rows'][number]): boolean =>
-    shortcutSearchQuery !== null &&
-    matchesShortcutGlobalSearch(row) &&
-    matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
-  const baseVisibleRows = shortcutRows.filter((row) => matchesShortcutSearch(row))
-  const filterCounts: Record<ShortcutFilter, number> = {
-    all: baseVisibleRows.length,
-    modified: baseVisibleRows.filter((row) => row.modified).length,
-    unassigned: baseVisibleRows.filter((row) => row.effective.length === 0).length,
-    conflicts: baseVisibleRows.filter((row) => row.warnings.length > 0).length
-  }
-  const visibleShortcutGroups = shortcutGroups
-    .map((group) => ({
-      title: group.title,
-      rows: group.rows.filter(
-        (row) => matchesShortcutSearch(row) && matchesShortcutFilter(row, shortcutFilter)
-      )
-    }))
-    .filter((group) => group.rows.length > 0)
-  const visibleShortcutCount = visibleShortcutGroups.reduce(
-    (sum, group) => sum + group.rows.length,
-    0
+      buildShortcutRowVisibility({
+        groups,
+        keybindings,
+        conflictByAction,
+        terminalShortcutPolicy,
+        platform,
+        managedBrowserCreationEnabled,
+        mobileEmulatorCreationEnabled,
+        settingsSearchQuery: searchQuery,
+        shortcutQuery,
+        shortcutFilter
+      }),
+    [
+      conflictByAction,
+      groups,
+      keybindings,
+      managedBrowserCreationEnabled,
+      mobileEmulatorCreationEnabled,
+      searchQuery,
+      shortcutFilter,
+      shortcutQuery,
+      terminalShortcutPolicy
+    ]
   )
 
   const saveBindings = async (
@@ -236,8 +210,7 @@ export function ShortcutsPane(): React.JSX.Element {
       return
     }
 
-    // Edit just the targeted binding (or append a new one) instead of replacing
-    // the whole list, so an action's other bindings survive the capture.
+    // Preserve sibling bindings when editing or appending one chord.
     const current = effectiveBindingsForAction(actionId)
     const next =
       recordingBindingIndex === null || recordingBindingIndex >= current.length
@@ -290,8 +263,7 @@ export function ShortcutsPane(): React.JSX.Element {
   }
 
   const clearRecordingForAction = (actionId: KeybindingActionId): void => {
-    // Why: disable/reset are final shortcut edits; the next keypress must not
-    // be captured into the shortcut the user just removed or restored.
+    // Why: final edits must not leave the recorder armed.
     if (recordingActionId === actionId) {
       setRecordingBindingIndex(null)
     }
@@ -367,9 +339,7 @@ export function ShortcutsPane(): React.JSX.Element {
           />
 
           <ShortcutRowsList
-            // overflow-x-hidden is explicit: overflow-y-auto alone makes the
-            // browser compute overflow-x to auto, which produced the phantom
-            // horizontal scroll when long edit-time content popped in.
+            // Why: overflow-y-auto otherwise creates a phantom horizontal scrollbar.
             className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 scrollbar-sleek"
             groups={visibleShortcutGroups}
             platform={platform}

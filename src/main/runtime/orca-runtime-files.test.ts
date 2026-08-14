@@ -22,6 +22,7 @@ const {
   closeWatcherInWatcherProcessMock,
   checkRgAvailableMock,
   getLocalGitOptionsForRegisteredWorktreeMock,
+  searchWithGitGrepMock,
   wslAwareSpawnMock,
   watchMock
 } = vi.hoisted(() => ({
@@ -35,6 +36,7 @@ const {
   statMock: vi.fn(),
   watchInWatcherProcessMock: vi.fn(),
   closeWatcherInWatcherProcessMock: vi.fn(),
+  searchWithGitGrepMock: vi.fn(),
   wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
@@ -89,6 +91,10 @@ vi.mock('../ipc/rg-availability', () => ({
 
 vi.mock('../ipc/local-worktree-runtime-options', () => ({
   getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
+}))
+
+vi.mock('../ipc/filesystem-search-git', () => ({
+  searchWithGitGrep: searchWithGitGrepMock
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -151,6 +157,7 @@ function createRuntimeFileCommands(options?: {
   resolveTerminalContext?: ReturnType<typeof vi.fn>
   resolveTerminalFileUriHostname?: ReturnType<typeof vi.fn>
   hasRecentTerminalOutputPath?: ReturnType<typeof vi.fn>
+  hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
@@ -186,6 +193,9 @@ function createRuntimeFileCommands(options?: {
       ? { resolveTerminalFileUriHostname: options.resolveTerminalFileUriHostname }
       : {}),
     hasRecentTerminalOutputPath: options?.hasRecentTerminalOutputPath ?? vi.fn(() => true),
+    ...(options?.hasRecentNativeChatOutputPath
+      ? { hasRecentNativeChatOutputPath: options.hasRecentNativeChatOutputPath }
+      : {}),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
@@ -200,6 +210,12 @@ function createRuntimeSearchChild(): MockRuntimeSearchChild {
   child.stderr = new EventEmitter()
   child.kill = vi.fn()
   return child
+}
+
+async function flushRuntimeSearchMicrotasks(): Promise<void> {
+  for (let index = 0; index < 8; index++) {
+    await Promise.resolve()
+  }
 }
 
 describe('RuntimeFileCommands', () => {
@@ -217,6 +233,7 @@ describe('RuntimeFileCommands', () => {
     closeWatcherInWatcherProcessMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
+    searchWithGitGrepMock.mockReset()
     vi.mocked(getSshFilesystemProvider).mockReset()
     resetSshConnectionGenerations()
     getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
@@ -754,6 +771,68 @@ describe('RuntimeFileCommands', () => {
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('close')).toBe(0)
+    expect(checkRgAvailableMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['error-first', 'close-first'] as const)(
+    'falls back once when runtime rg native launch failure is %s',
+    async (order) => {
+      const resolveRuntimeFileTarget = vi.fn(async () => ({
+        worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+        connectionId: null
+      }))
+      const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+      const child = createRuntimeSearchChild()
+      Object.defineProperty(child, 'pid', { value: undefined })
+      resolveAuthorizedPathMock.mockResolvedValue('/repo')
+      wslAwareSpawnMock.mockReturnValue(child)
+      const fallback = { files: [], totalMatches: 0, truncated: false }
+      searchWithGitGrepMock.mockResolvedValue(fallback)
+
+      const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+        query: 'needle',
+        maxResults: 10
+      })
+      await flushRuntimeSearchMicrotasks()
+      const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+      if (order === 'error-first') {
+        expect(() => child.emit('error', error)).not.toThrow()
+        child.emit('close', -2, null)
+      } else {
+        child.emit('close', -2, null)
+        expect(() => child.emit('error', error)).not.toThrow()
+      }
+
+      await expect(resultPromise).resolves.toBe(fallback)
+      expect(searchWithGitGrepMock).toHaveBeenCalledTimes(1)
+      expect(checkRgAvailableMock).not.toHaveBeenCalled()
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    }
+  )
+
+  it("falls back when a runtime native launcher exits outside ripgrep's contract", async () => {
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+      connectionId: null
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const child = createRuntimeSearchChild()
+    Object.defineProperty(child, 'pid', { value: 1 })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    wslAwareSpawnMock.mockReturnValue(child)
+    const fallback = { files: [], totalMatches: 0, truncated: false }
+    searchWithGitGrepMock.mockResolvedValue(fallback)
+
+    const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+      query: 'needle',
+      maxResults: 10
+    })
+    await flushRuntimeSearchMicrotasks()
+    child.emit('close', 127, null)
+
+    await expect(resultPromise).resolves.toBe(fallback)
+    expect(searchWithGitGrepMock).toHaveBeenCalledTimes(1)
   })
 
   it('routes runtime rg searches through the registered WSL project runtime', async () => {
@@ -767,6 +846,7 @@ describe('RuntimeFileCommands', () => {
     }))
     const { commands, store } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
+    Object.defineProperty(child, 'pid', { value: 1 })
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
     checkRgAvailableMock.mockResolvedValue(true)
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
@@ -779,7 +859,7 @@ describe('RuntimeFileCommands', () => {
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
-    child.emit('close')
+    child.emit('close', 127, null)
 
     await expect(resultPromise).resolves.toMatchObject({ files: [] })
     expect(getLocalGitOptionsForRegisteredWorktreeMock).toHaveBeenCalledWith(
@@ -788,6 +868,7 @@ describe('RuntimeFileCommands', () => {
       'C:\\repo'
     )
     expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(searchWithGitGrepMock).not.toHaveBeenCalled()
     expect(wslAwareSpawnMock).toHaveBeenCalledWith(
       'rg',
       expect.any(Array),
@@ -796,6 +877,25 @@ describe('RuntimeFileCommands', () => {
         wslDistro: 'Ubuntu'
       })
     )
+  })
+
+  it('keeps the runtime WSL preflight and falls back before starting real rg', async () => {
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo' },
+      connectionId: null
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const fallback = { files: [], totalMatches: 0, truncated: false }
+    resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    checkRgAvailableMock.mockResolvedValue(false)
+    searchWithGitGrepMock.mockResolvedValue(fallback)
+
+    await expect(
+      commands.searchRuntimeFiles('id:wt-1', { query: 'needle', maxResults: 10 })
+    ).resolves.toBe(fallback)
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(wslAwareSpawnMock).not.toHaveBeenCalled()
   })
 
   describe('resolveTerminalPath', () => {
@@ -849,11 +949,18 @@ describe('RuntimeFileCommands', () => {
       )
     }
 
-    function createRemoteTerminalArtifactGrantFixture(artifactPath = '/tmp/result.json') {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+    function createRemoteTerminalArtifactGrantFixture(
+      artifactPath = '/tmp/result.json',
+      nativeChat = false
+    ) {
+      const { commands, store } = createRuntimeFileCommands({
+        path: '/repo',
+        ...(nativeChat ? { hasRecentNativeChatOutputPath: vi.fn(() => true) } : {})
+      })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       let realArtifactPath = artifactPath
-      const stat = vi.fn().mockResolvedValue({ type: 'file', size: 11, mtime: 3 })
+      let artifactStat = { type: 'file', size: 11, mtime: 3 }
+      const stat = vi.fn(async () => artifactStat)
       const readTerminalArtifact = vi
         .fn()
         .mockResolvedValue({ content: '{"ok":true}', isBinary: false })
@@ -871,8 +978,18 @@ describe('RuntimeFileCommands', () => {
         writeTerminalArtifact,
         moveArtifactTarget: (nextPath: string) => {
           realArtifactPath = nextPath
+        },
+        replaceArtifact: () => {
+          artifactStat = { type: 'file', size: 12, mtime: 4 }
         }
       }
+    }
+
+    function resolveRemoteNativeChatArtifact(commands: RuntimeFileCommands, artifactPath: string) {
+      return commands.resolveTerminalPath('id:wt-1', artifactPath, null, 'client-a', null, true, {
+        tabId: 'tab-1',
+        sessionId: 'session-1'
+      })
     }
 
     it('resolves an absolute path inside the worktree to a relative path', async () => {
@@ -894,6 +1011,28 @@ describe('RuntimeFileCommands', () => {
           absolutePath: '/repo/src/index.ts'
         }
       })
+    })
+
+    it('keeps in-worktree resolution unchanged when chat provenance is present', async () => {
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '/repo/src/index.ts',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: 'src/index.ts', exists: true })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('resolves an absolute path through a known sibling workspace', async () => {
@@ -1271,9 +1410,13 @@ describe('RuntimeFileCommands', () => {
       expect(statMock).not.toHaveBeenCalled()
     })
 
-    it('does not mint an absolute terminal artifact grant without a source terminal', async () => {
+    it('keeps old-client behavior without native-chat provenance', async () => {
       const artifactPath = await tempFile('result.json', '{}')
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
 
       const result = await commands.resolveTerminalPath('id:wt-1', artifactPath, null, 'client-a')
 
@@ -1284,6 +1427,139 @@ describe('RuntimeFileCommands', () => {
         isDirectory: false
       })
       expect(result.openTarget).toBeUndefined()
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
+    })
+
+    it('mints an exact-path grant for an out-of-worktree path cited by native chat', async () => {
+      const artifactPath = await tempFile('chat-result.html', '<h1>Result</h1>')
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        artifactPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
+        'wt-1',
+        { tabId: 'tab-1', sessionId: 'session-1' },
+        artifactPath,
+        artifactPath
+      )
+      expect(result).toMatchObject({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: await realpath(artifactPath),
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          provider: 'local',
+          absolutePath: await realpath(artifactPath),
+          readOnly: true
+        }
+      })
+      const target = absoluteFileTarget(result)
+      await expect(
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          '<h1>Changed</h1>',
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_read_only')
+      await expect(readFile(artifactPath, 'utf8')).resolves.toBe('<h1>Result</h1>')
+    })
+
+    it('binds a cited symlink alias to its canonical read-only target', async () => {
+      const artifactPath = await tempFile('chat-target.html', '<h1>Result</h1>')
+      const citedPath = join(artifactPath, '..', 'chat-citation.html')
+      await symlink(artifactPath, citedPath)
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        citedPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
+        'wt-1',
+        { tabId: 'tab-1', sessionId: 'session-1' },
+        citedPath,
+        citedPath
+      )
+      expect(result).toMatchObject({
+        absolutePath: await realpath(artifactPath),
+        exists: true,
+        openTarget: {
+          kind: 'absolute-file',
+          absolutePath: await realpath(artifactPath),
+          readOnly: true
+        }
+      })
+    })
+
+    it('refuses an out-of-worktree chat path without transcript provenance', async () => {
+      const artifactPath = await tempFile('uncited-result.html', '<h1>Secret</h1>')
+      const hasRecentNativeChatOutputPath = vi.fn(() => false)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        artifactPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(result.openTarget).toBeUndefined()
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses native-chat tilde paths when the workspace runs in WSL', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: String.raw`\\wsl.localhost\Ubuntu\work\repo`,
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '~/.ssh/config',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, absolutePath: null, exists: false })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('does not mint an absolute terminal artifact grant for an unobserved path', async () => {
@@ -2117,6 +2393,69 @@ describe('RuntimeFileCommands', () => {
       expect(writeTerminalArtifact).toHaveBeenCalled()
     })
 
+    it('reads a remote non-temp artifact cited by native chat', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact } = createRemoteTerminalArtifactGrantFixture(
+        artifactPath,
+        true
+      )
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toMatchObject({ content: '{"ok":true}' })
+      expect(readTerminalArtifact).toHaveBeenCalledWith(
+        artifactPath,
+        expect.objectContaining({ expectedRealPath: artifactPath })
+      )
+    })
+
+    it('rejects a retargeted remote native-chat artifact grant', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact, moveArtifactTarget } =
+        createRemoteTerminalArtifactGrantFixture(artifactPath, true)
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      moveArtifactTarget('/home/me/private.json')
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_stale')
+      expect(readTerminalArtifact).not.toHaveBeenCalled()
+    })
+
+    it('rejects a replaced remote native-chat artifact grant', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact, replaceArtifact } =
+        createRemoteTerminalArtifactGrantFixture(artifactPath, true)
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      replaceArtifact()
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_stale')
+      expect(readTerminalArtifact).not.toHaveBeenCalled()
+    })
+
     it('rejects remote terminal artifact reads when a grant no longer resolves to the granted path', async () => {
       const { commands, readTerminalArtifact, moveArtifactTarget } =
         createRemoteTerminalArtifactGrantFixture()
@@ -2196,6 +2535,28 @@ describe('RuntimeFileCommands', () => {
 
       expect(result).toMatchObject({ relativePath: null, exists: false })
       expect(stat).not.toHaveBeenCalled()
+    })
+
+    it('still refuses a native-chat ~/ path on a remote worktree', async () => {
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands, store } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '~/notes.md',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('reports a missing remote file as not existing', async () => {

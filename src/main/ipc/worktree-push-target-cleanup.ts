@@ -6,7 +6,7 @@
 import type { Store } from '../persistence'
 import type { GitPushTarget } from '../../shared/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
 
 export type GitRemoteExec = (

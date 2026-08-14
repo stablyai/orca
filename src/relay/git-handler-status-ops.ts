@@ -24,6 +24,11 @@ import {
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../shared/git-status-line-stats-cache'
+import {
+  readGitBranchLineTotalMergeBaseParam,
+  type GitBranchLineTotal
+} from '../shared/git-branch-line-total'
+import { buildBranchLineTotalInput } from './git-status-branch-line-total'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -74,14 +79,48 @@ export async function getStatusOp(
   ignoredPaths?: string[]
   didHitLimit?: boolean
   statusLength?: number
+  branchLineTotal?: GitBranchLineTotal
 }> {
   const worktreePath = params.worktreePath as string
   const lineStatsCacheKey = `relay\0${worktreePath}`
   const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
+  // Why: untrusted RPC input spliced into a git argv — only an OID shape may pass.
+  const branchLineTotalMergeBase = readGitBranchLineTotalMergeBaseParam(
+    params.branchLineTotalMergeBase
+  )
   // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
   const limit = resolveGitStatusLimit(params.limit)
-  const conflictOperation = await detectConflictOperation(worktreePath)
+  const conflictPromise = detectConflictOperation(worktreePath)
+  // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
+  const statusArgs = [
+    '-c',
+    'core.quotePath=false',
+    'status',
+    '--porcelain=v2',
+    '--branch',
+    '--untracked-files=all'
+  ]
+  if (includeIgnored) {
+    statusArgs.push('--ignored=matching')
+  }
+  // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
+  const statusSettlementPromise = Promise.allSettled([
+    (async () => {
+      const parser = new StatusPorcelainParser()
+      const result = await streamGit(statusArgs, worktreePath, {
+        // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
+        disableOptionalLocks: true,
+        signal: options.signal,
+        onStdout: (chunk) => parser.update(chunk, limit)
+      })
+      if (!result.stoppedEarly) {
+        parser.finish()
+      }
+      return { parser, stoppedEarly: result.stoppedEarly }
+    })()
+  ])
+  const conflictOperation = await conflictPromise
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
   let branch: string | undefined
@@ -89,35 +128,21 @@ export async function getStatusOp(
   let ignoredPaths: string[] = []
   let didHitLimit = false
   let statusLength = 0
+  let statusSucceeded = false
+  let branchLineTotal: GitBranchLineTotal | undefined
 
   try {
-    // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
-    const statusArgs = [
-      '-c',
-      'core.quotePath=false',
-      'status',
-      '--porcelain=v2',
-      '--branch',
-      '--untracked-files=all'
-    ]
-    if (includeIgnored) {
-      statusArgs.push('--ignored=matching')
+    const [statusResult] = await statusSettlementPromise
+    if (statusResult.status === 'rejected') {
+      throw statusResult.reason
     }
-    const parser = new StatusPorcelainParser()
-    const { stoppedEarly } = await streamGit(statusArgs, worktreePath, {
-      // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
-      disableOptionalLocks: true,
-      signal: options.signal,
-      onStdout: (chunk) => parser.update(chunk, limit)
-    })
-    if (!stoppedEarly) {
-      parser.finish()
-    }
+    const { parser, stoppedEarly } = statusResult.value
     head = parser.branch.head
     branch = parser.branch.branch
     ignoredPaths = parser.ignoredPaths
     statusLength = parser.statusLength
     didHitLimit = stoppedEarly
+    statusSucceeded = true
     const { upstreamName, upstreamAheadBehind } = parser.branch
     upstreamStatus = upstreamName
       ? {
@@ -173,15 +198,26 @@ export async function getStatusOp(
 
   // Why: skip numstat after the limit to avoid reintroducing its cost.
   if (!didHitLimit) {
-    await reuseOrRecomputeGitStatusLineStats({
+    const branchLineTotalInput = buildBranchLineTotalInput(
+      git,
+      worktreePath,
+      entries,
+      // Why: a failed scan leaves the untracked list untrustworthy, so the total
+      // would under-count — omit it rather than publish a confident wrong number.
+      statusSucceeded ? branchLineTotalMergeBase : undefined,
+      options.signal
+    )
+    // Why: passed in so the ranged diff runs alongside the per-area numstats, not after them.
+    ;({ branchLineTotal } = await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,
       head,
       entries,
       writeToken: lineStatsWriteToken,
       reuse: params.reuseLineStats === true,
       isAborted: () => options.signal?.aborted === true,
-      recompute: () => attachLineStats(git, worktreePath, entries, options.signal)
-    })
+      recompute: () => attachLineStats(git, worktreePath, entries, options.signal),
+      ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
+    }))
   } else {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
@@ -200,7 +236,8 @@ export async function getStatusOp(
     branch,
     upstreamStatus,
     ...(includeIgnored ? { ignoredPaths } : {}),
-    ...(didHitLimit ? { didHitLimit: true, statusLength } : {})
+    ...(didHitLimit ? { didHitLimit: true, statusLength } : {}),
+    ...(branchLineTotal ? { branchLineTotal } : {})
   }
 }
 

@@ -101,6 +101,7 @@ export type KeybindingActionId =
   | 'fileExplorer.delete'
   | 'settings.search'
   | 'terminal.copySelection'
+  | 'terminal.selectAll'
   | 'terminal.paste'
   | 'terminal.search'
   | 'terminal.clear'
@@ -297,10 +298,20 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
   },
   {
     id: 'workspace.openBoard',
-    title: 'Open Workspace Board',
+    title: 'Toggle Workspace Board',
     group: 'Global',
     scope: 'global',
-    searchKeywords: ['shortcut', 'global', 'workspace', 'board', 'kanban', 'worktree'],
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'workspace',
+      'board',
+      'kanban',
+      'worktree',
+      'toggle',
+      'open',
+      'close'
+    ],
     // Why: configurable but unbound by default, to not take a global chord from terminal/browser/editor users.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
@@ -939,7 +950,23 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Terminal Panes',
     scope: 'terminal',
     searchKeywords: ['shortcut', 'terminal', 'copy', 'selection'],
-    defaultBindings: platformBindings(['Mod+Shift+C'])
+    defaultBindings: {
+      darwin: ['Mod+C'],
+      linux: ['Ctrl+Shift+C', 'Ctrl+C'],
+      win32: ['Ctrl+Shift+C', 'Ctrl+C']
+    }
+  },
+  {
+    id: 'terminal.selectAll',
+    title: 'Select all terminal text',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'select', 'all'],
+    defaultBindings: {
+      darwin: ['Mod+A'],
+      linux: ['Ctrl+Shift+A'],
+      win32: ['Ctrl+Shift+A']
+    }
   },
   {
     id: 'terminal.paste',

@@ -9,6 +9,7 @@ import {
   redactEphemeralVmRecipeDiagnosticText,
   type EphemeralVmRecipeResultWarning
 } from '../../shared/ephemeral-vm-recipe-diagnostics'
+import { getProvisionedRootRecipeRepoUrl } from '../../shared/ephemeral-vm-recipe-repo-url'
 // Why: import directly from the doctor module (not the barrel) — it uses Node
 // fs/path and must stay out of the browser bundle that imports the barrel.
 import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
@@ -110,6 +111,8 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         workspaceName?: string
         projectId?: string
         workspaceId?: string
+        branch?: string
+        ref?: string
         provisionId?: string
       }
     ): Promise<EphemeralVmProvisionIpcResult> => {
@@ -125,6 +128,10 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
       if (!recipe) {
         return { ok: false, error: `Recipe not found: ${args.recipeId}`, stdout: '', stderr: '' }
       }
+      const repoUrl = getProvisionedRootRecipeRepoUrl(
+        recipe.checkoutMode,
+        repo.repo.gitRemoteIdentity?.remoteUrl
+      )
       const controller = args.provisionId ? new AbortController() : null
       if (args.provisionId && controller) {
         activeProvisionControllers.set(args.provisionId, controller)
@@ -152,6 +159,9 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           projectId: args.projectId,
           workspaceId: args.workspaceId,
           workspaceName: args.workspaceName,
+          ...(repoUrl ? { repoUrl } : {}),
+          ...(args.branch ? { branch: args.branch } : {}),
+          ...(args.ref ? { ref: args.ref } : {}),
           ...(controller ? { signal: controller.signal } : {}),
           onStdout: (chunk) => sendProvisionEvent('stdout', chunk),
           onStderr: (chunk) => sendProvisionEvent('stderr', chunk)

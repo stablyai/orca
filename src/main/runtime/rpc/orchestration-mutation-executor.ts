@@ -22,7 +22,7 @@ export class OrchestrationMutationExecutor {
   async run(
     request: RpcRequest,
     params: unknown,
-    invoke: (mutation?: DurableMutationInvocation) => Promise<unknown> | unknown,
+    invoke: (mutation?: DurableMutationInvocation) => unknown,
     callerFingerprintOverride?: string
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId

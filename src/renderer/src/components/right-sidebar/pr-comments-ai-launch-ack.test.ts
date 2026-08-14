@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PRComment } from '../../../../shared/types'
-import type { PRCommentGroup } from '@/lib/pr-comment-groups'
+import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
   acknowledgePRCommentsAfterAiLaunch,
   attachPRReviewReplyParent,
@@ -8,6 +8,8 @@ import {
   checksPanelReviewStableKey,
   clearPendingPRCommentAiAck,
   getPRCommentGroupReplyTarget,
+  getPRCommentGroupsNeedingReply,
+  hasPRCommentGroupNeedingReply,
   PR_COMMENT_ACK_MAX_CONCURRENCY,
   resolvePRReviewReplyThreadId,
   setPendingPRCommentAiAck,
@@ -290,17 +292,16 @@ describe('checksPanelReviewStableKey', () => {
 })
 
 describe('acknowledgePRCommentsAfterAiLaunch', () => {
-  it('replies in-thread and resolves host-resolvable threads', async () => {
+  // Why: the reported bug — resolving is the acknowledgement, so a resolvable thread must
+  // never also get a "Fixing." reply on top of a thread that visibly collapsed.
+  it('resolves host-resolvable threads without replying to them', async () => {
     const resolveThread = vi.fn().mockResolvedValue(true)
     const replyInThread = vi.fn().mockResolvedValue(true)
     const replyAsConversation = vi.fn().mockResolvedValue(true)
-    const group = openThread('T1')
 
     const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [group, openThread('T2', 11)],
+      groups: [openThread('T1'), openThread('T2', 11)],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
         resolveThread,
         canReply: true,
         replyInThread,
@@ -308,24 +309,19 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
       }
     })
 
-    expect(result).toEqual({ resolved: 2, replied: 2, skipped: 0, failed: 0 })
-    expect(replyInThread).toHaveBeenCalledTimes(2)
-    expect(replyInThread).toHaveBeenCalledWith(group.root, PR_COMMENT_AI_FIXING_REPLY)
+    expect(result).toEqual({ resolved: 2, replied: 0, skipped: 0, failed: 0 })
+    expect(resolveThread.mock.calls.map(([threadId]) => threadId)).toEqual(['T1', 'T2'])
+    expect(replyInThread).not.toHaveBeenCalled()
     expect(replyAsConversation).not.toHaveBeenCalled()
-    expect(resolveThread).toHaveBeenCalledTimes(2)
   })
 
-  // Why: on GitHub canReply is true; a failed resolve still leaves the thread open and
-  // must count as failed or the success toast lies.
-  it('still replies in-thread when resolve fails, and counts the failed resolve', async () => {
-    const replyInThread = vi.fn().mockResolvedValue(true)
-    const group = openThread('T1')
+  // Why: a failed resolve leaves the thread open on the host, so the toast must not claim success.
+  it('counts a failed resolve instead of falling back to a reply', async () => {
+    const replyInThread = vi.fn()
 
     const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [group],
+      groups: [openThread('T1')],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
         resolveThread: vi.fn().mockResolvedValue(false),
         canReply: true,
         replyInThread,
@@ -333,19 +329,161 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
       }
     })
 
-    expect(result).toEqual({ resolved: 0, replied: 1, skipped: 0, failed: 1 })
-    expect(replyInThread).toHaveBeenCalledWith(group.root, PR_COMMENT_AI_FIXING_REPLY)
+    expect(result).toEqual({ resolved: 0, replied: 0, skipped: 0, failed: 1 })
+    expect(replyInThread).not.toHaveBeenCalled()
   })
 
-  it('posts a conversation @-reply for standalone conversation comments', async () => {
-    const replyAsConversation = vi.fn().mockResolvedValue(true)
-    const group = standalone(42)
+  // Why: GitLab reaches the ack with canReply false, so a failed resolve has no reply to fall
+  // back on and must still be counted.
+  it('counts a failed resolve on a provider that cannot reply', async () => {
+    const replyInThread = vi.fn()
+    const replyAsConversation = vi.fn()
+
+    const result = await acknowledgePRCommentsAfterAiLaunch({
+      groups: [openThread('T1')],
+      deps: {
+        resolveThread: vi.fn().mockResolvedValue(false),
+        canReply: false,
+        replyInThread,
+        replyAsConversation
+      }
+    })
+
+    expect(result).toEqual({ resolved: 0, replied: 0, skipped: 0, failed: 1 })
+    expect(replyInThread).not.toHaveBeenCalled()
+    expect(replyAsConversation).not.toHaveBeenCalled()
+  })
+
+  // Why: resolve used to be gated on panel/live-comment state and got silently skipped when
+  // a slow agent launch outlived either; the snapshotted threadId must always be attempted.
+  it('resolves every selected thread with no live-state gate', async () => {
+    const resolveThread = vi.fn().mockResolvedValue(true)
+
+    const result = await acknowledgePRCommentsAfterAiLaunch({
+      groups: [openThread('T1'), openThread('T2', 11), openThread('T3', 12)],
+      deps: {
+        resolveThread,
+        canReply: true,
+        replyInThread: vi.fn(),
+        replyAsConversation: vi.fn()
+      }
+    })
+
+    expect(resolveThread).toHaveBeenCalledTimes(3)
+    expect(result).toEqual({ resolved: 3, replied: 0, skipped: 0, failed: 0 })
+  })
+
+  // Why: GitLab MRs reach the ack with canReply false; resolve is the whole acknowledgement there.
+  it('resolves threads on providers that cannot reply', async () => {
+    const resolveThread = vi.fn().mockResolvedValue(true)
+
+    const result = await acknowledgePRCommentsAfterAiLaunch({
+      groups: [openThread('T1')],
+      deps: {
+        resolveThread,
+        canReply: false,
+        replyInThread: vi.fn(),
+        replyAsConversation: vi.fn()
+      }
+    })
+
+    expect(result).toEqual({ resolved: 1, replied: 0, skipped: 0, failed: 0 })
+    expect(resolveThread).toHaveBeenCalledWith('T1')
+  })
+
+  // Why: a summary thread GitHub *can* resolve is acked by resolving, even though its
+  // pullrequestreview anchor rules out a nested reply.
+  it('resolves a review-summary thread instead of batching it into a conversation post', async () => {
+    const resolveThread = vi.fn().mockResolvedValue(true)
+    const replyAsConversation = vi.fn()
+    const summaryThread: PRCommentGroup = {
+      kind: 'thread',
+      threadId: 'T_summary',
+      root: comment({
+        id: 30,
+        threadId: 'T_summary',
+        isResolved: false,
+        url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-999'
+      }),
+      replies: []
+    }
+
+    const result = await acknowledgePRCommentsAfterAiLaunch({
+      groups: [summaryThread],
+      deps: {
+        resolveThread,
+        canReply: true,
+        replyInThread: vi.fn(),
+        replyAsConversation
+      }
+    })
+
+    expect(result).toEqual({ resolved: 1, replied: 0, skipped: 0, failed: 0 })
+    expect(resolveThread).toHaveBeenCalledWith('T_summary')
+    expect(replyAsConversation).not.toHaveBeenCalled()
+  })
+
+  // Why: an already-resolved thread has nothing left to close, so it falls back to a reply.
+  it('replies in-thread when the thread is already resolved', async () => {
+    const replyInThread = vi.fn().mockResolvedValue(true)
+    const resolveThread = vi.fn()
+    const group: PRCommentGroup = {
+      kind: 'thread',
+      threadId: 'T1',
+      root: comment({ id: 10, threadId: 'T1', path: 'a.ts', isResolved: true }),
+      replies: []
+    }
 
     const result = await acknowledgePRCommentsAfterAiLaunch({
       groups: [group],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
+        resolveThread,
+        canReply: true,
+        replyInThread,
+        replyAsConversation: vi.fn()
+      }
+    })
+
+    expect(result).toEqual({ resolved: 0, replied: 1, skipped: 0, failed: 0 })
+    expect(resolveThread).not.toHaveBeenCalled()
+    expect(replyInThread).toHaveBeenCalledWith(group.root, PR_COMMENT_AI_FIXING_REPLY)
+  })
+
+  // Why: GitHub's replies endpoint keys off the top-level review comment id; replying to the
+  // newest reply 404s.
+  it('replies to the thread root, not the newest reply, on an already-resolved thread', async () => {
+    const replyInThread = vi.fn().mockResolvedValue(true)
+    const root = comment({ id: 10, threadId: 'T1', path: 'a.ts', isResolved: true })
+    const group: PRCommentGroup = {
+      kind: 'thread',
+      threadId: 'T1',
+      root,
+      replies: [
+        comment({ id: 11, threadId: 'T1', path: 'a.ts', body: 'first' }),
+        comment({ id: 12, threadId: 'T1', path: 'a.ts', body: 'latest' })
+      ]
+    }
+
+    const result = await acknowledgePRCommentsAfterAiLaunch({
+      groups: [group],
+      deps: {
+        resolveThread: vi.fn(),
+        canReply: true,
+        replyInThread,
+        replyAsConversation: vi.fn()
+      }
+    })
+
+    expect(result).toEqual({ resolved: 0, replied: 1, skipped: 0, failed: 0 })
+    expect(replyInThread).toHaveBeenCalledWith(root, PR_COMMENT_AI_FIXING_REPLY)
+  })
+
+  it('posts a conversation @-reply for standalone conversation comments', async () => {
+    const replyAsConversation = vi.fn().mockResolvedValue(true)
+
+    const result = await acknowledgePRCommentsAfterAiLaunch({
+      groups: [standalone(42)],
+      deps: {
         resolveThread: vi.fn(),
         canReply: true,
         replyInThread: vi.fn(),
@@ -364,8 +502,6 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     await acknowledgePRCommentsAfterAiLaunch({
       groups: [openThread('T1'), openThread('T2', 11)],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
         resolveThread: vi.fn().mockResolvedValue(true),
         canReply: true,
         replyInThread: vi.fn().mockResolvedValue(true),
@@ -379,13 +515,10 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
   it('posts a conversation @-reply for CodeRabbit review summaries', async () => {
     const replyInThread = vi.fn().mockResolvedValue(true)
     const replyAsConversation = vi.fn().mockResolvedValue(true)
-    const group = codeRabbitReviewSummary(77)
 
     const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [group],
+      groups: [codeRabbitReviewSummary(77)],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
         resolveThread: vi.fn(),
         canReply: true,
         replyInThread,
@@ -398,8 +531,8 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyAsConversation).toHaveBeenCalledWith(`@coderabbitai ${PR_COMMENT_AI_FIXING_REPLY}`)
   })
 
-  // Why: the reported bug — N selected summaries used to produce N near-identical
-  // "Fixing." conversation comments; one combined post covers the whole set.
+  // Why: N selected summaries used to produce N near-identical "Fixing." conversation
+  // comments; one combined post covers the whole set.
   it('combines every unresolvable review summary into one conversation comment', async () => {
     const replyAsConversation = vi.fn().mockResolvedValue(true)
     const resolveThread = vi.fn()
@@ -407,8 +540,6 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     const result = await acknowledgePRCommentsAfterAiLaunch({
       groups: [codeRabbitReviewSummary(30), codeRabbitReviewSummary(31), standalone(32)],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => false,
         resolveThread,
         canReply: true,
         replyInThread: vi.fn(),
@@ -432,31 +563,8 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(resolveThread).not.toHaveBeenCalled()
   })
 
-  it('mixes in-thread and conversation replies in a single selection', async () => {
-    const replyInThread = vi.fn().mockResolvedValue(true)
-    const replyAsConversation = vi.fn().mockResolvedValue(true)
-    const thread = openThread('T1', 10)
-    const summary = codeRabbitReviewSummary(30)
-
-    const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [thread, summary],
-      deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
-        resolveThread: vi.fn().mockResolvedValue(true),
-        canReply: true,
-        replyInThread,
-        replyAsConversation
-      }
-    })
-
-    expect(result).toEqual({ resolved: 1, replied: 2, skipped: 0, failed: 0 })
-    expect(replyInThread).toHaveBeenCalledWith(thread.root, PR_COMMENT_AI_FIXING_REPLY)
-    expect(replyAsConversation).toHaveBeenCalledWith(`@coderabbitai ${PR_COMMENT_AI_FIXING_REPLY}`)
-  })
-
-  // Why: nestable threads keep one reply each; only the conversation half is batched.
-  it('replies once per thread and once for the whole conversation set', async () => {
+  it('resolves threads and batches the conversation half in a single selection', async () => {
+    const resolveThread = vi.fn().mockResolvedValue(true)
     const replyInThread = vi.fn().mockResolvedValue(true)
     const replyAsConversation = vi.fn().mockResolvedValue(true)
 
@@ -468,27 +576,42 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
         standalone(31)
       ],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
-        resolveThread: vi.fn().mockResolvedValue(true),
+        resolveThread,
         canReply: true,
         replyInThread,
         replyAsConversation
       }
     })
 
-    expect(result).toEqual({ resolved: 2, replied: 3, skipped: 0, failed: 0 })
-    expect(replyInThread).toHaveBeenCalledTimes(2)
+    expect(result).toEqual({ resolved: 2, replied: 1, skipped: 0, failed: 0 })
+    expect(replyInThread).not.toHaveBeenCalled()
     expect(replyAsConversation).toHaveBeenCalledTimes(1)
     expect(replyAsConversation.mock.calls[0]?.[0]).toContain('Fixing:')
+  })
+
+  // Why: a path-only review comment with no thread metadata still nests a reply.
+  it('replies in-thread for an unresolvable comment that supports nesting', async () => {
+    const replyInThread = vi.fn().mockResolvedValue(true)
+    const target = comment({ id: 10, path: 'src/a.ts', line: 12 })
+
+    const result = await acknowledgePRCommentsAfterAiLaunch({
+      groups: [{ kind: 'standalone', comment: target }],
+      deps: {
+        resolveThread: vi.fn(),
+        canReply: true,
+        replyInThread,
+        replyAsConversation: vi.fn()
+      }
+    })
+
+    expect(result).toEqual({ resolved: 0, replied: 1, skipped: 0, failed: 0 })
+    expect(replyInThread).toHaveBeenCalledWith(target, PR_COMMENT_AI_FIXING_REPLY)
   })
 
   it('counts a failed conversation reply instead of silently reporting success', async () => {
     const result = await acknowledgePRCommentsAfterAiLaunch({
       groups: [codeRabbitReviewSummary(30)],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => false,
         resolveThread: vi.fn(),
         canReply: true,
         replyInThread: vi.fn(),
@@ -499,37 +622,10 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(result).toEqual({ resolved: 0, replied: 0, skipped: 0, failed: 1 })
   })
 
-  it('replies to the thread root in a multi-comment thread', async () => {
-    const replyInThread = vi.fn().mockResolvedValue(true)
-    const group: PRCommentGroup = {
-      kind: 'thread',
-      threadId: 'T1',
-      root: comment({ id: 10, threadId: 'T1', path: 'a.ts', isResolved: false }),
-      replies: [comment({ id: 11, threadId: 'T1', path: 'a.ts', body: 'prior reply' })]
-    }
-
-    const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [group],
-      deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => false,
-        resolveThread: vi.fn(),
-        canReply: true,
-        replyInThread,
-        replyAsConversation: vi.fn()
-      }
-    })
-
-    expect(result).toEqual({ resolved: 0, replied: 1, skipped: 0, failed: 0 })
-    expect(replyInThread).toHaveBeenCalledWith(group.root, PR_COMMENT_AI_FIXING_REPLY)
-  })
-
-  it('skips when reply is unavailable and resolve cannot run', async () => {
+  it('skips an unresolvable comment when the provider cannot reply', async () => {
     const result = await acknowledgePRCommentsAfterAiLaunch({
       groups: [standalone()],
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
         resolveThread: vi.fn(),
         canReply: false,
         replyInThread: vi.fn(),
@@ -540,27 +636,10 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(result).toEqual({ resolved: 0, replied: 0, skipped: 1, failed: 0 })
   })
 
-  it('counts a failure when resolve fails and reply is unavailable', async () => {
-    const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [openThread('T1')],
-      deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
-        resolveThread: vi.fn().mockResolvedValue(false),
-        canReply: false,
-        replyInThread: vi.fn(),
-        replyAsConversation: vi.fn()
-      }
-    })
-
-    expect(result).toEqual({ resolved: 0, replied: 0, skipped: 0, failed: 1 })
-  })
-
   it('keeps a durable pending payload across take', () => {
     const payload: PendingPRCommentAiAck = {
       reviewContextKey: 'repo::main::owner/repo::12::abc',
       provider: 'github',
-      selectedThreadIds: ['T1'],
       selectedGroups: [openThread('T1')]
     }
     clearPendingPRCommentAiAck()
@@ -569,136 +648,78 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(takePendingPRCommentAiAck()).toBeNull()
   })
 
-  it('still posts all replies when the review context becomes stale mid-loop', async () => {
-    let live = true
-    const replyInThread = vi.fn().mockImplementation(async () => {
-      live = false
-      return true
-    })
-    const resolveThread = vi.fn().mockResolvedValue(true)
-
-    const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [openThread('T1'), openThread('T2', 11), openThread('T3', 12)],
-      deps: {
-        isStillCurrent: () => live,
-        isThreadStillResolvable: () => true,
-        resolveThread,
-        canReply: true,
-        replyInThread,
-        replyAsConversation: vi.fn()
-      }
-    })
-
-    // Why: replies must not depend on checks-panel key stability; resolve stops after context
-    // goes stale, and each skipped resolve is reported rather than silently counted as success.
-    expect(replyInThread).toHaveBeenCalledTimes(3)
-    expect(resolveThread).toHaveBeenCalledTimes(0)
-    expect(result).toEqual({ resolved: 0, replied: 3, skipped: 3, failed: 0 })
-  })
-
-  // Why: resolving after a failed reply closes the thread with no ack at all.
-  it('leaves a thread open when its fixing reply failed', async () => {
-    const resolveThread = vi.fn().mockResolvedValue(true)
-
-    const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [openThread('T1')],
-      deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
-        resolveThread,
-        canReply: true,
-        replyInThread: vi.fn().mockResolvedValue(false),
-        replyAsConversation: vi.fn()
-      }
-    })
-
-    expect(result).toEqual({ resolved: 0, replied: 0, skipped: 0, failed: 1 })
-    expect(resolveThread).not.toHaveBeenCalled()
-  })
-
-  it('does not resolve batched conversation groups when the combined post failed', async () => {
-    const resolveThread = vi.fn()
-    const summaryThread: PRCommentGroup = {
-      kind: 'thread',
-      threadId: 'T_summary',
-      root: comment({
-        id: 30,
-        threadId: 'T_summary',
-        isResolved: false,
-        url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-999'
-      }),
-      replies: []
+  // Why: the ack resolves after delivery, by which point the panel may show another review —
+  // the host target must ride along in the payload, not be re-read from live state.
+  it('carries the snapshotted GitLab target through take', () => {
+    const payload: PendingPRCommentAiAck = {
+      reviewContextKey: 'repo::main::gitlab::7::abc',
+      provider: 'gitlab',
+      selectedGroups: [openThread('D1')],
+      gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7 }
     }
-
-    const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [summaryThread],
-      deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
-        resolveThread,
-        canReply: true,
-        replyInThread: vi.fn(),
-        replyAsConversation: vi.fn().mockResolvedValue(false)
-      }
+    clearPendingPRCommentAiAck()
+    setPendingPRCommentAiAck(payload)
+    expect(takePendingPRCommentAiAck()?.gitlabTarget).toEqual({
+      repoPath: '/repos/widgets',
+      repoId: 'repo-1',
+      iid: 7
     })
-
-    expect(result).toEqual({ resolved: 0, replied: 0, skipped: 0, failed: 1 })
-    expect(resolveThread).not.toHaveBeenCalled()
   })
 
-  it('reports a resolvable thread as skipped when the panel context moved', async () => {
-    const resolveThread = vi.fn()
-
-    const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [openThread('T1')],
-      deps: {
-        isStillCurrent: () => false,
-        isThreadStillResolvable: () => true,
-        resolveThread,
-        canReply: true,
-        replyInThread: vi.fn().mockResolvedValue(true),
-        replyAsConversation: vi.fn()
-      }
-    })
-
-    expect(result).toEqual({ resolved: 0, replied: 1, skipped: 1, failed: 0 })
-    expect(resolveThread).not.toHaveBeenCalled()
-  })
-
-  it('runs groups with bounded concurrency, replying before resolving in each group', async () => {
+  it('runs groups with bounded concurrency', async () => {
     const groups = Array.from({ length: 9 }, (_, index) => openThread(`T${index}`, 100 + index))
-    const order: string[] = []
     let inFlight = 0
     let peakInFlight = 0
-
-    const track = async <T>(label: string, value: T): Promise<T> => {
-      inFlight += 1
-      peakInFlight = Math.max(peakInFlight, inFlight)
-      order.push(label)
-      await Promise.resolve()
-      inFlight -= 1
-      return value
-    }
 
     const result = await acknowledgePRCommentsAfterAiLaunch({
       groups,
       deps: {
-        isStillCurrent: () => true,
-        isThreadStillResolvable: () => true,
-        resolveThread: (threadId) => track(`resolve:${threadId}`, true),
+        resolveThread: async () => {
+          inFlight += 1
+          peakInFlight = Math.max(peakInFlight, inFlight)
+          await Promise.resolve()
+          inFlight -= 1
+          return true
+        },
         canReply: true,
-        replyInThread: (comment) => track(`reply:${comment.threadId}`, true),
+        replyInThread: vi.fn(),
         replyAsConversation: vi.fn()
       }
     })
 
-    expect(result).toEqual({ resolved: 9, replied: 9, skipped: 0, failed: 0 })
+    expect(result).toEqual({ resolved: 9, replied: 0, skipped: 0, failed: 0 })
     expect(peakInFlight).toBeGreaterThan(1)
     expect(peakInFlight).toBeLessThanOrEqual(PR_COMMENT_ACK_MAX_CONCURRENCY)
-    for (const group of groups) {
-      expect(order.indexOf(`reply:${group.threadId}`)).toBeLessThan(
-        order.indexOf(`resolve:${group.threadId}`)
-      )
+  })
+})
+
+describe('getPRCommentGroupsNeedingReply', () => {
+  it('keeps only the groups the host cannot close for us', () => {
+    const summary = codeRabbitReviewSummary(30)
+    const conversation = standalone(31)
+    const resolvedThread: PRCommentGroup = {
+      kind: 'thread',
+      threadId: 'T_done',
+      root: comment({ id: 12, threadId: 'T_done', isResolved: true }),
+      replies: []
     }
+
+    expect(
+      getPRCommentGroupsNeedingReply([
+        openThread('T1'),
+        summary,
+        conversation,
+        resolvedThread,
+        openThread('T2', 11)
+      ])
+    ).toEqual([summary, conversation, resolvedThread])
+  })
+})
+
+describe('hasPRCommentGroupNeedingReply', () => {
+  it('matches the filtered list without materializing it', () => {
+    expect(hasPRCommentGroupNeedingReply([openThread('T1'), openThread('T2', 11)])).toBe(false)
+    expect(hasPRCommentGroupNeedingReply([openThread('T1'), standalone(31)])).toBe(true)
+    expect(hasPRCommentGroupNeedingReply([])).toBe(false)
   })
 })

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
 import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
 
 const {
@@ -579,6 +580,32 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     await second.session.done
     expect(secondStop).toHaveBeenCalledTimes(1)
   }, 10_000)
+
+  it('admits screencast frames through the paired-runtime size guard', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    const done = deferred<void>()
+    startBrowserScreencastMock.mockResolvedValue({
+      stop: vi.fn(() => done.resolve()),
+      done: done.promise
+    })
+    const sendBinary = vi.fn(() => true)
+
+    const commands = new RuntimeBrowserCommands(createHost())
+    const started = await commands.browserScreencast(
+      { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
+      { sendBinary }
+    )
+    const { onFrame } = startBrowserScreencastMock.mock.calls[0][1]
+
+    expect(onFrame(new Uint8Array(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1))).toBe(true)
+    expect(sendBinary).not.toHaveBeenCalled()
+    expect(onFrame(new Uint8Array(64))).toBe(true)
+    expect(sendBinary).toHaveBeenCalledTimes(1)
+
+    started.session.stop()
+    await started.session.done
+  })
 })
 
 describe('RuntimeBrowserCommands headless offscreen routing', () => {

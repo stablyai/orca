@@ -64,7 +64,7 @@ describe('buildAiVaultDropRepinStartup', () => {
     expect(startup).not.toBeNull()
     expect(startup?.command).toContain(`CODEX_HOME='${SELECTED_HOME}'`)
     expect(startup?.command).not.toContain(RECORDED_HOME)
-    expect(startup?.command).toContain("cd '/Users/ada/repo' && ")
+    expect(startup).toMatchObject({ cwd: '/Users/ada/repo' })
   })
 
   it('repins a payload whose session has no cwd instead of keeping the wrong-account command', () => {

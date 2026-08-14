@@ -22,7 +22,7 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
-import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
@@ -49,12 +49,7 @@ export type RuntimePullRequestGenerationInput = {
 }
 
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
-  Partial<
-    Pick<
-      GlobalSettings,
-      'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
-    >
-  >
+  Partial<Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>>
 
 type RuntimeDiscoverCommitMessageModelsResult =
   | {
@@ -96,12 +91,7 @@ export type RuntimeGeneratePullRequestFieldsOverrides = RuntimeGenerateCommitMes
 function getRuntimeCommitMessageSettings(
   settings: RuntimeGitSettings | null | undefined,
   connectionId?: string
-): Partial<
-  Pick<
-    GlobalSettings,
-    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
-  >
-> & {
+): Partial<Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>> & {
   commitMessageDiscoveryHostKey?: string
 } {
   if (!settings) {
@@ -117,9 +107,6 @@ function getRuntimeCommitMessageSettings(
       : {}),
     ...(settings.agentCmdOverrides !== undefined
       ? { agentCmdOverrides: settings.agentCmdOverrides }
-      : {}),
-    ...(settings.enableGitHubAttribution !== undefined
-      ? { enableGitHubAttribution: settings.enableGitHubAttribution }
       : {}),
     commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }
@@ -139,6 +126,7 @@ export async function getRuntimeGitStatus(
     includeIgnored?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
+    branchLineTotalMergeBase?: string
     signal?: AbortSignal
   }
 ): Promise<GitStatusResult> {
@@ -148,6 +136,9 @@ export async function getRuntimeGitStatus(
     ? { bypassEffectiveUpstreamNegativeCache: true }
     : {}
   const lineStatsReuseArgs = options?.reuseLineStats ? { reuseLineStats: true } : {}
+  const branchLineTotalArgs = options?.branchLineTotalMergeBase
+    ? { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
+    : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return callLocalGitStatus(
       {
@@ -155,7 +146,8 @@ export async function getRuntimeGitStatus(
         connectionId: context.connectionId,
         ...includeIgnoredArgs,
         ...upstreamCacheBypassArgs,
-        ...lineStatsReuseArgs
+        ...lineStatsReuseArgs,
+        ...branchLineTotalArgs
       },
       options?.signal
     )
@@ -167,7 +159,8 @@ export async function getRuntimeGitStatus(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs,
-      ...lineStatsReuseArgs
+      ...lineStatsReuseArgs,
+      ...branchLineTotalArgs
     },
     {
       timeoutMs: 15_000,
@@ -180,6 +173,24 @@ export async function getRuntimeGitStatus(
       ...(options?.reuseLineStats ? {} : { signal: options?.signal })
     }
   )
+}
+
+export async function setRuntimeGitStatusUpstreamRefWatch(
+  context: RuntimeGitContext,
+  args: { executionHostId: string; branch?: string; upstreamName?: string }
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind !== 'local' || !context.worktreeId) {
+    return
+  }
+  await window.api.git.setStatusUpstreamRefWatch({
+    worktreeId: context.worktreeId,
+    worktreePath: resolveLocalWorktreePath(context),
+    executionHostId: args.executionHostId,
+    ...(context.connectionId ? { connectionId: context.connectionId } : {}),
+    ...(args.branch ? { branch: args.branch } : {}),
+    ...(args.upstreamName ? { upstreamName: args.upstreamName } : {})
+  })
 }
 
 let nextGitStatusRequestToken = 0

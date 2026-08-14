@@ -281,4 +281,16 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).not.toContain('Create on host')
     expect(html).not.toContain('Want to import many repos at once?')
   })
+
+  it('opens the in-app filesystem browser for a paired runtime', () => {
+    const html = renderStepContent({
+      step: 'server-path',
+      isRuntimeEnvironmentActive: true,
+      activeRuntimeEnvironmentId: 'paired-host'
+    })
+
+    expect(html).toContain('Browse host filesystem')
+    expect(html).toContain('Navigate to a directory and click Select to choose it.')
+    expect(html).toContain('Select folder')
+  })
 })

@@ -69,6 +69,7 @@ import {
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
 import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
+import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 
 export type BrowserCommandTargetParams = {
   worktree?: string
@@ -541,7 +542,7 @@ export class RuntimeBrowserCommands {
         mobile: params.mobile === true,
         everyNthFrame: clampInteger(params.everyNthFrame, 1, 10, 2),
         minFrameIntervalMs: clampInteger(params.minFrameIntervalMs, 0, 1000, 0),
-        onFrame: stream.sendBinary,
+        onFrame: (bytes) => sendRemoteBrowserScreencastFrame(stream.sendBinary, bytes),
         onEvent: stream.emit,
         onError: (message) => stream.emit?.({ type: 'error', message })
       })

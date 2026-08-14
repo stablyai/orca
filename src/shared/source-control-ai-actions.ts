@@ -195,7 +195,7 @@ export function renderSourceControlActionCommandTemplate(
       // Why: placeholder names may start with letters or underscores.
       // Why: only own keys are real variables; inherited Object.prototype names
       // (e.g. `constructor`) must stay visible instead of rendering their value.
-      if (!Object.prototype.hasOwnProperty.call(variables, name)) {
+      if (!Object.hasOwn(variables, name)) {
         return match
       }
       const value = variables[name]

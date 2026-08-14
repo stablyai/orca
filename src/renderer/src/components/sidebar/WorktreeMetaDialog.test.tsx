@@ -225,6 +225,17 @@ describe('WorktreeMetaDialog issue link row', () => {
     expect(issueInput().value).toBe('42')
   })
 
+  it('replaces a completed emoji shortcode in the display name', () => {
+    openDialog()
+    const displayNameInput = screen.getByRole('textbox', { name: 'Display Name' })
+
+    fireEvent.change(displayNameInput, {
+      target: { value: 'Feature :wink:', selectionStart: 14 }
+    })
+
+    expect((displayNameInput as HTMLInputElement).value).toBe('Feature 😉')
+  })
+
   it('seeds the chip and value from a Linear link', () => {
     openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
 

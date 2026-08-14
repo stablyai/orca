@@ -1,10 +1,11 @@
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/types'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 
 export type SshRepoReconciliation = {
-  repos: Repo[]
-  pendingReadoptions: SshRepoReadoption[]
+  repos: readonly Repo[]
+  pendingReadoptions: readonly SshRepoReadoption[]
 }
 
 function repoBelongsToTarget(repo: Repo, targetId: string): boolean {
@@ -12,10 +13,6 @@ function repoBelongsToTarget(repo: Repo, targetId: string): boolean {
     repo.connectionId === targetId &&
     getRepoExecutionHostId(repo) === toSshExecutionHostId(targetId)
   )
-}
-
-function repoOwnerKey(hostId: string, repoId: string): string {
-  return `${hostId}\0${repoId}`
 }
 
 /**
@@ -32,7 +29,7 @@ export function reconcileReadoptedSshRepoRows(
   const directSshOwners = new Set(
     repos.flatMap((repo) =>
       repo.connectionId && repoBelongsToTarget(repo, repo.connectionId)
-        ? [repoOwnerKey(getRepoExecutionHostId(repo), repo.id)]
+        ? [getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))]
         : []
     )
   )
@@ -40,25 +37,33 @@ export function reconcileReadoptedSshRepoRows(
   for (const readoption of readoptions) {
     const pendingRepoIds: string[] = []
     for (const repoId of readoption.repoIds) {
-      const newOwner = repoOwnerKey(toSshExecutionHostId(readoption.newTargetId), repoId)
+      const newOwner = getRepoHostIdentityForParts(
+        repoId,
+        toSshExecutionHostId(readoption.newTargetId)
+      )
       const hasNewRow = directSshOwners.has(newOwner)
       if (!hasNewRow) {
         pendingRepoIds.push(repoId)
         continue
       }
-      prunedOwners.add(repoOwnerKey(toSshExecutionHostId(readoption.oldTargetId), repoId))
+      prunedOwners.add(
+        getRepoHostIdentityForParts(repoId, toSshExecutionHostId(readoption.oldTargetId))
+      )
     }
     if (pendingRepoIds.length > 0) {
       pendingReadoptions.push({ ...readoption, repoIds: pendingRepoIds })
     }
   }
 
+  // Why: pruning nothing must hand back the input array, or the copy alone would defeat the
+  // referential stability reconcileFetchedRepos just established upstream.
   if (prunedOwners.size === 0) {
-    return { repos: [...repos], pendingReadoptions }
+    return { repos, pendingReadoptions }
   }
   return {
     repos: repos.filter(
-      (repo) => !prunedOwners.has(repoOwnerKey(getRepoExecutionHostId(repo), repo.id))
+      (repo) =>
+        !prunedOwners.has(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)))
     ),
     pendingReadoptions
   }
@@ -67,7 +72,7 @@ export function reconcileReadoptedSshRepoRows(
 export function mergeSshRepoReadoptions(
   pending: readonly SshRepoReadoption[],
   incoming: readonly SshRepoReadoption[]
-): SshRepoReadoption[] {
+): readonly SshRepoReadoption[] {
   const repoIdsByMigration = new Map<string, Set<string>>()
   for (const readoption of [...pending, ...incoming]) {
     const key = `${readoption.oldTargetId}\0${readoption.newTargetId}`

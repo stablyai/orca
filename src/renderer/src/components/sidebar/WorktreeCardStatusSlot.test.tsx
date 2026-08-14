@@ -127,7 +127,7 @@ describe('WorktreeCardStatusSlot', () => {
 
     expect(markup).toContain('Needs permission · Unread')
     expect(markup).toContain('lucide-message-circle-question-mark')
-    expect(markup).toContain('text-amber-500')
+    expect(markup).toContain('text-agent-question')
     expect(markup).not.toContain('data-worktree-status-lane-unread=""')
     expect(markup).not.toContain('data-worktree-unread-alert=""')
     expect(markup).not.toContain('aria-label="Mark as read"')
@@ -380,7 +380,7 @@ describe('WorktreeCardStatusSlot', () => {
 
     expect(markup).toContain('Needs permission')
     expect(markup).toContain('lucide-message-circle-question-mark')
-    expect(markup).toContain('text-amber-500')
+    expect(markup).toContain('text-agent-question')
     expect(markup).not.toContain('PR checks: Failed')
   })
 

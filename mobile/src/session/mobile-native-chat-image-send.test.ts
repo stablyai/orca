@@ -27,17 +27,22 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 
 describe('pasteMobileNativeChatImagePaths', () => {
   it('clears the input line, then pastes each path as a bracketed, non-submitting terminal.send with the mobile client tag', async () => {
-    const client = clientWithResponses([sendResult(true), sendResult(true), sendResult(true)])
+    const client = clientWithResponses([
+      sendResult(true),
+      sendResult(true),
+      sendResult(true),
+      sendResult(true)
+    ])
 
     const ok = await pasteMobileNativeChatImagePaths({
       client,
       terminal: 'term-1',
       deviceToken: 'device-9',
-      imagePaths: ['/tmp/a.png', '/tmp/b.png']
+      imagePaths: ['/tmp/a.png', '/tmp/b.png', '/tmp/c.png']
     })
 
     expect(ok).toBe(true)
-    expect(client.calls).toHaveLength(3)
+    expect(client.calls).toHaveLength(4)
     // Leading Ctrl+U clears any stale input so a retry can't duplicate the image.
     expect(client.calls[0]).toEqual({
       method: 'terminal.send',
@@ -50,6 +55,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
     })
     expect(client.calls[1]?.params.text).toBe('\x1b[200~/tmp/a.png\x1b[201~')
     expect(client.calls[2]?.params.text).toBe('\x1b[200~/tmp/b.png\x1b[201~')
+    expect(client.calls[3]?.params.text).toBe('\x1b[200~/tmp/c.png\x1b[201~')
   })
 
   it('stops and reports failure as soon as a paste is rejected', async () => {

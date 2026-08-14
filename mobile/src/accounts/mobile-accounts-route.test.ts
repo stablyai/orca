@@ -45,7 +45,7 @@ describe('mobile accounts route', () => {
 
     navigateToHostStackRoute(
       harness.navigation,
-      { push },
+      { push, replace: vi.fn() },
       'host/one',
       mobileAccountsRouteTarget('host/one')
     )

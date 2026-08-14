@@ -14,14 +14,6 @@ function ContextMenuTrigger({
   return <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props} />
 }
 
-function ContextMenuGroup({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Group>) {
-  return <ContextMenuPrimitive.Group data-slot="context-menu-group" {...props} />
-}
-
-function ContextMenuPortal({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Portal>) {
-  return <ContextMenuPrimitive.Portal data-slot="context-menu-portal" {...props} />
-}
-
 function ContextMenuSub({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Sub>) {
   return <ContextMenuPrimitive.Sub data-slot="context-menu-sub" {...props} />
 }
@@ -123,6 +115,30 @@ function ContextMenuItem({
   )
 }
 
+function ContextMenuRadioItem({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof ContextMenuPrimitive.RadioItem>) {
+  return (
+    <ContextMenuPrimitive.RadioItem
+      data-slot="context-menu-radio-item"
+      className={cn(
+        "relative flex cursor-default items-center gap-2 rounded-[7px] py-1 pr-2 pl-8 text-[12px] leading-5 font-[450] outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        className
+      )}
+      {...props}
+    >
+      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
+        <ContextMenuPrimitive.ItemIndicator>
+          <CircleIcon className="size-2 fill-current" />
+        </ContextMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </ContextMenuPrimitive.RadioItem>
+  )
+}
+
 function ContextMenuCheckboxItem({
   className,
   children,
@@ -146,30 +162,6 @@ function ContextMenuCheckboxItem({
       </span>
       {children}
     </ContextMenuPrimitive.CheckboxItem>
-  )
-}
-
-function ContextMenuRadioItem({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.RadioItem>) {
-  return (
-    <ContextMenuPrimitive.RadioItem
-      data-slot="context-menu-radio-item"
-      className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-[7px] py-1 pr-2 pl-8 text-[12px] leading-5 font-[450] outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        className
-      )}
-      {...props}
-    >
-      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
-        <ContextMenuPrimitive.ItemIndicator>
-          <CircleIcon className="size-2 fill-current" />
-        </ContextMenuPrimitive.ItemIndicator>
-      </span>
-      {children}
-    </ContextMenuPrimitive.RadioItem>
   )
 }
 
@@ -224,13 +216,11 @@ export {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuCheckboxItem,
   ContextMenuRadioItem,
+  ContextMenuCheckboxItem,
   ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuShortcut,
-  ContextMenuGroup,
-  ContextMenuPortal,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,

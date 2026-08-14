@@ -219,12 +219,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(
-        Object.prototype.hasOwnProperty.call(
-          result.value.sleepingAgentSessionsByPaneKey ?? {},
-          '__proto__'
-        )
-      ).toBe(false)
+      expect(Object.hasOwn(result.value.sleepingAgentSessionsByPaneKey ?? {}, '__proto__')).toBe(
+        false
+      )
       const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
       expect(record?.agent).toBe('codex')
       expect(record?.launchConfig).toBeUndefined()

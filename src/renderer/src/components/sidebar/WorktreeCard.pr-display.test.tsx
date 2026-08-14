@@ -9,7 +9,7 @@ import type {
   Worktree,
   WorktreeCardProperty
 } from '../../../../shared/types'
-import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
+import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()

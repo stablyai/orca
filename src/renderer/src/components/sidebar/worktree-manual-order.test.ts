@@ -87,6 +87,28 @@ describe('buildWorktreeDragPreviewOffsets', () => {
     ])
   })
 
+  it('keeps downward offsets stable after virtualization unmounts the leading rows', () => {
+    const { offsets, placeholderTop } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e', 'f'],
+      draggedIds: ['a'],
+      draggingWorktreeId: 'a',
+      draggedPreviewHeight: 50,
+      dropIndex: 6,
+      rects: [
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 },
+        { worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([
+      ['d', -56],
+      ['e', -56],
+      ['f', -56]
+    ])
+    expect(placeholderTop).toBe(280)
+  })
+
   it('slides intervening rows down while dragging a row up', () => {
     const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c'],

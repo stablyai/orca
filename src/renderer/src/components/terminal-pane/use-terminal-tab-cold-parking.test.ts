@@ -6,7 +6,9 @@ import type { TerminalTab } from '../../../../shared/types'
 const mocks = vi.hoisted(() => ({
   storeState: {
     pendingStartupByTabId: {} as Record<string, unknown>,
+    ptyIdsByTabId: {} as Record<string, string[]>,
     runtimeStatusByEnvironmentId: new Map(),
+    runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     settings: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>,
     sleepingAgentSessionsByPaneKey: {} as Record<
@@ -72,6 +74,7 @@ function hookArgs(shouldMeasureHiddenWorktree: boolean) {
     terminalTabs: [terminalTab('tab-1'), terminalTab('tab-2')],
     assignments: new Map<string, { groupId: string; isActiveInGroup: boolean }>(),
     isWorktreeActive: false,
+    activeTerminalTabId: null as string | null,
     coldParkTerminalPanes: false,
     shouldMeasureHiddenWorktree,
     activityTerminalPortals: [],
@@ -93,6 +96,86 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     mocks.storeState.terminalLayoutsByTabId = {}
     mocks.storeState.sleepingAgentSessionsByPaneKey = {}
     mocks.storeState.runtimeStatusByEnvironmentId = new Map()
+  })
+
+  // Why: leaving a worktree gives every tab the same hidden time.
+  it('exempts the tab the worktree was left on when every tab hides in one pass', () => {
+    const assignments = new Map([
+      ['tab-1', { groupId: 'group-1', isActiveInGroup: false }],
+      ['tab-2', { groupId: 'group-1', isActiveInGroup: true }]
+    ])
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs> & { isWorktreeActive: boolean }) =>
+        useTerminalTabColdParking(args),
+      {
+        initialProps: {
+          ...hookArgs(false),
+          assignments,
+          isWorktreeActive: true,
+          activeTerminalTabId: 'tab-2'
+        }
+      }
+    )
+    expect(result.current.size).toBe(0)
+
+    act(() => {
+      rerender({
+        ...hookArgs(false),
+        assignments,
+        isWorktreeActive: false,
+        activeTerminalTabId: 'tab-2'
+      })
+    })
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+
+    expect(result.current).toEqual(new Set(['tab-1']))
+  })
+
+  it('records focused split changes when the visible tab set does not change', () => {
+    const assignments = new Map([
+      ['tab-1', { groupId: 'group-1', isActiveInGroup: true }],
+      ['tab-2', { groupId: 'group-2', isActiveInGroup: true }]
+    ])
+    const { result, rerender } = renderHook(
+      (
+        args: ReturnType<typeof hookArgs> & {
+          activeTerminalTabId: string | null
+          isWorktreeActive: boolean
+        }
+      ) => useTerminalTabColdParking(args),
+      {
+        initialProps: {
+          ...hookArgs(false),
+          assignments,
+          isWorktreeActive: true,
+          activeTerminalTabId: 'tab-1'
+        }
+      }
+    )
+
+    act(() => {
+      rerender({
+        ...hookArgs(false),
+        assignments,
+        isWorktreeActive: true,
+        activeTerminalTabId: 'tab-2'
+      })
+    })
+    act(() => {
+      rerender({
+        ...hookArgs(false),
+        assignments,
+        isWorktreeActive: false,
+        activeTerminalTabId: 'tab-2'
+      })
+    })
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+
+    expect(result.current).toEqual(new Set(['tab-1']))
   })
 
   it('parks paired-runtime tabs only when their exact host advertises restore', () => {
