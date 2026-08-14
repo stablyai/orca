@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { File, Image as ImageIcon, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -37,10 +37,31 @@ export function RoomComposerAttachments({
   onRemove: (attachment: RoomComposerAttachment) => void
   onCancelUpload: () => void
 }): React.JSX.Element | null {
-  const [preview, setPreview] = useState<RoomImagePreview | null>(null)
+  const [selectedPreviewUrl, setSelectedPreviewUrl] = useState<string | null>(null)
   const items = uploading ? [...attachments, uploading] : attachments
-  const visiblePreview =
-    preview && items.some((attachment) => attachment.previewUrl === preview.src) ? preview : null
+  const previewItems = items.filter(
+    (attachment): attachment is typeof attachment & { previewUrl: string } =>
+      attachment.previewUrl !== null
+  )
+  const selectedIndex = previewItems.findIndex(
+    (attachment) => attachment.previewUrl === selectedPreviewUrl
+  )
+  const selected = selectedIndex !== -1 ? previewItems[selectedIndex] : null
+  const preview: RoomImagePreview | null = selected
+    ? {
+        fileName: selected.fileName,
+        src: selected.previewUrl,
+        onDownload: () => downloadUrl(selected.previewUrl, selected.fileName),
+        onPrevious:
+          selectedIndex > 0
+            ? () => setSelectedPreviewUrl(previewItems[selectedIndex - 1].previewUrl)
+            : undefined,
+        onNext:
+          selectedIndex < previewItems.length - 1
+            ? () => setSelectedPreviewUrl(previewItems[selectedIndex + 1].previewUrl)
+            : undefined
+      }
+    : null
   if (items.length === 0) {
     return null
   }
@@ -50,12 +71,7 @@ export function RoomComposerAttachments({
         {items.map((attachment) => {
           const isUploading = 'progress' in attachment
           const openPreview = attachment.previewUrl
-            ? () =>
-                setPreview({
-                  fileName: attachment.fileName,
-                  src: attachment.previewUrl!,
-                  onDownload: () => downloadUrl(attachment.previewUrl!, attachment.fileName)
-                })
+            ? () => setSelectedPreviewUrl(attachment.previewUrl)
             : undefined
           return (
             <AttachmentCard
@@ -71,9 +87,8 @@ export function RoomComposerAttachments({
         })}
       </div>
       <RoomImagePreviewDialog
-        key={visiblePreview?.src}
-        preview={visiblePreview}
-        onOpenChange={(open) => !open && setPreview(null)}
+        preview={preview}
+        onOpenChange={(open) => !open && setSelectedPreviewUrl(null)}
       />
     </>
   )
@@ -88,7 +103,34 @@ export function RoomMessageAttachments({
   message: RoomMessage
   align?: 'start' | 'end'
 }): React.JSX.Element | null {
-  const [preview, setPreview] = useState<RoomImagePreview | null>(null)
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({})
+  const [selectedAttachmentId, setSelectedAttachmentId] = useState<string | null>(null)
+  const registerPreview = useCallback((id: string, src: string) => {
+    setPreviewUrls((current) => (current[id] === src ? current : { ...current, [id]: src }))
+  }, [])
+  const previewItems = message.attachments.flatMap((attachment) => {
+    const src = previewUrls[attachment.id]
+    return src ? [{ attachment, src }] : []
+  })
+  const selectedIndex = previewItems.findIndex(
+    ({ attachment }) => attachment.id === selectedAttachmentId
+  )
+  const selected = selectedIndex !== -1 ? previewItems[selectedIndex] : null
+  const preview: RoomImagePreview | null = selected
+    ? {
+        fileName: selected.attachment.fileName,
+        src: selected.src,
+        onDownload: () => void saveAttachment(data, message, selected.attachment),
+        onPrevious:
+          selectedIndex > 0
+            ? () => setSelectedAttachmentId(previewItems[selectedIndex - 1].attachment.id)
+            : undefined,
+        onNext:
+          selectedIndex < previewItems.length - 1
+            ? () => setSelectedAttachmentId(previewItems[selectedIndex + 1].attachment.id)
+            : undefined
+      }
+    : null
   if (message.attachments.length === 0) {
     return null
   }
@@ -101,20 +143,14 @@ export function RoomMessageAttachments({
             data={data}
             message={message}
             attachment={attachment}
-            onPreview={(src) =>
-              setPreview({
-                fileName: attachment.fileName,
-                src,
-                onDownload: () => void saveAttachment(data, message, attachment)
-              })
-            }
+            onPreview={() => setSelectedAttachmentId(attachment.id)}
+            onPreviewReady={registerPreview}
           />
         ))}
       </div>
       <RoomImagePreviewDialog
-        key={preview?.src}
         preview={preview}
-        onOpenChange={(open) => !open && setPreview(null)}
+        onOpenChange={(open) => !open && setSelectedAttachmentId(null)}
       />
     </>
   )
@@ -124,12 +160,14 @@ function RoomMessageAttachmentCard({
   data,
   message,
   attachment,
-  onPreview
+  onPreview,
+  onPreviewReady
 }: {
   data: RoomData
   message: RoomMessage
   attachment: RoomAttachment
-  onPreview: (src: string) => void
+  onPreview: () => void
+  onPreviewReady: (id: string, src: string) => void
 }): React.JSX.Element {
   const image = isPreviewableImage(attachment.mimeType, attachment.fileName)
   const attachmentId = attachment.id
@@ -145,14 +183,19 @@ function RoomMessageAttachmentCard({
         if (!active || !preview) {
           return
         }
-        setPreviewUrl(buildImageDataUri(preview.mimeType, preview.contentBase64))
+        const src = buildImageDataUri(preview.mimeType, preview.contentBase64)
+        if (!src) {
+          return
+        }
+        setPreviewUrl(src)
+        onPreviewReady(attachmentId, src)
       })
       .catch(() => {})
       .finally(() => active && setLoading(false))
     return () => {
       active = false
     }
-  }, [attachmentId, data.target, image, message.roomId])
+  }, [attachmentId, data.target, image, message.roomId, onPreviewReady])
 
   return (
     <AttachmentCard
@@ -160,11 +203,7 @@ function RoomMessageAttachmentCard({
       byteSize={attachment.byteSize}
       imageUrl={previewUrl}
       loading={loading}
-      onOpen={
-        previewUrl
-          ? () => onPreview(previewUrl)
-          : () => void saveAttachment(data, message, attachment)
-      }
+      onOpen={previewUrl ? onPreview : () => void saveAttachment(data, message, attachment)}
     />
   )
 }

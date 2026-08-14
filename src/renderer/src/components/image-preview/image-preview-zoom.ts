@@ -1,12 +1,12 @@
-export const ROOM_IMAGE_ZOOM_PRESETS = [25, 50, 100, 150, 200]
-export const MAX_ROOM_IMAGE_ZOOM_PERCENT = 500
+export const IMAGE_ZOOM_LEVELS = [
+  25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500
+]
+export const MAX_IMAGE_ZOOM_PERCENT = 500
 
-export type RoomImagePoint = { clientX: number; clientY: number }
-export type RoomImageTouchGesture = RoomImagePoint & { distance: number }
+export type ImagePoint = { clientX: number; clientY: number }
+export type ImageTouchGesture = ImagePoint & { distance: number }
 
-export function readRoomImageTouchGesture(
-  points: Map<number, RoomImagePoint>
-): RoomImageTouchGesture | null {
+export function readImageTouchGesture(points: Map<number, ImagePoint>): ImageTouchGesture | null {
   const iterator = points.values()
   const first = iterator.next().value
   const second = iterator.next().value
@@ -23,11 +23,11 @@ export function readRoomImageTouchGesture(
     : null
 }
 
-export function clampRoomImageAnchor(value: number): number {
+export function clampImageAnchor(value: number): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5
 }
 
-export function roomImagePointInside(point: RoomImagePoint, rect: DOMRect): boolean {
+export function imagePointInside(point: ImagePoint, rect: DOMRect): boolean {
   return (
     point.clientX >= rect.left &&
     point.clientX <= rect.right &&
@@ -36,7 +36,7 @@ export function roomImagePointInside(point: RoomImagePoint, rect: DOMRect): bool
   )
 }
 
-export function getRoomImageWheelZoomFactor(deltaY: number, deltaMode: number): number {
+export function getImageWheelZoomFactor(deltaY: number, deltaMode: number): number {
   const normalizedDelta = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 800 : deltaY
   return Math.exp(-normalizedDelta / 200)
 }

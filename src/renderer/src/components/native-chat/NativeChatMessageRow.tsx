@@ -15,6 +15,7 @@ import {
 } from './NativeChatTranscriptChrome'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { literalRoomTransportText } from './native-chat-room-transport'
+import type { NativeChatImageLoadContext } from './NativeChatImageAttachments'
 
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
@@ -31,7 +32,8 @@ export const MessageRow = memo(function MessageRow({
   deliveryFailed = false,
   activityExpandOverride,
   structuredActivityUi = true,
-  runtimeContext
+  runtimeContext,
+  imageLoadContext
 }: {
   message: NativeChatMessage
   expandSignal: boolean
@@ -44,6 +46,7 @@ export const MessageRow = memo(function MessageRow({
   activityExpandOverride?: boolean
   structuredActivityUi?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  imageLoadContext?: NativeChatImageLoadContext
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set: a streaming turn re-renders this row on every frame, and these
@@ -97,7 +100,7 @@ export const MessageRow = memo(function MessageRow({
                 blocks={prose}
                 runtimeContext={runtimeContext}
                 enablePreview={runtimeContext !== undefined}
-              />
+               loadContext={imageLoadContext} />
               {literalTransport !== null ? (
                 <div className="whitespace-pre-wrap break-words">{renderedText}</div>
               ) : (
@@ -115,7 +118,7 @@ export const MessageRow = memo(function MessageRow({
               blocks={prose}
               runtimeContext={runtimeContext}
               enablePreview={runtimeContext !== undefined}
-            />
+             loadContext={imageLoadContext} />
           )}
         </div>
         {deliveryFailed ? (
@@ -157,7 +160,7 @@ export const MessageRow = memo(function MessageRow({
         blocks={prose}
         runtimeContext={runtimeContext}
         enablePreview={runtimeContext !== undefined}
-      />
+       loadContext={imageLoadContext} />
       {renderedText ? (
         literalTransport !== null ? (
           <div className="whitespace-pre-wrap break-words">{renderedText}</div>
