@@ -153,7 +153,9 @@ describe('AgentHookServer listener replay', () => {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          payload: { state: 'done', prompt: 'late remote', agentType: 'codex' }
+          source: 'omp',
+          hookEventName: 'before_agent_start',
+          payload: { state: 'working', prompt: 'late OMP restart', agentType: 'omp' }
         },
         'conn-1'
       )
@@ -557,7 +559,7 @@ describe('AgentHookServer listener replay', () => {
   // Why: a detach re-points a legacy numeric alias at an owner in another tab, so the
   // fence can hold keys from two tabs at once. A legacy key never parses as a stable
   // one, so a stable-only tab check would wave it through when its own tab is closed.
-  it('keeps a legacy alias fenced when its own tab closed but the owner tab did not', async () => {
+  it('keeps a legacy alias fenced after its closed tab id is evicted', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -580,9 +582,12 @@ describe('AgentHookServer listener replay', () => {
       server.transferPaneAuthority(PANE, detachedPane, 'pty-cross')
       server.retirePaneAuthority(detachedPane)
       server.dropStatusEntriesByTabPrefix('tab-1')
+      for (let i = 0; i <= CLOSED_AGENT_STATUS_TAB_IDS_MAX; i += 1) {
+        server.dropStatusEntriesByTabPrefix(`tab-alias-evict-${i}`)
+      }
 
-      // The owner tab is open, so the restore proceeds — but the legacy key's own tab
-      // is closed, and its alias must not be rebuilt into the still-open owner.
+      // The owner tab is open and tab-1 has left the tab-id LRU, but the exact closed
+      // legacy key must still prevent its alias from being rebuilt into the live owner.
       expect(server.restorePaneAuthority(detachedPane)).toBe(true)
 
       await postHook({ hook_event_name: 'before_agent_start', prompt: 'after tab-1 close' })
@@ -656,11 +661,49 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('accepts a live remote prompt but not replay after launch authority retires', () => {
+  it('reclaims a retired local OMP pane only for a live before_agent_start', async () => {
+    const server = new AgentHookServer()
+    const received: { authorityRestart?: true }[] = []
+    server.setListener((event) => received.push(event))
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/omp`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload, { launchToken: 'retired-omp-launch-token' }))
+        })
+
+      await postHook({ hook_event_name: 'before_agent_start', prompt: 'first OMP turn' })
+      server.retirePaneAuthority(PANE)
+
+      await postHook({ hook_event_name: 'agent_end' })
+      expect(server.getStatusSnapshot()).toEqual([])
+
+      await postHook({ hook_event_name: 'before_agent_start', prompt: 'restarted OMP turn' })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          prompt: 'restarted OMP turn'
+        })
+      ])
+      expect(received.at(-1)).toEqual(expect.objectContaining({ authorityRestart: true }))
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('accepts a source-less live remote prompt but not replay or source mismatch', () => {
     const server = new AgentHookServer()
     server.ingestRemote(
       {
         paneKey: PANE,
+        source: 'claude',
         hookEventName: 'UserPromptSubmit',
         launchToken: 'retired-remote-launch-token',
         payload: { state: 'working', prompt: 'first launch', agentType: 'claude' }
@@ -672,6 +715,7 @@ describe('AgentHookServer listener replay', () => {
     server.ingestRemote(
       {
         paneKey: PANE,
+        source: 'claude',
         hookEventName: 'UserPromptSubmit',
         launchToken: 'retired-remote-launch-token',
         isReplay: true,
@@ -684,9 +728,42 @@ describe('AgentHookServer listener replay', () => {
     server.ingestRemote(
       {
         paneKey: PANE,
+        source: 'omp',
+        hookEventName: 'before_agent_start',
+        payload: { state: 'invalid' } as never
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()).toEqual([])
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'omp',
+        hookEventName: 'before_agent_start',
+        payload: { state: 'working', prompt: 'mismatched source', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()).toEqual([])
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'not-a-source',
+        hookEventName: 'UserPromptSubmit',
+        payload: { state: 'working', prompt: 'malformed source', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()).toEqual([])
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
         hookEventName: 'UserPromptSubmit',
         launchToken: 'retired-remote-launch-token',
-        payload: { state: 'working', prompt: 'remote manual restart', agentType: 'claude' }
+        payload: { state: 'working', prompt: 'source-less remote restart', agentType: 'claude' }
       },
       'conn-1'
     )
@@ -695,7 +772,7 @@ describe('AgentHookServer listener replay', () => {
       expect.objectContaining({
         paneKey: PANE,
         state: 'working',
-        prompt: 'remote manual restart',
+        prompt: 'source-less remote restart',
         connectionId: 'conn-1'
       })
     ])

@@ -253,6 +253,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   promptInteractionKey?: string
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** A source-aware live new-turn hook authoritatively restarts a retired pane.
+   *  Never stamped on startup snapshot replay. */
+  authorityRestart?: true
 } & WithAgentStatusObservation
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */

@@ -1539,7 +1539,7 @@ export class SshRelaySession {
             typeof envelope.teammateName === 'string' ? envelope.teammateName : undefined,
           toolAgentType:
             typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
-          isReplay: envelope.isReplay === true ? true : undefined,
+          isReplay: envelope.isReplay,
           providerSession: envelope.providerSession,
           providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
           // Why: names the fields the relay dropped to fit the frame; ingestRemote restores them.

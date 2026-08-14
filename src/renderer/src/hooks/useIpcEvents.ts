@@ -315,10 +315,14 @@ const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 
 function isAgentStatusForRecentlyClosedTab(
   store: Pick<AppState, 'recentlyClosedAgentStatusTabIds' | 'recentlyRetiredAgentStatusPaneKeys'>,
-  paneKey: string
+  paneKey: string,
+  options?: { allowRetiredPane?: boolean }
 ): boolean {
   const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
-  if (store.recentlyRetiredAgentStatusPaneKeys?.[ownerPaneKey] === true) {
+  if (
+    options?.allowRetiredPane !== true &&
+    store.recentlyRetiredAgentStatusPaneKeys?.[ownerPaneKey] === true
+  ) {
     return true
   }
   const tabId = parsePaneKey(ownerPaneKey)?.tabId
@@ -3253,7 +3257,13 @@ export function useIpcEvents(): void {
       if (!store.workspaceSessionReady) {
         return 'dropped'
       }
-      if (isAgentStatusForRecentlyClosedTab(store, data.paneKey)) {
+      // Why: only main-authorized live new-turn hooks may revive a pane retired by
+      // layout changes; this deliberately does not bypass a tab-close tombstone.
+      if (
+        isAgentStatusForRecentlyClosedTab(store, data.paneKey, {
+          allowRetiredPane: data.authorityRestart === true && options?.replay !== true
+        })
+      ) {
         return 'dropped'
       }
       const paneKey = resolveAgentPaneAuthorityKey(data.paneKey)
@@ -3471,10 +3481,11 @@ export function useIpcEvents(): void {
           ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
         },
         metadata:
-          data.providerSession || data.launchToken
+          data.providerSession || data.launchToken || data.authorityRestart === true
             ? {
                 ...(data.providerSession ? { providerSession: data.providerSession } : {}),
-                ...(data.launchToken ? { launchToken: data.launchToken } : {})
+                ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+                ...(data.authorityRestart === true ? { authorityRestart: true } : {})
               }
             : undefined
       }

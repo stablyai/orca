@@ -587,6 +587,41 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     ingestSpy.mockRestore()
   })
 
+  it('preserves malformed replay metadata for main trust-boundary rejection', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+
+    session = createSession('conn-malformed-replay')
+    await session.establish({} as SshConnection)
+
+    relay.notifyAgentHook(
+      makeEnvelope({
+        source: 'omp',
+        hookEventName: 'before_agent_start',
+        isReplay: 'true' as never,
+        payload: {
+          state: 'working',
+          prompt: 'malformed replay',
+          agentType: 'omp'
+        }
+      })
+    )
+
+    await vi.waitFor(() =>
+      expect(ingestSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ isReplay: 'true' }),
+        'conn-malformed-replay'
+      )
+    )
+    expect(agentHookServer.getStatusSnapshot()).toEqual([])
+    ingestSpy.mockRestore()
+  })
+
   it('tracks prompt sent from live SSH agent hooks but not replayed hooks', async () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
