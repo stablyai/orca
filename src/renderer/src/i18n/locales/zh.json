@@ -453,13 +453,6 @@
         "fileTooLarge": "文件过大：{{actualSize}}MB 超出 {{maxSize}}MB 限制"
       }
     },
-    "main": {
-      "ipc": {
-        "filesystem": {
-          "fileTooLarge": "文件过大：{{actualSize}}MB 超出 {{maxSize}}MB 限制"
-        }
-      }
-    },
     "shared": {
       "nodeBoundedFileReader": {
         "fileTooLarge": "文件过大：{{actualSize}}MB 超出 {{maxSize}}MB 限制"
@@ -1800,6 +1793,19 @@
         "notePasteTooLarge": "笔记字段的粘贴内容过大。",
         "waitForSetupBeforeAgent": "等待设置完成后再启动代理",
         "waitForSetupBeforeAgentHelp": "如果设置会安装依赖、MCP 服务器或代理启动时需要的配置文件，请开启此选项",
+        "setupScript": "设置脚本",
+        "runSetupCommand": "运行设置命令",
+        "defaultTabCommands": "默认标签页命令",
+        "setupAndDefaultTabCommands": "设置与默认标签页命令",
+        "runDefaultTabCommands": "运行默认标签页命令",
+        "runSetupAndDefaultTabCommands": "运行设置与默认标签页命令",
+        "runDefaultTabCommandsNow": "现在运行默认标签页命令？",
+        "runSetupAndDefaultTabCommandsNow": "现在运行设置与默认标签页命令？",
+        "runSetupNowQuestion": "现在运行设置？",
+        "runCommandsNow": "现在运行命令",
+        "runSetupNow": "现在运行设置",
+        "skipForNow": "暂时跳过",
+        "skipCommands": "跳过命令",
         "destroyDisabled": "已禁用销毁",
         "destroyConfigured": "已配置销毁",
         "noDestroyConfigured": "未配置销毁",
@@ -4424,6 +4430,7 @@
           "b3a500c623": "名称",
           "16223dde6a": "加载预设",
           "a683a4bc8e": "重试加载预设",
+          "loadingPresets": "正在加载预设…",
           "14952d451e": "{{value0}} 目录",
           "e9283eb171": "1 个目录",
           "69c020eddc": "编辑预设",
@@ -16017,6 +16024,11 @@
       }
     },
     "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "文件过大：{{actualSize}}MB 超出 {{maxSize}}MB 限制"
+        }
+      },
       "window": {
         "editableContextMenu": {
           "table": "表格",

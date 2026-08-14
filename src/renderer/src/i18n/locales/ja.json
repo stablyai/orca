@@ -192,13 +192,6 @@
         "fileTooLarge": "ファイルが大きすぎます：{{actualSize}}MB が {{maxSize}}MB の制限を超えています"
       }
     },
-    "main": {
-      "ipc": {
-        "filesystem": {
-          "fileTooLarge": "ファイルが大きすぎます：{{actualSize}}MB が {{maxSize}}MB の制限を超えています"
-        }
-      }
-    },
     "shared": {
       "nodeBoundedFileReader": {
         "fileTooLarge": "ファイルが大きすぎます：{{actualSize}}MB が {{maxSize}}MB の制限を超えています"
@@ -1360,6 +1353,19 @@
         "createMultiple": "さらに作成",
         "waitForSetupBeforeAgent": "セットアップが完了するまで待ってから Agent を開始してください",
         "waitForSetupBeforeAgentHelp": "セットアップによって、起動時に Agent に必要な依存関係、MCP サーバー、または構成ファイルがインストールされるときに、これをオンにします。",
+        "setupScript": "Setup script",
+        "runSetupCommand": "Run setup command",
+        "defaultTabCommands": "Default tab commands",
+        "setupAndDefaultTabCommands": "Setup and default tab commands",
+        "runDefaultTabCommands": "Run default tab commands",
+        "runSetupAndDefaultTabCommands": "Run setup and default tab commands",
+        "runDefaultTabCommandsNow": "Run default tab commands now?",
+        "runSetupAndDefaultTabCommandsNow": "Run setup and default tab commands now?",
+        "runSetupNowQuestion": "Run setup now?",
+        "runCommandsNow": "Run commands now",
+        "runSetupNow": "Run setup now",
+        "skipForNow": "Skip for now",
+        "skipCommands": "Skip commands",
         "destroyDisabled": "破壊は無効です",
         "destroyConfigured": "設定されたものを破棄する",
         "noDestroyConfigured": "破壊しない",
@@ -3847,6 +3853,7 @@
           "b3a500c623": "名前",
           "16223dde6a": "プリセットをロードする",
           "a683a4bc8e": "プリセットの読み込みを再試行",
+          "loadingPresets": "Loading presets...",
           "14952d451e": "{{value0}} ディレクトリ",
           "e9283eb171": "1 ディレクトリ",
           "69c020eddc": "プリセットの編集",
@@ -14305,6 +14312,11 @@
       }
     },
     "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "ファイルが大きすぎます：{{actualSize}}MB が {{maxSize}}MB の制限を超えています"
+        }
+      },
       "window": {
         "editableContextMenu": {
           "table": "テーブル",

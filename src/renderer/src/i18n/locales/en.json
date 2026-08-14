@@ -453,13 +453,6 @@
         "fileTooLarge": "File too large: {{actualSize}}MB exceeds {{maxSize}}MB limit"
       }
     },
-    "main": {
-      "ipc": {
-        "filesystem": {
-          "fileTooLarge": "File too large: {{actualSize}}MB exceeds {{maxSize}}MB limit"
-        }
-      }
-    },
     "shared": {
       "nodeBoundedFileReader": {
         "fileTooLarge": "File too large: {{actualSize}}MB exceeds {{maxSize}}MB limit"
@@ -1800,6 +1793,19 @@
         "notePasteTooLarge": "Paste is too large for the note field.",
         "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
         "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.",
+        "setupScript": "Setup script",
+        "runSetupCommand": "Run setup command",
+        "defaultTabCommands": "Default tab commands",
+        "setupAndDefaultTabCommands": "Setup and default tab commands",
+        "runDefaultTabCommands": "Run default tab commands",
+        "runSetupAndDefaultTabCommands": "Run setup and default tab commands",
+        "runDefaultTabCommandsNow": "Run default tab commands now?",
+        "runSetupAndDefaultTabCommandsNow": "Run setup and default tab commands now?",
+        "runSetupNowQuestion": "Run setup now?",
+        "runCommandsNow": "Run commands now",
+        "runSetupNow": "Run setup now",
+        "skipForNow": "Skip for now",
+        "skipCommands": "Skip commands",
         "destroyDisabled": "destroy disabled",
         "destroyConfigured": "destroy configured",
         "noDestroyConfigured": "no destroy",
@@ -4424,6 +4430,7 @@
           "b3a500c623": "Name",
           "16223dde6a": "Load presets",
           "a683a4bc8e": "Retry loading presets",
+          "loadingPresets": "Loading presets...",
           "14952d451e": "{{value0}} directories",
           "e9283eb171": "1 directory",
           "69c020eddc": "Edit preset",
@@ -16017,6 +16024,11 @@
       }
     },
     "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "File too large: {{actualSize}}MB exceeds {{maxSize}}MB limit"
+        }
+      },
       "window": {
         "editableContextMenu": {
           "table": "Table",

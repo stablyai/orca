@@ -192,13 +192,6 @@
         "fileTooLarge": "파일이 너무 큽니다: {{actualSize}}MB가 {{maxSize}}MB 제한을 초과합니다"
       }
     },
-    "main": {
-      "ipc": {
-        "filesystem": {
-          "fileTooLarge": "파일이 너무 큽니다: {{actualSize}}MB가 {{maxSize}}MB 제한을 초과합니다"
-        }
-      }
-    },
     "shared": {
       "nodeBoundedFileReader": {
         "fileTooLarge": "파일이 너무 큽니다: {{actualSize}}MB가 {{maxSize}}MB 제한을 초과합니다"
@@ -1360,6 +1353,19 @@
         "createMultiple": "더 만들기",
         "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
         "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오.",
+        "setupScript": "Setup script",
+        "runSetupCommand": "Run setup command",
+        "defaultTabCommands": "Default tab commands",
+        "setupAndDefaultTabCommands": "Setup and default tab commands",
+        "runDefaultTabCommands": "Run default tab commands",
+        "runSetupAndDefaultTabCommands": "Run setup and default tab commands",
+        "runDefaultTabCommandsNow": "Run default tab commands now?",
+        "runSetupAndDefaultTabCommandsNow": "Run setup and default tab commands now?",
+        "runSetupNowQuestion": "Run setup now?",
+        "runCommandsNow": "Run commands now",
+        "runSetupNow": "Run setup now",
+        "skipForNow": "Skip for now",
+        "skipCommands": "Skip commands",
         "destroyDisabled": "비활성화된 파괴",
         "destroyConfigured": "구성된 파괴",
         "noDestroyConfigured": "파괴하지 마세요",
@@ -3847,6 +3853,7 @@
           "b3a500c623": "이름",
           "16223dde6a": "사전 설정 로드",
           "a683a4bc8e": "사전 설정 로드를 다시 시도하세요.",
+          "loadingPresets": "Loading presets...",
           "14952d451e": "{{value0}} 디렉터리",
           "e9283eb171": "디렉터리 1개",
           "69c020eddc": "사전 설정 편집",
@@ -14306,6 +14313,11 @@
       }
     },
     "main": {
+      "ipc": {
+        "filesystem": {
+          "fileTooLarge": "파일이 너무 큽니다: {{actualSize}}MB가 {{maxSize}}MB 제한을 초과합니다"
+        }
+      },
       "window": {
         "editableContextMenu": {
           "table": "표",

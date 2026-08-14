@@ -70,7 +70,16 @@ export function RepositorySourceControlAiHostedReviewDefaults({
       </Label>
       <div className="space-y-2">
         {HOSTED_REVIEW_DEFAULT_ROWS.map((row) => {
-          const inherited = source.prCreationDefaults?.[row.key] === true ? 'On' : 'Off'
+          const inherited =
+            source.prCreationDefaults?.[row.key] === true
+              ? translate(
+                  'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.777443bf89',
+                  'On'
+                )
+              : translate(
+                  'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.053ccfbf52',
+                  'Off'
+                )
           return (
             <div
               key={row.key}

@@ -406,29 +406,51 @@ export default function NewWorkspaceComposerCard({
       : 'Reconnect'
   const setupConfigLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Default tab commands'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.defaultTabCommands',
+          'Default tab commands'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Setup and default tab commands'
-        : 'Setup script'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.setupAndDefaultTabCommands',
+            'Setup and default tab commands'
+          )
+        : translate('auto.components.NewWorkspaceComposerCard.setupScript', 'Setup script')
   const setupRunLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.runDefaultTabCommands',
+          'Run default tab commands'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands'
-        : 'Run setup command'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.runSetupAndDefaultTabCommands',
+            'Run setup and default tab commands'
+          )
+        : translate('auto.components.NewWorkspaceComposerCard.runSetupCommand', 'Run setup command')
   const setupAskLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands now?'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.runDefaultTabCommandsNow',
+          'Run default tab commands now?'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands now?'
-        : 'Run setup now?'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.runSetupAndDefaultTabCommandsNow',
+            'Run setup and default tab commands now?'
+          )
+        : translate(
+            'auto.components.NewWorkspaceComposerCard.runSetupNowQuestion',
+            'Run setup now?'
+          )
   const setupRunButtonLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Run commands now'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run commands now'
-        : 'Run setup now'
-  const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+    setupConfig?.kind === 'default-tabs' || setupConfig?.kind === 'setup-and-default-tabs'
+      ? translate('auto.components.NewWorkspaceComposerCard.runCommandsNow', 'Run commands now')
+      : translate('auto.components.NewWorkspaceComposerCard.runSetupNow', 'Run setup now')
+  const setupSkipButtonLabel =
+    setupConfig?.kind === 'setup'
+      ? translate('auto.components.NewWorkspaceComposerCard.skipForNow', 'Skip for now')
+      : translate('auto.components.NewWorkspaceComposerCard.skipCommands', 'Skip commands')
   // Why: defaultTabs launch commands can run long too, but aren't the setup command this setting gates agent startup on.
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
