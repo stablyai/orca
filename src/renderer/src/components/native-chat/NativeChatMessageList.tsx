@@ -1,3 +1,4 @@
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -14,6 +15,7 @@ import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { AgentSubagentTurnLink } from '../agent-subagents/AgentSubagentContext'
+import type { NativeChatImageLoadContext } from './NativeChatImageAttachments'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
@@ -34,7 +36,8 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds,
   subagentSourceKey,
   showTurnStatus = true,
-  runtimeContext
+  runtimeContext,
+  imageLoadContext
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -50,6 +53,7 @@ export function NativeChatMessageList({
   /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  imageLoadContext?: NativeChatImageLoadContext
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -260,6 +264,7 @@ export function NativeChatMessageList({
                   structuredActivityUi={showTurnStatus}
                   activityExpandOverride={turnKey ? expandedTurnIds.has(turnKey) : undefined}
                   runtimeContext={runtimeContext}
+                  imageLoadContext={imageLoadContext}
                 />
                 {showTurnStatus &&
                 status &&

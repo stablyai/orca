@@ -1,6 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+import {
+  encodeAgentSessionQuestionAnswers,
+  encodeAgentSessionQuestionAnswer
+} from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -22,6 +25,7 @@ import { useStructuredNativeChatPaneCommands } from './use-structured-native-cha
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
+import { nativeChatImageLoadContext } from './native-chat-image-load-context'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -97,6 +101,7 @@ export function NativeChatStructuredSession(
   const fileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
   const activeStoppingBackgroundTasks =
     stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
+  const imageLoadContext = nativeChatImageLoadContext(fileLinkContext)
   const prompt = controller.prompts[0] ?? null
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const questions =
@@ -186,6 +191,7 @@ export function NativeChatStructuredSession(
             onLinkClick={fileLinkClick}
             allowFileUriLinks={fileLinkClick !== undefined}
             runtimeContext={imageRuntimeContext}
+            imageLoadContext={imageLoadContext}
           />
         )}
       </div>
@@ -243,7 +249,7 @@ export function NativeChatStructuredSession(
               typeof index === 'number'
                 ? questionBody.options[index]?.id
                 : questionBody.freeTextQuestionId && other
-                  ? encodeQuestionAnswer(questionBody.freeTextQuestionId, other)
+                  ? encodeAgentSessionQuestionAnswer(questionBody.freeTextQuestionId, other)
                   : undefined
             if (optionId) {
               void controller.respond(prompt, optionId)
