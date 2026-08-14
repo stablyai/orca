@@ -1242,6 +1242,7 @@
         "519c3587f3": "Agregar al proyecto",
         "openAttachedWorkspace": "Abrir el espacio de trabajo vinculado al issue",
         "openWorkspace": "Abrir espacio de trabajo",
+        "openOnLinear": "Abrir en Linear",
         "moreWorkspaceActions": "Más acciones del espacio de trabajo del issue",
         "startNewWorkspace": "Iniciar un espacio de trabajo nuevo",
         "workspaceSection": "Espacio de trabajo",

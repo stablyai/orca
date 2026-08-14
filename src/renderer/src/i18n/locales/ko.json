@@ -1242,6 +1242,7 @@
         "519c3587f3": "프로젝트에 추가",
         "openAttachedWorkspace": "이슈에 연결된 워크스페이스 열기",
         "openWorkspace": "워크스페이스 열기",
+        "openOnLinear": "Linear에서 열기",
         "moreWorkspaceActions": "이슈 워크스페이스 작업 더 보기",
         "startNewWorkspace": "새 워크스페이스 시작",
         "workspaceSection": "워크스페이스",

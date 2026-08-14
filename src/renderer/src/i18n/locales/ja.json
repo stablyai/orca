@@ -1242,6 +1242,7 @@
         "519c3587f3": "プロジェクトに追加",
         "openAttachedWorkspace": "Issue にリンクされたワークスペースを開く",
         "openWorkspace": "ワークスペースを開く",
+        "openOnLinear": "Linear で開く",
         "moreWorkspaceActions": "Issue ワークスペースのその他の操作",
         "startNewWorkspace": "新規ワークスペースを開始",
         "workspaceSection": "ワークスペース",

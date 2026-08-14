@@ -6376,6 +6376,20 @@ export function connectPanePty(
     liveScrollbackRestore?.dispose()
     liveScrollbackRestore = installTerminalLiveScrollbackRestore(pane.terminal)
 
+    // Why read it live: `?1049` is not a no-op when the pane is already on the
+    // target buffer — xterm still runs restoreCursor and swaps the kitty flag
+    // registers — so the replay prologue must only switch when it truly differs.
+    //
+    // Best-effort by design. xterm parses asynchronously, so this sees only
+    // PARSED writes; a `?1049` transition still queued reads stale. Draining
+    // first with a write sentinel was tried and reverted: it puts the repaint
+    // behind xterm's queue, so a wedged terminal stalls recovery, and it breaks
+    // the disposal/cancellation ordering the restore paths rely on. A stale read
+    // costs one mis-scoped buffer switch; the barrier costs the repaint.
+    function isPaneOnAlternateScreen(): boolean {
+      return pane.terminal.buffer.active.type === 'alternate'
+    }
+
     function writePtyOutputToXterm(
       data: string,
       foreground: boolean,
@@ -7076,11 +7090,11 @@ export function connectPanePty(
         clearHiddenOutputRestoreFloodRepaintTimer()
         writeRestoreUnavailableWarning()
       }
-      // Why not an else: the unavailable warning is plain text and carries no SGR
-      // of its own, so folding the reset into the other branch skipped it on the
-      // primary abandon path — the one that declares the bytes unrecoverable.
-      // Guarded only against the remote re-arm, which writes its own reset.
-      if (!rearmedRemoteRestore) {
+      // Why an else: the branch above already grounds the gap inside
+      // writeRestoreUnavailableWarning, and the remote re-arm grounds it in
+      // rearmRemoteHiddenOutputRestoreInsteadOfWarning. Only the quiet
+      // flood-abandon reaches neither, and it still drains chunks below.
+      else if (!rearmedRemoteRestore) {
         writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
       }
       if (hadPendingOverflow) {
@@ -7312,9 +7326,16 @@ export function connectPanePty(
             // Why: an imageless success is not proof the pane is empty; normal replay clears screen and scrollback.
             const snapshotCarriesNoImage =
               snapshot.alternateScreen !== true && snapshot.data === '' && !snapshot.scrollbackAnsi
-            if (!snapshotCarriesNoImage) {
+            if (snapshotCarriesNoImage) {
+              // Why still ground: a restore only runs because bytes were dropped, so
+              // the gap's pen outlives a snapshot that cannot repaint over it. The
+              // live-path constant, not the replay baseline — nothing repaints here,
+              // so the pane is handed back to whatever is still running.
+              writeReplayData(RESET_AFTER_BYTE_GAP)
+            } else {
               for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
-                skipAltFrame: skippedAltFrame
+                skipAltFrame: skippedAltFrame,
+                paneOnAlternateScreen: isPaneOnAlternateScreen()
               })) {
                 writeReplayData(replayChunk)
               }
@@ -8026,7 +8047,9 @@ export function connectPanePty(
                 snapshotSeq: snapshot.seq
               })
               // Why keep a too-wide frame: preconnect SSH has no live repaint owner or post-restore fit.
-              for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot)) {
+              for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
+                paneOnAlternateScreen: isPaneOnAlternateScreen()
+              })) {
                 writeReplayData(replayChunk)
               }
               writeReplayData(reattachReplayResetSequence(modelData))
@@ -8327,7 +8350,8 @@ export function connectPanePty(
               skipAltFrame: shouldSkipAltFrameForWidthMismatch(
                 modelCols,
                 readProposedTerminalCols(pane)
-              )
+              ),
+              paneOnAlternateScreen: isPaneOnAlternateScreen()
             })) {
               writeReplayData(replayChunk)
             }

@@ -1,6 +1,15 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { readProposedPaneFitDimensions } from '@/lib/pane-manager/pane-fit'
-import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
+import {
+  ABORT_TRUNCATED_CONTROL_STRING,
+  buildSnapshotReplayPrologue
+} from '../../../../shared/terminal-mode-reset-profiles'
+
+// Once only: CAN must precede the first ESC of the replay, but the split branch
+// builds two prologues and later writes follow well-formed payloads.
+function abortGapBeforeFirstWrite(writes: string[]): string[] {
+  return [`${ABORT_TRUNCATED_CONTROL_STRING}${writes[0]}`, ...writes.slice(1)]
+}
 
 /**
  * Shared guards and write choreography for painting a main-model snapshot into
@@ -77,16 +86,26 @@ export function buildMainModelSnapshotReplayWrites(
     alternateScreen?: boolean
     scrollbackAnsi?: string
   },
-  options: { skipAltFrame?: boolean } = {}
+  options: { skipAltFrame?: boolean; paneOnAlternateScreen: boolean }
 ): string[] {
+  const { paneOnAlternateScreen } = options
+  const normalPrologue = buildSnapshotReplayPrologue({
+    targetAlternateScreen: false,
+    paneOnAlternateScreen
+  })
+  // The alt payload always follows a hop through the normal buffer in the split
+  // branch, so its own switch is judged from there, not from where we started.
+  const altPrologue = (fromAlternateScreen: boolean): string =>
+    buildSnapshotReplayPrologue({
+      targetAlternateScreen: true,
+      paneOnAlternateScreen: fromAlternateScreen
+    })
   if (!snapshot.alternateScreen) {
-    // Why: \x1b[3J wipes xterm scrollback; safe here because a normal-buffer
-    // snapshot carries its own history in data (mirrors pty-transport.ts).
-    // Why the leading SGR reset: a replay only happens because renderer-bound
-    // bytes were dropped, so the pen the drop interrupted is unknown — without
-    // clearing it the whole replayed buffer inherits it (STA-4042). The
-    // alt-screen branches below already reset; this one did not.
-    return [`${RESET_AFTER_BYTE_GAP}\x1b[2J\x1b[3J\x1b[H`, snapshot.data]
+    // Why the switch can be needed here: the gap can eat the TUI's own exit
+    // sequence, leaving the renderer on alt while the model moved to normal —
+    // the restored history would paint into the alt buffer, looking right while
+    // scrollback stays empty (STA-4042).
+    return abortGapBeforeFirstWrite([normalPrologue, snapshot.data])
   }
   // Older snapshot producers do not expose the mode/frame boundary. Keep their
   // composed data rather than dropping terminal modes together with the frame.
@@ -95,20 +114,17 @@ export function buildMainModelSnapshotReplayWrites(
       ? [snapshot.frameRestoreAnsi]
       : [snapshot.data]
   if (snapshot.scrollbackAnsi !== undefined) {
-    // Why: main serializes normal + alt buffers separately; rebuild normal
-    // while active, then return to a clean alt frame.
-    // Why the reset moved to the front too: scrollbackAnsi was replayed BEFORE
-    // the existing \x1b[0m, so the normal-buffer history inherited the stale pen
-    // even though the alt frame after it did not (STA-4042).
-    return [
-      `${RESET_AFTER_BYTE_GAP}\x1b[?1049l\x1b[2J\x1b[3J\x1b[H`,
+    // Why a prologue per payload: main serializes the buffers separately and
+    // each is diffed against the baseline. scrollbackAnsi used to replay before
+    // any reset at all, so the history inherited the stale state (STA-4042).
+    return abortGapBeforeFirstWrite([
+      normalPrologue,
       snapshot.scrollbackAnsi,
-      `${RESET_AFTER_BYTE_GAP}\x1b[?1049h\x1b[2J\x1b[H`,
+      altPrologue(false),
       ...altFrame
-    ]
+    ])
   }
-  // Why: the snapshot's ?1049h no-ops when already on alt screen and skips
-  // blank cells; clear the alt buffer so the pre-hide frame can't bleed
-  // through blank cells (spares normal-buffer scrollback).
-  return [`${RESET_AFTER_BYTE_GAP}\x1b[?1049h\x1b[2J\x1b[H`, ...altFrame]
+  // Why the prologue clears: `?1049h` does not clear the alt buffer, so the
+  // pre-hide frame would bleed through the snapshot's blank cells.
+  return abortGapBeforeFirstWrite([altPrologue(paneOnAlternateScreen), ...altFrame])
 }

@@ -1242,6 +1242,7 @@
         "519c3587f3": "添加到项目",
         "openAttachedWorkspace": "打开关联到议题的工作区",
         "openWorkspace": "打开工作区",
+        "openOnLinear": "在 Linear 中打开",
         "moreWorkspaceActions": "更多议题工作区操作",
         "startNewWorkspace": "启动新工作区",
         "workspaceSection": "工作区",
