@@ -58,7 +58,7 @@ export const BOOLEAN_FLAGS = new Set([
 ])
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
-const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
+const REPEATABLE_STRING_FLAGS = new Set(['label', 'project-path', 'skill'])
 
 function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
   const existing = flags.get(name)
@@ -158,6 +158,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'artifacts',
       'automations',
       'project',
+      'project-group',
       'repo',
       'worktree',
       'terminal',
@@ -206,6 +207,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'artifacts',
         'automations',
         'project',
+        'project-group',
         'host',
         'repo',
         'worktree',
