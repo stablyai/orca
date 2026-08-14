@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getEditorHeaderCopyState, getEditorHeaderOpenFileState } from './editor-header'
+import {
+  getEditorHeaderCopyMarkdownState,
+  getEditorHeaderCopyState,
+  getEditorHeaderOpenFileState
+} from './editor-header'
 import type { OpenFile } from '@/store/slices/editor'
 
 function makeOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
@@ -176,5 +180,67 @@ describe('getEditorHeaderOpenFileState', () => {
         null
       )
     ).toEqual({ canOpen: true })
+  })
+})
+
+describe('getEditorHeaderCopyMarkdownState', () => {
+  it('hides the action on non-markdown and diff surfaces', () => {
+    expect(
+      getEditorHeaderCopyMarkdownState({
+        isMarkdown: false,
+        isDiffSurface: false,
+        content: '# Hello'
+      })
+    ).toEqual({ canShow: false, canCopy: false })
+    expect(
+      getEditorHeaderCopyMarkdownState({
+        isMarkdown: true,
+        isDiffSurface: true,
+        content: '# Hello'
+      })
+    ).toEqual({ canShow: false, canCopy: false })
+  })
+
+  it('allows copying loaded markdown, including an empty document', () => {
+    expect(
+      getEditorHeaderCopyMarkdownState({
+        isMarkdown: true,
+        isDiffSurface: false,
+        content: '# Hello'
+      })
+    ).toEqual({ canShow: true, canCopy: true })
+    expect(
+      getEditorHeaderCopyMarkdownState({
+        isMarkdown: true,
+        isDiffSurface: false,
+        content: ''
+      })
+    ).toEqual({ canShow: true, canCopy: true })
+  })
+
+  it('keeps the button visible but disabled while content is missing or unreadable', () => {
+    expect(
+      getEditorHeaderCopyMarkdownState({
+        isMarkdown: true,
+        isDiffSurface: false,
+        content: null
+      })
+    ).toEqual({ canShow: true, canCopy: false })
+    expect(
+      getEditorHeaderCopyMarkdownState({
+        isMarkdown: true,
+        isDiffSurface: false,
+        content: '# Hello',
+        isBinary: true
+      })
+    ).toEqual({ canShow: true, canCopy: false })
+    expect(
+      getEditorHeaderCopyMarkdownState({
+        isMarkdown: true,
+        isDiffSurface: false,
+        content: '# Hello',
+        hasLoadError: true
+      })
+    ).toEqual({ canShow: true, canCopy: false })
   })
 })
