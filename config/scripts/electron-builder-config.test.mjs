@@ -395,7 +395,7 @@ describe('electron-builder config', () => {
     }
   })
 
-  it('includes @parcel/watcher in the packaged runtime closure', () => {
+  it('includes external main dependencies in the packaged runtime closure', () => {
     // Why: the main process imports '@parcel/watcher' for filesystem change
     // events; if it is absent from the packaged closure the serve host silently
     // stops propagating file changes to clients (regression guard for #4851).
@@ -407,6 +407,7 @@ describe('electron-builder config', () => {
         target.startsWith(join('node_modules', '@parcel', 'watcher-'))
       )
     ).toBe(true)
+    expect(packagedTargets).toContain(join('node_modules', 'proper-lockfile'))
   })
 
   it('prunes non-target @parcel/watcher architecture subpackages', async () => {

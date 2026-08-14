@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ImageManipulator } from 'expo-image-manipulator'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
 
 vi.mock('expo-image-picker', () => ({
@@ -11,11 +12,18 @@ vi.mock('expo-document-picker', () => ({
 vi.mock('expo-file-system', () => ({
   File: vi.fn()
 }))
+vi.mock('expo-image-manipulator', () => ({
+  ImageManipulator: { manipulate: vi.fn() },
+  SaveFormat: { PNG: 'png' }
+}))
 
 import {
   ImageLibraryPermissionError,
   pickMobileImage,
   pickMobileImages,
+  MOBILE_IMAGE_DOWNSAMPLE_TARGET_BASE64,
+  prepareMobileImageForUpload,
+  shouldDownsampleMobileImage,
   type PickedMobileImage
 } from './mobile-image-source-picker'
 
@@ -179,19 +187,22 @@ describe('pickMobileImage', () => {
     expect(result).toBeNull()
   })
 
-  it('rejects an oversized asset before opening it', async () => {
+  it('prepares an oversized asset before any raw base64 read', async () => {
     const file = fileFactory(new Uint8Array([1]))
+    const prepareImage = vi.fn().mockRejectedValue(new Error('Clipboard image is too large'))
     await expect(
       pickMobileImage('files', {
         launchFiles: vi.fn().mockResolvedValue({
           canceled: false,
           assets: [{ uri: 'file:///huge.png', size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1 }]
         }),
-        createFile: file.createFile
+        createFile: file.createFile,
+        prepareImage
       })
     ).rejects.toThrow('Clipboard image is too large')
     expect(file.createFile).not.toHaveBeenCalled()
     expect(file.open).not.toHaveBeenCalled()
+    expect(prepareImage).toHaveBeenCalledOnce()
   })
 
   it('closes the file handle when reading fails', async () => {
@@ -206,5 +217,83 @@ describe('pickMobileImage', () => {
       })
     ).rejects.toThrow('read failed')
     expect(file.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes large or high-resolution images through on-device preparation', async () => {
+    expect(shouldDownsampleMobileImage({ fileSize: 5 * 1024 * 1024 })).toBe(true)
+    expect(shouldDownsampleMobileImage({ width: 3000, height: 1200 })).toBe(true)
+    expect(shouldDownsampleMobileImage({ fileSize: 100, width: 800, height: 600 })).toBe(false)
+
+    const prepareImage = vi.fn().mockResolvedValue({
+      base64: 'AAAA',
+      uri: 'file:///resized.png'
+    })
+    const result = await pickMobileImage('library', {
+      requestLibraryPermission: vi.fn().mockResolvedValue(granted),
+      launchLibrary: vi.fn().mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///large.jpg', fileSize: 5 * 1024 * 1024, width: 4000, height: 3000 }]
+      }),
+      prepareImage
+    })
+
+    expect(result).toEqual({ base64: 'AAAA', uri: 'file:///resized.png' })
+    expect(prepareImage).toHaveBeenCalledWith({
+      uri: 'file:///large.jpg',
+      fileSize: 5 * 1024 * 1024,
+      width: 4000,
+      height: 3000
+    })
+  })
+
+  it('never guesses a resize that can upscale an image with unknown dimensions', async () => {
+    const resize = vi.fn()
+    const release = vi.fn()
+    vi.mocked(ImageManipulator.manipulate).mockReturnValue({
+      resize,
+      renderAsync: vi.fn().mockResolvedValue({
+        saveAsync: vi.fn().mockResolvedValue({ base64: 'AAAA', uri: 'file:///compressed.png' }),
+        release
+      }),
+      release
+    } as never)
+
+    await prepareMobileImageForUpload({
+      uri: 'file:///unknown.png',
+      fileSize: 5 * 1024 * 1024
+    })
+
+    expect(resize).not.toHaveBeenCalled()
+  })
+
+  it('keeps the final quality-rung preview file while deleting superseded rungs', async () => {
+    const oversized = 'A'.repeat(MOBILE_IMAGE_DOWNSAMPLE_TARGET_BASE64 + 1)
+    let attempt = 0
+    vi.mocked(ImageManipulator.manipulate).mockImplementation(() => {
+      const uri = `file:///quality-${++attempt}.png`
+      const release = vi.fn()
+      return {
+        resize: vi.fn(),
+        renderAsync: vi.fn().mockResolvedValue({
+          saveAsync: vi.fn().mockResolvedValue({ base64: oversized, uri }),
+          release
+        }),
+        release
+      } as never
+    })
+    const deleted: string[] = []
+
+    const result = await prepareMobileImageForUpload(
+      {
+        uri: 'file:///large.png',
+        fileSize: 5 * 1024 * 1024,
+        width: 4000,
+        height: 3000
+      },
+      (uri) => deleted.push(uri)
+    )
+
+    expect(result?.uri).toBe('file:///quality-3.png')
+    expect(deleted).toEqual(['file:///quality-1.png', 'file:///quality-2.png'])
   })
 })

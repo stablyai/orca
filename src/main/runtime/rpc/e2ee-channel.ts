@@ -18,6 +18,7 @@ import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memo
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
+import { parseMobileE2EEV2ClientCapabilities } from './mobile-e2ee-v2-client-capabilities'
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
@@ -283,14 +284,22 @@ export class E2EEChannel {
       onDecryptSuccess: () => (this.consecutiveFailures = 0),
       onAuth: (plaintext) => this.handleAuth(plaintext),
       onBinary: (plaintext) => this.binaryMessageHandler?.(plaintext),
-      onText: (plaintext) =>
-        this.messageHandler?.(
-          plaintext,
-          (response) => this.enqueueV2({ kind: 'text', plaintext: response }),
-          (response) => this.enqueueV2({ kind: 'binary', plaintext: response })
-        ),
+      onText: (plaintext) => this.handleV2Text(plaintext),
       onProtocolError: () => this.onError(4001, 'Invalid binary message before authentication')
     })
+  }
+
+  private handleV2Text(plaintext: string): void {
+    const capabilities = parseMobileE2EEV2ClientCapabilities(plaintext)
+    if (capabilities) {
+      this.clientCapabilities = capabilities
+      return
+    }
+    this.messageHandler?.(
+      plaintext,
+      (response) => this.enqueueV2({ kind: 'text', plaintext: response }),
+      (response) => this.enqueueV2({ kind: 'binary', plaintext: response })
+    )
   }
 
   private enqueueV2(item: V2OutboundItem): boolean {

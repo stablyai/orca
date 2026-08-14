@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     onCompositionEnd?: (event: { currentTarget: HTMLTextAreaElement }) => void
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
+    attachDisabled?: boolean
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'interaction-required' | 'unknown',
   confirmationObserver: null as {
@@ -240,6 +241,48 @@ describe('NativeChatComposer', () => {
 
     expect(onOptimisticSend).toHaveBeenCalledWith('hello', [])
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
+  })
+
+  it('routes structured sends and hydrated options through the existing composer', async () => {
+    const send = vi.fn(() => true)
+    const dispatchCommand = vi.fn(async () => ({
+      handled: false,
+      accepted: false,
+      error: null
+    }))
+    const optionsSurface = {
+      getSnapshot: () => [],
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      subscribe: () => () => {}
+    } satisfies SessionOptionsSurface
+    const optionSnapshot = [{ id: 'model' }] as SessionOptionDescriptor[]
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:structured"
+        targetPtyId={null}
+        agent="codex"
+        structuredTransport={{
+          send,
+          dispatchCommand,
+          optionsSurface,
+          optionSnapshot,
+          onError: vi.fn(),
+          runtime: 'local'
+        }}
+      />
+    )
+
+    expect(mocks.fieldProps?.sessionOptionsSurface).toBe(optionsSurface)
+    expect(mocks.fieldProps?.sessionOptionsSnapshot).toBe(optionSnapshot)
+    expect(mocks.fieldProps?.attachDisabled).toBe(true)
+    await act(async () => mocks.fieldProps?.onSend?.())
+
+    expect(dispatchCommand).toHaveBeenCalledWith('hello')
+    expect(send).toHaveBeenCalledWith('hello')
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(mocks.setDraft).toHaveBeenCalledWith('')
   })
 
   it('types Codex slash composer sends instead of pasting them', () => {

@@ -791,6 +791,9 @@
           }
         }
       },
+      "activateAiVaultStructuredSession": {
+        "unavailable": "The structured agent session is not available yet. Retry in a moment."
+      },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
       }
@@ -3100,7 +3103,10 @@
             "ec2adf093e": "Launch {{value0}} in a new terminal",
             "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
-            "8dea9b5cdf": "No enabled agents"
+            "8dea9b5cdf": "No enabled agents",
+            "f378201fbd": "Could not create chat session",
+            "a847779775": "Start Codex without a terminal",
+            "0ea6a78efb": "Chat session"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -15123,6 +15129,15 @@
           "updating": "Updating…",
           "update": "Update shared content"
         }
+      },
+      "native": {
+        "chat": {
+          "NativeChatStructuredSession": {
+            "1f772bb5d0": "Message delivery is unconfirmed.",
+            "93ef441197": "Message was not sent.",
+            "a5e7f14068": "Retry"
+          }
+        }
       }
     },
     "i18n": {
@@ -15253,8 +15268,44 @@
         "countOne": "1 tool call",
         "countN": "{{value0}} tool calls"
       },
+      "providerFrame": {
+        "byteLength": "{{value0}} bytes"
+      },
       "status": {
         "responding": "Agent is responding"
+      },
+      "handoff": {
+        "mode": {
+          "switching": "Switching",
+          "terminal": "Terminal",
+          "chat": "Chat"
+        },
+        "switchingAfterTurn": "Switching after this turn",
+        "returningAfterTurn": "Returning after this turn",
+        "cancel": "Cancel",
+        "switchAfterTurn": "Switch after this turn",
+        "stopTurnAndSwitch": "Stop turn and switch",
+        "openAgentTui": "Open agent TUI",
+        "sendFirst": "Send a message first to open the agent TUI.",
+        "returnAfterTurn": "Return after this turn",
+        "returnToChat": "Return to chat",
+        "agentOpen": "Agent is open in terminal.",
+        "agentOpenOnHost": "Agent is open in terminal on {{value0}}.",
+        "exitTerminal": "Exit the agent terminal to continue in chat.",
+        "switchingOwner": "Switching session owner…",
+        "retry": "Retry",
+        "retryProof": "Retry proof",
+        "details": "Details",
+        "stage": {
+          "finishingChat": "Finishing chat session…",
+          "finishingTerminal": "Finishing agent terminal…",
+          "openingTerminal": "Opening agent terminal…",
+          "resumingChat": "Resuming chat session…",
+          "verifyingTerminal": "Verifying agent terminal…",
+          "verifyingChat": "Verifying chat session…",
+          "recovering": "Recovering agent session…",
+          "manualRecovery": "Agent session needs recovery"
+        }
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {

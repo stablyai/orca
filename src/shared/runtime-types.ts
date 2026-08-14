@@ -5,6 +5,7 @@ import type {
   AgentStatusState,
   AgentType
 } from './agent-status-types'
+import type { AgentSessionPtyWriteRefusal } from './agent-session-pty-write-admission'
 import type {
   BrowserCertificateFailure,
   BrowserCookieImportResult,
@@ -250,11 +251,23 @@ export type RuntimeMobileSessionBrowserTab = {
   isActive: boolean
 }
 
+export type RuntimeMobileSessionAgentTab = {
+  type: 'agent-session'
+  id: string
+  title: string
+  sessionId: string
+  agent: 'claude' | 'codex'
+  color?: string | null
+  isPinned?: boolean
+  isActive: boolean
+}
+
 export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionTerminalTab
   | RuntimeMobileSessionMarkdownTab
   | RuntimeMobileSessionFileTab
   | RuntimeMobileSessionBrowserTab
+  | RuntimeMobileSessionAgentTab
 
 export type RuntimeMobileSessionTerminalClientTab =
   | (RuntimeMobileSessionTerminalTab & {
@@ -271,6 +284,7 @@ export type RuntimeMobileSessionClientTab =
   | RuntimeMobileSessionMarkdownTab
   | RuntimeMobileSessionFileTab
   | RuntimeMobileSessionBrowserTab
+  | RuntimeMobileSessionAgentTab
 
 export type RuntimeMobileSessionTabGroup = {
   id: string
@@ -327,7 +341,7 @@ export type RuntimeMobileSessionTabsSnapshot = {
   snapshotVersion: number
   activeGroupId: string | null
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
+  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session' | null
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
   tabs: RuntimeMobileSessionSnapshotTab[]
@@ -341,7 +355,7 @@ export type RuntimeMobileSessionTabsResult = {
   navigationIntent?: 'follow'
   activeGroupId: string | null
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
+  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session' | null
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
   tabs: RuntimeMobileSessionClientTab[]
@@ -612,6 +626,11 @@ export type RuntimeTerminalSend = {
   accepted: boolean
   bytesWritten: number
   refusedReason?: 'no-agent' | 'permission'
+  /**
+   * Present only when a durable agent-session lease refused the write. Additive and optional: an
+   * old client sees the `accepted: false` it already handles and ignores this field.
+   */
+  agentSessionRefusal?: AgentSessionPtyWriteRefusal
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
@@ -675,6 +694,8 @@ export type RuntimeTerminalCreate = {
   agentSessionDisposition?: 'created' | 'adopted'
   /** The host attached this request to the existing stable pane owner. */
   isReattach?: true
+  /** Spawn process identity for host-internal ownership proof. */
+  processId?: number
 }
 
 export type RuntimeTerminalSplit = {

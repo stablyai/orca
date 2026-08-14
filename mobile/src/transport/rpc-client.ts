@@ -3,8 +3,7 @@ import type {
   RpcSuccess,
   ConnectionState,
   ConnectionLogLevel,
-  ConnectionLogSink,
-  ForegroundNudgeReason
+  ConnectionLogSink
 } from './types'
 import {
   generateKeyPair,
@@ -47,6 +46,10 @@ import {
 } from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import type { RpcClient, SendRequestOptions, SubscribeOptions } from './rpc-client-contract'
+
+export type { RpcClient, SendRequestOptions } from './rpc-client-contract'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -59,25 +62,6 @@ type ConnectWaiter = {
   timeout: ReturnType<typeof setTimeout> | null
 }
 
-export type SendRequestOptions = {
-  timeoutMs?: number
-  /** Spend `timeoutMs` across connect-wait AND the request instead of giving each
-   *  phase its own. Interactive chat writes need it: they run as sequential loops
-   *  under one shared budget, so a per-phase clock lets the composer sit `sending`
-   *  for a multiple of the stated ceiling. Off by default — the long-running
-   *  callers (worktree create, dictation finish, credit reset) sized their budgets
-   *  against the post-connect clock, and squeezing them to the floor after a slow
-   *  reconnect would fail sends that used to land. */
-  budgetSpansConnect?: boolean
-  /** Reject immediately when not connected — a send parked in the connect wait
-   *  replays stale terminal bytes into the PTY after reconnect. */
-  failWhenDisconnected?: boolean
-}
-
-type SubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-}
-
 type StreamingListener = (result: unknown) => void
 
 type StreamRequest = {
@@ -88,34 +72,7 @@ type StreamRequest = {
   subscriptionId?: string
   cancelled?: boolean
   sent?: boolean
-}
-
-export type RpcClient = {
-  sendRequest: (
-    method: string,
-    params?: unknown,
-    options?: SendRequestOptions
-  ) => Promise<RpcResponse>
-  subscribe: (
-    method: string,
-    params: unknown,
-    onData: StreamingListener,
-    options?: SubscribeOptions
-  ) => () => void
-  updateTerminalSubscriptionViewport: (
-    terminal: string,
-    viewport: { cols: number; rows: number }
-  ) => void
-  getState: () => ConnectionState
-  // 0 means never failed (reset once the handshake authenticates); the UI escalates "Reconnecting…" to "Can't connect" past a threshold.
-  getReconnectAttempt: () => number
-  // Last 'connected' timestamp (ms epoch); null = never connected. Lets the UI tell "never reachable" from "transient blip".
-  getLastConnectedAt: () => number | null
-  onStateChange: (listener: (state: ConnectionState) => void) => () => void
-  // Why: app-resume hook — iOS/Android can kill the TCP path while backgrounded; call on AppState 'active' to recover.
-  // The reason routes relay handling (probe vs replace); the direct socket probes regardless.
-  notifyForeground: (reason?: ForegroundNudgeReason) => void
-  close: () => void
+  paramsForReconnect?: () => unknown
 }
 
 // Why: tiered backoff — fast early entries recover blips; the slow tail avoids burning a SYN every 4s on an unreachable desktop.
@@ -239,8 +196,13 @@ export function connect(
     if (next === 'connected') {
       lastConnectedAt = Date.now()
       authenticationGeneration++
-      // Why: only a completed E2EE handshake proves the path is healthy (issue #10119).
-      reconnectAttempt = 0
+      // A structured conversation keeps its attempt count until the resumed
+      // stream itself survives the longevity threshold.
+      if (
+        ![...streamListeners.values()].some((stream) => stream.method === 'agentSession.subscribe')
+      ) {
+        reconnectAttempt = 0
+      }
       // Why: a clean handshake proves the token is valid — reset the auth retry budget.
       authRejectionCount = 0
       for (const waiter of connectWaiters.splice(0)) {
@@ -409,7 +371,11 @@ export function connect(
           const msg = JSON.parse(raw)
           if (msg.type === 'e2ee_ready') {
             emitLog('success', 'Received e2ee_ready', 'Sending device token')
-            sendEncrypted({ type: 'e2ee_auth', deviceToken })
+            sendEncrypted({
+              type: 'e2ee_auth',
+              deviceToken,
+              clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+            })
             return
           }
         } catch {
@@ -453,7 +419,12 @@ export function connect(
               }
               resetTerminalStreamRoutingForRequest(id)
               if (
-                sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
+                sendEncrypted({
+                  id,
+                  deviceToken,
+                  method: stream.method,
+                  params: stream.paramsForReconnect?.() ?? stream.params
+                })
               ) {
                 stream.sent = true
               } else {
@@ -1073,7 +1044,8 @@ export function connect(
         method,
         params,
         listener: onData,
-        onBinaryFrame: options?.onBinaryFrame
+        onBinaryFrame: options?.onBinaryFrame,
+        paramsForReconnect: options?.paramsForReconnect
       }
       streamListeners.set(id, stream)
       if (method === 'browser.screencast') {
@@ -1122,7 +1094,7 @@ export function connect(
             })
           }
         } else {
-          const unsub = buildStreamUnsubscribe(stream?.method, stream?.params)
+          const unsub = buildStreamUnsubscribe(stream?.method, stream?.params, id)
           if (unsub) {
             sendEncrypted({ id: nextId(), deviceToken, method: unsub.method, params: unsub.params })
           }
@@ -1189,6 +1161,24 @@ export function connect(
         // (issue #10119). A redial with no dial to abandon is a genuinely fresh start.
         redialNow(!abandoned)
       }
+    },
+
+    restartAfterStructuredBackground(): void {
+      if (intentionallyClosed) {
+        return
+      }
+      reconnectAttempt = Math.max(1, reconnectAttempt)
+      const connectedSocket = ws
+      if (connectedSocket) {
+        closeAndSynthesize(connectedSocket)
+      } else {
+        setState('reconnecting')
+      }
+      redialNow(false)
+    },
+
+    confirmStructuredStreamLongevity(): void {
+      reconnectAttempt = 0
     },
 
     close() {

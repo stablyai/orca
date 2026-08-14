@@ -47,6 +47,14 @@ type MobileSessionTabLike =
       isActive?: boolean
     }
   | {
+      type: 'agent-session'
+      id: string
+      title?: string
+      sessionId: string
+      agent: 'codex'
+      isActive?: boolean
+    }
+  | {
       type: 'browser'
       id: string
       title?: string
@@ -120,6 +128,8 @@ function mobileSessionTabEqual(
         a.canGoBack === b.canGoBack &&
         a.canGoForward === b.canGoForward
       )
+    case 'agent-session':
+      return b.type === 'agent-session' && a.sessionId === b.sessionId && a.agent === b.agent
   }
 }
 

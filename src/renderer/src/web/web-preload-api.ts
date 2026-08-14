@@ -570,6 +570,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       // Staging already wrote through to browser storage, so there is nothing left to join.
       awaitBeforeUnloadCheckpoint: () => Promise.resolve(),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
+      prepareTerminalStartupRestoration: () => Promise.resolve(),
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
@@ -1391,6 +1392,17 @@ function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
     syncWindowGraph: async (_graph: RuntimeSyncWindowGraph) => getRemoteRuntimeStatus(),
     getStatus: () => getRemoteRuntimeStatus(),
     call: ({ method, params }) => callRuntimeEnvelope(method, params),
+    subscribe: async ({ method, params }, callback) => {
+      const environment = requireActiveEnvironment()
+      const subscription = await getClientForEnvironment(environment).subscribe(method, params, {
+        onResponse: callback
+      })
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        subscription.unsubscribe()
+        throw new Error('runtime_manually_disconnected')
+      }
+      return subscription
+    },
     getTerminalFitOverrides: () => Promise.resolve([]),
     getTerminalDrivers: () => Promise.resolve([]),
     getBrowserDrivers: () => Promise.resolve([]),

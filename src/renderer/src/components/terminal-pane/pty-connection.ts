@@ -1205,6 +1205,7 @@ export function connectPanePty(
   // mutation does not propagate back.
   const paneStartup = deps.startup ?? null
   deps.startup = undefined
+  let startupPtyBound = false
 
   // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
@@ -3027,6 +3028,10 @@ export function connectPanePty(
       } else {
         deps.updateTabPtyId(deps.tabId, ptyId)
       }
+    }
+    if (paneStartup && !startupPtyBound) {
+      startupPtyBound = true
+      deps.onStartupBound?.()
     }
     if (options.seedInitialAgentStatus) {
       applyInitialAgentStatus()
@@ -8139,20 +8144,6 @@ export function connectPanePty(
         coldRestoreStartup.sleepingRecordEntry &&
         isPassiveCompletedHibernationEvidence(coldRestoreStartup.sleepingRecordEntry.record)
       )
-      // Why: reattach drops startup commands; only passive hibernation is authority to retire an empty adopted shell and resume its provider session.
-      if (!hasStructuralReplay && connectResult?.isReattach && resumeComesFromPassiveHibernation) {
-        transport.disconnect()
-        if (staleSessionId) {
-          deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
-          deps.clearTabPtyId(deps.tabId, staleSessionId)
-        } else {
-          deps.syncPanePtyLayoutBinding(pane.id, null)
-        }
-        startFreshColdRestoreAgentResume(coldRestoreStartup, {
-          forceBlankRestoredViewport: true
-        })
-        return false
-      }
       setPanePtyFitBinding(ptyId)
       reportPanePtyVisibility(ptyId, deps.isVisibleRef.current)
       registerSideEffectFactConsumerForPty(ptyId)
@@ -8492,6 +8483,15 @@ export function connectPanePty(
       }
       if (!isCurrentReattachPayload() || !reattachPayloadApplied) {
         return false
+      }
+      if (connectResult?.isReattach && resumeComesFromPassiveHibernation && coldRestoreStartup) {
+        applyColdRestoreAgentResumeStartup(coldRestoreStartup)
+        await waitForTerminalOutputParsed(pane.terminal)
+        if (!(await runTerminalPasteStartupCommand(coldRestoreStartup.command))) {
+          return false
+        }
+        showSessionRestoredBanner()
+        clearSleepingRecordAfterColdRestoreSpawn(coldRestoreStartup)
       }
       scheduleReattachIdleAgentCursorReset()
 

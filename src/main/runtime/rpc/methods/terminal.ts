@@ -38,6 +38,7 @@ import {
 } from '../terminal-stream-byte-length'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences,
@@ -74,6 +75,7 @@ import {
 import type { TerminalSnapshotUnavailableReason } from '../../../../shared/terminal-snapshot-unavailability'
 import type { RemoteTerminalSourceRangeReplacementReservation } from '../../remote-terminal-source-range-consumer'
 import { withTerminalCloseAttribution } from '../terminal-close-attribution'
+import { isAgentSessionPtyWriteRefusedError } from '../../../../shared/agent-session-pty-write-admission'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
@@ -322,6 +324,11 @@ function resolveMobileFloorClientId(
 type TerminalStreamInputOutcome = 'delivered' | 'rejected' | 'failed'
 
 function isTerminalStreamInputRejection(error: unknown): boolean {
+  // Why: a lease refusal is a deliberate rejection, not a transport failure, so the stream reports
+  // it through the WriteUnavailable frame old clients already decode rather than a new opcode.
+  if (isAgentSessionPtyWriteRefusedError(error)) {
+    return true
+  }
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_not_writable') || message.includes('terminal_handle_stale')
 }
@@ -1227,6 +1234,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime, clientId }) => {
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
+      if (params.text) {
+        await assertLegacyAiVaultResumeCommandAllowed(params.text, () =>
+          runtime.ensureStructuredAgentSessionHost()
+        )
+      }
+      if (params.resolvedLaunchDraft?.text) {
+        await assertLegacyAiVaultResumeCommandAllowed(params.resolvedLaunchDraft.text, () =>
+          runtime.ensureStructuredAgentSessionHost()
+        )
+      }
       const queryReplyClientId = clientId ?? params.client?.id
       if (
         params.inputKind === 'query-reply' &&
@@ -1380,6 +1397,18 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
+        if (isAgentSessionPtyWriteRefusedError(error)) {
+          // Why: name the owner and the stage instead of a bare not-writable, so a client can say
+          // who holds the session rather than retrying into a lease it will never win.
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0,
+              agentSessionRefusal: error.refusal
+            }
+          }
+        }
         const refusedReason = getTerminalSendGuardRefusedReason(error)
         if (refusedReason) {
           return {

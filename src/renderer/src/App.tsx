@@ -113,6 +113,11 @@ import {
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
 import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
+import {
+  restoreLocalStructuredSessionTabsOnce,
+  useLocalStructuredSessionTabsSync
+} from './runtime/local-structured-session-tabs-sync'
+import { StructuredAgentSessionStatusBridge } from './components/native-chat/StructuredAgentSessionStatusBridge'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { MacosTccPromptNoticeHost } from './hooks/MacosTccPromptNoticeHost'
 import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
@@ -451,6 +456,7 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
+  useLocalStructuredSessionTabsSync()
   // Why restored: leaving the panel closed forces the user to reopen and re-maximize it,
   // and that size jump reflows a live TUI's buffer (see floating-terminal-panel-view-state).
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(
@@ -493,6 +499,7 @@ function App(): React.JSX.Element {
       setSshConnectionState: s.setSshConnectionState,
       hydratePersistedUI: s.hydratePersistedUI,
       setHydrationSucceeded: s.setHydrationSucceeded,
+      setTerminalStartupRestorationReady: s.setTerminalStartupRestorationReady,
       openModal: s.openModal,
       closeModal: s.closeModal,
       markFeatureTipsSeen: s.markFeatureTipsSeen,
@@ -1006,6 +1013,12 @@ function App(): React.JSX.Element {
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
           })
+          await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
+            window.api.app.prepareTerminalStartupRestoration()
+          )
+          if (cancelled) {
+            return
+          }
           // Why: prune visit timestamps AFTER hydration (earlier, worktreesByRepo may be empty and prune would drop entries for worktrees about to appear); seed the active worktree if missing.
           // See docs/cmd-j-empty-query-ordering.md.
           timeRendererStartupSyncStep('visit-timestamp-prune', () => {
@@ -1115,15 +1128,25 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('reconnect-terminals', () =>
             actions.reconnectPersistedTerminals(abortController.signal)
           )
+          if (cancelled) {
+            return
+          }
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          await timeRendererStartupStep('project-structured-session-tabs', () =>
+            restoreLocalStructuredSessionTabsOnce()
+          )
+          if (cancelled) {
+            return
+          }
           // Why here: reconnect just published restored PTY ids; sweeping them now
           // re-offers stale Codex panes whose tabs never mount this session.
           sweepRestoredCodexPanesForStaleAccounts(useAppStore.getState())
           syncZoomCSSVar()
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)
+          actions.setTerminalStartupRestorationReady(true)
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })
@@ -1226,6 +1249,7 @@ function App(): React.JSX.Element {
               pendingReconnectPtyIdByTabId: {}
             })
           }
+          actions.setTerminalStartupRestorationReady(true)
         }
       }
       void actions.initGitHubCache()
@@ -2266,6 +2290,7 @@ function App(): React.JSX.Element {
             <MacosTccPromptNoticeHost />
             {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
             <RetainedAgentsSyncGate />
+            <StructuredAgentSessionStatusBridge />
             <AiVaultTabTitleSyncGate />
             {settings?.experimentalAgentDashboardPopout === true ? (
               <Suspense fallback={null}>

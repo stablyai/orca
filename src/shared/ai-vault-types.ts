@@ -118,6 +118,11 @@ export type AiVaultSession = {
   subagentTranscriptCount: number
   resumeCommand: string
   subagent: AiVaultSessionSubagentInfo | null
+  /** Present only when the negotiated client can open the native structured owner. */
+  structuredSession?: {
+    sessionId: string
+    workspaceId: string
+  }
 }
 
 export type AiVaultSubagentListArgs = {

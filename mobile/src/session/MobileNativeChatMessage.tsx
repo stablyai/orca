@@ -146,6 +146,9 @@ function Prose({
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
+    if (block.providerFrame) {
+      return <MobileProviderFrame block={block} />
+    }
     // Inverted (user) bubbles use a fixed dark-on-light text rather than the
     // markdown renderer's light-on-dark palette.
     if (invert) {
@@ -178,6 +181,38 @@ function Prose({
     )
   }
   return null
+}
+
+function MobileProviderFrame({
+  block
+}: {
+  block: Extract<NativeChatBlock, { type: 'text' }>
+}): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const frame = block.providerFrame!
+  return (
+    <View>
+      <Pressable style={styles.providerFrameRow} onPress={() => setExpanded((value) => !value)}>
+        {expanded ? (
+          <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} />
+        ) : (
+          <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
+        )}
+        <Text style={styles.providerFrameProvider}>{frame.provider}</Text>
+        <Text style={styles.providerFrameKind} numberOfLines={1}>
+          {frame.kind}
+        </Text>
+      </Pressable>
+      {expanded ? (
+        <View style={styles.providerFrameDetail}>
+          <Text style={styles.mono}>
+            {frame.payload.head}
+            {frame.payload.truncated ? '\n…' : ''}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  )
 }
 
 /** A run of a message's tool calls/results, collapsed to a one-line summary that
@@ -276,6 +311,9 @@ function AgentControls({
 
 function MobileNativeChatMessageImpl({
   message,
+  queued,
+  deliveryState,
+  onQueuedPress,
   toolsExpanded = false,
   fontScale = 1,
   messageIndex,
@@ -283,6 +321,9 @@ function MobileNativeChatMessageImpl({
   onOpenFile
 }: {
   message: NativeChatMessage
+  queued?: boolean
+  deliveryState?: 'queued' | 'dispatching' | 'unconfirmed'
+  onQueuedPress?: () => void
   toolsExpanded?: boolean
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
@@ -339,6 +380,19 @@ function MobileNativeChatMessageImpl({
 
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
+      {isUser && queued ? (
+        <Pressable onPress={onQueuedPress} disabled={!onQueuedPress} hitSlop={6}>
+          <Text style={styles.queuedTag}>
+            {deliveryState === 'unconfirmed'
+              ? 'Unconfirmed · Retry'
+              : deliveryState === 'dispatching'
+                ? 'Sending…'
+                : deliveryState === 'queued'
+                  ? 'Queued · Edit'
+                  : 'Queued'}
+          </Text>
+        </Pressable>
+      ) : null}
       <View
         style={[
           styles.content,

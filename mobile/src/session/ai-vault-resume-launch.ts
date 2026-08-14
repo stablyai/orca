@@ -79,6 +79,29 @@ export type MobileAiVaultResumeLaunch = {
   launchAgent?: TuiAgent
 }
 
+export async function activateStructuredAiVaultSession(
+  client: Pick<RpcClient, 'sendRequest'>,
+  session: Pick<AiVaultSession, 'structuredSession'>
+): Promise<string | null> {
+  const structured = session.structuredSession
+  if (!structured) {
+    return null
+  }
+  const response = await client.sendRequest(
+    'session.tabs.activate',
+    {
+      worktree: `id:${structured.workspaceId}`,
+      tabId: `agent-session:${structured.sessionId}`,
+      navigation: 'caller'
+    },
+    { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+  )
+  if (!response.ok) {
+    throw new Error(response.error?.message || 'Failed to open structured agent session')
+  }
+  return structured.workspaceId
+}
+
 export function buildMobileAiVaultResumeLaunch(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
     Partial<Pick<AiVaultSession, 'filePath'>>

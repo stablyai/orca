@@ -1,5 +1,19 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionsSurface
+} from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+
+export type NativeChatStructuredComposerTransport = {
+  send: (text: string) => boolean
+  dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
+  optionsSurface: SessionOptionsSurface
+  optionSnapshot: SessionOptionDescriptor[]
+  onError: (message: string | null) => void
+  runtime: 'local' | 'remote'
+}
 
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
@@ -29,6 +43,8 @@ export type NativeChatComposerProps = {
   launchDraft?: NativeChatLaunchDraft | null
   /** True once the transcript shows the TUI-side draft was submitted or cleared. */
   launchDraftResolved?: boolean
+  /** Structured journal transport; absent keeps the existing PTY path unchanged. */
+  structuredTransport?: NativeChatStructuredComposerTransport
 }
 
 export type NativeChatComposerHandle = {

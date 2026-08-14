@@ -26,6 +26,9 @@ import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-sim
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
@@ -47,6 +50,7 @@ const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
 > = {}
 
 type TerminalTabItem = TerminalTab & { unifiedTabId: string }
+export type GroupAgentSessionItem = Tab & { contentType: 'agent-session' }
 
 export function useTabGroupWorkspaceModel({
   groupId,
@@ -183,6 +187,14 @@ export function useTabGroupWorkspaceModel({
     [groupTabs, worktreeState.browserTabs]
   )
 
+  const agentSessionItems = useMemo<GroupAgentSessionItem[]>(
+    () =>
+      groupTabs.filter(
+        (item): item is GroupAgentSessionItem => item.contentType === 'agent-session'
+      ),
+    [groupTabs]
+  )
+
   const closeEditorIfUnreferenced = useCallback(
     (entityId: string, closingTabId: string) => {
       const otherReference = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).some(
@@ -233,6 +245,21 @@ export function useTabGroupWorkspaceModel({
         useAppStore.getState(),
         worktreeId
       )
+      if (item.contentType === 'agent-session') {
+        const target = getActiveRuntimeTarget({
+          activeRuntimeEnvironmentId: runtimeEnvironmentId
+        })
+        void callRuntimeRpc(target, 'session.tabs.close', {
+          worktree: toRuntimeWorktreeSelector(worktreeId),
+          tabId: `agent-session:${item.entityId}`,
+          reason: 'user'
+        })
+        closeUnifiedTab(item.id)
+        if (!opts?.skipEmptyCheck) {
+          leaveWorktreeIfEmpty()
+        }
+        return
+      }
       if (item.contentType === 'terminal') {
         // Why: closeTerminalTab can defer behind a pin / running-process dialog, so the
         // empty check has to run on the actual close — never on cancel.
@@ -295,6 +322,18 @@ export function useTabGroupWorkspaceModel({
           useAppStore.getState(),
           worktreeId
         )
+        if (item.contentType === 'agent-session') {
+          const target = getActiveRuntimeTarget({
+            activeRuntimeEnvironmentId: runtimeEnvironmentId
+          })
+          void callRuntimeRpc(target, 'session.tabs.close', {
+            worktree: toRuntimeWorktreeSelector(worktreeId),
+            tabId: `agent-session:${item.entityId}`,
+            reason: 'user'
+          })
+          closeUnifiedTab(item.id)
+          continue
+        }
         if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
           // Why: revoke local resume + hook authority before the host removes its canonical tab.
           // No running-process prompt: a bulk close of N busy tabs would be a modal storm.
@@ -445,6 +484,13 @@ export function useTabGroupWorkspaceModel({
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
   )
 
+  const activateAgentSession = useCallback(
+    (tabId: string) => {
+      activateStructuredAgentSessionTab({ worktreeId, tabId })
+    },
+    [worktreeId]
+  )
+
   const createSplitGroup = useCallback(
     (direction: 'left' | 'right' | 'up' | 'down') => {
       focusGroup(worktreeId, groupId)
@@ -563,6 +609,7 @@ export function useTabGroupWorkspaceModel({
   return {
     group,
     activeTab,
+    agentSessionItems,
     browserItems,
     editorItems,
     terminalTabs,
@@ -574,6 +621,7 @@ export function useTabGroupWorkspaceModel({
         focusGroup(worktreeId, groupId)
       },
       activateBrowser,
+      activateAgentSession,
       activateEditor,
       activateTerminal,
       closeAllEditorTabsInGroup,

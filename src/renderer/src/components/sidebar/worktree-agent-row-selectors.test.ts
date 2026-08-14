@@ -3,6 +3,7 @@ import type {
   AgentStatusEntry,
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -150,6 +151,44 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     }
 
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([childEntry])
+  })
+
+  it('keeps an idle structured session visible while its unified tab exists', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'done',
+      sessionBoundary: true,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1'
+    })
+    const structuredTab = {
+      id: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      contentType: 'agent-session',
+      entityId: 'session-1',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      isPinned: false,
+      agentSessionAgent: 'codex'
+    } satisfies Tab
+    const state = {
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [structuredTab] },
+      agentStatusByPaneKey: { [PANE_KEY_1]: entry },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
+    expect(
+      selectLiveAgentStatusEntriesForWorktree(
+        { ...state, unifiedTabsByWorktree: { 'wt-1': [] } },
+        'wt-1'
+      )
+    ).toEqual([])
   })
 
   it('patches instead of full-rebuilding across within-state pings, and stays correct on transitions', () => {

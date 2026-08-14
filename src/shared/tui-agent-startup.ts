@@ -1,10 +1,5 @@
 import { isShellProcess } from './agent-detection'
-import {
-  getAgentResumeArgv,
-  type AgentProviderSessionMetadata,
-  type ResumableTuiAgent,
-  type SleepingAgentLaunchConfig
-} from './agent-session-resume'
+import type { SleepingAgentLaunchConfig } from './agent-session-resume'
 import {
   clearEnvCommand,
   commandSeparator,
@@ -20,7 +15,8 @@ import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './tui-agent'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
-import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
+
+export { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 
 export type AgentStartupPlan = {
   agent: TuiAgent
@@ -181,54 +177,6 @@ export function buildAgentStartupPlan(args: {
     followupPrompt: trimmedPrompt,
     launchConfig,
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-  }
-}
-
-export function buildAgentResumeStartupPlan(args: {
-  agent: ResumableTuiAgent
-  providerSession: AgentProviderSessionMetadata
-  cmdOverrides: Partial<Record<TuiAgent, string>>
-  platform: NodeJS.Platform
-  shell?: AgentStartupShell
-  agentArgs?: string | null
-  agentEnv?: Record<string, string> | null
-  agentCommand?: string | null
-  ompResumeFilePath?: string | null
-  sessionOptions?: Record<string, SessionOptionValue>
-  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
-  isRemote?: boolean
-}): AgentStartupPlan | null {
-  const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
-  if (!argv) {
-    return null
-  }
-  const shell = resolveStartupShell(args.platform, args.shell)
-  const config = TUI_AGENT_CONFIG[args.agent]
-  const resolvedAgentCommand = args.agentCommand?.trim()
-  const baseCommand = resolvedAgentCommand
-    ? ({ ok: true, command: resolvedAgentCommand } as const)
-    : resolveAgentLaunchCommand({
-        agent: args.agent,
-        cmdOverrides: args.cmdOverrides,
-        platform: args.platform,
-        shell,
-        agentArgs: args.agentArgs,
-        isRemote: args.isRemote
-      })
-  if (!baseCommand.ok) {
-    return null
-  }
-  const launchConfig = buildSleepingAgentLaunchConfig({
-    ...args,
-    agentCommand: baseCommand.command
-  })
-  return {
-    agent: args.agent,
-    launchCommand: buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell),
-    expectedProcess: config.expectedProcess,
-    followupPrompt: null,
-    launchConfig,
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }

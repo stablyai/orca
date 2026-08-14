@@ -15,6 +15,7 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
+import type { AgentSessionPtyWriteRefusal } from '../shared/agent-session-pty-write-admission'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
@@ -525,6 +526,8 @@ const api = {
     },
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+    prepareTerminalStartupRestoration: (): Promise<void> =>
+      ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
     recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
       ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
     startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
@@ -993,9 +996,17 @@ const api = {
     },
     writeAccepted: (id: string, data: string): Promise<boolean> =>
       ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-    onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
-        callback(payload)
+    onWriteUnavailable: (
+      callback: (payload: {
+        id: string
+        /** Set only when a durable agent-session lease refused the write; absent otherwise. */
+        agentSessionRefusal?: AgentSessionPtyWriteRefusal
+      }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
+      ): void => callback(payload)
       ipcRenderer.on('pty:writeUnavailable', handler)
       return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
     },
@@ -4320,6 +4331,31 @@ const api = {
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
       ipcRenderer.invoke('runtime:call', args),
+    subscribe: async (
+      args: { method: string; params?: unknown },
+      callback: (response: RuntimeRpcResponse<unknown>) => void
+    ): Promise<RuntimeEnvironmentSubscriptionHandle> => {
+      const subscriptionId = `desktop-${crypto.randomUUID()}`
+      const channel = `runtime:subscription:${subscriptionId}`
+      const listener = (_event: Electron.IpcRendererEvent, response: RuntimeRpcResponse<unknown>) =>
+        callback(response)
+      ipcRenderer.on(channel, listener)
+      try {
+        await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
+      } catch (error) {
+        ipcRenderer.removeListener(channel, listener)
+        throw error
+      }
+      return {
+        unsubscribe: () => {
+          ipcRenderer.removeListener(channel, listener)
+          ipcRenderer.send('runtime:unsubscribe', { subscriptionId })
+        },
+        sendBinary: () => {
+          throw new Error('Local runtime subscriptions do not accept binary input')
+        }
+      }
+    },
     getTerminalFitOverrides: (): Promise<
       { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),

@@ -202,6 +202,7 @@ import {
 } from '../../../shared/execution-host'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -783,9 +784,7 @@ function WorktreeJumpPaletteContent({
   const [rawFilter, setRawFilter] = useState<PaletteFilterState>(EMPTY_PALETTE_FILTER)
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
-  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal' | 'simulator'>(
-    'terminal'
-  )
+  const previousActiveTabTypeRef = useRef<WorkspaceVisibleTabType>('terminal')
   const previousBrowserPageIdRef = useRef<string | null>(null)
   const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>('webview')
   // Why: the exact element focused before Cmd+J opened, so Escape restores it precisely (not a background worktree's hidden terminal).

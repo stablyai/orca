@@ -255,6 +255,61 @@ describe('relay reconnect controller', () => {
     expect(onRetry).toHaveBeenCalledTimes(2)
   })
 
+  it('skips the first backoff rung after a structured background restart', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+    const session = {
+      getFailure: () => new Error('structured session background reconnect'),
+      consumeStructuredReconnectSignal: () => ({
+        backgroundRestart: true,
+        streamLongevityConfirmed: false
+      })
+    } as MobileRelayRpcSession
+    const logical = { getActivePath: () => 'relay' } as StableLogicalRpcClient
+
+    reconnect.setActiveSession(session)
+    reconnect.registerActiveFailure(logical)
+
+    vi.advanceTimersByTime(499)
+    expect(onRetry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
+  it('resets structured backoff only after stream longevity is confirmed', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+    const logical = { getActivePath: () => 'relay' } as StableLogicalRpcClient
+
+    reconnect.registerFailure(new Error('first failure'), false)
+    reconnect.registerFailure(new Error('second failure'), false)
+    reconnect.setActiveSession({
+      getFailure: () => new Error('short stream failure'),
+      consumeStructuredReconnectSignal: () => ({
+        backgroundRestart: false,
+        streamLongevityConfirmed: false
+      })
+    } as MobileRelayRpcSession)
+    reconnect.registerActiveFailure(logical)
+    vi.advanceTimersByTime(999)
+    expect(onRetry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onRetry).toHaveBeenCalledOnce()
+
+    reconnect.setActiveSession({
+      getFailure: () => new Error('long stream failure'),
+      consumeStructuredReconnectSignal: () => ({
+        backgroundRestart: false,
+        streamLongevityConfirmed: true
+      })
+    } as MobileRelayRpcSession)
+    reconnect.registerActiveFailure(logical)
+    vi.advanceTimersByTime(249)
+    expect(onRetry).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(1)
+    expect(onRetry).toHaveBeenCalledTimes(2)
+  })
+
   it('uses grace only when the outer relay credential was rejected', () => {
     const reconnect = createController(vi.fn())
 

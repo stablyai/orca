@@ -348,4 +348,86 @@ describe('MobileSocketWiring', () => {
     expect(transport.setClientId).not.toHaveBeenCalled()
     expect(ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
   })
+
+  it('projects post-auth v2 capabilities into later RPC dispatches', () => {
+    const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
+    const phone = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
+    const ws = new FakeSocket()
+    const transport = new FakeTransport()
+    const onText = vi.fn()
+    const metadata: MobileSocketTransportMetadata = {
+      transport: 'relay',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      relayDeviceId: 'device-1',
+      basisConnId: 'connection-1',
+      credentialKind: 'resume'
+    }
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token'),
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText,
+      onBinary: vi.fn(),
+      onClose: vi.fn()
+    })
+    wiring.attachTransport(transport, () => metadata)
+    const hello: MobileE2EEV2Hello = {
+      type: 'e2ee_hello',
+      v: 2,
+      clientPublicKeyB64: Buffer.from(phone.publicKey).toString('base64'),
+      clientNonceB64: Buffer.from(new Uint8Array(32).fill(3)).toString('base64'),
+      capabilities: { framing: [2], payloadKinds: ['text', 'binary'] },
+      context: {
+        protocol: 'orca-mobile-e2ee',
+        initiator: 'mobile',
+        responder: 'desktop',
+        transport: 'relay',
+        relayHostId: metadata.relayHostId
+      }
+    }
+    transport.receive(ws, JSON.stringify(hello))
+    const ready = JSON.parse(ws.sent[0]!.toString()) as MobileE2EEV2Ready
+    const handshake = validateMobileE2EEV2Handshake(hello, ready)!
+    const schedule = deriveMobileE2EEV2KeySchedule({
+      sharedSecret: deriveSharedKey(phone.secretKey, desktop.publicKey),
+      transcript: encodeMobileE2EEV2Transcript(handshake),
+      clientNonce: handshake.clientNonce,
+      desktopNonce: handshake.desktopNonce
+    })
+    const send = (value: unknown, counter: bigint): void => {
+      const frame = sealMobileE2EEV2Frame({
+        payload: new TextEncoder().encode(JSON.stringify(value)),
+        key: schedule.mobileToDesktopKey,
+        sessionId: schedule.sessionId,
+        direction: 'mobile-to-desktop',
+        payloadKind: 'text',
+        counter
+      })
+      transport.receive(ws, Buffer.from(frame).toString('base64'))
+    }
+    send(
+      {
+        type: 'e2ee_auth',
+        v: 2,
+        transcriptHashB64: Buffer.from(schedule.transcriptHash).toString('base64'),
+        deviceToken: 'valid-token'
+      },
+      0n
+    )
+    send(
+      {
+        type: 'e2ee_client_capabilities',
+        v: 1,
+        clientCapabilities: ['agent-session.structured.v1']
+      },
+      1n
+    )
+    send({ id: 'rpc-1', method: 'agentSession.history', params: {} }, 2n)
+
+    expect(onText).toHaveBeenCalledOnce()
+    expect(onText.mock.calls[0]?.[0].clientCapabilities).toEqual(['agent-session.structured.v1'])
+  })
 })

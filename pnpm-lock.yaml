@@ -67,6 +67,9 @@ importers:
       posthog-node:
         specifier: ^5.33.3
         version: 5.33.3
+      proper-lockfile:
+        specifier: 4.1.2
+        version: 4.1.2
       psl:
         specifier: 1.15.0
         version: 1.15.0
@@ -188,6 +191,9 @@ importers:
       '@types/node':
         specifier: ^25.6.0
         version: 25.9.5
+      '@types/proper-lockfile':
+        specifier: ^4.1.4
+        version: 4.1.4
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
@@ -3162,6 +3168,9 @@ packages:
 
   '@types/node@25.9.5':
     resolution: {integrity: sha512-OScDchr2fwuUmWdf4kZ9h7PcJiYDVInhJizG/biAq3cAvqwYktuy/TYGGdZNMtNTFUP7rnb0NU4TUdm82kt4Rg==}
+
+  '@types/proper-lockfile@4.1.4':
+    resolution: {integrity: sha512-uo2ABllncSqg9F1D4nugVl9v93RmjxF6LJzQLMLDdPaXCUIDPeOJ21Gbqi43xNKzBi/WQ0Q0dICqufzQbMjipQ==}
 
   '@types/qrcode@1.5.6':
     resolution: {integrity: sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw==}
@@ -9418,6 +9427,10 @@ snapshots:
   '@types/node@25.9.5':
     dependencies:
       undici-types: 7.24.6
+
+  '@types/proper-lockfile@4.1.4':
+    dependencies:
+      '@types/retry': 0.12.0
 
   '@types/qrcode@1.5.6':
     dependencies:

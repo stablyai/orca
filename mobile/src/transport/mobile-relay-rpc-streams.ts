@@ -4,6 +4,7 @@ import {
   type TerminalSnapshotState
 } from './rpc-client-terminal-binary-frame'
 import {
+  buildStreamUnsubscribe,
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
@@ -22,6 +23,7 @@ type StreamRecord = {
   streamIds: Set<number>
   subscriptionId?: string
   cancelled: boolean
+  sent: boolean
 }
 
 type StreamManagerOptions = {
@@ -51,17 +53,21 @@ export class MobileRelayRpcStreams {
       listener,
       onBinaryFrame: subscribeOptions?.onBinaryFrame,
       streamIds: new Set(),
-      cancelled: false
+      cancelled: false,
+      sent: false
     }
     this.streams.set(id, stream)
     void this.options
       .waitForConnected()
       .then(() => {
-        if (!stream.cancelled) {
-          if (!this.options.sendFrame({ id, method, params: stream.params })) {
-            this.fail(id, stream, 'Connection interrupted')
-          }
+        if (stream.cancelled) {
+          return
         }
+        if (!this.options.sendFrame({ id, method, params: stream.params })) {
+          this.fail(id, stream, 'Connection interrupted')
+          return
+        }
+        stream.sent = true
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : 'Connection interrupted'
@@ -136,6 +142,10 @@ export class MobileRelayRpcStreams {
       return
     }
     stream.cancelled = true
+    if (!stream.sent) {
+      this.remove(id)
+      return
+    }
     if (stream.method === 'terminal.subscribe') {
       const params = buildTerminalUnsubscribeParams(stream.params)
       if (params) {
@@ -145,12 +155,17 @@ export class MobileRelayRpcStreams {
           params
         })
       }
-    } else if (stream.subscriptionId) {
-      this.options.sendFrame({
-        id: this.options.nextId(),
-        method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
-        params: { subscriptionId: stream.subscriptionId }
-      })
+    } else {
+      const unsubscribe = buildStreamUnsubscribe(stream.method, stream.params, id)
+      if (unsubscribe) {
+        this.options.sendFrame({ id: this.options.nextId(), ...unsubscribe })
+      } else if (stream.subscriptionId) {
+        this.options.sendFrame({
+          id: this.options.nextId(),
+          method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
+          params: { subscriptionId: stream.subscriptionId }
+        })
+      }
     }
     this.remove(id)
   }

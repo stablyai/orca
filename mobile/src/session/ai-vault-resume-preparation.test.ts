@@ -91,6 +91,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
       'aiVault.prepareSessionResume',
       {
         agent: 'codex',
+        sessionId: legacy.sessionId,
         filePath: legacy.filePath,
         codexHome: LEGACY_CODEX_HOME,
         executionHostId: 'local'
@@ -151,6 +152,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
       'aiVault.prepareSessionResume',
       {
         agent: 'codex',
+        sessionId: current.sessionId,
         filePath: current.filePath,
         codexHome: PER_ACCOUNT_HOME,
         executionHostId: 'local'

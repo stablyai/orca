@@ -88,6 +88,14 @@ export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
+// Why: structured sessions are journal-backed, not PTY-backed, so a client that
+// cannot read them must not see them at all — it would render an agent tab it
+// can neither display nor drive. The host also refuses every agentSession.*
+// method from a connection that does not advertise this.
+export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: the first structured mobile client hardcoded Codex rendering, so hosts may publish Claude tabs only after this narrower capability is negotiated.
+export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
+  'agent-session.structured.claude.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -126,6 +134,8 @@ export const RUNTIME_CAPABILITIES = [
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY

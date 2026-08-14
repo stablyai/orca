@@ -49,6 +49,15 @@ export const styles = StyleSheet.create({
   reasoning: {
     opacity: 0.7
   },
+  queued: {
+    opacity: 0.55
+  },
+  queuedTag: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 2
+  },
   toolRun: {
     marginTop: spacing.xs
   },
@@ -107,6 +116,31 @@ export const styles = StyleSheet.create({
   toolPreviewLink: {
     color: colors.accentBlue,
     textDecorationLine: 'underline'
+  },
+  providerFrameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 3
+  },
+  providerFrameProvider: {
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: MONO_SIZE,
+    fontWeight: '600'
+  },
+  providerFrameKind: {
+    flex: 1,
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily,
+    fontSize: MONO_SIZE
+  },
+  providerFrameDetail: {
+    maxHeight: 240,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgPanel,
+    padding: spacing.md,
+    marginTop: spacing.xs
   },
   toolDetail: {
     paddingLeft: spacing.lg,

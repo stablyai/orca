@@ -31,6 +31,17 @@ export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 export type NativeChatTextBlock = {
   type: 'text'
   text: string
+  /** Optional structured detail for an otherwise ordinary fallback line. */
+  providerFrame?: {
+    provider: string
+    kind: string
+    payload: {
+      head: string
+      byteLength: number
+      digest: string
+      truncated: boolean
+    }
+  }
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool

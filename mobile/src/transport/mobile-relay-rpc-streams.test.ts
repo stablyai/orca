@@ -12,6 +12,26 @@ function rpcFailure(id: string): RpcFailure {
 }
 
 describe('MobileRelayRpcStreams failure parity', () => {
+  it('unsubscribes an agent session without waiting for nonexistent ready metadata', async () => {
+    let nextId = 0
+    const sendFrame = vi.fn(() => true)
+    const streams = new MobileRelayRpcStreams({
+      nextId: () => `stream-${++nextId}`,
+      sendFrame,
+      waitForConnected: async () => {}
+    })
+    const cancel = streams.subscribe('agentSession.subscribe', { sessionId: 'session-a' }, vi.fn())
+    await Promise.resolve()
+
+    cancel()
+
+    expect(sendFrame).toHaveBeenLastCalledWith({
+      id: 'stream-2',
+      method: 'agentSession.unsubscribe',
+      params: { sessionId: 'session-a', subscriptionId: 'stream-1' }
+    })
+  })
+
   it('emits an RPC failure exactly once before removing the stream', async () => {
     const listener = vi.fn()
     const sendFrame = vi.fn(() => true)

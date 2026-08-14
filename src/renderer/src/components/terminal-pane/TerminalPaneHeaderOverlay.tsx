@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
+import { StructuredAgentSessionTerminalReturnButton } from './StructuredAgentSessionTerminalReturnButton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
@@ -50,6 +51,8 @@ type TerminalPaneHeaderOverlayProps = {
   isChatViewMode?: boolean
   /** Flip the active pane between the terminal and the native chat view. */
   onToggleNativeChat?: () => void
+  canReturnStructuredSession?: boolean
+  onReturnStructuredSession?: () => void
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
@@ -88,6 +91,8 @@ export default function TerminalPaneHeaderOverlay({
   canToggleNativeChat,
   isChatViewMode,
   onToggleNativeChat,
+  canReturnStructuredSession,
+  onReturnStructuredSession,
   canContinueAgentSessionInNewSession,
   onContinueAgentSessionInNewSession,
   onSplitPane,
@@ -244,6 +249,10 @@ export default function TerminalPaneHeaderOverlay({
                   </button>
                 ) : null}
                 <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+                  <StructuredAgentSessionTerminalReturnButton
+                    enabled={Boolean(canReturnStructuredSession && isActivePane)}
+                    onReturn={onReturnStructuredSession}
+                  />
                   {canContinueAgentSessionInNewSession && isActivePane ? (
                     <Tooltip>
                       <TooltipTrigger asChild>

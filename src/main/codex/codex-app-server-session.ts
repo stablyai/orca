@@ -91,8 +91,17 @@ export function killCodexAppServerProcessTree(
   child.kill('SIGKILL')
 }
 
-function isMethodNotFoundError(error: { code?: number; message?: string }): boolean {
-  return error.code === JSON_RPC_METHOD_NOT_FOUND || /method not found/i.test(error.message ?? '')
+/** Codex answering "no such method" is the only response that proves the RPC
+ *  surface is absent rather than temporarily failing. */
+export function isCodexMethodNotFoundError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  return (
+    code === JSON_RPC_METHOD_NOT_FOUND ||
+    /method not found/i.test(typeof message === 'string' ? message : '')
+  )
 }
 
 /**
@@ -250,7 +259,7 @@ export async function runCodexAppServerSession<T>(
       }
     })
     if (response.error) {
-      if (isMethodNotFoundError(response.error)) {
+      if (isCodexMethodNotFoundError(response.error)) {
         throw new CodexAppServerUnsupportedError(
           `codex app-server does not support ${method}: ${response.error.message ?? 'method not found'}`
         )

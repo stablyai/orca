@@ -1,8 +1,9 @@
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { SearchableBrowserPage } from './browser-palette-search'
 
-type BrowserPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
 
 export type BuildSearchableBrowserPagesOptions = {
   worktrees: readonly Worktree[]

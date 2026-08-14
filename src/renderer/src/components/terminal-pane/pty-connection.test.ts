@@ -4078,6 +4078,34 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('settles a queued startup only after the pane binds its spawned PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-resume')
+    transportFactoryQueue.push(transport)
+    const onStartupBound = vi.fn()
+    const startup = {
+      command: "codex 'resume' 'codex-session-1'",
+      resumeProviderSession: { key: 'session_id', id: 'codex-session-1' } as const
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ startup, onStartupBound }) as never
+    )
+
+    expect(onStartupBound).not.toHaveBeenCalled()
+    expect(createdTransportOptions[0]).toMatchObject(startup)
+
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    onPtySpawn?.('pty-resume')
+    onPtySpawn?.('pty-resume')
+
+    expect(onStartupBound).toHaveBeenCalledTimes(1)
+  })
+
   it('seeds a working status for Command Code startup prompts after spawn', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const sshPtyId = toAppSshPtyId('ssh-a', 'pty-command-code')
@@ -8344,8 +8372,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('re-runs the resume command when a hibernated local session reattaches with no payload', async () => {
-    // Why: the daemon drops startup commands on reattach, so a passive hibernation record must replace a contentless adopted shell.
+  it('runs the resume command in an adopted shell when activating a sleeping agent', async () => {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
@@ -8356,29 +8383,19 @@ describe('connectPanePty', () => {
     try {
       const { connectPanePty } = await import('./pty-connection')
       const paneKey = makePaneKey('tab-1', LEAF_2)
-      let activePtyId: string | null = 'restored-session'
       const transport = createMockTransport('restored-session')
-      transport.getPtyId.mockImplementation(() => activePtyId)
-      transport.disconnect.mockImplementation(() => {
-        activePtyId = null
-      })
+      transport.getPtyId.mockReturnValue('restored-session')
       transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
         if (opts.sessionId) {
-          activePtyId = opts.sessionId
           return {
             id: opts.sessionId,
             isReattach: true,
-            snapshot: undefined,
+            snapshot: 'restored shell snapshot',
             replay: undefined,
             coldRestore: undefined
           }
         }
-        activePtyId = 'fresh-resume-pty'
-        const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
-          | ((ptyId: string) => void)
-          | undefined
-        onPtySpawn?.('fresh-resume-pty')
-        return 'fresh-resume-pty'
+        throw new Error('activation must resume in the adopted shell')
       })
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -8399,6 +8416,7 @@ describe('connectPanePty', () => {
             // Mirrors the user's scenario: a stopped/completed agent that hibernated.
             state: 'done',
             origin: 'worktree-sleep',
+            restoreOnTabOpenOnly: true,
             capturedAt: 1,
             updatedAt: 1
           }
@@ -8410,9 +8428,7 @@ describe('connectPanePty', () => {
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
-      vi.mocked(window.api.pty.declarePendingPaneSerializer)
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(2)
+      vi.mocked(window.api.pty.declarePendingPaneSerializer).mockResolvedValueOnce(1)
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(20)
@@ -8421,11 +8437,12 @@ describe('connectPanePty', () => {
       }
       await flushAsyncTicks(10)
 
-      expect(transport.disconnect).toHaveBeenCalledTimes(1)
-      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.disconnect).not.toHaveBeenCalled()
+      expect(transport.connect).toHaveBeenCalledTimes(1)
       expect(transport.connect).toHaveBeenNthCalledWith(
-        2,
+        1,
         expect.objectContaining({
+          sessionId: 'restored-session',
           command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
@@ -8433,13 +8450,14 @@ describe('connectPanePty', () => {
           })
         })
       )
-      // The dead session is not adopted as the pane's live PTY.
-      expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'restored-session')
-      expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
-      expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(2, 'restored-session')
-      expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-resume-pty')
+      expect(pane.terminal.paste).toHaveBeenCalledWith(
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
+      )
+      expect(transport.sendInput).toHaveBeenCalledWith('\r')
+      expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'restored-session')
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
-      expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(paneKey, 1)
+      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
+      expect(window.api.pty.settlePaneSerializer).toHaveBeenCalledWith(paneKey, 1)
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }

@@ -15,6 +15,11 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
+import {
+  agentSessionPtyWriteGate,
+  type AgentSessionPtyWriteAdmittance
+} from '../runtime/agent-session-pty-write-gate'
+import type { AgentSessionPtyWriteRefusal } from '../../shared/agent-session-pty-write-admission'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { toSshExecutionHostId } from '../../shared/execution-host'
@@ -5383,6 +5388,7 @@ export function registerPtyHandlers(
         }
         const response = {
           id: result.id,
+          ...(result.pid ? { pid: result.pid } : {}),
           ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
           ...(stablePaneOwner && (stablePaneOwner.handle || args.preAllocatedHandle)
             ? {
@@ -5427,6 +5433,22 @@ export function registerPtyHandlers(
       }
     },
     write: (ptyId, data) => {
+      // Why: the backstop for every runtime write path — query replies, followups, deliveries —
+      // so a caller that forgets the typed gate still cannot reach a provider.
+      if (!admitAgentSessionPtyWrite(ptyId)) {
+        return false
+      }
+      try {
+        getProviderForPty(ptyId).write(ptyId, data)
+        return true
+      } catch {
+        return false
+      }
+    },
+    writeAgentSessionProof: (ptyId, data, authority) => {
+      if (!agentSessionPtyWriteGate.admitProof(ptyId, authority)) {
+        return false
+      }
       try {
         getProviderForPty(ptyId).write(ptyId, data)
         return true
@@ -7080,10 +7102,51 @@ export function registerPtyHandlers(
     mainWindow.webContents.send('pty:writeUnavailable', { id })
   }
 
+  // Why: a lease refusal is never a silent drop — it rides the existing write-unavailable channel
+  // with an additive field, so old renderers keep their current behavior and new ones can name the
+  // owner. See docs/reference/remote-wire-compatibility.md.
+  const reportAgentSessionWriteRefusal = (
+    id: string,
+    refusal: AgentSessionPtyWriteRefusal
+  ): void => {
+    if (
+      mainWindow.isDestroyed() ||
+      (typeof mainWindow.webContents.isDestroyed === 'function' &&
+        mainWindow.webContents.isDestroyed())
+    ) {
+      return
+    }
+    mainWindow.webContents.send('pty:writeUnavailable', { id, agentSessionRefusal: refusal })
+  }
+
+  /** Single lease check for every byte-entry point this module owns. */
+  const admitAgentSessionPtyWrite = (id: string): AgentSessionPtyWriteAdmittance | null => {
+    const admission = agentSessionPtyWriteGate.admit(id)
+    if (admission.admitted) {
+      return { sessionId: admission.sessionId, runtimeFence: admission.runtimeFence }
+    }
+    reportAgentSessionWriteRefusal(id, admission.refusal)
+    return null
+  }
+
+  /** Re-check after a yield: the lease can move to another owner between chunks. */
+  const readmitAgentSessionPtyWrite = (
+    id: string,
+    admitted: AgentSessionPtyWriteAdmittance
+  ): boolean => {
+    const admission = agentSessionPtyWriteGate.readmit(id, admitted)
+    if (admission.admitted) {
+      return true
+    }
+    reportAgentSessionWriteRefusal(id, admission.refusal)
+    return false
+  }
+
   const writePtyProviderInputWithinLimit = (
     provider: IPtyProvider,
     id: string,
-    data: string
+    data: string,
+    admitted: AgentSessionPtyWriteAdmittance
   ): boolean | Promise<boolean> => {
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
@@ -7096,21 +7159,27 @@ export function registerPtyHandlers(
       provider.write(id, first.value)
       return true
     }
-    return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value)
+    return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value, admitted)
   }
 
   const writePtyProviderInput = (
     provider: IPtyProvider,
     id: string,
-    data: string
+    data: string,
+    admitted: AgentSessionPtyWriteAdmittance
   ): boolean | Promise<boolean> => {
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
       if (typeof tooLarge === 'boolean') {
-        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data)
+        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data, admitted)
       }
       return tooLarge
-        .then((result) => (result ? false : writePtyProviderInputWithinLimit(provider, id, data)))
+        .then((result) => {
+          if (result || !readmitAgentSessionPtyWrite(id, admitted)) {
+            return false
+          }
+          return writePtyProviderInputWithinLimit(provider, id, data, admitted)
+        })
         .catch((error) => {
           reportUnavailablePtyWrite(id, error)
           return false
@@ -7126,12 +7195,18 @@ export function registerPtyHandlers(
     id: string,
     chunks: Iterator<string>,
     firstChunk: string,
-    secondChunk: string
+    secondChunk: string,
+    admitted: AgentSessionPtyWriteAdmittance
   ): Promise<boolean> => {
     try {
       let chunk: IteratorResult<string> = { done: false, value: firstChunk }
       let nextChunk: IteratorResult<string> = { done: false, value: secondChunk }
+      let first = true
       while (!chunk.done) {
+        if (!first && !readmitAgentSessionPtyWrite(id, admitted)) {
+          return false
+        }
+        first = false
         provider.write(id, chunk.value)
         if (!nextChunk.done) {
           await new Promise((resolve) => setTimeout(resolve, 0))
@@ -7181,6 +7256,10 @@ export function registerPtyHandlers(
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
+    const admitted = admitAgentSessionPtyWrite(args.id)
+    if (!admitted) {
+      return false
+    }
     const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
     if (!provider) {
       return false
@@ -7192,7 +7271,7 @@ export function registerPtyHandlers(
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writePtyProviderInput(provider, args.id, args.data, admitted)
     } catch {
       return false
     }
@@ -7200,6 +7279,10 @@ export function registerPtyHandlers(
 
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
+      return false
+    }
+    const admitted = admitAgentSessionPtyWrite(args.id)
+    if (!admitted) {
       return false
     }
     // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
@@ -7217,7 +7300,7 @@ export function registerPtyHandlers(
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writePtyProviderInput(provider, args.id, args.data, admitted)
     } catch {
       return false
     }

@@ -4,7 +4,12 @@ import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
-import type { Tab, TabContentType, TabGroup } from '../../../shared/tab-types'
+import type {
+  Tab,
+  TabContentType,
+  TabGroup,
+  WorkspaceVisibleTabType
+} from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import {
@@ -50,7 +55,7 @@ export type SearchableWorkspaceTab = {
 // secondary crowds the row. Keep these matchable so typing "terminal" still finds them.
 export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as const
 
-type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType
 
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]

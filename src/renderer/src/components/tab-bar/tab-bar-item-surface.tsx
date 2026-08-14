@@ -1,5 +1,7 @@
 import React from 'react'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OpenFile } from '../../store/slices/editor'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
@@ -46,6 +48,7 @@ export function renderTabBarItems({
     onActivateFile,
     onCloseFile,
     onActivateBrowserTab,
+    onActivateAgentSession,
     onCloseBrowserTab,
     onDuplicateBrowserTab,
     onCloseAllFiles,
@@ -192,6 +195,45 @@ export function renderTabBarItems({
           onCloseAll={() => onCloseAllFiles?.()}
           onMakePermanent={() => {}}
           onTogglePin={() => togglePinned(item)}
+          dragData={dragData}
+          dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+          includeTopTabBorder={includeTopTabBorder}
+        />
+      )
+    }
+    if (item.type === 'agent-session') {
+      const structuredTab: TerminalTab = {
+        id: item.id,
+        ptyId: null,
+        worktreeId,
+        title: item.data.label,
+        customTitle: item.data.customLabel,
+        color: item.data.color,
+        sortOrder: item.data.sortOrder,
+        createdAt: item.data.createdAt,
+        launchAgent: (item.data.agentSessionAgent ?? 'codex') as TuiAgent
+      }
+      return (
+        <SortableTab
+          key={item.id}
+          tab={structuredTab}
+          unifiedTabId={item.unifiedTabId}
+          groupId={resolvedGroupId}
+          tabCount={items.length}
+          hasTabsToRight={index < items.length - 1}
+          hasTabsToLeft={index > 0}
+          isActive={activeTabType === 'agent-session' && item.id === activeTabId}
+          isPinned={item.isPinned}
+          isExpanded={false}
+          onActivate={() => onActivateAgentSession?.(item.id)}
+          onClose={() => onClose(item.id)}
+          onCloseOthers={() => onCloseOthers(item.id)}
+          onCloseToRight={() => onCloseToRight(item.id)}
+          onCloseToLeft={() => onCloseToLeft(item.id)}
+          onSetCustomTitle={onSetCustomTitle}
+          onSetTabColor={onSetTabColor}
+          onTogglePin={() => togglePinned(item)}
+          onToggleExpand={() => {}}
           dragData={dragData}
           dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
           includeTopTabBorder={includeTopTabBorder}

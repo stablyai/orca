@@ -9,7 +9,9 @@ import type {
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -22,9 +24,12 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
 
 export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
+  const localSubscriptions = new Map<string, AbortController>()
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
   ipcMain.removeHandler('runtime:call')
+  ipcMain.removeHandler('runtime:subscribe')
+  ipcMain.removeAllListeners('runtime:unsubscribe')
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
@@ -47,14 +52,70 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       _event,
       args: { method: string; params?: unknown }
     ): Promise<RuntimeRpcResponse<unknown>> => {
-      return (await new RpcDispatcher({ runtime }).dispatch({
-        id: 'desktop-ipc',
-        authToken: 'desktop-ipc',
-        method: args.method,
-        params: args.params
-      })) as RuntimeRpcResponse<unknown>
+      return (await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
+        {
+          id: 'desktop-ipc',
+          authToken: 'desktop-ipc',
+          method: args.method,
+          params: args.params
+        },
+        {
+          clientId: 'desktop-renderer',
+          clientKind: 'runtime',
+          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+        }
+      )) as RuntimeRpcResponse<unknown>
     }
   )
+
+  ipcMain.handle(
+    'runtime:subscribe',
+    (
+      event,
+      args: { subscriptionId: string; method: string; params?: unknown }
+    ): { subscribed: boolean } => {
+      const previous = localSubscriptions.get(args.subscriptionId)
+      previous?.abort()
+      const controller = new AbortController()
+      localSubscriptions.set(args.subscriptionId, controller)
+      const channel = `runtime:subscription:${args.subscriptionId}`
+      const onSenderDestroyed = (): void => controller.abort()
+      const stop = (): void => {
+        event.sender.removeListener('destroyed', onSenderDestroyed)
+        if (localSubscriptions.get(args.subscriptionId) === controller) {
+          localSubscriptions.delete(args.subscriptionId)
+        }
+      }
+      event.sender.once('destroyed', onSenderDestroyed)
+      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
+        .dispatchStreaming(
+          {
+            id: args.subscriptionId,
+            authToken: 'desktop-ipc',
+            method: args.method,
+            params: args.params
+          },
+          (response) => {
+            if (!controller.signal.aborted && !event.sender.isDestroyed()) {
+              event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
+            }
+          },
+          {
+            signal: controller.signal,
+            clientId: 'desktop-renderer',
+            clientKind: 'runtime',
+            clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+          }
+        )
+        .finally(stop)
+      return { subscribed: true }
+    }
+  )
+
+  ipcMain.on('runtime:unsubscribe', (_event, args: { subscriptionId: string }) => {
+    localSubscriptions.get(args.subscriptionId)?.abort()
+    localSubscriptions.delete(args.subscriptionId)
+  })
 
   ipcMain.removeHandler('runtime:getTerminalFitOverrides')
   ipcMain.handle(

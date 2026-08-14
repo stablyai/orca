@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Settings as SettingsIcon } from 'lucide-react'
+import { MessageSquare, Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
@@ -15,6 +15,7 @@ import {
   filterEnabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
+import { useStructuredAgentSessionCreate } from '../native-chat/use-structured-agent-session-create'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -116,6 +117,7 @@ function QuickLaunchAgentMenuItemsInner({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
+  const structuredSession = useStructuredAgentSessionCreate(worktreeId)
 
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
@@ -200,22 +202,52 @@ function QuickLaunchAgentMenuItemsInner({
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
-          <DropdownMenuItem
-            key={agent}
-            onSelect={() => runLaunch(agent)}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            title={translate(
-              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
-              'Launch {{value0}} in a new terminal',
-              { value0: label }
-            )}
-          >
-            <AgentIcon agent={agent} size={14} />
-            <span className="flex-1">{label}</span>
-            {showsDefaultAgentShortcut ? (
-              <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
+          <React.Fragment key={agent}>
+            <DropdownMenuItem
+              onSelect={() => runLaunch(agent)}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+              title={translate(
+                'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+                'Launch {{value0}} in a new terminal',
+                { value0: label }
+              )}
+            >
+              <AgentIcon agent={agent} size={14} />
+              <span className="flex-1">{label}</span>
+              {showsDefaultAgentShortcut ? (
+                <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
+              ) : null}
+            </DropdownMenuItem>
+            {agent === 'codex' && structuredSession.supported ? (
+              <DropdownMenuItem
+                disabled={structuredSession.creating}
+                onSelect={() => {
+                  void structuredSession.create().catch((error) => {
+                    toast.error(
+                      translate(
+                        'auto.components.tab.bar.QuickLaunchButton.f378201fbd',
+                        'Could not create chat session'
+                      ),
+                      { description: error instanceof Error ? error.message : String(error) }
+                    )
+                  })
+                }}
+                className="gap-2 rounded-[7px] px-2 py-1.5 pl-6 text-[12px] leading-5 font-medium"
+                title={translate(
+                  'auto.components.tab.bar.QuickLaunchButton.a847779775',
+                  'Start Codex without a terminal'
+                )}
+              >
+                <MessageSquare className="size-3.5 text-muted-foreground" />
+                <span className="flex-1">
+                  {translate(
+                    'auto.components.tab.bar.QuickLaunchButton.0ea6a78efb',
+                    'Chat session'
+                  )}
+                </span>
+              </DropdownMenuItem>
             ) : null}
-          </DropdownMenuItem>
+          </React.Fragment>
         )
       })}
       <DropdownMenuItem

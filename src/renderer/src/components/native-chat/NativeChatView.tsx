@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
@@ -12,7 +11,6 @@ import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
-import { findTabAgentEntry } from './native-chat-tab-agent-entry'
 import {
   shouldClearNativeChatWorkingSuppression,
   shouldShowNativeChatWorking
@@ -46,16 +44,25 @@ import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
 } from './use-native-chat-context-menu'
-import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatResolvedViewProps, NativeChatViewProps } from './native-chat-view-types'
+import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
+import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
 /** Resolves an agent terminal into its native conversation and composer UI. */
-export default function NativeChatView({
+export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
+  if (props.mode === 'structured') {
+    return <NativeChatStructuredSession {...props} />
+  }
+  return <NativeChatBridgeView {...props} />
+}
+
+function NativeChatBridgeView({
   terminalTabId,
   isVisible,
   paneKey: preferredPaneKey,
@@ -65,20 +72,11 @@ export default function NativeChatView({
   onSwitchToTerminal,
   readTerminalScreen,
   contextMenuActions
-}: NativeChatViewProps): React.JSX.Element {
-  // Select only this tab's status entry (shallow-compared) so an unrelated
-  // pane's status tick doesn't re-render this view or re-run the resolution.
-  const agentStatusEntry = useAppStore(
-    useShallow((s) =>
-      preferredPaneKey
-        ? s.agentStatusByPaneKey[preferredPaneKey]
-        : findTabAgentEntry(s.agentStatusByPaneKey, terminalTabId)
-    )
+}: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
+  const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
+    terminalTabId,
+    preferredPaneKey
   )
-
-  // paneKey: prefer the live entry's key; fall back to the tab id so the hook
-  // still has a stable key to select live status by before any pane reports.
-  const paneKey = preferredPaneKey ?? agentStatusEntry?.paneKey ?? `${terminalTabId}:`
   return (
     <NativeChatSessionGate
       paneKey={paneKey}
@@ -166,9 +164,7 @@ function NativeChatResolvedView({
   // The question card's free-text row; keeps Paste working while the card
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
-  const fileLinkContext = useAppStore(
-    useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
-  )
+  const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
   const pasteClipboardIntoComposer = useNativeChatPasteBridge({
     rootRef,
     composerRef,
