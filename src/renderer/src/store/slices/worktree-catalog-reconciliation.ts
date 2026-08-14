@@ -30,12 +30,12 @@ function catalogValuesEqual(left: unknown, right: unknown): boolean {
   return true
 }
 
-// Rows sharing an id are scanned linearly, so an unbounded bucket would cost
-// O(k^2) deep compares. Reuse is only an optimization — a missed match yields a
-// new object identity, never a wrong row — so cap the scan rather than build a
-// second index that would have to stay in step with catalogValuesEqual.
-// Both callers key on ids that are unique by construction, making this a bound
-// on damage rather than a live path.
+// NOTHING HITS THIS TODAY: both callers key on ids that are unique by
+// construction, so buckets stay at 1-3. It only bounds the damage if that ever
+// changes — a same-id bucket costs one deep compare per candidate, so an
+// unbounded one is O(k^2). A cap beats a second index that would have to stay in
+// step with catalogValuesEqual, and reuse is only an optimization: dropping a
+// match past the window costs object identity, never correctness.
 const MAX_DUPLICATE_ID_SCAN = 8
 
 export function reuseEqualCatalogRows<T extends CatalogRow>(
