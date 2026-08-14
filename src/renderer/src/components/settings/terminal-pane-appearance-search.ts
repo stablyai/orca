@@ -1,4 +1,9 @@
 import { getTerminalClipboardSearchEntries } from './terminal-clipboard-search'
+import {
+  getTerminalLinkActionSearchKeywords,
+  getTerminalLinkActionsDescription,
+  getTerminalLinkActionsTitle
+} from './terminal-link-actions-copy'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -72,6 +77,13 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
       ...translateSearchKeyword('auto.components.settings.terminal.search.prompt', 'prompt'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.stop', 'stop')
     ]
+  },
+  {
+    title: getTerminalLinkActionsTitle(),
+    // Why: the index is platform-agnostic, so it pins the Mac chord; the keyword
+    // list already carries both 'cmd' and 'ctrl'.
+    description: getTerminalLinkActionsDescription({ isMac: true }),
+    keywords: getTerminalLinkActionSearchKeywords({ isMac: true })
   },
   {
     title: translate('auto.components.settings.terminal.search.c6178a2b4d', 'Focus Follows Mouse'),

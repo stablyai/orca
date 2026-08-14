@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import type { TerminalLinkActionRequest } from './terminal-link-action-request'
 
 const mocks = vi.hoisted(() => ({
@@ -263,9 +263,9 @@ describe('TerminalLinkActionPopover', () => {
 
     expect(onClose).toHaveBeenCalledOnce()
     expect(mocks.openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'browser',
+      pane: 'terminal',
       repoId: null,
-      sectionId: BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID
+      sectionId: TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID
     })
     expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
     expect(focusTerminal).not.toHaveBeenCalled()
