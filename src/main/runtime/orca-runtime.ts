@@ -993,6 +993,7 @@ import {
 import {
   getTerminalViewAttributes,
   getTerminalViewColorQueryReplyColors,
+  ptyMatchesViewAttributeScope,
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
@@ -3423,8 +3424,12 @@ export class OrcaRuntimeService {
     // cursor options for DECRQSS/DECRQM parity plus the per-PTY OSC color
     // override reset a theme apply implies (terminal-query-authority.md
     // §View-attribute bridge).
-    registerTerminalViewAttributesApplier((attributes) => {
-      for (const state of this.headlessTerminals.values()) {
+    registerTerminalViewAttributesApplier((attributes, scope) => {
+      for (const [ptyId, state] of this.headlessTerminals.entries()) {
+        const launchAgent = this.ptysById.get(ptyId)?.launchAgent ?? null
+        if (!ptyMatchesViewAttributeScope(launchAgent, scope.launchAgent)) {
+          continue
+        }
         state.emulator.applyPushedViewAttributes(attributes)
       }
     })
@@ -11628,8 +11633,10 @@ export class OrcaRuntimeService {
     }
     // Why the lazy getter: replies must use the freshest renderer push at
     // parse time, and stay silent (never default) before the first push.
-    emulator.installViewAttributeResponder(() => getTerminalViewAttributes())
-    const viewAttributes = getTerminalViewAttributes()
+    emulator.installViewAttributeResponder(() =>
+      getTerminalViewAttributes(this.ptysById.get(ptyId)?.launchAgent)
+    )
+    const viewAttributes = getTerminalViewAttributes(this.ptysById.get(ptyId)?.launchAgent)
     if (viewAttributes) {
       emulator.applyPushedViewAttributes(viewAttributes)
     }
@@ -25882,7 +25889,8 @@ export class OrcaRuntimeService {
           agentTeamsPlan?.env
         )
         const terminalColorQueryReplies =
-          launchOpts.terminalColorQueryReplies ?? getTerminalViewColorQueryReplyColors()
+          launchOpts.terminalColorQueryReplies ??
+          getTerminalViewColorQueryReplyColors(launchOpts.launchAgent)
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }

@@ -236,6 +236,116 @@ describe('resolveEffectiveTerminalAppearance', () => {
         sourceLabel: 'Warp'
       })
     )
+    expect(options.some((option) => option.group === 'inherit' || option.value === 'inherit')).toBe(
+      false
+    )
+  })
+
+  it('uses a Codex dark override when the third argument is set', () => {
+    const appearance = resolveEffectiveTerminalAppearance(
+      {
+        theme: 'dark',
+        terminalThemeDark: DEFAULT_TERMINAL_THEME_DARK,
+        terminalDividerColorDark: '#3f3f46',
+        terminalUseSeparateLightTheme: true,
+        terminalThemeLight: DEFAULT_TERMINAL_THEME_LIGHT,
+        terminalDividerColorLight: '#d4d4d8',
+        agentTerminalThemes: { codex: { dark: 'Tokyo Night' } }
+      },
+      true,
+      'codex'
+    )
+
+    expect(appearance.themeName).toBe('Tokyo Night')
+    expect(appearance.mode).toBe('dark')
+  })
+
+  it('uses the light agent slot when the light variant is active', () => {
+    const appearance = resolveEffectiveTerminalAppearance(
+      {
+        theme: 'light',
+        terminalThemeDark: DEFAULT_TERMINAL_THEME_DARK,
+        terminalDividerColorDark: '#3f3f46',
+        terminalUseSeparateLightTheme: true,
+        terminalThemeLight: DEFAULT_TERMINAL_THEME_LIGHT,
+        terminalDividerColorLight: '#d4d4d8',
+        agentTerminalThemes: { claude: { dark: 'Tokyo Night', light: 'Builtin Solarized Light' } }
+      },
+      false,
+      'claude'
+    )
+
+    expect(appearance.themeName).toBe('Builtin Solarized Light')
+    expect(appearance.mode).toBe('light')
+  })
+
+  it('uses the dark agent override in light app mode when Match dark mode is on', () => {
+    const appearance = resolveEffectiveTerminalAppearance(
+      {
+        theme: 'light',
+        terminalThemeDark: DEFAULT_TERMINAL_THEME_DARK,
+        terminalDividerColorDark: '#3f3f46',
+        terminalUseSeparateLightTheme: false,
+        terminalThemeLight: DEFAULT_TERMINAL_THEME_LIGHT,
+        terminalDividerColorLight: '#d4d4d8',
+        agentTerminalThemes: { grok: { dark: 'Tokyo Night', light: 'Builtin Solarized Light' } }
+      },
+      false,
+      'grok'
+    )
+
+    expect(appearance.themeName).toBe('Tokyo Night')
+    expect(appearance.mode).toBe('light')
+  })
+
+  it('resolves a custom: agent override by id', () => {
+    const appearance = resolveEffectiveTerminalAppearance(
+      {
+        theme: 'dark',
+        terminalThemeDark: DEFAULT_TERMINAL_THEME_DARK,
+        terminalDividerColorDark: '#3f3f46',
+        terminalUseSeparateLightTheme: true,
+        terminalThemeLight: DEFAULT_TERMINAL_THEME_LIGHT,
+        terminalDividerColorLight: '#d4d4d8',
+        agentTerminalThemes: { cursor: { dark: 'custom:warp:tokyo-night' } },
+        terminalCustomThemes: [
+          {
+            id: 'warp:tokyo-night',
+            name: 'Tokyo Night',
+            source: 'warp',
+            mode: 'dark',
+            terminal: {
+              background: '#1a1b26',
+              foreground: '#c0caf5',
+              black: '#15161e'
+            },
+            importedAt: '2026-06-05T00:00:00.000Z'
+          }
+        ]
+      },
+      true,
+      'cursor'
+    )
+
+    expect(appearance.themeName).toBe('custom:warp:tokyo-night')
+    expect(appearance.theme?.background).toBe('#1a1b26')
+  })
+
+  it('keeps the global theme when the third argument is omitted', () => {
+    const appearance = resolveEffectiveTerminalAppearance(
+      {
+        theme: 'dark',
+        terminalThemeDark: DEFAULT_TERMINAL_THEME_DARK,
+        terminalDividerColorDark: '#3f3f46',
+        terminalUseSeparateLightTheme: true,
+        terminalThemeLight: DEFAULT_TERMINAL_THEME_LIGHT,
+        terminalDividerColorLight: '#d4d4d8',
+        agentTerminalThemes: { codex: { dark: 'Tokyo Night' } }
+      },
+      true
+    )
+
+    expect(appearance.themeName).toBe(DEFAULT_TERMINAL_THEME_DARK)
   })
 })
 

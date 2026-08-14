@@ -151,7 +151,10 @@ describe('getTerminalPaneSearchEntries', () => {
     'Use Separate Theme In Light Mode',
     'import',
     'Warp',
-    'YAML'
+    'YAML',
+    'agent theme',
+    'inherit',
+    'codex'
   ])('matches terminal appearance search for %s', (query) => {
     expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
   })

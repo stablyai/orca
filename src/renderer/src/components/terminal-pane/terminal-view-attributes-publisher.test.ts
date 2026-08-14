@@ -185,9 +185,9 @@ describe('applyTerminalAppearance publication', () => {
       new Map()
     )
     expect(publish).toHaveBeenCalledTimes(1)
-    const attributes = publish.mock.calls[0][0] as TerminalViewAttributes
-    expect(attributes.ansi).toHaveLength(256)
-    expect(attributes.cursorStyle).toBe(settings.terminalCursorStyle)
+    const push = publish.mock.calls[0][0] as { global: TerminalViewAttributes }
+    expect(push.global.ansi).toHaveLength(256)
+    expect(push.global.cursorStyle).toBe(settings.terminalCursorStyle)
 
     // Attribute-neutral tweak (font size) must not re-push…
     applyTerminalAppearance(
@@ -242,7 +242,7 @@ describe('applyTerminalAppearance publication', () => {
     )
 
     const modes = publish.mock.calls.map(
-      (call) => (call[0] as TerminalViewAttributes).colorSchemeMode
+      (call) => (call[0] as { global: TerminalViewAttributes }).global.colorSchemeMode
     )
     expect(modes).toEqual(['dark', 'light'])
   })

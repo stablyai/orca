@@ -24,6 +24,12 @@ import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pan
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
+import {
+  capturePaneThemeAgent,
+  releasePaneThemeAgent
+} from './pane-theme-identity'
+import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { composeActiveTerminalTheme } from '../../../../shared/compose-active-terminal-theme'
 import { useAppStore } from '@/store'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
 import {
@@ -945,6 +951,10 @@ export function useTerminalPaneLifecycle({
     const manager = new PaneManager(container, {
       // `spawnHints.cwd` (from Split actions) lets the new PTY inherit the source pane's cwd — see docs/ssh-split-pane-inherit-cwd.md.
       onPaneCreated: (pane, spawnHints) => {
+        const createdTab = useAppStore.getState().tabsByWorktree[worktreeId]?.find(
+          (candidate) => candidate.id === tabId
+        )
+        capturePaneThemeAgent(pane.leafId, ptyDeps.startup, createdTab?.launchAgent)
         // OSC 52 — TUI-initiated clipboard writes (Zellij/tmux/nvim/fzf/ssh).
         // Why: read settingsRef at fire time so mid-session gate toggles apply; return true in both paths so xterm doesn't fall through.
         const osc52Disposable = pane.terminal.parser.registerOscHandler(
@@ -1382,6 +1392,14 @@ export function useTerminalPaneLifecycle({
           panePtyBindings.delete(paneId)
         }
         const leafId = closedPane?.leafId
+        if (
+          leafId &&
+          (closedPane?.reason === 'close' ||
+            closedPane?.reason === 'detach' ||
+            closedPane?.reason === undefined)
+        ) {
+          releasePaneThemeAgent(leafId)
+        }
         if (leafId && isRetiredSurface) {
           retireMountedTerminalPaneSurface({
             paneKey: makePaneKey(tabId, leafId),
@@ -1536,9 +1554,24 @@ export function useTerminalPaneLifecycle({
           buildWindowsPtyCompatibilityOptions(ptyBackendContext)
         // Why: local Windows ConPTY reads the Kitty advertisement but can't decode CSI-u, so withhold it to restore Enter/Up/Down nav (issue #2434); Grok keeps it.
         const keyboardProtocolOptions = buildTerminalKeyboardProtocolOptions(ptyBackendContext)
+        const seedAppearance = currentSettings
+          ? resolveEffectiveTerminalAppearance(
+              currentSettings,
+              systemPrefersDarkRef.current,
+              knownTuiAgent
+            )
+          : null
+        const seedTheme =
+          currentSettings && seedAppearance
+            ? composeActiveTerminalTheme(
+                seedAppearance.theme ?? getBuiltinTheme(seedAppearance.themeName),
+                currentSettings
+              )
+            : null
         return {
           ...windowsPtyCompatibilityOptions,
           ...keyboardProtocolOptions,
+          ...(seedTheme ? { theme: seedTheme } : {}),
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
           fontWeight: terminalFontWeights.fontWeight,

@@ -10,6 +10,7 @@ import {
   parseXColorSpec,
   terminalViewAttributesEqual,
   validateTerminalViewAttributes,
+  validateTerminalViewAttributesPush,
   type TerminalViewAttributes,
   type TerminalViewRgb
 } from './terminal-view-attributes'
@@ -115,5 +116,66 @@ describe('terminalViewAttributesEqual', () => {
     ['cursorBlink', { ...snapshot(), cursorBlink: false }]
   ])('detects a change in %s', (_label, changed) => {
     expect(terminalViewAttributesEqual(snapshot(), changed as TerminalViewAttributes)).toBe(false)
+  })
+})
+
+describe('validateTerminalViewAttributesPush', () => {
+  const validAttrs = (): TerminalViewAttributes => ({
+    foreground: [1, 2, 3],
+    background: [4, 5, 6],
+    cursor: [7, 8, 9],
+    ansi: Array.from({ length: 256 }, (_, i) => [i % 256, 0, 0] as TerminalViewRgb),
+    colorSchemeMode: 'dark',
+    cursorStyle: 'block',
+    cursorBlink: true
+  })
+
+  it('accepts a well-formed snapshot', () => {
+    const push = validateTerminalViewAttributesPush({
+      kind: 'snapshot',
+      global: validAttrs(),
+      byAgent: { codex: validAttrs() }
+    })
+    expect(push?.kind).toBe('snapshot')
+    expect(push?.byAgent.codex?.background).toEqual([4, 5, 6])
+  })
+
+  it('rejects an invalid kind without applying a partial payload', () => {
+    expect(
+      validateTerminalViewAttributesPush({
+        kind: 'delta',
+        global: validAttrs(),
+        byAgent: {}
+      })
+    ).toBeNull()
+  })
+
+  it('rejects a missing global', () => {
+    expect(
+      validateTerminalViewAttributesPush({
+        kind: 'snapshot',
+        byAgent: {}
+      })
+    ).toBeNull()
+  })
+
+  it('rejects an invalid agent key for the entire payload', () => {
+    expect(
+      validateTerminalViewAttributesPush({
+        kind: 'snapshot',
+        global: validAttrs(),
+        byAgent: { notAnAgent: validAttrs() }
+      })
+    ).toBeNull()
+  })
+
+  it('rejects a malformed agent value for the entire payload', () => {
+    expect(
+      validateTerminalViewAttributesPush({
+        kind: 'snapshot',
+        global: validAttrs(),
+        byAgent: { codex: { ...validAttrs(), foreground: [1, 2] } }
+      })
+    ).toBeNull()
   })
 })

@@ -13,8 +13,8 @@ import { translate } from '@/i18n/i18n'
 import type { TerminalThemeOption } from '@/lib/terminal-theme'
 
 type ThemePickerProps = {
-  label: string
-  description: string
+  label?: string
+  description?: string
   selectedTheme: string
   themeOptions: TerminalThemeOption[]
   query: string
@@ -59,6 +59,10 @@ export function ThemePicker({
     themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
   const groupedThemes = [
     {
+      label: translate('auto.components.settings.SettingsFormControls.inherit_themes', 'Inherit'),
+      themes: matchingThemes.filter((theme) => theme.group === 'inherit')
+    },
+    {
       label: translate('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
       themes: matchingThemes
         .filter((theme) => theme.group === 'built-in')
@@ -75,10 +79,12 @@ export function ThemePicker({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
+      {label || description ? (
+        <div className="space-y-1">
+          {label ? <Label>{label}</Label> : null}
+          {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+        </div>
+      ) : null}
       <Input
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}

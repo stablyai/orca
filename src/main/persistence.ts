@@ -244,6 +244,13 @@ import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_TEXT_ACTION_IDS
 } from '../shared/source-control-ai-actions'
+import { normalizeAgentTerminalThemes } from '../shared/agent-terminal-themes'
+import {
+  installTerminalViewAttributeNativeThemeSeeding,
+  readSystemPrefersDarkForSeed,
+  seedTerminalViewAttributesFromSettings,
+  settingsAffectTerminalViewAttributes
+} from './runtime/terminal-view-attributes-seed'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 import {
   DEFAULT_TUI_AGENT_ARGS,
@@ -2930,6 +2937,8 @@ export class Store {
       // Why: rewrite legacy pane:1 leaves so older renderer writes can't revive them; other migrations also set loadNeedsSave.
       this.scheduleSave()
     }
+    seedTerminalViewAttributesFromSettings(this.state.settings, readSystemPrefersDarkForSeed())
+    installTerminalViewAttributeNativeThemeSeeding(() => this.getSettings())
   }
 
   // Why: notes live top-level on disk so an older build's field-by-field
@@ -3572,6 +3581,9 @@ export class Store {
             ),
             terminalCustomThemes: normalizeTerminalCustomThemes(
               parsed.settings?.terminalCustomThemes
+            ),
+            agentTerminalThemes: normalizeAgentTerminalThemes(
+              parsed.settings?.agentTerminalThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
             mobilePairingCustomAddress,
@@ -5993,6 +6005,11 @@ export class Store {
         updates.terminalCustomThemes
       )
     }
+    if ('agentTerminalThemes' in updates) {
+      sanitizedUpdates.agentTerminalThemes = normalizeAgentTerminalThemes(
+        updates.agentTerminalThemes
+      )
+    }
     if ('terminalCursorStyle' in updates) {
       Object.assign(
         sanitizedUpdates,
@@ -6136,6 +6153,9 @@ export class Store {
     }
     if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
       this.notifySettingsChanged(changedUpdates, options.originWebContentsId)
+    }
+    if (settingsAffectTerminalViewAttributes(sanitizedUpdates)) {
+      seedTerminalViewAttributesFromSettings(this.state.settings, readSystemPrefersDarkForSeed())
     }
     return this.state.settings
   }

@@ -115,7 +115,7 @@ import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
 } from '../shared/pty-renderer-delivery-health'
-import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
+import type { TerminalViewAttributesPush } from '../shared/terminal-view-attributes'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../shared/terminal-render-desync-evidence'
 import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
 import type {
@@ -1070,8 +1070,8 @@ const api = {
       ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
     },
     /** Push composed terminal appearance so main's model responder can answer OSC 4/10/11/12 and DSR ?996n for hidden-gated PTYs with renderer-true values. */
-    publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
-      ipcRenderer.send('pty:terminalViewAttributes', attributes)
+    publishTerminalViewAttributes: (push: TerminalViewAttributesPush): void => {
+      ipcRenderer.send('pty:terminalViewAttributes', push)
     },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>

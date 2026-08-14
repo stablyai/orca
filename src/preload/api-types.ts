@@ -303,7 +303,7 @@ import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
 } from '../shared/pty-renderer-delivery-health'
-import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
+import type { TerminalViewAttributesPush } from '../shared/terminal-view-attributes'
 import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
 import type {
   WarpThemeImportPreview,
@@ -1553,9 +1553,8 @@ export type PreloadApi = {
     /** Ref-counted-on-the-renderer delivery-interest signal that suppresses
      *  the hidden-delivery gate while any raw-byte consumer is registered. */
     setPtyDeliveryInterest: (id: string, interested: boolean) => void
-    /** View-attribute bridge (Phase 5 slice 2): app-global composed terminal
-     *  appearance push backing main's hidden-PTY OSC/DSR color replies. */
-    publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
+    /** View-attribute bridge: atomic `{global, byAgent}` snapshot for hidden-PTY OSC replies. */
+    publishTerminalViewAttributes: (push: TerminalViewAttributesPush) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     inspectProcess: (id: string) => Promise<{

@@ -1,16 +1,22 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, afterEach } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   applyTerminalAppearance,
   hexToRgba,
   publishTerminalViewAttributesAtAppStart
 } from './terminal-appearance'
+import {
+  _resetPaneThemeIdentityForTest,
+  capturePaneThemeAgent,
+  getPaneThemeAgent
+} from './pane-theme-identity'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
 import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
 import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
-import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import type { TerminalViewAttributesPush } from '../../../../shared/terminal-view-attributes'
 
 function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   isConnected: () => boolean
@@ -140,10 +146,22 @@ describe('applyTerminalAppearance theme assignment', () => {
   // xterm rebuilds the palette on any new theme-object identity (wiping OSC color mutations), so the assignment must be value-gated.
   // Measurable by default: metric options (fontSize/fontFamily/…) only land on
   // panes that can measure; unmeasurable panes defer them until fit/reveal.
-  function makePane(id: number, overrides?: { measurable?: boolean }): ManagedPane {
+  const CODEX_LEAF = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+  const CLAUDE_LEAF = '22222222-2222-4222-8222-222222222222' as TerminalLeafId
+  const SHELL_LEAF = '33333333-3333-4333-8333-333333333333' as TerminalLeafId
+
+  afterEach(() => {
+    _resetPaneThemeIdentityForTest()
+  })
+
+  function makePane(
+    id: number,
+    overrides?: { measurable?: boolean; leafId?: TerminalLeafId }
+  ): ManagedPane {
     const measurable = overrides?.measurable ?? true
     return {
       id,
+      leafId: overrides?.leafId ?? (`00000000-0000-4000-8000-00000000000${id}` as TerminalLeafId),
       terminal: { options: {}, cols: 80, rows: 24 },
       container: {
         dataset: {},
@@ -360,26 +378,151 @@ describe('applyTerminalAppearance theme assignment', () => {
     // Latest wins, exactly one write: intermediate hidden values never touch xterm.
     expect(writes).toEqual([21])
   })
+
+  it('paints Codex and shell panes different themes from the lifetime map, not a stub resolver', () => {
+    const codexPane = makePane(1, { leafId: CODEX_LEAF })
+    const shellPane = makePane(2, { leafId: SHELL_LEAF })
+    capturePaneThemeAgent(CODEX_LEAF, { launchAgent: 'codex' }, 'codex')
+    capturePaneThemeAgent(SHELL_LEAF, null, 'codex')
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      agentTerminalThemes: { codex: { dark: 'Tokyo Night' } }
+    }
+    const manager = makeManager([codexPane, shellPane])
+    const themeWrites: { id: number; background?: string }[] = []
+    for (const pane of [codexPane, shellPane]) {
+      let stored: (typeof pane.terminal.options)['theme']
+      Object.defineProperty(pane.terminal.options, 'theme', {
+        configurable: true,
+        enumerable: true,
+        get: () => stored,
+        set: (value: (typeof pane.terminal.options)['theme']) => {
+          themeWrites.push({ id: pane.id, background: value?.background })
+          stored = value
+        }
+      })
+    }
+
+    applyTerminalAppearance(
+      manager,
+      settings,
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map(),
+      (pane) => getPaneThemeAgent(pane.leafId)
+    )
+
+    expect(getPaneThemeAgent(CODEX_LEAF)).toBe('codex')
+    expect(getPaneThemeAgent(SHELL_LEAF)).toBe(null)
+    const codexTheme = codexPane.terminal.options.theme
+    const shellTheme = shellPane.terminal.options.theme
+    expect(codexTheme?.background).not.toBe(shellTheme?.background)
+    expect(themeWrites.some((write) => write.id === 1)).toBe(true)
+    expect(themeWrites.some((write) => write.id === 2)).toBe(true)
+
+    applyTerminalAppearance(
+      manager,
+      settings,
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map(),
+      (pane) => getPaneThemeAgent(pane.leafId)
+    )
+    expect(themeWrites).toHaveLength(2)
+  })
+
+  it('keeps three captured palettes after an unrelated font/opacity tweak', () => {
+    const codexPane = makePane(1, { leafId: CODEX_LEAF })
+    const claudePane = makePane(2, { leafId: CLAUDE_LEAF })
+    const shellPane = makePane(3, { leafId: SHELL_LEAF })
+    capturePaneThemeAgent(CODEX_LEAF, { launchAgent: 'codex' })
+    capturePaneThemeAgent(CLAUDE_LEAF, { launchAgent: 'claude' })
+    capturePaneThemeAgent(SHELL_LEAF, null, 'codex')
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      agentTerminalThemes: {
+        codex: { dark: 'Tokyo Night' },
+        claude: { dark: 'Dracula' }
+      }
+    }
+    const manager = makeManager([codexPane, claudePane, shellPane])
+    applyTerminalAppearance(
+      manager,
+      settings,
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+    const first = [
+      codexPane.terminal.options.theme,
+      claudePane.terminal.options.theme,
+      shellPane.terminal.options.theme
+    ]
+    expect(new Set(first.map((theme) => theme?.background)).size).toBe(3)
+
+    applyTerminalAppearance(
+      manager,
+      { ...settings, terminalFontSize: settings.terminalFontSize + 1, terminalInactivePaneOpacity: 0.5 },
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+    expect(codexPane.terminal.options.theme).toBe(first[0])
+    expect(claudePane.terminal.options.theme).toBe(first[1])
+    expect(shellPane.terminal.options.theme).toBe(first[2])
+  })
 })
 
 describe('publishTerminalViewAttributesAtAppStart', () => {
   // Hidden-at-launch PTYs query OSC 10/11 before any pane mounts; publish with no pane manager (terminal-query-authority.md).
   it('publishes composed attributes without any pane mount and dedupes repeats', () => {
     _resetTerminalViewAttributesPublisherForTest()
-    const sent: TerminalViewAttributes[] = []
-    const send = (attributes: TerminalViewAttributes): boolean => {
-      sent.push(attributes)
+    const sent: TerminalViewAttributesPush[] = []
+    const send = (push: TerminalViewAttributesPush): boolean => {
+      sent.push(push)
       return true
     }
     const settings = getDefaultSettings('/tmp')
 
     expect(publishTerminalViewAttributesAtAppStart(settings, true, send)).toBe(true)
     expect(sent).toHaveLength(1)
-    expect(sent[0]!.ansi).toHaveLength(256)
-    expect(sent[0]!.cursorStyle).toBe(settings.terminalCursorStyle ?? 'block')
+    expect(sent[0]!.kind).toBe('snapshot')
+    expect(sent[0]!.global.ansi).toHaveLength(256)
+    expect(sent[0]!.global.cursorStyle).toBe(settings.terminalCursorStyle ?? 'block')
 
     expect(publishTerminalViewAttributesAtAppStart(settings, true, send)).toBe(false)
     expect(sent).toHaveLength(1)
+  })
+
+  it('publishes one snapshot that includes global plus Codex byAgent', () => {
+    _resetTerminalViewAttributesPublisherForTest()
+    const sent: TerminalViewAttributesPush[] = []
+    const send = (push: TerminalViewAttributesPush): boolean => {
+      sent.push(push)
+      return true
+    }
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      agentTerminalThemes: { codex: { dark: 'Dracula' } }
+    }
+
+    expect(publishTerminalViewAttributesAtAppStart(settings, true, send)).toBe(true)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]!.kind).toBe('snapshot')
+    expect(sent[0]!.byAgent.codex).toBeDefined()
+    expect(sent[0]!.global.background).not.toEqual(sent[0]!.byAgent.codex?.background)
   })
 
   it('makes the later pane-mount applyTerminalAppearance a deduped no-op re-push', () => {

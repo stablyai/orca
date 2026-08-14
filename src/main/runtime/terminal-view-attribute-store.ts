@@ -1,28 +1,27 @@
 /**
- * Phase 5 slice 2 (View-attribute bridge): main-side cache of the renderer's
- * `pty:terminalViewAttributes`
- * push. One app-global snapshot, not per-PTY — per-pane font zoom never
- * affects these attributes and the color/cursor settings are global.
- *
- * Null until the first push, and the responder answers NO view-attribute
- * query while null (silent-until-first-push): a fabricated default would
- * resurrect the default-black OSC-11 bug. Staleness is bounded by one IPC
- * hop; subscribed TUIs are corrected by the renderer-owned 2031/997 flip.
+ * Main-side cache of the atomic `{global, byAgent}` view-attribute snapshot.
+ * Fan-out is effective-diff only so a no-op inherit never clears live OSC overlays.
  */
 import {
   terminalViewAttributesEqual,
   type TerminalViewAttributes
 } from '../../shared/terminal-view-attributes'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import type { TuiAgent } from '../../shared/types'
 
-// Why module state (pattern of pty-hidden-delivery-gate.ts): pty.ts receives
-// the push, the runtime emulators consult it at reply time via the getter.
-let currentAttributes: TerminalViewAttributes | null = null
+export type TerminalViewAttributesSnapshotState = {
+  global: TerminalViewAttributes
+  byAgent: Partial<Record<TuiAgent, TerminalViewAttributes>>
+}
 
-// Why appliers (pattern of registerConptyDa1OverrideInstaller): each push
-// must also reach already-live emulators — cursor options under the replay
-// guard, plus the per-PTY override reset a theme apply implies.
-type TerminalViewAttributesApplier = (attributes: TerminalViewAttributes) => void
+export type TerminalViewAttributesApplier = (
+  attributes: TerminalViewAttributes,
+  scope: { launchAgent: TuiAgent | null }
+) => void
+
+let currentSnapshot: TerminalViewAttributesSnapshotState | null = null
+let rendererCommittedSnapshot = false
 const pushAppliers = new Set<TerminalViewAttributesApplier>()
 
 export function registerTerminalViewAttributesApplier(
@@ -31,42 +30,115 @@ export function registerTerminalViewAttributesApplier(
   pushAppliers.add(applier)
 }
 
-/** Called from the pty:terminalViewAttributes IPC handler with a validated
- *  payload. Last push wins (replies always use the freshest snapshot). */
-export function setTerminalViewAttributes(attributes: TerminalViewAttributes): void {
-  // Why idempotent: the renderer publisher's dedupe is per-process, so a
-  // fresh renderer (second window, reload, macOS re-activation) re-pushes
-  // identical attributes. That is not a theme apply — fanning out would wipe
-  // every PTY's OSC SET overlay while visible panes keep theirs.
-  if (currentAttributes && terminalViewAttributesEqual(currentAttributes, attributes)) {
-    return
+export function effectiveTerminalViewAttributes(
+  snapshot: TerminalViewAttributesSnapshotState | null,
+  launchAgent?: TuiAgent | null
+): TerminalViewAttributes | null {
+  if (!snapshot) {
+    return null
   }
-  currentAttributes = attributes
-  for (const applier of pushAppliers) {
-    applier(attributes)
+  if (launchAgent && snapshot.byAgent[launchAgent]) {
+    return snapshot.byAgent[launchAgent] ?? snapshot.global
+  }
+  return snapshot.global
+}
+
+function collectEffectiveScopes(
+  previous: TerminalViewAttributesSnapshotState | null,
+  next: TerminalViewAttributesSnapshotState
+): Set<TuiAgent | null> {
+  const scopes = new Set<TuiAgent | null>([null])
+  for (const key of Object.keys(previous?.byAgent ?? {})) {
+    if (isTuiAgent(key)) {
+      scopes.add(key)
+    }
+  }
+  for (const key of Object.keys(next.byAgent)) {
+    if (isTuiAgent(key)) {
+      scopes.add(key)
+    }
+  }
+  return scopes
+}
+
+export function commitTerminalViewAttributesSnapshot(snapshot: {
+  global: TerminalViewAttributes
+  byAgent: Partial<Record<TuiAgent, TerminalViewAttributes>>
+}): void {
+  const next: TerminalViewAttributesSnapshotState = {
+    global: snapshot.global,
+    byAgent: { ...snapshot.byAgent }
+  }
+  const previous = currentSnapshot
+  currentSnapshot = next
+  for (const scope of collectEffectiveScopes(previous, next)) {
+    const oldEffective = effectiveTerminalViewAttributes(previous, scope)
+    const newEffective = effectiveTerminalViewAttributes(next, scope)
+    if (!newEffective) {
+      continue
+    }
+    if (oldEffective && terminalViewAttributesEqual(oldEffective, newEffective)) {
+      continue
+    }
+    for (const applier of pushAppliers) {
+      applier(newEffective, { launchAgent: scope })
+    }
   }
 }
 
-export function getTerminalViewAttributes(): TerminalViewAttributes | null {
-  return currentAttributes
+/** Compat for tests that still push a single global palette. */
+export function setTerminalViewAttributes(attributes: TerminalViewAttributes): void {
+  commitTerminalViewAttributesSnapshot({ global: attributes, byAgent: {} })
+}
+
+export function getTerminalViewAttributes(
+  launchAgent?: TuiAgent | null
+): TerminalViewAttributes | null {
+  return effectiveTerminalViewAttributes(currentSnapshot, launchAgent)
+}
+
+export function hasExplicitAgentViewAttributes(agent: TuiAgent): boolean {
+  return currentSnapshot?.byAgent[agent] != null
 }
 
 function rgbToCssHex(rgb: readonly [number, number, number]): string {
   return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
 }
 
-export function getTerminalViewColorQueryReplyColors(): TerminalOscColorQueryReplyColors | null {
-  if (!currentAttributes) {
+export function getTerminalViewColorQueryReplyColors(
+  launchAgent?: TuiAgent | null
+): TerminalOscColorQueryReplyColors | null {
+  const attributes = getTerminalViewAttributes(launchAgent)
+  if (!attributes) {
     return null
   }
   return {
-    foreground: rgbToCssHex(currentAttributes.foreground),
-    background: rgbToCssHex(currentAttributes.background)
+    foreground: rgbToCssHex(attributes.foreground),
+    background: rgbToCssHex(attributes.background)
   }
 }
 
-/** Test seam: reset module state between tests. */
+export function hasRendererCommittedSnapshot(): boolean {
+  return rendererCommittedSnapshot
+}
+
+export function markRendererCommittedSnapshot(): void {
+  rendererCommittedSnapshot = true
+}
+
+export function ptyMatchesViewAttributeScope(
+  ptyLaunchAgent: TuiAgent | null | undefined,
+  scopeLaunchAgent: TuiAgent | null
+): boolean {
+  const agent = ptyLaunchAgent ?? null
+  if (agent === scopeLaunchAgent) {
+    return true
+  }
+  return scopeLaunchAgent === null && agent !== null && !hasExplicitAgentViewAttributes(agent)
+}
+
 export function _resetTerminalViewAttributesForTest(): void {
-  currentAttributes = null
+  currentSnapshot = null
+  rendererCommittedSnapshot = false
   pushAppliers.clear()
 }
