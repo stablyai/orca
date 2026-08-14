@@ -166,7 +166,8 @@
   --secondary: #f5f5f5;
   --secondary-foreground: #171717;
   --muted: #f2f1ec;
-  --muted-foreground: #737373;
+  /* Darkened from #737373 so muted text clears 4.5:1 on the cream --muted surface. */
+  --muted-foreground: #6b6b6b;
   --accent: #f5f5f5;
   --accent-foreground: #171717;
   --destructive: #e40014;

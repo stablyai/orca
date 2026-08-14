@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   LIGHT_CONTENT_SURFACE_HEX,
@@ -35,13 +36,14 @@ describe('light surface tokens', () => {
     )
   })
 
-  it('keeps muted text legible on cream and the most-recessed surface (UI/secondary >= 3)', () => {
+  it('keeps muted text at AA body contrast (>= 4.5) on the cream and most-recessed surfaces', () => {
+    // Regression guard for the --muted / --muted-foreground pair (PR review #14410).
     expect(
       contrastRatio(LIGHT_MUTED_FOREGROUND_HEX, LIGHT_CONTENT_SURFACE_HEX)
-    ).toBeGreaterThanOrEqual(3)
+    ).toBeGreaterThanOrEqual(4.5)
     expect(
       contrastRatio(LIGHT_MUTED_FOREGROUND_HEX, LIGHT_SURFACE_LADDER.muted)
-    ).toBeGreaterThanOrEqual(3)
+    ).toBeGreaterThanOrEqual(4.5)
   })
 
   it('forms a monotonic white->cream ladder (each step no lighter than the last)', () => {
@@ -55,5 +57,30 @@ describe('light surface tokens', () => {
     for (let i = 1; i < order.length; i++) {
       expect(relLuminance(order[i])).toBeLessThan(relLuminance(order[i - 1]))
     }
+  })
+})
+
+describe('main.css mirrors the light token registry', () => {
+  // The TS constants above can drift from the stylesheet (CSS can't import them),
+  // so assert the first :root {} block (default light mode) uses the same values.
+  const css = readFileSync(new URL('../assets/main.css', import.meta.url), 'utf8')
+  const rootStart = css.indexOf(':root {')
+  const rootBlock = css.slice(rootStart, css.indexOf('}', rootStart))
+
+  const tokenValue = (name: string): string | null => {
+    const match = rootBlock.match(new RegExp(`(?:^|\\n)\\s*--${name}:\\s*([^;]+);`))
+    return match ? match[1].trim() : null
+  }
+
+  it.each([
+    ['background', LIGHT_SURFACE_LADDER.background],
+    ['card', LIGHT_SURFACE_LADDER.card],
+    ['popover', LIGHT_SURFACE_LADDER.card],
+    ['sidebar', LIGHT_SURFACE_LADDER.sidebar],
+    ['editor-surface', LIGHT_SURFACE_LADDER.content],
+    ['muted', LIGHT_SURFACE_LADDER.muted],
+    ['muted-foreground', LIGHT_MUTED_FOREGROUND_HEX]
+  ])('--%s in main.css matches the registry', (name, expected) => {
+    expect(tokenValue(name)).toBe(expected)
   })
 })

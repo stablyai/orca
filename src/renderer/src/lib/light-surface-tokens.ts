@@ -8,7 +8,7 @@ export const LIGHT_CONTENT_SURFACE_HEX = '#f6f4ef'
 
 /** Existing light-mode foreground token values, referenced for contrast tests. */
 export const LIGHT_FOREGROUND_HEX = '#0a0a0a'
-export const LIGHT_MUTED_FOREGROUND_HEX = '#737373'
+export const LIGHT_MUTED_FOREGROUND_HEX = '#6b6b6b'
 
 /** The full light surface ladder, whitest (chrome) -> most recessed. */
 export const LIGHT_SURFACE_LADDER = {
