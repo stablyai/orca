@@ -96,6 +96,8 @@ describe('non-agent pane OSC 10/11 reply echo leak on POSIX', () => {
     ingress.drainAndClose()
 
     expect(emitted.join('')).not.toMatch(LEAKED_COLOR_REPLY_TEXT)
+    // Guard against ingress dropping the whole chunk: prompt must remain visible.
+    expect(emitted.join('')).toContain('❭ ')
   })
 
   it('without ingress, the renderer reply echo leaks as visible text (baseline)', () => {
