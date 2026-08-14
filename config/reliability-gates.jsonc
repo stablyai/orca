@@ -1269,6 +1269,7 @@
       "oracle": "Unit tests coalesce early activation, preserve daemon and SSH identity, and reproduce the update race with a staged target, old serving child, persistent CLI parent, atomic .app replacement, and replacement readiness message. They assert the parent does not exit for launchd to respawn the old app, the native updater does not launch an interactive GUI, the replacement version is verified before handoff completion, mismatches become durable failures without retries, and unsupported/preflight-failed installs do not invoke native quit or PTY cleanup. A joined lock-owner/activation/hydration contract asserts that a forced relaunch opens exactly one window and that the renderer promoted inside the serve process launches zero agent resumes, creates no replacement tab or startup command, and leaves every surviving session record untouched. The Electron journey independently verifies headless promotion retains owner/runtime/daemon/PTY identity and terminal I/O.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-crash-supervisor.test.ts src/cli/runtime/serve-linux-supervision-startup.test.ts src/cli/runtime/serve-recovery-oracle.test.ts src/cli/runtime/serve-runtime-health.test.ts src/cli/runtime/serve-singleton-quarantine.test.ts src/cli/runtime/serve-singleton-recovery.test.ts src/cli/runtime/serve-temp-directory.test.ts src/main/startup/single-instance-lock-exit.electron.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/serve-desktop-promotion-session-continuity.test.ts",
         "pnpm exec electron-vite build --mode e2e",
@@ -1278,6 +1279,14 @@
         "src/main/updater.headless-serve-install.test.ts",
         "src/main/serve-update-handoff.test.ts",
         "src/cli/runtime/launch.test.ts",
+        "src/cli/runtime/serve-crash-supervisor.test.ts",
+        "src/cli/runtime/serve-linux-supervision-startup.test.ts",
+        "src/cli/runtime/serve-recovery-oracle.test.ts",
+        "src/cli/runtime/serve-runtime-health.test.ts",
+        "src/cli/runtime/serve-singleton-quarantine.test.ts",
+        "src/cli/runtime/serve-singleton-recovery.test.ts",
+        "src/cli/runtime/serve-temp-directory.test.ts",
+        "src/main/startup/single-instance-lock-exit.electron.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
         "src/main/startup/serve-desktop-activation-wiring.test.ts",
         "src/main/startup/single-instance-lock.test.ts",
@@ -1308,6 +1317,32 @@
             "an atomic app-bundle replacement starts one target-version serve child with the original arguments",
             "handoff completes only after the replacement reports target-version runtime readiness",
             "a replacement version mismatch or readiness timeout is persisted and exits without an in-process retry loop"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serve-crash-supervisor.test.ts",
+          "assertions": [
+            "unexpected main exit and failed runtime health restart within a bounded budget while the supervisor remains alive",
+            "stale singleton recovery retries once, cleans exact quarantine after verified readiness, and preserves the main teardown budget"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serve-singleton-quarantine.test.ts",
+          "assertions": [
+            "a fresh supervisor reconstructs and removes dead recovery artifacts while preserving live and malformed suffixes"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serve-singleton-recovery.test.ts",
+          "assertions": [
+            "live, ambiguous, changed, and remote owners remain untouched while concurrent stale-owner recovery has one winner",
+            "verified recovery removes only exact quarantine and the owned Chromium scoped socket directory"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serve-recovery-oracle.test.ts",
+          "assertions": [
+            "the foreground supervisor survives and replaces an unexpectedly exited main process"
           ]
         },
         {

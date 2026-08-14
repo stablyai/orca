@@ -71,6 +71,10 @@ import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtime/orca-runtime'
 import { ArtifactCloudService } from './artifacts/artifact-cloud-service'
 import { isArtifactSharingEnabled } from '../shared/artifact-sharing-gate'
+import {
+  SERVE_SUPERVISOR_STOP_EXIT_CODE,
+  SERVE_TEMP_DIRECTORY_ENV
+} from '../shared/serve-supervision'
 import { loadAgentSessionClaimSigner } from './runtime/agent-session-claim-identity'
 import {
   fingerprintOrchestrationPeer,
@@ -664,6 +668,26 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
+if (isServeMode) {
+  const configuredTempDirectory = process.env[SERVE_TEMP_DIRECTORY_ENV]
+  let configuredTempDirectoryValid = false
+  if (configuredTempDirectory && isAbsolute(configuredTempDirectory)) {
+    try {
+      configuredTempDirectoryValid =
+        existsSync(configuredTempDirectory) && statSync(configuredTempDirectory).isDirectory()
+    } catch {
+      configuredTempDirectoryValid = false
+    }
+  }
+  if (configuredTempDirectory && configuredTempDirectoryValid) {
+    app.setPath('temp', configuredTempDirectory)
+  } else if (configuredTempDirectory) {
+    console.error(
+      `[serve] ${SERVE_TEMP_DIRECTORY_ENV} must name an existing absolute directory: ${configuredTempDirectory}`
+    )
+    app.exit(SERVE_SUPERVISOR_STOP_EXIT_CODE)
+  }
+}
 installServeSupervisorDisconnectQuit(isServeMode)
 
 // Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.
@@ -1933,7 +1957,11 @@ async function printServeReady(options: ServeOptions): Promise<void> {
       ? { mode: 'recipe-json', projectRoot: options.projectRoot! }
       : { mode: options.json ? 'json' : 'human' }
   )
-  notifyServeSupervisorReady(runtime.getRuntimeId())
+  notifyServeSupervisorReady(runtime.getRuntimeId(), {
+    websocket: boundEndpoint ? 'ready' : 'unavailable',
+    runtime: 'ready',
+    graph: runtime.getStatus().graphStatus
+  })
 }
 
 function installServeSignalHandlers(): void {

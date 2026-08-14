@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import type { ServeSupervisorHealth } from './serve-supervision'
 
 export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'ORCA_SERVE_UPDATE_HANDOFF_PATH'
 export const SERVE_UPDATE_HANDOFF_FILE = 'serve-update-handoff.json'
@@ -32,6 +33,7 @@ export type ServeSupervisorMessage = {
   type: 'orca:serve-ready'
   version: string
   runtimeId: string
+  health?: ServeSupervisorHealth
 }
 
 export function getServeUpdateHandoffPath(userDataPath: string): string {
@@ -71,9 +73,25 @@ export function parseServeSupervisorMessage(value: unknown): ServeSupervisorMess
     typeof message.version !== 'string' ||
     message.version.length === 0 ||
     typeof message.runtimeId !== 'string' ||
-    message.runtimeId.length === 0
+    message.runtimeId.length === 0 ||
+    !isServeSupervisorHealth(message.health)
   ) {
     return null
   }
   return message as ServeSupervisorMessage
+}
+
+function isServeSupervisorHealth(value: unknown): boolean {
+  if (value === undefined) {
+    return true
+  }
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const health = value as Record<string, unknown>
+  return (
+    (health.websocket === 'ready' || health.websocket === 'unavailable') &&
+    (health.runtime === 'ready' || health.runtime === 'unavailable') &&
+    (health.graph === 'ready' || health.graph === 'reloading' || health.graph === 'unavailable')
+  )
 }

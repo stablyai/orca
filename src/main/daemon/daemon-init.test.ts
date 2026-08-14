@@ -575,6 +575,25 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
   })
 
+  it('disconnects a restarting main process without killing daemon PTY sessions', async () => {
+    const mod = await importFresh()
+    defaultListSessionsSessions.push(
+      { sessionId: 'pty-a' },
+      { sessionId: 'pty-b' },
+      { sessionId: 'pty-c' },
+      { sessionId: 'pty-d' },
+      { sessionId: 'pty-e' }
+    )
+    await mod.initDaemonPtyProvider()
+
+    await mod.disconnectDaemon()
+
+    expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
+    expect(adapterInstances[0].dispose).not.toHaveBeenCalled()
+    expect(spawnerInstances[0].shutdown).not.toHaveBeenCalled()
+    expect(defaultListSessionsSessions).toHaveLength(5)
+  })
+
   it('uses daemon-owned idle retirement when a fresh launch fails permanent adoption', async () => {
     const mod = await importFresh()
     ensureRunningOverrides.push(async () => ({
