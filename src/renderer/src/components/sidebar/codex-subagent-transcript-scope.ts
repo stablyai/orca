@@ -16,7 +16,7 @@ export function scopeCodexSubagentTranscript(
   const firstOwnedMessage = messages.findIndex(
     (message) => message.timestamp !== null && message.timestamp >= startedAt
   )
-  if (firstOwnedMessage < 0) {
+  if (firstOwnedMessage === -1) {
     return { messages: [], hasMore: false }
   }
   // Why: Codex full-history forks copy parent turns before the provider-authored child start boundary.
