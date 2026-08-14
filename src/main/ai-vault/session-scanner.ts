@@ -22,11 +22,7 @@ import {
   ensureSessionParseCacheLoaded,
   scheduleSessionParseCachePersist
 } from './session-parse-cache-persistence'
-import {
-  createSessionParseStats,
-  parseAgentSessionFileCached,
-  type SessionParseStats
-} from './session-scanner-parse-cache'
+import { createSessionParseStats, type SessionParseStats } from './session-scanner-parse-cache'
 import { recordSessionScanIssue } from './session-scan-issues'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
 import {
@@ -36,12 +32,17 @@ import {
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
-  SessionFileDiscovery,
-  SessionParseResult
+  SessionFileDiscovery
 } from './session-scanner-types'
-import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { clampPositiveInteger } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
+import {
+  createLocalCursorSessionMetadataResolver,
+  cursorChatsDirForProjectsDir,
+  type CursorSessionMetadataResolver
+} from './session-scanner-cursor-metadata'
+import { parseSessionCandidate } from './session-scanner-candidate-parser'
 
 const SESSION_PARSE_CONCURRENCY = 8
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
@@ -75,6 +76,7 @@ export async function scanAiVaultSessions(
     const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(
       readLocalAntigravityHistory
     )
+    const cursorMetadataResolver = createLocalCursorSessionMetadataResolver()
     // Why: persisted entries must be seeded before any candidate is parsed, or
     // the cold scan gains nothing from the cache file (#9210).
     throwIfAiVaultScanCancelled(options.signal)
@@ -99,6 +101,10 @@ export async function scanAiVaultSessions(
               antigravityHistoryPath:
                 discovery.agent === 'antigravity'
                   ? antigravityHistoryPathForBrainDir(discovery.rootDir)
+                  : undefined,
+              cursorChatsDir:
+                discovery.agent === 'cursor'
+                  ? (options.cursorChatsDir ?? cursorChatsDirForProjectsDir(discovery.rootDir))
                   : undefined
             })
           )
@@ -120,7 +126,8 @@ export async function scanAiVaultSessions(
       issues,
       parseStats,
       signal: options.signal,
-      antigravityWorkspaceResolver
+      antigravityWorkspaceResolver,
+      cursorMetadataResolver
     })
 
     const cappedSessions = dedupeCodexSessionsBySessionId(parsedSessions)
@@ -230,6 +237,7 @@ async function parseSessionCandidates(args: {
   parseStats: SessionParseStats
   signal?: AbortSignal
   antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
+  cursorMetadataResolver?: CursorSessionMetadataResolver
 }): Promise<AiVaultSession[]> {
   const sessions: AiVaultSession[] = []
   let index = 0
@@ -246,13 +254,14 @@ async function parseSessionCandidates(args: {
     const batch = args.candidates.slice(index, index + batchSize)
     const results = await Promise.all(
       batch.map((candidate) =>
-        parseSessionCandidate(
+        parseSessionCandidate({
           candidate,
-          args.platform,
-          args.executionHostId,
-          args.parseStats,
-          args.antigravityWorkspaceResolver
-        )
+          platform: args.platform,
+          executionHostId: args.executionHostId,
+          parseStats: args.parseStats,
+          antigravityWorkspaceResolver: args.antigravityWorkspaceResolver,
+          cursorMetadataResolver: args.cursorMetadataResolver
+        })
       )
     )
 
@@ -277,49 +286,6 @@ async function parseSessionCandidates(args: {
   // partial parse is never cached or returned as a complete scan.
   throwIfAiVaultScanCancelled(args.signal)
   return sessions
-}
-
-async function parseSessionCandidate(
-  candidate: SessionFileCandidate,
-  platform: NodeJS.Platform,
-  executionHostId: ExecutionHostId,
-  parseStats: SessionParseStats,
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
-): Promise<SessionParseResult> {
-  try {
-    let session = await parseAgentSessionFileCached(candidate, platform, parseStats)
-    if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
-      session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
-    }
-    return {
-      session: session ? withSessionExecutionHost(session, executionHostId) : null,
-      issue: null
-    }
-  } catch (err) {
-    return {
-      session: null,
-      issue: {
-        executionHostId,
-        agent: candidate.agent,
-        path: candidate.file.path,
-        message: errorMessage(err)
-      }
-    }
-  }
-}
-
-function withSessionExecutionHost(
-  session: AiVaultSession,
-  executionHostId: ExecutionHostId
-): AiVaultSession {
-  if (session.executionHostId === executionHostId) {
-    return session
-  }
-  return {
-    ...session,
-    executionHostId,
-    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
-  }
 }
 
 function canStopParsingSessions(

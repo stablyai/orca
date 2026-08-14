@@ -18,6 +18,7 @@ export type AiVaultScanOptions = {
   antigravityBrainDir?: string
   copilotSessionsDir?: string
   cursorProjectsDir?: string
+  cursorChatsDir?: string
   opencodeStorageDir?: string
   // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
   // here so they don't depend on the real ~/.local/share/opencode.
@@ -67,6 +68,7 @@ export type SessionFileCandidate = {
   file: FileWithMtime
   codexHome: string | null
   antigravityHistoryPath?: string
+  cursorChatsDir?: string
 }
 
 export type SessionFileDiscovery = {

@@ -5,6 +5,7 @@ import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import type { FileWithMtime } from './session-scanner-types'
 import type { SubagentTranscriptPartition } from './session-scanner-subagent-transcripts'
 import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import type { CursorSessionMetadataResolver } from './session-scanner-cursor-metadata'
 
 export type RemoteScannerContext = {
   provider: RemoteSessionFilesystemProvider
@@ -13,6 +14,7 @@ export type RemoteScannerContext = {
   signal?: AbortSignal
   titleCaches: Map<string, Promise<Map<string, string>>>
   antigravityWorkspaceResolver: AntigravityWorkspaceResolver
+  cursorMetadataResolver: CursorSessionMetadataResolver
 }
 
 export type RemoteSessionFilesystemProvider = Pick<

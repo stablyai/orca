@@ -161,6 +161,47 @@ describe('scanRemoteAiVaultSessions', () => {
     })
   })
 
+  it('joins remote Cursor chat metadata to its transcript', async () => {
+    const provider = new MemoryRemoteProvider()
+    const sessionId = 'cursor-session'
+    provider.addFile(
+      `/home/ada/.cursor/projects/repo/agent-transcripts/${sessionId}/${sessionId}.jsonl`,
+      jsonLines([
+        { role: 'user', message: { content: [{ type: 'text', text: 'Remote Cursor title' }] } },
+        { role: 'assistant', message: { content: [{ type: 'text', text: 'Done' }] } }
+      ]),
+      40
+    )
+    provider.addFile(
+      `/home/ada/.cursor/chats/workspace-md5/${sessionId}/meta.json`,
+      JSON.stringify({
+        createdAtMs: Date.parse('2026-08-14T04:00:00.000Z'),
+        updatedAtMs: Date.parse('2026-08-14T04:05:00.000Z'),
+        cwd: '/home/ada/repo'
+      }),
+      41
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      agent: 'cursor',
+      sessionId,
+      title: 'Remote Cursor title',
+      cwd: '/home/ada/repo',
+      createdAt: '2026-08-14T04:00:00.000Z',
+      updatedAt: '2026-08-14T04:05:00.000Z',
+      resumeCommand: "cd '/home/ada/repo' && cursor-agent --resume 'cursor-session'"
+    })
+  })
+
   it('discovers Prime Agent transcripts under the remote home sessions root', async () => {
     const provider = new MemoryRemoteProvider()
     const fixture = primeAgentFixture()

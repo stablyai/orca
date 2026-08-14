@@ -10,7 +10,6 @@ import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
-import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
@@ -22,6 +21,7 @@ import type {
   RemoteScannerContext,
   RemoteSessionSource
 } from './remote-session-scanner-types'
+import { remoteCursorSessionSource } from './remote-session-scanner-cursor'
 
 type RemoteContentParser = (
   file: FileWithMtime,
@@ -69,14 +69,7 @@ export function remoteSessionSources(
       ['.copilot', 'session-state'],
       parseCopilotSessionContent
     ),
-    jsonlSource(
-      'cursor',
-      remoteHome,
-      hostPlatform,
-      ['.cursor', 'projects'],
-      parseCursorSessionContent,
-      (path) => remotePathSegments(path).includes('agent-transcripts')
-    ),
+    remoteCursorSessionSource(remoteHome, hostPlatform),
     source(
       'hermes',
       remoteHome,

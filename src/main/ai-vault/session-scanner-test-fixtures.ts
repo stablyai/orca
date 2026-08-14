@@ -9,6 +9,7 @@ export function isolatedScanRoots(root: string) {
     antigravityBrainDir: join(root, 'antigravity-brain'),
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),
+    cursorChatsDir: join(root, 'cursor-chats'),
     opencodeStorageDir: join(root, 'opencode-storage'),
     // Why: prevent the SQLite scanner from picking up the real
     // ~/.local/share/opencode/opencode.db during tests.

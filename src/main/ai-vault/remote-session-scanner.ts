@@ -27,6 +27,7 @@ import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { recordSessionScanIssue } from './session-scan-issues'
 import { limitRemoteScanFilesystemConcurrency } from './remote-session-scan-concurrency'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
+import { createRemoteCursorSessionMetadataResolver } from './remote-session-scanner-cursor'
 
 const REMOTE_SCAN_CONCURRENCY = 8
 const REMOTE_PARSE_CANDIDATE_MULTIPLIER = 2
@@ -70,6 +71,11 @@ export async function scanRemoteAiVaultSessions(args: {
         }
         return null
       }
+    }),
+    cursorMetadataResolver: createRemoteCursorSessionMetadataResolver({
+      provider,
+      hostPlatform: args.hostPlatform,
+      signal: args.signal
     })
   }
   const candidates = dedupeCodexRolloutFileAliases(
