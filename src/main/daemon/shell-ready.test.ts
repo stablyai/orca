@@ -792,6 +792,23 @@ describePosix('daemon shell-ready launch config', () => {
     expectBashOsc133Lifecycle(output)
   })
 
+  itWithBash('trims a trailing separator so the append cannot form ";;"', async () => {
+    // Why: `zoxide init bash` leaves "__zoxide_hook;" when PROMPT_COMMAND was empty, and
+    // appending ";__orca_osc133_epilogue" to that makes bash reject the whole PROMPT_COMMAND,
+    // which silently takes the OSC 133 markers down with it.
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      'PROMPT_COMMAND=\'AFTER_TRAILING_PROMPT=1; printf "PROMPT_TRAILING\\n";\'\n'
+    )
+
+    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+    expect(output).not.toContain('syntax error')
+    expect(output).toContain('PROMPT_TRAILING')
+    expectBashOsc133Lifecycle(output)
+  })
+
   it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {
     // Why: only the wrapper self-loop should be rejected; a real user ZDOTDIR must round-trip so their configs load.
     const previousZdotdir = process.env.ZDOTDIR
