@@ -116,17 +116,13 @@ export class StructuredAgentSessionHost {
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
 
-  supportsCreate(location: AgentSessionExecutionLocation, agent: string): boolean {
-    return agent === 'codex' && (this.deps.adapter.supportsLocation?.(location) ?? false)
-  }
+  supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
+    agent === 'codex' && (this.deps.adapter.supportsLocation?.(location) ?? false)
 
-  listSessionTabs() {
-    return listStructuredAgentSessionTabs(this.sessions)
-  }
+  listSessionTabs = () => listStructuredAgentSessionTabs(this.sessions)
 
-  restoreReadableSessions(): Promise<void> {
-    return this.restartRestore.run(() => this.readableRestorer.restore())
-  }
+  restoreReadableSessions = (): Promise<void> =>
+    this.restartRestore.run(() => this.readableRestorer.restore())
 
   private serialize<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
     return this.tasks.serialize(sessionId, task)
@@ -219,9 +215,8 @@ export class StructuredAgentSessionHost {
     return this.mutate(caller, params.envelope, sendPlan(params))
   }
 
-  async invalidateEffectAuthorityForTrustedUserTurn(sourceSessionId: string): Promise<void> {
-    await this.deps.adapter.invalidateEffectAuthorityForTrustedUserTurn?.({ sourceSessionId })
-  }
+  invalidateEffectAuthorityForTrustedUserTurn = async (sourceSessionId: string): Promise<void> =>
+    this.deps.adapter.invalidateEffectAuthorityForTrustedUserTurn?.({ sourceSessionId })
 
   cancel(
     caller: StructuredAgentSessionCaller,
