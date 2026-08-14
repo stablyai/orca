@@ -16613,75 +16613,78 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('waits for Claude output to settle after its first render marker before one submit', async () => {
-    vi.useFakeTimers()
-    try {
-      const writes: string[] = []
-      let composerReady = false
-      let prematureEnters = 0
-      let submissions = 0
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-        write: (_ptyId, data) => {
-          writes.push(data)
-          if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
-            setTimeout(() => {
-              runtime.onPtyData('pty-bg', 'partial redraw without cursor', Date.now())
-            }, 650)
-            setTimeout(() => {
-              runtime.onPtyData('pty-bg', '\x1b[?2', Date.now())
-            }, 750)
-            setTimeout(() => {
-              runtime.onPtyData('pty-bg', '5h intermediate frame', Date.now())
-            }, 751)
-            setTimeout(() => {
-              runtime.onPtyData('pty-bg', 'continued composer render', Date.now())
-            }, 900)
-            setTimeout(() => {
-              composerReady = true
-              runtime.onPtyData('pty-bg', 'final composer frame', Date.now())
-            }, 1_000)
-          }
-          if (data === '\r') {
-            if (composerReady) {
-              submissions += 1
-            } else {
-              prematureEnters += 1
+  it.each(['claude', 'codex'] as const)(
+    'waits for %s output to settle after its first render marker before one submit',
+    async (agent) => {
+      vi.useFakeTimers()
+      try {
+        const writes: string[] = []
+        let composerReady = false
+        let prematureEnters = 0
+        let submissions = 0
+        const runtime = new OrcaRuntimeService(store)
+        runtime.setPtyController({
+          spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+          write: (_ptyId, data) => {
+            writes.push(data)
+            if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+              setTimeout(() => {
+                runtime.onPtyData('pty-bg', 'partial redraw without cursor', Date.now())
+              }, 650)
+              setTimeout(() => {
+                runtime.onPtyData('pty-bg', '\x1b[?2', Date.now())
+              }, 750)
+              setTimeout(() => {
+                runtime.onPtyData('pty-bg', '5h intermediate frame', Date.now())
+              }, 751)
+              setTimeout(() => {
+                runtime.onPtyData('pty-bg', 'continued composer render', Date.now())
+              }, 900)
+              setTimeout(() => {
+                composerReady = true
+                runtime.onPtyData('pty-bg', 'final composer frame', Date.now())
+              }, 1_000)
             }
-          }
-          return true
-        },
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        launchAgent: 'claude'
-      })
-      const assertAuthority = vi.fn()
+            if (data === '\r') {
+              if (composerReady) {
+                submissions += 1
+              } else {
+                prematureEnters += 1
+              }
+            }
+            return true
+          },
+          kill: () => true,
+          getForegroundProcess: async () => null
+        })
+        const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+          launchAgent: agent
+        })
+        const assertAuthority = vi.fn()
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
-        beforeWrite: assertAuthority
-      })
-      await vi.advanceTimersByTimeAsync(500)
+        const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+          beforeWrite: assertAuthority
+        })
+        await vi.advanceTimersByTimeAsync(500)
 
-      expect(writes).not.toContain('\r')
-      await vi.advanceTimersByTimeAsync(150)
-      expect(writes).not.toContain('\r')
-      await vi.advanceTimersByTimeAsync(101)
-      expect(writes).not.toContain('\r')
-      await vi.advanceTimersByTimeAsync(1_748)
-      expect(writes).not.toContain('\r')
-      await vi.advanceTimersByTimeAsync(1)
-      await sendPromise
-      expect(prematureEnters).toBe(0)
-      expect(submissions).toBe(1)
-      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-      expect(assertAuthority).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.useRealTimers()
+        expect(writes).not.toContain('\r')
+        await vi.advanceTimersByTimeAsync(150)
+        expect(writes).not.toContain('\r')
+        await vi.advanceTimersByTimeAsync(101)
+        expect(writes).not.toContain('\r')
+        await vi.advanceTimersByTimeAsync(1_748)
+        expect(writes).not.toContain('\r')
+        await vi.advanceTimersByTimeAsync(1)
+        await sendPromise
+        expect(prematureEnters).toBe(0)
+        expect(submissions).toBe(1)
+        expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+        expect(assertAuthority).toHaveBeenCalledTimes(2)
+      } finally {
+        vi.useRealTimers()
+      }
     }
-  })
+  )
 
   it('submits a silent Claude composer once after the bounded render fallback', async () => {
     vi.useFakeTimers()
@@ -16707,6 +16710,46 @@ describe('OrcaRuntimeService', () => {
 
       await vi.advanceTimersByTimeAsync(1)
       await sendPromise
+      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives a late Codex render marker a fresh quiescence window', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      let composerReady = false
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+            setTimeout(() => runtime.onPtyData('pty-bg', '\x1b[?25h', Date.now()), 7_900)
+            setTimeout(() => {
+              composerReady = true
+              runtime.onPtyData('pty-bg', 'final slow composer frame', Date.now())
+            }, 8_100)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'codex'
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(writes).not.toContain('\r')
+      await vi.advanceTimersByTimeAsync(1_599)
+      expect(writes).not.toContain('\r')
+      await vi.advanceTimersByTimeAsync(1)
+      await sendPromise
+      expect(composerReady).toBe(true)
       expect(writes.filter((data) => data === '\r')).toHaveLength(1)
     } finally {
       vi.useRealTimers()
@@ -16741,7 +16784,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
-      await vi.advanceTimersByTimeAsync(7_999)
+      await vi.advanceTimersByTimeAsync(8_099)
       expect(writes).not.toContain('\r')
 
       await vi.advanceTimersByTimeAsync(1)

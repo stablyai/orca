@@ -1863,10 +1863,10 @@ const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
-const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
-const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
-// Why: Claude emits show-cursor while rendering its composer; output must settle afterward.
-const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
+const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
+const AGENT_PROMPT_RENDER_QUIET_MS = 1500
+// Why: Claude and Codex emit show-cursor while rendering pasted composer content.
+const AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
@@ -17545,7 +17545,7 @@ export class OrcaRuntimeService {
       suffixFailureError?: string
     } = {}
   ): Promise<void> {
-    const renderGate = this.createClaudeAgentPromptRenderGate(ptyId)
+    const renderGate = this.createAgentPromptRenderGate(ptyId)
     let wrotePasteBytes = false
     let completedPaste = false
     try {
@@ -17596,13 +17596,14 @@ export class OrcaRuntimeService {
     }
   }
 
-  private createClaudeAgentPromptRenderGate(ptyId: string): {
+  private createAgentPromptRenderGate(ptyId: string): {
     arm: () => void
     wait: () => Promise<void>
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
-    if ((pty?.launchAgent ?? pty?.foregroundAgent) !== 'claude') {
+    const agent = pty?.launchAgent ?? pty?.foregroundAgent
+    if (agent !== 'claude' && agent !== 'codex') {
       return null
     }
     let armed = false
@@ -17635,7 +17636,13 @@ export class OrcaRuntimeService {
       if (quietTimer) {
         clearTimeout(quietTimer)
       }
-      quietTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
+      quietTimer = setTimeout(finish, AGENT_PROMPT_RENDER_QUIET_MS)
+    }
+    const armHardTimer = (): void => {
+      if (hardTimer) {
+        clearTimeout(hardTimer)
+      }
+      hardTimer = setTimeout(finish, AGENT_PROMPT_RENDER_TIMEOUT_MS)
     }
     const unsubscribe = this.subscribeToTerminalData(ptyId, (data) => {
       if (!armed || settled) {
@@ -17643,11 +17650,13 @@ export class OrcaRuntimeService {
       }
       if (!observedMarker) {
         const combined = markerCarry + data
-        markerCarry = combined.slice(-(CLAUDE_AGENT_PROMPT_RENDER_MARKER.length - 1))
-        if (!combined.includes(CLAUDE_AGENT_PROMPT_RENDER_MARKER)) {
+        markerCarry = combined.slice(-(AGENT_PROMPT_RENDER_MARKER.length - 1))
+        if (!combined.includes(AGENT_PROMPT_RENDER_MARKER)) {
           return
         }
         observedMarker = true
+        // Why: a slow initial redraw must still receive the full settlement window.
+        armHardTimer()
       }
       armQuietTimer()
     })
@@ -17660,7 +17669,9 @@ export class OrcaRuntimeService {
         if (settled) {
           return
         }
-        hardTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS)
+        if (!hardTimer) {
+          armHardTimer()
+        }
         await rendered
       },
       dispose: () => {
