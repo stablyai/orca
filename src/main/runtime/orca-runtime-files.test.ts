@@ -418,7 +418,7 @@ describe('RuntimeFileCommands', () => {
     const { commands } = createRuntimeFileCommands()
 
     await expect(commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')).rejects.toThrow(
-      'newer Orca client'
+      'Orca client paired with this server is out of date'
     )
 
     expect(getSshFilesystemProvider).not.toHaveBeenCalled()
@@ -431,7 +431,7 @@ describe('RuntimeFileCommands', () => {
 
     await expect(
       commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-1')
-    ).rejects.toThrow('newer Orca client')
+    ).rejects.toThrow('Orca client paired with this server is out of date')
 
     expect(getSshFilesystemProvider).not.toHaveBeenCalled()
     expect(renameMock).not.toHaveBeenCalled()

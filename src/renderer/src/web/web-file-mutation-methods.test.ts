@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE } from '../../../shared/protocol-version'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
@@ -271,13 +272,21 @@ describe('paired web file mutation methods', () => {
     expect(getSshState).not.toHaveBeenCalled()
   })
 
-  it('rejects an old HUB before reading SSH state or sending a mutation', async () => {
-    assertMutationSupported.mockRejectedValueOnce(new Error('Update the HUB'))
+  it('rejects an outdated remote Orca server before reading SSH state or mutating', async () => {
+    expect(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE).toContain(
+      "remote Orca server is out of date, so Orca can't upload or change files"
+    )
+    expect(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE).toContain(
+      'Settings > General > Updates > Remote Orca Servers'
+    )
+    assertMutationSupported.mockRejectedValueOnce(
+      new Error(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
+    )
     const methods = createWebFileMutationMethods({ captureSession })
 
     await expect(
       methods.deletePath({ targetPath: '/ssh/repo/dir', recursive: true })
-    ).rejects.toThrow('Update the HUB')
+    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
     expect(getSshState).not.toHaveBeenCalled()
     expect(callRuntimeResult).not.toHaveBeenCalled()
   })

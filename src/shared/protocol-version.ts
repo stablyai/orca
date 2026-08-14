@@ -91,7 +91,7 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
-  'Remote file changes require a newer Orca server. Update the HUB and try again.'
+  "This workspace's remote Orca server is out of date, so Orca can't upload or change files there. To update it, open Settings > General > Updates > Remote Orca Servers. Reconnect, then try again."
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
