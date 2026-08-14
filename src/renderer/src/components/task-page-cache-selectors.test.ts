@@ -354,6 +354,25 @@ describe('task page cache selectors', () => {
     expect(next).toEqual([refreshedFirst, refreshedSecond])
   })
 
+  it('refreshes Linear label ids even when display names are unchanged', () => {
+    const current = {
+      ...linearIssue('LIN-1'),
+      identifier: 'ENG-1',
+      url: 'https://linear.test/ENG-1',
+      state: { name: 'Todo', type: 'unstarted', color: '#111111' },
+      team: { id: 'team-1', name: 'Team', key: 'ENG' },
+      labels: ['Bug'],
+      labelIds: ['label-old'],
+      priority: 2,
+      updatedAt: '2026-01-01'
+    } as LinearIssue
+    const refreshed = { ...current, labelIds: ['label-new'] }
+
+    expect(reconcileTaskPageLinearIssuesAfterLandingRefresh([current], [refreshed])).toEqual([
+      refreshed
+    ])
+  })
+
   it('returns null while the Linear drawer is closed and finds open issues by stable reference', () => {
     const issue = linearIssue('LIN-1')
     const searchIssue = linearIssue('LIN-2')
@@ -372,5 +391,23 @@ describe('task page cache selectors', () => {
     expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
     expect(findTaskPageLinearDrawerIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
     expect(findTaskPageLinearDrawerIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
+  })
+
+  it('does not resolve a Linear issue from another runtime cache scope', () => {
+    const localScope = 'linear:runtime-local:project'
+    const remoteScope = 'linear:runtime-remote:project'
+    const staleRemote = { ...linearIssue('LIN-1'), title: 'Stale remote title' }
+    const currentLocal = { ...linearIssue('LIN-1'), title: 'Current local title' }
+    const listCache = {
+      [`${remoteScope}::workspace-1::list::all::36::`]: entry<LinearCollectionResult<LinearIssue>>({
+        items: [staleRemote]
+      }),
+      [`${localScope}::workspace-1::list::all::36::`]: entry<LinearCollectionResult<LinearIssue>>({
+        items: [currentLocal]
+      })
+    }
+
+    expect(findTaskPageLinearDrawerIssue({}, {}, listCache, 'LIN-1', localScope)).toBe(currentLocal)
+    expect(findTaskPageLinearDrawerIssue({}, {}, listCache, 'LIN-1', remoteScope)).toBe(staleRemote)
   })
 })

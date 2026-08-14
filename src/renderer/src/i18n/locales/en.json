@@ -2031,7 +2031,17 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "linearAssigneeUpdateFailed": "Failed to update Linear assignee",
+        "linearChangeAssigneeFrom": "Change assignee from {{value0}}",
+        "linearAssignIssue": "Assign Linear issue",
+        "linearLoadingMembers": "Loading members",
+        "linearNoMembersFound": "No members found",
+        "linearLabelsUpdateFailed": "Failed to update Linear labels",
+        "linearLabelsAria": "Labels: {{value0}}",
+        "linearAddLabel": "Add label",
+        "linearLoadingLabels": "Loading labels",
+        "linearNoLabelsFound": "No labels found"
       },
       "Terminal": {
         "73768427cf": "Close",

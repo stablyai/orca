@@ -1013,6 +1013,74 @@ describe('createLinearSlice caching', () => {
     ).toBe('Updated')
   })
 
+  it('does not let stale collection reads overwrite an optimistic issue patch', async () => {
+    const store = createTestStore()
+    const staleList = deferred<LinearCollectionResult<LinearIssue>>()
+    const staleSearch = deferred<LinearIssue[]>()
+    const staleProject = deferred<LinearCollectionResult<LinearIssue>>()
+    const staleCustomView = deferred<LinearCollectionResult<LinearIssue>>()
+    const oldIssue = { ...issue('issue-id'), title: 'Old title' }
+    const fetchedAt = Date.now()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
+      linearListCache: {
+        'workspace-1::list::all::36::': { data: { items: [oldIssue] }, fetchedAt }
+      },
+      linearSearchCache: {
+        'workspace-1::search::query::20': { data: [oldIssue], fetchedAt }
+      },
+      linearProjectIssueCache: {
+        'workspace-1::project-issues::project-1::20': {
+          data: { items: [oldIssue] },
+          fetchedAt
+        }
+      },
+      linearCustomViewIssueCache: {
+        'workspace-1::custom-view-issues::view-1::20': {
+          data: { items: [oldIssue] },
+          fetchedAt
+        }
+      }
+    })
+    linearListIssues.mockReturnValueOnce(staleList.promise)
+    linearSearchIssues.mockReturnValueOnce(staleSearch.promise)
+    linearListProjectIssues.mockReturnValueOnce(staleProject.promise)
+    linearListCustomViewIssues.mockReturnValueOnce(staleCustomView.promise)
+
+    const listRequest = store
+      .getState()
+      .listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
+    const searchRequest = store.getState().searchLinearIssues('query', 20, { force: true })
+    const projectRequest = store
+      .getState()
+      .listLinearProjectIssues('project-1', 'workspace-1', 20, { force: true })
+    const customViewRequest = store
+      .getState()
+      .listLinearCustomViewIssues('view-1', 'workspace-1', 20, { force: true })
+    store.getState().patchLinearIssue('issue-id', { title: 'Optimistic title' })
+
+    staleList.resolve({ items: [oldIssue] })
+    staleSearch.resolve([oldIssue])
+    staleProject.resolve({ items: [oldIssue] })
+    staleCustomView.resolve({ items: [oldIssue] })
+    await Promise.all([listRequest, searchRequest, projectRequest, customViewRequest])
+
+    expect(
+      store.getState().linearListCache['workspace-1::list::all::36::'].data?.items[0]?.title
+    ).toBe('Optimistic title')
+    expect(
+      store.getState().linearSearchCache['workspace-1::search::query::20'].data?.[0]?.title
+    ).toBe('Optimistic title')
+    expect(
+      store.getState().linearProjectIssueCache['workspace-1::project-issues::project-1::20'].data
+        ?.items[0]?.title
+    ).toBe('Optimistic title')
+    expect(
+      store.getState().linearCustomViewIssueCache['workspace-1::custom-view-issues::view-1::20']
+        .data?.items[0]?.title
+    ).toBe('Optimistic title')
+  })
+
   it('scopes optimistic issue patches to the selected Linear source context', () => {
     const store = createTestStore()
     const localSource = linearSourceContext('local-runtime')

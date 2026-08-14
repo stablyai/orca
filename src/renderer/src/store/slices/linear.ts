@@ -218,6 +218,47 @@ let linearListInvalidationToken: { scope: string; version: number } = {
   version: 0
 }
 
+const LINEAR_ISSUE_COLLECTION_MODES = new Set([
+  'search',
+  'list',
+  'project-issues',
+  'custom-view-issues'
+])
+
+function linearIssueCollectionKeyMatchesScope(key: string, cachePrefix: string | null): boolean {
+  if (cachePrefix) {
+    return key.startsWith(`${cachePrefix}::`)
+  }
+  return LINEAR_ISSUE_COLLECTION_MODES.has(key.split('::')[1] ?? '')
+}
+
+function clearLinearIssueCollectionRequestsForScope(cachePrefix: string | null): void {
+  const clearMatching = (requests: Map<string, unknown>): void => {
+    for (const key of requests.keys()) {
+      if (linearIssueCollectionKeyMatchesScope(key, cachePrefix)) {
+        requests.delete(key)
+      }
+    }
+  }
+  clearMatching(inflightSearchRequests)
+  clearMatching(inflightListRequests)
+  clearMatching(inflightProjectIssueRequests)
+  clearMatching(inflightCustomViewIssueRequests)
+}
+
+function advanceLinearListInvalidationToken(cachePrefix: string | null): {
+  scope: string
+  version: number
+} {
+  const tokenScope = cachePrefix ?? 'local'
+  const nextVersion =
+    linearListInvalidationToken.scope === tokenScope
+      ? (linearListInvalidationToken.version + 1) % LINEAR_LIST_INVALIDATION_VERSION_CAP || 1
+      : 1
+  linearListInvalidationToken = { scope: tokenScope, version: nextVersion }
+  return linearListInvalidationToken
+}
+
 function linearTeamsCacheKey(workspaceId: LinearWorkspaceSelection | null | undefined): string {
   return `${workspaceId ?? 'default'}::teams`
 }
@@ -2115,12 +2156,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   invalidateLinearIssueLists: (options) => {
     const scope = getLinearReadScope(get().settings, options?.sourceContext)
-    const tokenScope = scope.cachePrefix ?? 'local'
-    const nextVersion =
-      linearListInvalidationToken.scope === tokenScope
-        ? (linearListInvalidationToken.version + 1) % LINEAR_LIST_INVALIDATION_VERSION_CAP || 1
-        : 1
-    linearListInvalidationToken = { scope: tokenScope, version: nextVersion }
+    clearLinearIssueCollectionRequestsForScope(scope.cachePrefix)
+    const invalidationToken = advanceLinearListInvalidationToken(scope.cachePrefix)
 
     // Why: drop only attribute-filtered plain list entries in this source scope
     // so the next TaskPage read is forced current without wiping search/unrelated
@@ -2148,11 +2185,11 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         changed = true
       }
       if (!changed) {
-        return { linearListInvalidationToken: linearListInvalidationToken }
+        return { linearListInvalidationToken: invalidationToken }
       }
       return {
         linearListCache: nextListCache,
-        linearListInvalidationToken: linearListInvalidationToken
+        linearListInvalidationToken: invalidationToken
       }
     })
   },
@@ -2162,6 +2199,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       options?.sourceContext?.provider === 'linear'
         ? getTaskSourceCacheScope(options.sourceContext)
         : null
+    clearLinearIssueCollectionRequestsForScope(sourceScope)
+    const invalidationToken = advanceLinearListInvalidationToken(sourceScope)
     const canPatchCacheKey = (key: string): boolean =>
       sourceScope === null || key.startsWith(`${sourceScope}::`)
     set((s) => {
@@ -2230,6 +2269,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
       return changed
         ? {
+            linearListInvalidationToken: invalidationToken,
             linearIssueCache: nextIssueCache,
             linearSearchCache: nextSearchCache,
             linearListCache: nextListCache.changed ? nextListCache.cache : s.linearListCache,
@@ -2240,7 +2280,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
               ? nextCustomViewIssueCache.cache
               : s.linearCustomViewIssueCache
           }
-        : {}
+        : { linearListInvalidationToken: invalidationToken }
     })
   }
 })

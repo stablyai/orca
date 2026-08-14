@@ -6,6 +6,22 @@ import { sortedStrings } from './task-page-work-item-signatures'
 type LinearIssueCache = Record<string, CacheEntry<LinearIssue>>
 type LinearSearchCache = Record<string, CacheEntry<LinearIssue[]>>
 type LinearListCache = Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
+type LinearCacheKind = 'issue' | 'search' | 'list'
+
+function linearCacheKeyMatchesScope(
+  key: string,
+  kind: LinearCacheKind,
+  cacheScope: string | null | undefined
+): boolean {
+  if (cacheScope === undefined) {
+    return true
+  }
+  if (cacheScope) {
+    return key.startsWith(`${cacheScope}::`)
+  }
+  const parts = key.split('::')
+  return kind === 'issue' ? parts.length <= 2 : parts[1] === kind
+}
 
 function linearIssueKey(issue: LinearIssue): string {
   return issue.id
@@ -23,6 +39,7 @@ function linearIssueStatusSignature(issue: LinearIssue): string {
     issue.team.name,
     issue.team.key,
     sortedStrings(issue.labels),
+    sortedStrings(issue.labelIds),
     issue.assignee?.id ?? null,
     issue.assignee?.displayName ?? null,
     issue.priority,
@@ -65,23 +82,33 @@ export function findTaskPageLinearIssue(
   linearIssueCache: LinearIssueCache,
   linearSearchCache: LinearSearchCache,
   linearListCache: LinearListCache,
-  linearIssueId: string | null
+  linearIssueId: string | null,
+  cacheScope?: string | null
 ): LinearIssue | null {
   if (!linearIssueId) {
     return null
   }
-  for (const entry of Object.values(linearIssueCache)) {
+  for (const [key, entry] of Object.entries(linearIssueCache)) {
+    if (!linearCacheKeyMatchesScope(key, 'issue', cacheScope)) {
+      continue
+    }
     if (entry?.data?.id === linearIssueId) {
       return entry.data
     }
   }
-  for (const entry of Object.values(linearSearchCache)) {
+  for (const [key, entry] of Object.entries(linearSearchCache)) {
+    if (!linearCacheKeyMatchesScope(key, 'search', cacheScope)) {
+      continue
+    }
     const found = entry?.data?.find((issue) => issue.id === linearIssueId)
     if (found) {
       return found
     }
   }
-  for (const entry of Object.values(linearListCache)) {
+  for (const [key, entry] of Object.entries(linearListCache)) {
+    if (!linearCacheKeyMatchesScope(key, 'list', cacheScope)) {
+      continue
+    }
     const found = entry?.data?.items.find((issue) => issue.id === linearIssueId)
     if (found) {
       return found

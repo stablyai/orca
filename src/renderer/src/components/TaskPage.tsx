@@ -201,6 +201,8 @@ import {
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
+import { LinearAssigneeCell } from '@/components/task-page-linear-assignee-cell'
+import { LinearLabelsCell } from '@/components/task-page-linear-labels-cell'
 import {
   getSingleJiraProjectScope,
   getTaskPageJiraStatusOrderScopeKey,
@@ -685,11 +687,13 @@ function findLinearWorkflowStateForStatus(
 function LinearStateCell({
   issue,
   className,
-  sourceContext
+  sourceContext,
+  onIssuePatch
 }: {
   issue: LinearIssue
   className?: string
   sourceContext?: TaskSourceContext | null
+  onIssuePatch?: (issueId: string, patch: Partial<LinearIssue>) => void
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? settings
@@ -721,6 +725,7 @@ function LinearStateCell({
 
       setPending(true)
       patchLinearIssue(issue.id, { state: nextState }, { sourceContext })
+      onIssuePatch?.(issue.id, { state: nextState })
       void linearUpdateIssue(providerSettings, issue.id, { stateId }, issue.workspaceId)
         .then((result) => {
           if (reqId !== reqRef.current) {
@@ -728,6 +733,7 @@ function LinearStateCell({
           }
           if (result.ok === false) {
             patchLinearIssue(issue.id, { state: previousState }, { sourceContext })
+            onIssuePatch?.(issue.id, { state: previousState })
             toast.error(
               result.error ??
                 translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
@@ -742,6 +748,7 @@ function LinearStateCell({
             return
           }
           patchLinearIssue(issue.id, { state: previousState }, { sourceContext })
+          onIssuePatch?.(issue.id, { state: previousState })
           toast.error(
             translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
           )
@@ -757,6 +764,7 @@ function LinearStateCell({
       issue.id,
       issue.state,
       issue.workspaceId,
+      onIssuePatch,
       patchLinearIssue,
       pending,
       providerSettings,
@@ -3417,13 +3425,14 @@ export default function TaskPage(): React.JSX.Element {
       selectedLinearWorkspaceId
     ]
   )
+  const linearTaskSourceCacheScope = linearTaskSourceContext
+    ? getTaskSourceCacheScope(linearTaskSourceContext)
+    : null
   // Why: only react to invalidation tokens for this TaskPage source scope.
   const linearListInvalidationVersionForSource = useMemo(() => {
-    const scope = linearTaskSourceContext
-      ? getTaskSourceCacheScope(linearTaskSourceContext)
-      : 'local'
+    const scope = linearTaskSourceCacheScope ?? 'local'
     return linearListInvalidationToken.scope === scope ? linearListInvalidationToken.version : 0
-  }, [linearListInvalidationToken, linearTaskSourceContext])
+  }, [linearListInvalidationToken, linearTaskSourceCacheScope])
   const jiraTaskSourceContext = useMemo(
     () =>
       normalizeTaskSourceContext({
@@ -4246,7 +4255,8 @@ export default function TaskPage(): React.JSX.Element {
     linearCacheSnapshot.issueCache,
     linearCacheSnapshot.searchCache,
     linearCacheSnapshot.listCache,
-    selectedLinearIssueId
+    selectedLinearIssueId,
+    linearTaskSourceCacheScope
   )
   const selectedLinearIssue = selectedLinearIssueId
     ? (cachedSelectedLinearIssue ?? selectedLinearIssueFallback)
@@ -4495,13 +4505,19 @@ export default function TaskPage(): React.JSX.Element {
   const landingLinearRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
   const linearContextResumeAttemptedRef = useRef(false)
 
-  const patchScopedLinearIssue = useCallback((issueId: string, patch: Partial<LinearIssue>) => {
+  const patchVisibleLinearIssue = useCallback((issueId: string, patch: Partial<LinearIssue>) => {
     const patchResult = (result: LinearCollectionResult<LinearIssue>) => ({
       ...result,
       items: result.items.map((item) => (item.id === issueId ? { ...item, ...patch } : item))
     })
+    setLinearIssues((issues) =>
+      issues.map((item) => (item.id === issueId ? { ...item, ...patch } : item))
+    )
     setLinearProjectIssuesResult(patchResult)
     setLinearCustomViewIssuesResult(patchResult)
+    setSelectedLinearIssueFallback((issue) =>
+      issue?.id === issueId ? { ...issue, ...patch } : issue
+    )
   }, [])
 
   const selectLinearMode = useCallback(
@@ -5156,14 +5172,16 @@ export default function TaskPage(): React.JSX.Element {
             linearCacheSnapshot.issueCache,
             linearCacheSnapshot.searchCache,
             linearCacheSnapshot.listCache,
-            issue.id
+            issue.id,
+            linearTaskSourceCacheScope
           ) ?? issue
       ),
     [
       activeLinearIssues,
       linearCacheSnapshot.issueCache,
       linearCacheSnapshot.listCache,
-      linearCacheSnapshot.searchCache
+      linearCacheSnapshot.searchCache,
+      linearTaskSourceCacheScope
     ]
   )
 
@@ -5628,7 +5646,7 @@ export default function TaskPage(): React.JSX.Element {
         }
 
         patchLinearIssue(issue.id, { state: nextState }, { sourceContext: linearTaskSourceContext })
-        patchScopedLinearIssue(issue.id, { state: nextState })
+        patchVisibleLinearIssue(issue.id, { state: nextState })
         applyFallbackState(nextState)
 
         const result = await linearUpdateIssue(
@@ -5643,7 +5661,7 @@ export default function TaskPage(): React.JSX.Element {
             { state: previousState },
             { sourceContext: linearTaskSourceContext }
           )
-          patchScopedLinearIssue(issue.id, { state: previousState })
+          patchVisibleLinearIssue(issue.id, { state: previousState })
           applyFallbackState(previousState)
           toast.error(
             result.error ??
@@ -5659,7 +5677,7 @@ export default function TaskPage(): React.JSX.Element {
           { state: previousState },
           { sourceContext: linearTaskSourceContext }
         )
-        patchScopedLinearIssue(issue.id, { state: previousState })
+        patchVisibleLinearIssue(issue.id, { state: previousState })
         applyFallbackState(previousState)
         toast.error(
           translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
@@ -5678,7 +5696,7 @@ export default function TaskPage(): React.JSX.Element {
       linearBoardDraggingIssueId,
       linearBoardUpdatingIssueIds,
       linearStatusBoardEnabled,
-      patchScopedLinearIssue,
+      patchVisibleLinearIssue,
       patchLinearIssue,
       linearTaskSourceContext,
       settings
@@ -8433,6 +8451,7 @@ export default function TaskPage(): React.JSX.Element {
       cancelled = true
     }
   }, [
+    linearListInvalidationVersionForSource,
     linearProjectIssueLimit,
     linearProjectTab,
     linearRefreshNonce,
@@ -8551,6 +8570,7 @@ export default function TaskPage(): React.JSX.Element {
       cancelled = true
     }
   }, [
+    linearListInvalidationVersionForSource,
     linearRefreshNonce,
     linearCustomViewIssueLimit,
     listLinearCustomViewIssues,
@@ -11570,7 +11590,6 @@ export default function TaskPage(): React.JSX.Element {
                         <div className="space-y-2 p-2">
                           {section.issues.map((issue) => {
                             const selected = issue.id === selectedLinearIssueId
-                            const labels = issue.labels.slice(0, 2)
                             const dragging = linearBoardDraggingIssueId === issue.id
                             const updating = linearBoardUpdatingIssueIds.has(issue.id)
                             const teamLabel =
@@ -11700,16 +11719,16 @@ export default function TaskPage(): React.JSX.Element {
                                       issue={issue}
                                       className="px-1.5 py-0.5"
                                       sourceContext={linearTaskSourceContext}
+                                      onIssuePatch={patchVisibleLinearIssue}
                                     />
                                   ) : null}
                                   {effectiveLinearDisplayProperties.has('assignee') ? (
-                                    <span>
-                                      {issue.assignee?.displayName ??
-                                        translate(
-                                          'auto.components.TaskPage.42a9160321',
-                                          'Unassigned'
-                                        )}
-                                    </span>
+                                    <LinearAssigneeCell
+                                      issue={issue}
+                                      variant="name"
+                                      sourceContext={linearTaskSourceContext}
+                                      onIssuePatch={patchVisibleLinearIssue}
+                                    />
                                   ) : null}
                                   {effectiveLinearDisplayProperties.has('team') ? (
                                     <span className="truncate">{teamLabel}</span>
@@ -11724,22 +11743,15 @@ export default function TaskPage(): React.JSX.Element {
                                     </span>
                                   ) : null}
                                 </div>
-                                {effectiveLinearDisplayProperties.has('labels') &&
-                                issue.labels.length > 0 ? (
+                                {effectiveLinearDisplayProperties.has('labels') ? (
                                   <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1">
-                                    {labels.map((label) => (
-                                      <span
-                                        key={label}
-                                        className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                      >
-                                        {label}
-                                      </span>
-                                    ))}
-                                    {issue.labels.length > labels.length ? (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        +{issue.labels.length - labels.length}
-                                      </span>
-                                    ) : null}
+                                    <LinearLabelsCell
+                                      issue={issue}
+                                      maxVisible={2}
+                                      density="compact"
+                                      sourceContext={linearTaskSourceContext}
+                                      onIssuePatch={patchVisibleLinearIssue}
+                                    />
                                   </div>
                                 ) : null}
                               </div>
@@ -11771,7 +11783,6 @@ export default function TaskPage(): React.JSX.Element {
 
                       const issue = row.issue
                       const selected = issue.id === selectedLinearIssueId
-                      const labels = issue.labels.slice(0, 3)
                       const teamLabel =
                         selectedLinearWorkspaceId === 'all' && issue.workspaceName
                           ? `${issue.workspaceName} / ${issue.team.name}`
@@ -11832,13 +11843,17 @@ export default function TaskPage(): React.JSX.Element {
                                   issue={issue}
                                   className="px-1.5 py-0.5"
                                   sourceContext={linearTaskSourceContext}
+                                  onIssuePatch={patchVisibleLinearIssue}
                                 />
                               ) : null}
                               {effectiveLinearDisplayProperties.has('assignee') ? (
-                                <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                  {issue.assignee?.displayName ??
-                                    translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                                </span>
+                                <LinearAssigneeCell
+                                  issue={issue}
+                                  variant="name"
+                                  className="min-w-0 truncate"
+                                  sourceContext={linearTaskSourceContext}
+                                  onIssuePatch={patchVisibleLinearIssue}
+                                />
                               ) : null}
                               {effectiveLinearDisplayProperties.has('team') ? (
                                 <span className="min-w-0 truncate text-[11px] text-muted-foreground">
@@ -11856,19 +11871,12 @@ export default function TaskPage(): React.JSX.Element {
 
                           {effectiveLinearDisplayProperties.has('labels') ? (
                             <div className="flex min-w-0 items-center gap-1 max-lg:!hidden">
-                              {labels.map((label) => (
-                                <span
-                                  key={label}
-                                  className="max-w-[150px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                                >
-                                  {label}
-                                </span>
-                              ))}
-                              {issue.labels.length > labels.length ? (
-                                <span className="text-[11px] text-muted-foreground">
-                                  +{issue.labels.length - labels.length}
-                                </span>
-                              ) : null}
+                              <LinearLabelsCell
+                                issue={issue}
+                                maxVisible={3}
+                                sourceContext={linearTaskSourceContext}
+                                onIssuePatch={patchVisibleLinearIssue}
+                              />
                             </div>
                           ) : null}
 
@@ -11884,37 +11892,19 @@ export default function TaskPage(): React.JSX.Element {
                                 issue={issue}
                                 className="max-w-full px-2 py-0.5"
                                 sourceContext={linearTaskSourceContext}
+                                onIssuePatch={patchVisibleLinearIssue}
                               />
                             </div>
                           ) : null}
 
                           {effectiveLinearDisplayProperties.has('assignee') ? (
                             <div className="flex min-w-0 justify-center max-lg:!hidden">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div
-                                    className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px] text-muted-foreground"
-                                    aria-label={
-                                      issue.assignee?.displayName ??
-                                      translate('auto.components.TaskPage.42a9160321', 'Unassigned')
-                                    }
-                                  >
-                                    {issue.assignee?.avatarUrl ? (
-                                      <img
-                                        src={issue.assignee.avatarUrl}
-                                        alt={issue.assignee.displayName}
-                                        className="size-5 rounded-full"
-                                      />
-                                    ) : (
-                                      (issue.assignee?.displayName?.slice(0, 1) ?? '-')
-                                    )}
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={6}>
-                                  {issue.assignee?.displayName ??
-                                    translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                                </TooltipContent>
-                              </Tooltip>
+                              <LinearAssigneeCell
+                                issue={issue}
+                                variant="avatar"
+                                sourceContext={linearTaskSourceContext}
+                                onIssuePatch={patchVisibleLinearIssue}
+                              />
                             </div>
                           ) : null}
 

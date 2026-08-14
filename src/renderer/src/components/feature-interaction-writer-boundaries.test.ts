@@ -190,6 +190,22 @@ describe('feature interaction writer boundaries', () => {
       expect(section).toContain(linearWriter)
     }
 
+    const linearCellSections = [
+      sourceBetween(
+        componentSource('task-page-linear-assignee-cell.tsx'),
+        'export function LinearAssigneeCell',
+        'return ('
+      ),
+      sourceBetween(
+        componentSource('task-page-linear-labels-cell.tsx'),
+        'export function LinearLabelsCell',
+        'return ('
+      )
+    ]
+    for (const section of linearCellSections) {
+      expect(section).toContain(linearWriter)
+    }
+
     const drawerMutationSections = [
       sourceBetween(drawerSource, 'const handleStateChange', 'const handlePriorityChange'),
       sourceBetween(drawerSource, 'const handlePriorityChange', 'const handleEstimateChange'),
