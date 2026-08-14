@@ -1,5 +1,5 @@
 import type { ProviderAccountRef } from '../../shared/provider-account-ref'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export function assertProviderAccountRefForWorkspace(args: {

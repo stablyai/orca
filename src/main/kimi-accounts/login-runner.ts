@@ -105,7 +105,8 @@ export function runKimiLogin(
     let settled = false
     let prompted = false
     let output = ''
-    const decoder = new StringDecoder('utf8')
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
     const timeout = setTimeout(() => {
       terminateLogin(child)
       settle(() => reject(new Error('Kimi sign-in took too long to finish.')))
@@ -113,8 +114,8 @@ export function runKimiLogin(
 
     const cleanup = (): void => {
       clearTimeout(timeout)
-      stdout.off('data', onData)
-      stderr.off('data', onData)
+      stdout.off('data', onStdout)
+      stderr.off('data', onStderr)
       child.off('error', onError)
       child.off('close', onClose)
     }
@@ -126,8 +127,8 @@ export function runKimiLogin(
       cleanup()
       complete()
     }
-    const onData = (chunk: Buffer): void => {
-      output = retainRecentLoginOutput(`${output}${decoder.write(chunk)}`)
+    const consumeDecoded = (text: string): void => {
+      output = retainRecentLoginOutput(`${output}${text}`)
       if (prompted) {
         return
       }
@@ -151,6 +152,12 @@ export function runKimiLogin(
         }
       )
     }
+    const onStdout = (chunk: Buffer): void => {
+      consumeDecoded(stdoutDecoder.write(chunk))
+    }
+    const onStderr = (chunk: Buffer): void => {
+      consumeDecoded(stderrDecoder.write(chunk))
+    }
     const onError = (error: NodeJS.ErrnoException): void => {
       settle(() =>
         reject(
@@ -172,8 +179,8 @@ export function runKimiLogin(
       })
     }
 
-    stdout.on('data', onData)
-    stderr.on('data', onData)
+    stdout.on('data', onStdout)
+    stderr.on('data', onStderr)
     child.once('error', onError)
     child.once('close', onClose)
   })

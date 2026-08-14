@@ -1,3 +1,4 @@
+import { StringDecoder } from 'node:string_decoder'
 import { describe, expect, it } from 'vitest'
 import { parseKimiLoginInstructions, retainRecentLoginOutput } from './login-runner'
 
@@ -50,6 +51,36 @@ describe('parseKimiLoginInstructions', () => {
     expect(instructions?.message).toBe(
       'Open https://auth.kimi.com/device in your browser.\nEnter code: ABCD-EFGH'
     )
+  })
+
+  it('redacts a non-ASCII managed home after a UTF-8 split', () => {
+    const managedHomePath = '/private/管理/kimi-home'
+    const suffix = 'Open https://auth.kimi.com/device in your browser.\nEnter code: ABCD-EFGH'
+    const full = `Kimi login: ${managedHomePath}\n${suffix}\n`
+    const bytes = Buffer.from(full, 'utf8')
+    const midChar = Buffer.from('理', 'utf8')
+    const split = bytes.indexOf(Buffer.from(managedHomePath, 'utf8')) + midChar.length - 1
+    const decoder = new StringDecoder('utf8')
+    const streamed = decoder.write(bytes.subarray(0, split)) + decoder.write(bytes.subarray(split))
+
+    expect(streamed).toContain(managedHomePath)
+    const instructions = parseKimiLoginInstructions(streamed, managedHomePath)
+    expect(instructions?.message).toBe(suffix)
+    expect(instructions?.message).not.toContain('\uFFFD')
+  })
+
+  it('keeps stdout and stderr UTF-8 sequences on separate decoders', () => {
+    const managedHomePath = '/private/管理/kimi-home'
+    const bytes = Buffer.from(managedHomePath, 'utf8')
+    const split = bytes.indexOf(Buffer.from('理', 'utf8')) + 1
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
+    const assembled =
+      stdoutDecoder.write(bytes.subarray(0, split)) + stdoutDecoder.write(bytes.subarray(split))
+    const other = stderrDecoder.write(Buffer.from('noise'))
+
+    expect(assembled).toBe(managedHomePath)
+    expect(other).toBe('noise')
   })
 
   it('drops a truncated leading line so a cut managed-home path cannot leak', () => {
