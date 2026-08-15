@@ -6321,9 +6321,8 @@ export class OrcaRuntimeService {
     return false
   }
 
-  // Why: keep an existing snapshot's browser tabs in sync with the live bridge
-  // without rebuilding stable terminal state. Replaces browser entries with the
-  // current live set and rewrites the browser portion of the primary group order.
+  // Why: sync offscreen-owned browser tabs from the live bridge without deleting
+  // renderer-owned tabs whose workspace is currently unmounted.
   private reconcileHeadlessMobileSessionBrowserTabs(
     worktreeId: string,
     existing: RuntimeMobileSessionTabsSnapshot
@@ -6331,24 +6330,45 @@ export class OrcaRuntimeService {
     if (!this.offscreenBrowserBackend) {
       return
     }
-    const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
-    const liveIds = liveBrowserTabs.map((tab) => tab.id)
+    const headlessBuilt = this.isHeadlessBuiltMobileSessionPublicationBase(
+      existing.publicationEpoch
+    )
+    if (!headlessBuilt && !this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(existing)) {
+      return
+    }
     const existingBrowserTabs = existing.tabs.filter(
       (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
     )
-    const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
-    if (this.headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
+    const existingHeadlessBrowserTabs = existingBrowserTabs.filter((tab) =>
+      this.isHeadlessOwnedMobileBrowserTab(existing, tab)
+    )
+    const rendererBrowserPageIds = new Set(
+      existingBrowserTabs
+        .filter((tab) => !this.isHeadlessOwnedMobileBrowserTab(existing, tab))
+        .map((tab) => tab.browserPageId)
+        .filter((pageId): pageId is string => Boolean(pageId))
+    )
+    const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId).filter(
+      (tab) => !rendererBrowserPageIds.has(tab.browserPageId ?? '')
+    )
+    const liveIds = liveBrowserTabs.map((tab) => tab.id)
+    const existingHeadlessBrowserIds = new Set(
+      existingHeadlessBrowserTabs.flatMap((tab) => [tab.id, tab.browserWorkspaceId])
+    )
+    if (this.headlessBrowserTabsUnchanged(liveBrowserTabs, existingHeadlessBrowserTabs)) {
       return
     }
-    const nonBrowserTabs = existing.tabs.filter((tab) => tab.type !== 'browser')
-    const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...nonBrowserTabs, ...liveBrowserTabs]
+    const retainedTabs = existing.tabs.filter(
+      (tab) => tab.type !== 'browser' || !existingHeadlessBrowserIds.has(tab.id)
+    )
+    const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...retainedTabs, ...liveBrowserTabs]
     const liveIdSet = new Set(liveIds)
     const tabGroups = this.appendBrowserTabOrder(
       (existing.tabGroups ?? []).map((group) => ({
         ...group,
         // Drop closed browser ids; appendBrowserTabOrder re-adds the live ones.
         tabOrder: group.tabOrder.filter(
-          (id) => liveIdSet.has(id) || !existingBrowserIds.includes(id)
+          (id) => liveIdSet.has(id) || !existingHeadlessBrowserIds.has(id)
         )
       })),
       liveIds
@@ -6359,7 +6379,11 @@ export class OrcaRuntimeService {
       : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
     this.mobileSessionTabsByWorktree.set(worktreeId, {
       ...existing,
-      publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
+      publicationEpoch: this.getMobileSessionPublicationEpochAfterHeadlessBrowserChange(
+        existing,
+        nextTabs,
+        'headless-hydrated'
+      ),
       snapshotVersion: existing.snapshotVersion + 1,
       ...(activeStillPresent
         ? {}
@@ -8250,7 +8274,11 @@ export class OrcaRuntimeService {
         this.notifier?.closeTerminal(tab.parentTabId)
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot!, tab.parentTabId)
       }
-    } else if (tab.type === 'browser' && this.offscreenBrowserBackend) {
+    } else if (
+      tab.type === 'browser' &&
+      this.offscreenBrowserBackend &&
+      this.isHeadlessOwnedMobileBrowserTab(snapshot!, tab)
+    ) {
       // Why: headless browser tabs are offscreen WebContents with no renderer to
       // route closeSessionTab to. Close the page directly and drop it from the
       // snapshot so paired clients stop showing it.
@@ -8311,7 +8339,11 @@ export class OrcaRuntimeService {
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      publicationEpoch: this.getMobileSessionPublicationEpochAfterHeadlessBrowserChange(
+        snapshot,
+        nextTabs,
+        'headless'
+      ),
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
@@ -8324,6 +8356,63 @@ export class OrcaRuntimeService {
     }
     this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  }
+
+  private isHeadlessOwnedMobileBrowserTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean {
+    if (this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)) {
+      return true
+    }
+    if (!snapshot.publicationEpoch.includes(':headless-merge:')) {
+      return false
+    }
+    const rendererTabIdentityKeys =
+      this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(snapshot)
+    if (!rendererTabIdentityKeys) {
+      return false
+    }
+    // Why: a renderer-base merge contains both owners; only tabs absent from the accepted renderer revision belong to the offscreen backend.
+    return !this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+      rendererTabIdentityKeys.has(id)
+    )
+  }
+
+  private getMobileSessionPublicationEpochAfterHeadlessBrowserChange(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    nextTabs: readonly RuntimeMobileSessionSnapshotTab[],
+    headlessEpochPrefix: 'headless' | 'headless-hydrated'
+  ): string {
+    if (this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)) {
+      return `${headlessEpochPrefix}:${Date.now().toString(36)}`
+    }
+    const rendererTabIdentityKeys =
+      this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(snapshot)
+    if (!rendererTabIdentityKeys) {
+      return snapshot.publicationEpoch
+    }
+    const preservedTabs = nextTabs.filter(
+      (tab) =>
+        !this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+          rendererTabIdentityKeys.has(id)
+        )
+    )
+    const baseEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
+    return preservedTabs.length === 0
+      ? baseEpoch
+      : this.getMergedMobileSessionPublicationEpoch(
+          { ...snapshot, publicationEpoch: baseEpoch },
+          preservedTabs
+        )
+  }
+
+  private getAcceptedRendererIdentityKeysForMobileSessionSnapshot(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): ReadonlySet<string> | null {
+    const baseEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
+    const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
+    return accepted?.publicationEpoch === baseEpoch ? accepted.rendererTabIdentityKeys : null
   }
 
   private markHeadlessBrowserSessionTabActive(
@@ -8977,7 +9066,7 @@ export class OrcaRuntimeService {
         const liveTab = tab.browserPageId
           ? liveBrowserTabsByPageId.get(tab.browserPageId)
           : undefined
-        if (!liveTab) {
+        if (!liveTab && this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)) {
           continue
         }
         ids.add(tab.id)
@@ -31118,7 +31207,9 @@ export class OrcaRuntimeService {
     )
     return {
       ...existing,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
+      publicationEpoch: this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
+        ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)
+        : `headless-hydrated:${Date.now().toString(36)}`,
       // Why: mint a fresh version or clients' same-epoch gate drops the prune frame.
       snapshotVersion: existing.snapshotVersion + 1,
       activeGroupId:
@@ -31470,14 +31561,14 @@ export class OrcaRuntimeService {
         const liveTab = tab.browserPageId
           ? liveBrowserTabsByPageId.get(tab.browserPageId)
           : undefined
-        if (!liveTab) {
+        if (!liveTab && this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)) {
           continue
         }
-        // Why: renderer snapshots lag BrowserView teardown/process swaps; only surface pages the browser bridge can still route to.
+        // Why: renderer snapshots remain authoritative while their workspace is unmounted; only headless tabs require a live bridge page.
         tabs.push({
           ...tab,
-          title: liveTab.title || tab.title,
-          url: liveTab.url || tab.url,
+          title: liveTab?.title || tab.title,
+          url: liveTab?.url || tab.url,
           // Why: bridge "active" means active BrowserView/webContents, not active Orca tab; preserve the renderer's session focus.
           isActive: tab.isActive
         })
