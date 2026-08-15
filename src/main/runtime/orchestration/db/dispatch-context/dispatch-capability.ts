@@ -1,8 +1,29 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { OrchestrationError } from '../../orchestration-error'
+import type { DispatchContextRow } from '../../types'
 import { hashDispatchCapability } from '../dispatch-capability-hash'
 import { isEquivalentPaneKey } from '../pane-key-match'
+import { exposeUtcTimestamp } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+
+// Why: "capability is revoked" describes the mechanism, not the cause, and an
+// agent worker reads it as its authorization dying — the reported failure is a
+// worker that quits with finished work uncommitted rather than one that reports
+// again. State only what the row proves: whether this dispatch was settled or
+// released, when, and the one channel that still works. Never guess why.
+function describeRevokedDispatch(dispatch: DispatchContextRow): string {
+  const settled = dispatch.status === 'completed' || dispatch.status === 'failed'
+  const at = exposeUtcTimestamp(dispatch.completed_at ?? dispatch.capability_revoked_at)
+  const cause = settled
+    ? `Dispatch ${dispatch.id} was already settled as ${dispatch.status}${at ? ` at ${at}` : ''}, which revoked its lifecycle capability.`
+    : `Dispatch ${dispatch.id} was released${at ? ` at ${at}` : ''}, which revoked its lifecycle capability.`
+  return [
+    cause,
+    'This is final for worker_done and heartbeat: resending them cannot change it.',
+    'If the task is not actually finished, say so with --type escalation, which does not need this capability.',
+    'Do not exit with uncommitted work.'
+  ].join('\n')
+}
 
 export function mintDispatchCapability(
   this: OrchestrationDb,
@@ -52,9 +73,6 @@ export function verifyDispatchCapability(
   if (!dispatch.capability_hash) {
     return { valid: false, reason: `Dispatch ${params.dispatchId} has no lifecycle capability.` }
   }
-  if (dispatch.capability_revoked_at) {
-    return { valid: false, reason: `Dispatch ${params.dispatchId} capability is revoked.` }
-  }
   if (!params.capability) {
     return { valid: false, reason: 'The Dispatch capability is missing.' }
   }
@@ -76,6 +94,13 @@ export function verifyDispatchCapability(
     dispatch.process_incarnation !== params.processIncarnation
   ) {
     return { valid: false, reason: 'The Dispatch process incarnation changed.' }
+  }
+  // Why revocation is checked last: only a caller that has proven it is this
+  // dispatch's own worker gets told what happened to it. A caller that failed
+  // identity now learns nothing about the dispatch's state, and the recovery
+  // advice below is only ever addressed to someone who can act on it.
+  if (dispatch.capability_revoked_at) {
+    return { valid: false, reason: describeRevokedDispatch(dispatch) }
   }
   return { valid: true }
 }
