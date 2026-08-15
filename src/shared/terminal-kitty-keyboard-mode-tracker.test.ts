@@ -94,7 +94,18 @@ describe('TerminalKittyKeyboardModeTracker', () => {
 
     tracker.scan('\x1b[?25h')
     expect(tracker.cursorVisible).toBe(true)
-    tracker.scan('\x1bc')
+
+    const risTracker = new TerminalKittyKeyboardModeTracker()
+    risTracker.scan('\x1bc')
+    expect(risTracker.hasObservedCursorVisibility).toBe(true)
+    expect(risTracker.cursorVisible).toBe(true)
+
+    tracker.reset()
+    expect(tracker.hasObservedCursorVisibility).toBe(false)
+    expect(tracker.cursorVisible).toBe(true)
+
+    tracker.scan('\x1b[!p')
+    expect(tracker.hasObservedCursorVisibility).toBe(true)
     expect(tracker.cursorVisible).toBe(true)
   })
 
