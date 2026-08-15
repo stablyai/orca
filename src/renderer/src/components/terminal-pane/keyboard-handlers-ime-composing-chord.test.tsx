@@ -145,6 +145,10 @@ describe('a cursor chord pressed during a composition', () => {
     vi.restoreAllMocks()
   })
 
+  // The gesture runs to its release because a chord the IME swallowed is only resolvable there:
+  // on the keydown, Korean's committing source and Japanese's swallowing one are byte-identical,
+  // and acting on both would fire Korean's twice once the platform replays it. Recorded on macOS
+  // 26.5.1: `Cmd+←` delivers no arrow keyup at all, so the Command release ends it.
   function pressCmdArrowLeft(
     harness: ReturnType<typeof createHarness>,
     isComposing: boolean
@@ -157,6 +161,9 @@ describe('a cursor chord pressed during a composition', () => {
         metaKey: true,
         isComposing
       })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keyup', { key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing })
     )
   }
 

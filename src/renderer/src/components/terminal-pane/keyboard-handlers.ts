@@ -6,7 +6,7 @@ import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
-import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
+import { isImeExemptTerminalChord, resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
 import {
@@ -19,6 +19,7 @@ import {
   sendTerminalInputAfterComposition
 } from './terminal-ime-deferred-newline'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import {
   requestCapturedTerminalReconfirmation,
   sendCapturedTerminalInput
@@ -55,6 +56,86 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 
+// What runShortcutAction actually touches. Narrow so the release can hand it a chord that
+// answers for the press rather than for the event that happens to be in flight.
+type ShortcutActionEvent = {
+  key: string
+  code?: string
+  repeat: boolean
+  preventDefault: () => void
+  stopImmediatePropagation: () => void
+}
+
+type PendingImeChord = Parameters<typeof resolveTerminalShortcutAction>[0] &
+  Required<Pick<Parameters<typeof resolveTerminalShortcutAction>[0], 'code' | 'repeat'>> & {
+    isComposing: boolean
+  }
+
+/**
+ * A chord the IME took on keydown, kept until the key comes up so the release can answer for
+ * the press rather than for whatever the keyboard looks like by then.
+ *
+ * Recorded on stock macOS, and the two input sources answer in opposite ways. Both marked
+ * keydowns are identical (`code='ArrowLeft'`, `keyCode=229`, `isComposing=true`), so nothing
+ * can be decided when the key goes down. By the time it comes up they have separated:
+ *
+ *   - Korean 2-Set committed the syllable and ended the composition, then the platform
+ *     replays the chord unmarked. `isComposing` is false at release, and that replay resolves
+ *     on its own — acting there too would send it twice, which for `Option+←` is two words.
+ *   - Japanese conversion swallowed the chord whole: no commit, no replay, and the
+ *     composition is still live at release. Nothing else will ever deliver it.
+ *
+ * So a still-composing release means the chord has no other route to the shell. Its bytes take
+ * the transport, which bypasses xterm, so the release holds them until the composition commits.
+ *
+ * The snapshot is what makes reading the release safe. A `KeyboardEvent`'s modifier flags
+ * describe the moment it fired, and releasing `Cmd` before `←` leaves the arrow's keyup with
+ * `metaKey: false` — matching on that loses the chord entirely.
+ *
+ * TODO: one release is one action, so holding a swallowed chord down repeats nothing. Acting
+ * on the auto-repeat instead would have to run before the two cases separate, so this waits
+ * for a trace showing a user holds a chord mid-preedit.
+ */
+function imeChordSnapshot(event: KeyboardEvent): PendingImeChord {
+  // Field by field, and it must stay that way: a browser keeps KeyboardEvent's fields as
+  // prototype accessors, so `{ ...event }` is an empty object and the snapshot loses its
+  // `code`, which silently disables the whole recovery. happy-dom keeps them as own properties
+  // and would go on passing, so this is the only warning that survives in the source.
+  return {
+    key: event.key,
+    code: event.code,
+    metaKey: event.metaKey,
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    shiftKey: event.shiftKey,
+    // One release is one action, so the auto-repeat presses behind it are not repeats of it.
+    repeat: false,
+    // `isComposing` alone marks this as IME-owned for every consumer; the keyCode that also
+    // marked the press adds nothing once the press is over.
+    isComposing: true
+  }
+}
+
+/**
+ * Which release answers for a pending chord. Normally the chord's own key, but a key released
+ * while `Cmd` is held has no keyup at all: recorded in-app at Chromium's own input dispatch,
+ * `Cmd+←` delivers a keydown and nothing after it, while `Option+←` and a bare `←` both deliver
+ * their keyup there. Nothing in the app consumes it — it never arrives. The `Cmd` release does,
+ * still marked as composing, and it ends the same gesture.
+ *
+ * Korean cannot double-fire through this. It commits on the chord, so its own keyup arrives
+ * first and spends the carry, and both releases report the composition already over.
+ */
+function releasesPendingImeChord(chord: PendingImeChord, event: KeyboardEvent): boolean {
+  return chord.code === event.code || (chord.metaKey === true && event.key === 'Meta')
+}
+
+/**
+ * No IME gate here on purpose: the pane calls this for a swallowed chord's RELEASE, where the
+ * event still reports itself as composing and resolving it is the whole point. Which composing
+ * events reach a resolver at all is the pane's decision, not this function's — so a keydown
+ * outcome asserted against this function alone pins something the pane does not do.
+ */
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
   isMac: Parameters<typeof resolveTerminalShortcutAction>[1],
@@ -286,6 +367,7 @@ export function useTerminalKeyboardShortcuts({
     let optionKeyLocation = 0
     const heldImeEnterModifiers = new Set<'shift' | 'ctrl'>()
     const terminalImeEnterModifierKeydowns = new Set<'shift' | 'ctrl'>()
+    let pendingImeChord: PendingImeChord | null = null
     const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
     const deferredNewlineSender = createTerminalImeDeferredNewlineSender()
     const modifiedEnterChordOwner = createTerminalImeModifiedEnterChordOwner()
@@ -510,6 +592,26 @@ export function useTerminalKeyboardShortcuts({
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
       }
+      // Any press of this key ends whatever the last one carried, whoever owns this one. A key
+      // pressed outside a composition resolves from here, so a composition starting while it is
+      // held must not turn its release into a second firing; and a carry whose release never
+      // arrived — focus left the window mid-chord — must not answer for an unrelated later
+      // press of the same key. Scoped to this code so rollover leaves other keys alone.
+      if (pendingImeChord?.code === e.code) {
+        pendingImeChord = null
+      }
+      // Only the exempt chords yield here: an IME that swallows one leaves no other route to the
+      // shell, so it is recovered from the release. Every other IME-owned key keeps the paths
+      // below, which own the composing Enter.
+      if (isImeOwnedKeyboardEvent(e) && isImeExemptTerminalChord(e)) {
+        // Not armed from a rename field or the search input: that field can unmount before the
+        // key comes up, and the release would then arrive with the terminal as its target and
+        // pass the guard below, sending a chord aimed at the field to the shell.
+        if (!isEditableTarget(e.target)) {
+          pendingImeChord = imeChordSnapshot(e)
+        }
+        return
+      }
 
       const modifiedEnterChord = isWindows ? getModifiedEnterChord(e) : null
       if (
@@ -597,7 +699,41 @@ export function useTerminalKeyboardShortcuts({
       if (!action) {
         return
       }
+      const composing = e.isComposing || hasPendingImeComposition
+      runShortcutAction(e, action, manager, composing, (pane, sendResolvedInput) => {
+        if (!(composing && (e.key === 'Enter' || imeProcessEnter))) {
+          return false
+        }
+        if (isWindows) {
+          const chord = getModifiedEnterChord(e)
+          const claimedChord = chord
+            ? {
+                ...chord,
+                terminalModifierKeyDownObserved: terminalImeEnterModifierKeydowns.has(chord.kind)
+              }
+            : null
+          if (claimedChord && !modifiedEnterChordOwner.claim(claimedChord)) {
+            return true
+          }
+        }
+        deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+        return true
+      })
+    }
 
+    // Shared by the keydown path and the swallowed-chord release below, so a chord recovered
+    // from a release runs the same action a press would — including remaps onto pane commands.
+    function runShortcutAction(
+      e: ShortcutActionEvent,
+      action: NonNullable<ReturnType<typeof resolveShortcutEvent>>,
+      manager: PaneManager,
+      // Passed in because a chord recovered from a release has no live event to read it from,
+      // and is composing by definition — that is what armed the recovery.
+      composing: boolean,
+      // Why a callback: a composing Enter reads the live keydown and its imeProcessEnter, which
+      // a chord recovered from a release has neither of — and never is.
+      deferSend?: (pane: ManagedPane, sendResolvedInput: () => void) => boolean
+    ): void {
       if (action.type === 'switchInputSource') {
         // Why: the OS must receive its default action, while xterm must receive
         // none of the keydown, keypress, or keyup sequence.
@@ -614,20 +750,7 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         const sendResolvedInput = createCapturedInputSender(pane, action.data)
-        if ((e.isComposing || hasPendingImeComposition) && (e.key === 'Enter' || imeProcessEnter)) {
-          if (isWindows) {
-            const chord = getModifiedEnterChord(e)
-            const claimedChord = chord
-              ? {
-                  ...chord,
-                  terminalModifierKeyDownObserved: terminalImeEnterModifierKeydowns.has(chord.kind)
-                }
-              : null
-            if (claimedChord && !modifiedEnterChordOwner.claim(claimedChord)) {
-              return
-            }
-          }
-          deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+        if (deferSend?.(pane, sendResolvedInput)) {
           return
         }
         // Why: the composed glyph reaches the pty from the composition session-end handler, which
@@ -635,7 +758,7 @@ export function useTerminalKeyboardShortcuts({
         // after — `가나다` then Cmd+Left leaves `다가나` (#12871). Enter is handled above, where a
         // fallback timer is right because a newline arriving late still arrives; a chord arriving
         // mid-preedit is the corruption itself, so this one waits without a deadline.
-        if (e.isComposing || hasPendingImeComposition) {
+        if (composing) {
           sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput, {
             fallbackMs: null
           })
@@ -960,11 +1083,77 @@ export function useTerminalKeyboardShortcuts({
 
     const onNativeOnlyBlur = (): void => {
       nativeOnlyShortcutTracker.clear()
+      // Why: a chord interrupted by Cmd+Tab or Spotlight never delivers its release, and a carry
+      // with no release to spend it sits armed.
+      pendingImeChord = null
       heldImeEnterModifiers.clear()
       terminalImeEnterModifierKeydowns.clear()
       modifiedEnterChordOwner.clear()
       deferredNewlineSender.clearRedispatchedEnters()
       observedEnterKeydownTimeStamps.clear()
+    }
+
+    const onSwallowedImeChordRelease = (e: KeyboardEvent): void => {
+      const chord = pendingImeChord
+      if (!chord || !releasesPendingImeChord(chord, e)) {
+        return
+      }
+      // Spent before any gate below can refuse: the key is up, so the press it carried is over
+      // however this release is routed. Leaving it armed past a gate is what lets a carry
+      // outlive its gesture and answer for someone else's press.
+      pendingImeChord = null
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const keyboardScope = keyboardScopeRef.current
+      if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
+        return
+      }
+      // The composition ended while the key was down, so the IME took the chord as its cue to
+      // commit rather than eating it, and the platform's unmarked replay is on its way.
+      if (!isImeOwnedKeyboardEvent(e)) {
+        return
+      }
+      if (isEditableTarget(e.target)) {
+        return
+      }
+      // Matched on the press, consumed on the release. `chord` carries the modifiers as they
+      // were when the key went down; `preventDefault` forwards to the real event.
+      //
+      // The propagation stoppers do not. On a keydown they keep a second handler from acting on
+      // the same press, but by this point the action has already run and there is nothing left
+      // to race. Cutting a keyup off at window capture only costs: it never reaches xterm's own
+      // `_keyUp`, which clears the flags its input path reads, nor any window listener that
+      // happens to be registered after this one.
+      const pressed: PendingImeChord & ShortcutActionEvent & { stopPropagation: () => void } = {
+        ...chord,
+        preventDefault: () => e.preventDefault(),
+        stopPropagation: () => {},
+        stopImmediatePropagation: () => {}
+      }
+      // Same precedence as the keydown path: a chord remapped onto tab.close closes an empty
+      // floating panel there, and skipping it here would close the pane instead.
+      if (handleEmptyFloatingWorkspacePanelCloseShortcut(pressed, shortcutPlatform, keybindings)) {
+        return
+      }
+      if (matchFileSearchShortcut(chord, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
+        if (selectedText) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          onSearchSelectedText(selectedText)
+          return
+        }
+      }
+      const action = resolveShortcutEvent(chord)
+      // A native-only chord arms from its press so the OS still sees the gesture; arming it
+      // from a release would leave the tracker holding a key that is already up.
+      if (!action || action.type === 'switchInputSource') {
+        return
+      }
+      runShortcutAction(pressed, action, manager, true)
     }
 
     window.addEventListener('keydown', onModifierDown, { capture: true })
@@ -973,6 +1162,7 @@ export function useTerminalKeyboardShortcuts({
     window.addEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
     window.addEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
     window.addEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
+    window.addEventListener('keyup', onSwallowedImeChordRelease, { capture: true })
     window.addEventListener('blur', onNativeOnlyBlur)
     return () => {
       modifiedEnterChordOwner.clear()
@@ -984,6 +1174,8 @@ export function useTerminalKeyboardShortcuts({
       window.removeEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
       window.removeEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
       window.removeEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
+      pendingImeChord = null
+      window.removeEventListener('keyup', onSwallowedImeChordRelease, { capture: true })
       window.removeEventListener('blur', onNativeOnlyBlur)
     }
   }, [

@@ -6,6 +6,7 @@ import {
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 export type TerminalShortcutEvent = {
   key: string
@@ -18,6 +19,43 @@ export type TerminalShortcutEvent = {
 }
 
 export type MacOptionAsAlt = 'true' | 'false' | 'left' | 'right'
+
+// Why: a live composition owns every keydown, but a Japanese conversion swallows a modifier
+// chord over one of these keys outright — no commit, no platform replay, nothing reaching the
+// shell (#12871). Exempting them lets the terminal pane recover the chord from the key's
+// release, which is the first moment a swallowed chord is distinguishable from a delayed one
+// (keyboard-handlers.ts, `imeChordSnapshot`). Read `code`, not `key`: Windows reports an
+// IME-consumed key as `key: 'Process'` (#12171, #13033), which the keybinding matcher also
+// falls back on — see PHYSICAL_CODE_FALLBACK_KEYS in shared/keybindings.ts.
+//
+// Adding a code here means teaching the Cmd+Up/Down branch below to read `chordKey` too; it
+// reads `event.key`, which is the same value for every code outside this set.
+//
+// ArrowUp/ArrowDown are left out because no trace covers them, not because the reasoning
+// stops there — Cmd+↑/↓ scrolls the viewport and writes no bytes, so it is the safer half.
+const IME_EXEMPT_CHORD_CODES = new Set(['ArrowLeft', 'ArrowRight', 'Backspace', 'Delete'])
+
+// Gated on IME ownership so an ordinary press keeps following `key`: an X11 keysym remap
+// preserves `code` while changing `key`, and reading `code` there would silently override it.
+function physicalChordKey(event: TerminalShortcutEvent): string {
+  if (!isImeOwnedKeyboardEvent(event) || !event.code) {
+    return event.key
+  }
+  return IME_EXEMPT_CHORD_CODES.has(event.code) ? event.code : event.key
+}
+
+/**
+ * True when an IME-owned event is nonetheless an Orca terminal chord. A lone modifier is
+ * excluded, so a mode-switch gesture such as composing Ctrl+Space never reaches the shortcut
+ * policy, and so is Shift, which Japanese conversion binds to resize a segment.
+ */
+export function isImeExemptTerminalChord(event: TerminalShortcutEvent): boolean {
+  return (
+    IME_EXEMPT_CHORD_CODES.has(event.code ?? '') &&
+    !event.shiftKey &&
+    (event.metaKey || event.ctrlKey || event.altKey)
+  )
+}
 
 // Shared close-chord predicate: the terminal pane (L3) and the floating panel's focused-terminal
 // branch (L2) both treat terminal.closePane OR a terminal-scope tab.close as "close the active
@@ -113,7 +151,7 @@ export function resolveTerminalShortcutAction(
   hasCtrlEnterCsiUAuthority?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
-
+  const chordKey = physicalChordKey(event)
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
   if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
     return { type: 'switchInputSource' }
@@ -221,23 +259,23 @@ export function resolveTerminalShortcutAction(
     !event.metaKey &&
     !event.altKey &&
     !event.shiftKey &&
-    event.key === 'Backspace'
+    chordKey === 'Backspace'
   ) {
     return { type: 'sendInput', data: '\x17' }
   }
 
   if (isMac && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-    if (event.key === 'Backspace') {
+    if (chordKey === 'Backspace') {
       return { type: 'sendInput', data: '\x15' }
     }
-    if (event.key === 'Delete') {
+    if (chordKey === 'Delete') {
       return { type: 'sendInput', data: '\x0b' }
     }
     // Why: xterm.js has no Cmd+Arrow mapping; translate Cmd+←/→ to readline Ctrl+A/Ctrl+E for line start/end (iTerm2/Ghostty).
-    if (event.key === 'ArrowLeft') {
+    if (chordKey === 'ArrowLeft') {
       return { type: 'sendInput', data: '\x01' }
     }
-    if (event.key === 'ArrowRight') {
+    if (chordKey === 'ArrowRight') {
       return { type: 'sendInput', data: '\x05' }
     }
     // Why: macOS users expect Cmd+↑/↓ to scroll scrollback, not write escape bytes to the shell.
@@ -254,7 +292,7 @@ export function resolveTerminalShortcutAction(
     !event.ctrlKey &&
     event.altKey &&
     !event.shiftKey &&
-    event.key === 'Backspace'
+    chordKey === 'Backspace'
   ) {
     // Why: a kitty-protocol TUI binds the CSI 127;3u xterm emits natively; the legacy \x1b\x7f fallback would bypass it.
     if (isKittyKeyboardActivePane?.()) {
@@ -268,14 +306,14 @@ export function resolveTerminalShortcutAction(
     !event.ctrlKey &&
     event.altKey &&
     !event.shiftKey &&
-    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    (chordKey === 'ArrowLeft' || chordKey === 'ArrowRight')
   ) {
     // Why: a kitty-protocol TUI binds alt+arrow via xterm's native CSI 1;3D/C; \eb/\ef would reach it as alt+b/f.
     if (isKittyKeyboardActivePane?.()) {
       return null
     }
     // Why: readline doesn't bind xterm's \e[1;3D/C for alt+←/→, so translate to \eb/\ef for word-nav (iTerm2 "Esc+" behavior).
-    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+    return { type: 'sendInput', data: chordKey === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 
   if (
@@ -284,14 +322,14 @@ export function resolveTerminalShortcutAction(
     event.ctrlKey &&
     !event.altKey &&
     !event.shiftKey &&
-    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    (chordKey === 'ArrowLeft' || chordKey === 'ArrowRight')
   ) {
     // Why: local Windows ConPTY (PSReadLine) binds Ctrl+←/→ itself; sending \eb/\ef prints stray b/f. Remote/WSL run readline.
     if (isLocalWindowsConptyPane?.()) {
       return null
     }
     // Why: readline ignores xterm's \e[1;5D/C, so translate Ctrl+←/→ to \eb/\ef for word-nav; !isMac since Mac reserves Ctrl+Arrow.
-    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+    return { type: 'sendInput', data: chordKey === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 
   // Why: macOptionIsMeta stays off so non-US layouts can compose @/€; match event.code since composition rewrites event.key.
