@@ -78,6 +78,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { PlaneWorkItem } from '../../../../shared/plane/types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
@@ -115,6 +116,7 @@ import {
 } from '@/lib/workspace-emoji-shortcodes'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
+import { planeListIssues, planeSearchIssues } from '@/runtime/runtime-plane-client'
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
 const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
@@ -131,6 +133,7 @@ type SmartWorkspaceNameFieldProps = {
   onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onPlaneIssueSelect?: (issue: PlaneWorkItem) => void
   onOpenJiraSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
@@ -150,7 +153,15 @@ type SmartWorkspaceNameFieldProps = {
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  kind:
+    | 'github-pr'
+    | 'github-issue'
+    | 'gitlab-mr'
+    | 'gitlab-issue'
+    | 'branch'
+    | 'linear'
+    | 'jira'
+    | 'plane'
   label: string
   url?: string
 }
@@ -241,6 +252,7 @@ export default function SmartWorkspaceNameField({
   onBranchSelect,
   onLinearIssueSelect,
   onJiraIssueSelect,
+  onPlaneIssueSelect,
   onOpenJiraSettings,
   selectedSource,
   onClearSelectedSource,
@@ -269,6 +281,7 @@ export default function SmartWorkspaceNameField({
     getCachedWorkItems,
     linearStatus,
     linearStatusChecked,
+    planeStatus,
     listLinearIssues,
     preflightStatus,
     preflightStatusChecked,
@@ -288,6 +301,7 @@ export default function SmartWorkspaceNameField({
       getCachedWorkItems: s.getCachedWorkItems,
       linearStatus: s.linearStatus,
       linearStatusChecked: s.linearStatusChecked,
+      planeStatus: s.planeStatus,
       listLinearIssues: s.listLinearIssues,
       preflightStatus: s.preflightStatus,
       preflightStatusChecked: s.preflightStatusChecked,
@@ -369,6 +383,17 @@ export default function SmartWorkspaceNameField({
         : null,
     [selectedRepo]
   )
+  const planeSourceContext = useMemo(
+    () =>
+      selectedRepo
+        ? buildTaskSourceContextFromRepo({
+            provider: 'plane',
+            projectId: selectedRepo.id,
+            repo: selectedRepo
+          })
+        : null,
+    [selectedRepo]
+  )
   const [mode, setMode] = useState<SmartNameMode>(textOnly ? 'text' : 'smart')
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const [open, setOpen] = useState(false)
@@ -382,6 +407,7 @@ export default function SmartWorkspaceNameField({
   } | null>(null)
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
+  const [planeIssues, setPlaneIssues] = useState<PlaneWorkItem[]>([])
   const [githubLoading, setGithubLoading] = useState(false)
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [branchesLoading, setBranchesLoading] = useState(false)
@@ -391,6 +417,7 @@ export default function SmartWorkspaceNameField({
   )
   const [settledLinearUrlQuery, setSettledLinearUrlQuery] = useState<string | null>(null)
   const [jiraLoading, setJiraLoading] = useState(false)
+  const [planeLoading, setPlaneLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
   const [emojiCommandValue, setEmojiCommandValue] = useState('')
   const [emojiCursor, setEmojiCursor] = useState<number | null>(null)
@@ -439,13 +466,15 @@ export default function SmartWorkspaceNameField({
   )
   const availableTaskProviders = useMemo(
     () =>
-      filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
+      filterAvailableTaskProviders(['github', 'gitlab', 'linear', 'plane'], {
         gitlabInstalled: gitlabSourceAvailable,
-        linearConnected: linearStatus.connected === true
+        linearConnected: linearStatus.connected === true,
+        planeConnected: planeStatus.connected === true
       }),
-    [gitlabSourceAvailable, linearStatus.connected]
+    [gitlabSourceAvailable, linearStatus.connected, planeStatus.connected]
   )
   const linearAvailable = availableTaskProviders.includes('linear')
+  const planeAvailable = availableTaskProviders.includes('plane')
   const availableModes = getSmartWorkspaceNameModes().filter((item) => {
     if (textOnly) {
       return item.id === 'text'
@@ -461,6 +490,9 @@ export default function SmartWorkspaceNameField({
     }
     if (item.id === 'jira') {
       return jiraSourceConnected
+    }
+    if (item.id === 'plane') {
+      return planeAvailable
     }
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled
@@ -586,21 +618,27 @@ export default function SmartWorkspaceNameField({
       setOpen(false)
       return
     }
-    if ((mode === 'gitlab' && gitlabSourceAvailable) || (mode === 'linear' && linearAvailable)) {
+    if (
+      (mode === 'gitlab' && gitlabSourceAvailable) ||
+      (mode === 'linear' && linearAvailable) ||
+      (mode === 'plane' && planeAvailable)
+    ) {
       return
     }
-    if (mode !== 'gitlab' && mode !== 'linear') {
+    if (mode !== 'gitlab' && mode !== 'linear' && mode !== 'plane') {
       return
     }
     setMode('smart')
     setGitlabItems([])
     setLinearIssues([])
     setJiraIssues([])
+    setPlaneIssues([])
     setGitlabLoading(false)
     setLinearLoading(false)
     setJiraLoading(false)
+    setPlaneLoading(false)
     setCommandValue('')
-  }, [gitlabSourceAvailable, linearAvailable, mode, textOnly])
+  }, [gitlabSourceAvailable, linearAvailable, mode, planeAvailable, textOnly])
 
   useEffect(() => {
     if (!disabled) {
@@ -613,11 +651,13 @@ export default function SmartWorkspaceNameField({
     setBranchResultsSource(null)
     setLinearIssues([])
     setJiraIssues([])
+    setPlaneIssues([])
     setGithubLoading(false)
     setGitlabLoading(false)
     setBranchesLoading(false)
     setLinearLoading(false)
     setJiraLoading(false)
+    setPlaneLoading(false)
     setCommandValue('')
     setCrossRepoPrompt(null)
   }, [disabled])
@@ -679,6 +719,51 @@ export default function SmartWorkspaceNameField({
     jiraSourceConnected &&
     jiraSourceContext !== null &&
     jiraSearchJql !== null
+  const shouldQueryPlane =
+    isSmartWorkspaceSourceQueryWithinLimit(debouncedQuery) &&
+    !jiraSource.intent &&
+    !linearUrlIntentOwnsInput &&
+    !textOnly &&
+    planeAvailable &&
+    (mode === 'smart' || mode === 'plane')
+
+  useEffect(() => {
+    if (!shouldQueryPlane) {
+      setPlaneIssues([])
+      setPlaneLoading(false)
+      return
+    }
+    let stale = false
+    const trimmed = debouncedQuery.trim()
+    if (trimmed === '') {
+      setPlaneIssues([])
+    }
+    setPlaneLoading(true)
+    const request = trimmed
+      ? planeSearchIssues(planeSourceContext ?? settings, trimmed, RESULT_LIMIT)
+      : planeListIssues(planeSourceContext ?? settings, 'all', RESULT_LIMIT).then(
+          (result) => result.items
+        )
+    void request
+      .then((issues) => {
+        if (!stale) {
+          setPlaneIssues(issues)
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setPlaneIssues([])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setPlaneLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [debouncedQuery, planeSourceContext, settings, shouldQueryPlane])
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub) {
@@ -1294,6 +1379,12 @@ export default function SmartWorkspaceNameField({
       ),
       linearUrlIntentOwnsResults: true,
       mode,
+      planeAvailable,
+      planeIssues: getVisibleHeldProviderResults({
+        items: planeIssues,
+        value,
+        debouncedQuery
+      }),
       resultLimit: RESULT_LIMIT,
       value
     })
@@ -1313,6 +1404,8 @@ export default function SmartWorkspaceNameField({
     linearUrlLookupFailed,
     linearUrlIntentOwnsInput,
     mode,
+    planeAvailable,
+    planeIssues,
     selectedRepo?.id,
     value
   ])
@@ -1333,7 +1426,7 @@ export default function SmartWorkspaceNameField({
     !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
 
   // Why: when the typed value is an unambiguous source ref, snap the highlight to that row so Enter picks it over the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
+  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | 'plane' | null>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
@@ -1362,8 +1455,14 @@ export default function SmartWorkspaceNameField({
         return 'linear'
       }
     }
+    if (
+      planeAvailable &&
+      rows.some((row) => row.kind === 'plane' && row.issue.identifier.toLowerCase() === trimmed.toLowerCase())
+    ) {
+      return 'plane'
+    }
     return null
-  }, [jiraSource.intent, linearAvailable, rows, value])
+  }, [jiraSource.intent, linearAvailable, planeAvailable, rows, value])
   const unresolvedLinearUrlIntent =
     linearUrlIntentOwnsInput &&
     linearAvailable &&
@@ -1418,7 +1517,7 @@ export default function SmartWorkspaceNameField({
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading || planeLoading
   const reserveLinearLoadingResults = unresolvedLinearUrlIntent && searchResultRows.length === 0
   // Why: only spin on first load — not on every in-flight refresh while rows stay visible.
   const showSearchSpinner = loading && searchResultRows.length === 0
@@ -1466,6 +1565,8 @@ export default function SmartWorkspaceNameField({
           return
         }
         onJiraIssueSelect?.(row.issue, sourceContext)
+      } else if (row.kind === 'plane') {
+        onPlaneIssueSelect?.(row.issue)
       } else {
         onLinearIssueSelect(row.issue)
       }
@@ -1480,6 +1581,7 @@ export default function SmartWorkspaceNameField({
       onGitLabItemSelect,
       onJiraIssueSelect,
       onLinearIssueSelect,
+      onPlaneIssueSelect,
       onValueChange,
       selectJiraAccount
     ]

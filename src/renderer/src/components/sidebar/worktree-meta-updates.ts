@@ -118,6 +118,9 @@ function issueLinkIdentity(
   if (parsed.provider === 'github') {
     return `github:${parsed.number}`
   }
+  if (parsed.provider === 'plane') {
+    return `plane:${parsed.identifier}:${parsed.baseUrl ?? ''}:${parsed.workspaceSlug ?? ''}`
+  }
   const organizationUrlKey = parsed.organizationUrlKey ?? storedLinearOrganizationUrlKey ?? ''
   return `linear:${parsed.identifier}:${organizationUrlKey.trim().toLowerCase()}`
 }
@@ -154,10 +157,10 @@ function keepsLinkedWorkItem(
   if (parsed.provider === 'github') {
     return live.linkedWorkItemProvider === 'github' && parsed.number === live.linkedIssue
   }
-  if (
-    live.linkedWorkItemProvider !== 'linear' ||
-    parsed.identifier.toUpperCase() !== live.linkedLinearIssue?.trim().toUpperCase()
-  ) {
+  if (parsed.provider === 'plane') {
+    return false
+  }
+  if (live.linkedWorkItemProvider !== 'linear' || parsed.identifier.toUpperCase() !== live.linkedLinearIssue?.trim().toUpperCase()) {
     return false
   }
   const storedOrganizationUrlKey = live.linkedLinearIssueOrganizationUrlKey?.trim()

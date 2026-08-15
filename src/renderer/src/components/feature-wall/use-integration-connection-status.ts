@@ -28,7 +28,7 @@ export function deriveIntegrationStepStates(input: {
 
 export function deriveIntegrationFlowState(input: {
   reviewConnected: boolean
-  trackerProviderName: 'Linear' | 'Jira' | null
+  trackerProviderName: 'Linear' | 'Jira' | 'Plane' | null
   codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
   trackerChecking: boolean
 }): {
@@ -89,6 +89,9 @@ type ProviderStatusFacts = {
   jiraStatus: { connected?: boolean }
   jiraStatusChecked: boolean
   jiraStatusContextKey: string | null
+  planeStatus: { connected?: boolean }
+  planeStatusChecked: boolean
+  planeStatusContextKey: string | null
   providerRuntimeContextKey: string
 }
 
@@ -100,14 +103,14 @@ export type IntegrationConnectionStatus = {
   // GitHub/GitLab issues can double as tasks; token/env review providers do not.
   codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
   // True once any task source is usable: a code host (its issues double as a
-  // task source) or a dedicated tracker (Linear/Jira).
+  // task source) or a dedicated tracker (Linear/Jira/Plane).
   trackerConnected: boolean
   // Display name of the connected tracker, or null. Code hosts are surfaced
-  // via reviewProviderName, so this only names Linear/Jira.
-  trackerProviderName: 'Linear' | 'Jira' | null
+  // via reviewProviderName, so this only names Linear/Jira/Plane.
+  trackerProviderName: 'Linear' | 'Jira' | 'Plane' | null
   // Every connected task source, trackers first, for "Linear and GitHub
   // connected for tasks" summaries that don't under-report what's usable.
-  taskSourceNames: ('Linear' | 'Jira' | 'GitHub' | 'GitLab')[]
+  taskSourceNames: ('Linear' | 'Jira' | 'Plane' | 'GitHub' | 'GitLab')[]
   // True while the code-host check is unresolved, stale, loading, or errored.
   reviewChecking: boolean
   // True while either dedicated tracker check is unresolved or stale.
@@ -166,11 +169,14 @@ export function deriveIntegrationConnectionStatus(
 
   const linearStatusCurrent = facts.linearStatusContextKey === facts.providerRuntimeContextKey
   const jiraStatusCurrent = facts.jiraStatusContextKey === facts.providerRuntimeContextKey
+  const planeStatusCurrent = facts.planeStatusContextKey === facts.providerRuntimeContextKey
   const linearChecking = !linearStatusCurrent || !facts.linearStatusChecked
   const jiraChecking = !jiraStatusCurrent || !facts.jiraStatusChecked
+  const planeChecking = !planeStatusCurrent || !facts.planeStatusChecked
   const linearConnected =
     !linearChecking && linearStatusCurrent && facts.linearStatus.connected === true
   const jiraConnected = !jiraChecking && jiraStatusCurrent && facts.jiraStatus.connected === true
+  const planeConnected = !planeChecking && planeStatusCurrent && facts.planeStatus.connected === true
 
   const reviewProviderName = githubConnected
     ? 'GitHub'
@@ -184,10 +190,11 @@ export function deriveIntegrationConnectionStatus(
             ? 'Gitea'
             : null
   const codeHostTaskProviderName = githubConnected ? 'GitHub' : gitlabConnected ? 'GitLab' : null
-  const trackerProviderName = linearConnected ? 'Linear' : jiraConnected ? 'Jira' : null
+  const trackerProviderName = linearConnected ? 'Linear' : jiraConnected ? 'Jira' : planeConnected ? 'Plane' : null
   const taskSourceNames: IntegrationConnectionStatus['taskSourceNames'] = [
     ...(linearConnected ? (['Linear'] as const) : []),
     ...(jiraConnected ? (['Jira'] as const) : []),
+    ...(planeConnected ? (['Plane'] as const) : []),
     ...(githubConnected ? (['GitHub'] as const) : []),
     ...(gitlabConnected ? (['GitLab'] as const) : [])
   ]
@@ -195,7 +202,7 @@ export function deriveIntegrationConnectionStatus(
   // Why: one resolved task source is enough for parent setup readiness, but the
   // local "use code host issues" acknowledgement waits until tracker checks
   // settle so the banner uses the right completion reason.
-  const trackerChecking = trackerProviderName === null && (linearChecking || jiraChecking)
+  const trackerChecking = trackerProviderName === null && (linearChecking || jiraChecking || planeChecking)
 
   return {
     reviewConnected:
@@ -230,6 +237,9 @@ export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const planeStatus = useAppStore((s) => s.planeStatus)
+  const planeStatusChecked = useAppStore((s) => s.planeStatusChecked)
+  const planeStatusContextKey = useAppStore((s) => s.planeStatusContextKey)
   const settings = useAppStore((s) => s.settings)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -250,6 +260,9 @@ export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    planeStatus,
+    planeStatusChecked,
+    planeStatusContextKey,
     providerRuntimeContextKey
   })
 }

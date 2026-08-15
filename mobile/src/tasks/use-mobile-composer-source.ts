@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
+import type { PlaneWorkItem } from '../../../src/shared/plane/types'
 import { resolveComposerManualBranchNameChange } from '../../../src/shared/composer-branch-selection'
 import { resolveGitHubWorkItemIdentity } from '../../../src/shared/new-workspace/github-work-item-identity'
 import { getForkPushWarning } from '../../../src/shared/new-workspace/fork-push-warning'
@@ -10,10 +11,12 @@ import {
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
   buildLinearLinkedWorkItem,
+  buildPlaneLinkedWorkItem,
   buildSmartNameSelection,
   resolveComposerBranchPick,
   resolveComposerCreateSelection,
   resolveLinearAutoName,
+  resolvePlaneAutoName,
   resolveWorkItemAutoName,
   shouldApplyAutoName
 } from './composer-linked-work-item'
@@ -215,6 +218,25 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     [clearBaseAndBranch, name]
   )
 
+  const handleSmartPlaneIssueSelect = useCallback(
+    (issue: PlaneWorkItem) => {
+      resolveTokenRef.current += 1
+      setLinkedWorkItem(buildPlaneLinkedWorkItem(issue))
+      const suggested = resolvePlaneAutoName(issue)
+      const identifierTyped = name.trim().toLowerCase() === issue.identifier.toLowerCase()
+      if (
+        suggested &&
+        (identifierTyped ||
+          shouldApplyAutoName({ currentName: name, lastAutoName: lastAutoNameRef.current }))
+      ) {
+        setNameState(suggested)
+        lastAutoNameRef.current = suggested
+      }
+      clearBaseAndBranch()
+    },
+    [clearBaseAndBranch, name]
+  )
+
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string) => {
       resolveTokenRef.current += 1
@@ -323,6 +345,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     handleSmartGitHubItemSelect,
     handleSmartGitLabItemSelect,
     handleSmartLinearIssueSelect,
+    handleSmartPlaneIssueSelect,
     handleSmartBranchSelect,
     handleSmartCreateBranch,
     handleClearSmartNameSelection

@@ -6,9 +6,11 @@ import {
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
   buildLinearLinkedWorkItem,
+  buildPlaneLinkedWorkItem,
   buildSmartNameSelection,
   resolveComposerBranchPick,
   resolveComposerCreateSelection,
+  resolvePlaneAutoName,
   resolveWorkItemAutoName,
   shouldApplyAutoName
 } from './composer-linked-work-item'
@@ -50,6 +52,23 @@ describe('linked work item builders', () => {
       linearIdentifier: 'ENG-9',
       linearWorkspaceId: 'ws-1',
       linearOrganizationUrlKey: 'acme'
+    })
+  })
+
+  it('maps a Plane issue with identifier and instance id', () => {
+    const linked = buildPlaneLinkedWorkItem({
+      identifier: 'AIF-9',
+      sequenceId: 9,
+      title: 'Ship Plane',
+      url: 'https://plane.home.usableapps.io/usableapps/issues/AIF-9',
+      instanceId: 'plane-instance'
+    })
+    expect(linked).toMatchObject({
+      provider: 'plane',
+      type: 'issue',
+      number: 9,
+      planeIdentifier: 'AIF-9',
+      planeInstanceId: 'plane-instance'
     })
   })
 })
@@ -128,6 +147,19 @@ describe('buildSmartNameSelection', () => {
         baseBranch: undefined
       })
     ).toEqual({ kind: 'linear', label: 'ENG-9 Ship', url: 'u' })
+  })
+
+  it('maps Plane with a bare title label', () => {
+    expect(
+      buildSmartNameSelection({
+        linkedWorkItem: base({ provider: 'plane', type: 'issue', number: 9, title: 'AIF-9 Ship' }),
+        baseBranch: undefined
+      })
+    ).toEqual({ kind: 'plane', label: 'AIF-9 Ship', url: 'u' })
+  })
+
+  it('derives Plane issue auto names from the identifier and title', () => {
+    expect(resolvePlaneAutoName({ identifier: 'AIF-9', title: 'Ship Plane' })).toBe('aif-9')
   })
 
   it('falls back to a branch pill', () => {

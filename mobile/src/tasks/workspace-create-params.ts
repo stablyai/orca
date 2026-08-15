@@ -50,10 +50,22 @@ type WorkspaceCreateLinearItem = {
   }
 }
 
+type WorkspaceCreatePlaneItem = {
+  provider: 'plane'
+  source: {
+    identifier: string
+    title: string
+    url: string
+    number?: number
+    instanceId?: string
+  }
+}
+
 export type WorkspaceCreateTaskItem =
   | WorkspaceCreateGitHubItem
   | WorkspaceCreateGitLabItem
   | WorkspaceCreateLinearItem
+  | WorkspaceCreatePlaneItem
 
 export type WorkspaceCreateParams = Record<string, unknown>
 
@@ -110,17 +122,7 @@ export function buildTaskWorkspaceCreateParams(args: {
   const selectedPushTarget = pushTarget ?? hostedStartPoint?.pushTarget
   // Why: desktop only sends displayName while the name is still auto-derived; a
   // user-edited name suppresses it so the runtime keeps the user's chosen name.
-  const sourceName =
-    item.provider === 'linear'
-      ? getWorkspaceSourceName({
-          provider: 'linear',
-          type: 'issue',
-          number: 0,
-          title: item.source.title,
-          url: item.source.url,
-          linearIdentifier: item.source.identifier
-        })
-      : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+  const sourceName = getTaskItemWorkspaceSourceName(item)
   const displayName = nameIsAutoManaged ? { displayName: sourceName.displayName } : {}
   const common = {
     setupDecision,
@@ -161,6 +163,23 @@ export function buildTaskWorkspaceCreateParams(args: {
     }
   }
 
+  if (item.provider === 'linear') {
+    return {
+      repo: `id:${targetRepoId}`,
+      name: resolveMobileWorkspaceCreateName({
+        draft: workspaceName,
+        fallback: item.source.identifier.toLowerCase()
+      }),
+      ...displayName,
+      linkedLinearIssue: item.source.identifier,
+      ...(item.source.workspaceId ? { linkedLinearIssueWorkspaceId: item.source.workspaceId } : {}),
+      ...(item.source.organizationUrlKey
+        ? { linkedLinearIssueOrganizationUrlKey: item.source.organizationUrlKey }
+        : {}),
+      ...common
+    }
+  }
+
   return {
     repo: `id:${targetRepoId}`,
     name: resolveMobileWorkspaceCreateName({
@@ -168,11 +187,39 @@ export function buildTaskWorkspaceCreateParams(args: {
       fallback: item.source.identifier.toLowerCase()
     }),
     ...displayName,
-    linkedLinearIssue: item.source.identifier,
-    ...(item.source.workspaceId ? { linkedLinearIssueWorkspaceId: item.source.workspaceId } : {}),
-    ...(item.source.organizationUrlKey
-      ? { linkedLinearIssueOrganizationUrlKey: item.source.organizationUrlKey }
-      : {}),
+    linkedWorkItem: {
+      provider: 'plane',
+      type: 'issue',
+      number: item.source.number ?? 0,
+      title: item.source.title,
+      url: item.source.url,
+      planeIdentifier: item.source.identifier,
+      ...(item.source.instanceId ? { planeInstanceId: item.source.instanceId } : {})
+    },
     ...common
   }
+}
+
+function getTaskItemWorkspaceSourceName(item: WorkspaceCreateTaskItem): ReturnType<typeof getWorkspaceSourceName> {
+  if (item.provider === 'linear') {
+    return getWorkspaceSourceName({
+      provider: 'linear',
+      type: 'issue',
+      number: 0,
+      title: item.source.title,
+      url: item.source.url,
+      linearIdentifier: item.source.identifier
+    })
+  }
+  if (item.provider === 'plane') {
+    return getWorkspaceSourceName({
+      provider: 'plane',
+      type: 'issue',
+      number: item.source.number ?? 0,
+      title: item.source.title,
+      url: item.source.url,
+      planeIdentifier: item.source.identifier
+    })
+  }
+  return getWorkspaceSourceName({ provider: item.provider, ...item.source })
 }

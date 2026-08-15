@@ -57,6 +57,13 @@ function resolveRowContent(row: SourceRow): RowContent {
         subtitle: `${row.issue.identifier} · ${row.issue.team?.key ?? 'Linear'}`,
         status: row.issue.state?.name
       }
+    case 'plane':
+      return {
+        icon: <TaskProviderLogo provider="plane" size={16} color={colors.textSecondary} />,
+        title: row.issue.title,
+        subtitle: `${row.issue.identifier} · ${row.issue.project.identifier ?? row.issue.workspaceSlug}`,
+        status: row.issue.state?.name
+      }
     default:
       return { icon: <CaseSensitive size={16} color={colors.textSecondary} />, title: '' }
   }

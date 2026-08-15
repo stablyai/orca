@@ -2037,6 +2037,101 @@ const api = {
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
+  plane: {
+    connect: (args: {
+      baseUrl: string
+      workspaceSlug: string
+      apiKey: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('plane:connect', args),
+    disconnect: (args?: { instanceId?: string }): Promise<void> =>
+      ipcRenderer.invoke('plane:disconnect', args),
+    selectInstance: (args: { instanceId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('plane:selectInstance', args),
+    status: (): Promise<unknown> => ipcRenderer.invoke('plane:status'),
+    testConnection: (args?: {
+      instanceId?: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('plane:testConnection', args),
+    listProjects: (args?: { instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:listProjects', args),
+    listStates: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:listStates', args),
+    listLabels: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:listLabels', args),
+    listMembers: (args?: { instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:listMembers', args),
+    listCycles: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:listCycles', args),
+    listModules: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:listModules', args),
+    listWorkItemTypes: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:listWorkItemTypes', args),
+    listEstimates: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:listEstimates', args),
+    searchIssues: (args: {
+      query: string
+      limit?: number
+      instanceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('plane:searchIssues', args),
+    listIssues: (args?: {
+      filter?: 'assigned' | 'created' | 'all' | 'completed' | 'open'
+      limit?: number
+      instanceId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('plane:listIssues', args),
+    getIssue: (args: { id: string; instanceId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('plane:getIssue', args),
+    createIssue: (args: {
+      projectId: string
+      title: string
+      description?: string
+      stateId?: string
+      priority?: string
+      assigneeIds?: string[]
+      labelIds?: string[]
+      cycleId?: string
+      estimatePoint?: string | number
+      typeId?: string
+      moduleId?: string
+      externalSource?: string
+      externalId?: string
+      instanceId?: string
+    }): Promise<
+      | { ok: true; id: string; identifier: string; title: string; url: string }
+      | { ok: false; error: string }
+    > => ipcRenderer.invoke('plane:createIssue', args),
+    updateIssue: (args: {
+      id: string
+      updates: unknown
+      instanceId?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('plane:updateIssue', args),
+    deleteIssue: (args: {
+      id: string
+      instanceId?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('plane:deleteIssue', args),
+    addIssueComment: (args: {
+      id: string
+      body: string
+      instanceId?: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('plane:addIssueComment', args),
+    issueComments: (args: { id: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:issueComments', args),
+    issueLinks: (args: { id: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:issueLinks', args),
+    addIssueLink: (args: {
+      id: string
+      title: string
+      url: string
+      instanceId?: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('plane:addIssueLink', args),
+    issueAttachments: (args: { id: string; instanceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('plane:issueAttachments', args)
+  },
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void

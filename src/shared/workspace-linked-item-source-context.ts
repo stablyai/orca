@@ -17,6 +17,8 @@ function resolveLinkedItemProvider(
     title: item.title ?? '',
     ...(item.linearIdentifier ? { linearIdentifier: item.linearIdentifier } : {}),
     ...(item.jiraIdentifier ? { jiraIdentifier: item.jiraIdentifier } : {}),
+    ...(item.planeIdentifier ? { planeIdentifier: item.planeIdentifier } : {}),
+    ...(item.planeInstanceId ? { planeInstanceId: item.planeInstanceId } : {}),
     ...(item.repoId ? { repoId: item.repoId } : {})
   })
 }
@@ -35,6 +37,15 @@ export function isWorkspaceLinkedItemSourceContextMatch(
   const itemProvider = resolveLinkedItemProvider(item)
   if (itemProvider !== context.provider) {
     return false
+  }
+  if (itemProvider === 'plane') {
+    const identity = context.providerIdentity
+    return (
+      item.type === 'issue' &&
+      identity?.provider === 'plane' &&
+      Boolean(item.planeIdentifier) &&
+      (!item.planeInstanceId || item.planeInstanceId === identity.instanceId)
+    )
   }
   if (itemProvider !== 'jira') {
     return true

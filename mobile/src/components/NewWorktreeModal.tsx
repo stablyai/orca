@@ -294,7 +294,8 @@ function NewWorktreeModalContent({
     hasRepo: selectedRepo != null,
     githubAvailable: availableProviders.includes('github'),
     gitlabAvailable: availableProviders.includes('gitlab'),
-    linearAvailable: availableProviders.includes('linear')
+    linearAvailable: availableProviders.includes('linear'),
+    planeAvailable: availableProviders.includes('plane')
   }
   const pasteRepos = useMemo<PasteRepoCandidate[]>(
     () =>

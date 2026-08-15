@@ -60,6 +60,10 @@ export function useSetupGuideProgress(
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const planeStatus = useAppStore((s) => s.planeStatus)
+  const planeStatusChecked = useAppStore((s) => s.planeStatusChecked)
+  const planeStatusContextKey = useAppStore((s) => s.planeStatusContextKey)
+  const checkPlaneConnection = useAppStore((s) => s.checkPlaneConnection)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const expectedPreflightContextKey = useAppStore((s) =>
@@ -97,6 +101,7 @@ export function useSetupGuideProgress(
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const planeStatusCurrent = planeStatusContextKey === providerRuntimeContextKey
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
 
   useEffect(() => {
@@ -112,15 +117,22 @@ export function useSetupGuideProgress(
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!planeStatusCurrent || !planeStatusChecked) {
+      void checkPlaneConnection()
+    }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    checkPlaneConnection,
     jiraStatusCurrent,
     jiraStatusChecked,
     jiraStatusContextKey,
     linearStatusCurrent,
     linearStatusChecked,
     linearStatusContextKey,
+    planeStatusCurrent,
+    planeStatusChecked,
+    planeStatusContextKey,
     expectedPreflightContextKey,
     preflightStatusContextKey,
     preflightStatusCurrent,
@@ -248,6 +260,9 @@ export function useSetupGuideProgress(
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    planeStatus,
+    planeStatusChecked,
+    planeStatusContextKey,
     providerRuntimeContextKey
   })
   const hasConnectedTaskSource = taskSourceStatus.trackerConnected

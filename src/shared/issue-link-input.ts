@@ -1,12 +1,14 @@
 import { parseGitHubIssueOrPRLink } from './github/links'
 import { parseLinearIssueInput } from './linear/links'
+import { parsePlaneIssueLink } from './plane/links'
 import type { WorkspaceSourceProvider } from './new-workspace/workspace-source'
 
 // Why: narrows the canonical provider union instead of minting a parallel one,
 // so adding Jira here is a one-entry change rather than a new axis.
 export const ISSUE_LINK_PROVIDERS = [
   'github',
-  'linear'
+  'linear',
+  'plane'
 ] as const satisfies readonly WorkspaceSourceProvider[]
 
 export type IssueLinkProvider = (typeof ISSUE_LINK_PROVIDERS)[number]
@@ -32,12 +34,16 @@ export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | 
   if (parseLinearIssueInput(trimmed)) {
     return 'linear'
   }
+  if (parsePlaneIssueLink(trimmed)) {
+    return 'plane'
+  }
   return null
 }
 
 export type ParsedIssueLinkInput =
   | { provider: 'github'; number: number }
   | { provider: 'linear'; identifier: string; organizationUrlKey?: string }
+  | { provider: 'plane'; identifier: string; workspaceSlug?: string; baseUrl?: string }
 
 /**
  * Single parse shared by the dialog's save gate and its payload builder, so a
@@ -55,6 +61,18 @@ export function parseIssueLinkInput(
   if (provider === 'linear') {
     const parsed = parseLinearIssueInput(trimmed)
     return parsed ? { provider: 'linear', ...parsed } : null
+  }
+
+  if (provider === 'plane') {
+    const parsed = parsePlaneIssueLink(trimmed)
+    return parsed
+      ? {
+          provider: 'plane',
+          identifier: parsed.identifier,
+          workspaceSlug: parsed.workspaceSlug,
+          baseUrl: parsed.baseUrl
+        }
+      : null
   }
 
   const link = parseGitHubIssueOrPRLink(trimmed)

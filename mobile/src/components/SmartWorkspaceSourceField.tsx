@@ -37,7 +37,7 @@ function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
   if (kind === 'branch') {
     return <GitBranch size={15} color={colors.textSecondary} />
   }
-  return <TaskProviderLogo provider="linear" size={15} color={colors.textSecondary} />
+  return <TaskProviderLogo provider={kind === 'plane' ? 'plane' : 'linear'} size={15} color={colors.textSecondary} />
 }
 
 export function SmartWorkspaceSourceField({

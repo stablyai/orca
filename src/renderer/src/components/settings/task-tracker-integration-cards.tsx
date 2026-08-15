@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { PlaneIcon } from '@/components/icons/PlaneIcon'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+import { PlaneApiKeyDialog } from '@/components/plane-api-key-dialog'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
@@ -11,7 +13,7 @@ import { useIntegrationSubordinateRowClass } from './integration-card-presentati
 import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
-import { LINEAR_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
+import { LINEAR_INTEGRATION_SECTION_ID, PLANE_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
@@ -244,3 +246,124 @@ function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProvid
 }
 
 export { JiraIntegrationCard } from './jira-integration-card'
+
+export function PlaneIntegrationCard(): React.JSX.Element {
+  const planeStatus = useAppStore((s) => s.planeStatus)
+  const planeStatusChecked = useAppStore((s) => s.planeStatusChecked)
+  const planeStatusContextKey = useAppStore((s) => s.planeStatusContextKey)
+  const disconnectPlane = useAppStore((s) => s.disconnectPlane)
+  const checkPlaneConnection = useAppStore((s) => s.checkPlaneConnection)
+  const testPlaneConnection = useAppStore((s) => s.testPlaneConnection)
+  const settings = useAppStore((s) => s.settings)
+  const mountedRef = useMountedRef()
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null)
+  const [testResultByInstance, setTestResultByInstance] = useState<Record<string, VerificationResult>>({})
+
+  const contextMatches = planeStatusContextKey === getProviderRuntimeContextKey(settings)
+  const checking = !contextMatches || !planeStatusChecked
+  const connected = contextMatches && planeStatus.connected
+  const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
+
+  const handleTest = async (instanceId: string): Promise<void> => {
+    setTestingInstanceId(instanceId)
+    setTestResultByInstance((prev) => {
+      const next = { ...prev }
+      delete next[instanceId]
+      return next
+    })
+    const result = await testPlaneConnection(instanceId)
+    if (!mountedRef.current) {
+      return
+    }
+    setTestResultByInstance((prev) => ({
+      ...prev,
+      [instanceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
+    }))
+    setTestingInstanceId(null)
+  }
+
+  const handleDisconnect = async (instanceId?: string): Promise<void> => {
+    await disconnectPlane(instanceId)
+    if (mountedRef.current) {
+      setTestResultByInstance({})
+    }
+  }
+
+  return (
+    <IntegrationCardShell
+      settingsSectionId={PLANE_INTEGRATION_SECTION_ID}
+      icon={<PlaneIcon className="size-5" />}
+      name="Plane"
+      description={
+        connected
+          ? `${planeStatus.instances.length} instance${planeStatus.instances.length === 1 ? '' : 's'} connected`
+          : checking
+            ? 'Checking Plane access before showing setup actions.'
+            : 'Add self-hosted or cloud Plane access to browse and link work items.'
+      }
+      checking={checking}
+      statusTone={connected ? 'connected' : 'attention'}
+      statusLabel={connected ? 'Connected' : 'Not connected'}
+      actions={
+        !checking ? (
+          <Button variant={connected ? 'outline' : 'default'} size="sm" onClick={() => setDialogOpen(true)}>
+            {connected ? 'Add instance' : 'Add Plane access'}
+          </Button>
+        ) : null
+      }
+    >
+      <IntegrationCardDetails>
+        <ProviderAccountScopeRow scope={getProviderAccountScope(settings)} />
+        {connected ? (
+          <div className="space-y-2">
+            {planeStatus.instances.map((instance) => {
+              const testResult = testResultByInstance[instance.id]
+              const testing = testingInstanceId === instance.id
+              return (
+                <div key={instance.id} className={subordinateRowClass}>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{instance.workspaceSlug}</p>
+                    <p className="truncate text-xs text-muted-foreground">{instance.baseUrl}</p>
+                  </div>
+                  {testResult?.state === 'ok' ? (
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
+                      <CheckCircle2 className="size-3.5" /> Verified
+                    </span>
+                  ) : null}
+                  {testResult?.state === 'error' ? (
+                    <span className="flex min-w-0 max-w-[220px] shrink items-center gap-1 truncate text-xs text-destructive">
+                      <AlertCircle className="size-3.5 shrink-0" />
+                      <span className="truncate">{testResult.error}</span>
+                    </span>
+                  ) : null}
+                  <Button variant="outline" size="sm" onClick={() => void handleTest(instance.id)} disabled={testing}>
+                    {testing ? <LoaderCircle className="size-3.5 mr-1.5 animate-spin" /> : null}
+                    {testing ? 'Testing...' : 'Test'}
+                  </Button>
+                  <button
+                    onClick={() => void handleDisconnect(instance.id)}
+                    aria-label={`Disconnect ${instance.workspaceSlug}`}
+                    className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
+                  >
+                    <Unlink className="size-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        ) : !checking ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Add a Plane base URL, workspace slug, and Personal Access Token. Tokens are stored by the active runtime.
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => void checkPlaneConnection(true)}>
+              Re-check
+            </Button>
+          </>
+        ) : null}
+      </IntegrationCardDetails>
+      <PlaneApiKeyDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+    </IntegrationCardShell>
+  )
+}
