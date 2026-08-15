@@ -43,7 +43,7 @@ import {
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { sliceCheckLogTail } from '../../shared/check-job-log-tail-slice'
+import { toReadableCheckLogExcerpt } from '../../shared/check-job-log-excerpt'
 import {
   classifyPRRefreshError,
   safePRRefreshErrorMessage
@@ -4174,7 +4174,7 @@ async function attachFailedJobLogTails(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/jobs/${job.id}/logs`],
         ghOptions
       )
-      job.logTail = sliceCheckLogTail(stdout)
+      job.logTail = toReadableCheckLogExcerpt(stdout)
     } catch (err) {
       rethrowCheckDetailsAbort(ghOptions.signal, err)
       console.warn('getPRCheckDetails workflow job log fetch failed:', err)
