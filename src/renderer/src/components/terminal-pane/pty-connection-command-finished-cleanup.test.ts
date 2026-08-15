@@ -330,6 +330,165 @@ describe('connectPanePty', () => {
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
   })
 
+  it('confirms shell foreground for a sleeping-only pane identity', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
+    const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+    const ptyId = 'pty-droid-sleeping-only'
+    const transport = createMockTransport(ptyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      dataCallbackRef.current = callbacks.onData ?? null
+      return { id: ptyId }
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ isVisibleRef: { current: false } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'droid',
+      providerSession: { key: 'session_id', id: 'droid-session-1' },
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1
+    }
+
+    dataCallbackRef.current?.('\x1b]133;D;0\x07')
+    await vi.advanceTimersByTimeAsync(350)
+
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: null,
+      shellForeground: true
+    })
+  })
+
+  it('clears same-tab legacy aliases while preserving another tab', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
+    const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+    const ptyId = 'pty-droid-legacy-sleeping-only'
+    const transport = createMockTransport(ptyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      dataCallbackRef.current = callbacks.onData ?? null
+      return { id: ptyId }
+    })
+    transportFactoryQueue.push(transport)
+    const legacyPaneKey = 'tab-1:1'
+    const duplicateLegacyPaneKey = 'tab-1:2'
+    const otherTabLegacyPaneKey = 'tab-2:1'
+    const providerSession = { key: 'session_id' as const, id: 'droid-session-1' }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ isVisibleRef: { current: false } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.sleepingAgentSessionsByPaneKey = {
+      [legacyPaneKey]: {
+        paneKey: legacyPaneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agent: 'droid',
+        providerSession,
+        state: 'done',
+        capturedAt: 1,
+        updatedAt: 1
+      },
+      [duplicateLegacyPaneKey]: {
+        paneKey: duplicateLegacyPaneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agent: 'droid',
+        providerSession,
+        state: 'done',
+        capturedAt: 2,
+        updatedAt: 2
+      },
+      [otherTabLegacyPaneKey]: {
+        paneKey: otherTabLegacyPaneKey,
+        tabId: 'tab-2',
+        worktreeId: 'wt-1',
+        agent: 'droid',
+        providerSession,
+        state: 'done',
+        capturedAt: 3,
+        updatedAt: 3
+      }
+    }
+
+    dataCallbackRef.current?.('\x1b]133;D;0\x07')
+    await vi.advanceTimersByTimeAsync(350)
+
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[legacyPaneKey]).toBeUndefined()
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[duplicateLegacyPaneKey]).toBeUndefined()
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[otherTabLegacyPaneKey]).toBeDefined()
+  })
+
+  it('does not clear legacy identity when same-tab provider sessions differ', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
+    const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport('pty-ambiguous-legacy-sleeping')
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      dataCallbackRef.current = callbacks.onData ?? null
+      return { id: 'pty-ambiguous-legacy-sleeping' }
+    })
+    transportFactoryQueue.push(transport)
+    const exactLegacyPaneKey = 'tab-1:1'
+    const siblingLegacyPaneKey = 'tab-1:2'
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ isVisibleRef: { current: false } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.sleepingAgentSessionsByPaneKey = {
+      [exactLegacyPaneKey]: {
+        paneKey: exactLegacyPaneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agent: 'droid',
+        providerSession: { key: 'session_id', id: 'droid-session-1' },
+        state: 'done',
+        capturedAt: 1,
+        updatedAt: 1
+      },
+      [siblingLegacyPaneKey]: {
+        paneKey: siblingLegacyPaneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agent: 'droid',
+        providerSession: { key: 'session_id', id: 'droid-session-2' },
+        state: 'done',
+        capturedAt: 2,
+        updatedAt: 2
+      }
+    }
+
+    dataCallbackRef.current?.('\x1b]133;D;0\x07')
+    await vi.advanceTimersByTimeAsync(350)
+
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[exactLegacyPaneKey]).toBeDefined()
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[siblingLegacyPaneKey]).toBeDefined()
+  })
+
   it('disarms stale TUI modes in the emulator after a confirmed return to shell', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
