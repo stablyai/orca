@@ -686,8 +686,10 @@ describe('matchWorktreePaletteTaskUrl', () => {
     ).toBeNull()
   })
 
-  // The identifier is the only evidence when no URL was stored, so it still matches.
-  it('falls back to the Jira identifier when the linked item has no url', () => {
+  // The reachable fallback: `normalizeWorkspaceLinkedItem` drops any item with a
+  // blank url, so the only way to have no tenant evidence is a url that is present
+  // but is not a Jira browse link. The identifier is then all there is.
+  it('falls back to the Jira identifier when the stored url is not a Jira link', () => {
     const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
 
     expect(
@@ -697,9 +699,32 @@ describe('matchWorktreePaletteTaskUrl', () => {
             provider: 'jira',
             type: 'issue',
             number: 0,
-            title: 'No url',
+            title: 'Linked elsewhere',
             jiraIdentifier: 'PROJ-123',
-            url: ''
+            url: 'https://github.com/stablyai/orca/issues/14198'
+          }
+        }),
+        intent: intent!
+      })
+    ).toMatchObject({ supportingText: { text: 'PROJ-123' } })
+  })
+
+  // Jira appends a tracking query on copy, and the matcher is pathname-only.
+  it('matches a pasted Jira url carrying a tracking query string', () => {
+    const intent = parseCmdJTaskSourceUrl(
+      'https://acme.atlassian.net/browse/PROJ-123?atlOrigin=eyJpIjoiZm9vIn0'
+    )
+
+    expect(
+      matchWorktreePaletteTaskUrl({
+        worktree: makeWorktree({
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'Tenant scoped',
+            jiraIdentifier: 'PROJ-123',
+            url: 'https://acme.atlassian.net/browse/PROJ-123'
           }
         }),
         intent: intent!
