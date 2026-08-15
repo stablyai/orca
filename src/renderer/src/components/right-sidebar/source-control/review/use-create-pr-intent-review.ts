@@ -14,7 +14,7 @@ import {
 } from './create-pr-intent-flow'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
 import type { SourceControlAi } from '../ai/use-ai'
-import { stripBaseRef } from '../../useCreatePullRequestDialogFields'
+import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'

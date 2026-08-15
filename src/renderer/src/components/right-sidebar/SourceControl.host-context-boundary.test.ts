@@ -65,7 +65,10 @@ describe('SourceControl host-context boundaries', () => {
     )
     expect(composerCall).toContain('settings: activeRepoSettings')
 
-    const hookSource = readFileSync(join(__dirname, 'useCreatePullRequestDialogFields.ts'), 'utf8')
+    const hookSource = readFileSync(
+      join(__dirname, 'use-create-pull-request-field-generation.ts'),
+      'utf8'
+    )
     const requestContext = sourceBetween(hookSource, 'const requestContext = {', 'const seed = {')
     expect(requestContext).toContain('settings,')
     expect(requestContext).not.toContain('useAppStore.getState().settings')

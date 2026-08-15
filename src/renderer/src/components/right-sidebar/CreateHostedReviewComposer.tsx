@@ -26,7 +26,7 @@ import {
   hostedReviewProviderSupportsDraft,
   type HostedReviewProvider
 } from '../../../../shared/hosted-review'
-import { stripBaseRef } from './useCreatePullRequestDialogFields'
+import { stripBaseRef } from './create-pull-request-base-ref-normalization'
 import type { HostedReviewStackParent } from './useHostedReviewStackParent'
 import type { DropdownActionKind, DropdownEntry } from './source-control-dropdown-items'
 import { CreateHostedReviewComposerFields } from './CreateHostedReviewComposerFields'

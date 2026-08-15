@@ -20,7 +20,7 @@ import {
 } from '@/store/slices/pull-request-generation'
 import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
 import type { SourceControlAi } from '../ai/use-ai'
-import { stripBaseRef } from '../../useCreatePullRequestDialogFields'
+import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
