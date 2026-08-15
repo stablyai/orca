@@ -153,18 +153,15 @@ async function loadQuota(
   // Why: only an explicitly unsupported summary endpoint may use the legacy
   // endpoint. Auth, network, rate-limit, and empty-success responses must not
   // fan out into a second request or silently change quota identity.
-  try {
-    const legacy = await postJson(LEGACY_QUOTA_URL, { project: projectId }, accessToken, signal)
-    return parseAntigravityQuotaBuckets(legacy)
-  } catch (error) {
-    if (error instanceof AntigravityApiError && error.failureKind === 'usage-unavailable') {
-      throw new AntigravityApiError(
-        'Antigravity quota endpoint returned no recognized quota buckets',
-        { status: summaryError?.status ?? null, failureKind: 'usage-unavailable' }
-      )
-    }
-    throw error
+  const legacy = await postJson(LEGACY_QUOTA_URL, { project: projectId }, accessToken, signal)
+  const legacyBuckets = parseAntigravityQuotaBuckets(legacy)
+  if (legacyBuckets.length === 0) {
+    throw new AntigravityApiError(
+      'Antigravity quota endpoint returned no recognized quota buckets',
+      { status: summaryError?.status ?? null, failureKind: 'usage-unavailable' }
+    )
   }
+  return legacyBuckets
 }
 
 function quotaResult(
@@ -280,7 +277,7 @@ function isUnsupportedEndpoint(status: number | null): boolean {
 }
 
 function isUnauthorizedApiError(error: unknown): error is AntigravityApiError {
-  return error instanceof AntigravityApiError && error.status === 401
+  return error instanceof AntigravityApiError && (error.status === 401 || error.status === 403)
 }
 
 function errorResult(error: unknown, credentialSource: string | null): ProviderRateLimits {

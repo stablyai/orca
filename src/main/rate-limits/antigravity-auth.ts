@@ -83,7 +83,7 @@ export async function readAntigravityCredentials(
 
   const tokenPath = join(baseHomeDir, ...ANTIGRAVITY_TOKEN_PATH_PARTS)
   try {
-    const raw = await readFile(tokenPath, 'utf8')
+    const raw = await readFile(tokenPath, { encoding: 'utf8', signal })
     const parsed = parseCredentialValue(raw, 'official-token-file', baseHomeDir)
     cachedCredentials = parsed
     return parsed
@@ -164,7 +164,12 @@ function isTokenEnvelope(value: unknown): value is TokenEnvelope {
 
 function parseExpiry(value: string | number | undefined): number | null {
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null
+    // Why: the official agy CLI writes ISO-8601 strings, but older credential
+    // records may contain Unix seconds while other OAuth stores use millis.
+    if (!Number.isFinite(value)) {
+      return null
+    }
+    return value > 1_000_000_000_000 ? value : value * 1000
   }
   if (typeof value === 'string') {
     const parsed = Date.parse(value)

@@ -107,4 +107,26 @@ describe('Antigravity system keyring adapter', () => {
       expect.arrayContaining(['-EncodedCommand', expect.any(String)])
     )
   })
+
+  it('classifies an absent Linux Secret Service item as missing', async () => {
+    setPlatform('linux')
+    const notFound = Object.assign(new Error('secret not found'), { code: 1 })
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      invokeCallback(callback, notFound, '', 'secret not found')
+      return null as never
+    })
+
+    await expect(readAntigravityKeyring()).resolves.toEqual({ status: 'missing' })
+  })
+
+  it('classifies a Linux Secret Service failure as unavailable', async () => {
+    setPlatform('linux')
+    const failure = Object.assign(new Error('dbus unavailable'), { code: 1 })
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      invokeCallback(callback, failure, '', 'dbus unavailable')
+      return null as never
+    })
+
+    await expect(readAntigravityKeyring()).resolves.toEqual({ status: 'unavailable' })
+  })
 })

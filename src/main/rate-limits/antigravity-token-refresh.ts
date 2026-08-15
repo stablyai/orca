@@ -1,4 +1,4 @@
-import { rename, writeFile } from 'node:fs/promises'
+import { rename, rm, writeFile } from 'node:fs/promises'
 import { net } from 'electron'
 import { writeAntigravityKeyring } from './antigravity-keychain'
 import {
@@ -40,7 +40,9 @@ export function refreshAntigravitySingleFlight(
   const promise = refreshCredential(credentials, controller.signal)
     .then(async (refreshed) => {
       if (refreshed.refreshToken !== credentials.refreshToken) {
-        await persistRotatedCredentials(credentials, refreshed, controller.signal)
+        // Why: once OAuth has returned a rotated credential, persistence must
+        // finish even if the last consumer aborts its wait for the result.
+        await persistRotatedCredentials(credentials, refreshed)
       }
       return refreshed
     })
@@ -151,15 +153,13 @@ async function refreshCredential(
 
 async function persistRotatedCredentials(
   credentials: ParsedCredentials,
-  refreshed: RefreshedCredentials,
-  signal?: AbortSignal
+  refreshed: RefreshedCredentials
 ): Promise<void> {
   const envelope = buildUpdatedEnvelope(credentials.envelope, refreshed)
   try {
     if (credentials.source === 'official-keychain') {
       await writeAntigravityKeyring(
-        `${KEYRING_VALUE_PREFIX}${Buffer.from(JSON.stringify(envelope), 'utf8').toString('base64')}`,
-        signal
+        `${KEYRING_VALUE_PREFIX}${Buffer.from(JSON.stringify(envelope), 'utf8').toString('base64')}`
       )
       return
     }
@@ -167,11 +167,16 @@ async function persistRotatedCredentials(
       throw new Error('Antigravity token file path is missing')
     }
     const temporaryPath = `${credentials.tokenPath}.${process.pid}.tmp`
-    await writeFile(temporaryPath, JSON.stringify(envelope, null, 2), {
-      encoding: 'utf8',
-      mode: 0o600
-    })
-    await rename(temporaryPath, credentials.tokenPath)
+    try {
+      await writeFile(temporaryPath, JSON.stringify(envelope, null, 2), {
+        encoding: 'utf8',
+        mode: 0o600
+      })
+      await rename(temporaryPath, credentials.tokenPath)
+    } catch (error) {
+      await rm(temporaryPath, { force: true }).catch(() => undefined)
+      throw error
+    }
   } catch {
     throw new AntigravityAuthError(
       'Antigravity rotated credentials could not be saved',

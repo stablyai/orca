@@ -1,14 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { basename, join } from 'node:path'
 
-const { readKeyringMock, writeKeyringMock, readFileMock, writeFileMock, renameMock, netFetchMock } =
-  vi.hoisted(() => ({
-    readKeyringMock: vi.fn(),
-    writeKeyringMock: vi.fn(),
-    readFileMock: vi.fn(),
-    writeFileMock: vi.fn(),
-    renameMock: vi.fn(),
-    netFetchMock: vi.fn()
-  }))
+const {
+  readKeyringMock,
+  writeKeyringMock,
+  readFileMock,
+  writeFileMock,
+  renameMock,
+  rmMock,
+  netFetchMock
+} = vi.hoisted(() => ({
+  readKeyringMock: vi.fn(),
+  writeKeyringMock: vi.fn(),
+  readFileMock: vi.fn(),
+  writeFileMock: vi.fn(),
+  renameMock: vi.fn(),
+  rmMock: vi.fn(),
+  netFetchMock: vi.fn()
+}))
 
 vi.mock('./antigravity-keychain', () => ({
   readAntigravityKeyring: readKeyringMock,
@@ -18,7 +27,8 @@ vi.mock('./antigravity-keychain', () => ({
 vi.mock('node:fs/promises', () => ({
   readFile: readFileMock,
   writeFile: writeFileMock,
-  rename: renameMock
+  rename: renameMock,
+  rm: rmMock
 }))
 
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
@@ -70,12 +80,14 @@ describe('Antigravity credential authority', () => {
     readFileMock.mockReset()
     writeFileMock.mockReset()
     renameMock.mockReset()
+    rmMock.mockReset()
     netFetchMock.mockReset()
     readKeyringMock.mockResolvedValue({ status: 'missing' })
     readFileMock.mockRejectedValue({ code: 'ENOENT' })
     writeKeyringMock.mockResolvedValue(undefined)
     writeFileMock.mockResolvedValue(undefined)
     renameMock.mockResolvedValue(undefined)
+    rmMock.mockResolvedValue(undefined)
   })
 
   it('reads the official keyring before the token file', async () => {
@@ -93,20 +105,21 @@ describe('Antigravity credential authority', () => {
     const home = testHome()
     const raw = JSON.stringify(credentialRecord())
     readFileMock.mockResolvedValue(raw)
+    const controller = new AbortController()
 
-    const result = await readAntigravityCredentials(home)
+    const result = await readAntigravityCredentials(home, controller.signal)
 
     expect(result.source).toBe('official-token-file')
     expect(readFileMock).toHaveBeenCalledWith(
-      `${home}/.gemini/antigravity-cli/antigravity-oauth-token`,
-      'utf8'
+      join(home, '.gemini', 'antigravity-cli', 'antigravity-oauth-token'),
+      { encoding: 'utf8', signal: controller.signal }
     )
   })
 
   it('does not treat an unrelated auth file as an Antigravity credential', async () => {
     const home = testHome()
     readFileMock.mockImplementation(async (filePath: string) => {
-      if (filePath.endsWith('/antigravity-oauth-token')) {
+      if (basename(filePath) === 'antigravity-oauth-token') {
         throw { code: 'ENOENT' }
       }
       return JSON.stringify(credentialRecord())
@@ -115,6 +128,22 @@ describe('Antigravity credential authority', () => {
     await expect(readAntigravityCredentials(home)).rejects.toMatchObject({
       failureKind: 'missing-credentials'
     })
+  })
+
+  it('treats numeric Unix-second expiry values as epoch milliseconds', async () => {
+    const home = testHome()
+    const expiresAtSeconds = Math.floor(Date.now() / 1000) + 3_600
+    readKeyringMock.mockResolvedValue({
+      status: 'found',
+      value: keyringValue({
+        token: { access_token: 'fresh-access-token', expiry: expiresAtSeconds }
+      })
+    })
+
+    await expect(getAntigravityAccessToken({ baseHomeDir: home })).resolves.toMatchObject({
+      accessToken: 'fresh-access-token'
+    })
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
   it('shares one refresh request across concurrent callers', async () => {
@@ -214,6 +243,75 @@ describe('Antigravity credential authority', () => {
       Buffer.from(written.slice('go-keyring-base64:'.length), 'base64').toString('utf8')
     ) as { token: { refresh_token: string } }
     expect(decoded.token.refresh_token).toBe('new-refresh-token')
+  })
+
+  it('continues credential persistence after the only consumer aborts', async () => {
+    const home = testHome()
+    readKeyringMock.mockResolvedValue({
+      status: 'found',
+      value: keyringValue({
+        token: {
+          access_token: 'expired-access-token',
+          refresh_token: 'old-refresh-token',
+          expiry: '2026-08-01T09:00:00.000Z'
+        }
+      })
+    })
+    let resolveWrite!: () => void
+    writeKeyringMock.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveWrite = resolve
+      })
+    )
+    netFetchMock.mockResolvedValue(
+      response({
+        access_token: 'refreshed-access-token',
+        refresh_token: 'new-refresh-token',
+        expires_in: 3600
+      })
+    )
+    const controller = new AbortController()
+    const pending = getAntigravityAccessToken({ baseHomeDir: home, signal: controller.signal })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(writeKeyringMock).toHaveBeenCalledTimes(1)
+
+    controller.abort()
+    resolveWrite()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(writeKeyringMock.mock.calls[0]?.[1]).toBeUndefined()
+  })
+
+  it('removes a temporary token file when the atomic rename fails', async () => {
+    const home = testHome()
+    readKeyringMock.mockResolvedValue({ status: 'missing' })
+    readFileMock.mockResolvedValue(
+      JSON.stringify(
+        credentialRecord({
+          token: {
+            access_token: 'expired-access-token',
+            refresh_token: 'old-refresh-token',
+            expiry: '2026-08-01T09:00:00.000Z'
+          }
+        })
+      )
+    )
+    renameMock.mockRejectedValue(new Error('rename failed'))
+    netFetchMock.mockResolvedValue(
+      response({
+        access_token: 'refreshed-access-token',
+        refresh_token: 'new-refresh-token',
+        expires_in: 3600
+      })
+    )
+
+    await expect(getAntigravityAccessToken({ baseHomeDir: home })).rejects.toMatchObject({
+      failureKind: 'keychain-unavailable'
+    })
+    expect(rmMock).toHaveBeenCalledWith(
+      `${join(home, '.gemini', 'antigravity-cli', 'antigravity-oauth-token')}.${process.pid}.tmp`,
+      { force: true }
+    )
   })
 
   it('re-reads the official authority after an access token is invalidated', async () => {

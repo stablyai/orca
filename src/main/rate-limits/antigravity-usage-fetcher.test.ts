@@ -190,7 +190,25 @@ describe('fetchAntigravityRateLimits', () => {
     expect(netFetchMock).toHaveBeenCalledTimes(3)
   })
 
-  it('refreshes once after a quota API 401 and does not retry on 403', async () => {
+  it('reports an empty legacy response with the summary endpoint failure context', async () => {
+    netFetchMock.mockImplementation((url: string) => {
+      if (url.includes('loadCodeAssist')) {
+        return Promise.resolve(response({ cloudaicompanionProject: 'project-123' }))
+      }
+      if (url.includes('retrieveUserQuotaSummary')) {
+        return Promise.resolve(response({}, 404))
+      }
+      return Promise.resolve(response({ groups: [] }))
+    })
+
+    const result = await fetchAntigravityRateLimits()
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(netFetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('refreshes once after a quota API 401 or 403', async () => {
     let loadCalls = 0
     netFetchMock.mockImplementation((url: string) => {
       if (url.includes('loadCodeAssist')) {
@@ -220,13 +238,32 @@ describe('fetchAntigravityRateLimits', () => {
     ).toBe(true)
 
     netFetchMock.mockReset()
-    netFetchMock.mockResolvedValue(response({ error: 'Forbidden' }, 403))
-    getTokenMock.mockClear()
-    getTokenMock.mockResolvedValue(token())
+    let forbiddenLoadCalls = 0
+    netFetchMock.mockImplementation((url: string) => {
+      if (url.includes('loadCodeAssist')) {
+        forbiddenLoadCalls += 1
+        return Promise.resolve(
+          forbiddenLoadCalls === 1
+            ? response({ error: 'Forbidden' }, 403)
+            : response({ cloudaicompanionProject: 'project-123' })
+        )
+      }
+      return Promise.resolve(response({ groups: quotaGroups }))
+    })
+    getTokenMock.mockReset()
+    getTokenMock
+      .mockResolvedValueOnce(token('old-forbidden-token'))
+      .mockResolvedValueOnce(token('new-forbidden-token'))
     const forbidden = await fetchAntigravityRateLimits()
-    expect(forbidden.status).toBe('error')
-    expect(forbidden.usageMetadata?.failureKind).toBe('missing-scope')
-    expect(getTokenMock).toHaveBeenCalledTimes(1)
+    expect(forbidden.status).toBe('ok')
+    expect(getTokenMock).toHaveBeenNthCalledWith(2, { forceRefresh: true })
+    expect(
+      netFetchMock.mock.calls.some(
+        (call) =>
+          (call[1] as RequestInit).headers &&
+          JSON.stringify(call[1]).includes('new-forbidden-token')
+      )
+    ).toBe(true)
   })
 
   it('reports missing credentials as unavailable', async () => {

@@ -14,7 +14,7 @@ type AgentStopConfirmDialogProps = {
   /** The agent awaiting confirmation; null renders the dialog closed. */
   card: DashboardCard | null
   onCancel: () => void
-  onConfirm: (card: DashboardCard) => void
+  onConfirm: () => void
 }
 
 /**
@@ -56,17 +56,7 @@ export function AgentStopConfirmDialog({
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>
             {translate('auto.components.terminal.pane.CloseTerminalDialog.1d1a7a9c1f', 'Cancel')}
           </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            autoFocus
-            onClick={() => {
-              if (card) {
-                onConfirm(card)
-              }
-            }}
-          >
+          <Button type="button" variant="destructive" size="sm" autoFocus onClick={onConfirm}>
             {translate(
               'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_confirm',
               'Stop Agent'

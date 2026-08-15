@@ -21,9 +21,7 @@ type CommandResult = {
   stderr: string
 }
 
-// Why: Antigravity uses the Go keyring service/account pair, not Orca's own
-// Electron safeStorage namespace. Keep this adapter narrow so other auth files
-// cannot accidentally become credential authorities for this provider.
+// Why: keep the official Go keyring authority separate from Orca safeStorage.
 export async function readAntigravityKeyring(
   signal?: AbortSignal
 ): Promise<AntigravityKeyringReadResult> {
@@ -111,7 +109,7 @@ async function readLinuxSecretService(signal?: AbortSignal): Promise<Antigravity
     if (isAbortError(error)) {
       throw error
     }
-    if (isCommandMissingError(error) || isNotFoundError(error)) {
+    if (isCommandMissingError(error) || !isNotFoundError(error)) {
       return { status: 'unavailable' }
     }
     return { status: 'missing' }
@@ -138,7 +136,7 @@ async function readWindowsCredentialManager(
     if (isAbortError(error)) {
       throw error
     }
-    return isCommandMissingError(error) ? { status: 'unavailable' } : { status: 'missing' }
+    return isNotFoundError(error) ? { status: 'missing' } : { status: 'unavailable' }
   }
 }
 
@@ -208,6 +206,8 @@ function runCommand(
         }
       )
       if (options.input !== undefined && child.stdin) {
+        // Why: ignore EPIPE from a child killed before stdin is read.
+        child.stdin.once('error', () => undefined)
         child.stdin.end(options.input)
       }
     } catch (error) {
@@ -230,10 +230,11 @@ function isNotFoundError(error: unknown): boolean {
     error && typeof error === 'object' && 'code' in error
       ? (error as { code?: unknown }).code
       : undefined
-  const message =
-    error && typeof error === 'object'
-      ? `${(error as { stderr?: unknown }).stderr ?? ''} ${(error as { message?: unknown }).message ?? ''}`
-      : String(error)
+  const errObj =
+    error && typeof error === 'object' ? (error as { stderr?: unknown; message?: unknown }) : null
+  const stderrStr = typeof errObj?.stderr === 'string' ? errObj.stderr : ''
+  const messageStr = typeof errObj?.message === 'string' ? errObj.message : ''
+  const message = errObj ? `${stderrStr} ${messageStr}` : String(error)
   return code === 44 || /could not be found|not found/i.test(message)
 }
 
@@ -251,18 +252,14 @@ using System.Text;
 public static class OrcaAntigravityCredential {
   [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
   public struct CREDENTIAL {
-    public uint Flags;
-    public uint Type;
-    public string TargetName;
-    public string Comment;
+    public uint Flags, Type;
+    public string TargetName, Comment;
     public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
     public uint CredentialBlobSize;
     public IntPtr CredentialBlob;
-    public uint Persist;
-    public uint AttributeCount;
+    public uint Persist, AttributeCount;
     public IntPtr Attributes;
-    public string TargetAlias;
-    public string UserName;
+    public string TargetAlias, UserName;
   }
   [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
   public static extern bool CredRead(string target, uint type, uint flags, out IntPtr credential);
@@ -274,32 +271,24 @@ public static class OrcaAntigravityCredential {
     IntPtr pointer;
     if (!CredRead(target, 1, 0, out pointer)) return null;
     try {
-      CREDENTIAL credential = (CREDENTIAL)Marshal.PtrToStructure(pointer, typeof(CREDENTIAL));
-      if (credential.CredentialBlob == IntPtr.Zero || credential.CredentialBlobSize == 0) return null;
-      byte[] bytes = new byte[credential.CredentialBlobSize];
-      Marshal.Copy(credential.CredentialBlob, bytes, 0, (int)credential.CredentialBlobSize);
+      CREDENTIAL cred = (CREDENTIAL)Marshal.PtrToStructure(pointer, typeof(CREDENTIAL));
+      if (cred.CredentialBlob == IntPtr.Zero || cred.CredentialBlobSize == 0) return null;
+      byte[] bytes = new byte[cred.CredentialBlobSize];
+      Marshal.Copy(cred.CredentialBlob, bytes, 0, (int)cred.CredentialBlobSize);
       return Encoding.UTF8.GetString(bytes);
-    } finally {
-      CredFree(pointer);
-    }
+    } finally { CredFree(pointer); }
   }
   public static bool Write(string target, string value) {
     byte[] bytes = Encoding.UTF8.GetBytes(value);
     IntPtr blob = Marshal.AllocHGlobal(bytes.Length);
     try {
       Marshal.Copy(bytes, 0, blob, bytes.Length);
-      CREDENTIAL credential = new CREDENTIAL {
-        Type = 1,
-        TargetName = target,
-        CredentialBlobSize = (uint)bytes.Length,
-        CredentialBlob = blob,
-        Persist = 2,
-        UserName = target
+      CREDENTIAL cred = new CREDENTIAL {
+        Type = 1, TargetName = target, CredentialBlobSize = (uint)bytes.Length,
+        CredentialBlob = blob, Persist = 2, UserName = target
       };
-      return CredWrite(ref credential, 0);
-    } finally {
-      Marshal.FreeHGlobal(blob);
-    }
+      return CredWrite(ref cred, 0);
+    } finally { Marshal.FreeHGlobal(blob); }
   }
 }
 '@
