@@ -22,6 +22,7 @@ import {
   startTerminalImeByteReader,
   waitForTerminalImeBytes
 } from './terminal-ime-byte-reader'
+import { applyImePlatformPolicy, expectImePlatformPolicy } from './terminal-ime-platform-policy'
 
 const JAMO: Record<string, ImeKeyIdentity> = {
   ㄷ: { key: 'ㄷ', code: 'KeyE', keyCode: 229 },
@@ -42,6 +43,13 @@ test.describe('Terminal 2-Set Korean composing-chord order', () => {
     orcaPage,
     testRepoPath
   }, testInfo) => {
+    // Cmd+Left resolves to \x01 only under the macOS branch of the shortcut policy, so a Linux
+    // runner produces no chord byte at all and the spec would pass by measuring nothing. Pinning
+    // the renderer's platform is what lets the reported chord run on any shard; the assertion
+    // below fails loudly if the override did not take.
+    await applyImePlatformPolicy(orcaPage, 'mac')
+    await expectImePlatformPolicy(orcaPage, 'mac')
+
     const arena = await openTerminalImePaneArena(orcaPage)
     const reader = createTerminalImeByteReader(testRepoPath, 1)
     let completed = false
