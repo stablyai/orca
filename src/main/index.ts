@@ -47,6 +47,7 @@ import {
 } from './codex/codex-pane-account-registry'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
+import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
@@ -1782,6 +1783,7 @@ function shutdownWatchersOnce(): Promise<void> {
   }
   if (!watcherShutdownPromise) {
     // Why: @parcel/watcher tears down native async work on unsubscribe; Electron must await it before Node's environment exits.
+    stopFolderRepoGitUpgradeWatch()
     watcherShutdownPromise = Promise.allSettled([
       closeAllWatchers(),
       disposeWorktreeBaseDirectoryWatchers()

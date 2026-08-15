@@ -275,18 +275,21 @@ function worktreeMatchesLinearUrl(worktree: Worktree, intent: LinearIssueUrlInte
 }
 
 function worktreeMatchesJiraUrl(worktree: Worktree, parsed: ParsedJiraIssueUrl): boolean {
-  if (worktree.linkedWorkItem?.jiraIdentifier?.toUpperCase() === parsed.issueKey) {
-    return true
-  }
   const linkedUrl = worktree.linkedWorkItem?.url
     ? parseJiraIssueUrl(worktree.linkedWorkItem.url)
     : null
-  return (
-    linkedUrl !== null &&
-    linkedUrl.issueKey === parsed.issueKey &&
-    linkedUrl.origin === parsed.origin &&
-    linkedUrl.sitePath === parsed.sitePath
-  )
+  // Why url first: issue keys are per-project, not per-tenant, so two Jira sites
+  // routinely both have a PROJ-123. The stored URL is the only tenant evidence
+  // here, so where it exists it decides — matching on the bare identifier would
+  // jump to another tenant's worktree.
+  if (linkedUrl) {
+    return (
+      linkedUrl.issueKey === parsed.issueKey &&
+      linkedUrl.origin === parsed.origin &&
+      linkedUrl.sitePath === parsed.sitePath
+    )
+  }
+  return worktree.linkedWorkItem?.jiraIdentifier?.toUpperCase() === parsed.issueKey
 }
 
 export function matchWorktreePaletteTaskUrl(args: {

@@ -4,7 +4,6 @@
 import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle,
-  isCursorAgentTitle,
   isCursorNativeAgentTitle,
   isOpenCodeNativeTitle,
   isQuarterCircleSpinnerOnlyAgentTitle,
@@ -104,6 +103,7 @@ import {
   nonInteractiveGitEnv
 } from '../git/runner'
 import { runWithGitReadCacheInvalidation } from '../git/status'
+import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -168,8 +168,14 @@ import {
   releaseFederationAckCheckpoint
 } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
-import { formatMessagePointer } from './orchestration/formatter'
 import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoint-scheduler'
+import { OrchestrationMailboxOwner } from './orchestration/mailbox-owner'
+import { OrchestrationMailboxNotificationCoordinator } from './orchestration/mailbox-notification-coordinator'
+import { OrchestrationMailboxDeliveryTarget } from './orchestration/mailbox-delivery-target'
+import {
+  OrchestrationMailboxPointerDelivery,
+  type OrchestrationMessageWaiter
+} from './orchestration/mailbox-pointer-delivery'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import type {
   Automation,
@@ -474,6 +480,7 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/tui-agent-config'
+import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import { detectInstalledAgentsWithShellPathHydration, detectRemoteAgents } from '../ipc/preflight'
 import {
@@ -966,9 +973,20 @@ import {
 } from '../ipc/worktree-remote'
 import {
   getBranchNameOverrideCandidate,
+  getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
+  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
 } from '../worktree-create-candidates'
+import {
+  failedWorktreeCreationNeedsRetirement,
+  getRetiredNameRegistryForRepo,
+  retireGeneratedWorktreeName
+} from '../worktree-name-retirement'
+import {
+  createRetiredNameLookup,
+  type RetiredNameRegistry
+} from '../../shared/worktree/retired-name-registry'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -1145,6 +1163,9 @@ export type CodexRateLimitResetRpcResult = {
 type RuntimeStore = {
   getRepos: Store['getRepos']
   getRepo: Store['getRepo']
+  addRetiredWorktreeName: Store['addRetiredWorktreeName']
+  getRetiredWorktreeNameRegistry: Store['getRetiredWorktreeNameRegistry']
+  mergeRetiredWorktreeNames: Store['mergeRetiredWorktreeNames']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
   getProjects?: Store['getProjects']
@@ -1334,13 +1355,6 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   paneTitleUpdatedAt: number | null
-}
-
-function isCursorAgentOrchestrationTarget(
-  leaf: RuntimeLeafRecord,
-  tabTitle: string | null | undefined
-): boolean {
-  return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
 }
 
 type RuntimePtyWorktreeRecord = {
@@ -1760,6 +1774,7 @@ type RuntimePtyController = {
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
   write(ptyId: string, data: string): boolean
+  writeWithSettlement?(ptyId: string, data: string): Promise<boolean>
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
@@ -1867,7 +1882,6 @@ const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
-const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
 const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 const AGENT_PROMPT_RENDER_QUIET_MS = 1500
 // Why: Claude and Codex emit show-cursor while rendering pasted composer content.
@@ -1876,6 +1890,7 @@ const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
+const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 // Why: long enough that a keystroke burst to a proven-dead leaf probes once,
@@ -2008,7 +2023,10 @@ type RuntimeNotifier = {
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
   closeTerminal(tabId: string, paneRuntimeId?: number): void
-  closeTerminalTab?(tabId: string): Promise<void>
+  closeTerminalTab?(
+    tabId: string,
+    options?: { localPtyTeardownOwnedExternally?: boolean }
+  ): Promise<void>
   sleepWorktree(worktreeId: string): void
   // Why: a phone opening a worktree wakes its slept agents by asking the host
   // renderer to run its own navigation-free wake (experimental agent sleep);
@@ -2044,6 +2062,12 @@ type TerminalHandleRecord = {
   leafId: string
   ptyId: string | null
   ptyGeneration: number
+}
+
+type PtyIncarnationHandleRecord = {
+  handle: string
+  incarnationId: string
+  leafKey: string
 }
 
 export type OrchestrationCompatibilityTerminalAuthority = {
@@ -2101,33 +2125,14 @@ type TerminalWaiter = {
   abortCleanup: (() => void) | null
 }
 
-type MessageWaiter = {
+type MessageWaiter = OrchestrationMessageWaiter & {
   handle: string
-  typeFilter: string[] | undefined
   resolve: (result: MessageWaitResult) => void
   timeout: NodeJS.Timeout | null
   abortCleanup: (() => void) | null
 }
 
 export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled' | 'waiter_exists'
-
-// Why: an unfiltered waiter claims every type. A row a live waiter will return
-// from orchestration.check must not also be pushed into the pane — check reads
-// by `read`, push stamps `delivered_at`, so neither hides the row from the other.
-function messageTypeHasLiveWaiter(
-  waiters: Set<MessageWaiter> | undefined,
-  messageType: string
-): boolean {
-  if (!waiters) {
-    return false
-  }
-  for (const waiter of waiters) {
-    if (!waiter.typeFilter || waiter.typeFilter.includes(messageType)) {
-      return true
-    }
-  }
-  return false
-}
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
@@ -2903,10 +2908,7 @@ export class OrcaRuntimeService {
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
-  // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
-  private readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
-  // Why: a waiter can reserve an older row while a newer row advances the sequence watermark.
-  private readonly pointedMessageIdsByHandle = new Map<string, Set<string>>()
+  private handleByPtyIncarnation = new Map<string, PtyIncarnationHandleRecord>()
   private readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
     this.repointPendingMessagesForHandle(handle)
   )
@@ -2949,6 +2951,58 @@ export class OrcaRuntimeService {
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
+  private readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
+    getDb: () => this._orchestrationDb,
+    getLeaf: (leafKey) => this.leaves.get(leafKey),
+    getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+    getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+    getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
+    onRoutedMessageTypes: (mailboxHandle, types) =>
+      this.orchestrationMailboxNotifications.wakeRoutedMessageWaiters(mailboxHandle, types),
+    onForeignMailboxRouted: (mailboxHandle, messageType) =>
+      this.notifyMessageArrived(mailboxHandle, messageType)
+  })
+  private readonly orchestrationMailboxDeliveryTarget = new OrchestrationMailboxDeliveryTarget({
+    getDb: () => this._orchestrationDb,
+    getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+    hasTerminalHandle: (handle) => this.handles.has(handle),
+    canProbePtyLiveness: () => Boolean(this.ptyController?.probePtyLiveness),
+    controllerKnowsPtyIsLive: (ptyId) => this.controllerKnowsPtyIsLive(ptyId),
+    isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
+  })
+  private readonly orchestrationMailboxPointerDelivery =
+    new OrchestrationMailboxPointerDelivery<MessageWaiter>({
+      mailboxOwner: this.orchestrationMailboxOwner,
+      deliveryTarget: this.orchestrationMailboxDeliveryTarget,
+      getDb: () => this._orchestrationDb,
+      getLeaf: (leafKey) => this.leaves.get(leafKey),
+      getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+      getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
+      getMessageWaiters: (mailboxHandle) => this.messageWaitersByHandle.get(mailboxHandle),
+      getTabTitle: (tabId) => this.tabs.get(tabId)?.title,
+      getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+      isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
+      redriveMailbox: (mailboxHandle, reservedTypes) =>
+        this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
+      writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+    })
+  private readonly orchestrationMailboxNotifications =
+    new OrchestrationMailboxNotificationCoordinator<MessageWaiter>({
+      mailboxOwner: this.orchestrationMailboxOwner,
+      pointerDelivery: this.orchestrationMailboxPointerDelivery,
+      getDb: () => this._orchestrationDb,
+      getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
+      getPaneKeyForHandle: (handle) => {
+        const record = this.handles.get(handle)
+        return record ? `${record.tabId}:${record.leafId}` : undefined
+      },
+      getMessageWaiters: (mailboxHandle) => this.messageWaitersByHandle.get(mailboxHandle),
+      hasTerminalHandle: (handle) => this.handles.has(handle),
+      deliverForHandle: (handle, reservedTypes) =>
+        this.deliverPendingMessagesForHandle(handle, reservedTypes),
+      notifyMessageArrived: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
+      resolveMessageWaiter: (waiter) => this.resolveMessageWaiter(waiter, 'notified')
+    })
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
   // without polling. Keyed by ptyId for O(1) lookup per data event.
@@ -3947,8 +4001,6 @@ export class OrcaRuntimeService {
   setOrchestrationDb(db: OrchestrationDb): void {
     this.stopOrchestrationFederationRelay()
     this.mailPointerRepointScheduler.clear()
-    this.lastPointedMessageSequenceByHandle.clear()
-    this.pointedMessageIdsByHandle.clear()
     this._orchestrationDb = db
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
@@ -5386,6 +5438,7 @@ export class OrcaRuntimeService {
   }
 
   private notifyReposChanged(): void {
+    wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })
   }
@@ -5783,14 +5836,19 @@ export class OrcaRuntimeService {
     for (const oldLeafKey of this.leaves.keys()) {
       if (!nextLeaves.has(oldLeafKey)) {
         const oldLeaf = this.leaves.get(oldLeafKey)
+        const retainedIncarnation = oldLeaf?.ptyId
+          ? this.handleByPtyIncarnation.get(oldLeaf.ptyId)
+          : undefined
         if (
           preserveLivePtysDuringReload &&
           oldLeaf?.ptyId &&
-          this.handleByPtyId.has(oldLeaf.ptyId) &&
+          (this.handleByPtyId.has(oldLeaf.ptyId) ||
+            (retainedIncarnation &&
+              retainedIncarnation.incarnationId ===
+                this.ptysById.get(oldLeaf.ptyId)?.incarnationId)) &&
           !nextPtyIds.has(oldLeaf.ptyId)
         ) {
-          // Why: a CLI-created agent keeps using its exported handle even if
-          // the reloaded renderer has not rebound the pane yet.
+          // Why: the first reload graph can precede pane rebinding; the live PTY incarnation still owns its handle.
           nextLeaves.set(oldLeafKey, oldLeaf)
           nextPtyIds.add(oldLeaf.ptyId)
         } else if (oldLeaf?.ptyId && nextPtyIds.has(oldLeaf.ptyId)) {
@@ -5803,7 +5861,11 @@ export class OrcaRuntimeService {
           // no next owner — invalidate it so in-flight CLI waiters fail fast
           // instead of hanging on a dead leaf.
           const oldHandle = this.handleByLeafKey.get(oldLeafKey)
-          if (oldHandle !== undefined && oldHandle === this.handleByPtyId.get(oldLeaf.ptyId)) {
+          const incarnationHandle = retainedIncarnation?.handle
+          if (
+            oldHandle !== undefined &&
+            (oldHandle === this.handleByPtyId.get(oldLeaf.ptyId) || oldHandle === incarnationHandle)
+          ) {
             this.handleByLeafKey.delete(oldLeafKey)
           } else {
             this.invalidateLeafHandle(oldLeafKey)
@@ -5825,6 +5887,7 @@ export class OrcaRuntimeService {
 
     this.leaves = nextLeaves
     this.rebuildLeafPtyIndex()
+    this.reconcilePtyIncarnationHandles()
     // Why: the emitted client payload is a function of the stored snapshot AND
     // the tab/leaf graph (handles/titles/connected resolve from leaf state), so
     // a graph-only change — e.g. a restored leaf binding its ptyId while the
@@ -7982,6 +8045,7 @@ export class OrcaRuntimeService {
       expectedPublicationEpoch?: string
       expectedTerminalHandle?: string
       clientNavigationId?: string
+      localPtyTeardownOwnedExternally?: boolean
     } = {}
   ): Promise<RuntimeMobileSessionTabCloseResult> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
@@ -8134,7 +8198,11 @@ export class OrcaRuntimeService {
             ? this.rendererPublicationThrottle.acquire(win.webContents)
             : () => {}
         try {
-          await this.notifier.closeTerminalTab(tab.parentTabId)
+          await (options.localPtyTeardownOwnedExternally
+            ? this.notifier.closeTerminalTab(tab.parentTabId, {
+                localPtyTeardownOwnedExternally: true
+              })
+            : this.notifier.closeTerminalTab(tab.parentTabId))
         } finally {
           releasePublicationThrottle()
         }
@@ -9438,6 +9506,12 @@ export class OrcaRuntimeService {
   }
 
   registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
+    const retained = this.handleByPtyIncarnation.get(ptyId)
+    if (retained?.handle === handle) {
+      this.handleByPtyIncarnation.delete(ptyId)
+    } else {
+      this.invalidatePtyIncarnationHandle(ptyId)
+    }
     this.handleByPtyId.set(ptyId, handle)
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.adoptPreAllocatedHandle(leaf)
@@ -9483,15 +9557,24 @@ export class OrcaRuntimeService {
   }
 
   private invalidateAllHandlesForPty(ptyId: string): void {
+    const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
+    const preallocatedHandle = this.handleByPtyId.get(ptyId)
+    this.invalidatePtyIncarnationHandle(ptyId)
     this.handleByPtyId.delete(ptyId)
     const invalidated = new Set<string>()
+    if (preallocatedHandle && preallocatedHandle !== incarnationHandle) {
+      invalidated.add(preallocatedHandle)
+    }
     for (const [handle, record] of this.handles) {
       if (record.ptyId === ptyId) {
         invalidated.add(handle)
         this.handles.delete(handle)
-        this.syntheticTerminalHandles.delete(handle)
-        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
       }
+    }
+    for (const handle of invalidated) {
+      this.handles.delete(handle)
+      this.syntheticTerminalHandles.delete(handle)
+      this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
     }
     for (const [leafKey, handle] of this.handleByLeafKey) {
       if (invalidated.has(handle)) {
@@ -13928,7 +14011,7 @@ export class OrcaRuntimeService {
     // Why: a cold restore can respawn under the same session id within the
     // delayed-Enter window; the armed Enter would inject \r into the
     // replacement and stamp rows it never received.
-    this.retirePendingMessageDeliveryForPty(ptyId)
+    this.retireOrchestrationMailboxDeliveryForPty(ptyId)
 
     if (this.terminalFitOverrides.has(ptyId)) {
       this.terminalFitOverrides.delete(ptyId)
@@ -16853,10 +16936,6 @@ export class OrcaRuntimeService {
   // verdict per ptyId serves the burst instead of a probe round-trip each call.
   private readonly provenAbsentLeafPtyVerdicts = new Map<string, number>()
   private readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
-  // Why: probe dedupe shares one promise across callers, but each caller's
-  // continuation would re-deliver the same unread rows; arm one per pty.
-  private readonly probeDeferredDeliveryPtyIds = new Set<string>()
-
   private controllerKnowsPtyIsLive(ptyId: string): boolean {
     try {
       return this.ptyController?.hasPty?.(ptyId) === true
@@ -21372,6 +21451,35 @@ export class OrcaRuntimeService {
     }
   }
 
+  /** Keyed by repo id on the wire even though one repo is requested: the caller asked by selector
+   *  and needs to know which repo answered.
+   *
+   *  The tier watermark rides alongside the names rather than being expanded into them — expanding
+   *  it would put 552 strings per spent tier on the wire, which is what compaction exists to
+   *  avoid. A client predating the field reads the names only and under-retires, degrading to the
+   *  pre-retirement behavior for compacted tiers instead of breaking. */
+  async listRetiredWorktreeNames(repoSelector: string): Promise<{
+    retiredNamesByRepo: Record<string, readonly string[]>
+    retiredNameTiersByRepo: Record<string, number>
+  }> {
+    const store = this.store
+    if (!store) {
+      return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
+    }
+    const repo = await this.resolveRepoSelector(repoSelector)
+    const settings = store.getSettings()
+    const registry: RetiredNameRegistry = await getRetiredNameRegistryForRepo(
+      store,
+      repo,
+      store.getRepos(),
+      settings
+    )
+    return {
+      retiredNamesByRepo: { [repo.id]: registry.names },
+      retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }
+    }
+  }
+
   async listDetectedManagedWorktrees(
     repoSelector: string,
     connectionId?: string | null,
@@ -22214,7 +22322,7 @@ export class OrcaRuntimeService {
       if (replay) {
         observeData(replay)
       }
-      hardTimer = setTimeout(() => finish(null), DRAFT_PASTE_READY_TIMEOUT_MS)
+      hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent))
     })
   }
 
@@ -22237,6 +22345,9 @@ export class OrcaRuntimeService {
   async createManagedWorktree(args: {
     repoSelector: string
     name: string
+    /** True only when `name` came from Orca's creature-name generator; gates retirement so a name
+     *  the user typed stays reusable. Absent for CLI and automation callers. */
+    nameWasGenerated?: boolean
     baseBranch?: string
     compareBaseRef?: string
     branchNameOverride?: string
@@ -22574,13 +22685,35 @@ export class OrcaRuntimeService {
     let branchConflictKind: 'local' | 'remote' | null = null
     let worktreePath = ''
     let worktreePathResolved = false
+    const shouldRetireGeneratedName =
+      args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
+    const retiredNameRegistry = shouldRetireGeneratedName
+      ? await getRetiredNameRegistryForRepo(this.store, repo, this.store.getRepos(), settings)
+      : null
+    const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
     // Why: runtime/mobile create-from-review callers should get a new workspace
     // even when the PR branch or review branch name is already in use.
-    for (let suffix = 1; suffix <= WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
-      effectiveSanitizedName = getWorktreeCreateCandidate(sanitizedName, suffix)
-      effectiveRequestedName = args.name.trim()
-        ? getWorktreeCreateCandidate(args.name, suffix)
-        : effectiveSanitizedName
+    for (
+      let suffix = 1, attempts = 0;
+      attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS;
+      suffix += 1
+    ) {
+      effectiveSanitizedName = shouldRetireGeneratedName
+        ? getGeneratedWorktreeCreateCandidate(
+            sanitizedName,
+            suffix,
+            retiredNameRegistry?.exhaustedTiers
+          )
+        : getWorktreeCreateCandidate(sanitizedName, suffix)
+      effectiveRequestedName = shouldRetireGeneratedName
+        ? effectiveSanitizedName
+        : args.name.trim()
+          ? getWorktreeCreateCandidate(args.name, suffix)
+          : effectiveSanitizedName
+      if (isRetiredName?.(effectiveSanitizedName)) {
+        continue
+      }
+      attempts += 1
       branchName = await resolveCreateBranchName(
         repo.path,
         selectedExistingLocalBranchName ??
@@ -22782,19 +22915,11 @@ export class OrcaRuntimeService {
       ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
     }
     const defaultAddWorktreeOption = addProjectGitOptions()
-    const addResult: AddWorktreeResult =
-      (await (sparseDirectories.length > 0
-        ? checkoutExistingBranch
-          ? addSparseWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              sparseDirectories,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              addProjectGitOptions(existingBranchOption)
-            )
-          : suggestLocalBaseRefUpdate
+    let addResult: AddWorktreeResult
+    try {
+      addResult =
+        (await (sparseDirectories.length > 0
+          ? checkoutExistingBranch
             ? addSparseWorktree(
                 repo.path,
                 worktreePath,
@@ -22802,9 +22927,9 @@ export class OrcaRuntimeService {
                 sparseDirectories,
                 baseBranch,
                 settings.refreshLocalBaseRefOnWorktreeCreate,
-                addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
+                addProjectGitOptions(existingBranchOption)
               )
-            : remoteTrackingBaseOption
+            : suggestLocalBaseRefUpdate
               ? addSparseWorktree(
                   repo.path,
                   worktreePath,
@@ -22812,9 +22937,9 @@ export class OrcaRuntimeService {
                   sparseDirectories,
                   baseBranch,
                   settings.refreshLocalBaseRefOnWorktreeCreate,
-                  addProjectGitOptions(remoteTrackingBaseOption)
+                  addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
                 )
-              : defaultAddWorktreeOption
+              : remoteTrackingBaseOption
                 ? addSparseWorktree(
                     repo.path,
                     worktreePath,
@@ -22822,27 +22947,27 @@ export class OrcaRuntimeService {
                     sparseDirectories,
                     baseBranch,
                     settings.refreshLocalBaseRefOnWorktreeCreate,
-                    defaultAddWorktreeOption
+                    addProjectGitOptions(remoteTrackingBaseOption)
                   )
-                : addSparseWorktree(
-                    repo.path,
-                    worktreePath,
-                    branchName,
-                    sparseDirectories,
-                    baseBranch,
-                    settings.refreshLocalBaseRefOnWorktreeCreate
-                  )
-        : checkoutExistingBranch
-          ? addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              false,
-              addProjectGitOptions(existingBranchOption)
-            )
-          : suggestLocalBaseRefUpdate
+                : defaultAddWorktreeOption
+                  ? addSparseWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      sparseDirectories,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate,
+                      defaultAddWorktreeOption
+                    )
+                  : addSparseWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      sparseDirectories,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate
+                    )
+          : checkoutExistingBranch
             ? addWorktree(
                 repo.path,
                 worktreePath,
@@ -22850,9 +22975,9 @@ export class OrcaRuntimeService {
                 baseBranch,
                 settings.refreshLocalBaseRefOnWorktreeCreate,
                 false,
-                addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
+                addProjectGitOptions(existingBranchOption)
               )
-            : remoteTrackingBaseOption
+            : suggestLocalBaseRefUpdate
               ? addWorktree(
                   repo.path,
                   worktreePath,
@@ -22860,9 +22985,9 @@ export class OrcaRuntimeService {
                   baseBranch,
                   settings.refreshLocalBaseRefOnWorktreeCreate,
                   false,
-                  addProjectGitOptions(remoteTrackingBaseOption)
+                  addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
                 )
-              : defaultAddWorktreeOption
+              : remoteTrackingBaseOption
                 ? addWorktree(
                     repo.path,
                     worktreePath,
@@ -22870,15 +22995,36 @@ export class OrcaRuntimeService {
                     baseBranch,
                     settings.refreshLocalBaseRefOnWorktreeCreate,
                     false,
-                    defaultAddWorktreeOption
+                    addProjectGitOptions(remoteTrackingBaseOption)
                   )
-                : addWorktree(
-                    repo.path,
-                    worktreePath,
-                    branchName,
-                    baseBranch,
-                    settings.refreshLocalBaseRefOnWorktreeCreate
-                  ))) ?? {}
+                : defaultAddWorktreeOption
+                  ? addWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate,
+                      false,
+                      defaultAddWorktreeOption
+                    )
+                  : addWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate
+                    ))) ?? {}
+    } catch (error) {
+      if (shouldRetireGeneratedName && failedWorktreeCreationNeedsRetirement(error)) {
+        await retireGeneratedWorktreeName(this.store, repo, settings, effectiveSanitizedName)
+      }
+      throw error
+    }
+
+    // Why: fallible metadata work after creation must not leave a real workspace name reusable.
+    if (shouldRetireGeneratedName) {
+      await retireGeneratedWorktreeName(this.store, repo, settings, effectiveSanitizedName)
+    }
 
     let configuredPushTarget: GitPushTarget | undefined
     if (preparedPushTarget) {
@@ -23347,6 +23493,7 @@ export class OrcaRuntimeService {
     repo: Repo,
     args: {
       name: string
+      nameWasGenerated?: boolean
       baseBranch?: string
       compareBaseRef?: string
       branchNameOverride?: string
@@ -23398,6 +23545,7 @@ export class OrcaRuntimeService {
       {
         repoId: repo.id,
         name: args.name,
+        ...(args.nameWasGenerated === true ? { nameWasGenerated: true } : {}),
         ...(args.displayName ? { displayName: args.displayName } : {}),
         ...(args.baseBranch ? { baseBranch: args.baseBranch } : {}),
         ...(args.compareBaseRef ? { compareBaseRef: args.compareBaseRef } : {}),
@@ -27495,6 +27643,42 @@ export class OrcaRuntimeService {
     return count
   }
 
+  private getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
+    const ptyIds = new Set<string>()
+    for (const pty of this.ptysById.values()) {
+      if (pty.connected && pty.worktreeId === worktreeId && pty.tabId === tabId) {
+        ptyIds.add(pty.ptyId)
+      }
+    }
+    for (const leaf of this.leaves.values()) {
+      if (leaf.worktreeId === worktreeId && leaf.tabId === tabId && leaf.ptyId) {
+        ptyIds.add(leaf.ptyId)
+      }
+    }
+    return [...ptyIds]
+  }
+
+  private async stopExplicitlyClosedTabPtys(
+    ptyIds: readonly string[],
+    addressedPtyId: string
+  ): Promise<boolean> {
+    let addressedPtyStopped = false
+    const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
+    for (const ptyId of ptyIds) {
+      let verifiedStopped = false
+      try {
+        verifiedStopped = (await this.ptyController?.stopAndWait?.(ptyId, { deadlineMs })) ?? false
+      } catch {
+        // Why: verified teardown is preferred, but its transport failure must not suppress the legacy provider kill.
+      }
+      const stopped = verifiedStopped || (this.ptyController?.kill(ptyId) ?? false)
+      if (ptyId === addressedPtyId) {
+        addressedPtyStopped = stopped
+      }
+    }
+    return addressedPtyStopped
+  }
+
   private resolveHandleForTab(tabId: string): string | null {
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === tabId && leaf.ptyId !== null) {
@@ -27676,6 +27860,27 @@ export class OrcaRuntimeService {
       const siblingCount = surface?.tab.parentLayout
         ? countTerminalLayoutLeaves(surface.tab.parentLayout.root)
         : this.countLeavesInTab(tabId)
+      if (siblingCount <= 1 && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
+        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        try {
+          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+            localPtyTeardownOwnedExternally: true
+          })
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+            throw error
+          }
+          this.notifier.closeTerminal?.(tabId)
+        }
+        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        return { handle, tabId, ptyKilled }
+      }
+      if (siblingCount <= 1 && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
+        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
+        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        return { handle, tabId, ptyKilled }
+      }
       const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
       if (!ptyKilled || siblingCount <= 1) {
         if (surface) {
@@ -27696,13 +27901,23 @@ export class OrcaRuntimeService {
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    let ptyKilled = false
-    if (leaf.ptyId) {
-      ptyKilled = this.ptyController?.kill(leaf.ptyId) ?? false
-    }
     // Why: in a multi-pane tab, killing the PTY is enough (renderer's exit handler closes the pane); an extra IPC close would race it and close the whole tab.
     const siblingCount = this.countLeavesInTab(leaf.tabId)
-    if (!ptyKilled || siblingCount <= 1) {
+    const ptyIdsToKill =
+      siblingCount <= 1
+        ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
+        : leaf.ptyId
+          ? [leaf.ptyId]
+          : []
+    if (siblingCount <= 1 && this.notifier?.closeTerminalTab) {
+      await this.notifier.closeTerminalTab(leaf.tabId, {
+        localPtyTeardownOwnedExternally: true
+      })
+    }
+    const ptyKilled = leaf.ptyId
+      ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
+      : false
+    if (siblingCount > 1 ? !ptyKilled : !this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
     }
     return { handle, tabId: leaf.tabId, ptyKilled }
@@ -28792,16 +29007,23 @@ export class OrcaRuntimeService {
   }
 
   private beginGraphReload(windowId: number): number {
-    // Why: a renderer reload tears down the live graph, so live handles must go stale immediately, not be reused against the rebuild.
+    // Why: the rebuilt graph decides whether an incarnation survived; do not stale proven process identities before that comparison.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
     const revision = this.graphReloadLifecycle.begin(windowId)
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
+    const retainedHandles = new Set([
+      ...this.handleByPtyId.values(),
+      ...[...this.handleByPtyIncarnation.values()].map((record) => record.handle)
+    ])
+    for (const handle of this.waitersByHandle.keys()) {
+      if (!retainedHandles.has(handle)) {
+        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
+      }
+    }
     this.handles.clear()
     this.handleByLeafKey.clear()
-    // Why: handleByPtyId (pre-allocated CLI handles) survives reloads so CLI agents keep control; adoptPreAllocatedHandle re-links on the new graph.
-    this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
     return revision
   }
@@ -28821,6 +29043,10 @@ export class OrcaRuntimeService {
     if (fence.recovery === 'renderer') {
       this.graphStatus = 'ready'
       this.setTerminalSideEffectConsumerAvailable(true)
+      for (const leaf of this.leaves.values()) {
+        this.adoptPreAllocatedHandle(leaf)
+      }
+      this.reconcilePtyIncarnationHandles()
       this.refreshWritableFlags()
       return true
     }
@@ -28886,6 +29112,7 @@ export class OrcaRuntimeService {
     this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
     // Why: pre-allocated CLI handles must survive graph unavailability so they can be re-adopted on reconnect.
     this.rejectAllWaiters('terminal_handle_stale')
   }
@@ -28910,6 +29137,7 @@ export class OrcaRuntimeService {
     this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
   }
@@ -28929,6 +29157,7 @@ export class OrcaRuntimeService {
     this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
   }
@@ -30132,6 +30361,9 @@ export class OrcaRuntimeService {
 
     pty.worktreeId = worktreeId
     if (state.incarnationId !== undefined) {
+      if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
+        this.invalidatePtyIncarnationHandle(ptyId)
+      }
       pty.incarnationId = state.incarnationId
     }
     if (state.connectionId !== undefined) {
@@ -30580,6 +30812,7 @@ export class OrcaRuntimeService {
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
+    this.invalidatePtyIncarnationHandle(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.terminalCwdByPtyId.delete(ptyId)
@@ -32394,36 +32627,60 @@ export class OrcaRuntimeService {
   }
 
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
-    let terminalHandle = handle
-    if (!this.handles.has(terminalHandle)) {
-      const runId = handle.startsWith('run:') ? handle.slice('run:'.length) : ''
-      const coordinatorHandle = runId
-        ? this._orchestrationDb?.getRun(runId)?.coordinator_handle
-        : null
-      if (!coordinatorHandle || !this.handles.has(coordinatorHandle)) {
-        return
-      }
-      terminalHandle = coordinatorHandle
-    }
+    this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
+  }
+
+  private writeOrchestrationPointerPty(ptyId: string, data: string): boolean | Promise<boolean> {
     try {
-      const { leaf } = this.getLiveLeafForHandle(terminalHandle)
-      // Why lastAgentStatusObservedLive: a cold restore seeds `idle` from the
-      // title persisted at snapshot time, so an agent that went busy across the
-      // relaunch still reads idle until its first live frame. Pushing on that
-      // would type a message plus Enter into a working agent. Seeded state waits
-      // for a live observation to authorize it.
-      if (leaf.lastAgentStatus === 'idle' && leaf.lastAgentStatusObservedLive) {
-        this.deliverPendingMessages(leaf, { mailboxHandle: handle, reservedTypes })
+      if (this.ptyController?.writeWithSettlement) {
+        return this.ptyController.writeWithSettlement(ptyId, data).catch(() => false)
       }
+      return this.ptyController?.write(ptyId, data) ?? false
     } catch {
-      // Unknown/stale handles can't be pointed now; the persisted message stays available via explicit check or future idle delivery.
+      return false
+    }
+  }
+
+  private retireOrchestrationMailboxDeliveryForPty(ptyId: string): void {
+    this.orchestrationMailboxNotifications.retirePty(ptyId)
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      if (handle) {
+        this.mailPointerRepointScheduler.schedule(handle)
+      }
+      const run = this._orchestrationDb?.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
+      if (run) {
+        this.mailPointerRepointScheduler.schedule(`run:${run.id}`)
+      }
     }
   }
 
   private scheduleRestoredMessageRepoints(): void {
-    const handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
+    let handles: string[]
+    try {
+      handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
+    } catch (error) {
+      console.warn('[orchestration] failed to scan restored mailboxes', error)
+      return
+    }
     for (const handle of handles) {
-      if (!handle.startsWith('dispatch:')) {
+      try {
+        if (handle.startsWith('dispatch:')) {
+          continue
+        }
+        if (handle.startsWith('run:')) {
+          this.mailPointerRepointScheduler.schedule(handle)
+          continue
+        }
+        const routed = this.orchestrationMailboxOwner.routeDetachedDirectMessages(handle)
+        for (const mailbox of routed.mailboxes) {
+          this.mailPointerRepointScheduler.schedule(mailbox.mailboxHandle)
+        }
+        if (!routed.hasMore) {
+          this.mailPointerRepointScheduler.schedule(handle)
+        }
+      } catch (error) {
+        console.warn(`[orchestration] failed to restore mailbox ${handle}`, error)
         this.mailPointerRepointScheduler.schedule(handle)
       }
     }
@@ -32438,14 +32695,7 @@ export class OrcaRuntimeService {
   }
 
   private deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
-    this.deliverPendingMessages(leaf)
-    if (!this._orchestrationDb) {
-      return
-    }
-    const run = this._orchestrationDb.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
-    if (run) {
-      this.deliverPendingMessages(leaf, { mailboxHandle: `run:${run.id}` })
-    }
+    this.orchestrationMailboxNotifications.deliverForLeaf(leaf)
   }
 
   // Why: wake blocking orchestration.check --wait calls on this handle so they return the new message immediately instead of polling.
@@ -32453,44 +32703,7 @@ export class OrcaRuntimeService {
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
     }
-    // Why: push-on-idle is driven by status transitions; a message that
-    // arrives while the recipient is already idle never sees a transition, so
-    // deliver now (#12536). deliverPendingMessagesForHandle no-ops when the
-    // leaf is not idle. Main's messageDeliveryFlights serialize mid-Enter
-    // re-notifies without a separate settle barrier.
-    // Why skip when a waiter will consume this: a blocked check owns the row,
-    // so also pointing and submitting the pane would wake it twice. The pull wins.
-    // Why "will consume" and not "exists": a waiter filtered to other types
-    // never returns this row — check re-reads under the same filter on timeout
-    // — so treating it as the consumer strands the message in exactly the
-    // already-idle state #12536 is about.
-    const waiters = this.messageWaitersByHandle.get(handle)
-    // Why: don't wake a coordinator waiting for worker_done/escalation on heartbeat noise it would misread as idleness.
-    const consumers = waiters
-      ? [...waiters].filter(
-          (waiter) => !messageType || !waiter.typeFilter || waiter.typeFilter.includes(messageType)
-        )
-      : []
-    if (consumers.length === 0) {
-      // Why snapshot the reservation here: every remaining waiter filters this
-      // type out, but the push reads ALL pending rows. A waiter resolved later in
-      // this same drain is gone by the time the push runs, so reading waiters
-      // then would miss what its check is about to return. Captured now, the
-      // types those waiters claim stay out of the batch.
-      const reservedTypes = new Set(waiters ? [...waiters].flatMap((w) => w.typeFilter ?? []) : [])
-      // Why queueMicrotask: resolveMessageWaiter removes the waiter synchronously
-      // but its check handler marks the rows read a microtask later. Two sends
-      // that resumed adjacently off one shared in-flight promise (group send
-      // awaits listTerminals) put a no-waiter notify inside that window, where a
-      // synchronous push would inject rows the resolved check is about to return.
-      // Deferring one hop puts the push behind any already-queued check, and it
-      // re-reads undelivered rows when it runs so nothing strands.
-      queueMicrotask(() => this.deliverPendingMessagesForHandle(handle, reservedTypes))
-      return
-    }
-    for (const waiter of consumers) {
-      this.resolveMessageWaiter(waiter, 'notified')
-    }
+    this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }
 
   waitForMessage(
@@ -32705,13 +32918,20 @@ export class OrcaRuntimeService {
     }
 
     const preAllocatedHandle = this.adoptPreAllocatedHandle(leaf)
-    const handle = preAllocatedHandle ?? `term_${randomUUID()}`
-    if (!preAllocatedHandle) {
-      this.syntheticTerminalHandles.add(handle)
+    if (preAllocatedHandle) {
+      return preAllocatedHandle
     }
-    if (this.handles.has(handle)) {
-      return handle
+    const incarnationId = leaf.ptyId ? (this.ptysById.get(leaf.ptyId)?.incarnationId ?? null) : null
+    const retained = leaf.ptyId ? this.handleByPtyIncarnation.get(leaf.ptyId) : undefined
+    if (retained && leaf.ptyId && retained.incarnationId !== incarnationId) {
+      this.invalidatePtyIncarnationHandle(leaf.ptyId)
+    } else if (retained) {
+      this.bindPtyIncarnationHandle(retained, leaf)
+      return retained.handle
     }
+
+    const handle = `term_${randomUUID()}`
+    this.syntheticTerminalHandles.add(handle)
     this.handles.set(handle, {
       handle,
       runtimeId: this.runtimeId,
@@ -32723,7 +32943,72 @@ export class OrcaRuntimeService {
       ptyGeneration: leaf.ptyGeneration
     })
     this.handleByLeafKey.set(leafKey, handle)
+    if (leaf.ptyId && incarnationId) {
+      this.handleByPtyIncarnation.set(leaf.ptyId, { handle, incarnationId, leafKey })
+    }
     return handle
+  }
+
+  private bindPtyIncarnationHandle(
+    retained: PtyIncarnationHandleRecord,
+    leaf: RuntimeLeafRecord
+  ): void {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    if (retained.leafKey !== leafKey) {
+      if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
+        this.handleByLeafKey.delete(retained.leafKey)
+      }
+      retained.leafKey = leafKey
+    }
+    this.handles.set(retained.handle, {
+      handle: retained.handle,
+      runtimeId: this.runtimeId,
+      rendererGraphEpoch: this.rendererGraphEpoch,
+      worktreeId: leaf.worktreeId,
+      tabId: leaf.tabId,
+      leafId: leaf.leafId,
+      ptyId: leaf.ptyId,
+      ptyGeneration: leaf.ptyGeneration
+    })
+    this.handleByLeafKey.set(leafKey, retained.handle)
+  }
+
+  private invalidatePtyIncarnationHandle(ptyId: string): void {
+    const retained = this.handleByPtyIncarnation.get(ptyId)
+    if (!retained) {
+      return
+    }
+    this.handleByPtyIncarnation.delete(ptyId)
+    if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
+      this.handleByLeafKey.delete(retained.leafKey)
+    }
+    this.handles.delete(retained.handle)
+    this.syntheticTerminalHandles.delete(retained.handle)
+    this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
+  }
+
+  private clearPtyIncarnationHandles(): void {
+    for (const retained of this.handleByPtyIncarnation.values()) {
+      this.syntheticTerminalHandles.delete(retained.handle)
+    }
+    this.handleByPtyIncarnation.clear()
+  }
+
+  private reconcilePtyIncarnationHandles(): void {
+    for (const [ptyId, retained] of this.handleByPtyIncarnation) {
+      const pty = this.ptysById.get(ptyId)
+      const leaves = this.getLeavesForPty(ptyId)
+      if (
+        !pty?.incarnationId ||
+        pty.incarnationId !== retained.incarnationId ||
+        leaves.length !== 1 ||
+        this.handleByPtyId.has(ptyId)
+      ) {
+        this.invalidatePtyIncarnationHandle(ptyId)
+        continue
+      }
+      this.bindPtyIncarnationHandle(retained, leaves[0])
+    }
   }
 
   private adoptPreAllocatedHandle(leaf: RuntimeLeafRecord): string | null {
@@ -32807,6 +33092,10 @@ export class OrcaRuntimeService {
     if (!handle) {
       return
     }
+    const record = this.handles.get(handle)
+    if (record?.ptyId && this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
+      this.handleByPtyIncarnation.delete(record.ptyId)
+    }
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
     this.syntheticTerminalHandles.delete(handle)
@@ -32857,10 +33146,17 @@ export class OrcaRuntimeService {
   }
 
   private resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
-    const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!handle) {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    const candidateHandle =
+      this.handleByLeafKey.get(leafKey) ??
+      (leaf.ptyId
+        ? (this.handleByPtyId.get(leaf.ptyId) ??
+          this.handleByPtyIncarnation.get(leaf.ptyId)?.handle)
+        : undefined)
+    if (!candidateHandle || !this.waitersByHandle.has(candidateHandle)) {
       return
     }
+    const handle = this.issueHandle(leaf)
     const waiters = this.waitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
       return
@@ -33074,259 +33370,6 @@ export class OrcaRuntimeService {
       }
     }
     return null
-  }
-
-  // Why: the whole pointer→Enter span must be single-flight per pty. Triggers
-  // landing mid-flight park their mailbox and re-run once on settle. The
-  // flight object is the settle identity: a stale settle surviving an exit
-  // retire must not clear a newer same-id flight or flush its parked trigger.
-  private readonly messageDeliveryFlightsByPtyId = new Map<
-    string,
-    { enterTimer: ReturnType<typeof setTimeout> | null }
-  >()
-
-  private readonly parkedMessageRedeliveriesByPtyId = new Map<
-    string,
-    Map<string, { leaf: RuntimeLeafRecord; reservedTypes?: ReadonlySet<string> }>
-  >()
-
-  private settlePendingMessageDelivery(
-    ptyId: string,
-    flight: { enterTimer: ReturnType<typeof setTimeout> | null }
-  ): void {
-    if (this.messageDeliveryFlightsByPtyId.get(ptyId) !== flight) {
-      return
-    }
-    this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    const parked = this.parkedMessageRedeliveriesByPtyId.get(ptyId)
-    if (!parked) {
-      return
-    }
-    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
-    for (const [mailboxHandle, delivery] of parked) {
-      this.deliverPendingMessages(delivery.leaf, {
-        mailboxHandle,
-        reservedTypes: delivery.reservedTypes
-      })
-    }
-  }
-
-  // Why: a dead session's Enter or watermark must not affect a same-id cold restore.
-  private retirePendingMessageDeliveryForPty(ptyId: string): void {
-    const flight = this.messageDeliveryFlightsByPtyId.get(ptyId)
-    if (flight?.enterTimer != null) {
-      clearTimeout(flight.enterTimer)
-    }
-    this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-      if (handle) {
-        this.lastPointedMessageSequenceByHandle.delete(handle)
-        this.pointedMessageIdsByHandle.delete(handle)
-        this.mailPointerRepointScheduler.schedule(handle)
-      }
-      const run = this._orchestrationDb?.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
-      if (run) {
-        this.lastPointedMessageSequenceByHandle.delete(`run:${run.id}`)
-        this.pointedMessageIdsByHandle.delete(`run:${run.id}`)
-        this.mailPointerRepointScheduler.schedule(`run:${run.id}`)
-      }
-    }
-  }
-
-  // Why: normal delivery stays event-driven; the bounded mailbox retry only repairs missed liveness edges.
-  private deliverPendingMessages(
-    leaf: RuntimeLeafRecord,
-    options: {
-      mailboxHandle?: string
-      reservedTypes?: ReadonlySet<string>
-      skipAbsenceProbe?: boolean
-    } = {}
-  ): void {
-    if (!this._orchestrationDb) {
-      return
-    }
-
-    const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!handle) {
-      return
-    }
-    const mailboxHandle = options.mailboxHandle ?? handle
-
-    if (leaf.ptyId && this.messageDeliveryFlightsByPtyId.has(leaf.ptyId)) {
-      let parked = this.parkedMessageRedeliveriesByPtyId.get(leaf.ptyId)
-      if (!parked) {
-        parked = new Map()
-        this.parkedMessageRedeliveriesByPtyId.set(leaf.ptyId, parked)
-      }
-      const priorReservedTypes = parked.get(mailboxHandle)?.reservedTypes
-      const reservedTypes =
-        priorReservedTypes || options.reservedTypes
-          ? new Set([...(priorReservedTypes ?? []), ...(options.reservedTypes ?? [])])
-          : undefined
-      parked.set(mailboxHandle, { leaf, reservedTypes })
-      return
-    }
-
-    // Why filter here and not at the trigger: the push reads every pending row,
-    // not just the one that woke it, so a row a pull has claimed would be typed
-    // into the pane AND returned by that pull's check. Live waiters cover the
-    // still-blocked case; reservedTypes carries the notify-time snapshot for a
-    // waiter resolved later in the same drain, which is already gone from the map.
-    const waiters = this.messageWaitersByHandle.get(mailboxHandle)
-    const pending = this._orchestrationDb.getUndeliveredUnreadMessages(mailboxHandle)
-    const pendingIds = new Set(pending.map((message) => message.id))
-    const pointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
-    if (pointedIds) {
-      for (const id of pointedIds) {
-        if (!pendingIds.has(id)) {
-          pointedIds.delete(id)
-        }
-      }
-      if (pointedIds.size === 0) {
-        this.pointedMessageIdsByHandle.delete(mailboxHandle)
-      }
-    }
-    const unread = pending.filter(
-      (message) =>
-        !options.reservedTypes?.has(message.type) &&
-        !messageTypeHasLiveWaiter(waiters, message.type)
-    )
-    if (unread.length === 0) {
-      return
-    }
-
-    const watermark = this.lastPointedMessageSequenceByHandle.get(mailboxHandle) ?? -1
-    const priorPointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
-    if (
-      !unread.some(
-        (message) => message.sequence > watermark || priorPointedIds?.has(message.id) !== true
-      )
-    ) {
-      return
-    }
-
-    if (!leaf.writable || !leaf.ptyId) {
-      return
-    }
-    const newestSequence = unread.at(-1)?.sequence
-    if (newestSequence === undefined) {
-      return
-    }
-
-    if (
-      !options.skipAbsenceProbe &&
-      this.ptyController?.probePtyLiveness &&
-      !this.controllerKnowsPtyIsLive(leaf.ptyId)
-    ) {
-      // Why: a fire-and-forget write to a prior process's ptyId reports success
-      // and would mark these delivered while losing them. Proven absence keeps
-      // them queued for a future surface; unknown liveness still delivers.
-      const probedPtyId = leaf.ptyId
-      // Why: triggers arriving mid-probe must not each arm a continuation — the
-      // Every continuation would re-read the same unread rows. The single armed
-      // continuation re-reads fresh rows when it fires, so nothing is lost.
-      if (this.probeDeferredDeliveryPtyIds.has(probedPtyId)) {
-        return
-      }
-      this.probeDeferredDeliveryPtyIds.add(probedPtyId)
-      void this.isLeafPtyProvenAbsent(probedPtyId)
-        .then((absent) => {
-          this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
-          if (!absent && leaf.ptyId === probedPtyId) {
-            // Why a macrotask and not the stale reservation snapshot: a `remote:`
-            // pty answers the probe null before its first await, so this chain can
-            // settle in microtasks and overtake the resumption of a check resolved
-            // meanwhile — that check's waiter is already out of the map and its
-            // rows are not yet read, so the push would inject what it returns.
-            // Yielding the turn lets every queued check mark its rows read first;
-            // re-reading then (rather than replaying a reservation this probe may
-            // have outlived) is what keeps an orphaned row from stranding.
-            setTimeout(() => {
-              // Why current state, not the closure: the gate that authorized this
-              // push ran before the probe. A same-id cold restore inside the probe
-              // window keeps ptyId identical and makes the leaf writable again, so
-              // an id-only check would type the pointer plus Enter into a process
-              // whose idle was never observed. Re-read the live-idle gate.
-              const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-              if (
-                currentLeaf?.ptyId === probedPtyId &&
-                currentLeaf.lastAgentStatus === 'idle' &&
-                currentLeaf.lastAgentStatusObservedLive
-              ) {
-                this.deliverPendingMessages(currentLeaf, {
-                  mailboxHandle,
-                  skipAbsenceProbe: true
-                })
-              }
-            }, 0)
-          }
-        })
-        .catch(() => {
-          this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
-        })
-      return
-    }
-
-    const deliveryPtyId = leaf.ptyId
-    const flight: { enterTimer: ReturnType<typeof setTimeout> | null } = { enterTimer: null }
-    this.messageDeliveryFlightsByPtyId.set(deliveryPtyId, flight)
-    // Why: every sync outcome — failed write, Cursor branch, or a throw —
-    // must end the flight here, or a leaked flag parks this pty's deliveries
-    // forever. Only an armed Enter hands settling to its own callback.
-    let settlesInEnterCallback = false
-    try {
-      const payload = formatMessagePointer(unread.length)
-      const wrote = this.ptyController?.write(deliveryPtyId, payload) ?? false
-      if (!wrote) {
-        return
-      }
-      this.lastPointedMessageSequenceByHandle.set(
-        mailboxHandle,
-        Math.max(watermark, newestSequence)
-      )
-      const pointedIdsAfterWrite =
-        this.pointedMessageIdsByHandle.get(mailboxHandle) ?? new Set<string>()
-      for (const message of unread) {
-        pointedIdsAfterWrite.add(message.id)
-      }
-      this.pointedMessageIdsByHandle.set(mailboxHandle, pointedIdsAfterWrite)
-
-      const tabTitle = this.tabs.get(leaf.tabId)?.title
-      if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
-        // Why: Cursor Agent treats injected PTY text as editable prompt input, so submitting must stay under user control.
-        return
-      }
-
-      // Why: agent TUIs can swallow a \r in the same PTY write; submit separately after a delay.
-      flight.enterTimer = setTimeout(() => {
-        try {
-          // Why current state, not the closure: graph resync replaces leaf
-          // objects, so the captured record can read writable=true after the
-          // pty died, and an exit retire may have superseded this flight.
-          if (this.messageDeliveryFlightsByPtyId.get(deliveryPtyId) !== flight) {
-            return
-          }
-          const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-          if (!currentLeaf || currentLeaf.ptyId !== deliveryPtyId || !currentLeaf.writable) {
-            return
-          }
-          this.ptyController?.write(deliveryPtyId, '\r')
-        } catch {
-          // Terminal may have closed during the delay; mail remains queued for check.
-        } finally {
-          // Why finally: every outcome — submit, refusal, throw — ends the flight,
-          // and settle re-runs any trigger parked during it so nothing strands.
-          this.settlePendingMessageDelivery(deliveryPtyId, flight)
-        }
-      }, 500)
-      settlesInEnterCallback = true
-    } finally {
-      if (!settlesInEnterCallback) {
-        this.settlePendingMessageDelivery(deliveryPtyId, flight)
-      }
-    }
   }
 
   private resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {

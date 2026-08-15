@@ -119,9 +119,29 @@ function isIdentityRefreshDue(repo: Repo, now: number): boolean {
   return dueAt <= now
 }
 
+/**
+ * Drop deadlines for locations no longer backed by a repo, so removed repos and
+ * retired SSH hosts do not accumulate for the life of the process.
+ */
+function pruneRetryDeadlines(liveRepos: Repo[]): void {
+  const liveKeys = new Set(liveRepos.map(getRepoLocationKey))
+  for (const locationKey of probeRetryAfterByLocation.keys()) {
+    // A probe still running for a dropped repo needs no exemption: it re-adds its
+    // own deadline on settle, and only live repos are ever candidates, so nothing
+    // reads this entry in between.
+    if (!liveKeys.has(locationKey)) {
+      probeRetryAfterByLocation.delete(locationKey)
+    }
+  }
+}
+
 function selectEnrichmentCandidates(store: RepoIdentityStore): Repo[] {
   const now = Date.now()
   const repos = store.getRepos().filter((repo) => repo.kind !== 'folder')
+  // Why here: this is the one place that already enumerates every live repo, and
+  // `getRepos()` builds its list synchronously from in-memory state, so a repo is
+  // never transiently absent mid-sweep and cannot lose its startup delay or backoff.
+  pruneRetryDeadlines(repos)
   // Why: the settled `null` marker stays a candidate on purpose — a repo that
   // gains a remote later must still resolve. Do not tighten this to
   // `=== undefined`; the retry TTL already bounds the cost and `writeIdentity`

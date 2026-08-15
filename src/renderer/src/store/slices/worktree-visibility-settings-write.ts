@@ -111,7 +111,12 @@ export async function persistVisibilityAwareSettings(args: {
       const defaults =
         state.worktreeVisibilityDefaultsByHost[toRuntimeExecutionHostId(target.environmentId)] ??
         currentSettings?.worktreeVisibilityDefaults
-      if (target.environmentId === supportedRuntimeEnvironmentId && defaults) {
+      if (
+        target.environmentId ===
+          (state.worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId ??
+            supportedRuntimeEnvironmentId) &&
+        defaults
+      ) {
         return { ...persisted, worktreeVisibilityDefaults: defaults }
       }
       const { worktreeVisibilityDefaults: _unsupported, ...settingsWithoutDefaults } = persisted

@@ -207,6 +207,7 @@ import {
   confirmsMirroredTabSelection,
   type AppliedSnapshotMarker
 } from '../../../../src/session/session-tab-snapshot-gate'
+import { hasPendingTerminalHandleRecoveryNeed } from '../../../../src/session/pending-terminal-handle-recovery'
 import {
   createInitialSessionAutoCreateState,
   useInitialSessionTerminalAutoCreate,
@@ -2283,6 +2284,10 @@ export default function SessionScreen() {
     () =>
       closedTabTombstonesRef.current.size > 0 ||
       pendingBrowserFocusPageIdRef.current !== null ||
+      // Why: a pending-handle terminal only turns ready in a fresh snapshot. A live
+      // stream otherwise parks the poll, and a host that mints the handle without
+      // republishing strands the pane on its spinner forever (STA-4256).
+      hasPendingTerminalHandleRecoveryNeed(sessionTabsRef.current, activeSessionTabIdRef.current) ||
       // Why: a chat-covered handle that ran out of rearms and left `terminal.list`
       // was reminted by a desktop graph reload. Only a fresh tab snapshot carries
       // the replacement handle, so force one instead of holding the composer locked.

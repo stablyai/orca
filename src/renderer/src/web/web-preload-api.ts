@@ -65,6 +65,8 @@ import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-resul
 import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/pty-delivery-diagnostics'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { readRetiredNameRegistryForRepo } from '../../../shared/worktree/retired-name-cache'
+import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/retired-name-registry'
 import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides
@@ -583,6 +585,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
+      // The web client cannot inspect local Mission Control shortcuts.
+      getMacCapturedDigitRowChords: () => Promise.resolve([]),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
@@ -1801,6 +1805,18 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         withRuntimeWorktreeOwner(worktree, owned.hostId)
       )
     },
+    // Why the catch: a host predating this method answers `method_not_found`, and an empty list
+    // degrades the suggestion to the pre-existing behavior rather than blocking workspace create.
+    listRetiredNames: async ({ repoId }) => {
+      try {
+        return readRetiredNameRegistryForRepo(
+          await callRuntimeResult<unknown>('worktree.listRetiredNames', { repo: repoId }),
+          repoId
+        )
+      } catch {
+        return EMPTY_RETIRED_NAME_REGISTRY
+      }
+    },
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
@@ -1808,6 +1824,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
         repo: args.repoId,
         name: args.name,
+        // Absent means user-typed, which is what the host must assume — so send it only when true.
+        ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),
         baseBranch: args.baseBranch,
         compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,

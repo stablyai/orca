@@ -298,7 +298,9 @@
         "workspace": {
           "cleanup": {
             "9d6e531da6": "Workspace no longer exists.",
-            "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing."
+            "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing.",
+            "hostCollision": "Error: this workspace exists on multiple hosts at the same path",
+            "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again."
           }
         },
         "worktrees": {
@@ -4411,7 +4413,8 @@
           "d36883e046": "Cancel",
           "b79b39d865": "Remove Project",
           "removeDescriptionSsh": "This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.",
-          "removeDescriptionLocal": "This only removes {{name}} from Orca. It is still on your disk."
+          "removeDescriptionLocal": "This only removes {{name}} from Orca. It is still on your disk.",
+          "removeDescriptionVmRecipe": "This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Reveal active workspace"
@@ -9968,7 +9971,11 @@
           "cloudVmTitle": "Cloud VM runtimes",
           "cloudVmRefresh": "Refresh Cloud VM runtimes",
           "cloudVmLoading": "Checking Cloud VM runtimes…",
-          "cloudVmEmptyWithSetup": "No Cloud VM runtimes yet. Create one from a workspace using an environment recipe."
+          "cloudVmEmptyWithSetup": "No Cloud VM runtimes yet. Create one from a workspace using an environment recipe.",
+          "stoppingCleanup": "Stopping…",
+          "stopCleanup": "Stop cleanup",
+          "cleanupStopped": "Cleanup stopped",
+          "stopCleanupFailed": "Couldn’t stop Cloud VM cleanup."
         },
         "ephemeralVms": {
           "search": {
@@ -10720,6 +10727,16 @@
           "saveFailed": "Could not save visibility defaults.",
           "updateServer": "Update this server to configure source defaults.",
           "updateServerDefaults": "Update this server to configure visibility defaults."
+        },
+        "EphemeralVmCleanupStopDialog": {
+          "title": "Stop cleanup?",
+          "description": "The VM may remain running and incur charges. You can retry cleanup later.",
+          "cancel": "Keep cleaning",
+          "stopping": "Stopping…",
+          "confirm": "Stop cleanup"
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
         }
       },
       "right": {

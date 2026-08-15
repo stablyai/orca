@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from 'vitest'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState
@@ -34,6 +35,19 @@ function stateWith(
     worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
     ...overrides
   } as Partial<DashboardCardTerminalInputState>
+}
+
+function codexEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
+  return {
+    state: 'waiting',
+    prompt: '',
+    updatedAt: 1,
+    stateStartedAt: 1,
+    stateHistory: [],
+    agentType: 'codex',
+    paneKey: MAC_ARGS.paneKey,
+    ...overrides
+  }
 }
 
 describe('resolveDashboardCardTerminalInput', () => {
@@ -125,6 +139,50 @@ describe('resolveDashboardCardTerminalInput', () => {
       sshConnectionStates: new Map([['conn-1', { remotePlatform: 'win32' }]])
     } as unknown as Partial<DashboardCardTerminalInputState>)
     expect(resolveDashboardCardTerminalInput(state, MAC_ARGS).hostPlatform).toBe('win32')
+  })
+
+  it('relays Windows input-record paste encoding for a confirmed remote Codex pane', () => {
+    const profile = resolveDashboardCardTerminalInput(
+      stateWith({
+        runtimeStatusByEnvironmentId: new Map([
+          ['windows-box', { status: { hostPlatform: 'win32' } }]
+        ]),
+        agentStatusByPaneKey: { [MAC_ARGS.paneKey]: codexEntry() }
+      } as unknown as Partial<DashboardCardTerminalInputState>),
+      { ...MAC_ARGS, ptyId: 'remote:windows-box@@pty-1' }
+    )
+
+    expect(profile.windowsInputRecordPasteNewline).toBe('alt-enter')
+    expect(profile.forceBracketedMultilineTextPaste).toBeUndefined()
+  })
+
+  it('relays bracketed multiline paste for a confirmed non-Windows Codex pane', () => {
+    const profile = resolveDashboardCardTerminalInput(
+      stateWith({
+        agentStatusByPaneKey: { [MAC_ARGS.paneKey]: codexEntry() }
+      }),
+      MAC_ARGS
+    )
+
+    expect(profile.forceBracketedMultilineTextPaste).toBe(true)
+    expect(profile.windowsInputRecordPasteNewline).toBeUndefined()
+  })
+
+  it('does not relay stale restored agent paste authority', () => {
+    const profile = resolveDashboardCardTerminalInput(
+      stateWith({
+        runtimeStatusByEnvironmentId: new Map([
+          ['windows-box', { status: { hostPlatform: 'win32' } }]
+        ]),
+        agentStatusByPaneKey: {
+          [MAC_ARGS.paneKey]: codexEntry({ restoredUnconfirmed: true })
+        }
+      } as unknown as Partial<DashboardCardTerminalInputState>),
+      { ...MAC_ARGS, ptyId: 'remote:windows-box@@pty-1' }
+    )
+
+    expect(profile.forceBracketedMultilineTextPaste).toBeUndefined()
+    expect(profile.windowsInputRecordPasteNewline).toBeUndefined()
   })
 
   it("keeps the live SSH PTY's host after the worktree owner changes", () => {

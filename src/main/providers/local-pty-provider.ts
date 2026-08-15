@@ -1150,15 +1150,20 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
-  write(id: string, data: string): void {
+  write(id: string, data: string): boolean {
     // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
     if (extractOnlyCookedEchoSafeQueryReplies(data)) {
       const ingress = startupIngressByPty.get(id)
       if (ingress?.answerLiveQueryReply(data)) {
-        return
+        return true
       }
     }
-    ptyProcesses.get(id)?.write(data)
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return false
+    }
+    proc.write(data)
+    return true
   }
   resize(id: string, cols: number, rows: number): void {
     ptyProcesses.get(id)?.resize(cols, rows)
