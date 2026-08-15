@@ -3276,8 +3276,13 @@ app.on('will-quit', (e) => {
     : Promise.resolve()
   // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
   // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
-  // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
-  const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+  // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the
+  // temp/dev profile ownerless — and terminateSessionsOnQuit is the user's opt-in for quit meaning
+  // every session stops instead of surviving for reattach (#7783).
+  const daemonTeardown =
+    isDevParentShutdownRequested() || store?.getSettings().terminateSessionsOnQuit === true
+      ? shutdownDaemon()
+      : disconnectDaemon()
   // Why: a wedged transport (half-open post-sleep socket) can leave one
   // member unsettled forever and block app.quit() until Force Quit (#9447).
   // Why stats/state join here: their writes are durable but not worth hanging the app for.

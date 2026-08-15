@@ -312,6 +312,10 @@ export type GlobalSettings = {
   skipDeleteWorktreeConfirm: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
   skipCloseTerminalWithRunningProcessConfirm: boolean
+  /** Why: the daemon outlives quit so sessions reattach warm on relaunch, but that leaves agents
+   *  running headless after the app closes (#7783); this opt-in makes quit kill the daemon and
+   *  every session with it. Optional so pre-existing profiles keep the warm-reattach default. */
+  terminateSessionsOnQuit?: boolean
   /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */
   skipDeleteAutomationConfirm: boolean
   /** Why: deleting an artifact breaks a public link others may already hold; keep this skip separate from local deletions. */
