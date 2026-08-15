@@ -671,6 +671,33 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' }
     ],
     defaultModelId: 'Gemini 3.5 Flash (Medium)'
+  },
+  jcode: {
+    id: 'jcode',
+    label: 'Jcode',
+    binary: 'jcode',
+    // Why: jcode run takes the message as a positional argv argument and has
+    // no stdin prompt mode; Source Control AI prompts ride argv (fine for
+    // branch naming and small diffs, argv-capped on Windows).
+    promptDelivery: 'argv',
+    buildArgs: ({ prompt, model }) => [
+      'run',
+      '--no-update',
+      '--quiet',
+      '--json',
+      // Why: bare `default` (or an empty model) lets jcode use the model
+      // configured in its own config.toml, so no provider is hardcoded here.
+      ...(model && model !== 'default' ? ['--model', model] : []),
+      prompt
+    ],
+    modelSource: 'static',
+    models: [
+      { id: 'default', label: 'Config default' },
+      { id: 'claude-sonnet-4', label: 'Claude Sonnet 4' },
+      { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+      { id: 'gpt-5.4', label: 'GPT-5.4' }
+    ],
+    defaultModelId: 'default'
   }
 }
 

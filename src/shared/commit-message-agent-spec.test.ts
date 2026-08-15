@@ -33,6 +33,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'codex',
       'copilot',
       'cursor',
+      'jcode',
       'kimi',
       'opencode',
       'pi'
@@ -190,6 +191,32 @@ describe('buildArgs (Claude)', () => {
   it('omits --effort when thinkingLevel is not provided', () => {
     const args = spec.buildArgs({ prompt: '', model: 'opus' })
     expect(args).not.toContain('--effort')
+  })
+})
+
+describe('buildArgs (Jcode)', () => {
+  const spec = getCommitMessageAgentSpec('jcode')!
+
+  it('builds a jcode run argv with the model and prompt', () => {
+    const args = spec.buildArgs({ prompt: 'name this branch', model: 'claude-sonnet-4' })
+    expect(args).toEqual([
+      'run',
+      '--no-update',
+      '--quiet',
+      '--json',
+      '--model',
+      'claude-sonnet-4',
+      'name this branch'
+    ])
+  })
+
+  it('omits --model for the config-default choice', () => {
+    const args = spec.buildArgs({ prompt: 'name this branch', model: 'default' })
+    expect(args).toEqual(['run', '--no-update', '--quiet', '--json', 'name this branch'])
+  })
+
+  it('defaults the model to the jcode config default', () => {
+    expect(spec.defaultModelId).toBe('default')
   })
 })
 

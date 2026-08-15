@@ -99,6 +99,16 @@ describe('cleanGeneratedCommitMessage', () => {
     expect(cleanGeneratedCommitMessage(raw)).toBe('feat: hello world')
   })
 
+  it('strips the trailing jcode [Tokens] usage line', () => {
+    const raw = 'feat: hello\n[Tokens] upload: 14926 download: 17 cache_read: 14720 cache_write: 0'
+    expect(cleanGeneratedCommitMessage(raw)).toBe('feat: hello')
+  })
+
+  it('extracts the answer from a jcode --json envelope', () => {
+    const raw = JSON.stringify({ session_id: 's1', model: 'm', text: 'fix-login-crash', usage: {} })
+    expect(cleanGeneratedCommitMessage(raw)).toBe('fix-login-crash')
+  })
+
   it('normalizes CRLF line endings', () => {
     expect(cleanGeneratedCommitMessage('feat: a\r\nbody line\r\n')).toBe('feat: a\nbody line')
   })

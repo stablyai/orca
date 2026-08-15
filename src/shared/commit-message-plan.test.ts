@@ -124,6 +124,26 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Jcode run generation with an argv prompt', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'jcode',
+        model: 'default'
+      },
+      'name this branch'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'jcode',
+        args: ['run', '--no-update', '--quiet', '--json', 'name this branch'],
+        stdinPayload: null,
+        label: 'Jcode'
+      }
+    })
+  })
+
   it('allows discovered dynamic models that are not in the seed catalog', () => {
     const result = planCommitMessageGeneration(
       {
