@@ -256,6 +256,7 @@ type TerminalPaneProps = {
   isActive: boolean
   isVisible?: boolean
   isWorktreeActive?: boolean
+  suppressHeaderPaneZoomControl?: boolean
   // When set (Activity portal), isolates one split pane as a transient override that doesn't touch expandedPaneId or persist the layout.
   isolatedPaneKey?: string | null
   // Why: ephemeral one-off command terminals don't need the header's prominent split affordance (split shortcuts still work).
@@ -311,6 +312,7 @@ function TerminalPane(
     isActive,
     isVisible = true,
     isWorktreeActive = isVisible,
+    suppressHeaderPaneZoomControl = false,
     isolatedPaneKey = null,
     showSplitButton = true,
     onPtyExit,
@@ -3215,6 +3217,8 @@ function TerminalPane(
         renameInputRef={renameInputRef}
         titleUsesLightSurface={titleUsesLightSurface}
         paneTitleBackground={paneTitleBackground}
+        activePaneIsZoomed={activePane?.id !== undefined && expandedPaneId === activePane.id}
+        suppressPaneZoomControl={suppressHeaderPaneZoomControl}
         terminalContentVisible={terminalContentVisible}
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
@@ -3227,6 +3231,12 @@ function TerminalPane(
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
         }
         onSplitPane={splitTerminalPaneFromHeader}
+        onTogglePaneZoom={() => {
+          const pane = managerRef.current?.getActivePane() ?? managedPanes[0]
+          if (pane) {
+            toggleExpandPane(pane.id)
+          }
+        }}
         onBeginPaneDrag={beginPaneDragFromHeader}
         onActivatePaneTitleInteraction={activatePaneTitleInteraction}
         onPaneTitleContextMenu={contextMenu.onPaneTitleContextMenu}

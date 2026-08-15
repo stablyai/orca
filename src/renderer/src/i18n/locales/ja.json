@@ -2883,7 +2883,9 @@
             "1ff1c77616": "ブラウザ",
             "586d2ac445": "ターミナル",
             "addSplitPane": "分割ペインを追加",
-            "closePaneColumn": "分割ペインを閉じる"
+            "closePaneColumn": "分割ペインを閉じる",
+            "restorePane": "Restore pane",
+            "zoomPane": "Zoom pane"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "このセッションを再開するにはターミナルペインにドロップしてください。",

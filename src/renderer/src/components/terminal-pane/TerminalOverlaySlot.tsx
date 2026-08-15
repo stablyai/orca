@@ -45,6 +45,7 @@ type TerminalOverlaySlotProps = {
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   leaveWorktreeIfEmpty: () => void
+  suppressHeaderPaneZoomControl?: boolean
 }
 
 export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
@@ -60,7 +61,8 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
-  leaveWorktreeIfEmpty
+  leaveWorktreeIfEmpty,
+  suppressHeaderPaneZoomControl = false
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
@@ -226,6 +228,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       // flag still lets hidden tabs throttle rendering.
       isVisible={isVisible || activityTerminalPortal !== null}
       isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
+      suppressHeaderPaneZoomControl={suppressHeaderPaneZoomControl}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
       onPtyExit={(ptyId) => {
         if (consumeSuppressedPtyExit(ptyId)) {

@@ -2895,7 +2895,9 @@
             "1ff1c77616": "浏览器",
             "586d2ac445": "终端",
             "addSplitPane": "添加拆分窗格",
-            "closePaneColumn": "关闭拆分窗格"
+            "closePaneColumn": "关闭拆分窗格",
+            "restorePane": "Restore pane",
+            "zoomPane": "Zoom pane"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "拖放到终端面板以恢复此会话。",

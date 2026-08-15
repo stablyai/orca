@@ -188,4 +188,16 @@ describe('keybindings', () => {
       )
     ).toBe(true)
   })
+
+  it('matches the pane zoom shortcut in terminal-first context', () => {
+    expect(
+      keybindingMatchesAction(
+        'tab.togglePaneZoom',
+        { key: 'Enter', code: 'Enter', meta: false, control: true, alt: true, shift: false },
+        'linux',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+  })
 })

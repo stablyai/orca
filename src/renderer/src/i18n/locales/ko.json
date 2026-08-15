@@ -2883,7 +2883,9 @@
             "1ff1c77616": "브라우저",
             "586d2ac445": "터미널",
             "addSplitPane": "분할 창 추가",
-            "closePaneColumn": "분할 창 닫기"
+            "closePaneColumn": "분할 창 닫기",
+            "restorePane": "Restore pane",
+            "zoomPane": "Zoom pane"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "이 세션을 재개하려면 terminal 창에 놓으세요.",

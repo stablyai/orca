@@ -64,6 +64,7 @@ export function useTabGroupWorkspaceModel({
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId,
+      canExpandPaneByTabId: state.canExpandPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
       mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
@@ -109,6 +110,14 @@ export function useTabGroupWorkspaceModel({
   )
   const activeItemId = group?.activeTabId ?? null
   const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
+  const activeTerminalPaneZoomTabId =
+    activeTab?.contentType === 'terminal' ? activeTab.entityId : null
+  const canZoomActiveTerminalPane =
+    activeTerminalPaneZoomTabId !== null &&
+    worktreeState.canExpandPaneByTabId[activeTerminalPaneZoomTabId] === true
+  const activeTerminalPaneIsZoomed =
+    activeTerminalPaneZoomTabId !== null &&
+    worktreeState.expandedPaneByTabId[activeTerminalPaneZoomTabId] === true
   // Why: shell identity lives on the terminal tab (not the unified tab) so icons survive default-shell changes.
   const terminalTabById = useMemo(
     () => new Map(worktreeState.terminalTabs.map((item) => [item.id, item])),
@@ -396,6 +405,13 @@ export function useTabGroupWorkspaceModel({
     [activateTerminal, groupTabs]
   )
 
+  const toggleActiveTerminalPaneZoom = useCallback(() => {
+    if (!activeTerminalPaneZoomTabId || !canZoomActiveTerminalPane) {
+      return
+    }
+    toggleTerminalPaneExpand(activeTerminalPaneZoomTabId)
+  }, [activeTerminalPaneZoomTabId, canZoomActiveTerminalPane, toggleTerminalPaneExpand])
+
   const activateEditor = useCallback(
     (tabId: string) => {
       const item = groupTabs.find((candidate) => candidate.id === tabId)
@@ -569,6 +585,8 @@ export function useTabGroupWorkspaceModel({
     tabBarOrder,
     groupTabs,
     expandedPaneByTabId: worktreeState.expandedPaneByTabId,
+    canZoomActiveTerminalPane,
+    activeTerminalPaneIsZoomed,
     commands: {
       focusGroup: () => {
         focusGroup(worktreeId, groupId)
@@ -679,7 +697,8 @@ export function useTabGroupWorkspaceModel({
       pinFile,
       setTabColor,
       setTabCustomTitle,
-      toggleTerminalPaneExpand
+      toggleTerminalPaneExpand,
+      toggleActiveTerminalPaneZoom
     }
   }
 }

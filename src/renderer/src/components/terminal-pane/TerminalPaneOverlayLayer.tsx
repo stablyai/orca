@@ -100,6 +100,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     }
     return entries
   }, [groupActiveTabById, unifiedTabs])
+  const hasSplitGroups = groups.length > 1
 
   const activeTerminalTabId = useMemo(() => {
     if (!activeGroupId) {
@@ -163,6 +164,10 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
               onFocusOwningGroup={focusOwningGroup}
               consumeSuppressedPtyExit={consumeSuppressedPtyExit}
               leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+              // Why: tab-group split chrome owns the visible zoom command when
+              // multiple groups exist; the terminal header zoom is for single-group
+              // terminal leaf splits so identical labels do not target two scopes.
+              suppressHeaderPaneZoomControl={Boolean(assignment && hasSplitGroups)}
             />
           )
         })}

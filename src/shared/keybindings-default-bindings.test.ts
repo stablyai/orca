@@ -19,6 +19,14 @@ describe('keybindings', () => {
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
   })
 
+  it('defines a terminal-safe workspace pane zoom shortcut', () => {
+    expect(getEffectiveKeybindingsForAction('tab.togglePaneZoom', 'darwin')).toEqual([
+      'Mod+Alt+Enter'
+    ])
+    expect(formatKeybindingList(['Mod+Alt+Enter'], 'darwin')).toBe('⌘⌥Enter')
+    expect(formatKeybindingList(['Mod+Alt+Enter'], 'linux')).toBe('Ctrl+Alt+Enter')
+  })
+
   it.each(['darwin', 'linux', 'win32'] as const)(
     'binds editor word wrap to Alt+Z on %s',
     (platform) => {

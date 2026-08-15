@@ -65,6 +65,7 @@ export type TabsSlice = {
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
+  zoomedGroupIdByWorktree: Record<string, string | null>
   createUnifiedTab: (
     worktreeId: string,
     contentType: TabContentType,
@@ -149,6 +150,8 @@ export type TabsSlice = {
   closeTabsToLeft: (tabId: string) => string[]
   ensureWorktreeRootGroup: (worktreeId: string) => string
   focusGroup: (worktreeId: string, groupId: string) => void
+  togglePaneZoom: (worktreeId: string, groupId: string) => void
+  clearPaneZoom: (worktreeId: string) => void
   closeEmptyGroup: (worktreeId: string, groupId: string) => boolean
   createEmptySplitGroup: (
     worktreeId: string,
@@ -311,6 +314,26 @@ function updateSplitRatio(
 
 function findFirstLeaf(root: TabGroupLayoutNode): string {
   return root.type === 'leaf' ? root.groupId : findFirstLeaf(root.first)
+}
+
+function layoutContainsGroup(root: TabGroupLayoutNode | undefined, groupId: string): boolean {
+  if (!root) {
+    return false
+  }
+  if (root.type === 'leaf') {
+    return root.groupId === groupId
+  }
+  return layoutContainsGroup(root.first, groupId) || layoutContainsGroup(root.second, groupId)
+}
+
+function clearZoomedGroup(
+  zoomedGroupIdByWorktree: Record<string, string | null>,
+  worktreeId: string
+): Record<string, string | null> {
+  if (!zoomedGroupIdByWorktree[worktreeId]) {
+    return zoomedGroupIdByWorktree
+  }
+  return { ...zoomedGroupIdByWorktree, [worktreeId]: null }
 }
 
 function partitionPinnedTabOrder(tabOrder: string[], tabs: Tab[], movingTabId: string): string[] {
@@ -832,6 +855,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},
+  zoomedGroupIdByWorktree: {},
 
   createUnifiedTab: (worktreeId, contentType, init) => {
     const id = init?.id ?? createBrowserUuid()
@@ -1159,6 +1183,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       )
       let nextLayoutByWorktree = current.layoutByWorktree
       let nextActiveGroupIdByWorktree = current.activeGroupIdByWorktree
+      let nextZoomedGroupIdByWorktree = current.zoomedGroupIdByWorktree
       if (wasLastTab && current.layoutByWorktree[worktreeId] && nextGroups.length > 1) {
         nextGroups = nextGroups.filter((candidate) => candidate.id !== group.id)
         const collapsedState = collapseGroupLayout(
@@ -1170,6 +1195,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         )
         nextLayoutByWorktree = collapsedState.layoutByWorktree
         nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
+        nextZoomedGroupIdByWorktree = clearZoomedGroup(nextZoomedGroupIdByWorktree, worktreeId)
       }
       const shouldDeactivateWorktree =
         current.activeWorktreeId === worktreeId &&
@@ -1185,6 +1211,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         },
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        zoomedGroupIdByWorktree: nextZoomedGroupIdByWorktree,
         // Why: skip writing unreadTerminalTabs when the reference is unchanged, avoiding a no-op alloc that re-runs full-state selectors.
         ...(nextUnreadTerminalTabs !== current.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
@@ -1611,6 +1638,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
         layoutByWorktree: collapsedState.layoutByWorktree,
         activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
+        zoomedGroupIdByWorktree: clearZoomedGroup(current.zoomedGroupIdByWorktree, worktreeId),
         recentQuickCommandIdByGroup: remainingRecent,
         ...(current.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
@@ -1630,6 +1658,39 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
     })
     return true
+  },
+
+  togglePaneZoom: (worktreeId, groupId) => {
+    set((state) => {
+      const layout = state.layoutByWorktree[worktreeId]
+      const groups = state.groupsByWorktree[worktreeId] ?? []
+      if (
+        groups.length <= 1 ||
+        !groups.some((candidate) => candidate.id === groupId) ||
+        !layoutContainsGroup(layout, groupId)
+      ) {
+        return {
+          zoomedGroupIdByWorktree: clearZoomedGroup(state.zoomedGroupIdByWorktree, worktreeId)
+        }
+      }
+      const isZoomed = state.zoomedGroupIdByWorktree[worktreeId] === groupId
+      return {
+        activeGroupIdByWorktree: {
+          ...state.activeGroupIdByWorktree,
+          [worktreeId]: groupId
+        },
+        zoomedGroupIdByWorktree: {
+          ...state.zoomedGroupIdByWorktree,
+          [worktreeId]: isZoomed ? null : groupId
+        }
+      }
+    })
+  },
+
+  clearPaneZoom: (worktreeId) => {
+    set((state) => ({
+      zoomedGroupIdByWorktree: clearZoomedGroup(state.zoomedGroupIdByWorktree, worktreeId)
+    }))
   },
 
   createEmptySplitGroup: (worktreeId, sourceGroupId, direction) => {
@@ -1727,6 +1788,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       })
       let nextLayoutByWorktree = state.layoutByWorktree
       let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
+      let nextZoomedGroupIdByWorktree = state.zoomedGroupIdByWorktree
       let filteredGroups = nextGroups
       if (sourceOrder.length === 0) {
         filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
@@ -1739,6 +1801,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         )
         nextLayoutByWorktree = collapsedState.layoutByWorktree
         nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
+        nextZoomedGroupIdByWorktree = clearZoomedGroup(nextZoomedGroupIdByWorktree, worktreeId)
       }
       const nextGroupsByWorktree = {
         ...state.groupsByWorktree,
@@ -1755,6 +1818,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupsByWorktree: nextGroupsByWorktree,
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved,
+        zoomedGroupIdByWorktree: nextZoomedGroupIdByWorktree,
         ...(state.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
               {
@@ -1816,6 +1880,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       let nextGroups = state.groupsByWorktree[worktreeId] ?? []
       let nextLayoutByWorktree = state.layoutByWorktree
       let nextActiveGroupIdByWorktree = state.activeGroupIdByWorktree
+      let nextZoomedGroupIdByWorktree = state.zoomedGroupIdByWorktree
       let resolvedTargetGroupId = target.groupId
 
       if (target.splitDirection) {
@@ -1903,6 +1968,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         )
         nextLayoutByWorktree = collapsedState.layoutByWorktree
         nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
+        nextZoomedGroupIdByWorktree = clearZoomedGroup(nextZoomedGroupIdByWorktree, worktreeId)
       } else {
         nextActiveGroupIdByWorktree = {
           ...nextActiveGroupIdByWorktree,
@@ -1926,6 +1992,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupsByWorktree: nextGroupsByWorktree,
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        zoomedGroupIdByWorktree: nextZoomedGroupIdByWorktree,
         ...(state.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
               {
@@ -2073,6 +2140,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       layoutByWorktree: replaceWorkspaceRecordKeys(
         current.layoutByWorktree,
         hydrated.layoutByWorktree,
+        replaceWorkspaceKeys
+      ),
+      zoomedGroupIdByWorktree: replaceWorkspaceRecordKeys(
+        current.zoomedGroupIdByWorktree,
+        {},
         replaceWorkspaceKeys
       )
     }))

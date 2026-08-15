@@ -1,8 +1,10 @@
 import { Suspense, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Ellipsis, X } from 'lucide-react'
+import { Ellipsis, Maximize2, Minimize2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +21,7 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -28,6 +31,7 @@ export default function TabGroupPanel({
   isVisible,
   isFocused,
   hasSplitGroups,
+  isZoomed,
   touchesRightEdge,
   touchesLeftEdge,
   touchesBottomEdge = false,
@@ -37,13 +41,15 @@ export default function TabGroupPanel({
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
-  hoveredTabInsertion = null
+  hoveredTabInsertion = null,
+  onTogglePaneZoom
 }: {
   groupId: string
   worktreeId: string
   isVisible: boolean
   isFocused: boolean
   hasSplitGroups: boolean
+  isZoomed: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
   touchesBottomEdge?: boolean
@@ -54,12 +60,16 @@ export default function TabGroupPanel({
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
   hoveredTabInsertion?: HoveredTabInsertion | null
+  onTogglePaneZoom: () => void
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
+  const zoomShortcut = useShortcutKeyDetails('tab.togglePaneZoom')
+  const canZoomPane = hasSplitGroups || model.canZoomActiveTerminalPane
+  const isPaneZoomed = hasSplitGroups ? isZoomed : model.activeTerminalPaneIsZoomed
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -182,6 +192,11 @@ export default function TabGroupPanel({
 
   const menuButtonClassName =
     'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+  // Why: split-group zoom and terminal leaf zoom use separate state; when both
+  // could apply, the tab-group chrome owns the command to avoid duplicate scopes.
+  const zoomPaneLabel = isPaneZoomed
+    ? translate('auto.components.tab.group.TabGroupPanel.restorePane', 'Restore pane')
+    : translate('auto.components.tab.group.TabGroupPanel.zoomPane', 'Zoom pane')
   // Why: focused-only so quick commands and Close split pane stay with the active pane and unfocused strips stay compact.
   const focusedActionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
     isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
@@ -235,6 +250,44 @@ export default function TabGroupPanel({
             <div className={focusedActionChromeClassName}>
               {isFocused ? (
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+              ) : null}
+              {isFocused && canZoomPane ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={zoomPaneLabel}
+                      aria-pressed={isPaneZoomed}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (hasSplitGroups) {
+                          onTogglePaneZoom()
+                          return
+                        }
+                        commands.toggleActiveTerminalPaneZoom()
+                      }}
+                    >
+                      {isPaneZoomed ? (
+                        <Minimize2 className="size-4" />
+                      ) : (
+                        <Maximize2 className="size-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    <span className="inline-flex items-center gap-2">
+                      {zoomPaneLabel}
+                      {zoomShortcut.keys.length > 0 ? (
+                        <ShortcutKeyCombo
+                          keys={zoomShortcut.keys}
+                          doubleTap={zoomShortcut.doubleTap}
+                        />
+                      ) : null}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
               ) : null}
               {isFocused && hasSplitGroups ? (
                 <Tooltip>
