@@ -186,8 +186,10 @@ describe('a cursor chord pressed during a composition', () => {
   })
 
   // The Japanese shape: still marked composing when the chord is resolved. The preedit spans
-  // several characters here on purpose — a relocated multi-character preedit also overwrote the
-  // glyph already at the destination cell, so the whole run has to commit in place first.
+  // several characters because that is the reported symptom — a relocated multi-character preedit
+  // also overwrote the glyph already at the destination cell. Only the order is asserted, though:
+  // shorten 日本語 to one character and this still passes, because where the text lands on the grid
+  // is not something this harness can see.
   it('holds the chord while the keydown is still marked composing', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))

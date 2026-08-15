@@ -50,8 +50,10 @@ import {
  *     expectation below therefore REQUIRES the fix — on a pre-fix build this test fails on the
  *     missing \x01, which is exactly the regression it exists to catch.
  *   - Chinese (Zhuyin and Pinyin, measured 2026-08-09) behaves like Kotoeri and not like Korean:
- *     both swallow the chord, keep the preedit, and drain the byte at the commit. A Cmd chord
- *     there has no arrow keyup at all, so those two cells rest entirely on the Command release.
+ *     both swallow the chord and drain the byte at the commit. A Cmd chord there has no arrow
+ *     keyup at all, so those two cells rest entirely on the Command release. The preedit survives
+ *     the press in three of the four cells; Zhuyin's Option cell is the exception under this rig
+ *     and is described where it is defined.
  *   - ABC control: no IME anywhere, movement bytes flow alone.
  *
  * Run-validity guards follow terminal-macos-korean-chord-commit-native.spec.ts: the selected
@@ -353,8 +355,9 @@ test.describe('Native macOS IME cursor chords during composition @headful', () =
       composesThroughChord: true,
       // This chord moves the caret between the preedit's segments, and the segmented preedit
       // then costs one Return more than the Cmd cell: the first merges the segments, the next
-      // ends the composition. Spend that one here so flushLineToReader's own two presses mean
-      // the same thing in this cell as everywhere else in this file.
+      // ends the composition. Spend that one here so the Return inside flushLineToReader still
+      // means "flush the line" in this cell, as it does everywhere else in this file, rather
+      // than being eaten by the merge.
       commitReturns: 1,
       byte: '\x1bb',
       commit: /^nihao$/
