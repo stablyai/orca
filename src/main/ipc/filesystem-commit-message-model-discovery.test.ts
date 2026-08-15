@@ -318,4 +318,22 @@ describe('registerFilesystemHandlers', () => {
     )
     expect(discoverCommitMessageModelsLocalMock).not.toHaveBeenCalled()
   })
+
+  it('rejects PTY-scoped remote model discovery instead of using the unscoped account', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'codex',
+        worktreePath: '/remote/repo',
+        connectionId: 'conn-1',
+        ptyId: 'pty-pinned'
+      })
+    ).resolves.toEqual({
+      success: false,
+      error: 'Pinned PTY account scoping is not supported for remote model discovery.'
+    })
+    expect(discoverCommitMessageModelsRemoteMock).not.toHaveBeenCalled()
+    expect(discoverCommitMessageModelsLocalMock).not.toHaveBeenCalled()
+  })
 })
