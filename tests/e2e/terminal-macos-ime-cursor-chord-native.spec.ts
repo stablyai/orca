@@ -402,11 +402,12 @@ test.describe('Native macOS IME cursor chords during composition @headful', () =
         // The positive control, where the two drivers agree on it: a source that committed here
         // would make the byte assertion below evidence about some other gesture. The one cell
         // where synthesis and hardware disagree opts out rather than pinning the rig's answer.
+        // Read once rather than polled, as in the Kotoeri test: the wait above is the settle, so
+        // the preedit is either still there now or the chord committed it. Polling would let a
+        // late one pass.
         await orcaPage.waitForTimeout(700)
         if (cell.composesThroughChord === true) {
-          await expect
-            .poll(() => readActiveComposition(orcaPage), { timeout: 10_000 })
-            .toMatch(cell.preedit)
+          expect(await readActiveComposition(orcaPage)).toMatch(cell.preedit)
         }
 
         for (let index = 0; index < cell.commitReturns; index += 1) {
