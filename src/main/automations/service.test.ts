@@ -412,6 +412,104 @@ describe('AutomationService', () => {
     }
   })
 
+  it('fails a Codex headless dispatch when launch evidence never arrives', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Codex check',
+      prompt: 'Check the repo',
+      agentId: 'codex',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      codexHeadlessLaunchTimeoutMs: 1_000,
+      allowRemoteHostScheduling: true,
+      headlessDispatcher: vi.fn().mockResolvedValue({
+        workspaceId: 'wt1',
+        terminalSessionId: 'tab-1',
+        terminalPaneKey: 'pane-1',
+        terminalPtyId: 'pty-1'
+      })
+    })
+
+    const pending = store.createAutomationRun(automation, Date.now(), 'manual')
+    expect(pending.status).toBe('pending')
+    expect(pending.launchDeadlineAt).toBeNull()
+
+    const dispatched = await service.runNow(automation.id)
+    expect(dispatched.status).toBe('dispatched')
+    expect(dispatched.launchDeadlineAt).toBe(Date.now() + 1_000)
+    expect(dispatched.launchEvidenceAt).toBeNull()
+
+    const restartedStore = await createStore()
+    const restartedService = new AutomationService(restartedStore, {
+      tickMs: 60_000,
+      codexHeadlessLaunchTimeoutMs: 1_000,
+      allowRemoteHostScheduling: true,
+      headlessDispatcher: vi.fn()
+    })
+    vi.setSystemTime(new Date('2026-05-13T08:00:01.001Z'))
+    restartedService.start()
+    await vi.waitFor(() =>
+      expect(
+        restartedStore.listAutomationRuns(automation.id).find((run) => run.id === dispatched.id)
+      ).toMatchObject({
+        status: 'dispatch_failed',
+        error: 'Codex headless agent did not produce launch evidence before the deadline.'
+      })
+    )
+    restartedService.stop()
+  })
+
+  it('keeps a completed Codex dispatch terminal after a late launch failure', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Codex check',
+      prompt: 'Check the repo',
+      agentId: 'codex',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const service = new AutomationService(store, {
+      allowRemoteHostScheduling: true,
+      headlessDispatcher: vi.fn().mockResolvedValue({
+        workspaceId: 'wt1',
+        terminalSessionId: 'tab-1',
+        terminalPaneKey: 'pane-1',
+        terminalPtyId: 'pty-1',
+        launchReady: Promise.resolve(),
+        completion: Promise.resolve({ status: 'completed' as const, error: null })
+      })
+    })
+
+    const run = await service.runNow(automation.id)
+    await vi.waitFor(() =>
+      expect(
+        store.listAutomationRuns(automation.id).find((entry) => entry.id === run.id)?.status
+      ).toBe('completed')
+    )
+
+    const terminal = await service.markDispatchResult({
+      runId: run.id,
+      status: 'dispatch_failed',
+      error: 'late launch failure'
+    })
+    expect(terminal.status).toBe('completed')
+  })
+
   it('attaches provider usage when a completed run can be attributed', async () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()

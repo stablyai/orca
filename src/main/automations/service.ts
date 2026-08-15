@@ -14,14 +14,15 @@ import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { collectAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
+import { DEFAULT_CODEX_HEADLESS_LAUNCH_TIMEOUT_MS } from './headless-dispatch'
 import {
-  didAutomationPrecheckPass,
-  formatAutomationPrecheckFailure
-} from '../../shared/automation-precheck'
+  HeadlessLaunchCleanupRegistry,
+  reconcileStaleCodexHeadlessDispatches,
+  requestHeadlessAutomationDispatch
+} from './headless-dispatch-lifecycle'
+import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
 
 const DEFAULT_TICK_MS = 60 * 1000
-
 export class AutomationService {
   private readonly store: Store
   private readonly tickMs: number
@@ -33,6 +34,8 @@ export class AutomationService {
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
   private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  private readonly codexHeadlessLaunchTimeoutMs: number
+  private readonly headlessLaunchCleanups = new HeadlessLaunchCleanupRegistry()
 
   constructor(
     store: Store,
@@ -42,6 +45,7 @@ export class AutomationService {
       codexUsage?: CodexUsageStore
       allowRemoteHostScheduling?: boolean
       headlessDispatcher?: HeadlessAutomationDispatcher
+      codexHeadlessLaunchTimeoutMs?: number
     } = {}
   ) {
     this.store = store
@@ -50,6 +54,8 @@ export class AutomationService {
     this.codexUsage = opts.codexUsage ?? null
     this.allowRemoteHostScheduling = opts.allowRemoteHostScheduling ?? false
     this.headlessDispatcher = opts.headlessDispatcher ?? null
+    this.codexHeadlessLaunchTimeoutMs =
+      opts.codexHeadlessLaunchTimeoutMs ?? DEFAULT_CODEX_HEADLESS_LAUNCH_TIMEOUT_MS
   }
 
   setWebContents(webContents: WebContents | null): void {
@@ -133,8 +139,26 @@ export class AutomationService {
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
+    const current = this.store.listAutomationRuns().find((entry) => entry.id === result.runId)
+    // Why: completion and launch-timeout observers race; the first persisted terminal state is authoritative.
+    const clearsRetiredTerminalIdentity =
+      current &&
+      result.status === current.status &&
+      result.terminalSessionId === null &&
+      result.terminalPaneKey === null &&
+      result.terminalPtyId === null &&
+      Object.hasOwn(result, 'terminalSessionId') &&
+      Object.hasOwn(result, 'terminalPaneKey') &&
+      Object.hasOwn(result, 'terminalPtyId')
+    if (current && isFinalAutomationRunStatus(current.status) && !clearsRetiredTerminalIdentity) {
+      clearAutomationDispatchTokens(current.automationId, current.id)
+      return current
+    }
     const run = this.store.updateAutomationRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
+    if (isFinalAutomationRunStatus(run.status) && run.status !== 'dispatch_failed') {
+      this.headlessLaunchCleanups.clear(run.id)
+    }
     if (!isFinalAutomationRunStatus(run.status)) {
       return run
     }
@@ -173,6 +197,13 @@ export class AutomationService {
     this.evaluating = true
     try {
       const now = Date.now()
+      await reconcileStaleCodexHeadlessDispatches({
+        store: this.store,
+        now,
+        markDispatchResult: (result) => this.markDispatchResult(result),
+        cleanupLaunch: (runId) => this.headlessLaunchCleanups.run(runId),
+        clearLaunchCleanup: (runId) => this.headlessLaunchCleanups.clear(runId)
+      })
       for (const automation of this.store.listAutomations()) {
         if (!automation.enabled || automation.nextRunAt > now) {
           continue
@@ -254,63 +285,19 @@ export class AutomationService {
     run: AutomationRun,
     target: Extract<AutomationRunTargetResult, { ok: true }>
   ): Promise<AutomationRun> {
-    const precheckResult =
-      run.trigger === 'scheduled' && automation.precheck
-        ? await this.runPrecheck(automation.id, run.id)
-        : null
-    if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
-      return this.store.updateAutomationRun({
-        runId: run.id,
-        status: 'skipped_precheck',
-        workspaceId: automation.workspaceId,
-        precheckResult,
-        error: formatAutomationPrecheckFailure(precheckResult)
-      })
-    }
-    try {
-      const launch = await this.headlessDispatcher!({ automation, run, target })
-      const launchRunTarget = {
-        workspaceId: launch.workspaceId,
-        workspaceDisplayName: launch.workspaceDisplayName ?? null,
-        terminalSessionId: launch.terminalSessionId,
-        terminalPaneKey: launch.terminalPaneKey ?? null,
-        terminalPtyId: launch.terminalPtyId ?? null
-      }
-      const updated = this.store.updateAutomationRun({
-        runId: run.id,
-        status: 'dispatched',
-        ...launchRunTarget,
-        error: null
-      })
-      if (launch.completion) {
-        void launch.completion
-          .then((completion) =>
-            this.markDispatchResult({
-              runId: run.id,
-              status: completion.status,
-              ...launchRunTarget,
-              precheckResult,
-              outputSnapshot: completion.outputSnapshot ?? null,
-              error: completion.error ?? null
-            })
-          )
-          .catch((error) =>
-            this.markDispatchResult({
-              runId: run.id,
-              status: 'dispatch_failed',
-              ...launchRunTarget,
-              error: error instanceof Error ? error.message : String(error)
-            })
-          )
-      }
-      return updated
-    } catch (error) {
-      return this.store.updateAutomationRun({
-        runId: run.id,
-        status: 'dispatch_failed',
-        workspaceId: automation.workspaceId,
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
+    return await requestHeadlessAutomationDispatch({
+      store: this.store,
+      automation,
+      run,
+      target,
+      headlessDispatcher: this.headlessDispatcher!,
+      codexHeadlessLaunchTimeoutMs: this.codexHeadlessLaunchTimeoutMs,
+      runPrecheck: (automationId, runId) => this.runPrecheck(automationId, runId),
+      markDispatchResult: (result) => this.markDispatchResult(result),
+      registerLaunchCleanup: (runId, cleanup) =>
+        this.headlessLaunchCleanups.register(runId, cleanup),
+      clearLaunchCleanup: (runId) => this.headlessLaunchCleanups.clear(runId),
+      cleanupLaunch: (runId) => this.headlessLaunchCleanups.run(runId)
+    })
   }
 }

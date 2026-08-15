@@ -278,6 +278,7 @@ import { initializeBrowserSessionsForApp } from './browser/browser-session-start
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
+import { waitForHeadlessAgentLaunch } from './automations/headless-launch-observer'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
@@ -2575,6 +2576,7 @@ void app.whenReady().then(async () => {
           let terminalPtyId: string | null = null
           let workspaceId: string
           let workspaceDisplayName: string | null = null
+          const launchStartedAt = Date.now()
 
           if (automation.workspaceMode === 'new_per_run') {
             const created = await runtimeService.createManagedWorktree({
@@ -2648,6 +2650,37 @@ void app.whenReady().then(async () => {
             terminalSessionId,
             terminalPaneKey,
             terminalPtyId,
+            launchReady:
+              automation.agentId === 'codex'
+                ? !terminalPaneKey || !isAgentStatusHooksEnabled(store?.getSettings())
+                  ? Promise.resolve()
+                  : (launchDeadlineAt) =>
+                      waitForHeadlessAgentLaunch({
+                        paneKey: terminalPaneKey,
+                        agentType: automation.agentId,
+                        launchedAt: launchStartedAt,
+                        deadlineAt: launchDeadlineAt,
+                        getStatusSnapshotForPane: (paneKey) =>
+                          agentHookServer.getStatusSnapshotForPane(paneKey)
+                      })
+                : undefined,
+            cleanup: async () => {
+              await runtimeService.closeTerminal(terminalHandle).catch((error) => {
+                console.warn('[automations] failed to close headless launch terminal:', error)
+              })
+              if (automation.workspaceMode === 'new_per_run') {
+                // Why: a surviving per-run worktree is the user's to reclaim, so name it.
+                await runtimeService
+                  .removeManagedWorktree(`id:${workspaceId}`, true, false)
+                  .catch((error) => {
+                    console.warn(
+                      '[automations] failed to remove per-run worktree after launch failure:',
+                      workspaceId,
+                      error
+                    )
+                  })
+              }
+            },
             completion
           }
         }

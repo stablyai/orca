@@ -723,7 +723,10 @@ export class AgentHookServer {
   }
 
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
-    const entry = this.state.lastStatusByPaneKey.get(paneKey)
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const entry =
+      this.state.lastStatusByPaneKey.get(resolvedPaneKey) ??
+      (resolvedPaneKey === paneKey ? undefined : this.state.lastStatusByPaneKey.get(paneKey))
     return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
   }
 

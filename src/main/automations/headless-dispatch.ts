@@ -6,6 +6,11 @@ import type {
 import type { AutomationRunTargetResult } from './run-target-resolution'
 
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
+export const DEFAULT_CODEX_HEADLESS_LAUNCH_TIMEOUT_MS = 2 * 60 * 1000
+
+export type HeadlessAutomationLaunchReady =
+  | Promise<void>
+  | ((launchDeadlineAt: number) => Promise<void>)
 
 export type HeadlessAutomationDispatchLaunch = {
   workspaceId: string
@@ -13,6 +18,10 @@ export type HeadlessAutomationDispatchLaunch = {
   terminalSessionId: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
+  /** Resolves only after provider-owned evidence confirms that the agent launched. */
+  launchReady?: HeadlessAutomationLaunchReady
+  /** Stops an active launch that failed to produce its launch postcondition. */
+  cleanup?: () => Promise<void>
   completion?: Promise<{
     status: 'completed' | 'dispatch_failed'
     outputSnapshot?: AutomationRunOutputSnapshot | null

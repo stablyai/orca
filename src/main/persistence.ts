@@ -5501,6 +5501,8 @@ export class Store {
       error: null,
       startedAt: null,
       dispatchedAt: null,
+      launchDeadlineAt: null,
+      launchEvidenceAt: null,
       createdAt: now
     }
     this.state.automationRuns = pruneAutomationRuns([...(this.state.automationRuns ?? []), run])
@@ -5548,7 +5550,14 @@ export class Store {
       usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
       error: result.error ?? null,
       startedAt: current.startedAt ?? now,
-      dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
+      dispatchedAt:
+        result.status === 'dispatched' ? (current.dispatchedAt ?? now) : current.dispatchedAt,
+      launchDeadlineAt: Object.hasOwn(result, 'launchDeadlineAt')
+        ? (result.launchDeadlineAt ?? null)
+        : (current.launchDeadlineAt ?? null),
+      launchEvidenceAt: Object.hasOwn(result, 'launchEvidenceAt')
+        ? (result.launchEvidenceAt ?? null)
+        : (current.launchEvidenceAt ?? null)
     }
     this.state.automationRuns[index] = updated
     const automation = this.state.automations.find((entry) => entry.id === updated.automationId)

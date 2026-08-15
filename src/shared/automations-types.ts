@@ -152,6 +152,9 @@ export type AutomationRun = {
   error: string | null
   startedAt: number | null
   dispatchedAt: number | null
+  /** Why: Codex headless dispatches need a restart-visible bound until the agent hook proves launch. */
+  launchDeadlineAt?: number | null
+  launchEvidenceAt?: number | null
   createdAt: number
   /** Why: run titles must stay unique once retention prunes old runs, so the
    *  number can no longer be derived from how many runs are currently kept. */
@@ -220,6 +223,8 @@ export type AutomationDispatchResult = {
   outputSnapshot?: AutomationRunOutputSnapshot | null
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
+  launchDeadlineAt?: number | null
+  launchEvidenceAt?: number | null
   error?: string | null
 }
 
