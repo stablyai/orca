@@ -115,10 +115,16 @@ export function resolveSelectedRoomRecipients(
   if (selected.includes('@all')) {
     return agents.map((participant) => participant.identity)
   }
-  const selectedLower = new Set(selected.map((recipient) => recipient.slice(1).toLocaleLowerCase()))
-  return agents
-    .filter((participant) => selectedLower.has(participant.identity.toLocaleLowerCase()))
-    .map((participant) => participant.identity)
+  const identities = new Map(
+    agents.map((participant) => [participant.identity.toLocaleLowerCase(), participant.identity])
+  )
+  return [
+    ...new Set(
+      selected
+        .map((recipient) => identities.get(recipient.slice(1).toLocaleLowerCase()))
+        .filter((identity): identity is string => Boolean(identity))
+    )
+  ]
 }
 
 export function RoomComposerSuggestions({

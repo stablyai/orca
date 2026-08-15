@@ -68,6 +68,10 @@ describe('room composer suggestions', () => {
     ).toBeNull()
     expect(resolveSelectedRoomRecipients(['@all'], participants)).toEqual(['codex', 'claude'])
     expect(resolveSelectedRoomRecipients(['@codex'], participants)).toEqual(['codex'])
+    expect(resolveSelectedRoomRecipients(['@claude', '@codex'], participants)).toEqual([
+      'claude',
+      'codex'
+    ])
     expect(resolveSelectedRoomRecipients(['@gemini'], participants)).toEqual([])
     expect(resolveSelectedRoomRecipients([], participants)).toEqual([])
   })

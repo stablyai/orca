@@ -96,10 +96,11 @@ export class RoomMessageStore {
         )
       this.db.prepare('UPDATE rooms SET updated_at = ? WHERE id = ?').run(now, input.roomId)
       const mentionStatement = this.db.prepare(
-        'INSERT OR IGNORE INTO room_message_mentions(message_id, identity) VALUES (?, ?)'
+        `INSERT OR IGNORE INTO room_message_mentions(message_id, identity, position)
+         VALUES (?, ?, ?)`
       )
-      for (const identity of mentions) {
-        mentionStatement.run(id, identity)
+      for (const [position, identity] of mentions.entries()) {
+        mentionStatement.run(id, identity, position)
       }
       const attachmentStatement = this.db.prepare(
         `INSERT INTO room_attachments

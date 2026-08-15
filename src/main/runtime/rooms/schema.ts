@@ -24,6 +24,7 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     ensureRoomParticipantSleepingStateSchema(db)
     ensureRoomActivitySchema(db)
     ensureRoomDeliveryConfigurationSchema(db)
+    ensureRoomMessageMentionOrderSchema(db)
     ensureRoomDeletionSchema(db)
     return
   }
@@ -100,6 +101,7 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
       CREATE TABLE room_message_mentions (
         message_id TEXT NOT NULL REFERENCES room_messages(id) ON DELETE CASCADE,
         identity TEXT NOT NULL COLLATE NOCASE,
+        position INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY(message_id, identity)
       );
 
@@ -178,6 +180,13 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     throw error
   }
   ensureRoomDeliveryConfigurationSchema(db)
+}
+
+function ensureRoomMessageMentionOrderSchema(db: SyncDatabase.Database): void {
+  const columns = db.pragma('table_info(room_message_mentions)') as { name: string }[]
+  if (!columns.some((column) => column.name === 'position')) {
+    db.exec('ALTER TABLE room_message_mentions ADD COLUMN position INTEGER NOT NULL DEFAULT 0')
+  }
 }
 
 function ensureRoomDeletionSchema(db: SyncDatabase.Database): void {

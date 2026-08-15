@@ -66,7 +66,7 @@ export function RoomActivityStack({
     )
   }
 
-  const front = activities.at(-1)!
+  const front = activities[0]!
   const additionalCount = activities.length - 1
   return (
     <Collapsible

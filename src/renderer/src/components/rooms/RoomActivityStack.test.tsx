@@ -56,7 +56,9 @@ describe('RoomActivityStack', () => {
     } as DOMRect)
 
     expect(screen.getByText('+2 more')).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Show 3 activity updates'))
+    const trigger = screen.getByLabelText('Show 3 activity updates')
+    expect(trigger.textContent).toContain('@first')
+    fireEvent.click(trigger)
     expect(root.dataset.state).toBe('open')
 
     fireEvent.pointerDown(root, { clientX: 50, clientY: 50 })

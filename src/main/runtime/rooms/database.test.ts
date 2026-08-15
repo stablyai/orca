@@ -110,6 +110,35 @@ describe('RoomDatabase', () => {
     ])
   })
 
+  it('persists mention order and upgrades legacy mention rows', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-room-mentions-'))
+    directories.push(directory)
+    const path = join(directory, 'rooms.db')
+    const first = new RoomDatabase(path)
+    const snapshot = createRoom(first)
+    const created = first.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: 'egor',
+      actorKind: 'user',
+      body: '@claude @codex inspect this',
+      mentions: ['claude', 'codex']
+    }).message
+    first.close()
+
+    const second = new RoomDatabase(path)
+    expect(second.messages.get(created.id).mentions).toEqual(['claude', 'codex'])
+    second.close()
+
+    const legacy = new SyncDatabase(path)
+    legacy.exec('ALTER TABLE room_message_mentions DROP COLUMN position')
+    legacy.close()
+    const upgraded = new RoomDatabase(path)
+    databases.push(upgraded)
+
+    expect(upgraded.messages.get(created.id).mentions).toEqual(['claude', 'codex'])
+  })
+
   it('atomically replaces agent activity with its final room reply', () => {
     const database = memory()
     const snapshot = createRoom(database)
