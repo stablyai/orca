@@ -56,6 +56,13 @@ describe('CdpWsProxy', () => {
     expect(mock.webContents.debugger.attach).toHaveBeenCalledWith('1.3')
   })
 
+  it('enables CDP focus emulation on attach so document.hasFocus() can be true (#10375)', () => {
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
+      'Emulation.setFocusEmulationEnabled',
+      { enabled: true }
+    )
+  })
+
   // ── CDP message ID correlation ──
 
   it('correlates CDP request/response IDs', async () => {
@@ -403,6 +410,7 @@ describe('CdpWsProxy', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setFocusEmulationEnabled',
       'Input.insertText'
     ])
     client.close()
@@ -422,6 +430,7 @@ describe('CdpWsProxy', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setFocusEmulationEnabled',
       'Network.enable',
       'Page.enable',
       'Page.setLifecycleEventsEnabled',
@@ -443,6 +452,7 @@ describe('CdpWsProxy', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setFocusEmulationEnabled',
       'Network.enable',
       'Page.enable',
       'Page.setLifecycleEventsEnabled'
@@ -462,7 +472,7 @@ describe('CdpWsProxy', () => {
       sessionId: 'iframe-session-123'
     })
 
-    expect(getSendCommandCalls(mock).slice(2)).toEqual([
+    expect(getSendCommandCalls(mock).slice(3)).toEqual([
       ['Network.enable', {}, 'iframe-session-123'],
       ['Page.enable', {}, 'iframe-session-123'],
       ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
@@ -481,7 +491,7 @@ describe('CdpWsProxy', () => {
       sessionId: 'iframe-session-123'
     })
 
-    expect(getSendCommandCalls(mock).slice(2)).toEqual([
+    expect(getSendCommandCalls(mock).slice(3)).toEqual([
       ['Network.enable', {}, 'iframe-session-123'],
       ['Page.enable', {}, 'iframe-session-123'],
       ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
@@ -565,6 +575,7 @@ describe('CdpWsProxy', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setFocusEmulationEnabled',
       'Runtime.evaluate'
     ])
     client.close()

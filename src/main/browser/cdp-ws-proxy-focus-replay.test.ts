@@ -53,6 +53,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['Emulation.setFocusEmulationEnabled', { enabled: true }],
       ['DOM.focus', { backendNodeId: 99 }],
       ['DOM.focus', { backendNodeId: 99 }],
       ['Input.insertText', { text: 'hello' }]
@@ -81,6 +82,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['Emulation.setFocusEmulationEnabled', { enabled: true }],
       ['DOM.focus', { backendNodeId: 123 }, 'oopif-session-123'],
       ['DOM.focus', { backendNodeId: 123 }, 'oopif-session-123'],
       ['Input.insertText', { text: 'frame text' }, 'oopif-session-123']
@@ -113,6 +115,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['Emulation.setFocusEmulationEnabled', { enabled: true }],
       ['DOM.focus', { backendNodeId: 44 }],
       ['Runtime.callFunctionOn', { functionDeclaration: '() => document.activeElement?.id' }],
       ['Input.insertText', { text: 'after eval' }]
@@ -156,6 +159,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['Emulation.setFocusEmulationEnabled', { enabled: true }],
       ['DOM.focus', { backendNodeId: 55 }],
       ['Input.insertText', { text: 'fallback' }]
     ])
@@ -198,6 +202,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['Emulation.setFocusEmulationEnabled', { enabled: true }],
       ['DOM.focus', { backendNodeId: 77 }],
       ['DOM.focus', { backendNodeId: 77 }]
     ])
@@ -243,6 +248,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setFocusEmulationEnabled',
       'DOM.focus',
       'DOM.focus',
       'Input.insertText'
@@ -273,6 +279,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setFocusEmulationEnabled',
       'DOM.focus',
       'Input.insertText'
     ])
@@ -299,6 +306,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setFocusEmulationEnabled',
       'DOM.focus',
       'Page.captureScreenshot',
       'Input.insertText'
@@ -325,6 +333,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setFocusEmulationEnabled',
       'DOM.focus',
       'Input.insertText'
     ])

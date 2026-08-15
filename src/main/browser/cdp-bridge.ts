@@ -48,6 +48,7 @@ import {
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { enableCdpFocusEmulation } from './cdp-focus-emulation'
 
 const CAPTURE_LOG_LIMIT = 1000
 
@@ -1161,6 +1162,14 @@ export class CdpBridge {
     await sender('Page.addScriptToEvaluateOnNewDocument', {
       source: ANTI_DETECTION_SCRIPT
     })
+
+    // Why: keep document.hasFocus() true for guest views that are not the OS
+    // first responder so rich-editor insertText/fill paths commit (#10375).
+    try {
+      await enableCdpFocusEmulation(sender)
+    } catch {
+      /* best-effort */
+    }
 
     // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.
     this.removeDebuggerListeners(guest, state)

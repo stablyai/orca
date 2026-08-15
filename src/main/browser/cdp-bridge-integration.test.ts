@@ -352,6 +352,13 @@ describe('Browser automation pipeline (integration)', () => {
       name: 'More information...'
     })
     expect(activeGuest.debugger.attach).toHaveBeenCalledTimes(1)
+    expect(
+      activeGuestHarness.sendCommandMock.mock.calls.some(
+        ([method, params]) =>
+          method === 'Emulation.setFocusEmulationEnabled' &&
+          JSON.stringify(params) === JSON.stringify({ enabled: true })
+      )
+    ).toBe(true)
   })
 
   it('preserves debugger listeners owned by other browser streams', async () => {

@@ -6,6 +6,7 @@ import { captureScreenshot } from './cdp-screenshot'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
+import { enableCdpFocusEmulation } from './cdp-focus-emulation'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
 
@@ -231,6 +232,17 @@ export class CdpWsProxy {
       })
     } catch {
       /* best-effort — page domain may not be ready yet */
+    }
+
+    // Why: Electron 43+ tracks WebContentsView focus correctly, so embedded
+    // tabs can report document.hasFocus()===false even when Orca is frontmost.
+    // Rich editors (Draft.js) then drop Input.insertText / execCommand (#10375).
+    try {
+      await enableCdpFocusEmulation((method, params) =>
+        this.webContents.debugger.sendCommand(method, params ?? {})
+      )
+    } catch {
+      /* best-effort — older CDP stacks may lack the method */
     }
 
     this.debuggerMessageHandler = (_event: unknown, ...rest: unknown[]) => {
