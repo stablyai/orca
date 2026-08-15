@@ -325,6 +325,52 @@ describe('worker watchdog process ownership', () => {
     await expect(pending).resolves.toMatchObject({ stop: 'tree_kill_unknown' })
     expect(killImpl).not.toHaveBeenCalledWith(-4242, 'SIGKILL')
   })
+
+  it('hands cleanup to the deadline while natural close waits for descendant signalling', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime('2026-08-15T00:00:00.000Z')
+    const child = new FakeChild()
+    const snapshot: DescendantSnapshot = {
+      rootPgid: 4242,
+      capturedAtMs: Date.now(),
+      descendants: [
+        {
+          pid: 4343,
+          ppid: 4242,
+          pgid: 4343,
+          startedAt: 'Fri Aug 14 23:59:59 2026'
+        }
+      ]
+    }
+    let resolveSignal!: (count: number) => void
+    const pendingSignal = new Promise<number>((resolve) => {
+      resolveSignal = resolve
+    })
+    const signalLiveDescendants = vi.fn(() => pendingSignal)
+    const killImpl = vi.fn()
+    const pending = runWorkerWatchdog(request(), {
+      platform: 'darwin',
+      spawnImpl: spawnFake(child),
+      captureDescendantsImpl: vi.fn(async () => snapshot),
+      terminateDescendantsImpl: vi.fn(),
+      forceTerminateDescendantsImpl: vi.fn(async () => 0),
+      signalLiveDescendantsImpl: signalLiveDescendants,
+      killImpl,
+      writeSentinelImpl: vi.fn()
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    child.emit('close', 0, null)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(signalLiveDescendants).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1_000)
+    resolveSignal(1)
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(WORKER_WATCHDOG_CLEANUP_GRACE_MS)
+
+    await expect(pending).resolves.toMatchObject({ stop: 'tree_kill_unknown' })
+    expect(killImpl).not.toHaveBeenCalledWith(-4242, 'SIGKILL')
+  })
 })
 
 describe('worker watchdog entry resolution', () => {

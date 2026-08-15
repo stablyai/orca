@@ -166,6 +166,10 @@ export function runWorkerWatchdog(
           }
           treeKillUnknown ||= descendantSnapshotHasAmbiguousIdentity(snapshot)
           const signalled = await signalLiveDescendants(snapshot, 'SIGTERM').catch(() => 0)
+          if (terminationTriggered && !descendantCleanupComplete) {
+            deferredClose = { exitCode, signal }
+            return
+          }
           if (signalled === 0) {
             finish(exitCode, signal)
             return
