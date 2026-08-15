@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 export function worktreeVisibilityUpdateError(
   updateSucceeded: boolean,

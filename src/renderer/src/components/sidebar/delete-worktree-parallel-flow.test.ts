@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const state = {
@@ -83,6 +83,44 @@ describe('runWorktreeDeletesInParallel', () => {
     vi.mocked(toast.error).mockClear()
     vi.mocked(toast.info).mockClear()
     vi.mocked(showPreservedBranchBatchToast).mockClear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('uses one snapshot prune batch for a 100-workspace delete', async () => {
+    const begin = vi.fn(async (_args: { batchId: string }) => undefined)
+    const record = vi.fn(async (_args: { batchId: string; worktreeId: string }) => undefined)
+    const finish = vi.fn(async (_args: { batchId: string }) => undefined)
+    vi.stubGlobal('window', {
+      api: {
+        workspaceCleanup: {
+          beginRemovalSnapshotPruneBatch: begin,
+          recordRemovalSnapshotPrune: record,
+          finishRemovalSnapshotPruneBatch: finish
+        }
+      }
+    })
+    const targets = Array.from({ length: 100 }, (_, index) => ({
+      id: `wt-${index}`,
+      displayName: `workspace ${index}`,
+      repoId: `repo-${index % 10}`,
+      path: `/workspaces/${index}`
+    }))
+
+    await expect(runDeletesForCurrentWorktrees(targets)).resolves.toHaveLength(100)
+
+    expect(begin).toHaveBeenCalledOnce()
+    const batchId = begin.mock.calls[0]?.[0].batchId
+    expect(batchId).toEqual(expect.any(String))
+    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(100)
+    for (const call of mocks.state.removeWorktree.mock.calls) {
+      expect(call[2]).toMatchObject({ snapshotPruneBatchId: batchId })
+    }
+    expect(finish).toHaveBeenCalledOnce()
+    expect(finish).toHaveBeenCalledWith({ batchId })
+    expect(record).not.toHaveBeenCalled()
   })
 
   it('starts every selected delete before waiting for earlier deletes to finish', async () => {

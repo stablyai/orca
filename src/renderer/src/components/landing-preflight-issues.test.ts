@@ -4,7 +4,7 @@ import {
   hasGitHubBackedProject,
   type LandingPreflightStatus
 } from './landing-preflight-issues'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName'>): Repo {
   return {

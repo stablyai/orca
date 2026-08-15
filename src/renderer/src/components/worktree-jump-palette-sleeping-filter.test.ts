@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isSleepingSweepExemptWorkspace } from './sidebar/visible-worktrees'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 const source = readFileSync(join(__dirname, 'WorktreeJumpPalette.tsx'), 'utf8')
 

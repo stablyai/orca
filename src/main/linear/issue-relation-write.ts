@@ -3,8 +3,8 @@ import { loadLinearSdk } from './linear-sdk'
 import type {
   LinearIssueRelationship,
   LinearIssueRelationWriteResult
-} from '../../shared/linear-issue-relation-write'
-import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../shared/linear-issue-read-limits'
+} from '../../shared/linear/issue-relation-write'
+import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../shared/linear/issue-read-limits'
 import { acquire, clearToken, getClients, isAuthError, release } from './client'
 import { linearError } from './issue-context-errors'
 import {

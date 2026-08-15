@@ -4,7 +4,6 @@ import React, { useEffect, useCallback, useMemo, useRef, useState, Suspense } fr
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
-import { useShallow } from 'zustand/react/shallow'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
@@ -38,7 +37,9 @@ import {
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import EditorAutosaveController from './editor/EditorAutosaveController'
-import type { Tab, TabGroupLayoutNode, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { Tab, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/BrowserPaneOverlayLayer'
@@ -53,6 +54,10 @@ import {
   onBrowserDriverChange,
   useBrowserMobileDriverForAny
 } from '@/lib/pane-manager/browser-mobile-driver-state'
+import {
+  useAnyBrowserGuestNeedsPaint,
+  useWorktreeBrowserPageIds
+} from './browser-pane/browser-guest-paint-retention'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
@@ -463,6 +468,11 @@ function Terminal(): React.JSX.Element | null {
   const effectiveActiveLayout = renderedActiveWorktreeId
     ? getEffectiveLayoutForWorktree(renderedActiveWorktreeId)
     : undefined
+  // Why: both wrappers below sit above every browser <webview>, so a remote controller needs
+  // them to drop `hidden` too — the per-worktree surface hatch cannot override an ancestor.
+  const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(
+    !renderedActiveWorktreeId || !effectiveActiveLayout
+  )
   const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
@@ -2436,7 +2446,15 @@ function Terminal(): React.JSX.Element | null {
 
   return (
     <div
-      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${renderedActiveWorktreeId ? '' : ' hidden'}`}
+      // Why: already out of flow via the workbench container when hidden, so retention only
+      // has to drop `hidden` — it does not need to leave the flex column a second time.
+      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
+        renderedActiveWorktreeId
+          ? ''
+          : retainBrowserGuestPaint
+            ? ' opacity-0 pointer-events-none'
+            : ' hidden'
+      }`}
       data-rendered-active-worktree-id={renderedActiveWorktreeId ?? undefined}
     >
       <EditorAutosaveController />
@@ -2503,7 +2521,13 @@ function Terminal(): React.JSX.Element | null {
 
       {anyMountedWorktreeHasLayout ? (
         <div
-          className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${effectiveActiveLayout ? '' : ' hidden'}`}
+          className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${
+            effectiveActiveLayout
+              ? ''
+              : retainBrowserGuestPaint
+                ? ' opacity-0 pointer-events-none'
+                : ' hidden'
+          }`}
         >
           {/* Why: absolutely position each mounted surface so hidden trees don't reflow the active one; the relative anchor sizes panes to the workspace body. */}
           {workspaceSurfaces
@@ -2814,13 +2838,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   backgroundMountTabIds: ReadonlySet<string> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
-  const browserPageIds = useAppStore(
-    useShallow((state) =>
-      (state.browserTabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
-        tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
-      )
-    )
-  )
+  const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const shouldKeepPaintable =

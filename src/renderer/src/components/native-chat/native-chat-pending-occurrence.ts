@@ -114,9 +114,13 @@ export function matchingNativeChatUserTexts(
 }
 
 /**
- * How many leading pending texts concatenate exactly to `userText`.
- * Covers rapid-send glue ("joke"+"continue" → "jokecontinue") without matching
- * unrelated prefixes ("hi" ↛ "history").
+ * How many leading pending texts concatenate to exactly `userText`, allowing at
+ * most one collapsed space at each send boundary. Covers rapid-send glue
+ * ("joke"+"continue" → "joke continue") while still requiring the whole row to
+ * be consumed, so unrelated prefixes never match ("hi" ↛ "history").
+ *
+ * Greedy is exact here: both sides are whitespace-normalized, so a piece never
+ * starts with a space and at most one of the two boundary forms can apply.
  */
 export function countLeadingPendingTextsGluedToUserText(
   pendingTexts: readonly string[],
@@ -125,18 +129,21 @@ export function countLeadingPendingTextsGluedToUserText(
   if (pendingTexts.length === 0 || userText.length === 0) {
     return 0
   }
-  let combined = ''
+  let cursor = 0
   for (let index = 0; index < pendingTexts.length; index += 1) {
     const piece = pendingTexts[index]
     if (!piece) {
       return 0
     }
-    combined += piece
-    if (combined === userText) {
-      return index + 1
-    }
-    if (!userText.startsWith(combined)) {
+    if (userText.startsWith(piece, cursor)) {
+      cursor += piece.length
+    } else if (index > 0 && userText.startsWith(` ${piece}`, cursor)) {
+      cursor += piece.length + 1
+    } else {
       return 0
+    }
+    if (cursor === userText.length) {
+      return index + 1
     }
   }
   return 0
@@ -147,6 +154,9 @@ export function countLeadingPendingTextsGluedToUserText(
  * optimistic texts concatenated into one transcript user row). Exact single
  * matches stay in the content-key/occurrence path so repeated prompts and
  * send boundaries keep their existing semantics.
+ *
+ * `userTexts` must already be filtered to rows after the oldest entry's send
+ * boundary — this matcher has no clock of its own.
  */
 export function selectPendingIndicesRepresentedByUserTexts(
   pending: readonly NativeChatPendingOccurrence[],

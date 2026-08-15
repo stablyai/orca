@@ -1,4 +1,4 @@
-import type { PersistedUIState } from '../../../../shared/types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { defineMethod, type RpcMethod } from '../core'
 import {
   FeatureInteractionIdParam,

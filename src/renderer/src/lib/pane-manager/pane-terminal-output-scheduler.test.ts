@@ -1315,6 +1315,8 @@ describe('pane terminal output scheduler', () => {
             peakQueuedChars: number
             peakQueuedCharsByTerminal: number
             droppedBacklogCount: number
+            drainWrites: number[]
+            drainHighPriority: boolean[]
           }
         }
       }
@@ -1340,7 +1342,9 @@ describe('pane terminal output scheduler', () => {
       peakQueuedTerminalCount: 2,
       peakQueuedChars: 30,
       peakQueuedCharsByTerminal: 20,
-      droppedBacklogCount: 0
+      droppedBacklogCount: 0,
+      drainWrites: [2],
+      drainHighPriority: [false]
     })
   })
 
@@ -1368,6 +1372,13 @@ describe('pane terminal output scheduler', () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
+    const debug = (
+      window as unknown as {
+        __terminalOutputSchedulerDebug?: {
+          snapshot: () => { drainWrites: number[]; drainHighPriority: boolean[] }
+        }
+      }
+    ).__terminalOutputSchedulerDebug
     const chunk = 'x'.repeat(16 * 1024)
 
     for (let i = 0; i < 64; i++) {
@@ -1381,9 +1392,17 @@ describe('pane terminal output scheduler', () => {
     // parser's pace instead of a fixed 2-write drip.
     vi.advanceTimersByTime(0)
     expect(terminal.write).toHaveBeenCalledTimes(8)
+    expect(debug?.snapshot()).toMatchObject({
+      drainWrites: [8],
+      drainHighPriority: [true]
+    })
 
     vi.advanceTimersByTime(4)
     expect(terminal.write).toHaveBeenCalledTimes(16)
+    expect(debug?.snapshot()).toMatchObject({
+      drainWrites: [8, 8],
+      drainHighPriority: [true, true]
+    })
   })
 
   it('yields high-priority backlog drains when writes spend the frame budget', async () => {

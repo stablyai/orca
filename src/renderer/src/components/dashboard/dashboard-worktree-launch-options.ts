@@ -10,7 +10,7 @@ import {
   filterEnabledTuiAgents,
   TUI_AGENT_AUTO_PICK_ORDER
 } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type DashboardLaunchDetectionState = Pick<

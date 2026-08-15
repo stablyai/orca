@@ -1,13 +1,10 @@
 import { getSetupConfig } from '@/lib/new-workspace'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
-import type {
-  GitHubPrStartPoint,
-  GlobalSettings,
-  OrcaHooks,
-  RepoHookSettings,
-  SetupDecision
-} from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { OrcaHooks, RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
+import type { SetupDecision } from '../../../shared/worktree/create-types'
+import type { GitHubPrStartPoint } from '../../../shared/worktree/types'
 
 // Why: preflight routes by the repo's owner host, which `getSettingsForRepoRuntimeOwner`
 // hands back as a narrow runtime-scope pick rather than the full GlobalSettings.

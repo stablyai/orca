@@ -1,5 +1,5 @@
 import { stripCredentialsFromMessage } from './git-remote-error'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 
 export function getProvisionedRootRecipeRepoUrl(
   checkoutMode: OrcaVmRecipe['checkoutMode'],

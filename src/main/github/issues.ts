@@ -2,17 +2,15 @@
 comment operations keeps the shared acquire/release + error-classification
 pattern obvious. Each function is short; the file is long because the
 surface is broad. */
+import type { ClassifiedError } from '../../shared/classified-error'
+import type { GitHubCommentResult, PRComment } from '../../shared/github/comment-types'
+import type { GitHubAssignableUser, IssueInfo } from '../../shared/github/pull-request-types'
 import type {
-  ClassifiedError,
-  GitHubAssignableUser,
   GitHubCreateIssueFields,
   GitHubCreateIssueResult,
-  GitHubCommentResult,
-  GitHubIssueUpdate,
-  IssueInfo,
-  IssueSourcePreference,
-  PRComment
-} from '../../shared/types'
+  GitHubIssueUpdate
+} from '../../shared/issue-mutation-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapIssueInfo } from './mappers'
 import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
 import {

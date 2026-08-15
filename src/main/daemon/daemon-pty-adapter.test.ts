@@ -2525,6 +2525,180 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(checkpoint).not.toHaveBeenCalled()
     })
 
+    it('keeps abandoned periodic checkpoints within the global work cap', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as {
+        PERIODIC_CHECKPOINT_DEADLINE_MS: number
+      }
+      const previousDeadline = adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS
+      adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = 5
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const releases: (() => void)[] = []
+      const requestedSessionIds: string[] = []
+      const request = vi.fn(async (_type: string, payload: { sessionId: string }) => {
+        requestedSessionIds.push(payload.sessionId)
+        await new Promise<void>((resolve) => releases.push(resolve))
+        return {
+          records: [{ kind: 'output', data: payload.sessionId }],
+          seq: 1,
+          overflowed: false,
+          snapshot: null
+        }
+      })
+      const appendIncrements = vi.fn(async () => 'ok' as const)
+      const internals = historyAdapter as unknown as {
+        client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
+        historyManager: {
+          checkpoint: ReturnType<typeof vi.fn>
+          appendIncrements: typeof appendIncrements
+          dispose: ReturnType<typeof vi.fn>
+        }
+        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
+        nonFinalCheckpointAdmissionSessionIds: Set<string>
+        tryAdmitNonFinalCheckpoint(sessionId: string): boolean
+      }
+      internals.client = { request, disconnect: vi.fn() }
+      internals.historyManager = {
+        checkpoint: vi.fn(async () => 'committed' as const),
+        appendIncrements,
+        dispose: vi.fn(async () => {})
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const tryAdmit = vi.spyOn(internals, 'tryAdmitNonFinalCheckpoint')
+
+      try {
+        const checkpointing = internals.checkpointSessions(['a', 'b', 'c', 'd', 'e', 'f'])
+        await waitFor(() => requestedSessionIds.length === 4)
+        await expect(checkpointing).resolves.toEqual(new Set())
+
+        expect(requestedSessionIds).toEqual(['a', 'b', 'c', 'd'])
+        expect(tryAdmit).toHaveBeenCalledTimes(4)
+        expect(internals.nonFinalCheckpointAdmissionSessionIds).toEqual(
+          new Set(['a', 'b', 'c', 'd'])
+        )
+        expect(warn).toHaveBeenCalledWith('[history] periodic checkpoint deadline exceeded:', 'a')
+
+        for (const release of releases) {
+          release()
+        }
+        await waitFor(() => internals.nonFinalCheckpointAdmissionSessionIds.size === 0)
+      } finally {
+        adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = previousDeadline
+        warn.mockRestore()
+      }
+    })
+
+    it('lets one session hold only one global non-final admission', () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        tryAdmitNonFinalCheckpoint(sessionId: string): boolean
+        releaseNonFinalCheckpointAdmission(sessionId: string): void
+        nonFinalCheckpointAdmissionSessionIds: Set<string>
+        nonFinalAdmissionDeniedSessionIds: Set<string>
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        expect(internals.tryAdmitNonFinalCheckpoint('stalled')).toBe(true)
+        expect(internals.tryAdmitNonFinalCheckpoint('stalled')).toBe(false)
+        expect(warn).toHaveBeenCalledWith(
+          '[history] non-final checkpoint already in flight:',
+          'stalled'
+        )
+        expect(internals.tryAdmitNonFinalCheckpoint('healthy-a')).toBe(true)
+        expect(internals.tryAdmitNonFinalCheckpoint('healthy-b')).toBe(true)
+        expect(internals.tryAdmitNonFinalCheckpoint('healthy-c')).toBe(true)
+        expect(internals.tryAdmitNonFinalCheckpoint('overflow')).toBe(false)
+        expect(internals.tryAdmitNonFinalCheckpoint('another-overflow')).toBe(false)
+
+        expect(internals.nonFinalCheckpointAdmissionSessionIds).toEqual(
+          new Set(['stalled', 'healthy-a', 'healthy-b', 'healthy-c'])
+        )
+        expect(internals.nonFinalAdmissionDeniedSessionIds).toEqual(new Set(['stalled']))
+        expect(warn).toHaveBeenCalledWith(
+          '[history] non-final checkpoint global admission limit reached:',
+          'overflow'
+        )
+        expect(
+          warn.mock.calls.filter(
+            ([message]) =>
+              message === '[history] non-final checkpoint global admission limit reached:'
+          )
+        ).toHaveLength(1)
+
+        internals.releaseNonFinalCheckpointAdmission('stalled')
+        expect(internals.nonFinalAdmissionDeniedSessionIds).toEqual(new Set())
+        expect(internals.tryAdmitNonFinalCheckpoint('overflow')).toBe(true)
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('logs non-final checkpoint RPC failures', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const request = vi.fn(async () => {
+        throw new Error('daemon socket unavailable')
+      })
+      const internals = historyAdapter as unknown as {
+        client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
+        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
+      }
+      internals.client = { request, disconnect: vi.fn() }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        await expect(internals.checkpointSessions(['broken'])).resolves.toEqual(new Set())
+        expect(warn).toHaveBeenCalledWith(
+          '[history] checkpoint failed:',
+          'broken',
+          expect.objectContaining({ message: 'daemon socket unavailable' })
+        )
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('logs a periodic checkpoint failure that arrives after its deadline', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as {
+        PERIODIC_CHECKPOINT_DEADLINE_MS: number
+      }
+      const previousDeadline = adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS
+      adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = 5
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      let rejectRequest!: (error: unknown) => void
+      const request = vi.fn(
+        async () =>
+          await new Promise<never>((_resolve, reject) => {
+            rejectRequest = reject
+          })
+      )
+      const internals = historyAdapter as unknown as {
+        client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
+        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
+      }
+      internals.client = { request, disconnect: vi.fn() }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        const checkpointing = internals.checkpointSessions(['late-failure'])
+        await waitFor(() => request.mock.calls.length === 1)
+        await expect(checkpointing).resolves.toEqual(new Set())
+
+        rejectRequest(new Error('late daemon failure'))
+        await waitFor(() =>
+          warn.mock.calls.some(
+            ([message, sessionId, error]) =>
+              message === '[history] checkpoint failed:' &&
+              sessionId === 'late-failure' &&
+              error instanceof Error &&
+              error.message === 'late daemon failure'
+          )
+        )
+      } finally {
+        adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = previousDeadline
+        warn.mockRestore()
+      }
+    })
+
     describe('full-snapshot cooldown', () => {
       type CooldownInternals = {
         client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }

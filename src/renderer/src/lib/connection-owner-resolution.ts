@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   isPathInsideOrEqual,

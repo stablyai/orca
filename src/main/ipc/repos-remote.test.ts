@@ -1185,14 +1185,12 @@ describe('repos:addRemote', () => {
         kind: 'git',
         displayName: 'project',
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        externalWorktreeVisibility: 'hide',
-        externalWorktreeVisibilityLegacy: false,
         projectHostSetupMethod: 'imported-existing-folder'
       })
     )
     expect(result).toHaveProperty('repo.id')
     expect(result).toHaveProperty('repo.connectionId', 'conn-1')
-    expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
+    expect(result).not.toHaveProperty('repo.externalWorktreeVisibility')
   })
 
   it('uses custom displayName when provided', async () => {
@@ -1234,9 +1232,7 @@ describe('repos:addRemote', () => {
         connectionId: 'conn-1',
         kind: 'git',
         displayName: 'orca',
-        badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        externalWorktreeVisibility: 'hide',
-        externalWorktreeVisibilityLegacy: false
+        badgeColor: DEFAULT_REPO_BADGE_COLOR
       })
     )
     expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
@@ -1462,8 +1458,7 @@ describe('repos:addRemote', () => {
         path: '/home/user/created',
         connectionId: 'conn-1',
         kind: 'git',
-        displayName: 'created',
-        externalWorktreeVisibility: 'hide'
+        displayName: 'created'
       })
     )
     expect(result).toHaveProperty('repo.path', '/home/user/created')
@@ -1879,19 +1874,19 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
   })
 
-  it('defaults new git repos:add records to hiding non-Orca worktrees', async () => {
+  it('inherits global non-Orca visibility while retaining the mixed-version safety marker', async () => {
     const result = await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'git' })
 
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
         path: '/tmp/from-add',
         kind: 'git',
-        externalWorktreeVisibility: 'hide',
         externalWorktreeVisibilityLegacy: false,
         projectHostSetupMethod: 'imported-existing-folder'
       })
     )
-    expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
+    expect(result).not.toHaveProperty('repo.externalWorktreeVisibility')
+    expect(result).toHaveProperty('repo.externalWorktreeVisibilityLegacy', false)
   })
 
   it('prepares the worktree root when adding a local git repo', async () => {
@@ -2280,13 +2275,11 @@ describe('repos:add + repos:clone', () => {
       expect.objectContaining({
         path: join(destination, 'orca'),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        kind: 'git',
-        externalWorktreeVisibility: 'hide',
-        externalWorktreeVisibilityLegacy: false
+        kind: 'git'
       })
     )
     expect(result).toHaveProperty('badgeColor', DEFAULT_REPO_BADGE_COLOR)
-    expect(result).toHaveProperty('externalWorktreeVisibility', 'hide')
+    expect(result).not.toHaveProperty('externalWorktreeVisibility')
   })
 
   it('drops a same-path negative submodule cache before a local clone', async () => {

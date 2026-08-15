@@ -167,7 +167,6 @@ inline src/main/window/attach-main-window-services.ts
 inline src/main/window/createMainWindow.test.ts
 inline src/main/window/createMainWindow.ts
 inline src/main/workspace-space-analysis.ts
-inline src/preload/api-types.ts
 inline src/preload/index.ts
 inline src/relay/agent-hook-server.ts
 inline src/relay/dispatcher.ts
@@ -179,7 +178,6 @@ inline src/relay/pty-handler.test.ts
 inline src/relay/pty-handler.ts
 inline src/relay/relay.ts
 inline src/relay/workspace-space-scan.ts
-inline src/renderer/src/App.tsx
 inline src/renderer/src/components/GitHubItemDialog.tsx
 inline src/renderer/src/components/GitLabItemDialog.tsx
 inline src/renderer/src/components/JiraIssueWorkspace.tsx
@@ -235,7 +233,6 @@ inline src/renderer/src/components/sidebar/RemoteFileBrowser.tsx
 inline src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
 inline src/renderer/src/components/sidebar/WorktreeContextMenu.tsx
 inline src/renderer/src/components/sidebar/WorktreeList.lineage-child-card.test.ts
-inline src/renderer/src/components/sidebar/WorktreeList.tsx
 inline src/renderer/src/components/sidebar/use-workspace-kanban-area-selection.ts
 inline src/renderer/src/components/sidebar/worktree-list-groups.test.ts
 inline src/renderer/src/components/sidebar/worktree-list-groups.ts
@@ -260,7 +257,6 @@ inline src/renderer/src/components/terminal-pane/terminal-link-handlers.test.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-context-menu.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
-inline src/renderer/src/components/workspace-cleanup/WorkspaceCleanupDialog.tsx
 inline src/renderer/src/hooks/useAutomationDispatchEvents.ts
 inline src/renderer/src/hooks/useComposerState.ts
 inline src/renderer/src/hooks/useEditorExternalWatch.ts
@@ -309,7 +305,6 @@ inline src/renderer/src/store/slices/ui.test.ts
 inline src/renderer/src/store/slices/ui.ts
 inline src/renderer/src/store/slices/workspace-cleanup.ts
 inline src/renderer/src/store/slices/worktrees.test.ts
-inline src/renderer/src/store/slices/worktrees.ts
 inline src/renderer/src/web/web-preload-api.test.ts
 inline src/renderer/src/web/web-preload-api.ts
 inline src/renderer/src/web/web-runtime-client.ts
@@ -318,7 +313,7 @@ inline src/shared/agent-hook-listener.ts
 inline src/shared/automation-schedules.ts
 inline src/shared/commit-message-agent-spec.ts
 inline src/shared/constants.ts
-inline src/shared/github-project-types.ts
+inline src/shared/github/project-types.ts
 inline src/shared/keybindings.test.ts
 inline src/shared/keybindings.ts
 inline src/shared/marine-creatures.ts
@@ -327,7 +322,6 @@ inline src/shared/runtime-types.ts
 inline src/shared/source-control-ai.ts
 inline src/shared/telemetry-events.ts
 inline src/shared/text-search.ts
-inline src/shared/types.ts
 inline tests/e2e/helpers/terminal.ts
 inline tests/e2e/terminal-panes.spec.ts
 mobile-config app/h/*/files/*.tsx

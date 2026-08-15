@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   isParkRestorableTerminalPty,
   type TerminalParkRestorePolicy,

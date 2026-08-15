@@ -1,18 +1,17 @@
 /* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
 import { CircleX, FolderTree, List, Pin } from 'lucide-react'
 import type React from 'react'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectOrderBy } from '../../../../shared/ui-chrome-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type {
   DetectedWorktree,
-  Project,
-  ProjectHostSetup,
-  FolderWorkspace,
-  Repo,
-  ProjectGroup,
-  ProjectOrderBy,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceStatusDefinition
-} from '../../../../shared/types'
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import { branchName } from '../../lib/git-utils'
 import {
   getWorkspaceStatus,

@@ -1,21 +1,23 @@
 /* eslint-disable max-lines -- Why: Linear project and custom-view reads share
    raw GraphQL selection sets, workspace fan-out, and partial-failure mapping. */
+import type { LinearIssue } from '../../shared/linear/issue-types'
+import type {
+  LinearCustomViewModel,
+  LinearCustomViewSummary,
+  LinearProjectDetail,
+  LinearProjectMemberSummary,
+  LinearProjectSummary
+} from '../../shared/linear/project-types'
 import type {
   LinearCollectionResult,
   LinearConcreteWorkspaceId,
-  LinearCustomViewModel,
-  LinearCustomViewSummary,
-  LinearIssue,
-  LinearProjectDetail,
-  LinearProjectMemberSummary,
-  LinearProjectSummary,
   LinearWorkspaceError,
   LinearWorkspaceSelection
-} from '../../shared/types'
+} from '../../shared/linear/workspace-types'
 import {
   LINEAR_ISSUE_API_PAGE_SIZE_MAX,
   clampLinearIssueListLimit
-} from '../../shared/linear-issue-read-limits'
+} from '../../shared/linear/issue-read-limits'
 import {
   acquire,
   clearToken,

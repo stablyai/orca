@@ -20,7 +20,7 @@ import type {
   JiraSite,
   JiraSiteSelection,
   JiraViewer
-} from '../../shared/types'
+} from '../../shared/jira-types'
 import { clearAttachmentImagesForSite } from './attachment-image-cache'
 
 // Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser

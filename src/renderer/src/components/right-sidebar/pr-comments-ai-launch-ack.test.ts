@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PRComment } from '../../../../shared/types'
+import type { PRComment } from '../../../../shared/github/comment-types'
 import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
   acknowledgePRCommentsAfterAiLaunch,

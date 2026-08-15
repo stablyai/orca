@@ -1,5 +1,5 @@
 import { track } from '@/lib/telemetry'
-import type { OnboardingState } from '../../../shared/types'
+import type { OnboardingState } from '../../../shared/onboarding-state-types'
 
 export type OnboardingProjectChecklistItem = 'addedRepo' | 'addedFolder'
 

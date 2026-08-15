@@ -6,31 +6,30 @@ import {
   findPrevLiveNonTaskStackHistoryIndex,
   findPrevLiveWorktreeHistoryIndex
 } from './worktree-nav-history'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { JiraIssue } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { CustomPet } from '../../../../shared/pet-types'
+import type { TaskProvider } from '../../../../shared/task-providers'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
-  ChangelogData,
-  CustomPet,
-  GitHubWorkItem,
-  JiraIssue,
-  LinearIssue,
+  AgentActivityDisplayMode,
   ManualRepoOrderEntry,
-  PersistedTrustedOrcaHooks,
-  PersistedUIState,
+  ProjectOrderBy,
   StatusBarItem,
-  TaskProvider,
   TaskResumeState,
   TaskViewPresetId,
-  TuiAgent,
-  UpdateStatus,
-  WorkspaceStatusDefinition,
-  AgentActivityDisplayMode,
-  ProjectOrderBy,
-  WorktreeCardProperty,
-  WorktreeCardMode,
+  TopLevelView,
+  VisibleWorkspaceHostIds,
   WorkspaceHostOrder,
   WorkspaceHostScope,
-  VisibleWorkspaceHostIds,
-  TopLevelView
-} from '../../../../shared/types'
+  WorktreeCardMode,
+  WorktreeCardProperty
+} from '../../../../shared/ui-chrome-types'
+import type { ChangelogData, UpdateStatus } from '../../../../shared/update-status-types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -50,11 +49,12 @@ import {
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal
 } from '../../../../shared/workspace-cleanup'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
 import { normalizeFeatureTipIds, type FeatureTipId } from '../../../../shared/feature-tips'
 import {
   hasFeatureInteraction,
@@ -2565,6 +2565,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        // Why the normalizer rather than a cast: this blob is hand-editable and
+        // may come from an older or newer build; it degrades field by field
+        // instead of bricking the cleanup dialog.
+        workspaceCleanupBrowse: normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse),
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'

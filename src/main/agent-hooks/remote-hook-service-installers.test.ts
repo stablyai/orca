@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'
 
 vi.mock('electron', () => ({
@@ -415,7 +416,11 @@ describe('remote hook service installers', () => {
     expect(grokConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
     expect(grokConfig.hooks.StopFailure?.[0]?.matcher).toBeUndefined()
 
-    const devinConfig = JSON.parse(devin.fs.files.get('/home/dev/.config/devin/config.json')!) as {
+    const devinText = devin.fs.files.get('/home/dev/.config/devin/config.json')!
+    // Why: Devin config.json is JSONC — parse it as such, and assert the user's comment
+    // survived. Asserting with JSON.parse would only pass if the install had stripped it.
+    expect(devinText).toContain('// Existing Devin config comment')
+    const devinConfig = parseJsonc(devinText) as {
       permissions: { mode: string }
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
     }

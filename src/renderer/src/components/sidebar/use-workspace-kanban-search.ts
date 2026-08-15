@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { matchWorkspaceBoardWorktrees } from './workspace-kanban-search'
 
 function areWorktreeIdSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {

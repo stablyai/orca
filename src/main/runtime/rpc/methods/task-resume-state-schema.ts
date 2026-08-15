@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { TaskResumeState as TaskResumeStateType } from '../../../../shared/types'
+import type { TaskResumeState as TaskResumeStateType } from '../../../../shared/ui-chrome-types'
 import type { AssertNoMissingKeys } from './ui-state-schema-parity'
 
 /**

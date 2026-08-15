@@ -18,7 +18,7 @@ import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
-import type { CreateWorktreeResult } from '../../../shared/types'
+import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import {
   findPendingLinkedWorkItemCreationId,
   type WorktreeCreationPhase,
@@ -137,6 +137,7 @@ async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.linkedWorkItem !== undefined
             ? { linkedWorkItem: preparedRequest.linkedWorkItem }
             : {}),

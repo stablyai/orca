@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: hook parsing, shell selection, and execution-path regressions are tightly coupled, so these cases stay in one file to preserve the behavior matrix across platforms. */
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import type * as GitRunner from './git/runner'
 
 import { join } from 'node:path'

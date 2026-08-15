@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
 import { HeadlessEmulator } from './headless-emulator'
 import type { SessionState, ShellReadyState } from './types'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({

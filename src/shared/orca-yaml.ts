@@ -4,7 +4,7 @@ import type {
   OrcaHooks,
   OrcaVmRecipe,
   OrcaVmRecipeDiagnostic
-} from './types'
+} from './orca-yaml-hook-types'
 import {
   isOrcaYamlFieldWithinLimit,
   isOrcaYamlTextWithinLimit,

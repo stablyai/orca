@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { commitProjectGroupHeaderDragDrop } from './project-group-header-drag-commit'
 import type { ProjectGroupHeaderDragSession } from './project-group-header-drag-contract'
-import type { ProjectGroup } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 
 function group(id: string, overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {

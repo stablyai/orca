@@ -2,15 +2,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  DetectedWorktreeListResult,
-  FolderWorkspace,
-  LocalBaseRefRefreshResult,
-  TerminalTab,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { LocalBaseRefRefreshResult } from '../../../../shared/worktree/base-ref-drift-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { toast } from 'sonner'
 import {
   createCompatibleRuntimeStatusResponse,
@@ -143,6 +139,9 @@ const mockApi = {
   },
   hooks: {
     check: vi.fn().mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
+  },
+  workspaceCleanup: {
+    recordRemovalSnapshotPrune: vi.fn().mockResolvedValue(undefined)
   },
   runtimeEnvironments: {
     call: runtimeEnvironmentTransportCall
@@ -2364,6 +2363,42 @@ describe('fetchWorktrees', () => {
 
     // The backend can reuse persisted instance metadata for the same path.
     expect(hasDismissedHugeRepoWarning(beginHugeRepoWarningProbe(hidden))).toBe(false)
+  })
+
+  it('refreshes only repos owned by the changed visibility-default host', async () => {
+    const store = createTestStore()
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+      qualifyDetectedResult(args, makeDetectedResult(args.repoId, []))
+    )
+    store.setState({
+      repos: [
+        {
+          id: 'local-repo',
+          path: '/local',
+          displayName: 'Local',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        },
+        {
+          id: 'runtime-repo',
+          path: '/remote',
+          displayName: 'Remote',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      hasHydratedWorktreePurge: true
+    } as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledOnce()
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
+      expect.objectContaining({ repoId: 'local-repo', executionHostId: 'local' })
+    )
+    expect(mockApi.runtime.call).not.toHaveBeenCalled()
   })
 
   it('purges session-only tab keys after an authoritative refresh', async () => {
@@ -4870,6 +4905,51 @@ describe('createWorktree base status merge', () => {
     expect(mockApi.worktrees.prefetchCreateBase).not.toHaveBeenCalled()
   })
 
+  it('marks the create payload as a generated name only when the caller says so', async () => {
+    // Why: the host retires generated names permanently, and the creature pool contains ordinary
+    // words ("orca", "runner", "molly"). A name the user typed must stay reusable.
+    const store = createTestStore()
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    })
+
+    await store.getState().createWorktree('repo1', 'nautilus', 'origin/main')
+    expect(mockApi.worktrees.create.mock.calls[0][0]).not.toHaveProperty('nameWasGenerated')
+
+    mockApi.worktrees.create.mockClear()
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'nautilus',
+        'origin/main',
+        'inherit',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { nameWasGenerated: true }
+      )
+    expect(mockApi.worktrees.create.mock.calls[0][0]).toMatchObject({ nameWasGenerated: true })
+  })
+
   it('passes linked work item and creation agent metadata through the create IPC payload', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
@@ -6164,6 +6244,33 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
   })
 
+  it('forwards generated-name provenance through paired-runtime create', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/nautilus', repoId: 'repo1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'nautilus']
+    args[25] = { nameWasGenerated: true }
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ nameWasGenerated: true })
+      })
+    )
+  })
+
   it('persists Jira item and source context through paired-runtime create', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
@@ -6494,7 +6601,9 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [wt] }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(wt.id)
+    const result = await store.getState().removeWorktree(wt.id, false, {
+      snapshotPruneBatchId: 'batch-1'
+    })
 
     expect(result).toEqual({ ok: true })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -6503,14 +6612,20 @@ describe('worktree remote runtime mutations', () => {
       params: {
         worktree: `id:${wt.id}`,
         hostId: 'runtime:env-1',
-        force: undefined,
+        force: false,
         allowUnverifiedPtyStop: false,
         runHooks: true
       },
       timeoutMs: 60_000,
-      expectedEnvironmentPairingRevision: undefined
+      expectedEnvironmentPairingRevision: undefined,
+      expectedRuntimeId: undefined
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    expect(mockApi.workspaceCleanup.recordRemovalSnapshotPrune).toHaveBeenCalledExactlyOnceWith({
+      batchId: 'batch-1',
+      worktreeId: wt.id,
+      executionHostId: 'runtime:env-1'
+    })
     expect(store.getState().shutdownWorktreeTerminals).toHaveBeenCalledWith(wt.id, {
       shutdownReason: 'remove-worktree',
       backendOwnsPtyTeardown: true
@@ -10530,6 +10645,7 @@ describe('pending worktree creation state', () => {
   it('removePendingWorktreeCreation cleans up a provisioned-root setup and VM runtime', async () => {
     const store = createTestStore()
     const deleteProjectHostSetup = vi.mocked(store.getState().deleteProjectHostSetup)
+    deleteProjectHostSetup.mockResolvedValue({ setup: { id: 'setup-1' } } as never)
     store.getState().beginPendingWorktreeCreation(
       makePendingCreation('c1', {
         phase: 'fetching',

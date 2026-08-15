@@ -3,7 +3,7 @@ import {
   getNextSourceControlViewMode,
   shouldShowSourceControlCompareUnavailableCard
 } from './source-control-header-toolbar'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 
 const readySummary: GitBranchCompareSummary = {
   baseRef: 'origin/main',
