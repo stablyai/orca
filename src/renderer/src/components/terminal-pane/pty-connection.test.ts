@@ -22546,6 +22546,57 @@ describe('connectPanePty', () => {
     )
   })
 
+  it.each([
+    ['Claude', 'claude', '✳ Compacted', 1],
+    ['Codex', 'codex', '* Codex done', 1],
+    ['Claude with equal hook/title timestamps', 'claude', '✳ Compacted', 0]
+  ] as const)(
+    'ignores %s compact title completion while hook state remains on the previous turn',
+    async (_label, agentType, idleTitle, titleWorkingDelayMs) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport(`pty-${agentType}`)
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'done',
+        prompt: 'previous task',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType,
+        paneKey,
+        stateHistory: [],
+        lastAssistantMessage: 'Previous task completed.'
+      }
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps()
+
+      connectPanePty(pane as never, manager as never, deps as never)
+
+      const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
+        | (() => void)
+        | undefined
+      const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+        | ((title: string) => void)
+        | undefined
+      if (!workingHandler || !idleHandler) {
+        throw new Error('Expected working and idle handlers to be registered')
+      }
+
+      vi.advanceTimersByTime(titleWorkingDelayMs)
+      workingHandler()
+      vi.advanceTimersByTime(1_000)
+      idleHandler(idleTitle)
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'agent-task-complete' })
+      )
+    }
+  )
+
   it('ignores title-only idle while fresh hook status is still working', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

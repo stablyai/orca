@@ -3575,6 +3575,25 @@ describe('AgentHookServer listener replay', () => {
           })
         })
       )
+
+      const completedSnapshot = server.getStatusSnapshot()[0]
+      const completedEventCount = listener.mock.calls.length
+      await postCodexHook({
+        hook_event_name: 'SessionStart',
+        source: 'compact'
+      })
+      expect(listener).toHaveBeenCalledTimes(completedEventCount)
+      expect(server.getStatusSnapshot()[0]).toEqual(completedSnapshot)
+
+      await postCodexHook({
+        hook_event_name: 'Stop',
+        last_assistant_message: 'compacted'
+      })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        prompt: 'ship codex hook status',
+        stateStartedAt: completedSnapshot.stateStartedAt
+      })
     } finally {
       server.stop()
     }

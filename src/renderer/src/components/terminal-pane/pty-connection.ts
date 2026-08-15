@@ -1562,6 +1562,28 @@ export function connectPanePty(
       activeHookAgentForTitle !== explicitTitleAgentType
     return !titleNamesDifferentKnownAgent
   }
+  const shouldSuppressTitleCompletionWithoutNewHookTurn = (
+    title: string,
+    hookStatus: AgentStatusEntry | undefined,
+    titleWorkingStartedAt: number | null
+  ): boolean => {
+    // Why: compaction toggles native titles without opening a hook turn, so a prior `done` row cannot prove completion.
+    if (
+      titleWorkingStartedAt === null ||
+      hookStatus?.state !== 'done' ||
+      hookStatus.updatedAt > titleWorkingStartedAt ||
+      (hookStatus.agentType !== 'claude' && hookStatus.agentType !== 'codex')
+    ) {
+      return false
+    }
+    const explicitTitleAgentType = resolveCommittedTitleAgentType(title)
+    return (
+      explicitTitleAgentType === null ||
+      resolveCompatibleAgentTypeForOwner(hookStatus.agentType, explicitTitleAgentType) ===
+        explicitTitleAgentType
+    )
+  }
+  let titleWorkingStartedAt: number | null = null
   let pendingSuppressedTitleSideEffects: {
     title: string
     agentType: AgentType | undefined
@@ -3319,11 +3341,18 @@ export function connectPanePty(
     // that renderer timer throttling previously damped. Clear session-tied
     // state only; never schedule completion attention from it.
     if (meta?.staleWorkingTitleClear) {
+      titleWorkingStartedAt = null
       deps.setCacheTimerStartedAt(cacheKey, null)
       return
     }
     const currentState = useAppStore.getState()
     const activeHookStatus = currentState.agentStatusByPaneKey[cacheKey]
+    const suppressCompletionWithoutNewHookTurn = shouldSuppressTitleCompletionWithoutNewHookTurn(
+      title,
+      activeHookStatus,
+      titleWorkingStartedAt
+    )
+    titleWorkingStartedAt = null
     if (shouldSuppressTitleCompletionForFreshHook(title, activeHookStatus)) {
       // Why: agent CLIs can briefly publish an idle title while hook status
       // still says the same agent turn is active (e.g. during tool output).
@@ -3349,7 +3378,7 @@ export function connectPanePty(
     if (detectAgentStatusFromTitle(title) === 'idle') {
       setFocusReportSuppressionForAgentCompletion(title, activeHookStatus?.agentType)
     }
-    if (syncAgentTaskCompleteTrackingEnabled()) {
+    if (syncAgentTaskCompleteTrackingEnabled() && !suppressCompletionWithoutNewHookTurn) {
       agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
     // Why: some agent TUIs leave xterm renderer modes active after a turn.
@@ -3357,6 +3386,7 @@ export function connectPanePty(
     queueAgentIdleTerminalModeReset()
   }
   const onAgentBecameWorking = (): void => {
+    titleWorkingStartedAt = Date.now()
     suppressNativeWindowsIdleCodexFocusReports = false
     clearSuppressedTitleSideEffects()
     if (syncAgentTaskCompleteTrackingEnabled()) {
@@ -3372,6 +3402,7 @@ export function connectPanePty(
     }
   }
   const onAgentExited = (): void => {
+    titleWorkingStartedAt = null
     // Why: eligibility can disappear transiently during reconnect, but a
     // confirmed shell-title transition is authoritative for native-chat exit.
     deps.onAgentExitedRef.current(pane.leafId)

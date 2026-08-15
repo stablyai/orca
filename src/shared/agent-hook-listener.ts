@@ -3693,6 +3693,10 @@ function normalizeCodexEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  // Why: Codex emits SessionStart after compaction, but it continues the current turn.
+  if (eventName === 'SessionStart' && readString(hookPayload, 'source') === 'compact') {
+    return null
+  }
   if (eventName === 'SubagentStart' || eventName === 'SubagentStop') {
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }

@@ -3338,6 +3338,49 @@ describe('shared agent-hook-listener', () => {
     expect(working?.payload.interactivePrompt).toBeUndefined()
   })
 
+  it('keeps Codex compaction inside the current turn', () => {
+    normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'finish the current task'
+        }
+      },
+      'production'
+    )
+    const compacted = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SessionStart',
+          source: 'compact'
+        }
+      },
+      'production'
+    )
+    const stopped = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'Stop' }
+      },
+      'production'
+    )
+
+    expect(compacted).toBeNull()
+    expect(stopped?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'finish the current task',
+      agentType: 'codex'
+    })
+  })
+
   it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
     normalizeHookPayload(
       state,
