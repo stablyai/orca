@@ -450,7 +450,9 @@ describe('recorded macOS chord traces during an IME composition', () => {
     const rig = openRig()
     await replay(rig.textarea, testCase.rows)
 
-    if (testCase.commitsAfterCapture) {
+    // Present, not truthy: a case that commits the empty string would otherwise skip both the
+    // mid-gesture guard and the commit, and assert nothing while still passing.
+    if (testCase.commitsAfterCapture !== undefined) {
       // Held, not dropped: nothing yet, and the same expectations must hold once it commits.
       expect(rig.inputCalls).toEqual([])
       await commitComposition(rig.textarea, testCase.commitsAfterCapture)

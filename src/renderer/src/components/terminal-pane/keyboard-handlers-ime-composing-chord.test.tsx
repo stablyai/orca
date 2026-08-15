@@ -231,10 +231,18 @@ describe('a cursor chord pressed during a composition', () => {
   })
 
   /**
-   * The Korean 2-Set gesture end to end. The marked press is remembered rather than sent; the
-   * syllable commits while the key is still down, so the release arrives already unmarked and the
-   * recovery declines it; and the platform then replays the chord for the pane to resolve the
-   * ordinary way. One byte per press is the contract — a second one jumps two words.
+   * The Korean 2-Set gesture as recorded: marked press, commit, unmarked release, then the
+   * platform's replay of the chord.
+   *
+   * What the cases below pin is the count, not the route. The byte comes from the replay alone —
+   * drop the marked press from these rows and they still pass, because there is then nothing that
+   * could have fired a second time. Drop the arming instead and they fail with the byte twice,
+   * which is #12871's Korean half. So read them as "the remembered press adds nothing on top of
+   * the replay", and read the recorded-trace fixtures for which event carries the byte.
+   *
+   * The arrow keyup here is under a held Command, which the Korean capture does contain — the
+   * missing-keyup finding is about the sources that swallow the chord, where the IME consumed the
+   * key and only the Command release ends the gesture.
    */
   function playCommittingChord(
     harness: ReturnType<typeof createHarness>,

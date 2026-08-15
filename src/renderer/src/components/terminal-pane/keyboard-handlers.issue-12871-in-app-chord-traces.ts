@@ -45,9 +45,10 @@ export type RecordedChordCase = {
   expectEmitted: string[]
   rows: RecordedChordRow[]
   /**
-   * Rows end mid-composition: assert nothing sent yet, then drive a commit and check again. The
-   * value is the text that source committed. xterm emits none of it — the capture opens after the
-   * session it would have to match — so it names the recording rather than feeding an assertion.
+   * Rows end mid-composition: assert nothing sent yet, then drive a commit and check again. Holds
+   * the text that source committed, which no assertion reads — xterm emits none of it, the capture
+   * having opened after the session it would have to match. It is a label, so a wrong one here
+   * misleads a reader rather than failing; the PTY line in each case's comment is the record.
    */
   commitsAfterCapture?: string
 }

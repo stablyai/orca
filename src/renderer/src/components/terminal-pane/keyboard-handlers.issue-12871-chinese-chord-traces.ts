@@ -2,9 +2,11 @@
 // Orca build (app commit 84517d74b268bca888a44b285627ec82ffde1361, macOS 26.5.2/25F84, darwin
 // arm64) at the xterm helper textarea, with PTY-side ground-truth bytes read by a child on the
 // pty. Replayed by keyboard-handlers.issue-12871-recorded-chord-traces.test.ts through the same
-// rig as the other recordings. Reproduce with the Chinese cases in
-// tests/e2e/terminal-macos-ime-cursor-chord-native.spec.ts, which drives the same gestures against
-// the real input sources and asserts the resulting line end to end.
+// rig as the other recordings. Unlike the Kotoeri and Korean families, these rows cannot be
+// re-recorded from this repo: tests/e2e/terminal-macos-chord-input-pipeline-probe.spec.ts is the
+// recorder and was never extended past Japanese, Korean and ABC. The Chinese cases in
+// tests/e2e/terminal-macos-ime-cursor-chord-native.spec.ts drive the same gestures and assert the
+// resulting line end to end, but they check the rows rather than produce them.
 //
 // These replace an earlier Chinese recording entirely. That one was driven with the modifier
 // folded into the target key's flags, which produces no modifier press or release at all, so it
@@ -26,10 +28,12 @@
 // Kotoeri. Three timing regimes were tried (a flat 80ms with the modifier as a synthetic key
 // event, then the hardware medians 190/110/160ms and 700/400/500ms with the modifier posted as a
 // real flagsChanged) and all three committed on the press. Rather than freeze a recording no hand
-// can reproduce, the cell is left out; the end-to-end byte order for that gesture is still
-// asserted in terminal-macos-ime-cursor-chord-native.spec.ts, where it holds under both
-// behaviours. The raw recordings and the human cross-check behind that call are attached to
-// stablyai/orca#12732, where this round was measured.
+// can reproduce, the cell is left out. Its byte order is still asserted in
+// terminal-macos-ime-cursor-chord-native.spec.ts, where it holds under both behaviours — but that
+// spec is hand-run behind ORCA_E2E_NATIVE_MACOS_KOREAN and no workflow sets it, so be plain about
+// what that leaves: after this file, Zhuyin `Option+←` has no coverage that runs on its own.
+// The raw recordings and the human cross-check behind the call are attached to stablyai/orca#12732,
+// where this round was measured.
 import type { RecordedChordCase } from './keyboard-handlers.issue-12871-in-app-chord-traces'
 
 export const CHINESE_TRACE_CASES: RecordedChordCase[] = [
