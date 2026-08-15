@@ -1,8 +1,28 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
+import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { findSkillFiles } from './skill-root-file-walk'
+
+/** Set by a test to run at a chosen point inside the walk; cleared after each. */
+let onStat: ((path: string) => Promise<void>) | null = null
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    stat: async (path: string, ...rest: unknown[]) => {
+      const result = await (actual.stat as (...args: unknown[]) => Promise<unknown>)(path, ...rest)
+      await onStat?.(path)
+      return result
+    }
+  }
+})
+
+afterEach(() => {
+  onStat = null
+})
 
 async function makeTree(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'orca-skill-walk-'))
@@ -34,6 +54,27 @@ describe('findSkillFiles', () => {
     await writeFileAt(join(root, 'two', 'SKILL.md'))
 
     await expect(findSkillFiles(root, 4, AbortSignal.abort())).rejects.toThrow()
+  })
+
+  // The broken-link catch around the symlink branch must not swallow the abort a
+  // nested visit throws, or the walk returns a truncated listing as success. The
+  // abort has to land inside the symlink's stat — after the entry loop's check and
+  // before the nested visit's — and the link must be the last entry, so nothing
+  // afterwards re-checks the signal.
+  it('propagates an abort thrown while following a symlinked directory', async () => {
+    const base = await makeTree()
+    const root = join(base, 'skills')
+    await writeFileAt(join(base, 'linked', 'deep', 'SKILL.md'))
+    await mkdir(root, { recursive: true })
+    await symlink(join(base, 'linked'), join(root, 'via-link'), 'dir')
+    const controller = new AbortController()
+    onStat = async (path) => {
+      if (path.endsWith('via-link')) {
+        controller.abort()
+      }
+    }
+
+    await expect(findSkillFiles(root, 4, controller.signal)).rejects.toThrow()
   })
 
   // Why not a truncated list: a caller that cached one would publish "these skills

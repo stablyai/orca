@@ -86,12 +86,16 @@ export async function findSkillFiles(
       if (entry.isSymbolicLink()) {
         // Why: users commonly symlink agent skill dirs across providers; follow
         // directory links but guard by realpath so recursive links cannot loop.
+        let linksToDirectory = false
         try {
-          if ((await stat(entryPath)).isDirectory()) {
-            await visit(entryPath)
-          }
+          linksToDirectory = (await stat(entryPath)).isDirectory()
         } catch {
           // Broken links are not valid skill directories.
+        }
+        // Why outside the catch: it must not swallow the abort a nested visit
+        // throws, which would let the walk return a truncated list as success.
+        if (linksToDirectory) {
+          await visit(entryPath)
         }
       }
     }
