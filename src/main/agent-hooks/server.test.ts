@@ -942,6 +942,137 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it.each(['omp', 'pi'] as const)('rejects plain Escape inference for %s', (agentType) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'long task', agentType }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      const applied = server.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: 'long task',
+        baselineAgentType: agentType,
+        intent: 'plain-escape'
+      })
+
+      expect(applied).toBe(false)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'long task',
+          agentType
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['omp', 'pi'] as const)('still accepts Ctrl+C inference for %s', (agentType) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'long task', agentType }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      const applied = server.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: 'long task',
+        baselineAgentType: agentType,
+        intent: 'ctrl-c'
+      })
+
+      expect(applied).toBe(true)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'long task',
+          agentType,
+          interrupted: true
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['omp', 'pi'] as const)(
+    'ignored navigation Escape does not block %s agent_end',
+    (agentType) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_000)
+      try {
+        const server = new AgentHookServer()
+        server.ingestRemote(
+          {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            payload: { state: 'working', prompt: 'long task', agentType }
+          },
+          'conn-1'
+        )
+        const baseline = server.getStatusSnapshot()[0]
+
+        vi.setSystemTime(1_500)
+        const applied = server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'long task',
+          baselineAgentType: agentType,
+          intent: 'plain-escape'
+        })
+        expect(applied).toBe(false)
+
+        const event = normalizeHookPayload(
+          createHookListenerState(),
+          agentType,
+          buildBody({ hook_event_name: 'agent_end' }),
+          'production'
+        )
+        if (!event) {
+          throw new Error('normalizeHookPayload rejected a known-good agent_end fixture')
+        }
+        server.ingestRemote(event, 'conn-1')
+
+        expect(server.getStatusSnapshot()).toEqual([
+          expect.objectContaining({
+            state: 'done',
+            agentType
+          })
+        ])
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('does not let late same-turn working hooks resurrect an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

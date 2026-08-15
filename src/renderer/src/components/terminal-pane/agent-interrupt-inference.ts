@@ -59,7 +59,10 @@ function shouldIgnoreInterruptIntent(
   agentType: AgentStatusEntry['agentType'],
   intent: AgentInterruptInputIntent
 ): boolean {
-  return agentType === 'droid' && intent === 'ctrl-c'
+  return (
+    (agentType === 'droid' && intent === 'ctrl-c') ||
+    ((agentType === 'omp' || agentType === 'pi') && intent === 'plain-escape')
+  )
 }
 
 function canInferInterrupt(entry: AgentStatusEntry, intent: AgentInterruptInputIntent): boolean {

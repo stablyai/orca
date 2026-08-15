@@ -216,6 +216,25 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
+  it.each(['omp', 'pi'] as const)('does not infer plain Escape for %s', (agentType) => {
+    vi.useFakeTimers()
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => entry,
+      inferInterrupt,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent('plain-escape')
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).not.toHaveBeenCalled()
+    tracker.dispose()
+    entry = undefined
+  })
+
   it.each(['opencode', 'copilot'] as const)(
     'infers immediately on double Escape for %s',
     (agentType) => {
@@ -342,6 +361,32 @@ describe('agent interrupt inference', () => {
       baselineStateStartedAt: 900,
       baselinePrompt: 'write tests',
       baselineAgentType: 'opencode',
+      intent: 'ctrl-c'
+    })
+    tracker.dispose()
+    entry = undefined
+  })
+
+  it.each(['omp', 'pi'] as const)('still infers Ctrl+C for %s', (agentType) => {
+    vi.useFakeTimers()
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => entry,
+      inferInterrupt,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent('ctrl-c')
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).toHaveBeenCalledWith({
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: 1_000,
+      baselineStateStartedAt: 900,
+      baselinePrompt: 'write tests',
+      baselineAgentType: agentType,
       intent: 'ctrl-c'
     })
     tracker.dispose()
