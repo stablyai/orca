@@ -279,7 +279,13 @@ export function setupGuestShortcutForwarding(args: {
   } = args
   let ctrlTabSwitching = false
   const doubleTapDetector = new ModifierDoubleTapDetector()
-  const resetDoubleTapDetector = (): void => doubleTapDetector.reset()
+  // Why: the renderer pulls focus out of the guest mid-Ctrl+Tab gesture (a
+  // prevented keydown suppresses guest keyups), so clear held-key state on blur
+  // rather than letting a stale flag emit a phantom commit on a later keyup.
+  const resetHeldKeyState = (): void => {
+    ctrlTabSwitching = false
+    doubleTapDetector.reset()
+  }
   type GuestShortcutInput = WindowShortcutInput & { isAutoRepeat?: boolean }
 
   const forwardBrowserPageZoom = (
@@ -545,12 +551,12 @@ export function setupGuestShortcutForwarding(args: {
 
   guest.on('before-input-event', handler)
   guest.on('zoom-changed', zoomCommandHandler)
-  guest.on('blur', resetDoubleTapDetector)
+  guest.on('blur', resetHeldKeyState)
   return () => {
     try {
       guest.off('before-input-event', handler)
       guest.off('zoom-changed', zoomCommandHandler)
-      guest.off('blur', resetDoubleTapDetector)
+      guest.off('blur', resetHeldKeyState)
     } catch {
       // Why: best-effort — guest may already be destroyed during teardown.
     }

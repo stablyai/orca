@@ -14,6 +14,10 @@ import {
   normalizeCtrlTabOrderMode,
   type RecentTabSwitcherItem
 } from './recent-tab-switching'
+import {
+  ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  queueBrowserFocusRequest
+} from '../browser-pane/browser-focus'
 import { translate } from '@/i18n/i18n'
 
 type SwitcherState = {
@@ -24,6 +28,21 @@ type SwitcherState = {
 function consumeKeyboardEvent(event: KeyboardEvent): void {
   event.preventDefault()
   event.stopPropagation()
+}
+
+// Why: focus requests are keyed by browser *page* id (what BrowserPane mounts),
+// while switcher items and activeBrowserTabId carry the browser *tab* id.
+function resolveActiveBrowserPageId(
+  state: ReturnType<typeof useAppStore.getState>,
+  browserTabId: string
+): string | null {
+  for (const tabs of Object.values(state.browserTabsByWorktree)) {
+    const tab = tabs.find((candidate) => candidate.id === browserTabId)
+    if (tab) {
+      return tab.activePageId ?? null
+    }
+  }
+  return null
 }
 
 function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
@@ -47,10 +66,40 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
 export default function RecentTabSwitcher(): React.JSX.Element | null {
   const [switcher, setSwitcher] = useState<SwitcherState | null>(null)
   const switcherRef = useRef<SwitcherState | null>(null)
+  // Why: set only when the gesture started inside a browser guest, so commit/
+  // cancel know to hand focus back to a webview instead of leaving it on body.
+  const guestSourcePageIdRef = useRef<string | null>(null)
 
   const setSwitcherState = useCallback((next: SwitcherState | null): void => {
     switcherRef.current = next
     setSwitcher(next)
+  }, [])
+
+  const requestGuestPageFocus = useCallback((pageId: string): void => {
+    const detail = { pageId, target: 'webview' as const }
+    queueBrowserFocusRequest(detail)
+    window.dispatchEvent(new CustomEvent(ORCA_BROWSER_FOCUS_REQUEST_EVENT, { detail }))
+  }, [])
+
+  const releaseGuestFocusForHeldGesture = useCallback((): void => {
+    if (!switcherRef.current) {
+      return
+    }
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement) || active.tagName !== 'WEBVIEW') {
+      return
+    }
+    const store = useAppStore.getState()
+    guestSourcePageIdRef.current =
+      store.activeTabType === 'browser' && store.activeBrowserTabId
+        ? resolveActiveBrowserPageId(store, store.activeBrowserTabId)
+        : null
+    // Why: main preventDefault-ed the guest's Ctrl+Tab keydown, and Chromium
+    // then suppresses every guest keyup until the next keydown — the
+    // modifier-release commit can never arrive over IPC (#9937). Move DOM focus
+    // out of the webview so the rest of the held gesture (advance, release,
+    // Escape) flows through this window's key handlers instead.
+    active.blur()
   }, [])
 
   const openOrAdvance = useCallback(
@@ -88,27 +137,43 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
   const commit = useCallback((): void => {
     const current = switcherRef.current
     setSwitcherState(null)
+    const guestSourcePageId = guestSourcePageIdRef.current
+    guestSourcePageIdRef.current = null
     const selected = current?.items[current.selectedIndex]
     if (!selected) {
       return
     }
     activateCyclableTab(useAppStore.getState(), selected)
-  }, [setSwitcherState])
+    // Why: the held gesture pulled focus out of the source webview; when it
+    // commits to a browser tab, hand focus to that page like a click would.
+    if (guestSourcePageId !== null && selected.type === 'browser') {
+      const pageId = resolveActiveBrowserPageId(useAppStore.getState(), selected.id)
+      if (pageId !== null) {
+        requestGuestPageFocus(pageId)
+      }
+    }
+  }, [requestGuestPageFocus, setSwitcherState])
 
   const cancel = useCallback((): void => {
     setSwitcherState(null)
-  }, [setSwitcherState])
+    const guestSourcePageId = guestSourcePageIdRef.current
+    guestSourcePageIdRef.current = null
+    if (guestSourcePageId !== null) {
+      requestGuestPageFocus(guestSourcePageId)
+    }
+  }, [requestGuestPageFocus, setSwitcherState])
 
   useEffect(() => {
     const unsubscribeKeyDown = window.api.ui.onCtrlTabKeyDown(({ shiftKey }) => {
       openOrAdvance(shiftKey ? -1 : 1)
+      releaseGuestFocusForHeldGesture()
     })
     const unsubscribeKeyUp = window.api.ui.onCtrlTabKeyUp(commit)
     return () => {
       unsubscribeKeyDown()
       unsubscribeKeyUp()
     }
-  }, [commit, openOrAdvance])
+  }, [commit, openOrAdvance, releaseGuestFocusForHeldGesture])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {

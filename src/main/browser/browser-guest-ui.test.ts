@@ -509,6 +509,30 @@ describe('setupGuestShortcutForwarding', () => {
     }
   })
 
+  it('clears held Ctrl+Tab state when the guest blurs mid-gesture', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    triggerBeforeInput({ code: 'Tab', key: 'Tab', control: true, meta: false })
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:ctrlTabKeyDown', { shiftKey: false })
+    rendererSendMock.mockClear()
+
+    // Why: the renderer steals focus from the guest to run the held gesture;
+    // a later stray keyup must not emit a phantom commit from stale state.
+    triggerGuestBlur()
+    triggerBeforeInput({
+      type: 'keyUp',
+      code: 'ControlLeft',
+      key: 'Control',
+      control: false,
+      meta: false
+    })
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
   it('forwards browser page zoom shortcuts from focused guest pages', () => {
     setupGuestShortcutForwarding({
       browserTabId,

@@ -88,6 +88,17 @@ function makeStore(): AppState {
   } as unknown as AppState
 }
 
+function makeBrowserGuestStore(): AppState {
+  const store = makeStore() as unknown as Record<string, unknown>
+  store.activeTabType = 'browser'
+  store.activeBrowserTabId = 'browser-tab-1'
+  // Why: focus requests target the browser *page* id, resolved from the tab.
+  store.browserTabsByWorktree = {
+    [WORKTREE_ID]: [{ id: 'browser-tab-1', activePageId: 'page-1' }]
+  }
+  return store as unknown as AppState
+}
+
 function installWindowApi(): void {
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -181,6 +192,67 @@ describe('RecentTabSwitcher', () => {
     expect(terminal.keyUp).not.toHaveBeenCalled()
     expectCommittedToTabB()
 
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('pulls DOM focus out of a webview guest when the switcher opens via IPC', async () => {
+    // Why: a prevented guest keydown suppresses guest keyups (see #9937), so
+    // the gesture must transfer to the renderer window by blurring the webview.
+    const store = makeBrowserGuestStore()
+    getStateMock.mockReturnValue(store)
+
+    const { root } = await renderSwitcher()
+    const webview = document.createElement('webview')
+    const blur = vi.fn()
+    webview.blur = blur
+    const activeElementSpy = vi
+      .spyOn(document, 'activeElement', 'get')
+      .mockReturnValue(webview as unknown as Element)
+
+    await act(async () => {
+      ctrlTabKeyDownCallback?.({ shiftKey: false })
+    })
+
+    expect(document.body.querySelector('[role="listbox"]')).not.toBeNull()
+    expect(blur).toHaveBeenCalledTimes(1)
+
+    activeElementSpy.mockRestore()
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('returns focus to the source browser page when the gesture is cancelled', async () => {
+    const store = makeBrowserGuestStore()
+    getStateMock.mockReturnValue(store)
+
+    const { root } = await renderSwitcher()
+    const webview = document.createElement('webview')
+    webview.blur = vi.fn()
+    const activeElementSpy = vi
+      .spyOn(document, 'activeElement', 'get')
+      .mockReturnValue(webview as unknown as Element)
+
+    await act(async () => {
+      ctrlTabKeyDownCallback?.({ shiftKey: false })
+    })
+    activeElementSpy.mockRestore()
+
+    const focusRequests: { pageId: string; target: string }[] = []
+    const onFocusRequest = (event: Event): void => {
+      focusRequests.push((event as CustomEvent<{ pageId: string; target: string }>).detail)
+    }
+    window.addEventListener('orca:browser-focus-request', onFocusRequest)
+
+    await dispatchKeyboard(document.body, 'keydown', { key: 'Escape', code: 'Escape' })
+
+    expect(document.body.querySelector('[role="listbox"]')).toBeNull()
+    expect(focusRequests).toEqual([{ pageId: 'page-1', target: 'webview' }])
+    expect(activateCyclableTabMock).not.toHaveBeenCalled()
+
+    window.removeEventListener('orca:browser-focus-request', onFocusRequest)
     await act(async () => {
       root.unmount()
     })
