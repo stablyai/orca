@@ -375,9 +375,7 @@ async function createWebRuntimeSessionTerminalResult(
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
-              ...(args.providerAccountRef
-                ? { providerAccountRef: args.providerAccountRef }
-                : {}),
+              ...(args.providerAccountRef ? { providerAccountRef: args.providerAccountRef } : {}),
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
               // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,

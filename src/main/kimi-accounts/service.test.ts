@@ -119,7 +119,9 @@ describe('KimiAccountService', () => {
 
         const managedHome = store.getSettings().kimiManagedAccounts![0].managedHomePath
         expect(statSync(join(managedHome, 'credentials')).mode & 0o777).toBe(0o700)
-        expect(statSync(join(managedHome, 'credentials', 'kimi-code.json')).mode & 0o777).toBe(0o600)
+        expect(statSync(join(managedHome, 'credentials', 'kimi-code.json')).mode & 0o777).toBe(
+          0o600
+        )
         expect(statSync(sourceCredentials).mode & 0o777).toBe(0o500)
         expect(statSync(sourceCredential).mode & 0o777).toBe(0o400)
       } finally {

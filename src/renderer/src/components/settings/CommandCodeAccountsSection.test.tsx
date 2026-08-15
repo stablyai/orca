@@ -74,7 +74,7 @@ describe('CommandCodeAccountsSection', () => {
 
   it('disables account actions until the initial list resolves', async () => {
     let resolveList:
-      | ((value: { accounts: typeof account[]; activeAccountId: string }) => void)
+      | ((value: { accounts: (typeof account)[]; activeAccountId: string }) => void)
       | undefined
     mocks.list.mockImplementation(
       () =>

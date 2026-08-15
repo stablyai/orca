@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
-import type { ManagedCliHomeAccountsState, ManagedCliHomeProvider } from '../../../../shared/managed-account-types'
+import type {
+  ManagedCliHomeAccountsState,
+  ManagedCliHomeProvider
+} from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
