@@ -1561,7 +1561,7 @@ export function registerFilesystemHandlers(
     'git:discoverCommitMessageModels',
     async (
       _event,
-      args: { agentId: string; worktreePath?: string; connectionId?: string }
+      args: { agentId: string; worktreePath?: string; connectionId?: string; ptyId?: string }
     ): Promise<DiscoverCommitMessageModelsResult> => {
       const agentId = args.agentId
       const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
@@ -1601,7 +1601,8 @@ export function registerFilesystemHandlers(
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         agentId,
         commitMessageAgentEnv,
-        localRuntimeTarget
+        localRuntimeTarget,
+        args.ptyId
       )
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }

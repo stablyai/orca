@@ -852,7 +852,8 @@ export class RuntimeGitCommands {
   async discoverRuntimeCommitMessageModels(
     worktreeSelector: string,
     agentId: string,
-    settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>
+    settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>,
+    ptyId?: string
   ): Promise<DiscoverCommitMessageModelsResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const typedAgentId = agentId as TuiAgent
@@ -877,7 +878,8 @@ export class RuntimeGitCommands {
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       typedAgentId,
       this.host.getCommitMessageAgentEnvironment?.(),
-      localAgentRuntimeTargetForTarget(target)
+      localAgentRuntimeTargetForTarget(target),
+      ptyId
     )
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }

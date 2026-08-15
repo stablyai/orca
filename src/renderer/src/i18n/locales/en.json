@@ -3268,6 +3268,19 @@
           "TabBarQuickCommandHostLoadStatus": {
             "82e294f3ca": "Host unavailable",
             "7c129b08ff": "Loading host…"
+          },
+          "CodexLaunchAccountMenu": {
+            "sshUnsupported": "Account selection is unavailable for SSH workspaces.",
+            "runtimeUnsupported": "This runtime only supports Current default. Update or restart Orca to select an account.",
+            "loadFailed": "Could not load Codex accounts.",
+            "title": "Launch Codex in a new terminal",
+            "trigger": "Launch Codex with an account",
+            "currentDefault": "Current default",
+            "loading": "Loading Codex accounts…",
+            "retry": "Retry",
+            "codex": "Codex",
+            "currentDefaultDescription": "Follow the account currently selected for this runtime",
+            "systemLogin": "System Codex login"
           }
         }
       },

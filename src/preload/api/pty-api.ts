@@ -14,6 +14,7 @@ import type {
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
+import type { ProviderAccountRef } from '../../shared/provider-account-ref'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
 
@@ -31,6 +32,7 @@ export type PtyApi = {
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
+    providerAccountRef?: ProviderAccountRef
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null
     worktreeId?: string

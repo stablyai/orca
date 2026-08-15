@@ -233,15 +233,20 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'create'],
     summary: 'Create a terminal session in the current worktree',
     usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--agent codex --account <uuid|system> [--account-runtime host|wsl] [--wsl-distro <name>]] [--focus] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      ...'worktree command title agent account account-runtime wsl-distro focus'.split(' ')
+    ],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.'
+      'Use this, not worktree create, for a fresh agent in the current checkout.',
+      'Use --agent codex --account <uuid> to launch with one managed account without changing the global default. UUIDs come from `orca account list`.',
+      'Use --account system for the system Codex login. Add --account-runtime wsl --wsl-distro <name> for a WSL system login.'
     ],
     examples: [
-      'orca terminal create --json',
       'orca terminal create --worktree active --command "codex" --json',
+      'orca terminal create --worktree active --agent codex --account <uuid> --json',
       'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
       'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus'
     ]
