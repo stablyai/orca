@@ -1,6 +1,7 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   createClaudeCatalogOptions,
+  createCodexCatalogOptions,
   getAgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
@@ -71,16 +72,17 @@ export function resolveNativeChatModelDiscoveryContext(
 
 export async function discoverNativeChatCatalogModels(
   agent: AgentType,
-  context: RuntimeGitContext
+  context: RuntimeGitContext,
+  ptyId?: string
 ): Promise<CatalogModel[] | null> {
-  const result = await discoverRuntimeCommitMessageModels(context, agent)
+  const result = await discoverRuntimeCommitMessageModels(context, agent, ptyId)
   const catalog = getAgentSessionOptionCatalog(agent)
   if (
     !result.success ||
     result.models.length === 0 ||
     // Why: a spec's static fallback list must never pass as a probe result for an
     // agent whose published list replaces rather than extends the seed.
-    ((agent === 'claude' || catalog?.discoveredModelsAreAuthoritative) &&
+    ((agent === 'claude' || agent === 'codex' || catalog?.discoveredModelsAreAuthoritative) &&
       result.catalogOrigin !== 'probe')
   ) {
     return null
@@ -96,6 +98,11 @@ export async function discoverNativeChatCatalogModels(
             effortLevelIds: model.thinkingLevels?.map(({ id }) => id) ?? [],
             supportsFastMode: model.supportsFastMode
           })
-        : []
+        : agent === 'codex'
+          ? createCodexCatalogOptions({
+              effortLevels: model.thinkingLevels ?? [],
+              ...(model.defaultThinkingLevel ? { defaultEffort: model.defaultThinkingLevel } : {})
+            })
+          : []
   }))
 }

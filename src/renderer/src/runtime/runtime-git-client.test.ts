@@ -725,16 +725,41 @@ describe('runtime git client', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo'
       },
-      'cursor'
+      'cursor',
+      'remote:env-1@@pty-account-b'
     )
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'git.discoverCommitMessageModels',
-      params: { worktree: 'id:wt-1', agentId: 'cursor', agentCmdOverrides },
+      params: {
+        worktree: 'id:wt-1',
+        agentId: 'cursor',
+        agentCmdOverrides,
+        ptyId: 'pty-account-b'
+      },
       timeoutMs: 75_000
     })
     expect(gitDiscoverCommitMessageModels).not.toHaveBeenCalled()
+  })
+
+  it('passes a local PTY id through model discovery IPC', async () => {
+    await discoverRuntimeCommitMessageModels(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      'codex',
+      'pty-account-a'
+    )
+
+    expect(gitDiscoverCommitMessageModels).toHaveBeenCalledWith({
+      agentId: 'codex',
+      worktreePath: '/repo',
+      connectionId: undefined,
+      ptyId: 'pty-account-a'
+    })
   })
 
   it('passes the raw worktree id to local generation IPC', async () => {

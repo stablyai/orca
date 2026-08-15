@@ -14,6 +14,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
+import type { ProviderAccountRef } from '../../../../shared/provider-account-ref'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import {
   DEFAULT_REPO_BADGE_COLOR,
@@ -570,6 +571,7 @@ export type TerminalSlice = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      providerAccountRef?: ProviderAccountRef
       /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
       agentArgsOverride?: string | null
       draftPrompt?: string
@@ -752,6 +754,7 @@ export type TerminalSlice = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      providerAccountRef?: ProviderAccountRef
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>
@@ -772,6 +775,7 @@ export type TerminalSlice = {
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
+    providerAccountRef?: ProviderAccountRef
     agentArgsOverride?: string | null
     draftPrompt?: string
     sessionOptions?: Record<string, SessionOptionValue>

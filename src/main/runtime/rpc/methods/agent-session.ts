@@ -12,6 +12,11 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../../../shared/agent-session-host-authority'
 import {
+  PROVIDER_ACCOUNT_REF_MAX_ID_LENGTH,
+  PROVIDER_ACCOUNT_REF_MAX_PROVIDER_LENGTH,
+  PROVIDER_ACCOUNT_REF_MAX_WSL_DISTRO_LENGTH
+} from '../../../../shared/provider-account-ref'
+import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from '../../../../shared/agent-session-host-authority'
@@ -111,6 +116,21 @@ const ProviderSession = z
   })
   .strict()
 
+const ProviderAccountRefSchema = z
+  .object({
+    provider: z.string().trim().min(1).max(PROVIDER_ACCOUNT_REF_MAX_PROVIDER_LENGTH),
+    accountId: z.string().trim().min(1).max(PROVIDER_ACCOUNT_REF_MAX_ID_LENGTH).nullable(),
+    runtime: z.enum(['host', 'wsl']),
+    wslDistro: z
+      .string()
+      .trim()
+      .min(1)
+      .max(PROVIDER_ACCOUNT_REF_MAX_WSL_DISTRO_LENGTH)
+      .nullable()
+      .optional()
+  })
+  .strict()
+
 const AutomaticEnsure = z
   .object({
     kind: z.literal('automatic'),
@@ -132,6 +152,7 @@ const ExplicitEnsure = z
     ompResumeFilePath: OmpResumeFilePath.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
+    providerAccountRef: ProviderAccountRefSchema.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional()
   })
@@ -149,6 +170,26 @@ const ExplicitEnsure = z
         code: z.ZodIssueCode.custom,
         path: ['providerSession'],
         message: 'Provider session is not resumable for this agent'
+      })
+    }
+    if (
+      value.providerAccountRef &&
+      (value.agent !== 'codex' || value.providerAccountRef.provider !== 'codex')
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['providerAccountRef', 'provider'],
+        message: 'Account reference must match the resumed agent'
+      })
+    }
+    if (
+      value.providerAccountRef?.runtime === 'host' &&
+      value.providerAccountRef.wslDistro != null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['providerAccountRef', 'wslDistro'],
+        message: 'Host account references cannot name a WSL distribution'
       })
     }
   })
@@ -179,7 +220,8 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
-    viewMode: z.enum(['terminal', 'chat']).optional()
+    viewMode: z.enum(['terminal', 'chat']).optional(),
+    providerAccountRef: ProviderAccountRefSchema.optional()
   })
   .strict()
   .superRefine((value, context) => {
@@ -188,6 +230,16 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
         code: z.ZodIssueCode.custom,
         path: ['prompt'],
         message: 'Draft delivery requires a non-empty prompt'
+      })
+    }
+    if (
+      value.providerAccountRef?.runtime === 'host' &&
+      value.providerAccountRef.wslDistro != null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['providerAccountRef', 'wslDistro'],
+        message: 'Host account references cannot name a WSL distribution'
       })
     }
   })

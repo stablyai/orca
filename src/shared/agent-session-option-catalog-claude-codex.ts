@@ -10,6 +10,7 @@ import {
   parseClaudeModelList
 } from './claude-model-list-probe'
 import { hasFlag } from './agent-cli-flag-detection'
+import { CODEX_MODEL_LIST_COMMAND, parseCodexModelList } from './codex-model-list-probe'
 
 function hasCodexEffortOverride(tokens: readonly string[]): boolean {
   if (hasFlag(tokens, ['--reasoning-effort'])) {
@@ -190,17 +191,20 @@ const CODEX_EFFORT_CHOICES = [
   { value: 'ultra', label: 'Ultra' }
 ]
 
-// Why: Codex can clamp higher values, so expose only each model's advertised levels.
-function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
-  const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+type CodexEffortChoice = { value: string; label: string }
+
+function codexEffortWithChoices(
+  choices: readonly CodexEffortChoice[],
+  defaultValue: string
+): CatalogOption {
   return {
     id: 'effort',
     label: 'Reasoning effort',
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
-      defaultValue: 'medium'
+      choices: [...choices],
+      defaultValue
     },
     apply: {
       launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
@@ -209,6 +213,53 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
       midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
     }
   }
+}
+
+// Why: Codex can clamp higher values, so expose only each model's advertised levels.
+function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
+  const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+  return codexEffortWithChoices(CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1), 'medium')
+}
+
+function labelCodexEffort(effort: string): string {
+  if (effort === 'xhigh') {
+    return 'Extra high'
+  }
+  return effort.charAt(0).toUpperCase() + effort.slice(1)
+}
+
+export function createCodexCatalogOptions(args: {
+  effortLevels: readonly { id: string; label: string }[]
+  defaultEffort?: string
+}): CatalogOption[] {
+  const choices = args.effortLevels.map(({ id, label }) => ({ value: id, label }))
+  if (choices.length === 0) {
+    return []
+  }
+  const choiceIds = choices.map(({ value }) => value)
+  const defaultEffort = choiceIds.includes(args.defaultEffort ?? '')
+    ? args.defaultEffort!
+    : choiceIds.includes('medium')
+      ? 'medium'
+      : choiceIds[0]
+  return [codexEffortWithChoices(choices, defaultEffort)]
+}
+
+function parseCodexCatalogModels(stdout: string): CatalogModel[] {
+  return parseCodexModelList(stdout).map((model) => {
+    const effortLevels = model.effortLevels.map((effort) => ({
+      id: effort,
+      label: labelCodexEffort(effort)
+    }))
+    return {
+      id: model.id,
+      label: model.label,
+      options: createCodexCatalogOptions({
+        effortLevels,
+        ...(model.defaultEffort ? { defaultEffort: model.defaultEffort } : {})
+      })
+    }
+  })
 }
 
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
@@ -234,5 +285,9 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // command and let its own picker apply the account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  unknownModelOptions: [codexEffort('xhigh')]
+  unknownModelOptions: [codexEffort('xhigh')],
+  listModels: {
+    command: CODEX_MODEL_LIST_COMMAND,
+    parse: parseCodexCatalogModels
+  }
 }

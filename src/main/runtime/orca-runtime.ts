@@ -63,6 +63,7 @@ import type {
   RuntimeEnsureAgentSessionRequest,
   RuntimeEnsureAgentSessionResult
 } from '../../shared/agent-session-host-authority'
+import type { ProviderAccountRef } from '../../shared/provider-account-ref'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
@@ -1418,6 +1419,7 @@ type TerminalCreateOptions = {
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  providerAccountRef?: ProviderAccountRef
   // Why: agent ids are not shell commands (`cursor` is the Cursor desktop app; its
   // CLI is `cursor-agent`). Callers that know the agent name it here instead of
   // guessing a command, and the runtime builds the configured launch.
@@ -1728,6 +1730,7 @@ type RuntimePtyController = {
     cwd?: string
     command?: string
     launchAgent?: TuiAgent
+    providerAccountRef?: ProviderAccountRef
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
@@ -25746,6 +25749,26 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+    if (request.providerAccountRef) {
+      if (request.agent !== 'codex' || request.providerAccountRef.provider !== 'codex') {
+        throw new Error('agent_session_account_agent_mismatch')
+      }
+      if (workspace.connectionId) {
+        throw new Error('agent_session_account_runtime_mismatch')
+      }
+      const wsl = parseWslUncPath(workspace.path)
+      if ((request.providerAccountRef.runtime === 'wsl') !== Boolean(wsl)) {
+        throw new Error('agent_session_account_runtime_mismatch')
+      }
+      if (
+        wsl &&
+        request.providerAccountRef.wslDistro?.trim() &&
+        request.providerAccountRef.wslDistro.trim().toLocaleLowerCase('en-US') !==
+          wsl.distro.toLocaleLowerCase('en-US')
+      ) {
+        throw new Error('agent_session_account_runtime_mismatch')
+      }
+    }
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||
@@ -25807,6 +25830,7 @@ export class OrcaRuntimeService {
       env: startup.env,
       launchConfig: startup.launchConfig,
       launchAgent: request.agent,
+      providerAccountRef: request.providerAccountRef,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
@@ -25853,7 +25877,11 @@ export class OrcaRuntimeService {
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
-          request.viewMode ?? null
+          request.viewMode ?? null,
+          request.providerAccountRef?.provider ?? null,
+          request.providerAccountRef?.accountId ?? null,
+          request.providerAccountRef?.runtime ?? null,
+          request.providerAccountRef?.wslDistro ?? null
         ])
       )
       .digest('base64url')
@@ -25900,6 +25928,28 @@ export class OrcaRuntimeService {
         // Why: the exact legacy launch remains client-owned until this pre-spawn check succeeds.
         throw new Error('agent_session_legacy_required')
       }
+      if (request.providerAccountRef) {
+        if (request.agent !== 'codex' || request.providerAccountRef.provider !== 'codex') {
+          throw new Error('agent_session_account_agent_mismatch')
+        }
+        if (workspace.connectionId) {
+          // Why: an account ref belongs to this Orca runtime, not an SSH
+          // downstream whose credential registry this process cannot attest.
+          throw new Error('agent_session_account_runtime_mismatch')
+        }
+        const wsl = parseWslUncPath(workspace.path)
+        if ((request.providerAccountRef.runtime === 'wsl') !== Boolean(wsl)) {
+          throw new Error('agent_session_account_runtime_mismatch')
+        }
+        if (
+          wsl &&
+          request.providerAccountRef.wslDistro?.trim() &&
+          request.providerAccountRef.wslDistro.trim().toLocaleLowerCase('en-US') !==
+            wsl.distro.toLocaleLowerCase('en-US')
+        ) {
+          throw new Error('agent_session_account_runtime_mismatch')
+        }
+      }
       const startupCwd = this.resolveWorkspaceTerminalStartupCwd(workspace, request.startupCwd)
       // Why: aliases and object property order are client syntax, not authority;
       // fingerprint the host-resolved fields in one fixed order.
@@ -25919,7 +25969,11 @@ export class OrcaRuntimeService {
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
-            request.viewMode ?? null
+            request.viewMode ?? null,
+            request.providerAccountRef?.provider ?? null,
+            request.providerAccountRef?.accountId ?? null,
+            request.providerAccountRef?.runtime ?? null,
+            request.providerAccountRef?.wslDistro ?? null
           ])
         )
         .digest('base64url')
@@ -25998,6 +26052,7 @@ export class OrcaRuntimeService {
           leafId: operationLeafId,
           preAllocatedHandle: operationHandle,
           viewMode: request.viewMode,
+          providerAccountRef: request.providerAccountRef,
           persistHostSessionBinding: true,
           agentSessionCreateOperationId: executionOperationId,
           signal: caller.signal,
@@ -26234,6 +26289,7 @@ export class OrcaRuntimeService {
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
+            providerAccountRef: launchOpts.providerAccountRef,
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,
