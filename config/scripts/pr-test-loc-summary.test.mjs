@@ -110,7 +110,7 @@ describe('PR test LoC summary', () => {
 
     expect(block).toContain(LOC_HANDS_OFF_COMMENT)
     expect(block).toContain('| Test | 1 | +2 | −1 | +1 |')
-    expect(block).toContain('| Non-test | 1 | +4 | 0 | +4 |')
+    expect(block).toContain('| Prod | 1 | +4 | 0 | +4 |')
     expect(block).toContain('| Total | 2 | +6 | −1 | +5 |')
     expect(mergeLocBlock('## ELI5\n\nHello\n', totals)).toBe(`${block}\n\n## ELI5\n\nHello\n`)
     expect(mergeLocBlock(`${block}\n\n## ELI5\n`, totals)).toBe(`${block}\n\n## ELI5\n`)
@@ -142,7 +142,7 @@ describe('PR test LoC summary', () => {
     expect(result.stdout.startsWith('<!-- orca-pr-loc -->')).toBe(true)
     expect(result.stdout).toContain(LOC_HANDS_OFF_COMMENT)
     expect(result.stdout).toContain('| Test | 1 | +6 | −1 | +5 |')
-    expect(result.stdout).toContain('| Non-test | 1 | +2 | 0 | +2 |')
+    expect(result.stdout).toContain('| Prod | 1 | +2 | 0 | +2 |')
     expect(result.stdout).toContain('| Total | 2 | +8 | −1 | +7 |')
     expect(result.stdout).toContain('## ELI5\n\nHello\n')
     expect(result.stdout.match(/<!-- orca-pr-loc -->/g)).toHaveLength(1)

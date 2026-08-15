@@ -54,7 +54,7 @@ export function formatLocTable({ test, nonTest }) {
     '| | Files | Added | Deleted | Net |',
     '| :--- | ---: | ---: | ---: | ---: |',
     locTableRow('Test', test),
-    locTableRow('Non-test', nonTest),
+    locTableRow('Prod', nonTest),
     locTableRow('Total', total)
   ].join('\n')
 }
