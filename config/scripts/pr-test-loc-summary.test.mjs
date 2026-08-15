@@ -85,7 +85,7 @@ describe('PR test LoC summary', () => {
       fetchImpl: async (url) => {
         const page = pages[url]
         if (page == null) {
-          throw new Error(`unexpected url ${url}`)
+          throw new Error(`unexpected url ${String(url)}`)
         }
         return {
           ok: true,
