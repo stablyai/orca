@@ -8020,6 +8020,12 @@ export class OrcaRuntimeService {
       expectedPublicationEpoch?: string
       expectedTerminalHandle?: string
       clientNavigationId?: string
+      // Why: a caller-supplied tabId can be a stale spawn-time identity (see
+      // the RuntimePtyWorktreeRecord.tabId comment) while the live pty is
+      // still published under a different parentTabId. Callers that already
+      // know the pty they mean to close (closeTerminalTab) can pass it here
+      // so a rescued/re-adopted terminal is still resolvable by identity.
+      expectedPtyId?: string
     } = {}
   ): Promise<RuntimeMobileSessionTabCloseResult> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
@@ -8062,7 +8068,13 @@ export class OrcaRuntimeService {
       ) ??
       snapshot?.tabs.find(
         (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
-      )
+      ) ??
+      (options.expectedPtyId
+        ? snapshot?.tabs.find(
+            (candidate) =>
+              candidate.type === 'terminal' && candidate.ptyId === options.expectedPtyId
+          )
+        : undefined)
     if (!tab) {
       throw new Error('tab_not_found')
     }
@@ -27783,7 +27795,10 @@ export class OrcaRuntimeService {
       }
       // Why: a handle-addressed CLI/automation close is an explicit intent, so
       // it must stay destructive under the non-user close adjudication gate.
-      await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, { reason: 'user' })
+      await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+        reason: 'user',
+        expectedPtyId: pty.pty.ptyId
+      })
       this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
       return { handle, tabId, closeMode: 'tab', ptyKilled: false }
     }

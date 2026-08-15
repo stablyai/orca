@@ -29209,6 +29209,93 @@ describe('OrcaRuntimeService', () => {
     expect(flushOrThrow).toHaveBeenCalledTimes(1)
   })
 
+  it('closes a runtime-owned pty by handle even when its spawn-time tabId has gone stale (#14719)', async () => {
+    // Repro for https://github.com/stablyai/orca/issues/14719: `terminal
+    // close --tab` can return `tab_not_found` while the terminal stays
+    // `running`. `RuntimePtyWorktreeRecord.tabId` is documented as a
+    // spawn-time snapshot ("later reveals can adopt under the env key"), so
+    // a pty spawned under one tabId (here: 'stale-tab', simulating an
+    // Antigravity/agy-style out-of-band spawn) can end up republished in the
+    // live mobile-session snapshot under a different `parentTabId`
+    // ('live-tab'). `closeTerminalTab` still keys its `closeMobileSessionTab`
+    // lookup off the stale `pty.pty.tabId`, and that lookup
+    // (id / parentTabId / browserWorkspaceId) has no ptyId fallback, even
+    // though the live snapshot's tab still carries the same `ptyId`.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: TEST_REPO_ID,
+      activeWorktreeId: TEST_WORKTREE_ID,
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
+    })
+    const closeTerminalTab = vi.fn(async () => {})
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    // A renderer tab exists ('live-tab'), but no renderer leaf is synced for
+    // it: the pty is only reachable as a runtime-owned/orphaned pty (the
+    // shape a background CLI-spawned terminal like agy's takes), which is
+    // exactly the path (`closeTerminalTab`'s `if (pty)` branch, keyed off
+    // `pty.pty.tabId`) the AGYFIX2 investigation identified as vulnerable.
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'live-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'agy',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:reveal',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `live-tab::${HEADLESS_LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `live-tab::${HEADLESS_LEAF_ID}`,
+              parentTabId: 'live-tab',
+              leafId: HEADLESS_LEAF_ID,
+              ptyId: 'agy-pty',
+              title: 'agy',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    runtime.registerPty('agy-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'stale-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        setBackgroundThrottling: vi.fn()
+      }
+    })
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.closeTerminalTab(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      tabId: 'stale-tab',
+      closeMode: 'tab',
+      ptyKilled: false
+    })
+    expect(closeTerminalTab).toHaveBeenCalledWith('live-tab')
+  })
+
   it('lists PTY-backed mobile session terminals without a renderer graph', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
