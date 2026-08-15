@@ -1,5 +1,7 @@
 import React from 'react'
-import type { CheckStatus, GitConflictOperation, TerminalTab } from '../../../../shared/types'
+import type { GitConflictOperation } from '../../../../shared/git-status-types'
+import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // ── Pure helper functions ────────────────────────────────────────────
 

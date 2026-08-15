@@ -20,7 +20,7 @@ import type {
   JiraStatus,
   JiraTransition,
   JiraUser
-} from '../../shared/types'
+} from '../../shared/jira-types'
 import {
   acquire,
   apiBasePath,

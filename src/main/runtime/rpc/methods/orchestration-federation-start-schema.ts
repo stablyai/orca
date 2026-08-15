@@ -12,7 +12,7 @@ export const FederationAttachStartParams = z
     ),
     taskId: requiredString('Missing Task ID'),
     taskSpec: requiredString('Missing Task spec'),
-    protocolVersion: z.union([z.literal(1), z.literal(2)]),
+    protocolVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     worktree: requiredString('Missing remote worktree selector'),
     name: OptionalString,
     repo: OptionalString,

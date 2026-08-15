@@ -3,8 +3,9 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import type { Worktree } from '../../../../shared/types'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 
 export function deriveAiVaultWorkspaceScopePaths(
   activeWorktree: Pick<Worktree, 'id' | 'path' | 'priorWorktreeIds' | 'repoId'> | null,
@@ -88,10 +89,10 @@ export function deriveAiVaultScopeSessionPaths(
 
 function buildProjectSetupsByRepoId(
   projection?: ProjectHostSetupProjection
-): Map<string, ProjectHostSetupProjection['setups']> {
-  const setupsByRepoId = new Map<string, ProjectHostSetupProjection['setups']>()
+): Map<string, ProjectHostSetup[]> {
+  const setupsByRepoId = new Map<string, ProjectHostSetup[]>()
   for (const setup of projection?.setups ?? []) {
-    const setups = setupsByRepoId.get(setup.repoId) ?? []
+    const setups: ProjectHostSetup[] = setupsByRepoId.get(setup.repoId) ?? []
     setups.push(setup)
     setupsByRepoId.set(setup.repoId, setups)
   }

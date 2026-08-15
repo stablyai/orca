@@ -470,7 +470,7 @@ function findMatchingSessionRunIndex(
     (sessionRun, index) =>
       !usedSessionRunIndexes.has(index) && getRunKey(sessionRun) === outputRunKey
   )
-  if (exactMatchIndex >= 0) {
+  if (exactMatchIndex !== -1) {
     return exactMatchIndex
   }
 
@@ -798,7 +798,7 @@ function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[] {
   }
 }
 
-function readHermesSessionDbRunById(jobId: string, runId: string): unknown | null {
+function readHermesSessionDbRunById(jobId: string, runId: string): unknown {
   if (!existsSync(HERMES_STATE_DB)) {
     return null
   }

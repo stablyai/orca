@@ -10,12 +10,7 @@ import type { RelayContext } from './context'
 // Why: RelayContext is accepted in the constructor for protocol back-compat
 // (see docs/relay-fs-allowlist-removal.md), but no longer consulted on FS ops.
 import { expandTilde } from './context'
-import {
-  DEFAULT_MAX_RESULTS,
-  searchWithRg,
-  listFilesWithRg,
-  checkRgAvailable
-} from './fs-handler-utils'
+import { DEFAULT_MAX_RESULTS, searchWithRg, listFilesWithRg } from './fs-handler-utils'
 import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
 import { ListFilesScanCoordinator } from './fs-list-files-scan-coordinator'
@@ -35,6 +30,7 @@ import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
+import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
 import { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 import type { RelayWatcherProcessPool } from './relay-watcher-process-pool'
 
@@ -328,26 +324,22 @@ export class FsHandler {
       DEFAULT_MAX_RESULTS
     )
 
-    const rgAvailable = await checkRgAvailable()
-    if (!rgAvailable) {
-      return searchWithGitGrep(rootPath, query, {
-        caseSensitive,
-        wholeWord,
-        useRegex,
-        includePattern,
-        excludePattern,
-        maxResults
-      })
-    }
-
-    return searchWithRg(rootPath, query, {
+    const options = {
       caseSensitive,
       wholeWord,
       useRegex,
       includePattern,
       excludePattern,
       maxResults
-    })
+    }
+    try {
+      return await searchWithRg(rootPath, query, options)
+    } catch (error) {
+      if (!(error instanceof RipgrepUnavailableError)) {
+        throw error
+      }
+      return searchWithGitGrep(rootPath, query, options)
+    }
   }
 
   private listFiles(params: Record<string, unknown>, context?: RequestContext): Promise<string[]> {
@@ -380,10 +372,14 @@ export class FsHandler {
     signal: AbortSignal,
     maxResults?: number
   ): Promise<string[]> {
-    const rgAvailable = await checkRgAvailable()
     throwIfFileListingCancelled(signal)
-    if (rgAvailable) {
-      return listFilesWithRg(rootPath, excludePathPrefixes, { signal, maxResults })
+    try {
+      return await listFilesWithRg(rootPath, excludePathPrefixes, { signal, maxResults })
+    } catch (error) {
+      throwIfFileListingCancelled(signal)
+      if (!(error instanceof RipgrepUnavailableError)) {
+        throw error
+      }
     }
     // Why: git ls-files only works inside git repos. Use rev-parse to detect
     // git ancestry — unlike checking for a local .git entry, this works from

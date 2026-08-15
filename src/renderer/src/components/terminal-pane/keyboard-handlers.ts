@@ -15,7 +15,8 @@ import {
   getTerminalImeModifiedEnterKind,
   isTerminalImeConsumedKey,
   isTerminalImeEnterKeyUp,
-  isTerminalImeProcessEnter
+  isTerminalImeProcessEnter,
+  sendTerminalInputAfterComposition
 } from './terminal-ime-deferred-newline'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
@@ -629,7 +630,32 @@ export function useTerminalKeyboardShortcuts({
           deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
           return
         }
+        // Why: the composed glyph reaches the pty from the composition session-end handler, which
+        // runs after this keydown. Sending now puts a cursor chord ahead of the text it was typed
+        // after — `가나다` then Cmd+Left leaves `다가나` (#12871). Enter is handled above, where a
+        // fallback timer is right because a newline arriving late still arrives; a chord arriving
+        // mid-preedit is the corruption itself, so this one waits without a deadline.
+        if (e.isComposing || hasPendingImeComposition) {
+          sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput, {
+            fallbackMs: null
+          })
+          return
+        }
         sendResolvedInput()
+        return
+      }
+
+      if (action.type === 'selectAll') {
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        if (!e.repeat) {
+          nativeOnlyShortcutTracker.armKeyDown(e)
+          pane.terminal.selectAll()
+        }
+        e.preventDefault()
+        e.stopImmediatePropagation()
         return
       }
 
@@ -637,8 +663,7 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      // Cmd/Ctrl+Shift+C copies terminal selection via Electron clipboard.
-      // This ensures Linux terminal copy works consistently.
+      // Why: bypass xterm's hidden textarea and Kitty encoder for terminal copy bindings.
       if (action.type === 'copySelection') {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {

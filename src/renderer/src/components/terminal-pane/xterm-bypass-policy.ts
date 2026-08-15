@@ -1,4 +1,5 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
 import {
   isTerminalImeCandidateDigitKeyEvent,
   isTerminalImeCandidateSelectionKeyEvent
@@ -84,33 +85,6 @@ function isSingleNonAsciiPrintableText(key: string): boolean {
   return codePoint !== undefined && codePoint >= 0x80
 }
 
-/**
- * Why: kept from #13128 when the rest of it was reverted. The native-text
- * forwarder only claims keys for input sources in its hardcoded CJK allowlist,
- * so third-party IMEs off that list (Qingg, issue #10896) never get their
- * backslash-position key claimed and xterm sends the raw `\` instead of `、`.
- * Bypassing keydown lets Chromium's text pipeline produce the layout character.
- * Scoped to the bare backslash key: broadening this to all non-ASCII text would
- * race the forwarder and double-send.
- */
-export function shouldBypassXtermForMacNativeText(
-  event: XtermBypassEvent,
-  isMac: boolean,
-  kittyKeyboardActive = false
-): boolean {
-  if (
-    !isMac ||
-    !isXtermHandledKeyEvent(event.type) ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.altKey ||
-    event.shiftKey
-  ) {
-    return false
-  }
-  return !kittyKeyboardActive && event.code === 'Backslash'
-}
-
 function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
 }
@@ -178,10 +152,33 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
   )
 }
 
+/**
+ * A logical key a Latin layout could have produced. Only then is `key` authoritative:
+ * Dvorak moving `c` elsewhere is a real remap and must be honoured.
+ */
+function isLatinLetterKey(normalizedKey: string): boolean {
+  return normalizedKey.length === 1 && normalizedKey >= 'a' && normalizedKey <= 'z'
+}
+
 function isTerminalInterruptCKey(event: XtermBypassEvent): boolean {
   const normalizedKey = event.key.toLowerCase()
-  const logicalKeyAvailable = normalizedKey !== '' && normalizedKey !== 'unidentified'
-  return logicalKeyAvailable ? normalizedKey === 'c' : event.code === 'KeyC' || event.keyCode === 67
+  if (isLatinLetterKey(normalizedKey)) {
+    return normalizedKey === 'c'
+  }
+  // A non-Latin input source reports its own glyph here — a Hangul jamo on Korean 2-Set,
+  // Cyrillic es on Russian — and cannot express a control chord in `key` at all. Ask the
+  // layout map what this physical key produces unmodified: for an IME layered over a Latin
+  // layout that answers `c`, and for a Dvorak base it answers `j`, which correctly declines.
+  const layoutBaseKey = event.code
+    ? getLayoutBaseCharacterForCode(event.code)?.toLowerCase()
+    : undefined
+  if (layoutBaseKey !== undefined && isLatinLetterKey(layoutBaseKey)) {
+    return layoutBaseKey === 'c'
+  }
+  // Why the physical fallback: on a true non-Latin *layout* the map is non-Latin too, so it
+  // cannot answer the question either. Terminals resolve control chords by physical position,
+  // so KeyC is the interrupt. Empty and Unidentified land here as they always did.
+  return event.code === 'KeyC' || event.keyCode === 67
 }
 
 function isPlainCtrlC(event: XtermBypassEvent): boolean {
@@ -249,9 +246,6 @@ export function shouldBypassXtermKeyboardEvent(
   }
 
   const { isMac, hasSelection } = options
-  if (shouldBypassXtermForMacNativeText(event, isMac, (options.kittyKeyboardFlags ?? 0) !== 0)) {
-    return true
-  }
   const platformModifierHeld = isMac
     ? event.metaKey && !event.ctrlKey
     : event.ctrlKey && !event.metaKey

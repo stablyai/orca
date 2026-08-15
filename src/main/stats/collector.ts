@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'node:path'
-import type { StatsSummary } from '../../shared/types'
+import type { StatsSummary } from '../../shared/process-stats-types'
 import type { StatsEvent, StatsAggregates } from './types'
 import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'
 import { StatsSnapshotWriter } from './stats-snapshot-writer'

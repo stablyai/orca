@@ -13,6 +13,7 @@ import {
   PanelRightClose,
   Pencil,
   SquareTerminal,
+  TextSelect,
   X
 } from 'lucide-react'
 import {
@@ -24,7 +25,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
@@ -43,6 +44,7 @@ type TerminalContextMenuProps = {
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
   onCopy: () => void
+  onSelectAll: () => void
   onPaste: () => void
   onSplitRight: () => void
   onSplitDown: () => void
@@ -81,6 +83,7 @@ export default function TerminalContextMenu({
   canExpandPane,
   menuPaneIsExpanded,
   onCopy,
+  onSelectAll,
   onPaste,
   onSplitRight,
   onSplitDown,
@@ -113,6 +116,7 @@ export default function TerminalContextMenu({
   const shortcuts = useMemo(
     () => ({
       copy: formatPrimaryShortcutLabel('terminal.copySelection', keybindings),
+      selectAll: formatPrimaryShortcutLabel('terminal.selectAll', keybindings),
       paste: formatPrimaryShortcutLabel('terminal.paste', keybindings),
       splitRight: formatPrimaryShortcutLabel('terminal.splitRight', keybindings),
       splitDown: formatPrimaryShortcutLabel('terminal.splitDown', keybindings),
@@ -174,6 +178,11 @@ export default function TerminalContextMenu({
           <Copy />
           {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
           <DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onSelectAll}>
+          <TextSelect />
+          {translate('auto.components.terminal.pane.TerminalContextMenu.selectAll', 'Select All')}
+          <DropdownMenuShortcut>{shortcuts.selectAll}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onPaste}>
           <Clipboard />

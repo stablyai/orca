@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import {
   getAutoExpandedTaskProvider,
   getIncompleteVisibleTaskProviders,

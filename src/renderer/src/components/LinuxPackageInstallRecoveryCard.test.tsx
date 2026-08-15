@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, type RenderResult } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LinuxPackageInstallRecovery } from '../../../shared/types'
+import type { LinuxPackageInstallRecovery } from '../../../shared/update-status-types'
 import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
 
 const RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/v1.4.200'

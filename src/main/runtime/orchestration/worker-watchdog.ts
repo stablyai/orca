@@ -26,7 +26,7 @@ export type PreparedWorkerWatchdogLaunch = {
   requestPath: string
 }
 
-export type WorkerWatchdogTerminalShell = 'posix' | 'cmd' | 'powershell'
+export type WorkerWatchdogTerminalShell = 'posix' | 'fish' | 'cmd' | 'powershell'
 
 export function resolveWorkerWatchdogEntryPath(
   deps: Pick<
@@ -116,7 +116,7 @@ export function launchWatchedWorker(
     child.stdout.on('data', (chunk) => {
       stdout += String(chunk)
       const newline = stdout.indexOf('\n')
-      if (newline < 0) {
+      if (newline === -1) {
         if (stdout.length > 16_384) {
           fail(new Error('Worker watchdog startup acknowledgement exceeded its size limit.'))
         }
@@ -182,7 +182,7 @@ export function buildWorkerWatchdogTerminalCommand(args: {
   shell: WorkerWatchdogTerminalShell
 }): string {
   const values = [args.execPath, args.prepared.entryPath, args.prepared.requestPath]
-  if (args.shell === 'posix') {
+  if (args.shell === 'posix' || args.shell === 'fish') {
     return `exec ${values.map(quotePosix).join(' ')}`
   }
   if (args.shell === 'powershell') {

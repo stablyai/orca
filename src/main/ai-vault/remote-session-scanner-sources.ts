@@ -102,6 +102,13 @@ export function remoteSessionSources(
       partitionSubagentTranscripts: partitionOmpSubagentTranscriptPaths
     },
     jsonlSource(
+      'prime-agent',
+      remoteHome,
+      hostPlatform,
+      remotePrimeAgentSessionsSegments(),
+      primeAgentParser
+    ),
+    jsonlSource(
       'droid',
       remoteHome,
       hostPlatform,
@@ -264,6 +271,16 @@ function ompParser(
   return parseMessageGraphSessionContent('omp', file, content, platform, options, signal)
 }
 
+function primeAgentParser(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: RemoteParserOptions,
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  return parseMessageGraphSessionContent('prime-agent', file, content, platform, options, signal)
+}
+
 function openClawParser(
   file: FileWithMtime,
   content: string,
@@ -284,4 +301,11 @@ function remotePiSessionsSegments(): string[] {
 
 function remoteOmpSessionsSegments(): string[] {
   return normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
+}
+
+// Why: remote roots are posix regardless of the client platform, so these stay literal
+// rather than round-tripping through a local-platform path join that would emit
+// backslashes on a Windows client and collapse into a single bogus segment.
+function remotePrimeAgentSessionsSegments(): string[] {
+  return ['.prime', 'agent', 'sessions']
 }

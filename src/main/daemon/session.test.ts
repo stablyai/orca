@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
+import { HeadlessEmulator } from './headless-emulator'
 import type { SessionState, ShellReadyState } from './types'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
@@ -334,6 +335,23 @@ describe('Session', () => {
   })
 
   describe('shell readiness gating', () => {
+    // Why: the renderer's DA1 reply would be queued here, and a shell that withholds its
+    // first prompt until DA1 is answered never emits the marker that would release it.
+    it('answers DA1 once without forwarding it to a renderer', () => {
+      createSession({ shellReadySupported: true })
+      const onData = vi.fn((d: string) => d === '\x1b[0c' && session.write('\x1b[?1;2c'))
+      session.attachClient({ onData, onExit: () => {} })
+
+      subprocess.simulateData('\x1b[0c')
+
+      expect(onData).toHaveBeenCalledWith('', '\x1b[0c'.length, true, '\x1b[0c'.length)
+      expect(session.takePendingOutput(false)?.records).toEqual([])
+      expect(session.getSnapshot()?.outputSequence).toBe('\x1b[0c'.length)
+      subprocess.simulateData('\x1b]777;orca-shell-ready\x07prompt')
+      vi.advanceTimersByTime(30)
+      expect(subprocess.written).toEqual(['\x1b[?1;2c'])
+    })
+
     // Why: regression guard for "claude claude" double-echo. The marker fires
     // from precmd before readline switches the PTY into raw mode; flushing
     // then lets the kernel re-echo the command under the prompt. Detailed
@@ -413,6 +431,29 @@ describe('Session', () => {
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain('orca-shell-ready')
     })
 
+    it.each([
+      ['after the ready marker', ['\x1b]777;orca-shell-ready\x07', '\x1b[?2004hfish> ']],
+      ['after the ESC introducer', ['\x1b]777;orca-shell-ready\x07\x1b', '[?2004hfish> ']]
+    ])('preserves Fish bracketed-paste output split %s', (_boundary, chunks) => {
+      createSession({ shellReadySupported: true })
+      const received: string[] = []
+      session.attachClient({
+        onData: (data) => received.push(data),
+        onExit: () => {}
+      })
+
+      for (const chunk of chunks) {
+        subprocess.simulateData(chunk)
+      }
+
+      const output = received.join('')
+      expect(output).toBe('\x1b[?2004hfish> ')
+      const rendered = new HeadlessEmulator({ cols: 80, rows: 24 })
+      expect(rendered.writeSync(output)).toBe(true)
+      expect(rendered.getVisibleLines().join('\n')).not.toContain('[?2004h')
+      rendered.dispose()
+    })
+
     it('publishes an absolute output sequence with live snapshots', () => {
       createSession()
       subprocess.simulateData('first')
@@ -459,6 +500,19 @@ describe('Session', () => {
       ])
     })
 
+    it('exposes drained output beside an includeSnapshot take without changing records', () => {
+      createSession()
+      subprocess.simulateData('kept-for-durable-history\r\n')
+
+      const taken = session.takePendingOutput(true)
+
+      expect(taken?.records).toEqual([])
+      expect(taken?.drainedRecords).toEqual([
+        { kind: 'output', data: 'kept-for-durable-history\r\n' }
+      ])
+      expect(taken?.snapshot).toBeTruthy()
+    })
+
     it('keeps held marker-prefix bytes during live take-with-snapshot', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
       session.write('codex\n')
@@ -469,6 +523,7 @@ describe('Session', () => {
       vi.advanceTimersByTime(30)
 
       expect(taken?.records).toEqual([])
+      expect(taken?.drainedRecords).toEqual([])
       expect(taken?.snapshot).toBeTruthy()
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
       expect(subprocess.written).toEqual(['codex\n'])

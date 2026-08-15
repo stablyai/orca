@@ -4,18 +4,20 @@ reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
 import { ipcMain } from 'electron'
 import { resolve } from 'node:path'
+import type { GitHubReactionContent } from '../../shared/github/comment-types'
 import type {
-  Repo,
-  GitHubCreateIssueFields,
-  GitHubIssueUpdate,
-  GitHubOwnerRepo,
-  GitHubPullRequestStateUpdate,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshReason,
-  PRRefreshOutcome,
-  GitHubPRFile
-} from '../../shared/types'
+  PRRefreshOutcome
+} from '../../shared/github/pull-request-refresh-types'
+import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
+import type {
+  GitHubCreateIssueFields,
+  GitHubIssueUpdate,
+  GitHubPullRequestStateUpdate
+} from '../../shared/issue-mutation-types'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
@@ -39,6 +41,7 @@ import {
   getPRChecks,
   getPRCheckDetails,
   getPRComments,
+  setPRCommentReaction,
   resolveReviewThread,
   setPRFileViewed,
   addPRReviewComment,
@@ -105,7 +108,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
-} from '../../shared/github-project-types'
+} from '../../shared/github/project-types'
 import { appStarSourceSchema } from '../../shared/gh-star-source'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
@@ -662,6 +665,36 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.prNumber,
         { noCache: args.noCache, prRepo: args.prRepo ?? null },
         repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:setPRCommentReaction',
+    (
+      _event,
+      args: {
+        repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
+        reactionSubjectId: string
+        content: GitHubReactionContent
+        reacted: boolean
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      if (!args.reactionSubjectId?.trim()) {
+        return false
+      }
+      return setPRCommentReaction(
+        repo.path,
+        args.reactionSubjectId.trim(),
+        args.content,
+        args.reacted,
+        repoConnectionId(repo),
+        args.prRepo ?? null,
         ...localGitOptionArgs(store, repo)
       )
     }

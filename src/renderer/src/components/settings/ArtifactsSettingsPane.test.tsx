@@ -15,12 +15,17 @@ const mocks = vi.hoisted(() => ({
       configured: true,
       state: 'connected'
     } as Record<string, unknown> | null,
-    orcaProfileConnecting: false
+    orcaProfileConnecting: false,
+    isWebClient: false
   }
 }))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
+}))
+
+vi.mock('@/lib/web-client-location', () => ({
+  isWebClientLocation: () => mocks.state.isWebClient
 }))
 
 vi.mock('@/store', () => ({
@@ -42,6 +47,7 @@ describe('ArtifactsSettingsPane', () => {
     mocks.openArtifactsPage.mockReset()
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'connected' }
     mocks.state.orcaProfileConnecting = false
+    mocks.state.isWebClient = false
   })
 
   afterEach(cleanup)
@@ -55,13 +61,15 @@ describe('ArtifactsSettingsPane', () => {
     )
 
     expect(screen.getByText('How to use Artifacts')).toBeInTheDocument()
-    expect(screen.getByText('Ask your agent to share it')).toBeInTheDocument()
+    expect(screen.getByText('Choose a file to share')).toBeInTheDocument()
     expect(
-      screen.getByText('For example: “Share this HTML mock as an artifact.”')
+      screen.getByText(
+        'Open an HTML or Markdown file and select Share as artifact, or ask an agent to share it.'
+      )
     ).toBeInTheDocument()
-    expect(screen.getByText('Share the public link')).toBeInTheDocument()
+    expect(screen.getByText('Copy the public link')).toBeInTheDocument()
     expect(
-      screen.getByText('Your agent returns a link that anyone with the URL can view.')
+      screen.getByText('After publishing, copy the link and send it to your team.')
     ).toBeInTheDocument()
     expect(screen.getByText('Manage it in Orca')).toBeInTheDocument()
     expect(
@@ -129,5 +137,91 @@ describe('ArtifactsSettingsPane', () => {
     expect(openButton).toBeEnabled()
     await user.click(openButton)
     expect(mocks.openArtifactsPage).toHaveBeenCalledOnce()
+  })
+
+  it('describes public publishing and existing-link retention', () => {
+    render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+
+    expect(
+      screen.getByRole('switch', { name: 'Allow publishing public artifact links' })
+    ).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText(/Publish HTML and Markdown files as links/)).toBeInTheDocument()
+    expect(screen.getByText(/Existing links remain until you delete them/)).toBeInTheDocument()
+    expect(screen.queryByText(/Off by default/)).not.toBeInTheDocument()
+  })
+
+  it('grants and revokes the publish capability through the toggle', async () => {
+    const user = userEvent.setup()
+    const updateSettings = vi.fn()
+    const { rerender } = render(
+      <ArtifactsSettingsPane
+        settings={{ ...getDefaultSettings('/tmp'), artifactSharingEnabled: false }}
+        updateSettings={updateSettings}
+      />
+    )
+
+    await user.click(screen.getByRole('switch', { name: 'Allow publishing public artifact links' }))
+    expect(updateSettings).toHaveBeenCalledWith({ artifactSharingEnabled: true })
+
+    rerender(
+      <ArtifactsSettingsPane
+        settings={{ ...getDefaultSettings('/tmp'), artifactSharingEnabled: true }}
+        updateSettings={updateSettings}
+      />
+    )
+    const toggle = screen.getByRole('switch', { name: 'Allow publishing public artifact links' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await user.click(toggle)
+    expect(updateSettings).toHaveBeenLastCalledWith({ artifactSharingEnabled: false })
+  })
+
+  it('makes the capability read-only on web, where the grant never reaches the host', async () => {
+    const user = userEvent.setup()
+    const updateSettings = vi.fn()
+    mocks.state.isWebClient = true
+    render(
+      <ArtifactsSettingsPane
+        settings={{ ...getDefaultSettings('/tmp'), artifactSharingEnabled: true }}
+        updateSettings={updateSettings}
+      />
+    )
+
+    const toggle = screen.getByRole('switch', { name: 'Allow publishing public artifact links' })
+    // Mirrors the host value so web never claims a capability the host is not enforcing.
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    expect(toggle).toBeDisabled()
+    await user.click(toggle)
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(screen.getByText(/Desktop only/)).toBeInTheDocument()
+  })
+
+  it('leads with the opt-in step while publishing is off, and drops it once granted', () => {
+    const { rerender } = render(
+      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
+
+    expect(screen.getByText('Enable artifact sharing')).toBeInTheDocument()
+    expect(
+      screen.getByText('Turn on “Allow publishing public artifact links” above.')
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Enable artifact sharing above/)).toBeInTheDocument()
+
+    rerender(
+      <ArtifactsSettingsPane
+        settings={{ ...getDefaultSettings('/tmp'), artifactSharingEnabled: true }}
+        updateSettings={vi.fn()}
+      />
+    )
+    expect(screen.queryByText('Enable artifact sharing')).not.toBeInTheDocument()
+    expect(screen.getByText('Choose a file to share')).toBeInTheDocument()
+  })
+
+  it('points web clients at the desktop app for the opt-in step', () => {
+    mocks.state.isWebClient = true
+    render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+
+    expect(
+      screen.getByText(/Open Settings → Artifacts in the Orca desktop app on the host device/)
+    ).toBeInTheDocument()
   })
 })

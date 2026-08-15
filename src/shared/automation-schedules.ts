@@ -301,7 +301,7 @@ export function parseAutomationRrule(rrule: string): {
   }
   const dayCode = rule.byDay[0]
   const dayOfWeek = DAY_CODES.indexOf(dayCode as (typeof DAY_CODES)[number])
-  if (dayOfWeek < 0) {
+  if (dayOfWeek === -1) {
     throw new Error('Invalid recurrence day.')
   }
   return {

@@ -1,14 +1,11 @@
-/* eslint-disable max-lines -- Why: this store owns Codex analytics persistence, scan policy, and renderer query semantics. Keeping them together prevents the Codex range/scope rules from drifting away from the scanner’s event model. */
+/* eslint-disable max-lines -- Why: Codex pricing, range, scope, breakdown, and automation-attribution policies remain one cohesive store. */
 import { app } from 'electron'
 import { join } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint,
   CodexUsageRange,
-  CodexUsageScanState,
   CodexUsageScope,
   CodexUsageSessionRow,
   CodexUsageSnapshot,
@@ -16,13 +13,12 @@ import type {
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
-import { createWorktreeRefs } from '../usage/usage-worktree-refs'
 import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
+import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
+import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
-const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
 let _codexUsageFile: string | null = null
@@ -308,31 +304,6 @@ function estimateCostUsd(
   )
 }
 
-function getRangeCutoff(range: CodexUsageRange): string | null {
-  if (range === 'all') {
-    return null
-  }
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  now.setDate(now.getDate() - (days - 1))
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getLocalDay(timestamp: string): string | null {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-  const year = parsed.getFullYear()
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 type ScopedCodexUsageModelRow = {
   modelKey: string
   modelLabel: string
@@ -345,78 +316,21 @@ type ScopedCodexUsageModelRow = {
   totalTokens: number
 }
 
-function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
-  const rows = [...worktreesByRepo.entries()]
-    .flatMap(([repoId, worktrees]) =>
-      worktrees.map((worktree) =>
-        JSON.stringify({
-          repoId,
-          worktreeId: worktree.worktreeId,
-          path: worktree.path,
-          displayName: worktree.displayName
-        })
-      )
-    )
-    .sort()
-  return JSON.stringify(rows)
-}
-
-export class CodexUsageStore {
-  private state: CodexUsagePersistedState
-  private readonly store: Store
-  private scanPromise: Promise<void> | null = null
-  // Why: the 60 MB usage JSON must not block the Electron main thread; the writer serializes writes
-  // and vetoes superseded renames.
-  private readonly writer = new UsageCacheSnapshotWriter('[codex-usage]', getCodexUsageFile)
-
-  constructor(store: Store) {
-    this.store = store
-    this.state = this.load()
-  }
-
-  private load(): CodexUsagePersistedState {
-    try {
-      const usageFile = getCodexUsageFile()
-      if (!existsSync(usageFile)) {
-        return getDefaultState()
-      }
-      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as CodexUsagePersistedState
-      return normalizePersistedState({
-        ...getDefaultState(),
-        ...parsed,
-        scanState: {
-          ...getDefaultState().scanState,
-          ...parsed.scanState
-        }
-      })
-    } catch (error) {
-      console.error('[codex-usage] Failed to load persisted state, starting fresh:', error)
-      return getDefaultState()
-    }
-  }
-
-  private writeToDisk(): Promise<void> {
-    // Compact: this cache reaches 60 MB, and pretty-printing it costs main-thread time per scan.
-    return this.writer.write(() => JSON.stringify(this.state))
-  }
-
-  /** Await queued cache writes so quit does not drop the final snapshot. */
-  flush(): Promise<void> {
-    return this.writer.flush()
-  }
-
-  async setEnabled(enabled: boolean): Promise<CodexUsageScanState> {
-    this.state.scanState.enabled = enabled
-    await this.writeToDisk()
-    return this.getScanState()
-  }
-
-  getScanState(): CodexUsageScanState {
-    return {
-      ...this.state.scanState,
-      isScanning: this.scanPromise !== null,
-      hasAnyCodexData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
-    }
+export class CodexUsageStore extends UsageProviderStoreLifecycle<
+  'processedFiles',
+  CodexUsagePersistedState,
+  'hasAnyCodexData'
+> {
+  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+    super(store, {
+      logTag: '[codex-usage]',
+      resolveCacheFile: getCodexUsageFile,
+      createDefaultState: getDefaultState,
+      normalizeState: normalizePersistedState,
+      sourceKey: 'processedFiles',
+      dataPresenceKey: 'hasAnyCodexData',
+      scan: codexUsageProvider.scan
+    })
   }
 
   getSnapshot(
@@ -432,61 +346,6 @@ export class CodexUsageStore {
       projectBreakdown: this.buildBreakdown(scope, range, 'project'),
       recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
     }
-  }
-
-  async refresh(force = false): Promise<CodexUsageScanState> {
-    if (!this.state.scanState.enabled) {
-      return this.getScanState()
-    }
-    const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
-    if (!force && this.state.scanState.lastScanCompletedAt) {
-      const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
-      if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
-        return this.getScanState()
-      }
-    }
-    await this.runScan()
-    return this.getScanState()
-  }
-
-  private async runScan(): Promise<void> {
-    if (this.scanPromise) {
-      await this.scanPromise
-      return
-    }
-
-    this.state.scanState.lastScanStartedAt = Date.now()
-    this.state.scanState.lastScanError = null
-    // Why no write here: persisting scan-start would rewrite the whole multi-MB cache before a single
-    // result changed. The completion/failure write below persists the same fields.
-
-    this.scanPromise = (async () => {
-      try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await codexUsageProvider.scan(
-          createWorktreeRefs(repos, worktreesByRepo),
-          this.state.worktreeFingerprint === worktreeFingerprint ? this.state.processedFiles : []
-        )
-        this.state.processedFiles = result.processedFiles
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
-        this.state.worktreeFingerprint = worktreeFingerprint
-        this.state.scanState.lastScanCompletedAt = Date.now()
-        this.state.scanState.lastScanError = null
-        // Why swallow: persistence is a cache concern. A disk failure must not turn a good scan into
-        // a scan error and reject refresh() for every query caller; writeToDisk already logs it.
-        await this.writeToDisk().catch(() => {})
-      } catch (error) {
-        this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        await this.writeToDisk().catch(() => {})
-      } finally {
-        this.scanPromise = null
-      }
-    })()
-
-    await this.scanPromise
   }
 
   async getSummary(scope: CodexUsageScope, range: CodexUsageRange): Promise<CodexUsageSummary> {
@@ -888,7 +747,7 @@ export class CodexUsageStore {
   }
 
   private getFilteredDaily(scope: CodexUsageScope, range: CodexUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.dailyAggregates.filter((entry) => {
       if (cutoff && entry.day < cutoff) {
         return false
@@ -901,9 +760,9 @@ export class CodexUsageStore {
   }
 
   private getFilteredSessions(scope: CodexUsageScope, range: CodexUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.sessions.filter((session) => {
-      const day = getLocalDay(session.lastTimestamp)
+      const day = getLocalUsageDay(session.lastTimestamp)
       if (!day) {
         return false
       }
@@ -974,11 +833,5 @@ export class CodexUsageStore {
     return (
       Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
     )
-  }
-
-  private async getCurrentWorktreeFingerprint(): Promise<string> {
-    const repos = this.store.getRepos()
-    const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-    return getWorktreeFingerprint(worktreesByRepo)
   }
 }

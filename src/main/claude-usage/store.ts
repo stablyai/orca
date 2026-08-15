@@ -1,14 +1,11 @@
-/* eslint-disable max-lines -- Why: this store is the single main-process owner for Claude usage persistence, scan gating, and query semantics. Keeping those policy decisions together avoids split-brain range/scope logic across multiple files. */
+/* eslint-disable max-lines -- Why: Claude pricing, range, scope, breakdown, and automation-attribution policies remain one cohesive store. */
 import { app } from 'electron'
-import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
   ClaudeUsageRange,
-  ClaudeUsageScanState,
   ClaudeUsageScope,
   ClaudeUsageSessionRow,
   ClaudeUsageSnapshot,
@@ -16,16 +13,15 @@ import type {
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { ClaudeUsagePersistedState } from './types'
-import { createWorktreeRefs } from '../usage/usage-worktree-refs'
 import { getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
+import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
+import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
 
 // Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
 // caches either lack ownership or used narrower keys and can under/over-count
 // after fork reclaim (#8006).
 const SCHEMA_VERSION = 5
-const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
 // Why: capture the path after configureDevUserDataPath() but before app.setName()
@@ -126,6 +122,21 @@ function getDefaultState(): ClaudeUsagePersistedState {
       lastScanStartedAt: null,
       lastScanCompletedAt: null,
       lastScanError: null
+    }
+  }
+}
+
+function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsagePersistedState {
+  if (state.schemaVersion === SCHEMA_VERSION) {
+    return state
+  }
+  // Scanner changes invalidate totals, but preserving enabled keeps existing tracking on.
+  const defaults = getDefaultState()
+  return {
+    ...defaults,
+    scanState: {
+      ...defaults.scanState,
+      enabled: state.scanState.enabled ?? defaults.scanState.enabled
     }
   }
 }
@@ -288,120 +299,22 @@ function estimateCostUsd(
   )
 }
 
-function getRangeCutoff(range: ClaudeUsageRange): string | null {
-  if (range === 'all') {
-    return null
-  }
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  now.setDate(now.getDate() - (days - 1))
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getLocalDay(timestamp: string): string | null {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-  const year = parsed.getFullYear()
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
-  const rows = [...worktreesByRepo.entries()]
-    .flatMap(([repoId, worktrees]) =>
-      worktrees.map((worktree) =>
-        JSON.stringify({
-          repoId,
-          worktreeId: worktree.worktreeId,
-          path: worktree.path,
-          displayName: worktree.displayName
-        })
-      )
-    )
-    .sort()
-  return JSON.stringify(rows)
-}
-
-export class ClaudeUsageStore {
-  private state: ClaudeUsagePersistedState
-  private readonly store: Store
-  private scanPromise: Promise<void> | null = null
-  // Why: the 20 MB usage JSON must not block the Electron main thread; the writer serializes writes
-  // and vetoes superseded renames.
-  private readonly writer = new UsageCacheSnapshotWriter('[claude-usage]', getClaudeUsageFile)
-
-  constructor(store: Store) {
-    this.store = store
-    this.state = this.load()
-  }
-
-  private load(): ClaudeUsagePersistedState {
-    try {
-      const usageFile = getClaudeUsageFile()
-      if (!existsSync(usageFile)) {
-        return getDefaultState()
-      }
-      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as ClaudeUsagePersistedState
-      if (parsed.schemaVersion !== SCHEMA_VERSION) {
-        // Why: scanner semantics affect persisted totals, so old Claude caches
-        // must be rebuilt after parser/source changes instead of reused briefly.
-        // Preserve scanState.enabled so existing users keep tracking on across
-        // schema bumps; the next refresh will repopulate the analytics.
-        const defaults = getDefaultState()
-        return {
-          ...defaults,
-          scanState: {
-            ...defaults.scanState,
-            enabled: parsed.scanState?.enabled ?? defaults.scanState.enabled
-          }
-        }
-      }
-      return {
-        ...getDefaultState(),
-        ...parsed,
-        scanState: {
-          ...getDefaultState().scanState,
-          ...parsed.scanState
-        }
-      }
-    } catch (error) {
-      // Why: Claude usage is a local analytics feature, not primary workspace
-      // state. A corrupt cache should degrade to a fresh rebuild instead of
-      // preventing Orca from booting, but we leave the file on disk for debugging.
-      console.error('[claude-usage] Failed to load persisted state, starting fresh:', error)
-      return getDefaultState()
-    }
-  }
-
-  private writeToDisk(): Promise<void> {
-    // Pretty-print preserved: humans inspect this analytics cache on disk.
-    return this.writer.write(() => JSON.stringify(this.state, null, 2))
-  }
-
-  /** Await queued cache writes so quit does not drop the final snapshot. */
-  flush(): Promise<void> {
-    return this.writer.flush()
-  }
-
-  async setEnabled(enabled: boolean): Promise<ClaudeUsageScanState> {
-    this.state.scanState.enabled = enabled
-    await this.writeToDisk()
-    return this.getScanState()
-  }
-
-  getScanState(): ClaudeUsageScanState {
-    return {
-      ...this.state.scanState,
-      isScanning: this.scanPromise !== null,
-      hasAnyClaudeData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
-    }
+export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
+  'processedFiles',
+  ClaudeUsagePersistedState,
+  'hasAnyClaudeData'
+> {
+  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+    super(store, {
+      logTag: '[claude-usage]',
+      resolveCacheFile: getClaudeUsageFile,
+      createDefaultState: getDefaultState,
+      normalizeState: normalizePersistedState,
+      sourceKey: 'processedFiles',
+      dataPresenceKey: 'hasAnyClaudeData',
+      jsonIndent: 2,
+      scan: scanClaudeUsageFiles
+    })
   }
 
   getSnapshot(
@@ -417,63 +330,6 @@ export class ClaudeUsageStore {
       projectBreakdown: this.buildBreakdown(scope, range, 'project'),
       recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
     }
-  }
-
-  async refresh(force = false): Promise<ClaudeUsageScanState> {
-    if (!this.state.scanState.enabled) {
-      return this.getScanState()
-    }
-    const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
-    if (!force && this.state.scanState.lastScanCompletedAt) {
-      const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
-      if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
-        return this.getScanState()
-      }
-    }
-    await this.runScan()
-    return this.getScanState()
-  }
-
-  private async runScan(): Promise<void> {
-    if (this.scanPromise) {
-      await this.scanPromise
-      return
-    }
-
-    this.state.scanState.lastScanStartedAt = Date.now()
-    this.state.scanState.lastScanError = null
-
-    // Why no write here: persisting scan-start would rewrite the whole multi-MB cache before a single
-    // result changed. The completion/failure write below persists the same fields.
-
-    // Why: assign scanPromise before any await so concurrent refresh shares one scan.
-    this.scanPromise = (async () => {
-      try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await scanClaudeUsageFiles(
-          createWorktreeRefs(repos, worktreesByRepo),
-          this.state.worktreeFingerprint === worktreeFingerprint ? this.state.processedFiles : []
-        )
-        this.state.processedFiles = result.processedFiles
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
-        this.state.worktreeFingerprint = worktreeFingerprint
-        this.state.scanState.lastScanCompletedAt = Date.now()
-        this.state.scanState.lastScanError = null
-        // Why swallow: persistence is a cache concern. A disk failure must not turn a good scan into
-        // a scan error and reject refresh() for every query caller; writeToDisk already logs it.
-        await this.writeToDisk().catch(() => {})
-      } catch (error) {
-        this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        await this.writeToDisk().catch(() => {})
-      } finally {
-        this.scanPromise = null
-      }
-    })()
-
-    await this.scanPromise
   }
 
   async getSummary(scope: ClaudeUsageScope, range: ClaudeUsageRange): Promise<ClaudeUsageSummary> {
@@ -843,7 +699,7 @@ export class ClaudeUsageStore {
   }
 
   private getFilteredDaily(scope: ClaudeUsageScope, range: ClaudeUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.dailyAggregates.filter((entry) => {
       if (cutoff && entry.day < cutoff) {
         return false
@@ -856,12 +712,12 @@ export class ClaudeUsageStore {
   }
 
   private getFilteredSessions(scope: ClaudeUsageScope, range: ClaudeUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.sessions.filter((session) => {
       // Why: daily aggregates use local calendar days, so session filtering has
       // to use the same conversion or the sessions table/counts can disagree
       // with the chart around UTC day boundaries.
-      const day = getLocalDay(session.lastTimestamp)
+      const day = getLocalUsageDay(session.lastTimestamp)
       if (!day) {
         return false
       }
@@ -882,11 +738,5 @@ export class ClaudeUsageStore {
     return (
       Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
     )
-  }
-
-  private async getCurrentWorktreeFingerprint(): Promise<string> {
-    const repos = this.store.getRepos()
-    const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-    return getWorktreeFingerprint(worktreesByRepo)
   }
 }

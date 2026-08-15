@@ -1,8 +1,11 @@
 import { randomBytes } from 'node:crypto'
 import {
   chmodSync,
+  closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   renameSync,
   rmSync,
   statSync,
@@ -39,6 +42,8 @@ const DEFAULT_HARDENING_CACHE_BOUNDS: SecurePathHardeningCacheBounds = {
   maxKeyBytes: SECURE_PATH_HARDENING_CACHE_KEY_MAX_BYTES,
   maxTotalKeyBytes: SECURE_PATH_HARDENING_CACHE_KEYS_MAX_BYTES
 }
+
+const UNSUPPORTED_DIRECTORY_FSYNC_CODES = new Set(['EINVAL', 'ENOTSUP', 'EOPNOTSUPP'])
 
 // Why: PowerShell hardening (~1-1.5s) stalls the main thread, so cache idempotent re-hardens per process.
 let hardenedPathsThisProcess = new SecurePathHardeningCache<HardenedPathCacheEntry>(
@@ -87,7 +92,15 @@ export function writeSecureJsonFile(targetPath: string, value: unknown): void {
   writeSecureFile(targetPath, JSON.stringify(value, null, 2))
 }
 
-export function writeSecureFile(targetPath: string, contents: string): void {
+export function writeDurableSecureJsonFile(targetPath: string, value: unknown): void {
+  writeSecureFile(targetPath, JSON.stringify(value, null, 2), { durable: true })
+}
+
+export function writeSecureFile(
+  targetPath: string,
+  contents: string,
+  options: { durable?: boolean } = {}
+): void {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -101,6 +114,9 @@ export function writeSecureFile(targetPath: string, contents: string): void {
       encoding: 'utf-8',
       mode: 0o600
     })
+    if (options.durable) {
+      fsyncFileSync(tmpFile)
+    }
     // Why: writeFileSync mode is a no-op on Windows, so restrict the credential's ACL synchronously before the rename publishes it under inherited ACLs.
     applySecurePathRestriction(tmpFile, false, process.platform, true)
     renameSync(tmpFile, targetPath)
@@ -108,8 +124,42 @@ export function writeSecureFile(targetPath: string, contents: string): void {
     if (applySecurePathRestriction(targetPath, false, process.platform, true)) {
       rememberHardenedPath(targetPath, false)
     }
+    if (options.durable) {
+      bestEffortFsyncDirectorySync(dir)
+    }
   } catch (error) {
     rmSync(tmpFile, { force: true })
+    throw error
+  }
+}
+
+function fsyncPathSync(path: string, flags: 'r' | 'r+'): void {
+  const descriptor = openSync(path, flags)
+  try {
+    fsyncSync(descriptor)
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
+export function fsyncFileSync(path: string): void {
+  // FlushFileBuffers requires a write-capable handle on Windows.
+  fsyncPathSync(path, process.platform === 'win32' ? 'r+' : 'r')
+}
+
+export function bestEffortFsyncDirectorySync(directory: string): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  try {
+    fsyncPathSync(directory, 'r')
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      UNSUPPORTED_DIRECTORY_FSYNC_CODES.has((error as NodeJS.ErrnoException).code ?? '')
+    ) {
+      return
+    }
     throw error
   }
 }

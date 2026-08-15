@@ -46,12 +46,12 @@ import type {
   ListProjectViewsResult,
   ResolveProjectRefArgs,
   ResolveProjectRefResult
-} from '../../shared/github-project-types'
+} from '../../shared/github/project-types'
 import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   isGitHubProjectRefInputTooLarge
-} from '../../shared/github-project-ref-input'
-import { githubProjectHost } from '../../shared/github-project-identity'
+} from '../../shared/github/project-ref-input'
+import { githubProjectHost } from '../../shared/github/project-identity'
 
 // Re-export the public API so existing `./project-view` call sites keep working; the split is internal-only.
 export { isValidOwnerSlug, isValidRepoSlug } from './project-view/internals'

@@ -1,24 +1,15 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import type * as FsPromises from 'node:fs/promises'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   OpenCodeUsageDailyAggregate,
-  OpenCodeUsagePersistedDatabase,
   OpenCodeUsagePersistedState,
   OpenCodeUsageSession
 } from './types'
 
-const { getPathMock, writeOpens, writeGate } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata'),
-  // Why only mode 'w': the durable write also opens the directory read-only to fsync it, so counting
-  // every open would hide a regression back to multiple full-cache rewrites per scan.
-  writeOpens: { value: 0, inFlight: 0, maxConcurrent: 0 },
-  writeGate: {
-    blocked: false,
-    waiters: [] as (() => void)[]
-  }
+const { getPathMock } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
 }))
 
 vi.mock('electron', () => ({
@@ -27,29 +18,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('node:fs/promises', async () => {
-  const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
-  return {
-    ...actual,
-    open: (async (...args: Parameters<typeof actual.open>) => {
-      if (args[1] !== 'w') {
-        return actual.open(...args)
-      }
-      writeOpens.value += 1
-      writeOpens.inFlight += 1
-      writeOpens.maxConcurrent = Math.max(writeOpens.maxConcurrent, writeOpens.inFlight)
-      try {
-        if (writeGate.blocked) {
-          await new Promise<void>((resolve) => writeGate.waiters.push(resolve))
-        }
-        return await actual.open(...args)
-      } finally {
-        writeOpens.inFlight -= 1
-      }
-    }) as typeof actual.open
-  }
-})
-
 vi.mock('./scanner', () => ({
   scanOpenCodeUsageDatabases: vi.fn()
 }))
@@ -57,24 +25,7 @@ vi.mock('./scanner', () => ({
 import { OpenCodeUsageStore, initOpenCodeUsagePath, normalizePersistedState } from './store'
 import { scanOpenCodeUsageDatabases } from './scanner'
 
-type ScanResult = {
-  processedDatabases: OpenCodeUsagePersistedDatabase[]
-  sessions: OpenCodeUsageSession[]
-  dailyAggregates: OpenCodeUsageDailyAggregate[]
-}
-
-function createDeferred<T>(): {
-  promise: Promise<T>
-  resolve: (value: T) => void
-} {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((promiseResolve) => {
-    resolve = promiseResolve
-  })
-  return { promise, resolve }
-}
-
-function createEmptyScanResult(): ScanResult {
+function createEmptyScanResult() {
   return {
     processedDatabases: [],
     sessions: [],
@@ -101,9 +52,8 @@ function getDefaultState(): OpenCodeUsagePersistedState {
 function createStoreWithState(state: Partial<OpenCodeUsagePersistedState>): OpenCodeUsageStore {
   const store = new OpenCodeUsageStore({
     getRepos: () => [],
-    getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => undefined
-  } as never)
+    getAllWorktreeMeta: () => ({})
+  })
 
   ;(store as unknown as { state: OpenCodeUsagePersistedState }).state = {
     ...getDefaultState(),
@@ -212,11 +162,6 @@ describe('OpenCodeUsageStore', () => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initOpenCodeUsagePath()
-    writeOpens.value = 0
-    writeOpens.inFlight = 0
-    writeOpens.maxConcurrent = 0
-    writeGate.blocked = false
-    writeGate.waiters = []
     vi.mocked(scanOpenCodeUsageDatabases).mockReset()
     vi.mocked(scanOpenCodeUsageDatabases).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()
@@ -228,7 +173,7 @@ describe('OpenCodeUsageStore', () => {
     rmSync(tempUserData, { recursive: true, force: true })
   })
 
-  it('persists a successful refresh with one full-cache write', async () => {
+  it('adapts OpenCode scans to pretty-printed cache persistence', async () => {
     const store = createStoreWithState({
       scanState: {
         enabled: true,
@@ -240,89 +185,9 @@ describe('OpenCodeUsageStore', () => {
 
     await store.refresh(true)
 
-    // Why exactly one: a refresh that rewrites the whole multi-MB cache twice is the regression this guards.
-    expect(writeOpens.value).toBe(1)
-    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
     const persistedJson = readFileSync(join(tempUserData, 'orca-opencode-usage.json'), 'utf-8')
+    expect(scanOpenCodeUsageDatabases).toHaveBeenCalledWith([], [])
     expect(persistedJson).toContain('\n')
-    expect(JSON.parse(persistedJson).scanState).toMatchObject({
-      enabled: true,
-      lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
-      lastScanCompletedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
-      lastScanError: null
-    })
-  })
-
-  it('keeps scan start visible in memory while scan-start persistence is skipped', async () => {
-    const pendingScan = createDeferred<ScanResult>()
-    vi.mocked(scanOpenCodeUsageDatabases).mockReturnValueOnce(pendingScan.promise)
-    const store = createStoreWithState({
-      scanState: {
-        enabled: true,
-        lastScanStartedAt: null,
-        lastScanCompletedAt: null,
-        lastScanError: 'previous failure'
-      }
-    })
-
-    const refreshPromise = store.refresh(true)
-    await Promise.resolve()
-
-    expect(store.getScanState()).toMatchObject({
-      isScanning: true,
-      lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
-      lastScanError: null
-    })
-    expect(writeOpens.value).toBe(0)
-
-    pendingScan.resolve(createEmptyScanResult())
-    await refreshPromise
-
-    expect(store.getScanState().isScanning).toBe(false)
-    expect(writeOpens.value).toBe(1)
-  })
-
-  it('vetoes a stale concurrent async write so the newer snapshot wins without leaking tmp files', async () => {
-    const store = createStoreWithState({
-      scanState: {
-        enabled: true,
-        lastScanStartedAt: null,
-        lastScanCompletedAt: null,
-        lastScanError: null
-      }
-    })
-    const internals = store as unknown as {
-      writeToDisk: () => Promise<void>
-      state: OpenCodeUsagePersistedState
-    }
-
-    writeGate.blocked = true
-    const first = internals.writeToDisk()
-    await vi.waitFor(() => expect(writeGate.waiters.length).toBe(1))
-
-    internals.state.scanState.enabled = false
-    writeGate.blocked = false
-    const second = internals.writeToDisk()
-    writeGate.waiters.splice(0).forEach((resolve) => resolve())
-    await Promise.all([first, second])
-
-    expect(
-      JSON.parse(readFileSync(join(tempUserData, 'orca-opencode-usage.json'), 'utf-8')).scanState
-        .enabled
-    ).toBe(false)
-    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    // Serialized, so the superseded write can be skipped safely rather than racing the newer one.
-    expect(writeOpens.maxConcurrent).toBe(1)
-  })
-
-  it('sweeps a usage temp file orphaned by a crash between write and rename', async () => {
-    const orphan = join(tempUserData, 'orca-opencode-usage.json.999.1.abc.tmp')
-    writeFileSync(orphan, '{}')
-
-    createStoreWithState({})
-    await vi.waitFor(() =>
-      expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    )
   })
 
   it('reports no data for Orca scope when only non-Orca OpenCode usage exists', async () => {

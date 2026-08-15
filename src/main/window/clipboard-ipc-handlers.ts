@@ -31,6 +31,7 @@ import {
 } from './clipboard-file-copy'
 import {
   cleanupExpiredRemoteClipboardFiles,
+  scheduleLegacyRemoteClipboardFileCleanup,
   writeRemoteFileToClipboard
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
@@ -85,6 +86,7 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
 
   void cleanupExpiredRemoteClipboardFiles()
+  scheduleLegacyRemoteClipboardFileCleanup()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)

@@ -2,18 +2,18 @@
 co-locating issue list/create/update/comment operations keeps the shared
 acquire/release + error-classification pattern obvious. Each function is
 short; the file is long because the surface is broad. */
+import type { ClassifiedError } from '../../shared/classified-error'
 import type {
-  ClassifiedError,
   GitLabAssignableUser,
   GitLabCommentResult,
   GitLabIssueInfo,
   GitLabIssueUpdate,
-  IssueSourcePreference,
   MRComment
-} from '../../shared/types'
+} from '../../shared/gitlab-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapGitLabIssueInfo } from './mappers'
 // prettier-ignore
-import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListIssuesError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, type LocalGitExecOptions, type ProjectRef } from './gl-utils'
+import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListFetchError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, parseGlabJsonList, type LocalGitExecOptions, type ProjectRef } from './gl-utils'
 
 // Why: parallel to GitHub's IssueListResult — distinguishes a successful-
 // empty listing from a failed fetch.
@@ -128,7 +128,7 @@ export async function listIssues(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = JSON.parse(stdout) as Record<string, unknown>[]
+    const data = parseGlabJsonList<Record<string, unknown>>(stdout)
     // Why: GitLab's project issues endpoint returns true issues only
     // (MRs are a separate endpoint), so no equivalent of GitHub's
     // pull_request filter is needed here.
@@ -136,10 +136,9 @@ export async function listIssues(
       items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0]))
     }
   } catch (err) {
-    const stderr = err instanceof Error ? err.message : String(err)
     return {
       items: [],
-      error: classifyListIssuesError(stderr)
+      error: classifyListFetchError(err)
     }
   } finally {
     release()

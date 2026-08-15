@@ -364,8 +364,9 @@ async function main() {
 
     const { runtime, getController } = createRuntimeStub()
     // Why hooks off: fresh WSL spawn still runs buildPtyHostEnv, which calls ensureForDistro when
-    // hooks are on. This bench isolates the reattach call site (ensureWslHookRelayForReattach),
-    // which does not gate on agentStatusHooksEnabled.
+    // hooks are on. This bench isolates the reattach call site (ensureWslHookRelayForReattach);
+    // the manager's own hooks gate lives behind the ensureForDistro patch above, so it stays out
+    // of the measurement — `manager` below resolves its own (enabled) managed-hook settings.
     ptyIpc.registerPtyHandlers(
       createRendererWindowStub(),
       runtime,

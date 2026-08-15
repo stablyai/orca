@@ -59,6 +59,7 @@ import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
+import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -206,6 +207,8 @@ type CreateMainWindowOptions = {
   }) => void
   /** Defer renderer load until IPC handlers are registered, or eager renderer calls race into missing channels. */
   deferLoad?: boolean
+  /** Reveal after load instead of first paint when startup must show the shell before slower renderer work. */
+  revealOnDidFinishLoad?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
@@ -302,6 +305,7 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
@@ -332,7 +336,7 @@ export function createMainWindow(
     mainWindow.webContents.setZoomLevel(level)
     // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
     if (process.platform === 'darwin') {
-      syncTrafficLightPosition(mainWindow, Math.pow(1.2, level))
+      syncTrafficLightPosition(mainWindow, 1.2 ** level)
     }
   })
 
@@ -377,6 +381,9 @@ export function createMainWindow(
     mainWindow.show()
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
+  if (opts?.revealOnDidFinishLoad === true) {
+    mainWindow.webContents.on('did-finish-load', revealInitialWindow)
+  }
 
   // Why: persist window bounds to restore last position/size; debounce to avoid hammering persistence during resize drags.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null

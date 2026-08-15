@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
 import {
   buildMobileHostedReviewEligibilityLoadKey,
@@ -205,10 +205,6 @@ describe('rendered eligibility state', () => {
 describe('eligibility request ordering', () => {
   let renderer: ReactTestRenderer | null = null
   let renderedState: MobileCreatePrEligibilityState = { kind: 'idle' }
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
 
   afterEach(() => {
     act(() => renderer?.unmount())

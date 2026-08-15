@@ -13,7 +13,7 @@ import {
   shouldAttemptCreateHostedReviewForIntent,
   shouldGenerateHostedReviewDetailsForIntent
 } from './source-control-create-pr-intent-flow'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 describe('source-control Create PR intent flow helpers', () => {
   it('matches async completions only to the original repo, worktree, path, branch, and base', () => {

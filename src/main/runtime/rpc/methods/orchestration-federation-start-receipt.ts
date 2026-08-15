@@ -3,6 +3,21 @@ import { isFederationEffectUnknown } from './orchestration-federation-effects'
 import type { WorkerSetupReceipt } from './orchestration-worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './orchestration-worker-launch-preferences'
 
+const KNOWN_REMOTE_START_FAILURES = new Set([
+  'invalid_argument',
+  'agent_unconfigured',
+  'worktree_not_found_on_server',
+  'terminal_worktree_mismatch',
+  'capability_unsupported',
+  'bounded_worker_requires_fresh_process',
+  'leaf_control_unsupported',
+  'runtime_budget_exhausted'
+])
+
+export function isKnownRemoteStartFailure(code: string): boolean {
+  return KNOWN_REMOTE_START_FAILURES.has(code)
+}
+
 export type RemoteStartReceipt = {
   dispatchId: string
   state: string

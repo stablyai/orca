@@ -44,7 +44,7 @@ function attachArtifactWebview({
   webview.style.width = '100%'
   webview.style.height = '100%'
   webview.style.border = 'none'
-  webview.style.background = '#ffffff'
+  // Why: forcing white flashes beneath dark artifact pages during navigation.
   webview.addEventListener('did-start-loading', onLoadStarted)
   webview.addEventListener('did-stop-loading', onLoadStopped)
   webview.addEventListener('did-fail-load', onLoadFailed)
@@ -138,14 +138,17 @@ export function ArtifactPreview({ shareUrl }: { shareUrl: string }): React.JSX.E
   }, [shareUrl])
 
   return (
-    <div className="relative flex min-h-0 flex-1 overflow-hidden bg-white" ref={containerRef}>
+    <div
+      className="relative flex min-h-0 flex-1 overflow-hidden bg-editor-surface"
+      ref={containerRef}
+    >
       {state === 'loading' ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">
           <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
       ) : null}
       {state === 'unavailable' ? (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background px-6 text-center">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-editor-surface px-6 text-center">
           <AlertCircle className="size-6 text-muted-foreground" />
           <p className="text-sm font-medium">
             {translate('auto.components.artifacts.previewUnavailable', 'Preview unavailable')}

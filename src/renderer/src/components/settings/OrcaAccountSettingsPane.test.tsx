@@ -82,7 +82,11 @@ describe('OrcaAccountSettingsPane', () => {
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'local' }
     render(<OrcaAccountSettingsPane />)
 
-    expect(screen.getByText('Sign in to use Artifacts and Orca Relay.')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.'
+      )
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Sign in to Orca' }))
     expect(mocks.connect).toHaveBeenCalledOnce()
   })

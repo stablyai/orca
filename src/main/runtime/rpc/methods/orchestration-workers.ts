@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
@@ -76,26 +76,26 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
 
       const coordinatorTerminal = await runtime.showTerminal(params.from)
-      const coordinatorWorktree = await runtime.showManagedWorktree(
-        `id:${coordinatorTerminal.worktreeId}`
-      )
-      if (createsWorktree) {
+      const creationWorktree = createsWorktree
+        ? await runtime.showManagedWorktree(`id:${coordinatorTerminal.worktreeId}`)
+        : undefined
+      if (creationWorktree) {
         await assertOrchestrationWorktreeCreationSupported({
           runtime,
-          repoSelector: params.repo ?? coordinatorWorktree.repoId,
+          repoSelector: params.repo ?? creationWorktree.repoId,
           existingPlacement: 'current or an exact existing folder workspace'
         })
       }
-      let resolvedWorktree = createsWorktree
+      let resolvedWorktree = creationWorktree
         ? undefined
         : requestedWorktree === 'current'
-          ? coordinatorWorktree
-          : await runtime.showManagedWorktree(requestedWorktree)
+          ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
+          : await runtime.showManagedTerminalWorkspace(requestedWorktree)
       const startOptions = {
         worktree: requestedWorktree,
         resolvedWorktreeId: resolvedWorktree?.id ?? null,
         name: params.name ?? null,
-        repo: params.repo ?? (createsWorktree ? coordinatorWorktree.repoId : null),
+        repo: params.repo ?? creationWorktree?.repoId ?? null,
         baseBranch: params.baseBranch ?? null,
         terminal: null,
         agent: agent ?? null,
@@ -137,14 +137,14 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         state: 'not_applicable'
       }
       try {
-        if (createsWorktree) {
+        if (creationWorktree) {
           failedStage = 'worktree_create'
           const created = await createWorkerWorktree({
             runtime,
             db,
             dispatchId: started.dispatch.id,
             requestedWorktree,
-            coordinatorWorktree,
+            coordinatorWorktree: creationWorktree,
             params,
             agent: agent as TuiAgent,
             launchPreferences: launch.preferences,

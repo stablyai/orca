@@ -1,4 +1,5 @@
-import type { WorkspaceSessionState, WorkspaceVisibleTabType } from '../../shared/types'
+import type { WorkspaceVisibleTabType } from '../../shared/tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
   pruneTabGroupLayoutAfterRetirement,
   repairMobileSessionTabGroupsAfterRetirement,

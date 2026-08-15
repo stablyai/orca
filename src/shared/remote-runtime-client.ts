@@ -24,7 +24,9 @@ import {
 import type { RuntimeStatus } from './runtime-types'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from './protocol-version'
 // Re-export so existing value importers of `RemoteRuntimeClientError` are
 // unaffected; the class lives in a ws-free module so type-only consumers
@@ -139,21 +141,19 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
     deviceToken: pairing.deviceToken,
     clientCapabilities: [
       SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
     ]
   })
   const pendingRequest = {
     preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
-      serializeRemoteRuntimePayload({
-        id: requestId,
+      serializeRemoteRuntimeRpcRequest({
+        requestId,
         deviceToken: pairing.deviceToken,
         method,
         params,
-        orchestrationCapability: envelope?.orchestrationCapability,
-        orchestrationContractVersion: envelope?.orchestrationContractVersion,
-        orchestrationRequestId: envelope?.orchestrationRequestId,
-        compatibilityInvocationId: envelope?.compatibilityInvocationId,
-        orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
+        envelope
       })
     )
   }
@@ -515,7 +515,9 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     deviceToken: pairing.deviceToken,
     clientCapabilities: [
       SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
     ]
   })
   return await new Promise((resolve, reject) => {

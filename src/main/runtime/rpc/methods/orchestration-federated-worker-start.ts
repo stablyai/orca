@@ -1,10 +1,12 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../../../shared/orchestration-rpc-contract'
@@ -24,6 +26,7 @@ import {
   validateFederatedWorkerStartPlacement
 } from './orchestration-worker-start-validation'
 import {
+  isKnownRemoteStartFailure,
   settleFederatedStartRuntimeReceipt,
   type RemoteStartReceipt
 } from './orchestration-federation-start-receipt'
@@ -102,11 +105,16 @@ export async function startFederatedWorker(args: {
     capabilities: status.capabilities,
     serverName: server.name
   })
-  const federationProtocolVersion = status.capabilities?.includes(
+  const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
-    ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-    : 1
+  const federationProtocolVersion =
+    supportsControlMail &&
+    status.capabilities?.includes(ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
+      ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+      : supportsControlMail
+        ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+        : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const started = db.createStartingWorkerDispatch({
@@ -288,17 +296,4 @@ export async function startFederatedWorker(args: {
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
     return federatedUnknownReceipt(worker, task.id, server.name, requestedLaunch, bounded)
   }
-}
-
-function isKnownRemoteStartFailure(code: string): boolean {
-  return [
-    'invalid_argument',
-    'agent_unconfigured',
-    'worktree_not_found_on_server',
-    'terminal_worktree_mismatch',
-    'capability_unsupported',
-    'bounded_worker_requires_fresh_process',
-    'leaf_control_unsupported',
-    'runtime_budget_exhausted'
-  ].includes(code)
 }

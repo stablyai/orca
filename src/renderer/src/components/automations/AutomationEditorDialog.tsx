@@ -6,15 +6,13 @@ import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
-import type {
-  GlobalSettings,
-  OrcaHooks,
-  ProjectHostSetup,
-  Repo,
-  SetupDecision,
-  TuiAgent,
-  Worktree
-} from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SetupDecision } from '../../../../shared/worktree/create-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   isValidAutomationCronSchedule,
   isValidAutomationSchedule
@@ -61,8 +59,8 @@ type AutomationEditorDialogProps = {
   isSaving: boolean
   canSave: boolean
   createTarget: AutomationCreateTarget
-  repos: Repo[]
-  projectHostSetups: ProjectHostSetup[]
+  repos: readonly Repo[]
+  projectHostSetups: readonly ProjectHostSetup[]
   automationYamlHooksByRepoKey: Record<string, OrcaHooks | null>
   getAutomationHooksCacheKey: (repoId: string) => string
   repoMap: Map<string, Repo>

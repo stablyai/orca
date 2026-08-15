@@ -15,7 +15,7 @@ import {
   getEditorFileOperationContext
 } from '@/lib/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 
 const SOURCE = 'repo-a::/repo-a'
 const TARGET = 'repo-b::/repo-b'

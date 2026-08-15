@@ -13,13 +13,13 @@ describe('federated worker agent launch', () => {
     vi.restoreAllMocks()
   })
 
-  it('creates the remote worker terminal from the agent id, never as a command', async () => {
+  it('creates an exact folder worker terminal from the agent id, never as a command', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-      id: 'repo::remote-worktree'
+    vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
+      id: 'folder:remote-workspace'
     } as never)
     const legacyCreateTerminal = vi.spyOn(runtime, 'createTerminal')
     const createTerminal = vi
@@ -30,7 +30,7 @@ describe('federated worker agent launch', () => {
         )
         return {
           handle: 'term_remote_worker',
-          worktreeId: 'repo::remote-worktree',
+          worktreeId: 'folder:remote-workspace',
           title: 'worker',
           watchdogSentinelPath: '/tmp/ctx_remote-watchdog.json'
         }
@@ -66,8 +66,8 @@ describe('federated worker agent launch', () => {
         dispatchId: 'ctx_remote',
         taskId: 'task_remote',
         taskSpec: 'remote codex worker',
-        protocolVersion: 1,
-        worktree: 'id:repo::remote-worktree',
+        protocolVersion: 3,
+        worktree: 'folder:remote-workspace',
         agent: 'codex',
         model: 'gpt-5.3-codex',
         effort: 'high',
@@ -105,7 +105,7 @@ describe('federated worker agent launch', () => {
       }
     })
     expect(createTerminal).toHaveBeenCalledWith(
-      'id:repo::remote-worktree',
+      'id:folder:remote-workspace',
       expect.objectContaining({
         agent: 'codex',
         launchPreferences: { model: 'gpt-5.3-codex', effort: 'high' }
@@ -130,8 +130,8 @@ describe('federated worker agent launch', () => {
           dispatchId: 'ctx_elapsed',
           taskId: 'task_elapsed',
           taskSpec: 'must not start',
-          protocolVersion: 2,
-          worktree: 'id:repo::remote-worktree',
+          protocolVersion: 3,
+          worktree: 'folder:remote-workspace',
           agent: 'codex',
           dispatchGroup: 'remote-elapsed',
           dispatchIndex: 1,

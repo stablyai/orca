@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { BUNDLED_PET, BUNDLED_PETS, findBundledPet, isBundledPetId } from '../pet/pet-models'
-import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
+import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import { translate } from '@/i18n/i18n'
 
 // Why: cluster pet-related controls (show/hide, character picker, custom

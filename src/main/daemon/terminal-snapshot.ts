@@ -9,6 +9,8 @@ export type TerminalSnapshot = {
   scrollbackAnsi: string
   oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
+  /** Live modes and cursor state that can be restored without the alt frame. */
+  frameRestoreAnsi?: string
   cwd: string | null
   modes: TerminalModes
   cols: number

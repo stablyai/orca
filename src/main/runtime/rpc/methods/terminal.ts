@@ -99,6 +99,8 @@ type SnapshotFrameOptions = {
   source?: 'headless' | 'renderer'
   oscLinks?: TerminalOscLinkRange[]
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags proven at this frame's own `seq`. */
+  kittyKeyboardFlags?: number
 }
 
 type SerializedSnapshot = {
@@ -113,6 +115,7 @@ type SerializedSnapshot = {
   scrollbackRows: number
   truncatedByByteBudget: boolean
   pendingEscapeTailAnsi?: string
+  kittyKeyboardFlags?: number
 } | null
 
 type TerminalViewportClient = {
@@ -648,6 +651,15 @@ function sendSnapshotFrames(
         source: options.source,
         oscLinks: options.oscLinks,
         pendingEscapeTailAnsi: options.pendingEscapeTailAnsi,
+        // Why conditional and additive: old clients ignore the unknown field,
+        // and a new client must read absence as unknown rather than zero, so
+        // no opcode or capability negotiation is involved (Rule 1 of
+        // docs/reference/remote-wire-compatibility.md).
+        // Why `seq` is required: the flags are only proven at this frame's own
+        // seq, so without a replay boundary the client cannot order them.
+        ...(typeof options.seq === 'number' && options.kittyKeyboardFlags !== undefined
+          ? { kittyKeyboardFlags: options.kittyKeyboardFlags }
+          : {}),
         truncated: options.truncated === true,
         truncatedByByteBudget: options.truncatedByByteBudget === true
       })
@@ -1840,6 +1852,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               reason: 'ack-pending-overflow',
               seq: serialized.seq,
               source: serialized.source,
+              kittyKeyboardFlags: serialized.kittyKeyboardFlags,
               truncatedByByteBudget: serialized.truncatedByByteBudget,
               data: serialized.data
             }
@@ -2327,6 +2340,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             seq: serialized?.seq,
             cwd: serialized?.cwd,
             source: serialized?.source,
+            kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
             oscLinks: serialized?.oscLinks,
             pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
             truncated: false,
@@ -2669,6 +2683,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               truncated: initialOutputOverflowed,
               truncatedByByteBudget: serialized?.truncatedByByteBudget,
               source: serialized?.source,
+              kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
               oscLinks: serialized?.oscLinks,
               pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
               data:

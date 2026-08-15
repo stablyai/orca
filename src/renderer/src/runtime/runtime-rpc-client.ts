@@ -325,8 +325,7 @@ export async function assertRuntimeEnvironmentCapability(
   message: string,
   timeoutMs?: number
 ): Promise<void> {
-  const status = await getRuntimeEnvironmentStatus(environmentId, timeoutMs)
-  if (!status.capabilities?.includes(capability)) {
+  if (!(await runtimeEnvironmentSupportsCapability(environmentId, capability, timeoutMs))) {
     throw new Error(message)
   }
 }

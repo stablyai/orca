@@ -25,6 +25,10 @@ const POST_V6_COLUMNS = [
   ['legacy_mail_receipts', 'principal_id']
 ] as const
 
+const VERSIONED_POST_V6_COLUMNS = [
+  { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' }
+] as const
+
 const POST_V6_INDEXES = [
   'idx_messages_run_sequence',
   'idx_messages_delivery_contract',
@@ -82,9 +86,13 @@ function hasConsistentLegacyAdoption(db: Database.Database): boolean {
   return true
 }
 
-function hasCompletePostV6Schema(db: Database.Database): boolean {
+function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): boolean {
   return (
     POST_V6_COLUMNS.every(([table, column]) => hasOrchestrationColumn(db, table, column)) &&
+    VERSIONED_POST_V6_COLUMNS.every(
+      ({ version, table, column }) =>
+        storedVersion < version || hasOrchestrationColumn(db, table, column)
+    ) &&
     POST_V6_INDEXES.every((index) => hasOrchestrationIndex(db, index)) &&
     messagesAllowQuestions(db) &&
     hasConsistentLegacyAdoption(db)
@@ -99,7 +107,7 @@ export function resolveOrchestrationMigrationStartVersion(
   if (storedVersion > schemaVersion) {
     return storedVersion
   }
-  if (hasCompletePostV6Schema(db)) {
+  if (hasCompletePostV6Schema(db, storedVersion)) {
     return storedVersion
   }
   // Why: version-skewed pre-Run databases can claim the post-v6 range while retaining v6 tables.

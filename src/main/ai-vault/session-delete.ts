@@ -2,10 +2,8 @@ import { lstat, realpath } from 'node:fs/promises'
 import { shell } from 'electron'
 import type {
   AiVaultDeleteSessionResult,
-  AiVaultSessionDeleteRemoval,
-  AiVaultSessionLiveness
+  AiVaultSessionDeleteRemoval
 } from '../../shared/ai-vault-session-deletion'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import {
   validateAiVaultSessionDeleteTarget,
@@ -19,38 +17,13 @@ import { isENOENT } from '../ipc/filesystem-auth'
 // Never throws: IPC payloads are untyped at runtime, so a bad input and an fs
 // error both resolve to a discriminated result the handler can render.
 export async function deleteAiVaultSessionFile(
-  args: ValidateAiVaultSessionDeleteTargetArgs & { sessionId?: string },
-  deps: {
-    getSessionLiveness: (target: {
-      agent: AiVaultAgent
-      sessionId: string | undefined
-      filePath: string
-    }) => Promise<AiVaultSessionLiveness>
-  }
+  args: ValidateAiVaultSessionDeleteTargetArgs & { sessionId?: string }
 ): Promise<AiVaultDeleteSessionResult> {
   const validation = validateAiVaultSessionDeleteTarget(args)
   if (!validation.allowed) {
     return { outcome: 'rejected', agent: validation.agent, reason: validation.reason }
   }
   const { agent, removals } = validation
-
-  let liveness: AiVaultSessionLiveness = 'unknown'
-  try {
-    liveness = await deps.getSessionLiveness({
-      agent,
-      sessionId: args.sessionId,
-      filePath: validation.resolvedPath
-    })
-  } catch {
-    // Inspection failure is unknown, never permission to delete.
-  }
-  if (liveness !== 'not-live') {
-    return {
-      outcome: 'rejected',
-      agent,
-      reason: liveness === 'live' ? 'session-live' : 'session-liveness-unknown'
-    }
-  }
 
   try {
     for (const removal of removals) {

@@ -21,6 +21,7 @@ import type { SessionOptionValue } from './native-chat-session-options'
 export type {
   AgentSessionOptionCatalog,
   CatalogAgentInteractionDetection,
+  CatalogCommandDelivery,
   CatalogMidSessionApply,
   CatalogModel,
   CatalogOption,

@@ -53,6 +53,7 @@ const PUNCTUATION_CODE_MAP: Record<string, string> = {
 
 export type TerminalShortcutAction =
   | { type: 'copySelection' }
+  | { type: 'selectAll' }
   | { type: 'toggleSearch' }
   | { type: 'clearActivePane' }
   | { type: 'focusPane'; direction: 'next' | 'previous' }
@@ -116,6 +117,12 @@ export function resolveTerminalShortcutAction(
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
   if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
     return { type: 'switchInputSource' }
+  }
+
+  // Why: held select-all keydowns must remain claimed until keyup so Kitty
+  // event reporting cannot encode their repeat or release into the PTY.
+  if (keybindingMatchesAction('terminal.selectAll', event, platform, keybindings)) {
+    return { type: 'selectAll' }
   }
 
   if (!event.repeat) {

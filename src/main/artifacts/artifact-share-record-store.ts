@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { writeSecureJsonFile } from '../../shared/secure-file'
+import { writeDurableSecureJsonFile, writeSecureJsonFile } from '../../shared/secure-file'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 
 export type ArtifactShareScope = {
@@ -183,7 +183,7 @@ export function saveArtifactShareRecord(
   const records = readRecords(profileId, userDataPath)
   records.shares[sourceKey] = { ...record, savedAt: Date.now() }
   records.shares = pruneRecords(records.shares, Date.now()).shares
-  writeSecureJsonFile(recordPath(profileId, userDataPath), records)
+  writeDurableSecureJsonFile(recordPath(profileId, userDataPath), records)
 }
 
 export function refreshArtifactShareRecordExpiration(
@@ -228,7 +228,7 @@ export function removeArtifactShareRecords(
       delete records.shares[sourceKey]
     }
   }
-  writeSecureJsonFile(recordPath(profileId, userDataPath), records)
+  writeDurableSecureJsonFile(recordPath(profileId, userDataPath), records)
 }
 
 export function clearArtifactShareRecords(profileId: string, userDataPath: string): void {
@@ -238,7 +238,7 @@ export function clearArtifactShareRecords(profileId: string, userDataPath: strin
   } catch {
     // Clearing must recover sign-out from an unreadable token index.
   }
-  writeSecureJsonFile(recordPath(profileId, userDataPath), {
+  writeDurableSecureJsonFile(recordPath(profileId, userDataPath), {
     version: 2,
     lifecycleGeneration: lifecycleGeneration + 1,
     lifecycleNonce: randomUUID(),
