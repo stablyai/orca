@@ -57,6 +57,10 @@ import {
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import {
+  parseExplicitCodexApprovalReviewer,
+  type ExplicitCodexApprovalReviewer
+} from './codex-approval-reviewer'
+import {
   agentProviderSessionsEqual,
   extractAgentProviderSession,
   type AgentProviderSessionMetadata
@@ -329,6 +333,8 @@ export type AgentHookEventPayload = {
   source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
+  /** Reviewer ownership stamped by Orca at Codex launch and echoed by the managed hook. */
+  codexApprovalReviewer?: ExplicitCodexApprovalReviewer
   tabId?: string
   worktreeId?: string
   /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
@@ -4272,6 +4278,10 @@ export function normalizeHookPayload(
   }
   const worktreeId = readStringField(record, 'worktreeId')
   const launchToken = readStringField(record, 'launchToken')
+  const codexApprovalReviewer =
+    source === 'codex'
+      ? parseExplicitCodexApprovalReviewer(readStringField(record, 'codexApprovalReviewer'))
+      : undefined
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
   if (source === 'claude') {
@@ -4475,6 +4485,7 @@ export function normalizeHookPayload(
         paneKey,
         source,
         launchToken,
+        codexApprovalReviewer,
         tabId,
         worktreeId,
         // Why: normalization is transport-agnostic — only ingestRemote knows the mux identity to stamp here.

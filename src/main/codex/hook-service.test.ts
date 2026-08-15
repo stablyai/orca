@@ -81,6 +81,19 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+it('installs a managed hook that forwards launch-stamped reviewer ownership', () => {
+  new CodexHookService().install()
+  const scriptPath = join(
+    homedir(),
+    '.orca',
+    'agent-hooks',
+    process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+  )
+  const script = readFileSync(scriptPath, 'utf-8')
+  expect(script).toContain('codexApprovalReviewer=')
+  expect(script).toContain('ORCA_CODEX_APPROVAL_REVIEWER')
+})
+
 function escapeTomlBasicString(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
 }
@@ -351,7 +364,8 @@ describe('CodexHookService', () => {
             ORCA_PANE_KEY: '42:leaf-abc',
             ORCA_TAB_ID: '42',
             ORCA_WORKTREE_ID: 'C:\\work trees\\my repo & co',
-            ORCA_AGENT_HOOK_VERSION: '1'
+            ORCA_CODEX_APPROVAL_REVIEWER: 'auto_review',
+            ORCA_AGENT_HOOK_VERSION: '2'
           }
         })
         child.stdin.end(payload)
@@ -363,6 +377,7 @@ describe('CodexHookService', () => {
         expect(received.headers['x-orca-agent-hook-token']).toBe('tok123')
         expect(params.get('paneKey')).toBe('42:leaf-abc')
         expect(params.get('worktreeId')).toBe('C:\\work trees\\my repo & co')
+        expect(params.get('codexApprovalReviewer')).toBe('auto_review')
         expect(JSON.parse(params.get('payload') ?? '{}').prompt).toBe('你好世界')
       } finally {
         await new Promise<void>((resolve) => server.close(() => resolve()))

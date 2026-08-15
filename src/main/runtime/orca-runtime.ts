@@ -50,6 +50,10 @@ import {
   type AgentStatusOrchestrationContext,
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
+import {
+  ORCA_CODEX_APPROVAL_REVIEWER_ENV,
+  resolveCodexApprovalReviewer
+} from '../../shared/codex-approval-reviewer'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
@@ -26099,9 +26103,17 @@ export class OrcaRuntimeService {
         const launchToken = launchOpts.launchConfig
           ? (launchOpts.launchToken ?? randomUUID())
           : undefined
-        const baseEnv = {
+        const baseEnv: Record<string, string> = {
           ...launchOpts.env,
           ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
+        }
+        delete baseEnv[ORCA_CODEX_APPROVAL_REVIEWER_ENV]
+        const codexApprovalReviewer =
+          launchOpts.launchAgent === 'codex'
+            ? resolveCodexApprovalReviewer(launchOpts.launchConfig?.agentArgs)
+            : 'unknown'
+        if (codexApprovalReviewer !== 'unknown') {
+          baseEnv[ORCA_CODEX_APPROVAL_REVIEWER_ENV] = codexApprovalReviewer
         }
         const claudeAgentTeamsSourceCommand =
           launchOpts.claudeAgentTeamsSourceCommand?.trim() ||

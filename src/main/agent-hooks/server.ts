@@ -83,11 +83,12 @@ import {
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
+import { parseExplicitCodexApprovalReviewer } from '../../shared/codex-approval-reviewer'
 
 export type { AgentHookSource }
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
-type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
@@ -320,6 +321,10 @@ function sanitizeHydratedEntry(
   return {
     paneKey,
     source,
+    codexApprovalReviewer:
+      payload.agentType === 'codex'
+        ? parseExplicitCodexApprovalReviewer(record.codexApprovalReviewer)
+        : undefined,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
     connectionId,
@@ -400,6 +405,8 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
   return {
     paneKey: entry.paneKey,
     ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
+    ...(entry.codexApprovalReviewer ? { codexApprovalReviewer: entry.codexApprovalReviewer } : {}),
+    ...(entry.hookEventName ? { hookEventName: entry.hookEventName } : {}),
     tabId: entry.tabId,
     worktreeId: entry.worktreeId,
     connectionId: entry.connectionId,
@@ -1876,6 +1883,7 @@ export class AgentHookServer {
       env?: string
       version?: string
       launchToken?: string
+      codexApprovalReviewer?: unknown
       hasExplicitPrompt?: boolean
       promptInteractionKey?: string
       hookEventName?: string
@@ -2051,6 +2059,10 @@ export class AgentHookServer {
       paneKey,
       source,
       launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
+      codexApprovalReviewer:
+        normalizedPayload.agentType === 'codex'
+          ? parseExplicitCodexApprovalReviewer(envelope.codexApprovalReviewer)
+          : undefined,
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,

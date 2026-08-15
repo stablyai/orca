@@ -61,6 +61,7 @@ const RUNNING_SHELL = { id: 'shell-1', type: 'shell', status: 'running' }
 type Body = {
   paneKey: string
   launchToken?: string
+  codexApprovalReviewer?: 'auto_review' | 'user'
   tabId?: string
   worktreeId?: string
   env?: string
@@ -3396,7 +3397,7 @@ describe('AgentHookServer listener replay', () => {
           tabId: ' tab-3 ',
           worktreeId: ' wt-3 ',
           env: 'remote',
-          version: '1',
+          version: server.buildPtyEnv().ORCA_AGENT_HOOK_VERSION,
           payload: {
             state: 'done',
             prompt: oversizedPrompt,
@@ -6507,11 +6508,12 @@ describe('Endpoint file lifecycle', () => {
       const contents = readFileSync(filePath!, 'utf8')
       const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
       const expectedToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
+      const expectedVersion = server.buildPtyEnv().ORCA_AGENT_HOOK_VERSION
       const prefix = process.platform === 'win32' ? 'set ' : ''
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_PORT=${expectedPort}`)
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_TOKEN=${expectedToken}`)
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_ENV=development`)
-      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=1`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=${expectedVersion}`)
     } finally {
       server.stop()
     }
@@ -6832,6 +6834,57 @@ describe('Last-status persistence', () => {
       expect(file.entries[PANE].claudeRunningNonAgentTask).toBeUndefined()
       expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('claudeRunningNonAgentTask')
       expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('launch-bearer-must-not-persist')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('hydrates Codex reviewer ownership without persisting the launch bearer', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody(
+        { hook_event_name: 'PermissionRequest', tool_name: 'exec_command' },
+        {
+          launchToken: 'reviewer-launch-bearer',
+          codexApprovalReviewer: 'auto_review'
+        }
+      ),
+      '/hook/codex'
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const persisted = readFileSync(lastStatusPath(), 'utf8')
+    expect(persisted).not.toContain('reviewer-launch-bearer')
+    expect(JSON.parse(persisted).entries[PANE]).toMatchObject({
+      codexApprovalReviewer: 'auto_review',
+      hookEventName: 'PermissionRequest'
+    })
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          codexApprovalReviewer: 'auto_review',
+          hookEventName: 'PermissionRequest',
+          isReplay: true,
+          payload: expect.objectContaining({ state: 'waiting', agentType: 'codex' })
+        })
+      )
+      expect(listener.mock.calls[0]?.[0]).not.toHaveProperty('launchToken')
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          codexApprovalReviewer: 'auto_review',
+          hookEventName: 'PermissionRequest',
+          state: 'waiting',
+          agentType: 'codex'
+        })
+      ])
     } finally {
       server.stop()
     }
@@ -8699,12 +8752,23 @@ describe('AgentHookServer ingestRemote', () => {
         tabId: 'tab-1',
         worktreeId: 'wt-1',
         hookEventName: 'PermissionRequest',
+        codexApprovalReviewer: 'auto_review',
         toolAgentId: 'agent-subagent-a',
         toolAgentType: 'Review',
         payload: waiting
       },
       'conn-1'
     )
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        connectionId: 'conn-1',
+        hookEventName: 'PermissionRequest',
+        state: 'waiting',
+        agentType: 'claude'
+      })
+    ])
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('codexApprovalReviewer')
     server.ingestRemote(
       {
         paneKey: PANE,
@@ -8723,6 +8787,7 @@ describe('AgentHookServer ingestRemote', () => {
       expect.objectContaining({
         paneKey: PANE,
         connectionId: 'conn-1',
+        hookEventName: 'PreToolUse',
         state: 'working',
         agentType: 'claude',
         toolName: 'Bash',

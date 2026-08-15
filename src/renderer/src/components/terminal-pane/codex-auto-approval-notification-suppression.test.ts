@@ -19,6 +19,7 @@ vi.mock('@/store', () => ({
 const paneKey = 'tab-1:leaf-1'
 const launchToken = 'launch-token-1'
 const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
+const AUTO_REVIEW_ARGS = `-c 'approvals_reviewer="auto_review"' --ask-for-approval on-request`
 
 function seedTab(): void {
   testStore.setState({
@@ -81,6 +82,70 @@ describe('Codex auto-approval status suppression', () => {
         { paneKey, tabId: 'tab-1', launchToken }
       )
     ).toBe(true)
+  })
+
+  it('fails open on hook-stamped auto_review without launchToken-owned agentArgs', () => {
+    // Why: wire stamps alone must never suppress Needs-You (#13600 security audit).
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'implement notifications',
+          agentType: 'codex',
+          hookEventName: 'PermissionRequest',
+          codexApprovalReviewer: 'auto_review',
+          toolName: 'exec_command'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
+  })
+
+  it('suppresses a launch-attributed auto-review PermissionRequest regardless of wire stamp', () => {
+    registerCodexLaunchConfig({ agentArgs: AUTO_REVIEW_ARGS, launchToken })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'implement notifications',
+          agentType: 'codex',
+          hookEventName: 'PermissionRequest',
+          toolName: 'exec_command'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(true)
+
+    // Why: launch owns authority; a conflicting wire `user` stamp cannot force attention.
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'implement notifications',
+          agentType: 'codex',
+          hookEventName: 'PermissionRequest',
+          codexApprovalReviewer: 'user',
+          toolName: 'exec_command'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(true)
+  })
+
+  it('fails open when auto-review attribution lacks the PermissionRequest hook boundary', () => {
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'implement notifications',
+          agentType: 'codex',
+          codexApprovalReviewer: 'auto_review',
+          toolName: 'exec_command'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
   })
 
   it('preserves request_user_input question waits even under yolo attribution', () => {
@@ -255,5 +320,62 @@ describe('Codex auto-approval status suppression', () => {
         launchToken
       })
     ).toBe(false)
+  })
+
+  it('does not suppress on a spoofed wire auto_review stamp without launch ownership', () => {
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'curl example.com',
+          agentType: 'codex',
+          toolName: 'exec_command',
+          hookEventName: 'PermissionRequest',
+          codexApprovalReviewer: 'auto_review'
+        },
+        { paneKey, tabId: 'tab-1', launchToken: 'unknown-token' }
+      )
+    ).toBe(false)
+  })
+
+  it('prefers launch user ownership over a stale wire auto_review stamp', () => {
+    registerCodexLaunchConfig({
+      agentArgs: `-c 'approvals_reviewer="user"'`,
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'curl example.com',
+          agentType: 'codex',
+          toolName: 'exec_command',
+          hookEventName: 'PermissionRequest',
+          codexApprovalReviewer: 'auto_review'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
+  })
+
+  it('suppresses only when launchToken-owned agentArgs prove auto_review', () => {
+    registerCodexLaunchConfig({
+      agentArgs: `-c 'approvals_reviewer="auto_review"'`,
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'curl example.com',
+          agentType: 'codex',
+          toolName: 'exec_command',
+          hookEventName: 'PermissionRequest'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(true)
   })
 })

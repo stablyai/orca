@@ -312,6 +312,9 @@ export class RelayAgentHookServer {
       source,
       paneKey: event.paneKey,
       ...(event.launchToken ? { launchToken: event.launchToken } : {}),
+      ...(event.codexApprovalReviewer
+        ? { codexApprovalReviewer: event.codexApprovalReviewer }
+        : {}),
       tabId: event.tabId,
       worktreeId: event.worktreeId,
       connectionId: null,
