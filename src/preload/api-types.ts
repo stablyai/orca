@@ -2459,6 +2459,7 @@ export type PreloadApi = {
     copilotStatus: () => Promise<AgentHookInstallStatus>
     hermesStatus: () => Promise<AgentHookInstallStatus>
     devinStatus: () => Promise<AgentHookInstallStatus>
+    jcodeStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
     markTrusted: (args: {

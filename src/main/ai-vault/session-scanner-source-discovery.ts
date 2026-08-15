@@ -5,6 +5,7 @@ import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
 import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-sources'
+import { jcodeDiscoveries } from './session-scanner-jcode-sources'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
@@ -143,7 +144,8 @@ function standardDiscoveries(
     ...hermesDiscoveries(options, wslHomeDirs, limit, issues),
     ...rovoDiscoveries(options, wslHomeDirs, limit, issues),
     ...piDiscoveries(options, wslHomeDirs, limit, issues),
-    ...ompDiscoveries(options, wslHomeDirs, limit, issues)
+    ...ompDiscoveries(options, wslHomeDirs, limit, issues),
+    ...jcodeDiscoveries(options, wslHomeDirs, limit, issues)
   ]
 }
 
@@ -312,7 +314,7 @@ function normalizedWslHomeDirs(homeDirs: readonly string[] | undefined): string[
   return unique
 }
 
-function sessionRootDirs(
+export function sessionRootDirs(
   hostRootDir: string,
   wslHomeDirs: readonly string[],
   segments: readonly string[]

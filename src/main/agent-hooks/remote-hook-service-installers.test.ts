@@ -19,6 +19,7 @@ import { GrokHookService, grokHookService } from '../grok/hook-service'
 import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
 import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
+import { JcodeHookService, jcodeHookService } from '../jcode/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
@@ -172,6 +173,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
           install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/jcode-hook.sh',
+          install: (sftp: SFTPWrapper) => new JcodeHookService().installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/droid-hook.sh',
@@ -687,7 +692,8 @@ describe('remote hook service installers', () => {
       ['copilot', copilotHookService],
       ['hermes', hermesHookService],
       ['devin', devinHookService],
-      ['kimi', kimiHookService]
+      ['kimi', kimiHookService],
+      ['jcode', jcodeHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.

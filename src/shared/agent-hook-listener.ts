@@ -71,6 +71,7 @@ import {
 } from './grok-session-paths'
 import { sweepStaleAgentHookEndpointTemps } from './agent-hook-endpoint-temp-cleanup'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { readLastJcodeUserPromptFromHookPayload } from './jcode-session-files'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -2235,6 +2236,32 @@ function extractHermesToolFields(
   return {}
 }
 
+// Why: jcode's post_tool hook reports the tool name but no tool input (only
+// the pre_tool gate hook receives the input JSON, and Orca does not gate).
+function extractJcodeToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (eventName === 'post_tool') {
+    const toolName = readString(hookPayload, 'tool_name')
+    return toolUpdate(
+      { toolName, toolInput: undefined },
+      // Why: hasToolInputField with an undefined input clears any stale tool
+      // input from the previous turn instead of inheriting it.
+      { hasToolInputField: hasOwnField(hookPayload, 'tool_name') }
+    )
+  }
+  if (eventName === 'turn_end') {
+    const message =
+      readString(hookPayload, 'last_assistant_message') ??
+      readString(hookPayload, 'last_assistant_text')
+    if (message) {
+      return { lastAssistantMessage: message }
+    }
+  }
+  return {}
+}
+
 function isGrokPermissionNotification(message: string | undefined): boolean {
   if (!message) {
     return false
@@ -2327,6 +2354,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'jcode':
+      // Why: jcode hooks carry no UserPromptSubmit; a fresh/attached session_start is the only durable turn boundary.
+      return eventName === 'session_start'
   }
 }
 
@@ -2344,6 +2374,15 @@ function hasExplicitUserPrompt(
     resolvedPromptText.trim().length > 0
   ) {
     // Why: Command Code exposes the submitted prompt via its transcript, not direct hook fields; treat the transcript-backed prompt as explicit so telemetry covers real turns.
+    return true
+  }
+  if (
+    source === 'jcode' &&
+    (eventName === 'post_tool' || eventName === 'turn_end') &&
+    hasTranscriptPromptEvidence &&
+    resolvedPromptText.trim().length > 0
+  ) {
+    // Why: jcode hooks carry no prompt field; only the journal-backed prompt counts as explicit user text.
     return true
   }
   if (
@@ -2418,6 +2457,8 @@ function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'jcode':
+      return extractJcodeToolFields(eventName, hookPayload)
   }
 }
 
@@ -2904,6 +2945,66 @@ function normalizeKimiEvent(
     toolInput: snapshot.toolInput,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted
+  })
+}
+
+// Why: jcode's permission/ask surface is tool-driven; token-normalize the name
+// (like Kimi's AskUserQuestion check) so renamed or spaced variants still count.
+function isJcodeUserInputTool(toolName: string | undefined): boolean {
+  const normalized = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() ?? ''
+  return (
+    normalized.includes('ask') ||
+    normalized.includes('question') ||
+    normalized.includes('permission') ||
+    normalized.includes('approval') ||
+    normalized.includes('confirm')
+  )
+}
+
+function normalizeJcodeEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  if (eventName === 'session_start') {
+    // Why: jcode fires session_start on idle TUI open/attach/resume; mapping it
+    // to 'working' would show a spinner before the user typed (mirrors Devin).
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const toolName = readString(hookPayload, 'tool_name')
+  const stateName =
+    eventName === 'post_tool' && isJcodeUserInputTool(toolName)
+      ? 'waiting'
+      : eventName === 'post_tool'
+        ? 'working'
+        : eventName === 'turn_end' || eventName === 'session_end'
+          ? 'done'
+          : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractJcodeToolFields(eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('jcode', eventName) }
+  )
+
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('jcode', eventName)
+    }),
+    agentType: 'jcode',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    lastAssistantMessage: snapshot.lastAssistantMessage
   })
 }
 
@@ -4105,6 +4206,24 @@ export function normalizeHookPayload(
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'jcode':
+      {
+        const transcriptPrompt = readLastJcodeUserPromptFromHookPayload(hookPayloadRecord)
+        hasTranscriptPromptEvidence = transcriptPrompt !== undefined
+        promptInteractionKey = transcriptPrompt?.interactionKey
+        resolvedPromptText = transcriptPrompt?.text ?? ''
+        if (promptText && extractedPrompt.source !== 'message') {
+          resolvedPromptText = promptText
+        }
+      }
+      payload = normalizeJcodeEvent(
+        state,
+        eventName,
+        resolvedPromptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
   }
 
   // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
@@ -4115,12 +4234,18 @@ export function normalizeHookPayload(
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
   const providerSessionOnly =
-    source === 'pi' && eventName === 'session_start' && providerSession !== null
-  // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
+    (source === 'pi' || source === 'jcode') &&
+    eventName === 'session_start' &&
+    providerSession !== null
+  // Why: Pi/Jcode session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
   const transportPayload =
     payload ??
     (providerSessionOnly
-      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'pi' })
+      ? normalizeAgentStatusPayload({
+          state: 'done',
+          prompt: '',
+          agentType: source === 'jcode' ? 'jcode' : 'pi'
+        })
       : null)
   return transportPayload
     ? {
@@ -4179,7 +4304,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  '/hook/jcode': 'jcode'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

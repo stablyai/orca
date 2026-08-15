@@ -103,6 +103,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/omp')).toBe('omp')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
+    expect(resolveHookSource('/hook/jcode')).toBe('jcode')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -229,6 +230,80 @@ describe('shared agent-hook-listener', () => {
       state: 'working',
       toolName: 'AskUserQuestion'
     })
+  })
+
+  it('maps jcode post_tool to working with the tool name', () => {
+    const event = normalizeHookPayload(
+      state,
+      'jcode',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'post_tool',
+        payload: { event: 'post_tool', session_id: 'session_jc_1', tool_name: 'read_file' }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      agentType: 'jcode',
+      state: 'working',
+      toolName: 'read_file'
+    })
+  })
+
+  it('maps jcode user-input tools to waiting', () => {
+    const event = normalizeHookPayload(
+      state,
+      'jcode',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'post_tool',
+        payload: { event: 'post_tool', session_id: 'session_jc_2', tool_name: 'ask_user' }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      agentType: 'jcode',
+      state: 'waiting',
+      toolName: 'ask_user'
+    })
+  })
+
+  it('maps jcode turn_end to done with the last assistant message', () => {
+    const event = normalizeHookPayload(
+      state,
+      'jcode',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'turn_end',
+        payload: {
+          event: 'turn_end',
+          session_id: 'session_jc_3',
+          status: 'ok',
+          last_assistant_message: 'Done.'
+        }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      agentType: 'jcode',
+      state: 'done',
+      lastAssistantMessage: 'Done.'
+    })
+  })
+
+  it('treats jcode session_start as identity-only (no status row)', () => {
+    const event = normalizeHookPayload(
+      state,
+      'jcode',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'session_start',
+        payload: { event: 'session_start', session_id: 'session_jc_4', source: 'create' }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({ agentType: 'jcode', state: 'done' })
+    expect(event?.providerSession).toEqual({ key: 'session_id', id: 'session_jc_4' })
   })
 
   it('keeps a normal Claude PreToolUse tool call as working', () => {

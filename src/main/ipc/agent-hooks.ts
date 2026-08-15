@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -24,6 +24,7 @@ import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { devinHookService } from '../devin/hook-service'
+import { jcodeHookService } from '../jcode/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
@@ -36,6 +37,28 @@ import {
 
 type AgentHookHandlerDependencies = {
   getPtyIdForPaneKey?: (paneKey: string) => string | undefined
+}
+
+// Why: status handlers are identical except for the service; a shared factory
+// keeps the per-agent registrations one line each (and this file inside its
+// max-lines budget).
+function agentHookStatusHandler(
+  agent: AgentHookTarget,
+  getStatus: () => AgentHookInstallStatus
+): () => AgentHookInstallStatus {
+  return (): AgentHookInstallStatus => {
+    try {
+      return getStatus()
+    } catch (err) {
+      return {
+        agent,
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  }
 }
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
@@ -66,6 +89,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentHooks:devinStatus')
   ipcMain.removeHandler('agentHooks:kimiStatus')
+  ipcMain.removeHandler('agentHooks:jcodeStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
@@ -295,30 +319,16 @@ export function registerAgentHookHandlers(
       }
     }
   })
-  ipcMain.handle('agentHooks:devinStatus', (): AgentHookInstallStatus => {
-    try {
-      return devinHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'devin',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:kimiStatus', (): AgentHookInstallStatus => {
-    try {
-      return kimiHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'kimi',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
+  ipcMain.handle(
+    'agentHooks:devinStatus',
+    agentHookStatusHandler('devin', () => devinHookService.getStatus())
+  )
+  ipcMain.handle(
+    'agentHooks:kimiStatus',
+    agentHookStatusHandler('kimi', () => kimiHookService.getStatus())
+  )
+  ipcMain.handle(
+    'agentHooks:jcodeStatus',
+    agentHookStatusHandler('jcode', () => jcodeHookService.getStatus())
+  )
 }

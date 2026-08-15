@@ -36,7 +36,7 @@ type SessionParseCacheEntry = {
 }
 
 // Incremental append-parsing applies only to transcripts that are append-only
-// JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes/gemini-json)
+// JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes/jcode/gemini-json)
 // are rewritten in place, Kimi reads a state doc plus a sibling wire file, and
 // OpenCode reads SQLite rows or a doc plus a message dir — those formats keep
 // unchanged-file reuse only and re-parse whole when they change.
@@ -71,6 +71,7 @@ function resumableStateFactoryFor(
     case 'devin':
     case 'grok':
     case 'hermes':
+    case 'jcode':
     case 'kimi':
     case 'opencode':
     case 'rovo':
