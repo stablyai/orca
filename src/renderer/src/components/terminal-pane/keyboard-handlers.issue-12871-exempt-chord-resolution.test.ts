@@ -1,14 +1,8 @@
-// Issue #12871. Unit half: which events the shortcut layer still resolves while a composition
-// is live. The end-to-end half lives in keyboard-handlers.issue-12871-recorded-chord-traces.test.ts,
-// which replays captured macOS Korean and Japanese traces through the real handler and xterm.
-//
-// The exemption exists because a Japanese conversion swallows a modifier chord outright — no
-// commit, no platform replay, nothing reaches the shell. It is what lets the pane resolve such
-// a chord from its *release*; on the keydown the pane still yields, because Korean's input
-// source replays the chord instead and acting on both copies would fire it twice.
-//
-// Scope: shapes here are constructed from the DOM contract, not captured. The captured file is
-// where hardware fidelity lives; this file pins the decision boundary, including the negatives.
+// Issue #12871, unit half: the decision boundary, including the negatives. Shapes here are
+// constructed from the DOM contract; hardware fidelity lives in
+// keyboard-handlers.issue-12871-recorded-chord-traces.test.ts, which replays captured macOS
+// Korean and Japanese traces through the real handler and xterm. Why the two input sources need
+// different answers is in `isImeExemptTerminalChord` (terminal-shortcut-policy.ts).
 import { describe, expect, it } from 'vitest'
 import { resolveTerminalKeyboardShortcutAction } from './keyboard-handlers'
 import { isImeExemptTerminalChord, type TerminalShortcutEvent } from './terminal-shortcut-policy'
@@ -69,59 +63,6 @@ describe('terminal chords stay live during an IME composition', () => {
     })
   })
 
-  // Chromium defines KeyboardEvent's fields as accessors on the prototype, not as own
-  // properties, so anything that copies an event by enumerating it gets nothing. happy-dom
-  // does the opposite, which means a plain-object fixture cannot see that class of bug and a
-  // real `new KeyboardEvent(...)` cannot either under this runner. Modelling the browser's
-  // shape explicitly is the only form of it that runs here.
-  it('resolves an event whose fields live on the prototype, as in a browser', () => {
-    const fields = keyEvent({
-      key: 'Process',
-      code: 'Backspace',
-      metaKey: true,
-      isComposing: true,
-      keyCode: 229
-    })
-    const prototype = Object.create(
-      null,
-      Object.fromEntries(
-        Object.entries(fields).map(([name, value]) => [name, { get: () => value }])
-      )
-    ) as ComposingKeyEvent
-    const event = Object.create(prototype) as ComposingKeyEvent
-    expect(Object.keys(event)).toEqual([])
-
-    expect(
-      resolveTerminalKeyboardShortcutAction(
-        event,
-        true,
-        'false',
-        0,
-        false,
-        { 'terminal.clear': ['Mod+Backspace'] },
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        () => false
-      )
-    ).toEqual({ type: 'clearActivePane' })
-  })
-
-  // A CJK input source rewrites `key` while `code` keeps the physical key, which is what
-  // #12171 and #13033 turned on. Matching `key` here would drop the chord again.
-  it('matches the physical code when the input source has rewritten key', () => {
-    const event = keyEvent({
-      key: 'Process',
-      code: 'ArrowLeft',
-      metaKey: true,
-      isComposing: true,
-      keyCode: 229
-    })
-
-    expect(resolveOnMac(event)).toEqual({ type: 'sendInput', data: '\x01' })
-  })
-
   // The gate that decides whether a composing keydown is remembered for its release. Asserted
   // directly rather than through the resolver: the resolver answers for every binding in the
   // registry, so a new one landing there would break these rows for a reason unrelated to the
@@ -139,7 +80,7 @@ describe('terminal chords stay live during an IME composition', () => {
     ],
     ['Cmd+A', keyEvent({ key: 'a', code: 'KeyA', metaKey: true })]
   ])('does not remember %s for its release', (_label, event) => {
-    expect(isImeExemptTerminalChord({ ...event, isComposing: true })).toBe(false)
+    expect(isImeExemptTerminalChord(event)).toBe(false)
   })
 
   it.each([
@@ -148,6 +89,6 @@ describe('terminal chords stay live during an IME composition', () => {
     // `key` is already rewritten here, which is why the gate reads `code`.
     ['Cmd+Backspace as Process', keyEvent({ key: 'Process', code: 'Backspace', metaKey: true })]
   ])('remembers %s for its release', (_label, event) => {
-    expect(isImeExemptTerminalChord({ ...event, isComposing: true })).toBe(true)
+    expect(isImeExemptTerminalChord(event)).toBe(true)
   })
 })

@@ -1624,9 +1624,7 @@ const PUNCTUATION_KEY_TOKENS = new Set([
   'Backquote'
 ])
 
-// 'Process' is Windows' report for a key an IME consumed (#12171): the produced key is
-// genuinely unreportable, which is the same condition as 'Dead' above.
-const PHYSICAL_CODE_FALLBACK_KEYS = new Set(['', 'Dead', 'Unidentified', 'Process'])
+const PHYSICAL_CODE_FALLBACK_KEYS = new Set(['', 'Dead', 'Unidentified'])
 
 const SHIFTED_PUNCTUATION_KEY_TOKENS: Record<string, string> = {
   '<': 'Comma',

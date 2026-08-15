@@ -24,9 +24,9 @@
 // than the fix. That recording is evidence about the platform, not a contract for this handler,
 // and is raised on #12732 instead of frozen into a green assertion here.
 
-// Structurally identical to the replaying test's own RecordedRow/RecordedCase; declared here so
-// the data module stands alone and the test file keeps its types private.
-export type InAppRecordedRow = {
+// Shared with the bare-page recordings in the replaying test and with the command-release
+// module, so a field added to one shape cannot be missed by the other.
+export type RecordedChordRow = {
   t: string
   key?: string
   code?: string
@@ -39,16 +39,16 @@ export type InAppRecordedRow = {
   value?: string
 }
 
-export type InAppRecordedCase = {
+export type RecordedChordCase = {
   name: string
   expectCalls: string[]
   expectEmitted: string[]
-  rows: InAppRecordedRow[]
+  rows: RecordedChordRow[]
   /** Rows end mid-composition: assert nothing sent yet, then drive a commit and check again. */
   commitsAfterCapture?: true
 }
 
-export const IN_APP_TRACE_CASES: InAppRecordedCase[] = [
+export const IN_APP_TRACE_CASES: RecordedChordCase[] = [
   {
     // korean-cmdright.json dom[36..50]: committed 가나 with 나 composing, Cmd+ArrowRight.
     // Captured PTY line: 가나나\x05\x1b[C\n.

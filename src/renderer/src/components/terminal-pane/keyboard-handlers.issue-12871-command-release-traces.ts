@@ -6,8 +6,9 @@
 //
 // What is new here is the driver: these were posted as CGEvents with the modifier as its own
 // key event, the way a hand types it. System Events folds the modifier into the target key's
-// flags instead, which is why no earlier recording contains a modifier press or release at all
-// and why the Cmd half of the gesture looked like it had no end.
+// flags instead, which is why no earlier IN-APP recording contains a modifier press or release
+// and why the Cmd half of the gesture looked like it had no end. The bare-page recordings in
+// keyboard-handlers.issue-12871-recorded-chord-traces.test.ts do carry both.
 //
 // With that end recorded, the two input sources separate on `Cmd` exactly as they already did on
 // `Option`, and the same recordings show why the arrow's own release cannot carry the decision:
@@ -18,9 +19,9 @@
 //   - Korean 2-Set commits on the chord. Its arrow keyup does arrive, after compositionend and
 //     with `isComposing` false, so it spends the carry without firing and the `Cmd` release that
 //     follows finds nothing armed. Two independent reasons the committing source stays silent.
-import type { InAppRecordedCase } from './keyboard-handlers.issue-12871-in-app-chord-traces'
+import type { RecordedChordCase } from './keyboard-handlers.issue-12871-in-app-chord-traces'
 
-export const COMMAND_RELEASE_TRACE_CASES: InAppRecordedCase[] = [
+export const COMMAND_RELEASE_TRACE_CASES: RecordedChordCase[] = [
   {
     name: 'Japanese, Cmd+ArrowLeft over a live さ preedit, ended by the Command release',
     expectCalls: ['\x01'],

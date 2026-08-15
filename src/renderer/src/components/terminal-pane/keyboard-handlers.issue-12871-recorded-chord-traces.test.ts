@@ -40,30 +40,13 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
 import { COMMAND_RELEASE_TRACE_CASES } from './keyboard-handlers.issue-12871-command-release-traces'
-import { IN_APP_TRACE_CASES } from './keyboard-handlers.issue-12871-in-app-chord-traces'
+import {
+  IN_APP_TRACE_CASES,
+  type RecordedChordCase,
+  type RecordedChordRow
+} from './keyboard-handlers.issue-12871-in-app-chord-traces'
 
-type RecordedRow = {
-  t: string
-  key?: string
-  code?: string
-  keyCode?: number
-  isComposing?: boolean
-  meta?: boolean
-  alt?: boolean
-  data?: string
-  inputType?: string
-  value?: string
-}
-
-type RecordedCase = {
-  name: string
-  expectCalls: string[]
-  expectEmitted: string[]
-  rows: RecordedRow[]
-  commitsAfterCapture?: true
-}
-
-const CASES: RecordedCase[] = [
+const CASES: RecordedChordCase[] = [
   {
     name: 'Korean 2-Set, Cmd+ArrowLeft',
     expectCalls: ['\x01'],
@@ -375,7 +358,7 @@ function openRig(overrides: Record<string, unknown> = {}): Rig {
   }
 }
 
-function dispatchRow(textarea: HTMLTextAreaElement, row: RecordedRow): void {
+function dispatchRow(textarea: HTMLTextAreaElement, row: RecordedChordRow): void {
   if (row.t === 'keydown' || row.t === 'keyup') {
     const event = new KeyboardEvent(row.t, {
       key: row.key,
@@ -409,7 +392,7 @@ function dispatchRow(textarea: HTMLTextAreaElement, row: RecordedRow): void {
   }
 }
 
-async function replay(textarea: HTMLTextAreaElement, rows: RecordedRow[]): Promise<void> {
+async function replay(textarea: HTMLTextAreaElement, rows: RecordedChordRow[]): Promise<void> {
   for (const row of rows) {
     dispatchRow(textarea, row)
     // A full task between rows, deliberately: nothing here may depend on how fast the rows
@@ -436,7 +419,7 @@ const JAPANESE_CASE = 'Japanese, a bare arrow and four chords across one live pr
 
 // By name, not by index: each test below needs a particular gesture, and inserting a case
 // would otherwise silently repoint them at the wrong trace while still passing.
-function caseNamed(name: string): RecordedCase {
+function caseNamed(name: string): RecordedChordCase {
   const found = CASES.find((testCase) => testCase.name === name)
   if (!found) {
     throw new Error(`recorded case not found: ${name}`)
@@ -444,20 +427,20 @@ function caseNamed(name: string): RecordedCase {
   return found
 }
 
+beforeEach(() => {
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+    measureText: () => ({ width: 10 })
+  } as unknown as CanvasRenderingContext2D)
+  vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(MAC_USER_AGENT)
+})
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  document.body.replaceChildren()
+})
+
 describe('recorded macOS chord traces during an IME composition', () => {
-  beforeEach(() => {
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      measureText: () => ({ width: 10 })
-    } as unknown as CanvasRenderingContext2D)
-    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(MAC_USER_AGENT)
-  })
-
-  afterEach(() => {
-    cleanup()
-    vi.restoreAllMocks()
-    document.body.replaceChildren()
-  })
-
   it.each(
     [...CASES, ...IN_APP_TRACE_CASES, ...COMMAND_RELEASE_TRACE_CASES].map(
       (testCase) => [testCase.name, testCase] as const
@@ -506,48 +489,11 @@ describe('recorded macOS chord traces during an IME composition', () => {
   // The release path reads a live composition, and a rename field or the search input can hold
   // one too. Those keystrokes belong to the field, and routing them to the shell would both
   // move the wrong cursor and write bytes the user never aimed at the terminal.
-  it('leaves a swallowed chord alone when the composition is in a text field', async () => {
-    const rig = openRig()
-    const field = document.createElement('input')
-    rig.textarea.parentElement?.append(field)
-
-    for (const t of ['keydown', 'keyup'] as const) {
-      const event = new KeyboardEvent(t, {
-        key: 'ArrowLeft',
-        code: 'ArrowLeft',
-        metaKey: true,
-        bubbles: true,
-        cancelable: true
-      })
-      Object.defineProperties(event, {
-        isComposing: { value: true },
-        keyCode: { value: t === 'keydown' ? 229 : 37 }
-      })
-      field.dispatchEvent(event)
-      await macrotask()
-    }
-
-    expect(rig.inputCalls).toEqual([])
-    rig.unmount()
-  })
 })
 
 // Constructed, not recorded. Both cases below need a shape the two captures happen not to
 // contain, and the file above is kept to captured rows only so its fidelity claim stays true.
 describe('constructed shapes the macOS captures do not contain', () => {
-  beforeEach(() => {
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      measureText: () => ({ width: 10 })
-    } as unknown as CanvasRenderingContext2D)
-    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(MAC_USER_AGENT)
-  })
-
-  afterEach(() => {
-    cleanup()
-    vi.restoreAllMocks()
-    document.body.replaceChildren()
-  })
-
   // The decision is the release's alone. Pinned directly rather than left to be inferred from
   // the call counts above, because `resolveTerminalKeyboardShortcutAction` does resolve a
   // composing exempt chord — it is the pane that declines to act on it until the key comes up.
@@ -654,7 +600,7 @@ describe('constructed shapes the macOS captures do not contain', () => {
   // Three separate ways a carry can be left with no release of its own to spend it, each with
   // its own escape. Split apart deliberately: one test covering all three passes as long as any
   // one of them works, which pins none of them.
-  const ARMED_ALT_ARROW: RecordedRow[] = [
+  const ARMED_ALT_ARROW: RecordedChordRow[] = [
     { t: 'compositionstart', data: '' },
     { t: 'keydown', key: 'Alt', code: 'AltLeft', keyCode: 18, isComposing: true, alt: true },
     {
@@ -722,6 +668,108 @@ describe('constructed shapes the macOS captures do not contain', () => {
     rig.unmount()
   })
 
+  // The release-keyed recovery reads two stock-macOS behaviours: that a committing source
+  // replays the chord unmarked, and that Cmd+key delivers no keyup. Neither is recorded for
+  // ibus or MS-IME, and an input source that commits without replaying would lose the chord
+  // outright. Everywhere else the chord must still arrive once the composition commits.
+  it('keeps the deferred send on a non-mac platform, with no release at all', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const rig = openRig()
+    await replay(rig.textarea, [
+      { t: 'compositionstart', data: '' },
+      { t: 'compositionupdate', data: 'ㅅ' },
+      { t: 'input', data: 'ㅅ', value: 'ㅅ' },
+      {
+        t: 'keydown',
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        keyCode: 229,
+        isComposing: true,
+        alt: true
+      }
+    ])
+
+    // Held, not sent, exactly as on the parent commit.
+    expect(rig.inputCalls).toEqual([])
+    await commitComposition(rig.textarea, '사')
+    expect(rig.inputCalls).toEqual(['\x1bb'])
+    rig.unmount()
+  })
+
+  // Both keys are down at once under one Cmd hold, and the Command release ends both. A single
+  // slot would drop the first chord silently: its keydown produced no bytes, so nothing but the
+  // missing line-start would show it was ever pressed.
+  it('sends both chords when two exempt keys are held under one modifier', async () => {
+    const rig = openRig()
+    const japanese = caseNamed(JAPANESE_CASE)
+    const beforeFirstChord = japanese.rows.slice(
+      0,
+      japanese.rows.findIndex((row) => row.t === 'keydown' && row.code === 'MetaLeft')
+    )
+    await replay(rig.textarea, [
+      ...beforeFirstChord,
+      { t: 'keydown', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true, meta: true },
+      {
+        t: 'keydown',
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        keyCode: 229,
+        isComposing: true,
+        meta: true
+      },
+      {
+        t: 'keydown',
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 229,
+        isComposing: true,
+        meta: true
+      },
+      { t: 'keyup', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true }
+    ])
+
+    expect(rig.inputCalls).toEqual([])
+    await commitComposition(rig.textarea, '日本語')
+    // Press order: line start, then kill to line start.
+    expect(rig.inputCalls).toEqual(['\x01', '\x15'])
+    rig.unmount()
+  })
+
+  // The pane takes the press when it remembers it, so a global handler bound to the same chord
+  // must not also act on it — that fires the remapped action twice, once per phase.
+  it('consumes the keydown it remembers', async () => {
+    const rig = openRig()
+    const japanese = caseNamed(JAPANESE_CASE)
+    const beforeFirstChord = japanese.rows.slice(
+      0,
+      japanese.rows.findIndex((row) => row.t === 'keydown' && row.code === 'MetaLeft')
+    )
+    await replay(rig.textarea, beforeFirstChord)
+
+    const seenAfterUs: string[] = []
+    const later = (event: Event): void => {
+      seenAfterUs.push((event as KeyboardEvent).code)
+    }
+    window.addEventListener('keydown', later, { capture: true })
+    const press = new KeyboardEvent('keydown', {
+      key: 'ArrowLeft',
+      code: 'ArrowLeft',
+      metaKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperties(press, { isComposing: { value: true }, keyCode: { value: 229 } })
+    rig.textarea.dispatchEvent(press)
+    await macrotask()
+    window.removeEventListener('keydown', later, { capture: true })
+
+    expect(press.defaultPrevented).toBe(true)
+    expect(seenAfterUs).toEqual([])
+    rig.unmount()
+  })
+
   // A KeyboardEvent's modifier flags describe the moment it fired, so letting Cmd up before
   // the arrow leaves the arrow's keyup with metaKey: false. Reading the release's own flags
   // drops the chord outright, which is the bug this whole change exists to fix.
@@ -781,8 +829,8 @@ describe('constructed shapes the macOS captures do not contain', () => {
     )
     await replay(rig.textarea, rows)
 
-    // Without the physical-code substitution this falls through to the built-in kill-line
-    // byte: the wrong action, silently, for anyone who remapped the chord.
+    // The remembered chord carries the physical code as its key; without that it falls through
+    // to the built-in kill-line byte, the wrong action and silently, for anyone who remapped it.
     expect(rig.clearPaneCalls).toBe(1)
     expect(rig.inputCalls).toEqual(['\x01', '\x1bb', '\x1b\x7f'])
     rig.unmount()

@@ -1,6 +1,9 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { PtyTransport } from './pty-transport'
 
+// Both are emitted only by config/patches/@xterm__xterm@6.1.0-beta.287.patch, not by upstream
+// xterm. A regenerated patch that drops them leaves every waiter here silent rather than failing,
+// and the deferred cursor chord in keyboard-handlers.ts waits with no deadline at all.
 export const XTERM_COMPOSITION_SESSION_START_EVENT = 'xterm-composition-session-start'
 export const XTERM_COMPOSITION_SESSION_END_EVENT = 'xterm-composition-session-end'
 
