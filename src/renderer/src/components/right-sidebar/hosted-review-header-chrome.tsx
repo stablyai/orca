@@ -1,5 +1,5 @@
 import React from 'react'
-import { GitMerge } from 'lucide-react'
+import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from './checks-panel-content'
@@ -17,6 +17,23 @@ function hostedReviewStateClass(review: HostedReviewInfo): string {
   return 'text-muted-foreground/50'
 }
 
+// Why: draft and closed only differed by a near-identical muted tone on the same
+// glyph, so a draft review read as closed.
+function hostedReviewStateIcon(
+  review: HostedReviewInfo
+): React.ComponentType<{ className?: string }> | null {
+  if (review.state === 'merged') {
+    return GitMerge
+  }
+  if (review.state === 'closed') {
+    return GitPullRequestClosed
+  }
+  if (review.state === 'draft') {
+    return GitPullRequestDraft
+  }
+  return null
+}
+
 export function HostedReviewIcon({
   review,
   className
@@ -24,7 +41,8 @@ export function HostedReviewIcon({
   review: HostedReviewInfo
   className?: string
 }): React.JSX.Element {
-  const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const providerIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const Icon = hostedReviewStateIcon(review) ?? providerIcon
   return <Icon className={cn(className, hostedReviewStateClass(review))} />
 }
 

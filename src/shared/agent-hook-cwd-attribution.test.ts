@@ -6,7 +6,7 @@ import {
   hookCwdContradictsWorktree,
   hookCwdContradictsWorktreeAfterLocalResolve
 } from './agent-hook-cwd-attribution'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from './worktree-id'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from './worktree/id'
 
 const REPO = 'repo-1'
 const WORKTREE = `${REPO}::/Users/dev/projects/api`

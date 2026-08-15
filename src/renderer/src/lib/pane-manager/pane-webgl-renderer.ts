@@ -23,6 +23,7 @@ let suggestedRendererType: 'dom' | undefined
 
 type ReleasableWebglContext = {
   getExtension(name: 'WEBGL_lose_context'): WEBGL_lose_context | null
+  isContextLost?: () => boolean
 }
 
 type XtermWebglAddonInternals = {
@@ -72,6 +73,15 @@ export function cancelPendingWebglRefresh(pane: ManagedPaneInternal): void {
     globalThis.cancelAnimationFrame(pane.pendingWebglRefreshRafId)
   }
   pane.pendingWebglRefreshRafId = null
+}
+
+export function isPaneWebglContextLost(pane: ManagedPaneInternal): boolean {
+  try {
+    const renderer = (pane.webglAddon as unknown as XtermWebglAddonInternals | null)?._renderer
+    return renderer?._gl?.isContextLost?.() === true
+  } catch {
+    return true
+  }
 }
 
 export function disposeWebgl(

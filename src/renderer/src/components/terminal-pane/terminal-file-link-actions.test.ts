@@ -40,6 +40,7 @@ function context(request: ReturnType<typeof vi.fn>): TerminalLinkActionContext {
   return {
     paneId: 3,
     pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+    claimPtyMouse: vi.fn(() => true),
     request: request as TerminalLinkActionContext['request'],
     focusTerminal: vi.fn()
   }

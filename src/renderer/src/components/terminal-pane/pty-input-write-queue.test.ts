@@ -469,7 +469,8 @@ describe('pty input write queue', () => {
   })
 
   it('dual mode-2031 enqueues through the real queue never paint 997 under host echo-safe write', async () => {
-    // Issue path: xterm onData + mode-2031 scan each enqueue mode2031SequenceFor.
+    // Two 997s can still coalesce in one write: a fast theme flip, or an old client that
+    // still answers 2031 subscribes (#9993 made this host silent, mixed versions have not).
     // Drive the real write queue → host intercept (extract + answerLiveQueryReply)
     // → ingress echo strip, and assert no `997;1n` emission at the confirm prompt.
     vi.useFakeTimers()

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, type RefObject } from 'react'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import type { SourceControlRowOpenEvent } from './source-control-split-open'
 
 function isMacPlatform(): boolean {

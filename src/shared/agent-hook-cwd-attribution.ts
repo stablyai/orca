@@ -5,7 +5,7 @@ import {
   isWindowsAbsolutePathLike,
   resolveRuntimePath
 } from './cross-platform-path'
-import { splitWorktreeIdForFilesystem, WORKTREE_ID_SEPARATOR } from './worktree-id'
+import { splitWorktreeIdForFilesystem, WORKTREE_ID_SEPARATOR } from './worktree/id'
 
 const UNC_NOTATION = /^(?:\/\/|\\\\)/
 

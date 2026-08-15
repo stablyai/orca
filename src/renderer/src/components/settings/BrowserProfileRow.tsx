@@ -1,7 +1,10 @@
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
-import type { BrowserCookieImportSummary, BrowserSessionProfile } from '../../../../shared/types'
+import type {
+  BrowserCookieImportSummary,
+  BrowserSessionProfile
+} from '../../../../shared/browser-workspace-types'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -14,6 +17,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
+import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
@@ -80,7 +84,8 @@ export function BrowserProfileRow({
                 value1: browser?.label ?? browserFamily,
                 value2: profile.label
               }
-            )
+            ),
+        result.executionHostLabel
       )
     } else {
       toast.error(result.reason)
@@ -96,7 +101,8 @@ export function BrowserProfileRow({
           'auto.components.settings.BrowserProfileRow.b4c167764d',
           'Imported {{value0}} cookies from file into {{value1}}.',
           { value0: result.summary.importedCookies, value1: profile.label }
-        )
+        ),
+        result.executionHostLabel
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -213,6 +219,7 @@ export function BrowserProfileRow({
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
               {translate('auto.components.settings.BrowserProfileRow.ebb78dfd6f', 'From File…')}
             </DropdownMenuItem>
+            <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
         {isDefault ? (

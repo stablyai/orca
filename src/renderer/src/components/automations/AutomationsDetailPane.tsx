@@ -11,7 +11,7 @@ import type {
   ExternalAutomationRun,
   AutomationRun
 } from '../../../../shared/automations-types'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AutomationDetail } from './AutomationDetail'
 import { HermesCronOutputView } from './HermesCronOutputView'

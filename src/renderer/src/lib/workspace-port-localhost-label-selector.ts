@@ -1,5 +1,7 @@
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
-import type { GlobalSettings, Project, Repo } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Project } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import type { WorkspacePort } from '../../../shared/workspace-ports'
 import { useAppStore } from '@/store'
 import { localhostWorktreeLabelRouteForPort } from './workspace-port-localhost-label'
@@ -9,8 +11,8 @@ import { localhostWorktreeLabelRouteForPort } from './workspace-port-localhost-l
 // this is the single source for both reactive and imperative call sites.
 type LocalhostLabelLookupState = {
   settings?: Pick<GlobalSettings, 'localhostWorktreeLabelsEnabled'> | null
-  repos?: Repo[]
-  projects?: Project[]
+  repos?: readonly Repo[]
+  projects?: readonly Project[]
   getKnownWorktreeById?: (worktreeId: string) => { projectId?: string | null } | null | undefined
 }
 

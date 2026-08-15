@@ -40,8 +40,8 @@ import {
   type DashboardCardContextState
 } from './dashboard-card-context'
 import {
-  dashboardCardMapWorkspaceMetadata,
-  collectActiveDashboardWorkspaces
+  collectActiveDashboardWorkspaces,
+  dashboardCardMapWorkspaceMetadata
 } from './dashboard-snapshot-workspaces'
 import {
   boundedLabel,
@@ -75,7 +75,11 @@ export type DashboardSnapshotState = Pick<
   | 'settings'
 > &
   DashboardCardContextState &
-  Partial<DashboardCardTerminalInputState & DashboardLaunchDetectionState>
+  Partial<
+    DashboardCardTerminalInputState &
+      DashboardLaunchDetectionState &
+      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels'>
+  >
 
 /**
  * Derive the serializable dashboard snapshot from the live renderer store.
@@ -185,13 +189,19 @@ export function buildDashboardSnapshot(
       ? resolveDashboardCardContext(state, repo, worktree)
       : undefined
     if (workspaces && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
+      const hostMetadata = dashboardCardMapWorkspaceMetadata(
+        workspace,
+        null,
+        undefined,
+        clientHost.platform
+      )
       workspaces.push({
         repoId: workspace.projectId,
         worktreeId,
         repoName: boundedLabel(workspace.projectName),
         worktreeName: boundedLabel(worktree.displayName),
         ...(parentWorktreeId ? { parentWorktreeId } : {}),
-        ...dashboardCardMapWorkspaceMetadata(workspace, null, undefined, clientHost.platform),
+        ...hostMetadata,
         workspaceStatusId: context?.workspaceStatus.id,
         workspaceStatusLabel: context?.workspaceStatus.label,
         workspaceStatusColor: context?.workspaceStatus.color,
@@ -246,6 +256,14 @@ export function buildDashboardSnapshot(
             })
           : null
       const finishedAt = lastEnteredDoneAt(row)
+      const hostMetadata = includeCardDetails
+        ? dashboardCardMapWorkspaceMetadata(
+            workspace,
+            ptyId,
+            terminalInput ?? undefined,
+            clientHost.platform
+          )
+        : undefined
       // Only repos that actually contribute a card ship their icon.
       repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
 
@@ -266,12 +284,7 @@ export function buildDashboardSnapshot(
           ? {
               parentPaneKey: dashboardCardParentPaneKey(row),
               ...(parentWorktreeId ? { parentWorktreeId } : {}),
-              ...dashboardCardMapWorkspaceMetadata(
-                workspace,
-                ptyId,
-                terminalInput ?? undefined,
-                clientHost.platform
-              )
+              ...hostMetadata
             }
           : {}),
         workspaceStatusId: context?.workspaceStatus.id,

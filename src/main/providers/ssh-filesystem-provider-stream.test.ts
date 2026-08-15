@@ -155,6 +155,21 @@ describe('SshFilesystemProvider readFile streaming', () => {
     expect(mux.notify).toHaveBeenCalledWith('fs.cancelStream', { streamId: 1 })
   })
 
+  it('applies a caller binary cap before allocating the stream buffer', async () => {
+    mux.request.mockResolvedValue({
+      streamId: 2,
+      totalSize: 2,
+      isBinary: true,
+      chunkEncoding: 'base64',
+      resultEncoding: 'base64'
+    })
+
+    await expect(provider.readFile('/home/x.bin', { maxBinaryBytes: 1 })).rejects.toThrow(
+      /exceeds client cap/i
+    )
+    expect(mux.notify).toHaveBeenCalledWith('fs.cancelStream', { streamId: 2 })
+  })
+
   it('rejects on fs.streamError notification', async () => {
     const totalSize = 1024
     mux.request.mockImplementation(async () => {

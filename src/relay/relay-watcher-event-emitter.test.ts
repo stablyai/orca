@@ -61,7 +61,7 @@ function createRecordingSink(highWaterMark?: number): {
       drainWaiters.push(callback)
       return () => {
         const index = drainWaiters.indexOf(callback)
-        if (index >= 0) {
+        if (index !== -1) {
           drainWaiters.splice(index, 1)
         }
       }

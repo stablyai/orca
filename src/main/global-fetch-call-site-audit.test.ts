@@ -18,6 +18,7 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/artifacts/artifact-cloud-request.ts', 1],
   ['main/azure-devops/azure-devops-api-request.ts', 1],
   ['main/bitbucket/client.ts', 1],
+  ['main/bitbucket/user-request.ts', 1],
   ['main/gitea/client.ts', 1],
   ['main/orca-profiles/profile-cloud-client.ts', 1],
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],

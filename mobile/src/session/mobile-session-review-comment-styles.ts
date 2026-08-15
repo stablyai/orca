@@ -159,6 +159,11 @@ export const mobileSessionReviewCommentStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs
   },
+  markdownKeyboardDismissButton: {
+    width: 34,
+    justifyContent: 'center',
+    paddingHorizontal: 0
+  },
   markdownSaveButton: {
     backgroundColor: colors.bgRaised
   },

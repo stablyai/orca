@@ -1,4 +1,4 @@
-import type { GitPushTarget } from '../../../../shared/types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 // Why: a fork-PR worktree pushes to a contributor's fork, not origin. Render
 // "owner:branch" from the fork remote URL when available so the maintainer can

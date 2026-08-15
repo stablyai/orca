@@ -4,7 +4,11 @@ import { getUnreadBadgeCount } from '@/lib/unread-badge-count'
 import { useAppStore } from '@/store'
 
 function setUnreadDockBadgeCountBestEffort(count: number): void {
-  void window.api.app.setUnreadDockBadgeCount(count).catch(() => {
+  const setBadge = window.api?.app?.setUnreadDockBadgeCount
+  if (!setBadge) {
+    return
+  }
+  void setBadge(count).catch(() => {
     // Dock sync is best-effort chrome; stale badge state should not affect app use.
   })
 }

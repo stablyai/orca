@@ -1,13 +1,11 @@
 /* eslint-disable max-lines -- Why: keeps group-scoped activation, close, split, and tab-order rules together with the TabGroupPanel surface. */
 import { useCallback, useMemo } from 'react'
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
-import type {
-  BrowserTab as BrowserTabState,
-  Tab,
-  TabGroup,
-  TerminalTab
-} from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
@@ -28,6 +26,7 @@ import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-sim
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -585,7 +584,9 @@ export function useTabGroupWorkspaceModel({
       closeToLeft,
       createSplitGroup,
       newBrowserTab: () => {
-        void openNewBrowserTabInActiveWorkspace(groupId)
+        void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
+          toast.error(error instanceof Error ? error.message : String(error))
+        })
       },
       newSimulatorTab: worktreeState.mobileEmulatorEnabled
         ? () => {
@@ -597,6 +598,8 @@ export function useTabGroupWorkspaceModel({
             void openMobileEmulatorTab(worktreeId, {
               placement: 'rightSplit',
               targetGroupId: groupId
+            }).catch((error) => {
+              toast.error(error instanceof Error ? error.message : String(error))
             })
           }
         : undefined,
@@ -612,23 +615,36 @@ export function useTabGroupWorkspaceModel({
             return
           }
           const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+          const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
+            'managed-browser'
+          ]
+          if (browserAvailability.state !== 'enabled') {
+            throw new Error(browserAvailability.reason)
+          }
           if (
-            browserWorkspaceHasRemoteOwner(state, source.id, runtimeEnvironmentId) &&
-            (await createWebRuntimeSessionBrowserTab({
+            browserAvailability.provider === 'paired-runtime' &&
+            browserWorkspaceHasRemoteOwner(state, source.id, runtimeEnvironmentId)
+          ) {
+            const created = await createWebRuntimeSessionBrowserTab({
               worktreeId,
               environmentId: runtimeEnvironmentId,
               url: source.url,
               profileId: source.sessionProfileId,
               targetGroupId: groupId
-            }))
-          ) {
-            return
+            })
+            if (created) {
+              return
+            }
+            throw new Error('The paired runtime could not duplicate the managed browser tab.')
           }
           createBrowserTab(worktreeId, source.url, {
             ...buildDuplicatedBrowserTabOptions(source),
+            ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {}),
             targetGroupId: groupId
           })
-        })()
+        })().catch((error) => {
+          toast.error(error instanceof Error ? error.message : String(error))
+        })
       },
       // Why: target the owning group explicitly; the "+" menu can fire from an unfocused panel without updating global group focus.
       newFileTab: async () => {

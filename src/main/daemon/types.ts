@@ -12,7 +12,7 @@ export type {
 
 // ─── Protocol Version ────────────────────────────────────────────────
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {
   AgentSessionExecutionClaim,
@@ -282,9 +282,13 @@ export type TakePendingOutputRequest = {
 
 export type TakePendingOutputResult = {
   records: PendingOutputRecord[]
-  /** Monotonic per-session batch sequence. The history log stores it so the
+  /** Drained pending queue. Absent on older daemons. includeSnapshot still
+   *  keeps `records` as held-only so mixed-version adapters do not double-replay. */
+  drainedRecords?: PendingOutputRecord[]
+  /** Non-decreasing per-session batch sequence. The history log stores it so the
    *  cold-restore reader can detect a lost batch (gap) and discard the log
-   *  instead of replaying a stream with missing bytes. */
+   *  instead of replaying a stream with missing bytes. Snapshot, record, and
+   *  overflow takes advance it; empty incremental takes repeat the prior value. */
   seq: number
   /** True when the session's pending buffer exceeded its cap and records were
    *  dropped. The caller must fall back to a full snapshot checkpoint. */
@@ -382,23 +386,6 @@ export type DaemonSessionInfo = SessionInfo & {
 // Stream-socket event shapes live in daemon-stream-events.ts; re-exported so
 // existing importers keep one types entry point.
 export * from './daemon-stream-events'
-
-// ─── Binary Frame Protocol (Daemon ↔ PTY Subprocess) ────────────────
-//
-// 5-byte header: [type:1][length:4 big-endian]
-// Followed by `length` bytes of payload.
-
-export const enum FrameType {
-  Data = 0x01,
-  Resize = 0x02,
-  Exit = 0x03,
-  Error = 0x04,
-  Kill = 0x05,
-  Signal = 0x06
-}
-
-export const FRAME_HEADER_SIZE = 5
-export const FRAME_MAX_PAYLOAD = 1024 * 1024 // 1MB
 
 // ─── Notify prefix ──────────────────────────────────────────────────
 // Requests with IDs starting with this prefix are fire-and-forget:

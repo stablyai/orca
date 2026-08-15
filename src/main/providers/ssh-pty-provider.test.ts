@@ -427,7 +427,7 @@ describe('SshPtyProvider', () => {
 
     it('preserves explicit TERM and forwards final env deletions to the relay', async () => {
       mux.request.mockResolvedValue({ id: 'pty-env-precedence' })
-      const envToDelete = ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      const envToDelete = ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
 
       await provider.spawn({
         cols: 120,
@@ -435,7 +435,7 @@ describe('SshPtyProvider', () => {
         env: {
           TERM: 'screen-256color',
           TERM_PROGRAM: 'stale-terminal',
-          ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+          ORCA_STALE_TEST_ENV: '/tmp/stale-env'
         },
         envToDelete
       })
@@ -452,7 +452,7 @@ describe('SshPtyProvider', () => {
       })
       const spawnCall = mux.request.mock.calls.find((call) => call[0] === 'pty.spawn')
       expect(spawnCall?.[1]?.env).not.toHaveProperty('TERM_PROGRAM')
-      expect(spawnCall?.[1]?.env).not.toHaveProperty('ORCA_ATTRIBUTION_SHIM_DIR')
+      expect(spawnCall?.[1]?.env).not.toHaveProperty('ORCA_STALE_TEST_ENV')
     })
 
     it('forwards provider command delivery to the relay', async () => {

@@ -18,7 +18,10 @@ import { create } from 'zustand'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
-import type { GitHubPRRefreshEvent, GitHubPRRefreshReason } from '../../../../shared/types'
+import type {
+  GitHubPRRefreshEvent,
+  GitHubPRRefreshReason
+} from '../../../../shared/github/pull-request-refresh-types'
 
 // MAX_PR_REFRESH_STATE_ENTRIES is module-private; mirror its value here.
 const MAX_ENTRIES = 2000

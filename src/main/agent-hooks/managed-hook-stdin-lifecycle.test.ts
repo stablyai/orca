@@ -79,12 +79,9 @@ import { GeminiHookService } from '../gemini/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
-import {
-  wrapPosixHookCommand,
-  wrapWindowsGitBashHookCommand,
-  wrapWindowsHookCommand
-} from './installer-utils'
+import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
+import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
@@ -296,13 +293,17 @@ describe('Windows managed hook stdin structure', () => {
         claude.indexOf('if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin')
       )
 
+      // Why (#11549 class): every Windows-local hook now guards before owning stdin —
+      // the caller may abandon the pipe, and the payload is discarded on this path anyway.
       const copilot = readFileSync(join(hooksDir, 'copilot-hook.ps1'), 'utf8')
-      expect(copilot.indexOf('[Console]::In.ReadToEnd()')).toBeLessThan(
-        copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')
+      expect(copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')).toBeGreaterThan(-1)
+      expect(copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')).toBeLessThan(
+        copilot.indexOf('[Console]::In.ReadToEnd()')
       )
       const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
-      expect(kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)).toBeLessThan(
-        kimi.indexOf('exit 0')
+      expect(kimi.indexOf('if [ -z "$ORCA_AGENT_HOOK_PORT" ]')).toBeGreaterThan(-1)
+      expect(kimi.indexOf('if [ -z "$ORCA_AGENT_HOOK_PORT" ]')).toBeLessThan(
+        kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       )
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
@@ -321,7 +322,7 @@ describe('Windows managed hook stdin structure', () => {
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'exits 0 for every local script and missing-script launcher, and only .cmd drops stdin',
+    'exits 0 for every local script and missing-script launcher, dropping stdin only without Orca env',
     async () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
@@ -359,16 +360,13 @@ describe('Windows managed hook stdin structure', () => {
               : [scriptPath]
           const result = await runHookProcess(executable, args, hookEnvironment())
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
-          if (fileName.endsWith('.cmd')) {
-            // Why (#11549): these guards exit rather than own stdin, so the writer breaks —
-            // EPIPE, or ECONNRESET when Windows tears the pipe down first. hookEnvironment()
-            // strips every ORCA_* var, so the relaxation only ever covers the missing-env
-            // path — a happy-path case added to this loop must not reuse it.
-            for (const error of result.stdinErrors) {
-              expect(['EPIPE', 'ECONNRESET'], `${fileName} stdin error`).toContain(error.code)
-            }
-          } else {
-            expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
+          // Why (#11549 class): every Windows-local hook exits before owning stdin when the
+          // Orca env is missing, so the writer may break — EPIPE, or ECONNRESET when Windows
+          // tears the pipe down first. hookEnvironment() strips every ORCA_* var, so this
+          // relaxation only ever covers the missing-env path — a happy-path case added to
+          // this loop must not reuse it.
+          for (const error of result.stdinErrors) {
+            expect(['EPIPE', 'ECONNRESET'], `${fileName} stdin error`).toContain(error.code)
           }
         }
 
@@ -387,9 +385,9 @@ describe('Windows managed hook stdin structure', () => {
             args: ['/d', '/c', wrapWindowsHookCommand(missingScript)]
           },
           {
-            name: 'Git Bash fast path',
+            name: 'portable Git Bash launcher',
             executable: gitBash,
-            args: ['-lc', wrapWindowsGitBashHookCommand(missingScript)]
+            args: ['-lc', wrapRuntimeHomeHookCommand('missing-orca-hook')]
           }
         ]
         for (const launcher of launcherCases) {

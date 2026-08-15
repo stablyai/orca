@@ -47,7 +47,7 @@ import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 describe('local filesystem watcher unsubscribe cleanup', () => {
   const handlers: HandlerMap = {}

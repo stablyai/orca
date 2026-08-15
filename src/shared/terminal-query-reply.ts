@@ -92,8 +92,9 @@ function cookedEchoSafeReplyEnd(data: string, start: number): number {
 }
 
 /**
- * If `data` is entirely one or more consecutive cooked-echo-risk replies
- * (e.g. repeated `?997;1n` coalesced by the input write queue), return each reply.
+ * If `data` is entirely one or more consecutive cooked-echo-risk replies, return each
+ * reply. Repeats still arrive coalesced from a rapid theme flip or an older client that
+ * answers 2031 subscribes (this host stopped — #9993), so peel them individually.
  * Mixed payloads (reply + keystroke) return null so hosts fall through to raw write.
  */
 export function extractOnlyCookedEchoSafeQueryReplies(data: string): string[] | null {

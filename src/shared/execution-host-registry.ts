@@ -14,7 +14,8 @@ import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION, RUNTIME_PROTOCOL_VERSION } from 
 import type { RuntimeStatus } from './runtime-types'
 import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
-import type { GlobalSettings, Repo } from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
 
 export type ExecutionHostHealth =
   | 'local'

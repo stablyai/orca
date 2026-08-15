@@ -7,7 +7,11 @@
 
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
-import type { PathSource, ShellHydrationFailureReason, TuiAgent } from '../../../../shared/types'
+import type {
+  PathSource,
+  ShellHydrationFailureReason
+} from '../../../../shared/shell-path-hydration-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type AgentPickedSnapshot = {
   agent: TuiAgent

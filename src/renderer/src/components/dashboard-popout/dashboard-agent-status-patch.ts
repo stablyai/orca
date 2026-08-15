@@ -35,7 +35,7 @@ export function patchDashboardSnapshotFromAgentStatus(
     return { matched: true, snapshot }
   }
   const index = snapshot.cards.findIndex((card) => card.paneKey === event.paneKey)
-  if (index < 0) {
+  if (index === -1) {
     return { matched: false, snapshot }
   }
   const card = snapshot.cards[index]

@@ -554,7 +554,7 @@ describe('settings host client lifecycle', () => {
     }
 
     const originalClient = clients.get(replacedHostId)?.[0]
-    act(() => context?.closeHost(replacedHostId))
+    act(() => context?.refreshHostClient(replacedHostId))
     expect(originalClient?.closeMock).toHaveBeenCalledOnce()
 
     await act(async () => {

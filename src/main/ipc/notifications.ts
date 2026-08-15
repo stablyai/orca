@@ -14,14 +14,14 @@ import twoToneSoundPath from '../../../resources/notification-sounds/two-tone.mp
 import type { Store } from '../persistence'
 import type {
   NotificationDeliveryProbeResult,
+  NotificationDismissResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
-  NotificationDismissResult,
   NotificationPermissionStatusResult,
   NotificationSettings,
   NotificationSoundDataResult
-} from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+} from '../../shared/notification-settings-types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from './notification-options'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'

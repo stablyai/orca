@@ -23,12 +23,12 @@ import type {
   ListAccessibleProjectsResult,
   ListProjectViewsResult,
   ResolveProjectRefResult
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   hasBoundedGitHubProjectRefInputText,
   isGitHubProjectRefInputTooLarge
-} from '../../../../shared/github-project-ref-input'
+} from '../../../../shared/github/project-ref-input'
 import { filterGitHubProjectPickerProjects } from './github-project-picker-filter'
 import {
   getProjectPickerBrowseCacheEntry,
@@ -39,7 +39,7 @@ import { translate } from '@/i18n/i18n'
 import {
   githubProjectHost,
   githubProjectIdentityKey
-} from '../../../../shared/github-project-identity'
+} from '../../../../shared/github/project-identity'
 
 export type ResolvedProjectSelection = {
   owner: string

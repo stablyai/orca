@@ -1,13 +1,13 @@
 /* eslint-disable max-lines -- Why: worktree activation is a single ordered flow spanning startup, setup, issue commands, and default tabs; splitting it would obscure sequencing guarantees. */
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
-  FolderWorkspace,
-  GlobalSettings,
   SetupSplitDirection,
-  Tab,
-  TuiAgent,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../shared/types'
+} from '../../../shared/worktree/launch-types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type {
@@ -507,7 +507,13 @@ export function ensureWorktreeHasInitialTerminal(
     return null
   }
 
-  if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+  const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
+  const shouldAutoCreate = shouldAutoCreateInitialTerminal(
+    renderableTabCount,
+    Object.hasOwn(store.tabsByWorktree, worktreeId)
+  )
+  const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
+  if (!shouldAutoCreate && !shouldCreateForExplicitWork) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       // Why: main may have adopted the startup tab but failed to spawn setup; renderer must still launch the returned fallback setup.

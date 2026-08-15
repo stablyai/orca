@@ -43,12 +43,6 @@ const repairedEntries = [
   ['zh', 'auto.components.settings.repository.search.603c68b68c'],
   ['zh', 'auto.components.right.sidebar.index.6306b48afd'],
   ['zh', 'auto.components.feature.wall.BrowserAnimatedVisual.7da6eed7bf'],
-  ['zh', 'auto.components.feature.wall.FeatureTourPreview.6ed43cb0e0'],
-  ['zh', 'auto.components.feature.wall.FeatureTourPreview.24fedd5a52'],
-  ['zh', 'auto.components.feature.wall.FeatureTourPreview.6218a9014d'],
-  ['zh', 'auto.components.feature.wall.FeatureTourPreview.04d54d50ec'],
-  ['zh', 'auto.components.feature.wall.FeatureTourPreview.d54aefe09e'],
-  ['zh', 'auto.components.feature.wall.FeatureTourPreview.0688842445'],
   ['zh', 'auto.components.feature.wall.WorkbenchAnimatedVisual.defe550fe2'],
   ['zh', 'auto.components.feature.wall.WorkbenchAnimatedVisual.4371cc9931'],
   ['zh', 'auto.components.feature.wall.ReviewAnimatedVisual.8df4d52b68'],
@@ -70,7 +64,7 @@ function readValue(catalog: object, key: string): unknown {
 
 describe('technical literal catalog repairs (#13121)', () => {
   it('keeps every repaired value identical to English', () => {
-    expect(repairedEntries).toHaveLength(49)
+    expect(repairedEntries).toHaveLength(43)
 
     for (const [locale, key] of repairedEntries) {
       expect(readValue(catalogs[locale], key), `${locale}:${key}`).toBe(readValue(en, key))

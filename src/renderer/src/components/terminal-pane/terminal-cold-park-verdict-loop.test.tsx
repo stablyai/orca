@@ -17,7 +17,7 @@
 import { act, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -154,6 +154,7 @@ function OverlayHost(): React.JSX.Element | null {
     terminalTabs,
     assignments: EMPTY_ASSIGNMENTS,
     isWorktreeActive: false,
+    activeTerminalTabId: null,
     coldParkTerminalPanes: false,
     shouldMeasureHiddenWorktree: false,
     activityTerminalPortals: EMPTY_PORTALS,
