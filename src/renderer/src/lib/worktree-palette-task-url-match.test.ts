@@ -622,6 +622,90 @@ describe('matchWorktreePaletteTaskUrl', () => {
       })
     ).toBeNull()
   })
+
+  it('matches a Jira issue URL on its own tenant', () => {
+    const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
+
+    expect(
+      matchWorktreePaletteTaskUrl({
+        worktree: makeWorktree({
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'Tenant scoped',
+            jiraIdentifier: 'PROJ-123',
+            url: 'https://acme.atlassian.net/browse/PROJ-123'
+          }
+        }),
+        intent: intent!
+      })
+    ).toMatchObject({ supportingText: { text: 'PROJ-123' } })
+  })
+
+  // Why: Jira issue keys are per-project, so the same PROJ-123 exists on every
+  // tenant that has a PROJ project.
+  it('rejects a Jira issue URL from a different tenant with the same issue key', () => {
+    const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
+
+    expect(
+      matchWorktreePaletteTaskUrl({
+        worktree: makeWorktree({
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'Other tenant',
+            jiraIdentifier: 'PROJ-123',
+            url: 'https://other.atlassian.net/browse/PROJ-123'
+          }
+        }),
+        intent: intent!
+      })
+    ).toBeNull()
+  })
+
+  // Same host, different site path: Jira Server installs are commonly path-scoped.
+  it('rejects a Jira issue URL from a different site path on the same host', () => {
+    const intent = parseCmdJTaskSourceUrl('https://jira.acme.test/one/browse/PROJ-123')
+
+    expect(
+      matchWorktreePaletteTaskUrl({
+        worktree: makeWorktree({
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'Other site',
+            jiraIdentifier: 'PROJ-123',
+            url: 'https://jira.acme.test/two/browse/PROJ-123'
+          }
+        }),
+        intent: intent!
+      })
+    ).toBeNull()
+  })
+
+  // The identifier is the only evidence when no URL was stored, so it still matches.
+  it('falls back to the Jira identifier when the linked item has no url', () => {
+    const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
+
+    expect(
+      matchWorktreePaletteTaskUrl({
+        worktree: makeWorktree({
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'No url',
+            jiraIdentifier: 'PROJ-123',
+            url: ''
+          }
+        }),
+        intent: intent!
+      })
+    ).toMatchObject({ supportingText: { text: 'PROJ-123' } })
+  })
 })
 
 describe('getCmdJTaskUrlCreatePreview', () => {
