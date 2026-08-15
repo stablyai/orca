@@ -27,7 +27,7 @@ export const COMMAND_RELEASE_TRACE_CASES: RecordedChordCase[] = [
     expectCalls: ['\x01'],
     expectEmitted: ['\x01'],
     // Kotoeri is still converting when the capture stops.
-    commitsAfterCapture: true,
+    commitsAfterCapture: 'さ',
     rows: [
       { t: 'keydown', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true, meta: true },
       {

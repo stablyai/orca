@@ -44,8 +44,12 @@ export type RecordedChordCase = {
   expectCalls: string[]
   expectEmitted: string[]
   rows: RecordedChordRow[]
-  /** Rows end mid-composition: assert nothing sent yet, then drive a commit and check again. */
-  commitsAfterCapture?: true
+  /**
+   * Rows end mid-composition: assert nothing sent yet, then drive a commit and check again. The
+   * value is the text that source committed. xterm emits none of it — the capture opens after the
+   * session it would have to match — so it names the recording rather than feeding an assertion.
+   */
+  commitsAfterCapture?: string
 }
 
 export const IN_APP_TRACE_CASES: RecordedChordCase[] = [

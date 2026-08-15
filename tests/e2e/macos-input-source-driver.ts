@@ -9,6 +9,12 @@ import path from 'node:path'
 export const TWO_SET_KOREAN_ID = 'com.apple.inputmethod.Korean.2SetKorean'
 export const KOTOERI_ROMAJI_ID = 'com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese'
 export const KOTOERI_ROMAJI_PARENT_ID = 'com.apple.inputmethod.Kotoeri.RomajiTyping'
+// Chinese, both scripts. Each needs its parent enabled first for the same reason Kotoeri does:
+// an enable-everything-for-this-id pass cannot reach a mode whose parent is still disabled.
+export const SIMPLIFIED_PINYIN_ID = 'com.apple.inputmethod.SCIM.ITABC'
+export const SIMPLIFIED_PINYIN_PARENT_ID = 'com.apple.inputmethod.SCIM'
+export const TRADITIONAL_ZHUYIN_ID = 'com.apple.inputmethod.TCIM.Zhuyin'
+export const TRADITIONAL_ZHUYIN_PARENT_ID = 'com.apple.inputmethod.TCIM'
 export const ABC_ID = 'com.apple.keylayout.ABC'
 
 export const KEY = { left: 123, backspace: 51, returnKey: 36, s: 1, a: 0 } as const

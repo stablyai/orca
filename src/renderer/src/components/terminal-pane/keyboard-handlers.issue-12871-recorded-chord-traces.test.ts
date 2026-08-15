@@ -39,6 +39,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { CHINESE_TRACE_CASES } from './keyboard-handlers.issue-12871-chinese-chord-traces'
 import { COMMAND_RELEASE_TRACE_CASES } from './keyboard-handlers.issue-12871-command-release-traces'
 import {
   IN_APP_TRACE_CASES,
@@ -442,7 +443,7 @@ afterEach(() => {
 
 describe('recorded macOS chord traces during an IME composition', () => {
   it.each(
-    [...CASES, ...IN_APP_TRACE_CASES, ...COMMAND_RELEASE_TRACE_CASES].map(
+    [...CASES, ...IN_APP_TRACE_CASES, ...COMMAND_RELEASE_TRACE_CASES, ...CHINESE_TRACE_CASES].map(
       (testCase) => [testCase.name, testCase] as const
     )
   )('%s', async (_name, testCase) => {
@@ -452,7 +453,7 @@ describe('recorded macOS chord traces during an IME composition', () => {
     if (testCase.commitsAfterCapture) {
       // Held, not dropped: nothing yet, and the same expectations must hold once it commits.
       expect(rig.inputCalls).toEqual([])
-      await commitComposition(rig.textarea, 'さ')
+      await commitComposition(rig.textarea, testCase.commitsAfterCapture)
     }
     expect(rig.inputCalls).toEqual(testCase.expectCalls)
     // Joined: the captures were taken when xterm flushed preedit and chord as one payload, and
