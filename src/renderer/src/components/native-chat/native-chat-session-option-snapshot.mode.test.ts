@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
-import { createNativeChatSessionOptionRecord } from '../../../../shared/native-chat-session-option-state'
-import type { NativeChatSessionOptionRecord } from '../../../../shared/native-chat-session-option-state'
+import {
+  applyNativeChatReportedSessionOptions,
+  createNativeChatSessionOptionRecord,
+  type NativeChatSessionOptionRecord
+} from '../../../../shared/native-chat-session-option-state'
 import {
   buildNativeChatSessionOptionSnapshot,
   flattenNativeChatSessionOptionRecord
@@ -9,7 +12,6 @@ import {
 import { createSessionOptionAppliers } from './native-chat-session-option-apply'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { readClaudePermissionModeFromTerminalScreen } from './claude-terminal-session-options'
-import { applyNativeChatReportedSessionOptions } from '../../../../shared/native-chat-session-option-state'
 
 const catalog = getAgentSessionOptionCatalog('claude')!
 
