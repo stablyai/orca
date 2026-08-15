@@ -1674,6 +1674,16 @@ function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
     ...(typeof raw.worktreeId === 'string' ? { worktreeId: raw.worktreeId } : {}),
     ...(typeof raw.tabId === 'string' ? { tabId: raw.tabId } : {}),
     ...(typeof raw.leafId === 'string' && raw.leafId.length <= 256 ? { leafId: raw.leafId } : {}),
+    ...(raw.cleanupPending === true ? { cleanupPending: true } : {}),
+    ...(typeof raw.cleanupExpectedPaneKey === 'string'
+      ? { cleanupExpectedPaneKey: raw.cleanupExpectedPaneKey }
+      : {}),
+    ...(typeof raw.cleanupExpectedTabId === 'string'
+      ? { cleanupExpectedTabId: raw.cleanupExpectedTabId }
+      : {}),
+    ...(typeof raw.cleanupExpectedIncarnationId === 'string'
+      ? { cleanupExpectedIncarnationId: raw.cleanupExpectedIncarnationId }
+      : {}),
     state,
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
@@ -7008,9 +7018,14 @@ export class Store {
       expectedBinding?: { ptyId: string; incarnationId?: string }
       expectedSourceBinding?: PtyBindingSourceExpectation
     },
-    hostId?: string | null
+    hostId?: string | null,
+    sshSurfaceLease?: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt'> &
+      Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>> & { cleanupPending: false }
   ): boolean {
     const resolvedHostId = this.resolveHostId(hostId)
+    if (sshSurfaceLease && resolvedHostId !== toSshExecutionHostId(sshSurfaceLease.targetId)) {
+      throw new Error('SSH surface lease target does not match the binding host')
+    }
     const session = this.getWorkspaceSession(resolvedHostId)
     const paneKey = `${args.tabId}:${args.leafId}`
     const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
@@ -7054,6 +7069,9 @@ export class Store {
       }
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+    const sshRemotePtyLeasesBeforeBinding = sshSurfaceLease
+      ? [...(this.state.sshRemotePtyLeases ?? [])]
+      : undefined
     const reconciledIncarnation =
       args.expectedBinding !== undefined &&
       args.incarnationId !== args.expectedBinding.incarnationId
@@ -7082,6 +7100,14 @@ export class Store {
           ...this.state.workspaceSessionsByHostId,
           [resolvedHostId]: sessionBeforeBinding
         }
+      }
+      if (sshSurfaceLease) {
+        this.state.sshRemotePtyLeases = sshRemotePtyLeasesBeforeBinding ?? []
+      }
+    }
+    const applySshSurfaceLease = (): void => {
+      if (sshSurfaceLease) {
+        this.applySshRemotePtyLease(sshSurfaceLease)
       }
     }
     if (args.incarnationId) {
@@ -7126,6 +7152,7 @@ export class Store {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
       advanceTopologyFence()
       try {
+        applySshSurfaceLease()
         this.flushOrThrow()
       } catch (err) {
         restoreSession()
@@ -7174,6 +7201,7 @@ export class Store {
     }
     advanceTopologyFence()
     try {
+      applySshSurfaceLease()
       this.flushOrThrow()
     } catch (err) {
       restoreSession()
@@ -7548,6 +7576,28 @@ export class Store {
     lease: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt'> &
       Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
   ): void {
+    this.applySshRemotePtyLease(lease)
+    this.flush()
+  }
+
+  async upsertSshPtyCleanupLeaseAsync(
+    lease: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt' | 'cleanupPending'> &
+      Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>> & { cleanupPending: true }
+  ): Promise<void> {
+    this.applySshRemotePtyLease(lease)
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      // Why: keep live retry authority and schedule another disk attempt, but never kill remotely before one durable copy exists.
+      this.scheduleSave()
+      throw error
+    }
+  }
+
+  private applySshRemotePtyLease(
+    lease: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt'> &
+      Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
+  ): void {
     this.state.sshRemotePtyLeases ??= []
     const normalizedLease = { ...lease }
     if (normalizedLease.leafId !== undefined && !isTerminalLeafId(normalizedLease.leafId)) {
@@ -7564,18 +7614,48 @@ export class Store {
         entry.targetId === normalizedLease.targetId && entry.ptyId === normalizedLease.ptyId
     )
     const existing = existingIndex !== -1 ? this.state.sshRemotePtyLeases[existingIndex] : undefined
+    if (normalizedLease.cleanupPending === true && existing && !existing.cleanupPending) {
+      this.clearSshRemotePtyBindingsForLeases(normalizedLease.targetId, [existing])
+    }
     const next: SshRemotePtyLease = {
       ...existing,
       ...normalizedLease,
       createdAt: existing?.createdAt ?? normalizedLease.createdAt ?? now,
       updatedAt: normalizedLease.updatedAt ?? now
     }
+    if (normalizedLease.cleanupPending === true) {
+      next.cleanupPending = true
+      delete next.tabId
+      delete next.leafId
+      delete next.cleanupExpectedPaneKey
+      delete next.cleanupExpectedTabId
+      delete next.cleanupExpectedIncarnationId
+      Object.assign(next, {
+        ...(normalizedLease.cleanupExpectedPaneKey
+          ? { cleanupExpectedPaneKey: normalizedLease.cleanupExpectedPaneKey }
+          : {}),
+        ...(normalizedLease.cleanupExpectedTabId
+          ? { cleanupExpectedTabId: normalizedLease.cleanupExpectedTabId }
+          : {}),
+        ...(normalizedLease.cleanupExpectedIncarnationId
+          ? { cleanupExpectedIncarnationId: normalizedLease.cleanupExpectedIncarnationId }
+          : {})
+      })
+    } else if (
+      normalizedLease.cleanupPending === false ||
+      normalizedLease.tabId !== undefined ||
+      normalizedLease.leafId !== undefined
+    ) {
+      delete next.cleanupPending
+      delete next.cleanupExpectedPaneKey
+      delete next.cleanupExpectedTabId
+      delete next.cleanupExpectedIncarnationId
+    }
     if (existingIndex !== -1) {
       this.state.sshRemotePtyLeases[existingIndex] = next
     } else {
       this.state.sshRemotePtyLeases.push(next)
     }
-    this.flush()
   }
 
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
@@ -7679,6 +7759,64 @@ export class Store {
       this.clearSshRemotePtyBindingsForLeases(targetId, [lease])
     }
     this.flush()
+  }
+
+  async removeMatchingSshPtyCleanupLeasesAsync(
+    targetId: string,
+    candidates: readonly {
+      ptyId: string
+      cleanupExpectedIncarnationId?: string
+    }[]
+  ): Promise<{ ptyId: string; cleanupExpectedIncarnationId?: string }[]> {
+    const candidateByKey = new Map(
+      candidates.map((candidate) => {
+        const ptyId = this.getRelayPtyIdForSshLeaseStorage(targetId, candidate.ptyId)
+        return [
+          `${ptyId}\0${candidate.cleanupExpectedIncarnationId ?? ''}`,
+          { ptyId, cleanupExpectedIncarnationId: candidate.cleanupExpectedIncarnationId }
+        ]
+      })
+    )
+    if (candidateByKey.size === 0) {
+      return []
+    }
+    const leases = this.state.sshRemotePtyLeases ?? []
+    const retired: { ptyId: string; cleanupExpectedIncarnationId?: string }[] = []
+    const removedLeases: SshRemotePtyLease[] = []
+    const next = leases.filter((lease) => {
+      if (lease.targetId !== targetId || lease.cleanupPending !== true) {
+        return true
+      }
+      const candidate = candidateByKey.get(
+        `${lease.ptyId}\0${lease.cleanupExpectedIncarnationId ?? ''}`
+      )
+      if (!candidate) {
+        return true
+      }
+      retired.push(candidate)
+      removedLeases.push(lease)
+      return false
+    })
+    if (retired.length === 0) {
+      return []
+    }
+    this.state.sshRemotePtyLeases = next
+    try {
+      this.flushOrThrow()
+      return retired
+    } catch (error) {
+      this.state.sshRemotePtyLeases ??= []
+      for (const lease of removedLeases) {
+        const replaced = this.state.sshRemotePtyLeases.some(
+          (candidate) => candidate.targetId === lease.targetId && candidate.ptyId === lease.ptyId
+        )
+        if (!replaced) {
+          this.state.sshRemotePtyLeases.push(lease)
+        }
+      }
+      this.scheduleSave()
+      throw error
+    }
   }
 
   removeSshRemotePtyLease(targetId: string, ptyId: string): void {

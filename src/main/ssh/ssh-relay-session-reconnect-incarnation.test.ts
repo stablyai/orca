@@ -596,4 +596,178 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     )
     consoleError.mockRestore()
   })
+
+  it('retries a cleanup lease without restoring a terminal surface', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const mockAttach = vi.fn().mockResolvedValue({ incarnationId: 'cleanup-incarnation' })
+    const mockShutdown = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: mockAttach,
+      listProcesses: vi.fn().mockResolvedValue([
+        {
+          id: 'ssh:target-1@@cleanup-pty',
+          incarnationId: 'cleanup-incarnation',
+          cwd: '/remote/repo',
+          title: 'shell'
+        }
+      ]),
+      shutdown: mockShutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      {
+        targetId: 'target-1',
+        ptyId: 'cleanup-pty',
+        worktreeId: 'repo-1::/remote/repo',
+        cleanupPending: true,
+        cleanupExpectedPaneKey: 'tab-cleanup:33333333-3333-4333-8333-333333333333',
+        cleanupExpectedTabId: 'tab-cleanup',
+        cleanupExpectedIncarnationId: 'cleanup-incarnation',
+        state: 'detached'
+      }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+    const runtime = {
+      onPtySpawned: vi.fn(),
+      registerPty: vi.fn()
+    }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+
+    await session.establish(mockConn)
+
+    expect(mockAttach).not.toHaveBeenCalled()
+    await vi.waitFor(() =>
+      expect(mockShutdown).toHaveBeenCalledWith(
+        'ssh:target-1@@cleanup-pty',
+        expect.objectContaining({ immediate: true, deadlineMs: expect.any(Number) })
+      )
+    )
+    await vi.waitFor(() =>
+      expect(mockStore.removeMatchingSshPtyCleanupLeasesAsync).toHaveBeenCalledWith('target-1', [
+        { ptyId: 'cleanup-pty', cleanupExpectedIncarnationId: 'cleanup-incarnation' }
+      ])
+    )
+    expect(runtime.onPtySpawned).not.toHaveBeenCalled()
+    expect(runtime.registerPty).not.toHaveBeenCalled()
+    expect(mockStore.persistPtyBinding).not.toHaveBeenCalled()
+  })
+
+  it('retains a cleanup lease when reconnect shutdown fails', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const shutdown = vi.fn().mockRejectedValue(new Error('injected cleanup retry failure'))
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: vi.fn().mockResolvedValue({ incarnationId: 'cleanup-incarnation' }),
+      listProcesses: vi.fn().mockResolvedValue([
+        {
+          id: 'ssh:target-1@@cleanup-pty',
+          incarnationId: 'cleanup-incarnation',
+          cwd: '/remote/repo',
+          title: 'shell'
+        }
+      ]),
+      shutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      {
+        targetId: 'target-1',
+        ptyId: 'cleanup-pty',
+        cleanupPending: true,
+        cleanupExpectedTabId: 'tab-cleanup',
+        cleanupExpectedIncarnationId: 'cleanup-incarnation',
+        state: 'detached'
+      }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runtime = { onPtySpawned: vi.fn(), registerPty: vi.fn() }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+
+    try {
+      await session.establish(mockConn)
+      await vi.waitFor(() =>
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('cleanup retry failed for target-1')
+        )
+      )
+      expect(shutdown).toHaveBeenCalledOnce()
+      expect(mockStore.removeMatchingSshPtyCleanupLeasesAsync).not.toHaveBeenCalled()
+      expect(runtime.onPtySpawned).not.toHaveBeenCalled()
+      expect(runtime.registerPty).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it.each([
+    ['reused', 'different-incarnation', true],
+    ['unproven', undefined, false]
+  ])('does not auto-clean a %s relay PTY identity', async (_case, incarnationId, terminates) => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const shutdown = vi.fn()
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: vi.fn().mockResolvedValue({ incarnationId }),
+      listProcesses: vi.fn().mockResolvedValue([
+        {
+          id: 'ssh:target-1@@cleanup-pty',
+          incarnationId,
+          cwd: '/remote/repo',
+          title: 'shell'
+        }
+      ]),
+      shutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      {
+        targetId: 'target-1',
+        ptyId: 'cleanup-pty',
+        cleanupPending: true,
+        cleanupExpectedPaneKey: 'tab-cleanup:33333333-3333-4333-8333-333333333333',
+        cleanupExpectedTabId: 'tab-cleanup',
+        cleanupExpectedIncarnationId: 'expected-incarnation',
+        state: 'detached'
+      }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward, {
+      onPtySpawned: vi.fn(),
+      registerPty: vi.fn()
+    } as never)
+
+    try {
+      await session.establish(mockConn)
+      if (terminates) {
+        await vi.waitFor(() =>
+          expect(mockStore.removeMatchingSshPtyCleanupLeasesAsync).toHaveBeenCalledWith(
+            'target-1',
+            [{ ptyId: 'cleanup-pty', cleanupExpectedIncarnationId: 'expected-incarnation' }]
+          )
+        )
+      } else {
+        await vi.waitFor(() =>
+          expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining('cleanup retry lacks incarnation proof for target-1')
+          )
+        )
+        expect(mockStore.removeMatchingSshPtyCleanupLeasesAsync).not.toHaveBeenCalled()
+      }
+      expect(shutdown).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })

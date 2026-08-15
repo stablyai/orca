@@ -1114,6 +1114,38 @@ function finishPtyShutdown(
   return incarnationId
 }
 
+async function shutdownFreshPtyAfterBindingFailure(
+  provider: IPtyProvider,
+  id: string,
+  connectionId: string | null | undefined,
+  store: Store | undefined
+): Promise<void> {
+  try {
+    await provider.shutdown(id, { immediate: true })
+  } catch (error) {
+    if (!isPtyAlreadyGoneError(error)) {
+      console.warn('[pty] failed to clean up PTY after persistence failure:', error)
+      return
+    }
+  }
+  finishPtyShutdown(id, connectionId, store)
+}
+
+function isPendingSshPtyCleanup(
+  id: string,
+  connectionId: string,
+  store: Store | undefined
+): boolean {
+  const relayPtyId = getRelayPtyId(connectionId, id)
+  const leases = store?.getSshRemotePtyLeases?.(connectionId)
+  return Boolean(
+    leases?.some(
+      (lease) =>
+        lease.ptyId === relayPtyId && lease.cleanupPending === true && lease.state !== 'terminated'
+    )
+  )
+}
+
 // ─── Host PTY env assembly ──────────────────────────────────────────
 // Why: centralize host-local env injections so both spawn paths (local + daemon) get them; implemented twice they drifted, silently breaking daemon PTYs.
 
@@ -5219,25 +5251,47 @@ export function registerPtyHandlers(
           markNativeWindowsConptyPty(result.id)
         }
         const relayResultId = getRelayPtyId(args.connectionId, result.id)
-        const persistSshLease = (): void => {
-          if (!store || !args.connectionId) {
+        const sshSurfaceLease =
+          store && args.connectionId
+            ? ({
+                targetId: args.connectionId,
+                ptyId: relayResultId,
+                ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
+                ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
+                ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
+                  ? { leafId: args.leafId }
+                  : {}),
+                cleanupPending: false,
+                state: 'attached',
+                lastAttachedAt: Date.now()
+              } as const)
+            : undefined
+        const persistSshCleanupLease = async (): Promise<void> => {
+          if (!store || !args.connectionId || !sshSurfaceLease) {
             return
           }
+          const { tabId: _tabId, leafId: _leafId, ...cleanupLease } = sshSurfaceLease
           // Why: SSH leases keep relay ids for remote reconciliation, while session bindings keep app-facing ids for hydration.
-          store.upsertSshRemotePtyLease({
-            targetId: args.connectionId,
-            ptyId: relayResultId,
-            ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
-            ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
-            ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
-              ? { leafId: args.leafId }
+          await store.upsertSshPtyCleanupLeaseAsync({
+            ...cleanupLease,
+            cleanupPending: true,
+            ...(typeof args.tabId === 'string' &&
+            typeof args.leafId === 'string' &&
+            isValidTerminalTabId(args.tabId) &&
+            isTerminalLeafId(args.leafId)
+              ? { cleanupExpectedPaneKey: makePaneKey(args.tabId, args.leafId) }
               : {}),
-            state: 'attached',
-            lastAttachedAt: Date.now()
+            ...(typeof args.tabId === 'string' ? { cleanupExpectedTabId: args.tabId } : {}),
+            ...(result.incarnationId ? { cleanupExpectedIncarnationId: result.incarnationId } : {})
           })
         }
-        if (!hostSessionBinding) {
-          persistSshLease()
+        const hasPendingSshBinding = Boolean(
+          hostSessionBinding && result.isReattach !== true && !stablePaneBindingPersisted
+        )
+        if (hasPendingSshBinding) {
+          await persistSshCleanupLease()
+        } else if (store && !hostSessionBinding && sshSurfaceLease) {
+          store.upsertSshRemotePtyLease(sshSurfaceLease)
         }
         ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
         if (effectiveSessionAppId !== undefined && effectiveSessionAppId !== result.id) {
@@ -5267,10 +5321,16 @@ export function registerPtyHandlers(
                 : {})
             }
             const persisted = args.connectionId
-              ? hostSessionBinding.store.persistPtyBinding(
-                  binding,
-                  toSshExecutionHostId(args.connectionId)
-                )
+              ? hasPendingSshBinding && sshSurfaceLease
+                ? hostSessionBinding.store.persistPtyBinding(
+                    binding,
+                    toSshExecutionHostId(args.connectionId),
+                    sshSurfaceLease
+                  )
+                : hostSessionBinding.store.persistPtyBinding(
+                    binding,
+                    toSshExecutionHostId(args.connectionId)
+                  )
               : hostSessionBinding.store.persistPtyBinding(binding)
             if (persisted === false) {
               throw new Error('terminal_split_source_not_found')
@@ -5278,13 +5338,12 @@ export function registerPtyHandlers(
           } catch (err) {
             console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
             if (!result.isReattach) {
-              deletePtyOwnership(result.id)
-              try {
-                await provider.shutdown(result.id, { immediate: true })
-              } catch (shutdownErr) {
-                console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
-              }
-              clearProviderPtyState(result.id)
+              await shutdownFreshPtyAfterBindingFailure(
+                provider,
+                result.id,
+                args.connectionId,
+                store
+              )
             }
             if (err instanceof Error && err.message === 'terminal_split_source_not_found') {
               throw err
@@ -5293,7 +5352,9 @@ export function registerPtyHandlers(
               agentSessionOperationOutcome: 'unknown' as const
             })
           }
-          persistSshLease()
+        }
+        if (store && hostSessionBinding && !hasPendingSshBinding && sshSurfaceLease) {
+          store.upsertSshRemotePtyLease(sshSurfaceLease)
         }
         if (args.preAllocatedHandle && !stablePaneOwner?.handle) {
           runtime?.registerPreAllocatedHandleForPty(result.id, args.preAllocatedHandle)
@@ -5515,6 +5576,9 @@ export function registerPtyHandlers(
           provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
         } catch {
           if (connectionId) {
+            if (isPendingSshPtyCleanup(ptyId, connectionId, store)) {
+              return false
+            }
             // Why: runtime/CLI close can target a detached SSH PTY after its
             // provider was unregistered. Tombstone the lease so reconnect does
             // not revive a terminal the user explicitly closed.
@@ -5647,6 +5711,9 @@ export function registerPtyHandlers(
         provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
       } catch {
         if (connectionId) {
+          if (isPendingSshPtyCleanup(ptyId, connectionId, store)) {
+            return false
+          }
           // Why: an absent SSH provider means there is no live target left to
           // await, but the relay lease must still be tombstoned.
           const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
@@ -6782,17 +6849,49 @@ export function registerPtyHandlers(
           markNativeWindowsConptyPty(result.id)
         }
         const relayResultId = getRelayPtyId(args.connectionId, result.id)
+        const sshSurfaceLease =
+          store && args.connectionId
+            ? ({
+                targetId: args.connectionId,
+                ptyId: relayResultId,
+                ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
+                ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
+                ...(validatedLeafId ? { leafId: validatedLeafId } : {}),
+                cleanupPending: false,
+                state: 'attached',
+                lastAttachedAt: Date.now()
+              } as const)
+            : undefined
+        const hasPendingSshBinding = Boolean(
+          sshSurfaceLease &&
+          typeof args.worktreeId === 'string' &&
+          typeof args.tabId === 'string' &&
+          validatedLeafId !== null &&
+          result.isReattach !== true &&
+          !stablePaneBindingPersisted
+        )
         if (store && args.connectionId) {
-          // Why: remote PTYs live in the SSH relay grace window after Orca detaches; persist IDs immediately so reconnect reattaches instead of spawning a fresh shell.
-          store.upsertSshRemotePtyLease({
-            targetId: args.connectionId,
-            ptyId: relayResultId,
-            ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
-            ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
-            ...(validatedLeafId ? { leafId: validatedLeafId } : {}),
-            state: 'attached',
-            lastAttachedAt: Date.now()
-          })
+          if (hasPendingSshBinding) {
+            // Why: a crash before split acceptance must recover as cleanup, never as a terminal surface.
+            await store.upsertSshPtyCleanupLeaseAsync({
+              targetId: args.connectionId,
+              ptyId: relayResultId,
+              ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
+              cleanupPending: true,
+              ...(typeof args.tabId === 'string' && validatedLeafId
+                ? { cleanupExpectedPaneKey: makePaneKey(args.tabId, validatedLeafId) }
+                : {}),
+              ...(typeof args.tabId === 'string' ? { cleanupExpectedTabId: args.tabId } : {}),
+              ...(result.incarnationId
+                ? { cleanupExpectedIncarnationId: result.incarnationId }
+                : {}),
+              state: 'attached',
+              lastAttachedAt: Date.now()
+            })
+          } else if (sshSurfaceLease) {
+            // Why: remote PTYs live in the SSH relay grace window after Orca detaches; persist IDs immediately so reconnect reattaches instead of spawning a fresh shell.
+            store.upsertSshRemotePtyLease(sshSurfaceLease)
+          }
         }
         if (preAllocatedHandle && !stablePaneOwner?.handle) {
           runtime?.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
@@ -6819,23 +6918,27 @@ export function registerPtyHandlers(
               ...(cwd ? { startupCwd: cwd } : {})
             }
             if (args.connectionId) {
-              store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
+              if (hasPendingSshBinding && sshSurfaceLease) {
+                store.persistPtyBinding(
+                  binding,
+                  toSshExecutionHostId(args.connectionId),
+                  sshSurfaceLease
+                )
+              } else {
+                store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
+              }
             } else {
               store.persistPtyBinding(binding)
             }
           } catch (err) {
             console.error('[pty] failed to persist PTY binding after spawn:', err)
             if (!result.isReattach) {
-              try {
-                await provider.shutdown(result.id, { immediate: true })
-              } catch (shutdownErr) {
-                console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
-              }
-              clearProviderPtyState(result.id)
-              deletePtyOwnership(result.id)
-            }
-            if (!result.isReattach && args.connectionId && store) {
-              store.removeSshRemotePtyLease(args.connectionId, relayResultId)
+              await shutdownFreshPtyAfterBindingFailure(
+                provider,
+                result.id,
+                args.connectionId,
+                store
+              )
             }
             throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
               agentSessionOperationOutcome: 'unknown' as const
@@ -7580,6 +7683,9 @@ export function registerPtyHandlers(
     }
     const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
     if (!provider && connectionId) {
+      if (isPendingSshPtyCleanup(args.id, connectionId, store)) {
+        throw new Error('SSH PTY cleanup requires reconnect before shutdown can be confirmed')
+      }
       // Why: detached SSH PTYs intentionally keep ownership after their
       // provider is unregistered; hydrated app-scoped ids can also arrive
       // before ownership is rebuilt. Tombstone instead of falling back local.

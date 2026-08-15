@@ -198,6 +198,10 @@ export type SshRemotePtyLease = {
   worktreeId?: string
   tabId?: string
   leafId?: string
+  cleanupPending?: boolean
+  cleanupExpectedPaneKey?: string
+  cleanupExpectedTabId?: string
+  cleanupExpectedIncarnationId?: string
   state: SshRemotePtyLeaseState
   createdAt: number
   updatedAt: number
