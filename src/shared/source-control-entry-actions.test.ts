@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { GitStatusEntry } from './git-status-types'
-import { getConflictResolutions } from './source-control-entry-actions'
+import {
+  canOpenWorkingTreeStatusEntry,
+  getConflictResolutions
+} from './source-control-entry-actions'
 
 function conflict(overrides: Partial<GitStatusEntry>): GitStatusEntry {
   return {
@@ -37,5 +40,26 @@ describe('getConflictResolutions', () => {
   it('offers nothing for resolved rows or rows inside a submodule the parent cannot stage', () => {
     expect(getConflictResolutions(conflict({ conflictStatus: 'resolved_locally' }))).toEqual([])
     expect(getConflictResolutions(conflict({ submoduleRoot: 'sub' }))).toEqual([])
+  })
+})
+
+function entry(overrides: Partial<GitStatusEntry>): GitStatusEntry {
+  return {
+    path: 'file.ts',
+    status: 'modified',
+    area: 'unstaged',
+    ...overrides
+  } as GitStatusEntry
+}
+
+describe('canOpenWorkingTreeStatusEntry', () => {
+  it('hides Open file for deleted rows and keeps it for rows that still exist on disk', () => {
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'modified' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'added' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'untracked' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'renamed' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ area: 'staged', status: 'modified' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'deleted' }))).toBe(false)
+    expect(canOpenWorkingTreeStatusEntry(entry({ area: 'staged', status: 'deleted' }))).toBe(false)
   })
 })

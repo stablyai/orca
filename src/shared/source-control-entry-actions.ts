@@ -40,3 +40,8 @@ export function getConflictResolutions(entry: GitStatusEntry): ConflictResolutio
   }
   return ['mark_resolved']
 }
+
+// Why: deleted rows have nothing on disk; hide Open file instead of failing later.
+export function canOpenWorkingTreeStatusEntry(entry: Pick<GitStatusEntry, 'status'>): boolean {
+  return entry.status !== 'deleted'
+}
