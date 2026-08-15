@@ -3,12 +3,17 @@ import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import type { HostSectionRow } from '../host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../worktree-list-groups'
 import type { RenderRow } from '../worktree-list-virtual-rows'
-import { getCyclableWorktreeIds, resolveCycledWorktreeId } from '../worktree-keyboard-cycle'
+import {
+  getActiveCyclableWorktreeIds,
+  getCyclableWorktreeIds,
+  resolveCycledWorktreeId
+} from '../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktree } from './render-row-worktree-lookup'
 import { isEditableTarget } from './sidebar-editable-target'
 
@@ -33,14 +38,31 @@ export function useWorktreeListKeyboardNavigation(args: {
     markDirectScrollInput
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
+  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
 
   const navigateWorktree = useCallback(
-    (direction: 'up' | 'down') => {
+    (direction: 'up' | 'down', activeOnly = false) => {
       // Why: cycle over the rows the sidebar actually rendered — collapsing a group
       // means "not now", and a rebuilt near-copy would drift from what is on screen
       // (host sections, pinned placement, folder workspaces).
+      void agentStatusEpoch
+      const worktreeIds = activeOnly
+        ? getActiveCyclableWorktreeIds(rows, pinnedDisplayPolicy, {
+            tabsByWorktree,
+            ptyIdsByTabId,
+            browserTabsByWorktree,
+            worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
+              useAppStore.getState().agentStatusByPaneKey,
+              tabsByWorktree,
+              Date.now()
+            )
+          })
+        : getCyclableWorktreeIds(rows, pinnedDisplayPolicy)
       const nextWorktreeId = resolveCycledWorktreeId({
-        worktreeIds: getCyclableWorktreeIds(rows, pinnedDisplayPolicy),
+        worktreeIds,
         activeWorktreeId,
         direction
       })
@@ -60,7 +82,17 @@ export function useWorktreeListKeyboardNavigation(args: {
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
     },
-    [rows, renderRows, activeWorktreeId, virtualizer, pinnedDisplayPolicy]
+    [
+      rows,
+      renderRows,
+      activeWorktreeId,
+      virtualizer,
+      pinnedDisplayPolicy,
+      tabsByWorktree,
+      ptyIdsByTabId,
+      browserTabsByWorktree,
+      agentStatusEpoch
+    ]
   )
 
   useEffect(() => {
@@ -76,14 +108,18 @@ export function useWorktreeListKeyboardNavigation(args: {
         return
       }
 
-      const direction = keybindingMatchesAction('worktree.navigateUp', e, platform, keybindings)
-        ? 'up'
+      const navigation = keybindingMatchesAction('worktree.navigateUp', e, platform, keybindings)
+        ? { direction: 'up' as const, activeOnly: false }
         : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
-          ? 'down'
-          : null
-      if (direction) {
+          ? { direction: 'down' as const, activeOnly: false }
+          : keybindingMatchesAction('worktree.navigateActiveUp', e, platform, keybindings)
+            ? { direction: 'up' as const, activeOnly: true }
+            : keybindingMatchesAction('worktree.navigateActiveDown', e, platform, keybindings)
+              ? { direction: 'down' as const, activeOnly: true }
+              : null
+      if (navigation) {
         markDirectScrollInput()
-        navigateWorktree(direction)
+        navigateWorktree(navigation.direction, navigation.activeOnly)
         e.preventDefault()
       }
     }

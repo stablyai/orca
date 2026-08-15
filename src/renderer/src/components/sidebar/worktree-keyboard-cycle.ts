@@ -1,6 +1,14 @@
 import type { HostSectionRow } from './host-section-rows'
+import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
 import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list-groups'
 import { getPreferredWorktreeRows } from './worktree-sidebar-row-preference'
+
+type ActiveWorktreeInputs = {
+  tabsByWorktree: Record<string, readonly { id: string }[]>
+  ptyIdsByTabId: Record<string, string[]>
+  browserTabsByWorktree: Record<string, readonly { id: string }[]>
+  worktreeIdsWithLiveAgent: ReadonlySet<string>
+}
 
 /** Worktree ids in sidebar order, taken from the rows the sidebar actually
  *  rendered, so collapsed groups and collapsed host sections drop out on their own. */
@@ -21,6 +29,23 @@ export function getCyclableWorktreeIds(
     ids.push(row.worktree.id)
   }
   return ids
+}
+
+/** Worktree ids in sidebar order that still have a live session or agent. */
+export function getActiveCyclableWorktreeIds(
+  rows: readonly HostSectionRow[],
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy,
+  activity: ActiveWorktreeInputs
+): string[] {
+  return getCyclableWorktreeIds(rows, pinnedDisplayPolicy).filter((worktreeId) =>
+    hasActiveWorkspaceActivity(
+      worktreeId,
+      activity.tabsByWorktree,
+      activity.ptyIdsByTabId,
+      activity.browserTabsByWorktree,
+      activity.worktreeIdsWithLiveAgent
+    )
+  )
 }
 
 /** Pick the worktree that `worktree.navigateUp` / `worktree.navigateDown` moves
