@@ -183,6 +183,8 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     ) {
       pty.lastExitCode = null
       pty.lastExitCause = null
+      this.lastReportedPaneExitCodeByPtyId.delete(ptyId)
+      this.paneExitScanStateByPtyId.delete(ptyId)
     }
     if (state.incarnationId !== undefined) {
       if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {

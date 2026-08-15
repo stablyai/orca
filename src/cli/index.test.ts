@@ -102,4 +102,16 @@ describe('command aliases dispatch to the canonical handler', () => {
       process.exitCode = priorExitCode
     }
   })
+
+  it('documents that terminal wait --for exit needs exec', async () => {
+    await main(['terminal', 'create', '--help'], '/tmp/repo')
+    expect(String(logSpy.mock.calls[0][0])).toContain('prefix --command with exec')
+
+    logSpy.mockClear()
+    await main(['terminal', 'wait', '--help'], '/tmp/repo')
+    expect(String(logSpy.mock.calls[0][0])).toContain(
+      'Prefix terminal create --command with exec so the command replaces the shell'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
