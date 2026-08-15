@@ -19,6 +19,7 @@ import { getRoomComposerClipboardFiles } from './room-composer-clipboard-files'
 import { useRoomComposerClipboardPaste } from './room-composer-clipboard-paste'
 import { getRoomContinueDeliveryIds } from './room-composer-continue-deliveries'
 import { useRoomComposerWorkControl } from './use-room-composer-work-control'
+import { ComposerPromptTextarea } from '@/components/ComposerPromptTextarea'
 import {
   applyRoomComposerSuggestion,
   getExactRoomMentionSuggestion,
@@ -333,7 +334,7 @@ export function RoomComposer({
             void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
           }}
         />
-        <textarea
+        <ComposerPromptTextarea
           ref={textareaRef}
           value={text}
           onChange={(event) => {
@@ -374,12 +375,10 @@ export function RoomComposer({
               void send()
             }
           }}
-          rows={2}
           placeholder={translate(
             'rooms.composer.placeholder',
             'Message the room — use @agent to invite a response'
           )}
-          className="block max-h-48 min-h-14 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none"
         />
         <input
           ref={fileInputRef}

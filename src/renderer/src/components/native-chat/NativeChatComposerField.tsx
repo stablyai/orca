@@ -16,6 +16,7 @@ import type { NativeChatOptionPickerRequest } from './native-chat-composer-types
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
 import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
+import { ComposerPromptTextarea } from '@/components/ComposerPromptTextarea'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -207,11 +208,10 @@ export function NativeChatComposerField({
                 ))}
               </div>
             ) : null}
-            <textarea
+            <ComposerPromptTextarea
               ref={textareaRef}
               defaultValue={draft}
               disabled={disabled}
-              rows={2}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
               onKeyDown={(event) => {
                 if (!imeEnterGesture.ownsKeyDown(event)) {
@@ -252,16 +252,6 @@ export function NativeChatComposerField({
                   : undefined
               }
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
-              // Why: coarse-pointer min-height follows the app's touch target convention.
-              // field-sizing:content grows the field with the draft; the 8lh cap (plus
-              // py-1) turns further growth into internal scrolling, and scrollbar-sleek
-              // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
-              // so re-wrap on window/pane resize is handled without a measure pass.
-              className={cn(
-                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
-                '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
-                'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
-              )}
             />
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <NativeChatComposerActions
