@@ -203,6 +203,21 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.fontWeightBold).toBe(800)
   })
 
+  it('applies custom fallback fonts to existing panes in configured order', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, {
+      ...settings,
+      terminalFontFamily: 'MesloLGS NF',
+      terminalFontFallbacks: ['Microsoft YaHei UI', 'Noto Sans Arabic']
+    })
+
+    expect(pane.terminal.options.fontFamily).toMatch(
+      /^"MesloLGS NF", "Microsoft YaHei UI", "Noto Sans Arabic",/
+    )
+  })
+
   it('still assigns a fresh theme when composed values actually change', () => {
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')

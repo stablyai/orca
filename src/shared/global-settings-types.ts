@@ -104,6 +104,8 @@ export type GlobalSettings = {
   primarySelectionMiddleClickPasteDefaultedForTerminalDefaults?: boolean
   terminalFontSize: number
   terminalFontFamily: string
+  /** Ordered font families tried after the primary family and before Orca's defaults. */
+  terminalFontFallbacks?: string[]
   terminalFontWeight: number
   terminalFontWeightBold: number
   terminalLineHeight: number

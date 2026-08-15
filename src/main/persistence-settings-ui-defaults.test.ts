@@ -80,6 +80,7 @@ describe('Store', () => {
     expect(settings.editorAutoSave).toBe(false)
     expect(settings.editorAutoSaveDelayMs).toBe(1000)
     expect(settings.terminalFontSize).toBe(14)
+    expect(settings.terminalFontFallbacks).toEqual([])
     expect(settings.terminalFontWeight).toBe(500)
     expect(settings.terminalFontWeightBold).toBe(700)
     expect(settings.terminalScrollSensitivity).toBe(1.15)
@@ -119,6 +120,30 @@ describe('Store', () => {
     expect(store.getSettings().terminalLineHeight).toBe(1)
     store.flush()
     expect((readDataFile() as PersistedState).settings.terminalLineHeight).toBe(1)
+  })
+
+  it('normalizes persisted terminal fallback font stacks on load', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      settings: {
+        ...persisted.settings,
+        terminalFontFallbacks: [
+          ' Microsoft YaHei UI ',
+          '',
+          42,
+          'Noto Sans Arabic',
+          'microsoft yahei ui'
+        ]
+      } as unknown as GlobalSettings
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalFontFallbacks).toEqual([
+      'Microsoft YaHei UI',
+      'Noto Sans Arabic'
+    ])
   })
 
   it('returns default UI state when no data file exists', async () => {

@@ -7262,7 +7262,8 @@
           "e90afcc44f": "オフ",
           "16c471ee03": "オン",
           "typographyAdvanced": "タイポグラフィ",
-          "dimUnfocusedPanes": "フォーカスされていないペインを暗くします。"
+          "dimUnfocusedPanes": "フォーカスされていないペインを暗くします。",
+          "13b09da243": "フォールバックフォント"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "ピクセル",
@@ -9088,7 +9089,10 @@
               "title": "テーマモード",
               "keyword_target": "対象",
               "keyword_editing": "編集"
-            }
+            },
+            "3f2a94a78d": "フォールバックフォント",
+            "a113f6ead3": "優先フォントにグリフがない場合に、指定順で使用するフォントです。Orca の既定フォントはスタックの末尾に残ります。",
+            "ceecc7e492": "フォールバック スタック 多言語"
           },
           "windows": {
             "search": {
@@ -9720,6 +9724,17 @@
           "title": "エディターフォント",
           "description": "ファイルエディターと差分ビューで使用されるフォント。空の場合はターミナルフォントに従います。",
           "placeholder": "ターミナルフォントと同じ"
+        },
+        "TerminalFontFallbackSetting": {
+          "212953bee6": "Terminal fallback fonts",
+          "36f45a7277": "Move up",
+          "5adea09881": "Move down",
+          "7c2c7906a8": "Remove fallback",
+          "a47b16e7af": "Add a font",
+          "5674a5b618": "New fallback font",
+          "14e6f886f2": "Add",
+          "f78f446a8d": "Maximum of 32 fallback fonts reached.",
+          "ff79a93a0d": "Fallback font"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "ペアリング済みサーバー {{value0}} 台",

@@ -7659,7 +7659,8 @@
           "e90afcc44f": "off",
           "16c471ee03": "on",
           "typographyAdvanced": "Typography",
-          "dimUnfocusedPanes": "Dim unfocused panes."
+          "dimUnfocusedPanes": "Dim unfocused panes.",
+          "13b09da243": "Fallback Fonts"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -9499,7 +9500,10 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
-            }
+            },
+            "3f2a94a78d": "Fallback Fonts",
+            "a113f6ead3": "Ordered fonts used when the primary font doesn't contain a glyph. Orca's defaults remain at the end of the stack.",
+            "ceecc7e492": "fallback stack multilingual"
           },
           "windows": {
             "search": {
@@ -10144,6 +10148,17 @@
           "title": "Editor Font Family",
           "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
+        },
+        "TerminalFontFallbackSetting": {
+          "212953bee6": "Terminal fallback fonts",
+          "36f45a7277": "Move up",
+          "5adea09881": "Move down",
+          "7c2c7906a8": "Remove fallback",
+          "a47b16e7af": "Add a font",
+          "5674a5b618": "New fallback font",
+          "14e6f886f2": "Add",
+          "f78f446a8d": "Maximum of 32 fallback fonts reached.",
+          "ff79a93a0d": "Fallback font"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

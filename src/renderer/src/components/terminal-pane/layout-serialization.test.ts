@@ -81,6 +81,18 @@ describe('buildFontFamily', () => {
     expect(result).toBe(`"JetBrains Mono", ${FULL_FALLBACK}`)
   })
 
+  it('places custom fallbacks between the primary font and Orca defaults', () => {
+    const result = buildFontFamily('MesloLGS NF', ['Microsoft YaHei UI', 'Noto Sans Arabic'])
+    expect(result).toBe(`"MesloLGS NF", "Microsoft YaHei UI", "Noto Sans Arabic", ${FULL_FALLBACK}`)
+  })
+
+  it('ignores empty and duplicate custom fallbacks', () => {
+    const result = buildFontFamily('SF Mono', [' ', 'Noto Sans', 'noto sans', 'SF Mono'])
+    expect(result).toBe(
+      '"SF Mono", "Noto Sans", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+    )
+  })
+
   it('does not duplicate SF Mono when it is the input', () => {
     const result = buildFontFamily('SF Mono')
     expect(result).toBe(
@@ -98,10 +110,10 @@ describe('buildFontFamily', () => {
     expect(result).toBe(FULL_FALLBACK)
   })
 
-  it('does not duplicate when font name contains "sf mono" (case-insensitive)', () => {
-    const result = buildFontFamily('My SF Mono Custom')
+  it('keeps distinct family names that contain an Orca default name', () => {
+    const result = buildFontFamily('My SF Mono Custom', ['Menlo Extra', 'monospace'])
     expect(result).toBe(
-      '"My SF Mono Custom", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+      '"My SF Mono Custom", "Menlo Extra", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
     )
   })
 

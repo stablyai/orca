@@ -7225,7 +7225,8 @@
           "e90afcc44f": "끔",
           "16c471ee03": "켜짐",
           "typographyAdvanced": "타이포그래피",
-          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다."
+          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다.",
+          "13b09da243": "대체 글꼴"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -9051,7 +9052,10 @@
               "title": "테마 모드",
               "keyword_target": "대상",
               "keyword_editing": "편집"
-            }
+            },
+            "3f2a94a78d": "대체 글꼴",
+            "a113f6ead3": "기본 글꼴에 글리프가 없을 때 지정한 순서로 사용하는 글꼴입니다. Orca 기본값은 스택 끝에 유지됩니다.",
+            "ceecc7e492": "대체 글꼴 스택 다국어"
           },
           "windows": {
             "search": {
@@ -9720,6 +9724,17 @@
           "title": "편집기 글꼴",
           "description": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다.",
           "placeholder": "터미널 글꼴과 동일"
+        },
+        "TerminalFontFallbackSetting": {
+          "212953bee6": "Terminal fallback fonts",
+          "36f45a7277": "Move up",
+          "5adea09881": "Move down",
+          "7c2c7906a8": "Remove fallback",
+          "a47b16e7af": "Add a font",
+          "5674a5b618": "New fallback font",
+          "14e6f886f2": "Add",
+          "f78f446a8d": "Maximum of 32 fallback fonts reached.",
+          "ff79a93a0d": "Fallback font"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

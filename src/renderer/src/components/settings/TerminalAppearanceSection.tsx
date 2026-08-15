@@ -24,6 +24,7 @@ import { Button } from '../ui/button'
 import { SettingsRow, SettingsSubsectionHeader, FontAutocomplete } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
+import { TerminalFontFallbackSetting } from './TerminalFontFallbackSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from './TerminalThemeSections'
 import { TerminalWindowSection } from './TerminalWindowSection'
@@ -114,7 +115,7 @@ export function TerminalAppearanceSection({
   const showThemeCatalog = !isSearching || themeCatalogMatches || previewAdvancedMatches
   const primaryTypographyMatches = matchesSettingsSearch(
     searchQuery,
-    terminalTypographyEntries.slice(0, 2)
+    terminalTypographyEntries.slice(0, 3)
   )
   const ghosttyImportMatches = matchesSettingsSearch(searchQuery, ghosttyImportEntries)
   const showPrimaryTypography =
@@ -229,6 +230,39 @@ export function TerminalAppearanceSection({
                     onRequestSuggestions={onRequestFontSuggestions}
                     onChange={(value) => updateSettings({ terminalFontFamily: value })}
                     onPreviewFontFamily={setPreviewFontFamily}
+                  />
+                }
+              />
+            </SearchableSetting>
+
+            <SearchableSetting
+              title={translate(
+                'auto.components.settings.TerminalAppearanceSection.13b09da243',
+                'Fallback Fonts'
+              )}
+              description={terminalTypographyEntries[2]?.description}
+              keywords={
+                terminalTypographyEntries[2]?.keywords ?? [
+                  'terminal',
+                  'typography',
+                  'font',
+                  'fallback'
+                ]
+              }
+              forceVisible={forceVisiblePrimary}
+            >
+              <SettingsRow
+                alignTop
+                label={translate(
+                  'auto.components.settings.TerminalAppearanceSection.13b09da243',
+                  'Fallback Fonts'
+                )}
+                control={
+                  <TerminalFontFallbackSetting
+                    value={settings.terminalFontFallbacks ?? []}
+                    suggestions={terminalFontSuggestions}
+                    onRequestSuggestions={onRequestFontSuggestions}
+                    onChange={(value) => updateSettings({ terminalFontFallbacks: value })}
                   />
                 }
               />

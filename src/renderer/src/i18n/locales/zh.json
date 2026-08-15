@@ -7237,7 +7237,8 @@
           "e90afcc44f": "关",
           "16c471ee03": "开",
           "typographyAdvanced": "排版",
-          "dimUnfocusedPanes": "调暗未聚焦的窗格。"
+          "dimUnfocusedPanes": "调暗未聚焦的窗格。",
+          "13b09da243": "后备字体"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "像素",
@@ -9063,7 +9064,10 @@
               "title": "主题模式",
               "keyword_target": "目标",
               "keyword_editing": "编辑"
-            }
+            },
+            "3f2a94a78d": "后备字体",
+            "a113f6ead3": "主字体缺少某个字形时，按指定顺序使用这些字体。Orca 默认字体仍位于字体栈末尾。",
+            "ceecc7e492": "后备 字体栈 多语言"
           },
           "windows": {
             "search": {
@@ -9732,6 +9736,17 @@
           "title": "编辑器字体",
           "description": "文件编辑器和差异视图使用的字体，留空则跟随终端字体。",
           "placeholder": "与终端字体相同"
+        },
+        "TerminalFontFallbackSetting": {
+          "212953bee6": "Terminal fallback fonts",
+          "36f45a7277": "Move up",
+          "5adea09881": "Move down",
+          "7c2c7906a8": "Remove fallback",
+          "a47b16e7af": "Add a font",
+          "5674a5b618": "New fallback font",
+          "14e6f886f2": "Add",
+          "f78f446a8d": "Maximum of 32 fallback fonts reached.",
+          "ff79a93a0d": "Fallback font"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

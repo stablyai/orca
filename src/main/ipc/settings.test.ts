@@ -553,6 +553,33 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('normalizes terminal fallback font stacks before persistence', async () => {
+    store.getSettings.mockReturnValue({ terminalFontFallbacks: [] })
+    store.updateSettings.mockReturnValue({
+      terminalFontFallbacks: ['Microsoft YaHei UI', 'Noto Sans Arabic']
+    })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      terminalFontFallbacks: [
+        ' Microsoft YaHei UI ',
+        null,
+        'Noto Sans Arabic',
+        'microsoft yahei ui'
+      ]
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { terminalFontFallbacks: ['Microsoft YaHei UI', 'Noto Sans Arabic'] },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('normalizes custom terminal themes from renderer settings IPC', async () => {
     store.getSettings.mockReturnValue({ terminalCustomThemes: [] })
     store.updateSettings.mockReturnValue({ terminalCustomThemes: [] })

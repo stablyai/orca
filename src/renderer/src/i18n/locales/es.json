@@ -7240,7 +7240,8 @@
           "e90afcc44f": "apagado",
           "16c471ee03": "activado",
           "typographyAdvanced": "Tipografía",
-          "dimUnfocusedPanes": "Atenuar paneles sin foco."
+          "dimUnfocusedPanes": "Atenuar paneles sin foco.",
+          "13b09da243": "Fuentes alternativas"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -9066,7 +9067,10 @@
               "title": "Modo del tema",
               "keyword_target": "destino",
               "keyword_editing": "edición"
-            }
+            },
+            "3f2a94a78d": "Fuentes alternativas",
+            "a113f6ead3": "Fuentes ordenadas que se usan cuando la fuente principal no contiene un glifo. Los valores predeterminados de Orca permanecen al final de la lista.",
+            "ceecc7e492": "fuentes alternativas pila multilingüe"
           },
           "windows": {
             "search": {
@@ -9720,6 +9724,17 @@
           "title": "Fuente del editor",
           "description": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal.",
           "placeholder": "Igual que la fuente de la terminal"
+        },
+        "TerminalFontFallbackSetting": {
+          "212953bee6": "Terminal fallback fonts",
+          "36f45a7277": "Move up",
+          "5adea09881": "Move down",
+          "7c2c7906a8": "Remove fallback",
+          "a47b16e7af": "Add a font",
+          "5674a5b618": "New fallback font",
+          "14e6f886f2": "Add",
+          "f78f446a8d": "Maximum of 32 fallback fonts reached.",
+          "ff79a93a0d": "Fallback font"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

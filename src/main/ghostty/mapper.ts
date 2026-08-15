@@ -1,6 +1,7 @@
 import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
 import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import { HEX_COLOR_RE } from '../../shared/color-validation'
+import { normalizeTerminalFontFallbacks } from '../../shared/terminal-font-fallbacks'
 import { parsePaddingValue, parseStrictInt } from './numeric-config-values'
 
 const PALETTE_INDEX_MAP: Record<number, keyof TerminalColorOverrides> = {
@@ -211,11 +212,18 @@ export function mapGhosttyToOrca(
       return { key: 'terminalCursorOpacity', value: num }
     },
 
-    'font-family': (v) => {
-      if (typeof v !== 'string' || v.trim().length === 0) {
+    'font-family': (v, rawValue) => {
+      const families = normalizeTerminalFontFallbacks(Array.isArray(rawValue) ? rawValue : [v])
+      const primary = families[0]
+      if (!primary) {
         return null
       }
-      return { key: 'terminalFontFamily', value: v }
+      return Array.isArray(rawValue)
+        ? [
+            { key: 'terminalFontFamily', value: primary },
+            { key: 'terminalFontFallbacks', value: families.slice(1) }
+          ]
+        : { key: 'terminalFontFamily', value: primary }
     },
 
     'font-size': (v) => {
@@ -286,7 +294,7 @@ export function mapGhosttyToOrca(
       continue
     }
 
-    if (!value.trim()) {
+    if (!value.trim() && (key !== 'font-family' || !Array.isArray(rawValue))) {
       unsupportedKeys.push(key)
       continue
     }

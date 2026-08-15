@@ -11,7 +11,9 @@ type FontAutocompleteProps = {
   value: string
   suggestions: string[]
   onChange: (value: string) => void
+  onCommit?: (value: string) => void
   placeholder?: string
+  ariaLabel?: string
   onRequestSuggestions?: () => void
   /** Fires with whichever option the user is currently highlighting in the
    *  dropdown (via mouse hover or keyboard arrow), or null when nothing is
@@ -24,7 +26,9 @@ export function FontAutocomplete({
   value,
   suggestions,
   onChange,
+  onCommit,
   placeholder = 'SF Mono',
+  ariaLabel,
   onRequestSuggestions,
   onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
@@ -128,6 +132,7 @@ export function FontAutocomplete({
     setQuery(nextValue)
     setIsFilteringQuery(false)
     onChange(nextValue)
+    onCommit?.(nextValue)
     setOpen(false)
   }
 
@@ -161,6 +166,7 @@ export function FontAutocomplete({
                 setIsFilteringQuery(false)
                 setOpen(true)
               }}
+              onBlur={() => onCommit?.(query)}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   if (open) {
@@ -199,11 +205,20 @@ export function FontAutocomplete({
                     e.preventDefault()
                     commitValue(highlightedFont)
                   }
+                  return
+                }
+
+                if (e.key === 'Enter' && onCommit) {
+                  e.preventDefault()
+                  setIsFilteringQuery(false)
+                  onCommit(query)
+                  setOpen(false)
                 }
               }}
               placeholder={placeholder}
               className="pr-18"
               role="combobox"
+              aria-label={ariaLabel}
               aria-autocomplete="list"
               aria-expanded={open}
               aria-controls={listboxId}
