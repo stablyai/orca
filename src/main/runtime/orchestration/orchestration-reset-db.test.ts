@@ -17,6 +17,17 @@ describe('OrchestrationDb reset scopes', () => {
     const started = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: { worktree: 'current' },
+      budget: {
+        group: 'reset-workers',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z',
       runtimeEpoch: 'runtime_1',
       federation: {
         environmentId: 'environment_1',

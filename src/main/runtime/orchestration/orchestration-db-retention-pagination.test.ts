@@ -106,6 +106,8 @@ describe('OrchestrationDb bounded mutation receipts', () => {
       homePeerFingerprint: 'caller',
       protocolVersion: 1,
       runtimeEpoch: 'worker_epoch',
+      deadlineAt: '2099-01-01T00:00:00.000Z',
+      maxRequests: 10,
       mutationReceipt: {
         callerFingerprint: 'caller',
         requestId: 'remote_pruned',
@@ -134,6 +136,8 @@ describe('OrchestrationDb bounded mutation receipts', () => {
         homePeerFingerprint: 'caller',
         protocolVersion: 1,
         runtimeEpoch: 'worker_epoch',
+        deadlineAt: '2099-01-01T00:00:00.000Z',
+        maxRequests: 10,
         mutationReceipt: {
           callerFingerprint: 'caller',
           requestId: 'remote_overflow',
@@ -156,6 +160,17 @@ describe('OrchestrationDb bounded mutation receipts', () => {
       db!.createStartingWorkerDispatch({
         taskId: task.id,
         startOptions: {},
+        budget: {
+          group: 'mutation-capacity',
+          index: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 30_000,
+          maxRequests: 10,
+          requestCapEnforcement: 'prompt_only',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z',
         mutationReceipt: {
           callerFingerprint: 'caller',
           requestId: 'worker_overflow',
@@ -240,7 +255,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(25)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(26)
     expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ assignee_handle: 'term_worker' })
     expect(db.getTask(task.id)).toMatchObject({
       created_by_pane_key: null,
@@ -277,7 +292,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db.close()
     db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(25)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(26)
     expect(db.getDispatchContextById(dispatch.id)).toBeDefined()
   })
 
@@ -309,7 +324,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(25)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(26)
     expect(db.getTask(task.id)).toMatchObject({
       created_by_pane_key: 'tab_creator:leaf_creator',
       created_by_process_incarnation: 'pty_creator:incarnation-a',
@@ -328,7 +343,79 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db.close()
     db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(25)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(26)
     expect(db.getTask(task.id)?.created_by_process_incarnation).toBe('pty_creator:incarnation-a')
+  })
+
+  it('adds bounded worker budget storage to a populated v25 database idempotently', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-bounded-worker-migration-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const task = db.createTask({ spec: 'legacy worker row' })
+    const sqlite = sqliteFor(db)
+    sqlite
+      .prepare(
+        `INSERT INTO dispatch_contexts (
+           id, run_id, task_id, contract_version, status, dispatched_at
+         ) VALUES ('ctx_legacy_worker', ?, ?, 2, 'pending', datetime('now'))`
+      )
+      .run(task.run_id, task.id)
+    sqlite
+      .prepare(
+        `INSERT INTO worker_dispatches (
+           dispatch_id, state, stage, deadline_at, max_runtime_ms, max_requests,
+           request_cap_enforcement, max_review_cycles, leaf
+         ) VALUES (
+           'ctx_legacy_worker', 'starting', 'accepted', '2099-01-01T00:00:00.000Z',
+           30000, 10, 'prompt_only', 0, 1
+         )`
+      )
+      .run()
+    db.close()
+    db = undefined
+
+    const oldDb = new Database(dbPath)
+    oldDb.exec(`
+      DROP TABLE dispatch_budget_reservations;
+      DROP TABLE dispatch_budget_groups;
+      ALTER TABLE worker_dispatches DROP COLUMN watchdog_sentinel_path;
+      ALTER TABLE worker_dispatches DROP COLUMN leaf;
+      ALTER TABLE worker_dispatches DROP COLUMN review_cycle;
+      ALTER TABLE worker_dispatches DROP COLUMN max_review_cycles;
+      ALTER TABLE worker_dispatches DROP COLUMN request_cap_enforcement;
+      ALTER TABLE worker_dispatches DROP COLUMN max_requests;
+      ALTER TABLE worker_dispatches DROP COLUMN max_runtime_ms;
+      ALTER TABLE worker_dispatches DROP COLUMN deadline_at;
+    `)
+    oldDb.pragma('user_version = 25')
+    oldDb.close()
+
+    db = new OrchestrationDb(dbPath)
+    const migrated = sqliteFor(db)
+    expect(migrated.pragma('user_version', { simple: true })).toBe(26)
+    expect(
+      migrated
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get('dispatch_budget_groups')
+    ).toBeDefined()
+    expect(
+      migrated
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get('dispatch_budget_reservations')
+    ).toBeDefined()
+    expect(db.getWorkerDispatch('ctx_legacy_worker')).toMatchObject({
+      deadline_at: expect.any(String),
+      max_runtime_ms: 1000,
+      max_requests: 1,
+      request_cap_enforcement: 'unsupported',
+      max_review_cycles: 0,
+      review_cycle: null,
+      leaf: 1,
+      watchdog_sentinel_path: null
+    })
+
+    db.close()
+    db = new OrchestrationDb(dbPath)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(26)
   })
 })

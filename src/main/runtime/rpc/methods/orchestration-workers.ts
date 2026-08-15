@@ -8,18 +8,22 @@ import { WorkerStartParams } from './orchestration-worker-start-schema'
 import {
   createExistingWorktreeWorkerTerminal,
   createWorkerWorktree,
-  monitorWorkerSetup,
   requireWorkerAuthority,
   type WorkerEffect,
   type WorkerSetupReceipt
 } from './orchestration-worker-topology'
 import {
   persistGatedSetupSpawnFailure,
+  monitorWorkerSetup,
   persistWorkerReadinessStage,
-  persistWorkerSetupWaitOutcome
+  persistWorkerSetupWaitOutcome,
+  WorkerSetupGateError
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
-import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
+import {
+  prepareLocalWorkerStart,
+  resolveBoundedWorkerControls
+} from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -58,6 +62,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const createsWorktree =
         requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
       const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+      const controls = resolveBoundedWorkerControls(params, agent as TuiAgent)
+      const deadlineAt = new Date(Date.now() + params.maxRuntimeMs).toISOString()
+      const bounded = {
+        deadlineAt,
+        budget: controls.budget,
+        leafControl: controls.leafControl
+      }
 
       const coordinatorTerminal = await runtime.showTerminal(params.from)
       const coordinatorWorktree = await runtime.showManagedWorktree(
@@ -75,32 +86,16 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         : requestedWorktree === 'current'
           ? coordinatorWorktree
           : await runtime.showManagedWorktree(requestedWorktree)
-      let explicitTerminal
-      if (params.terminal) {
-        explicitTerminal = await runtime.showTerminal(params.terminal)
-        if (explicitTerminal.worktreeId !== resolvedWorktree?.id) {
-          throw new OrchestrationError(
-            'terminal_worktree_mismatch',
-            `Terminal ${params.terminal} does not belong to worktree ${resolvedWorktree?.id}.`
-          )
-        }
-        if (!(await runtime.isTerminalRunningAgent(params.terminal))) {
-          throw new OrchestrationError(
-            'agent_unconfigured',
-            `Terminal ${params.terminal} is not running a recognized agent.`
-          )
-        }
-      }
-
       const startOptions = {
         worktree: requestedWorktree,
         resolvedWorktreeId: resolvedWorktree?.id ?? null,
         name: params.name ?? null,
         repo: params.repo ?? (createsWorktree ? coordinatorWorktree.repoId : null),
         baseBranch: params.baseBranch ?? null,
-        terminal: params.terminal ?? null,
+        terminal: null,
         agent: agent ?? null,
         launch: launch.receipt,
+        bounded,
         timeoutMs: params.timeoutMs ?? 60_000,
         setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         setupSource: createsWorktree
@@ -113,6 +108,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         taskId: task.id,
         retryOf: params.retryOf,
         startOptions,
+        budget: controls.budget,
+        deadlineAt,
         runtimeEpoch: runtime.getRuntimeId(),
         mutationReceipt: orchestrationMutation
       })
@@ -123,7 +120,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
         )
       }
-      let terminalHandle = params.terminal
+      let terminalHandle: string | undefined
       let terminalRevealWarning: string | undefined
       let failedStage = 'terminal_create'
       let setupReceipt: WorkerSetupReceipt = {
@@ -146,12 +143,17 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             params,
             agent: agent as TuiAgent,
             launchPreferences: launch.preferences,
-            effects
+            deadlineAt,
+            maxRequests: params.maxRequests,
+            effects,
+            onStage: (stage) => {
+              failedStage = stage
+            }
           })
           resolvedWorktree = created.worktree
           terminalHandle = created.terminalHandle
           setupReceipt = created.setupReceipt
-        } else if (!terminalHandle) {
+        } else {
           db.recordWorkerStage({
             dispatchId: started.dispatch.id,
             stage: 'terminal_creating',
@@ -160,25 +162,32 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           })
           const terminal = await createExistingWorktreeWorkerTerminal({
             runtime,
+            db,
+            dispatchId: started.dispatch.id,
             worktreeId: resolvedWorktree!.id,
             agent: agent as TuiAgent,
             launchPreferences: launch.preferences,
+            deadlineAt,
+            maxRequests: params.maxRequests,
             taskId: task.id,
             effects
           })
           terminalHandle = terminal.handle
           terminalRevealWarning = terminal.warning
-        } else {
-          effects.push({
-            kind: 'terminal',
-            role: 'agent',
-            action: 'reused',
-            id: terminalHandle
-          })
         }
         if (!resolvedWorktree || !terminalHandle) {
           throw new Error('Worker topology did not resolve an agent terminal and worktree.')
         }
+        const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
+        const capability = db.prepareStartingWorkerAuthority({
+          dispatchId: started.dispatch.id,
+          handle: terminalHandle,
+          ...terminalAuthority,
+          worktreeId: resolvedWorktree.id,
+          effects,
+          setupState: setupReceipt.state,
+          terminalOwnership: 'created'
+        })
         const setupStage = {
           db,
           dispatchId: started.dispatch.id,
@@ -209,17 +218,6 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
               : `Agent did not become ready (${wait.status}).`
           )
         }
-        const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
-        const capability = db.prepareStartingWorkerAuthority({
-          dispatchId: started.dispatch.id,
-          handle: terminalHandle,
-          ...terminalAuthority,
-          worktreeId: resolvedWorktree.id,
-          effects,
-          setupState: setupReceipt.state,
-          terminalOwnership: params.terminal ? 'external' : 'created'
-        })
-
         failedStage = 'dispatch_input'
         const preamble = buildDispatchPreamble({
           taskId: task.id,
@@ -227,6 +225,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           taskSpec: task.spec,
           coordinatorHandle: params.from,
           workerHandle: terminalHandle,
+          maxRequests: params.maxRequests,
           dispatchCapability: capability,
           devMode: params.devMode,
           cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
@@ -255,12 +254,17 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           stage: worker.stage,
           setup: setupReceipt,
           launch: launch.receipt,
+          ...bounded,
           timeoutMs: params.timeoutMs ?? 60_000,
           effects,
           residualResources: [],
           ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})
         }
       } catch (error) {
+        if (error instanceof WorkerSetupGateError) {
+          failedStage = error.failedStage
+          setupReceipt = error.setupReceipt
+        }
         return failWorkerStartWithReceipt({
           db,
           runId: run.id,
@@ -269,7 +273,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           failedStage,
           error,
           setup: setupReceipt,
-          launch: launch.receipt
+          launch: launch.receipt,
+          bounded
         })
       }
     }

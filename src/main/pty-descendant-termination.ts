@@ -299,28 +299,33 @@ type TerminateDeps = {
   timeoutMs?: number
 }
 
-function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
+function hasUnambiguousStartIdentity(row: ProcessTableRow, verifiedAtMs: number): boolean {
   const startedAtMs = Date.parse(row.startedAt)
   if (!Number.isFinite(startedAtMs)) {
     return false
   }
   // ps lstart is second-resolution. A process born in the capture second can
   // be replaced by a different process with the same displayed timestamp.
-  return startedAtMs < Math.floor(capturedAtMs / 1_000) * 1_000
+  return startedAtMs < Math.floor(verifiedAtMs / 1_000) * 1_000
+}
+
+export function descendantSnapshotHasAmbiguousIdentity(snapshot: DescendantSnapshot): boolean {
+  return snapshot.descendants.some(
+    (row) => !hasUnambiguousStartIdentity(row, snapshot.capturedAtMs)
+  )
 }
 
 /**
  * Terminates a snapshotted descendant tree: SIGTERM every descendant now,
  * reaching detached-pgid children the PTY's SIGHUP cannot, then after a grace
- * window SIGKILL identity-safe survivors. Processes born in the capture second
- * are not escalated because ps cannot distinguish same-second PID reuse.
+ * window SIGKILL identity-safe survivors. Escalation waits for a later process
+ * table boundary so same-second descendants can gain an unambiguous identity.
  */
 export function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
   deps: TerminateDeps = {}
 ): void {
   const sendSignal = deps.sendSignal ?? defaultSendSignal
-  const readTable = deps.readTable ?? readProcessTable
   for (const row of snapshot.descendants) {
     sendSignal(row.pid, 'SIGTERM')
   }
@@ -328,34 +333,53 @@ export function terminateDescendantSnapshot(
     return
   }
   const timer = setTimeout(() => {
-    void readProcessTableBeforeDeadline(
-      readTable,
-      deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
-    ).then((capture) => {
-      if (!capture) {
-        return
-      }
-      const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
-      const liveTargets = new Map<number, ProcessTableRow | null>()
-      // Why: a process table may be large, while one agent's descendants are
-      // normally few. Index only signal targets instead of duplicating every row.
-      for (const live of capture.rows) {
-        if (expectedPids.has(live.pid)) {
-          // Duplicate PID rows make identity ambiguous, so never escalate them.
-          liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
-        }
-      }
-      for (const row of snapshot.descendants) {
-        const live = liveTargets.get(row.pid)
-        if (
-          hasUnambiguousStartIdentity(row, snapshot.capturedAtMs) &&
-          live?.startedAt === row.startedAt &&
-          live.pgid === row.pgid
-        ) {
-          sendSignal(row.pid, 'SIGKILL')
-        }
-      }
-    })
+    void forceTerminateDescendantSnapshot(snapshot, deps)
   }, deps.graceMs ?? DESCENDANT_KILL_GRACE_MS)
   timer.unref?.()
+}
+
+export async function forceTerminateDescendantSnapshot(
+  snapshot: DescendantSnapshot,
+  deps: TerminateDeps = {}
+): Promise<number> {
+  return signalLiveDescendantSnapshot(snapshot, 'SIGKILL', deps)
+}
+
+export async function signalLiveDescendantSnapshot(
+  snapshot: DescendantSnapshot,
+  signal: NodeJS.Signals,
+  deps: TerminateDeps = {}
+): Promise<number> {
+  const readTable = deps.readTable ?? readProcessTable
+  const sendSignal = deps.sendSignal ?? defaultSendSignal
+  const capture = await readProcessTableBeforeDeadline(
+    readTable,
+    deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
+  )
+  if (!capture) {
+    return 0
+  }
+  const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
+  const liveTargets = new Map<number, ProcessTableRow | null>()
+  // Why: a process table may be large, while one agent's descendants are
+  // normally few. Index only signal targets instead of duplicating every row.
+  for (const live of capture.rows) {
+    if (expectedPids.has(live.pid)) {
+      // Duplicate PID rows make identity ambiguous, so never escalate them.
+      liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
+    }
+  }
+  let killed = 0
+  for (const row of snapshot.descendants) {
+    const live = liveTargets.get(row.pid)
+    if (
+      hasUnambiguousStartIdentity(row, snapshot.capturedAtMs) &&
+      live?.startedAt === row.startedAt &&
+      live.pgid === row.pgid
+    ) {
+      sendSignal(row.pid, signal)
+      killed += 1
+    }
+  }
+  return killed
 }

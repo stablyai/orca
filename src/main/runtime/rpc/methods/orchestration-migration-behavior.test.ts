@@ -181,7 +181,13 @@ describe('orchestration migration behavior', () => {
           worktree: 'new-top-level',
           repo: 'id:windows-repo',
           name: 'remote-work',
-          agent: 'codex'
+          agent: 'codex',
+          dispatchGroup: 'migration-workers',
+          dispatchIndex: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 30_000,
+          maxRequests: 10,
+          maxReviewCycles: 0
         },
         runtime,
         db,
@@ -228,7 +234,13 @@ describe('orchestration migration behavior', () => {
           worktree: 'new-top-level',
           repo: 'id:windows-repo',
           name: 'remote-work',
-          agent: 'codex'
+          agent: 'codex',
+          dispatchGroup: 'migration-workers',
+          dispatchIndex: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 30_000,
+          maxRequests: 10,
+          maxReviewCycles: 0
         },
         runtime,
         db,

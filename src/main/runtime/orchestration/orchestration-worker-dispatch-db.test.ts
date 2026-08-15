@@ -3,6 +3,7 @@ import { CURRENT_CONTRACT_VERSION, OrchestrationDb } from './db'
 
 describe('OrchestrationDb worker Dispatch state', () => {
   let db: OrchestrationDb | undefined
+  let budgetIndex = 0
 
   afterEach(() => {
     db?.close()
@@ -10,13 +11,38 @@ describe('OrchestrationDb worker Dispatch state', () => {
 
   function createDb(): OrchestrationDb {
     db = new OrchestrationDb(':memory:')
+    budgetIndex = 0
     return db
+  }
+
+  function createBoundedDispatch(
+    d: OrchestrationDb,
+    params: Omit<
+      Parameters<OrchestrationDb['createStartingWorkerDispatch']>[0],
+      'budget' | 'deadlineAt'
+    >
+  ) {
+    budgetIndex += 1
+    return d.createStartingWorkerDispatch({
+      ...params,
+      budget: {
+        group: 'test-workers',
+        index: budgetIndex,
+        maxDispatches: 64,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z'
+    })
   }
 
   it('creates and activates a composed worker Dispatch transactionally', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'worker' })
-    const started = d.createStartingWorkerDispatch({
+    const started = createBoundedDispatch(d, {
       taskId: task.id,
       startOptions: { topology: 'current', agent: 'codex' }
     })
@@ -54,10 +80,222 @@ describe('OrchestrationDb worker Dispatch state', () => {
     ])
   })
 
+  it('reserves bounded Dispatch indices atomically and never reopens consumed slots', () => {
+    const d = createDb()
+    const firstTask = d.createTask({ spec: 'first bounded worker' })
+    const first = d.createStartingWorkerDispatch({
+      taskId: firstTask.id,
+      startOptions: {},
+      budget: {
+        group: 'bounded-batch',
+        index: 1,
+        maxDispatches: 2,
+        maxRuntimeMs: 60_000,
+        maxRequests: 20,
+        requestCapEnforcement: 'hard',
+        maxReviewCycles: 2,
+        reviewCycle: 1,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z'
+    })
+    expect(first.worker).toMatchObject({
+      deadline_at: '2099-01-01T00:00:00.000Z',
+      max_runtime_ms: 60_000,
+      max_requests: 20,
+      request_cap_enforcement: 'hard',
+      max_review_cycles: 2,
+      review_cycle: 1,
+      leaf: 1,
+      watchdog_sentinel_path: null
+    })
+    expect(d.getDispatchBudgetGroup(firstTask.run_id, 'bounded-batch')).toMatchObject({
+      max_dispatches: 2
+    })
+    expect(d.listDispatchBudgetReservations(firstTask.run_id, 'bounded-batch')).toEqual([
+      expect.objectContaining({
+        dispatch_index: 1,
+        dispatch_id: first.dispatch.id
+      })
+    ])
+
+    d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'provider failed')
+    const duplicateTask = d.createTask({ spec: 'duplicate slot' })
+    expect(() =>
+      d.createStartingWorkerDispatch({
+        taskId: duplicateTask.id,
+        startOptions: {},
+        budget: {
+          group: 'bounded-batch',
+          index: 1,
+          maxDispatches: 2,
+          maxRuntimeMs: 60_000,
+          maxRequests: 20,
+          requestCapEnforcement: 'hard',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z'
+      })
+    ).toThrow('already consumed')
+    expect(d.getTask(duplicateTask.id)?.status).toBe('ready')
+
+    const changedMaximumTask = d.createTask({ spec: 'changed group maximum' })
+    expect(() =>
+      d.createStartingWorkerDispatch({
+        taskId: changedMaximumTask.id,
+        startOptions: {},
+        budget: {
+          group: 'bounded-batch',
+          index: 2,
+          maxDispatches: 3,
+          maxRuntimeMs: 60_000,
+          maxRequests: 20,
+          requestCapEnforcement: 'hard',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z'
+      })
+    ).toThrow('already has maximum 2')
+    expect(d.listDispatchBudgetReservations(firstTask.run_id, 'bounded-batch')).toHaveLength(1)
+
+    const overflowTask = d.createTask({ spec: 'overflow' })
+    expect(() =>
+      d.createStartingWorkerDispatch({
+        taskId: overflowTask.id,
+        startOptions: {},
+        budget: {
+          group: 'overflow-batch',
+          index: 3,
+          maxDispatches: 2,
+          maxRuntimeMs: 60_000,
+          maxRequests: 20,
+          requestCapEnforcement: 'hard',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z'
+      })
+    ).toThrow('outside budget group')
+    expect(d.getDispatchBudgetGroup(overflowTask.run_id, 'overflow-batch')).toBeUndefined()
+
+    const invalidReviewTask = d.createTask({ spec: 'invalid review cycle' })
+    expect(() =>
+      d.createStartingWorkerDispatch({
+        taskId: invalidReviewTask.id,
+        startOptions: {},
+        budget: {
+          group: 'review-batch',
+          index: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 60_000,
+          maxRequests: 20,
+          requestCapEnforcement: 'hard',
+          maxReviewCycles: 2,
+          reviewCycle: 3,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z'
+      })
+    ).toThrow('within the configured maximum')
+    expect(d.getDispatchBudgetGroup(invalidReviewTask.run_id, 'review-batch')).toBeUndefined()
+
+    const rollbackTask = d.createTask({ spec: 'rollback after reservation' })
+    const circular: { self?: unknown } = {}
+    circular.self = circular
+    expect(() =>
+      d.createStartingWorkerDispatch({
+        taskId: rollbackTask.id,
+        startOptions: circular,
+        budget: {
+          group: 'rollback-batch',
+          index: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 60_000,
+          maxRequests: 20,
+          requestCapEnforcement: 'hard',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z'
+      })
+    ).toThrow()
+    expect(d.getDispatchBudgetGroup(rollbackTask.run_id, 'rollback-batch')).toBeUndefined()
+    expect(d.getTask(rollbackTask.id)?.status).toBe('ready')
+  })
+
+  it('binds a Run to one durable Dispatch budget group', () => {
+    const d = createDb()
+    const firstTask = d.createTask({ spec: 'first group' })
+    const first = createBoundedDispatch(d, { taskId: firstTask.id, startOptions: {} })
+    d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'failed')
+    const secondTask = d.createTask({ spec: 'second group' })
+
+    expect(() =>
+      d.createStartingWorkerDispatch({
+        taskId: secondTask.id,
+        startOptions: {},
+        budget: {
+          group: 'replacement-group',
+          index: 1,
+          maxDispatches: 64,
+          maxRuntimeMs: 30_000,
+          maxRequests: 10,
+          requestCapEnforcement: 'prompt_only',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z'
+      })
+    ).toThrow('already bound')
+  })
+
+  it('does not let a retry redefine its review-cycle maximum', () => {
+    const d = createDb()
+    const task = d.createTask({ spec: 'review retry' })
+    const first = d.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: {},
+      budget: {
+        group: 'review-retry',
+        index: 1,
+        maxDispatches: 2,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 2,
+        reviewCycle: 1,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z'
+    })
+    d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'failed')
+
+    expect(() =>
+      d.createStartingWorkerDispatch({
+        taskId: task.id,
+        retryOf: first.dispatch.id,
+        startOptions: {},
+        budget: {
+          group: 'review-retry',
+          index: 2,
+          maxDispatches: 2,
+          maxRuntimeMs: 30_000,
+          maxRequests: 10,
+          requestCapEnforcement: 'prompt_only',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:01:00.000Z'
+      })
+    ).toThrow('preserve')
+  })
+
   it('requeues an active Task before settling a worker whose terminal is missing', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'recover missing worker' })
-    const started = d.createStartingWorkerDispatch({
+    const started = createBoundedDispatch(d, {
       taskId: task.id,
       startOptions: { topology: 'current', agent: 'codex' }
     })
@@ -101,7 +339,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
       payloadHash: 'payload_hash'
     }
 
-    const started = d.createStartingWorkerDispatch({
+    const started = createBoundedDispatch(d, {
       taskId: task.id,
       startOptions: { topology: 'current' },
       mutationReceipt
@@ -122,7 +360,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
     const d = createDb()
 
     expect(() =>
-      d.createStartingWorkerDispatch({
+      createBoundedDispatch(d, {
         taskId: 'task_missing',
         startOptions: {},
         mutationReceipt: {
@@ -139,7 +377,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('fails a composed start without losing residual resource receipts', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'worker' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = createBoundedDispatch(d, { taskId: task.id, startOptions: {} })
     d.recordWorkerStage({
       dispatchId: started.dispatch.id,
       stage: 'terminal_created',
@@ -159,9 +397,9 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('allows retry only from the Task current terminal Dispatch', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'retry current' })
-    const first = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const first = createBoundedDispatch(d, { taskId: task.id, startOptions: {} })
     d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
-    const second = d.createStartingWorkerDispatch({
+    const second = createBoundedDispatch(d, {
       taskId: task.id,
       retryOf: first.dispatch.id,
       startOptions: {}
@@ -169,14 +407,14 @@ describe('OrchestrationDb worker Dispatch state', () => {
     d.failWorkerStart(second.dispatch.id, 'agent_readiness', 'second failed')
 
     expect(() =>
-      d.createStartingWorkerDispatch({
+      createBoundedDispatch(d, {
         taskId: task.id,
         retryOf: first.dispatch.id,
         startOptions: {}
       })
     ).toThrow('cannot retry')
     expect(
-      d.createStartingWorkerDispatch({
+      createBoundedDispatch(d, {
         taskId: task.id,
         retryOf: second.dispatch.id,
         startOptions: {}
@@ -187,9 +425,9 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('treats abandon of a superseded Dispatch as a no-op', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'stale abandon' })
-    const first = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const first = createBoundedDispatch(d, { taskId: task.id, startOptions: {} })
     d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
-    const second = d.createStartingWorkerDispatch({
+    const second = createBoundedDispatch(d, {
       taskId: task.id,
       retryOf: first.dispatch.id,
       startOptions: {}
@@ -225,7 +463,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('lets the stop fence win before a late worker completion', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = createBoundedDispatch(d, { taskId: task.id, startOptions: {} })
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -253,7 +491,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('allows explicit stop recovery from uncertain local and remote starts', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'uncertain local start' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = createBoundedDispatch(d, { taskId: task.id, startOptions: {} })
     d.markWorkerStartUnknown(started.dispatch.id, 'agent_readiness', 'connection lost')
 
     expect(d.beginWorkerStop(started.dispatch.id)).toMatchObject({
@@ -267,6 +505,8 @@ describe('OrchestrationDb worker Dispatch state', () => {
       homePeerFingerprint: 'home_peer',
       protocolVersion: 1,
       runtimeEpoch: 'worker_epoch',
+      deadlineAt: '2099-01-01T00:00:00.000Z',
+      maxRequests: 10,
       mutationReceipt: {
         callerFingerprint: 'home_peer',
         requestId: 'remote_unknown_start',
@@ -291,7 +531,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('returns already-settled when completion wins before stop', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = createBoundedDispatch(d, { taskId: task.id, startOptions: {} })
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',

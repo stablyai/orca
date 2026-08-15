@@ -9,6 +9,7 @@ import {
   exposeWorkerTerminalResource,
   type WorkerReleaseReceipt
 } from './orchestration-worker-release-completion'
+import { resolvePinnedFederatedServer } from './orchestration-worker-observation'
 
 const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
 
@@ -26,22 +27,83 @@ const WorkerListParams = z.object({
   terminalState: z.enum(WORKER_TERMINAL_LIST_STATES).optional()
 })
 
+function legacyRemoteCleanupReceipt(dispatchId: string, action: 'release' | 'retention') {
+  return {
+    dispatchId,
+    state: 'retained' as const,
+    reason: 'ownership_transferred' as const,
+    processAction: 'none' as const,
+    archive: null,
+    recovery: `The pinned worker server cannot perform managed ${action}; the remote terminal was preserved.`
+  }
+}
+
+function isLegacyRemoteCleanupError(error: unknown): boolean {
+  return (
+    error instanceof OrchestrationError &&
+    ['orchestration_migration_required', 'method_not_found', 'capability_unsupported'].includes(
+      error.code
+    )
+  )
+}
+
 export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerRelease',
     params: WorkerDispatchParams,
-    handler: async (params, { runtime }): Promise<WorkerReleaseReceipt> => {
+    handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
-      if (db.getFederatedDispatch(params.dispatch)) {
-        // Fail closed: the worker server owns that terminal; a home-side close would be a guess.
+      const federated = db.getFederatedDispatch(params.dispatch)
+      if (federated) {
+        if (!orchestrationMutation) {
+          throw new OrchestrationError(
+            'invalid_argument',
+            'Remote worker-release requires a durable retry request.'
+          )
+        }
+        const worker = db.getWorkerDispatch(params.dispatch)
+        if (!worker || !['succeeded', 'failed', 'stopped', 'stop_unknown'].includes(worker.state)) {
+          throw new OrchestrationError(
+            'dispatch_inactive',
+            `Federated Dispatch ${params.dispatch} is not settled for release.`
+          )
+        }
+        const server = resolvePinnedFederatedServer(runtime, federated)
+        let remote: {
+          state:
+            | 'released'
+            | 'already_released'
+            | 'retained'
+            | 'release_pending'
+            | 'release_unknown'
+          reason?: WorkerReleaseReceipt['reason']
+          processAction: 'closed_agent_terminal' | 'closed_exited_terminal' | 'none'
+          archive: WorkerReleaseReceipt['archive']
+          recovery?: string
+          lastError?: string
+        }
+        try {
+          remote = (await runtime.callOrchestrationWorkerServer(
+            server.environmentId,
+            'orchestration.federationRelease',
+            { dispatchId: params.dispatch },
+            30_000,
+            { orchestrationRequestId: orchestrationMutation.requestId }
+          )) as typeof remote
+        } catch (error) {
+          if (isLegacyRemoteCleanupError(error)) {
+            return legacyRemoteCleanupReceipt(params.dispatch, 'release')
+          }
+          throw error
+        }
         return {
           dispatchId: params.dispatch,
-          state: 'retained',
-          reason: 'federation_unsupported',
-          processAction: 'none',
-          archive: null,
-          recovery:
-            'Connected-server workers do not support release yet; inspect the worker server directly.'
+          state: remote.state,
+          processAction: remote.processAction,
+          archive: remote.archive,
+          ...(remote.reason ? { reason: remote.reason } : {}),
+          ...(remote.recovery ? { recovery: remote.recovery } : {}),
+          ...(remote.lastError ? { lastError: remote.lastError } : {})
         }
       }
       if (!db.getWorkerDispatch(params.dispatch)) {
@@ -97,8 +159,32 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerRetain',
     params: WorkerDispatchParams,
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()
+      const federated = db.getFederatedDispatch(params.dispatch)
+      if (federated) {
+        if (!orchestrationMutation) {
+          throw new OrchestrationError(
+            'invalid_argument',
+            'Remote worker-retain requires a durable retry request.'
+          )
+        }
+        const server = resolvePinnedFederatedServer(runtime, federated)
+        try {
+          return await runtime.callOrchestrationWorkerServer(
+            server.environmentId,
+            'orchestration.federationRetain',
+            { dispatchId: params.dispatch },
+            30_000,
+            { orchestrationRequestId: orchestrationMutation.requestId }
+          )
+        } catch (error) {
+          if (isLegacyRemoteCleanupError(error)) {
+            return legacyRemoteCleanupReceipt(params.dispatch, 'retention')
+          }
+          throw error
+        }
+      }
       if (!db.getWorkerDispatch(params.dispatch)) {
         throw new OrchestrationError(
           'dispatch_not_found',

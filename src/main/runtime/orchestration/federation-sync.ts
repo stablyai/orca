@@ -88,7 +88,13 @@ export async function syncFederatedDispatch(
         threadId: message.threadId ?? undefined,
         payload: message.payload ?? undefined
       },
-      lifecycle: parseFederatedLifecycle(message, item.message_id, dispatchId, dispatch.task_id)
+      lifecycle: parseFederatedLifecycle(
+        message,
+        item.kind,
+        item.message_id,
+        dispatchId,
+        dispatch.task_id
+      )
     })
     cursor = item.sequence
     runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
@@ -161,6 +167,7 @@ export function parseRelayedMessage(payload: string): RelayedMessage {
 
 function parseFederatedLifecycle(
   message: RelayedMessage,
+  relayKind: string,
   messageId: string,
   dispatchId: string,
   taskId: string
@@ -171,6 +178,12 @@ function parseFederatedLifecycle(
       kind: 'worker_report'
       taskId: string
       outcome: WorkerReportOutcome
+      result: string
+    }
+  | {
+      kind: 'runtime_failure'
+      taskId: string
+      reason: string
       result: string
     }
   | { kind: 'rejected'; code: string; reason: string } {
@@ -209,6 +222,14 @@ function parseFederatedLifecycle(
     reportPath: payload.reportPath,
     completedAt: new Date().toISOString()
   })
+  if (relayKind === 'runtime_failure' && payload.runtimeFailure) {
+    return {
+      kind: 'runtime_failure',
+      taskId: payload.taskId,
+      reason: payload.runtimeFailure,
+      result
+    }
+  }
   return {
     kind: 'worker_report',
     taskId: payload.taskId,
@@ -223,6 +244,7 @@ function parseWorkerReportPayload(payload: string | null): {
   outcome: WorkerReportOutcome
   filesModified: string[]
   reportPath: string | null
+  runtimeFailure: string | null
 } {
   let parsed: unknown
   try {
@@ -248,6 +270,7 @@ function parseWorkerReportPayload(payload: string | null): {
     filesModified: Array.isArray(report.filesModified)
       ? report.filesModified.filter((file): file is string => typeof file === 'string')
       : [],
-    reportPath: typeof report.reportPath === 'string' ? report.reportPath : null
+    reportPath: typeof report.reportPath === 'string' ? report.reportPath : null,
+    runtimeFailure: typeof report.runtimeFailure === 'string' ? report.runtimeFailure : null
   }
 }

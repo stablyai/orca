@@ -62,6 +62,12 @@ describe('orchestration worker release', () => {
       worktreeId: 'repo::worktree',
       title: 'worker'
     })
+    vi.spyOn(runtime, 'createBoundedWorkerTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      title: 'worker',
+      watchdogSentinelPath: '/tmp/ctx_watchdog.json'
+    })
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
       handle: 'term_worker',
       condition: 'tui-idle',
@@ -127,6 +133,12 @@ describe('orchestration worker release', () => {
     const result = (await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
+      dispatchGroup: 'release-workers',
+      dispatchIndex: 1,
+      maxDispatches: 1,
+      maxRuntimeMs: 1_800_000,
+      maxRequests: 100,
+      maxReviewCycles: 0,
       ...(options.terminal ? { terminal: options.terminal } : { agent: 'codex' })
     })) as { dispatchId: string; state: string }
     expect(result.state).toBe('ready')
@@ -199,6 +211,25 @@ describe('orchestration worker release', () => {
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('failed')
   })
 
+  it('releases a watchdog-stopped worker terminal', async () => {
+    setup()
+    const { dispatchId } = await startWorker()
+    const deadlineAt = db.getWorkerDispatch(dispatchId)!.deadline_at
+    db.reconcileWorkerWatchdogSentinel(dispatchId, {
+      dispatchId,
+      startedAt: '2026-08-15T00:00:00.000Z',
+      deadlineAt,
+      finishedAt: '2026-08-15T00:00:02.000Z',
+      stop: 'kill',
+      exitCode: null,
+      signal: 'SIGKILL'
+    })
+
+    await expect(
+      call('orchestration.workerRelease', { dispatch: dispatchId })
+    ).resolves.toMatchObject({ state: 'released', processAction: 'closed_agent_terminal' })
+  })
+
   it('is idempotent: a duplicate release returns already_released without another close', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -215,20 +246,29 @@ describe('orchestration worker release', () => {
     setup()
     const { dispatchId } = await startWorker()
     await expect(call('orchestration.workerRelease', { dispatch: dispatchId })).rejects.toThrow(
-      /only a succeeded or failed worker can release/
+      /only a succeeded, failed, or stopped worker can release/
     )
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('not_requested')
   })
 
-  it('retains an explicitly reused external terminal without closing it', async () => {
+  it('rejects external terminal reuse before creating release ownership', async () => {
     setup()
-    const { dispatchId } = await startSettledWorker('succeeded', { terminal: 'term_worker' })
-    const receipt = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
-      state: string
-      reason?: string
-    }
-    expect(receipt).toMatchObject({ state: 'retained', reason: 'external_terminal' })
+    const task = db.createTask({ spec: 'no external reuse', runId: activeRunId })
+    await expect(
+      call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        terminal: 'term_worker',
+        dispatchGroup: 'external-reuse',
+        dispatchIndex: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 1_800_000,
+        maxRequests: 100,
+        maxReviewCycles: 0
+      })
+    ).rejects.toMatchObject({ code: 'bounded_worker_requires_fresh_process' })
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
@@ -647,54 +687,6 @@ describe('orchestration worker release', () => {
     })
   })
 
-  it('transfers ownership on exact reuse and fences release through the old Dispatch', async () => {
-    setup()
-    const first = await startSettledWorker('succeeded')
-    const originalResource = db.getWorkerTerminalResourceByOwner(first.dispatchId)
-    expect(originalResource?.ownership_state).toBe('owned')
-
-    const second = await startWorker({ terminal: 'term_reminted' })
-    const transferred = db.getWorkerTerminalResourceByOwner(second.dispatchId)
-    expect(transferred?.id).toBe(originalResource?.id)
-    expect(transferred?.terminal_handle).toBe('term_reminted')
-    expect(db.getWorkerTerminalResourceByOwner(first.dispatchId)).toBeUndefined()
-
-    const oldRelease = (await call('orchestration.workerRelease', {
-      dispatch: first.dispatchId
-    })) as { state: string; reason?: string }
-    expect(oldRelease).toMatchObject({ state: 'retained', reason: 'ownership_transferred' })
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-
-    settle(second.taskId, second.dispatchId, 'succeeded')
-    const newRelease = (await call('orchestration.workerRelease', {
-      dispatch: second.dispatchId
-    })) as { state: string }
-    expect(newRelease.state).toBe('released')
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
-    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_reminted')
-  })
-
-  it('rejects exact reuse after release intent instead of closing the new worker', async () => {
-    setup()
-    const first = await startSettledWorker('succeeded')
-    expect(db.requestWorkerTerminalRelease(first.dispatchId).disposition).toBe('requested')
-    const nextTask = db.createTask({ spec: 'racing reuse', runId: activeRunId })
-
-    const attempted = (await call('orchestration.workerStart', {
-      task: nextTask.id,
-      from: 'term_coord',
-      terminal: 'term_worker'
-    })) as { state: string; lastError?: string }
-
-    expect(attempted).toMatchObject({ state: 'failed' })
-    expect(attempted.lastError).toMatch(/release.*progress/i)
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    await expect(
-      call('orchestration.workerRelease', { dispatch: first.dispatchId })
-    ).resolves.toMatchObject({ state: 'released' })
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
-  })
-
   it('retains when persisted state has another resource for the exact terminal identity', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -787,7 +779,7 @@ describe('orchestration worker release', () => {
       expect.objectContaining({ dispatchId, terminalState: 'retained' })
     )
     await expect(call('orchestration.workerRelease', { dispatch: dispatchId })).rejects.toThrow(
-      /only a succeeded or failed worker can release/
+      /only a succeeded, failed, or stopped worker can release/
     )
   })
 

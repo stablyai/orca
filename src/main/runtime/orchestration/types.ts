@@ -143,6 +143,43 @@ export type WorkerDispatchState =
   | 'stopped'
   | 'abandoned'
 
+export type DispatchBudgetInput = {
+  group: string
+  index: number
+  maxDispatches: number
+  maxRuntimeMs: number
+  maxRequests: number
+  requestCapEnforcement: 'hard' | 'prompt_only' | 'unsupported'
+  maxReviewCycles: number
+  reviewCycle?: number
+  leaf: true
+}
+
+export type DispatchBudgetGroupRow = {
+  run_id: string
+  group_id: string
+  max_dispatches: number
+  created_at: string
+}
+
+export type DispatchBudgetReservationRow = {
+  run_id: string
+  group_id: string
+  dispatch_index: number
+  dispatch_id: string
+  created_at: string
+}
+
+export type BoundedWorkerDeadlineRow = {
+  dispatch_id: string
+  task_id: string
+  dispatch_status: DispatchStatus
+  task_status: TaskStatus
+  worker_state: WorkerDispatchState
+  deadline_at: string
+  watchdog_sentinel_path: string | null
+}
+
 export type WorkerDispatchRow = {
   dispatch_id: string
   runtime_epoch: string | null
@@ -155,6 +192,14 @@ export type WorkerDispatchRow = {
   residual_resources: string
   start_options: string
   last_error: string | null
+  deadline_at: string
+  max_runtime_ms: number
+  max_requests: number
+  request_cap_enforcement: DispatchBudgetInput['requestCapEnforcement']
+  max_review_cycles: number
+  review_cycle: number | null
+  leaf: number
+  watchdog_sentinel_path: string | null
   created_at: string
   updated_at: string
 }
@@ -172,55 +217,12 @@ export type LegacyWorkerTerminalRecoveryRow = {
   agent_terminal_handle: string | null
 }
 
-export type FederatedDispatchRow = {
-  dispatch_id: string
-  environment_id: string
-  environment_name: string
-  peer_fingerprint: string
-  remote_runtime_epoch: string | null
-  protocol_version: number
-  remote_worktree_id: string | null
-  remote_terminal_handle: string | null
-  to_home_imported_sequence: number
-  created_at: string
-  updated_at: string
-}
-
-export type RemoteDispatchAttachmentRow = {
-  dispatch_id: string
-  task_id: string
-  home_peer_fingerprint: string
-  protocol_version: number
-  runtime_epoch: string
-  capability_hash: string | null
-  pane_key: string | null
-  process_incarnation: string | null
-  state: WorkerDispatchState
-  stage: string
-  worktree_id: string | null
-  terminal_handle: string | null
-  setup_state: string
-  effects: string
-  residual_resources: string
-  to_worker_imported_sequence: number
-  last_error: string | null
-  created_at: string
-  updated_at: string
-}
-
-export type FederationRelayDirection = 'to_home' | 'to_worker'
-
-export type FederationRelayItemRow = {
-  dispatch_id: string
-  direction: FederationRelayDirection
-  sequence: number
-  message_id: string
-  kind: string
-  payload: string
-  byte_count: number
-  acked_at: string | null
-  created_at: string
-}
+export type {
+  FederatedDispatchRow,
+  FederationRelayDirection,
+  FederationRelayItemRow,
+  RemoteDispatchAttachmentRow
+} from './orchestration-federation-types'
 
 export type MessageRow = {
   id: string

@@ -1,3 +1,9 @@
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
+import type { TuiAgent } from '../../../../shared/types'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { OrchestrationDb } from '../../orchestration/db'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
+
 export type FederationEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
   action?: string
@@ -14,10 +20,48 @@ export type FederationEffect = {
   terminalId?: string
 }
 
+export async function createBoundedFederatedTerminal(args: {
+  runtime: OrcaRuntimeService
+  db: OrchestrationDb
+  dispatchId: string
+  worktreeId: string
+  taskId: string
+  agent: TuiAgent
+  launchPreferences?: AgentLaunchPreferences
+  deadlineAt: string
+  maxRequests: number
+  effects: FederationEffect[]
+}): Promise<string> {
+  if (Date.parse(args.deadlineAt) <= Date.now()) {
+    throw new OrchestrationError(
+      'runtime_budget_exhausted',
+      'The immutable worker deadline elapsed before remote provider launch.'
+    )
+  }
+  const sentinelPath = args.runtime.getWorkerWatchdogSentinelPath(args.dispatchId)
+  args.db.setRemoteWorkerWatchdogSentinelPath(args.dispatchId, sentinelPath)
+  const terminal = await args.runtime.createBoundedWorkerTerminal(`id:${args.worktreeId}`, {
+    dispatchId: args.dispatchId,
+    agent: args.agent,
+    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+    deadlineAt: args.deadlineAt,
+    maxRequests: args.maxRequests,
+    title: `worker-${args.taskId}`,
+    surfaceOwner: false
+  })
+  args.effects.push({
+    kind: 'terminal',
+    role: 'agent',
+    action: 'created',
+    id: terminal.handle
+  })
+  return terminal.handle
+}
+
 export function appendFederationTerminalEffects(
   effects: FederationEffect[],
   terminals: { handle: string; title: string | null; tabId?: string; leafId?: string }[],
-  agentHandle: string,
+  agentHandle: string | undefined,
   setupHandle?: string
 ): void {
   for (const terminal of terminals) {

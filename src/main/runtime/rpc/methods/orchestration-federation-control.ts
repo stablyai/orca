@@ -6,6 +6,9 @@ import type { RemoteDispatchAttachmentRow } from '../../orchestration/types'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, requiredString } from '../schemas'
 import { readExactWorkerOutput } from './orchestration-worker-output'
+import { readArchivedWorkerOutput } from './orchestration-worker-archive-read'
+import { releaseRemoteAttachment } from './orchestration-federation-release'
+import { archiveSummary } from './orchestration-worker-release-completion'
 
 const FederationDispatchParams = z.object({
   dispatchId: requiredString('Missing Dispatch ID')
@@ -71,6 +74,30 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
         params.dispatchId,
         authenticatedCallerFingerprint
       )
+      const resource = runtime
+        .getOrchestrationDb()
+        .getWorkerTerminalResourceByOwner(params.dispatchId)
+      const hasReleaseArchive =
+        resource?.release_state !== 'not_requested' &&
+        Boolean(runtime.getOrchestrationDb().getWorkerTerminalArchive(params.dispatchId))
+      if (
+        resource &&
+        (['releasing', 'released'].includes(resource.release_state) || hasReleaseArchive)
+      ) {
+        return {
+          dispatchId: params.dispatchId,
+          runtimeEpoch: runtime.getRuntimeId(),
+          output: await readArchivedWorkerOutput({
+            db: runtime.getOrchestrationDb(),
+            dispatchId: params.dispatchId,
+            workerState: attachment.state,
+            resource,
+            ...(params.source ? { source: params.source } : {}),
+            ...(params.cursor === undefined ? {} : { cursor: params.cursor }),
+            ...(params.limit === undefined ? {} : { limit: params.limit })
+          })
+        }
+      }
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
       if (!observation.exact || !observation.terminal) {
         throw new OrchestrationError(
@@ -152,6 +179,66 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
           processAction: 'unknown',
           lastError: reason
         }
+      }
+    }
+  }),
+  defineMethod({
+    name: 'orchestration.federationRelease',
+    params: FederationDispatchParams,
+    handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
+      const attachment = requireHomeAttachment(
+        runtime,
+        params.dispatchId,
+        authenticatedCallerFingerprint
+      )
+      return releaseRemoteAttachment({
+        runtime,
+        db: runtime.getOrchestrationDb(),
+        attachment
+      })
+    }
+  }),
+  defineMethod({
+    name: 'orchestration.federationRetain',
+    params: FederationDispatchParams,
+    handler: (params, { runtime, authenticatedCallerFingerprint }) => {
+      requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+      const retained = runtime.getOrchestrationDb().retainWorkerTerminalResource(params.dispatchId)
+      if (retained.disposition === 'already_released') {
+        return {
+          dispatchId: params.dispatchId,
+          state: 'already_released' as const,
+          processAction: 'none' as const,
+          archive: archiveSummary(retained.resource)
+        }
+      }
+      if (retained.disposition === 'no_owned_resource') {
+        return {
+          dispatchId: params.dispatchId,
+          state: 'retained' as const,
+          reason: 'no_owned_resource' as const,
+          processAction: 'none' as const,
+          archive: null
+        }
+      }
+      if (retained.disposition === 'release_committed') {
+        return {
+          dispatchId: params.dispatchId,
+          state:
+            retained.resource.release_state === 'unknown'
+              ? ('release_unknown' as const)
+              : ('release_pending' as const),
+          processAction: 'none' as const,
+          archive: archiveSummary(retained.resource),
+          ...(retained.resource.release_error ? { lastError: retained.resource.release_error } : {})
+        }
+      }
+      return {
+        dispatchId: params.dispatchId,
+        state: 'retained' as const,
+        reason: 'user_requested' as const,
+        processAction: 'none' as const,
+        archive: archiveSummary(retained.resource)
       }
     }
   })

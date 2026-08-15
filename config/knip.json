@@ -5,6 +5,7 @@
     "src/preload/index.ts",
     "src/preload/browser-window-close.ts",
     "src/main/daemon/daemon-entry.ts",
+    "src/main/runtime/orchestration/worker-watchdog-entry.ts",
     "src/main/plugins/plugin-host-entry.ts",
     "src/main/computer/sidecar-entry.ts",
     "src/main/speech/stt-worker.ts",

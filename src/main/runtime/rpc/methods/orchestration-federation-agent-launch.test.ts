@@ -3,10 +3,8 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
-// Why: a federated worker terminal is created from an agent id. Passing that id
-// as a shell command launched Cursor's desktop app instead of `cursor-agent`
-// (issue #11926), so the remote path must resolve through the TUI agent config
-// exactly like the local one.
+// Why: a federated worker terminal must go through the bounded launcher while
+// preserving the resolved agent and launch preferences.
 describe('federated worker agent launch', () => {
   let db: OrchestrationDb | undefined
 
@@ -23,11 +21,20 @@ describe('federated worker agent launch', () => {
     vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
       id: 'repo::remote-worktree'
     } as never)
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term_remote_worker',
-      worktreeId: 'repo::remote-worktree',
-      title: 'worker'
-    })
+    const legacyCreateTerminal = vi.spyOn(runtime, 'createTerminal')
+    const createTerminal = vi
+      .spyOn(runtime, 'createBoundedWorkerTerminal')
+      .mockImplementation(async (_worktree, args) => {
+        expect(db?.getRemoteDispatchAttachment(args.dispatchId)?.watchdog_sentinel_path).toBe(
+          runtime.getWorkerWatchdogSentinelPath(args.dispatchId)
+        )
+        return {
+          handle: 'term_remote_worker',
+          worktreeId: 'repo::remote-worktree',
+          title: 'worker',
+          watchdogSentinelPath: '/tmp/ctx_remote-watchdog.json'
+        }
+      })
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
       handle: 'term_remote_worker',
       condition: 'tui-idle',
@@ -58,12 +65,19 @@ describe('federated worker agent launch', () => {
       method.params!.parse({
         dispatchId: 'ctx_remote',
         taskId: 'task_remote',
-        taskSpec: 'remote cursor worker',
+        taskSpec: 'remote codex worker',
         protocolVersion: 1,
         worktree: 'id:repo::remote-worktree',
-        agent: 'cursor',
+        agent: 'codex',
         model: 'gpt-5.3-codex',
-        effort: 'high'
+        effort: 'high',
+        dispatchGroup: 'remote-agent-launch',
+        dispatchIndex: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 60_000,
+        maxRequests: 10,
+        maxReviewCycles: 0,
+        deadlineAt: new Date(Date.now() + 60_000).toISOString()
       }),
       {
         runtime,
@@ -86,20 +100,60 @@ describe('federated worker agent launch', () => {
     expect(result).toMatchObject({
       state: 'ready',
       launch: {
-        requested: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' },
-        effective: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' }
+        requested: { agent: 'codex', model: 'gpt-5.3-codex', effort: 'high' },
+        effective: { agent: 'codex', model: 'gpt-5.3-codex', effort: 'high' }
       }
     })
     expect(createTerminal).toHaveBeenCalledWith(
       'id:repo::remote-worktree',
       expect.objectContaining({
-        startupAgent: 'cursor',
+        agent: 'codex',
         launchPreferences: { model: 'gpt-5.3-codex', effort: 'high' }
       })
     )
-    expect(createTerminal).toHaveBeenCalledWith(
-      'id:repo::remote-worktree',
-      expect.not.objectContaining({ command: expect.anything() })
-    )
+    expect(legacyCreateTerminal).not.toHaveBeenCalled()
+  })
+
+  it('rejects an elapsed immutable deadline before remote effects', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    const bounded = vi.spyOn(runtime, 'createBoundedWorkerTerminal')
+    const method = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.federationAttachStart'
+    )!
+
+    await expect(
+      method.handler(
+        method.params!.parse({
+          dispatchId: 'ctx_elapsed',
+          taskId: 'task_elapsed',
+          taskSpec: 'must not start',
+          protocolVersion: 2,
+          worktree: 'id:repo::remote-worktree',
+          agent: 'codex',
+          dispatchGroup: 'remote-elapsed',
+          dispatchIndex: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 60_000,
+          maxRequests: 10,
+          maxReviewCycles: 0,
+          deadlineAt: '2020-01-01T00:00:00.000Z'
+        }),
+        {
+          runtime,
+          orchestrationMutation: {
+            callerFingerprint: 'home_peer',
+            requestId: 'request_elapsed',
+            method: 'orchestration.federationAttachStart',
+            payloadHash: 'elapsed_payload'
+          }
+        }
+      )
+    ).rejects.toMatchObject({ code: 'runtime_budget_exhausted' })
+    expect(db.getRemoteDispatchAttachment('ctx_elapsed')).toBeUndefined()
+    expect(db.getMutationReceipt('home_peer', 'request_elapsed')).toBeUndefined()
+    expect(bounded).not.toHaveBeenCalled()
   })
 })

@@ -13,8 +13,10 @@ describe('orchestration new-worktree workers', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
   let runId: string
+  let dispatchIndex: number
 
   beforeEach(() => {
+    dispatchIndex = 0
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
@@ -48,6 +50,12 @@ describe('orchestration new-worktree workers', () => {
       kind: 'git'
     } as never)
     vi.spyOn(runtime, 'createTerminal')
+    vi.spyOn(runtime, 'createBoundedWorkerTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::created',
+      title: 'worker',
+      watchdogSentinelPath: '/tmp/ctx_watchdog.json'
+    })
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [{ handle: 'term_worker', title: 'Codex' }],
       totalCount: 1,
@@ -74,6 +82,7 @@ describe('orchestration new-worktree workers', () => {
   afterEach(() => db.close())
 
   async function startWorker(overrides: Record<string, unknown> = {}) {
+    dispatchIndex += 1
     const task = db.createTask({ spec: 'new-worktree task', runId })
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.workerStart'
@@ -87,6 +96,12 @@ describe('orchestration new-worktree workers', () => {
       worktree: 'new-child',
       name: 'new-worker',
       agent: 'codex',
+      dispatchGroup: 'new-worktree-workers',
+      dispatchIndex,
+      maxDispatches: 64,
+      maxRuntimeMs: 1_800_000,
+      maxRequests: 100,
+      maxReviewCycles: 0,
       ...overrides
     })
     const result = await method.handler(params, { runtime })
@@ -102,36 +117,62 @@ describe('orchestration new-worktree workers', () => {
   }) {
     const hookFound = options?.hookFound ?? true
     const state = options?.state ?? (hookFound ? 'running' : 'not_configured')
+    const startupPolicy = options?.startupPolicy ?? 'start-immediately'
+    const setupTerminalHandle =
+      options?.setupTerminalHandle ??
+      options?.terminals?.find((terminal) => terminal.title === 'Setup')?.handle ??
+      (startupPolicy === 'wait-for-setup' ? 'term_setup' : undefined)
+    const terminals =
+      options?.terminals ??
+      (startupPolicy === 'wait-for-setup'
+        ? [
+            { handle: 'term_worker', title: 'Codex' },
+            { handle: setupTerminalHandle as string, title: 'Setup' }
+          ]
+        : undefined)
     vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
       worktree: { id: 'repo::created', repoId: 'repo' },
       startupTerminal: { spawned: true, handle: 'term_worker' },
       setupReceipt: {
         requested: state === 'skipped' ? 'skip' : 'run',
         hookFound,
-        startupPolicy: options?.startupPolicy ?? 'start-immediately',
+        startupPolicy,
         state,
-        terminalHandle:
-          options?.setupTerminalHandle ??
-          options?.terminals?.find((terminal) => terminal.title === 'Setup')?.handle
+        terminalHandle: setupTerminalHandle
       }
     } as never)
-    if (options?.terminals) {
+    if (terminals) {
       vi.mocked(runtime.listTerminals).mockResolvedValue({
-        terminals: options.terminals,
-        totalCount: options.terminals.length,
+        terminals,
+        totalCount: terminals.length,
         truncated: false
       } as never)
     }
+    if (startupPolicy === 'wait-for-setup' && state === 'running') {
+      vi.mocked(runtime.waitForSetupTerminalCompletion).mockResolvedValue({ exitCode: 0 })
+    }
   }
 
-  it('creates an independent top-level worktree and reuses its agent terminal', async () => {
+  it('creates an independent top-level worktree and a fresh bounded agent terminal', async () => {
     mockCreatedWorktree()
+    vi.mocked(runtime.createBoundedWorkerTerminal).mockImplementationOnce(
+      async (_worktree, args) => {
+        expect(db.getWorkerDispatch(args.dispatchId)?.watchdog_sentinel_path).toBe(
+          runtime.getWorkerWatchdogSentinelPath(args.dispatchId)
+        )
+        return {
+          handle: 'term_worker',
+          worktreeId: 'repo::created',
+          title: 'worker',
+          watchdogSentinelPath: '/tmp/ctx_watchdog.json'
+        }
+      }
+    )
 
     const { result } = await startWorker({ worktree: 'new-top-level' })
 
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
-        startupAgent: 'codex',
         awaitTerminalProvisioning: true,
         observeSetupCompletion: true,
         lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
@@ -149,15 +190,19 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({
           kind: 'terminal',
           role: 'agent',
-          action: 'reused_agent_terminal',
+          action: 'created',
           id: 'term_worker'
         })
       ])
     )
     expect(runtime.createTerminal).not.toHaveBeenCalled()
+    expect(runtime.createBoundedWorkerTerminal).toHaveBeenCalledWith(
+      'id:repo::created',
+      expect.objectContaining({ agent: 'codex', surfaceOwner: false })
+    )
   })
 
-  it('passes launch preferences into agent-first worktree creation', async () => {
+  it('passes launch preferences into fresh bounded worker creation', async () => {
     mockCreatedWorktree()
 
     const { result } = await startWorker({
@@ -165,10 +210,11 @@ describe('orchestration new-worktree workers', () => {
       effort: 'high'
     })
 
-    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+    expect(runtime.createBoundedWorkerTerminal).toHaveBeenCalledWith(
+      'id:repo::created',
       expect.objectContaining({
-        startupAgent: 'codex',
-        startupLaunchPreferences: { model: 'custom-codex-model', effort: 'high' }
+        agent: 'codex',
+        launchPreferences: { model: 'custom-codex-model', effort: 'high' }
       })
     )
     expect(result).toMatchObject({
@@ -201,7 +247,13 @@ describe('orchestration new-worktree workers', () => {
           from: 'term_coord',
           worktree: 'new-child',
           name: 'folder-worker',
-          agent: 'codex'
+          agent: 'codex',
+          dispatchGroup: 'folder-workers',
+          dispatchIndex: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 1_800_000,
+          maxRequests: 100,
+          maxReviewCycles: 0
         }),
         { runtime }
       )
@@ -371,7 +423,10 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
       ])
     })
-    expect(vi.mocked(runtime.waitForTerminal).mock.invocationCallOrder[0]).toBeLessThan(
+    expect(
+      vi.mocked(runtime.waitForSetupTerminalCompletion).mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(runtime.createBoundedWorkerTerminal).mock.invocationCallOrder[0]!)
+    expect(vi.mocked(runtime.createBoundedWorkerTerminal).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(runtime.sendTerminalAgentPrompt).mock.invocationCallOrder[0]!
     )
     expect(JSON.parse(db.getWorkerDispatch(dispatchId)?.effects ?? '[]')).toEqual(
@@ -383,13 +438,6 @@ describe('orchestration new-worktree workers', () => {
 
   it('does not inject task input when the gated setup terminal fails to start', async () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'spawn_failed' })
-    vi.mocked(runtime.waitForTerminal).mockResolvedValue({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: false,
-      status: 'exited',
-      exitCode: 1
-    })
 
     const { result, task } = await startWorker()
 
@@ -402,18 +450,13 @@ describe('orchestration new-worktree workers', () => {
       ])
     })
     expect(db.getTask(task.id)?.status).toBe('failed')
+    expect(runtime.createBoundedWorkerTerminal).not.toHaveBeenCalled()
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
   it('does not inject task input when the gated setup script fails', async () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
-    vi.mocked(runtime.waitForTerminal).mockResolvedValue({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: false,
-      status: 'exited',
-      exitCode: 1
-    })
+    vi.mocked(runtime.waitForSetupTerminalCompletion).mockResolvedValue({ exitCode: 1 })
 
     const { result } = await startWorker()
 
@@ -423,26 +466,24 @@ describe('orchestration new-worktree workers', () => {
       setup: { state: 'failed' },
       effects: expect.arrayContaining([expect.objectContaining({ kind: 'setup', state: 'failed' })])
     })
+    expect(runtime.createBoundedWorkerTerminal).not.toHaveBeenCalled()
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
   it('does not mislabel a wait-for-setup timeout as setup failure', async () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
-    vi.mocked(runtime.waitForTerminal).mockResolvedValue({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: false,
-      status: 'running',
-      exitCode: null
-    })
+    vi.mocked(runtime.waitForSetupTerminalCompletion).mockRejectedValue(
+      new Error('setup_wait_timeout')
+    )
 
     const { result } = await startWorker()
 
     expect(result).toMatchObject({
       state: 'failed',
-      failedStage: 'agent_readiness',
+      failedStage: 'setup_wait',
       setup: { state: 'running' }
     })
+    expect(runtime.createBoundedWorkerTerminal).not.toHaveBeenCalled()
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
@@ -535,7 +576,13 @@ describe('orchestration new-worktree workers', () => {
         from: 'term_coord',
         worktree: 'new-child',
         name: 'atomic-worker',
-        agent: 'codex'
+        agent: 'codex',
+        dispatchGroup: 'atomic-workers',
+        dispatchIndex: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 1_800_000,
+        maxRequests: 100,
+        maxReviewCycles: 0
       }
     }
 
@@ -618,12 +665,7 @@ describe('orchestration new-worktree workers', () => {
       status: 'running',
       exitCode: null
     })
-    await vi.waitFor(() =>
-      expect(db.getWorkerDispatch(dispatch.id)).toMatchObject({
-        state: 'starting',
-        stage: 'authority_attached'
-      })
-    )
+    await vi.waitFor(() => expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce())
 
     finishPrompt?.({ handle: 'term_worker', accepted: true, bytesWritten: 1 })
     await expect(pending).resolves.toMatchObject({

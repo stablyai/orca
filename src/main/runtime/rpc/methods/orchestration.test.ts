@@ -20,10 +20,12 @@ describe('orchestration RPC methods', () => {
   let runtime: OrcaRuntimeService
   let ctx: RpcContext
   let activeRunId: string | undefined
+  let workerDispatchIndex = 0
 
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
   function setup(withBoundRun = true): void {
+    workerDispatchIndex = 0
     db = new OrchestrationDb(':memory:')
     dbOpen = true
     runtime = new OrcaRuntimeService()
@@ -74,6 +76,15 @@ describe('orchestration RPC methods', () => {
   async function call(name: string, params: Record<string, unknown>) {
     const method = findMethod(name)
     const scopedParams = { ...params }
+    if (name === 'orchestration.workerStart') {
+      workerDispatchIndex += 1
+      scopedParams.dispatchGroup ??= 'rpc-test-workers'
+      scopedParams.dispatchIndex ??= workerDispatchIndex
+      scopedParams.maxDispatches ??= 64
+      scopedParams.maxRuntimeMs ??= 1_800_000
+      scopedParams.maxRequests ??= 100
+      scopedParams.maxReviewCycles ??= 0
+    }
     if (activeRunId) {
       if (name === 'orchestration.taskCreate' || name === 'orchestration.taskUpdate') {
         scopedParams.run ??= activeRunId
@@ -108,7 +119,7 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(38)
+    expect(registry.size).toBe(40)
     expect(registry.has('orchestration.workerRelease')).toBe(true)
     expect(registry.has('orchestration.workerRetain')).toBe(true)
     expect(registry.has('orchestration.workerList')).toBe(true)
@@ -140,6 +151,7 @@ describe('orchestration RPC methods', () => {
     expect(registry.has('orchestration.federationRead')).toBe(true)
     expect(registry.has('orchestration.federationReadOutput')).toBe(true)
     expect(registry.has('orchestration.federationStop')).toBe(true)
+    expect(registry.has('orchestration.federationRelease')).toBe(true)
     expect(registry.has('orchestration.ask')).toBe(true)
     expect(registry.has('orchestration.run')).toBe(true)
     expect(registry.has('orchestration.runStop')).toBe(true)
@@ -2161,6 +2173,45 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('composed workers', () => {
+    const validWorkerStartParams = {
+      task: 'task_1',
+      from: 'term_coord',
+      agent: 'codex',
+      dispatchGroup: 'bounded-workers',
+      dispatchIndex: 1,
+      maxDispatches: 4,
+      maxRuntimeMs: 1_800_000,
+      maxRequests: 100,
+      maxReviewCycles: 0
+    }
+
+    it('rejects missing or invalid bounded worker limits at the RPC boundary', () => {
+      const schema = findMethod('orchestration.workerStart').params!
+      expect(schema.safeParse({ task: 'task_1', from: 'term_coord', agent: 'codex' }).success).toBe(
+        false
+      )
+      expect(schema.safeParse({ ...validWorkerStartParams, maxRuntimeMs: 999 }).success).toBe(false)
+      expect(schema.safeParse({ ...validWorkerStartParams, maxRuntimeMs: 7_200_001 }).success).toBe(
+        false
+      )
+      expect(
+        schema.safeParse({ ...validWorkerStartParams, dispatchIndex: 5, maxDispatches: 4 }).success
+      ).toBe(false)
+      expect(
+        schema.safeParse({
+          ...validWorkerStartParams,
+          maxReviewCycles: 2
+        }).success
+      ).toBe(false)
+      expect(
+        schema.safeParse({
+          ...validWorkerStartParams,
+          maxReviewCycles: 2,
+          reviewCycle: 3
+        }).success
+      ).toBe(false)
+    })
+
     function mockCurrentWorkerStart(options?: { ready?: boolean }): void {
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_coord'
@@ -2180,6 +2231,12 @@ describe('orchestration RPC methods', () => {
         handle: 'term_worker',
         worktreeId: 'repo::worktree',
         title: 'worker'
+      })
+      vi.spyOn(runtime, 'createBoundedWorkerTerminal').mockResolvedValue({
+        handle: 'term_worker',
+        worktreeId: 'repo::worktree',
+        title: 'worker',
+        watchdogSentinelPath: '/tmp/ctx_watchdog.json'
       })
       vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
         handle: 'term_worker',
@@ -2211,10 +2268,28 @@ describe('orchestration RPC methods', () => {
       })) as {
         dispatchId: string
         state: string
+        deadlineAt: string
+        budget: { requestCapEnforcement: string; leaf: boolean }
+        leafControl: { leaf: boolean; provider: string; enforcement: string }
         effects: { kind: string; role?: string; action?: string; state?: string }[]
       }
 
       expect(result.state).toBe('ready')
+      expect(result).toMatchObject({
+        deadlineAt: expect.any(String),
+        budget: {
+          group: 'rpc-test-workers',
+          maxRuntimeMs: 1_800_000,
+          maxRequests: 100,
+          requestCapEnforcement: 'prompt_only',
+          leaf: true
+        },
+        leafControl: {
+          leaf: true,
+          provider: 'codex',
+          enforcement: 'environment_and_cli'
+        }
+      })
       expect(result.effects).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ kind: 'worktree', action: 'reused' }),
@@ -2223,11 +2298,21 @@ describe('orchestration RPC methods', () => {
         ])
       )
       expect(db.getTask(task.id)?.status).toBe('dispatched')
-      expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
+      expect(db.getWorkerDispatch(result.dispatchId)).toMatchObject({
+        state: 'ready',
+        deadline_at: result.deadlineAt,
+        max_runtime_ms: 1_800_000,
+        max_requests: 100,
+        request_cap_enforcement: 'prompt_only',
+        leaf: 1
+      })
       // Why: dispatching a worker is background work — surfaceOwner:false adopts
       // the tab without scrolling the sidebar to the worker's workspace.
-      expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
-        startupAgent: 'codex',
+      expect(runtime.createBoundedWorkerTerminal).toHaveBeenCalledWith('id:repo::worktree', {
+        dispatchId: result.dispatchId,
+        agent: 'codex',
+        deadlineAt: result.deadlineAt,
+        maxRequests: 100,
         title: `worker-${task.id}`,
         surfaceOwner: false
       })
@@ -2264,10 +2349,10 @@ describe('orchestration RPC methods', () => {
           effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
         }
       })
-      expect(runtime.createTerminal).toHaveBeenCalledWith(
+      expect(runtime.createBoundedWorkerTerminal).toHaveBeenCalledWith(
         'id:repo::worktree',
         expect.objectContaining({
-          startupAgent: 'claude',
+          agent: 'claude',
           launchPreferences: { model: 'aws-bedrock-opus-5', effort: 'high' }
         })
       )
@@ -2288,31 +2373,24 @@ describe('orchestration RPC methods', () => {
           terminal: 'term_worker',
           model: 'gpt-5.6-sol'
         })
-      ).rejects.toMatchObject({ code: 'invalid_argument' })
+      ).rejects.toMatchObject({ code: 'bounded_worker_requires_fresh_process' })
       expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
-    // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
-    // shell command opened the IDE and left a blank shell (issue #11926).
-    it('never passes the agent id to the worker terminal as a shell command', async () => {
+    it('rejects providers without a bounded leaf launcher before creating a Dispatch', async () => {
       setup()
       mockCurrentWorkerStart()
-      const task = db.createTask({ spec: 'start a cursor worker' })
+      const task = db.createTask({ spec: 'unsupported bounded worker' })
 
-      await call('orchestration.workerStart', {
-        task: task.id,
-        from: 'term_coord',
-        agent: 'cursor'
-      })
-
-      expect(runtime.createTerminal).toHaveBeenCalledWith(
-        'id:repo::worktree',
-        expect.objectContaining({ startupAgent: 'cursor' })
-      )
-      expect(runtime.createTerminal).toHaveBeenCalledWith(
-        'id:repo::worktree',
-        expect.not.objectContaining({ command: expect.anything() })
-      )
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          agent: 'cursor'
+        })
+      ).rejects.toMatchObject({ code: 'leaf_control_unsupported' })
+      expect(runtime.createBoundedWorkerTerminal).not.toHaveBeenCalled()
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
     it('commits the launched worker token with its durable authority', async () => {
@@ -2344,12 +2422,13 @@ describe('orchestration RPC methods', () => {
     it('surfaces a worker terminal reveal failure without discarding the live worker', async () => {
       setup()
       mockCurrentWorkerStart()
-      vi.mocked(runtime.createTerminal).mockResolvedValue({
+      vi.mocked(runtime.createBoundedWorkerTerminal).mockResolvedValue({
         handle: 'term_worker',
         worktreeId: 'repo::worktree',
         title: 'worker',
         surface: 'background',
-        warning: 'Terminal term_worker is running but could not be revealed.'
+        warning: 'Terminal term_worker is running but could not be revealed.',
+        watchdogSentinelPath: '/tmp/ctx_watchdog.json'
       })
       const task = db.createTask({ spec: 'keep working if reveal fails' })
 
@@ -2404,40 +2483,30 @@ describe('orchestration RPC methods', () => {
           expect.objectContaining({ kind: 'setup', action: 'not_applicable' })
         ])
       )
-      expect(runtime.createTerminal).toHaveBeenCalledWith(
+      expect(runtime.createBoundedWorkerTerminal).toHaveBeenCalledWith(
         'id:repo::other',
         // Why: starting a worker in an existing worktree must not pull the sidebar
         // away from whatever the user is looking at.
-        expect.objectContaining({ startupAgent: 'codex', surfaceOwner: false })
+        expect.objectContaining({ agent: 'codex', surfaceOwner: false })
       )
       expect(createWorktree).not.toHaveBeenCalled()
     })
 
-    it('reuses only an explicitly selected existing agent terminal', async () => {
+    it('rejects explicitly selected existing agent terminals', async () => {
       setup()
       mockCurrentWorkerStart()
       const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
       const task = db.createTask({ spec: 'reuse exact worker' })
 
-      const result = (await call('orchestration.workerStart', {
-        task: task.id,
-        from: 'term_coord',
-        terminal: 'term_worker'
-      })) as { state: string; effects: unknown[] }
-
-      expect(result).toMatchObject({ state: 'ready' })
-      expect(result.effects).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kind: 'terminal',
-            role: 'agent',
-            action: 'reused',
-            id: 'term_worker'
-          })
-        ])
-      )
-      expect(runtime.createTerminal).not.toHaveBeenCalled()
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: 'term_worker'
+        })
+      ).rejects.toMatchObject({ code: 'bounded_worker_requires_fresh_process' })
+      expect(runtime.createBoundedWorkerTerminal).not.toHaveBeenCalled()
       expect(createWorktree).not.toHaveBeenCalled()
     })
 
@@ -2461,7 +2530,9 @@ describe('orchestration RPC methods', () => {
     it('returns a no-effect failure when terminal creation fails', async () => {
       setup()
       mockCurrentWorkerStart()
-      vi.mocked(runtime.createTerminal).mockRejectedValueOnce(new Error('terminal spawn rejected'))
+      vi.mocked(runtime.createBoundedWorkerTerminal).mockRejectedValueOnce(
+        new Error('terminal spawn rejected')
+      )
       const task = db.createTask({ spec: 'terminal failure' })
 
       const result = (await call('orchestration.workerStart', {
@@ -2591,19 +2662,22 @@ describe('orchestration RPC methods', () => {
           name: 'child-worker',
           runHooks: false,
           setupDecision: 'run',
-          startupAgent: 'codex',
           activate: false,
           lineage: expect.objectContaining({ parentWorktree: 'repo::parent', noParent: false })
         })
       )
       expect(result.effects).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ role: 'agent', action: 'reused_agent_terminal' }),
+          expect.objectContaining({ role: 'agent', action: 'created' }),
           expect.objectContaining({ role: 'setup', action: 'created' }),
           expect.objectContaining({ role: 'configured_tab', action: 'created' })
         ])
       )
       expect(runtime.createTerminal).not.toHaveBeenCalled()
+      expect(runtime.createBoundedWorkerTerminal).toHaveBeenCalledWith(
+        'id:repo::child',
+        expect.objectContaining({ agent: 'codex', surfaceOwner: false })
+      )
     })
   })
 

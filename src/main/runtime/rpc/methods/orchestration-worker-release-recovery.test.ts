@@ -19,12 +19,14 @@ describe('orchestration worker release recovery', () => {
   let runtime: OrcaRuntimeService
   let ctx: RpcContext
   let activeRunId: string
+  let dispatchIndex: number
 
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
   function setup(): void {
     db = new OrchestrationDb(':memory:')
+    dispatchIndex = 0
     dbOpen = true
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
@@ -55,6 +57,12 @@ describe('orchestration worker release recovery', () => {
       handle: 'term_worker',
       worktreeId: 'repo::worktree',
       title: 'worker'
+    })
+    vi.spyOn(runtime, 'createBoundedWorkerTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      title: 'worker',
+      watchdogSentinelPath: '/tmp/release-recovery-watchdog.json'
     })
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
       handle: 'term_worker',
@@ -110,10 +118,17 @@ describe('orchestration worker release recovery', () => {
 
   async function startWorker(): Promise<{ taskId: string; dispatchId: string }> {
     const task = db.createTask({ spec: 'release recovery fixture task', runId: activeRunId })
+    dispatchIndex += 1
     const result = (await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
-      agent: 'codex'
+      agent: 'codex',
+      dispatchGroup: 'release-recovery',
+      dispatchIndex,
+      maxDispatches: 64,
+      maxRuntimeMs: 60_000,
+      maxRequests: 10,
+      maxReviewCycles: 0
     })) as { dispatchId: string; state: string }
     expect(result.state).toBe('ready')
     return { taskId: task.id, dispatchId: result.dispatchId }
@@ -228,8 +243,12 @@ describe('orchestration worker release recovery', () => {
         .run(dispatchId, activeRunId, task.id, paneKey, paneKey ? `inc:${dispatchId}` : null)
       raw
         .prepare(
-          `INSERT INTO worker_dispatches (dispatch_id, state, stage, agent_terminal_handle, residual_resources)
-           VALUES (?, 'succeeded', 'settled', ?, ?)`
+          `INSERT INTO worker_dispatches (
+             dispatch_id, state, stage, agent_terminal_handle, residual_resources,
+             deadline_at, max_runtime_ms, max_requests, request_cap_enforcement,
+             max_review_cycles, leaf
+           ) VALUES (?, 'succeeded', 'settled', ?, ?, '2099-01-01T00:00:00.000Z',
+                     60000, 10, 'prompt_only', 0, 1)`
         )
         .run(
           dispatchId,
@@ -276,8 +295,12 @@ describe('orchestration worker release recovery', () => {
         )
       raw
         .prepare(
-          `INSERT INTO worker_dispatches (dispatch_id, state, stage, agent_terminal_handle, residual_resources)
-           VALUES (?, ?, 'legacy', 'term_worker', ?)`
+          `INSERT INTO worker_dispatches (
+             dispatch_id, state, stage, agent_terminal_handle, residual_resources,
+             deadline_at, max_runtime_ms, max_requests, request_cap_enforcement,
+             max_review_cycles, leaf
+           ) VALUES (?, ?, 'legacy', 'term_worker', ?, '2099-01-01T00:00:00.000Z',
+                     60000, 10, 'prompt_only', 0, 1)`
         )
         .run(
           dispatchId,

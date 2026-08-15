@@ -1,5 +1,6 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { TuiAgent } from '../../../../shared/types'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
@@ -15,10 +16,17 @@ import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
   createPendingWorkerLaunchReceipt,
-  resolveFederatedWorkerLaunchReceipt,
-  type OrchestrationWorkerLaunchReceipt
+  resolveFederatedWorkerLaunchReceipt
 } from './orchestration-worker-launch-preferences'
-import { validateFederatedWorkerStartPlacement } from './orchestration-worker-start-validation'
+import {
+  resolveBoundedWorkerControls,
+  validateFederatedWorkerStartPlacement
+} from './orchestration-worker-start-validation'
+import {
+  settleFederatedStartRuntimeReceipt,
+  type RemoteStartReceipt
+} from './orchestration-federation-start-receipt'
+import { federatedUnknownReceipt } from './orchestration-worker-start-receipt'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -50,6 +58,13 @@ export async function startFederatedWorker(args: {
   const createsWorktree = worktree === 'new-top-level'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
+  const controls = resolveBoundedWorkerControls(params, params.agent as TuiAgent)
+  const deadlineAt = new Date(Date.now() + params.maxRuntimeMs).toISOString()
+  const bounded = {
+    deadlineAt,
+    budget: controls.budget,
+    leafControl: controls.leafControl
+  }
   const requestedLaunch = createPendingWorkerLaunchReceipt({
     agent: isTuiAgent(params.agent) ? params.agent : null,
     model: params.model,
@@ -102,6 +117,7 @@ export async function startFederatedWorker(args: {
       terminal: params.terminal ?? null,
       agent: params.agent ?? null,
       launch: requestedLaunch,
+      bounded,
       timeoutMs: params.timeoutMs ?? 60_000,
       setup: setupDecision,
       setupSource: createsWorktree
@@ -110,6 +126,8 @@ export async function startFederatedWorker(args: {
           : 'orchestration_default'
         : 'existing_worktree'
     },
+    budget: controls.budget,
+    deadlineAt,
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation,
     federation: {
@@ -146,6 +164,14 @@ export async function startFederatedWorker(args: {
         model: params.model,
         effort: params.effort,
         timeoutMs: params.timeoutMs,
+        dispatchGroup: params.dispatchGroup,
+        dispatchIndex: params.dispatchIndex,
+        maxDispatches: params.maxDispatches,
+        maxRuntimeMs: params.maxRuntimeMs,
+        maxRequests: params.maxRequests,
+        maxReviewCycles: params.maxReviewCycles,
+        reviewCycle: params.reviewCycle,
+        deadlineAt,
         devMode: params.devMode
       },
       (params.timeoutMs ?? 60_000) + 15_000,
@@ -189,6 +215,7 @@ export async function startFederatedWorker(args: {
         server: { environmentId: server.environmentId, name: server.name },
         setup: remote.setup,
         launch,
+        ...bounded,
         timeoutMs: params.timeoutMs ?? 60_000,
         effects: remote.effects ?? [],
         residualResources: remote.residualResources ?? []
@@ -200,7 +227,19 @@ export async function startFederatedWorker(args: {
         remote.failedStage ?? 'remote_attach',
         remote.lastError ?? 'The worker server reported an unknown start outcome.'
       )
-      return federatedUnknownReceipt(worker, task.id, server.name, launch)
+      return federatedUnknownReceipt(worker, task.id, server.name, launch, bounded)
+    }
+    if (remote.state === 'stopped' || remote.state === 'stop_unknown') {
+      return settleFederatedStartRuntimeReceipt({
+        db,
+        runId,
+        taskId: task.id,
+        dispatchId: started.dispatch.id,
+        server: { environmentId: server.environmentId, name: server.name },
+        remote,
+        launch,
+        bounded
+      })
     }
     const worker = db.failWorkerStart(
       started.dispatch.id,
@@ -218,6 +257,7 @@ export async function startFederatedWorker(args: {
       lastError: worker.last_error,
       setup: remote.setup,
       launch,
+      ...bounded,
       effects: remote.effects ?? [],
       residualResources: remote.residualResources ?? []
     }
@@ -235,27 +275,14 @@ export async function startFederatedWorker(args: {
         failedStage: worker.stage,
         lastError: worker.last_error,
         launch: requestedLaunch,
+        ...bounded,
         effects: [],
         residualResources: []
       }
     }
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
-    return federatedUnknownReceipt(worker, task.id, server.name, requestedLaunch)
+    return federatedUnknownReceipt(worker, task.id, server.name, requestedLaunch, bounded)
   }
-}
-
-type RemoteStartReceipt = {
-  dispatchId: string
-  state: string
-  runtimeEpoch: string
-  worktreeId?: string
-  terminalHandle?: string
-  setup?: { state: string }
-  launch?: OrchestrationWorkerLaunchReceipt
-  effects?: unknown[]
-  residualResources?: unknown[]
-  failedStage?: string
-  lastError?: string
 }
 
 function isKnownRemoteStartFailure(code: string): boolean {
@@ -264,30 +291,9 @@ function isKnownRemoteStartFailure(code: string): boolean {
     'agent_unconfigured',
     'worktree_not_found_on_server',
     'terminal_worktree_mismatch',
-    'capability_unsupported'
+    'capability_unsupported',
+    'bounded_worker_requires_fresh_process',
+    'leaf_control_unsupported',
+    'runtime_budget_exhausted'
   ].includes(code)
-}
-
-function federatedUnknownReceipt(
-  worker: { dispatch_id: string; state: string; stage: string; last_error: string | null },
-  taskId: string,
-  serverName: string,
-  launch: OrchestrationWorkerLaunchReceipt
-): unknown {
-  return {
-    taskId,
-    dispatchId: worker.dispatch_id,
-    state: 'outcome_unknown',
-    stage: worker.stage,
-    server: { name: serverName },
-    launch,
-    failedStage: worker.stage,
-    lastError: worker.last_error,
-    effects: [],
-    residualResources: [],
-    nextCommands: [
-      `orca orchestration worker-show --dispatch ${worker.dispatch_id} --json`,
-      `orca orchestration worker-abandon --dispatch ${worker.dispatch_id} --json`
-    ]
-  }
 }

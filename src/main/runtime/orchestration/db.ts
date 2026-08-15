@@ -29,6 +29,10 @@ import type {
   QuestionStatus,
   MutationReceiptRow,
   MutationState,
+  DispatchBudgetInput,
+  DispatchBudgetGroupRow,
+  DispatchBudgetReservationRow,
+  BoundedWorkerDeadlineRow,
   WorkerDispatchRow,
   WorkerDispatchState,
   LegacyWorkerTerminalRecoveryRow,
@@ -53,6 +57,7 @@ import {
 } from './worker-terminal-ownership'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import type { WorkerWatchdogSentinel } from './worker-watchdog-protocol'
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -103,6 +108,10 @@ export type {
   QuestionStatus,
   MutationReceiptRow,
   MutationState,
+  DispatchBudgetInput,
+  DispatchBudgetGroupRow,
+  DispatchBudgetReservationRow,
+  BoundedWorkerDeadlineRow,
   WorkerDispatchRow,
   WorkerDispatchState
 }
@@ -277,8 +286,35 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup.
-const SCHEMA_VERSION = 25
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 bounded worker budgets and deadlines.
+const SCHEMA_VERSION = 26
+
+function mergeSerializedEffects(currentJson: string, incoming: unknown[]): string {
+  const replacesSetup = incoming.some(
+    (effect) =>
+      Boolean(effect) &&
+      typeof effect === 'object' &&
+      !Array.isArray(effect) &&
+      (effect as { kind?: unknown }).kind === 'setup'
+  )
+  const current = (JSON.parse(currentJson) as unknown[]).filter(
+    (effect) =>
+      !replacesSetup ||
+      !effect ||
+      typeof effect !== 'object' ||
+      Array.isArray(effect) ||
+      (effect as { kind?: unknown }).kind !== 'setup'
+  )
+  const seen = new Set(current.map((effect) => JSON.stringify(effect)))
+  for (const effect of incoming) {
+    const key = JSON.stringify(effect)
+    if (!seen.has(key)) {
+      seen.add(key)
+      current.push(effect)
+    }
+  }
+  return JSON.stringify(current)
+}
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -401,8 +437,34 @@ export class OrchestrationDb {
         residual_resources     TEXT NOT NULL DEFAULT '[]',
         start_options          TEXT NOT NULL DEFAULT '{}',
         last_error             TEXT,
+        deadline_at            TEXT NOT NULL,
+        max_runtime_ms         INTEGER NOT NULL CHECK(max_runtime_ms BETWEEN 1000 AND 7200000),
+        max_requests           INTEGER NOT NULL CHECK(max_requests BETWEEN 1 AND 100),
+        request_cap_enforcement TEXT NOT NULL
+          CHECK(request_cap_enforcement IN ('hard', 'prompt_only', 'unsupported')),
+        max_review_cycles      INTEGER NOT NULL CHECK(max_review_cycles BETWEEN 0 AND 2),
+        review_cycle           INTEGER,
+        leaf                   INTEGER NOT NULL CHECK(leaf = 1),
+        watchdog_sentinel_path TEXT,
         created_at             TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS dispatch_budget_groups (
+        run_id          TEXT NOT NULL,
+        group_id        TEXT NOT NULL,
+        max_dispatches  INTEGER NOT NULL CHECK(max_dispatches BETWEEN 1 AND 64),
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (run_id, group_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS dispatch_budget_reservations (
+        run_id          TEXT NOT NULL,
+        group_id        TEXT NOT NULL,
+        dispatch_index  INTEGER NOT NULL,
+        dispatch_id     TEXT NOT NULL UNIQUE,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (run_id, group_id, dispatch_index)
       );
 
       CREATE TABLE IF NOT EXISTS worker_terminal_resources (
@@ -486,6 +548,9 @@ export class OrchestrationDb {
         residual_resources      TEXT NOT NULL DEFAULT '[]',
         to_worker_imported_sequence INTEGER NOT NULL DEFAULT 0,
         last_error              TEXT,
+        deadline_at             TEXT NOT NULL,
+        max_requests            INTEGER NOT NULL CHECK(max_requests BETWEEN 1 AND 100),
+        watchdog_sentinel_path  TEXT,
         created_at              TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -977,6 +1042,74 @@ export class OrchestrationDb {
           CREATE INDEX IF NOT EXISTS idx_dispatch_active_assignee_handle
             ON dispatch_contexts(assignee_handle)
             WHERE assignee_handle IS NOT NULL AND status IN ('pending', 'dispatched');
+        `)
+      }
+      if (current < 26) {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS dispatch_budget_groups (
+            run_id          TEXT NOT NULL,
+            group_id        TEXT NOT NULL,
+            max_dispatches  INTEGER NOT NULL CHECK(max_dispatches BETWEEN 1 AND 64),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (run_id, group_id)
+          );
+          CREATE TABLE IF NOT EXISTS dispatch_budget_reservations (
+            run_id          TEXT NOT NULL,
+            group_id        TEXT NOT NULL,
+            dispatch_index  INTEGER NOT NULL,
+            dispatch_id     TEXT NOT NULL UNIQUE,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (run_id, group_id, dispatch_index)
+          );
+        `)
+        if (!this.hasColumn('worker_dispatches', 'deadline_at')) {
+          this.db.exec(`ALTER TABLE worker_dispatches ADD COLUMN deadline_at TEXT`)
+        }
+        if (!this.hasColumn('worker_dispatches', 'max_runtime_ms')) {
+          this.db.exec(`ALTER TABLE worker_dispatches ADD COLUMN max_runtime_ms INTEGER`)
+        }
+        if (!this.hasColumn('worker_dispatches', 'max_requests')) {
+          this.db.exec(`ALTER TABLE worker_dispatches ADD COLUMN max_requests INTEGER`)
+        }
+        if (!this.hasColumn('worker_dispatches', 'request_cap_enforcement')) {
+          this.db.exec(`ALTER TABLE worker_dispatches ADD COLUMN request_cap_enforcement TEXT`)
+        }
+        if (!this.hasColumn('worker_dispatches', 'max_review_cycles')) {
+          this.db.exec(`ALTER TABLE worker_dispatches ADD COLUMN max_review_cycles INTEGER`)
+        }
+        if (!this.hasColumn('worker_dispatches', 'review_cycle')) {
+          this.db.exec(`ALTER TABLE worker_dispatches ADD COLUMN review_cycle INTEGER`)
+        }
+        if (!this.hasColumn('worker_dispatches', 'leaf')) {
+          this.db.exec(`ALTER TABLE worker_dispatches ADD COLUMN leaf INTEGER`)
+        }
+        if (!this.hasColumn('worker_dispatches', 'watchdog_sentinel_path')) {
+          this.db.exec(`ALTER TABLE worker_dispatches ADD COLUMN watchdog_sentinel_path TEXT`)
+        }
+        if (!this.hasColumn('remote_dispatch_attachments', 'deadline_at')) {
+          this.db.exec(`ALTER TABLE remote_dispatch_attachments ADD COLUMN deadline_at TEXT`)
+        }
+        if (!this.hasColumn('remote_dispatch_attachments', 'max_requests')) {
+          this.db.exec(`ALTER TABLE remote_dispatch_attachments ADD COLUMN max_requests INTEGER`)
+        }
+        if (!this.hasColumn('remote_dispatch_attachments', 'watchdog_sentinel_path')) {
+          this.db.exec(
+            `ALTER TABLE remote_dispatch_attachments ADD COLUMN watchdog_sentinel_path TEXT`
+          )
+        }
+        this.db.exec(`
+          UPDATE worker_dispatches
+          SET deadline_at = COALESCE(deadline_at, created_at),
+              max_runtime_ms = COALESCE(max_runtime_ms, 1000),
+              max_requests = COALESCE(max_requests, 1),
+              request_cap_enforcement = COALESCE(request_cap_enforcement, 'unsupported'),
+              max_review_cycles = COALESCE(max_review_cycles, 0),
+              leaf = COALESCE(leaf, 1)
+        `)
+        this.db.exec(`
+          UPDATE remote_dispatch_attachments
+          SET deadline_at = COALESCE(deadline_at, created_at),
+              max_requests = COALESCE(max_requests, 1)
         `)
       }
       this.db.exec(`
@@ -3972,6 +4105,8 @@ export class OrchestrationDb {
   createStartingWorkerDispatch(params: {
     taskId: string
     startOptions: unknown
+    budget: DispatchBudgetInput
+    deadlineAt: string
     launchTokenHash?: string
     retryOf?: string
     runtimeEpoch?: string
@@ -4035,6 +4170,31 @@ export class OrchestrationDb {
             `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`
           )
         }
+        const priorReservation = this.db
+          .prepare(
+            `SELECT group_id, dispatch_index
+             FROM dispatch_budget_reservations
+             WHERE dispatch_id = ?`
+          )
+          .get(params.retryOf) as { group_id: string; dispatch_index: number } | undefined
+        if (
+          !priorReservation ||
+          priorReservation.group_id !== params.budget.group ||
+          priorWorker.max_review_cycles !== params.budget.maxReviewCycles
+        ) {
+          throw new OrchestrationError(
+            'dispatch_budget_conflict',
+            `Retry ${params.retryOf} must preserve its Dispatch group and review-cycle maximum.`
+          )
+        }
+        const expectedReviewCycle =
+          priorWorker.max_review_cycles === 0 ? undefined : (priorWorker.review_cycle ?? 0) + 1
+        if (params.budget.reviewCycle !== expectedReviewCycle) {
+          throw new OrchestrationError(
+            'invalid_review_cycle',
+            `Retry ${params.retryOf} requires reviewCycle ${expectedReviewCycle ?? 'omitted'}.`
+          )
+        }
       } else if (task.status !== 'ready') {
         throw new OrchestrationError(
           'task_not_startable',
@@ -4043,6 +4203,17 @@ export class OrchestrationDb {
       }
 
       const id = generateId('ctx')
+      const deadlineMs = Date.parse(params.deadlineAt)
+      if (
+        !Number.isFinite(deadlineMs) ||
+        new Date(deadlineMs).toISOString() !== params.deadlineAt
+      ) {
+        throw new OrchestrationError(
+          'invalid_dispatch_budget',
+          'deadlineAt must be an absolute ISO-8601 timestamp.'
+        )
+      }
+      this.reserveDispatchBudget(task.run_id, id, params.budget)
       if (params.mutationReceipt) {
         this.db
           .prepare(
@@ -4066,10 +4237,22 @@ export class OrchestrationDb {
       this.db
         .prepare(
           `INSERT INTO worker_dispatches (
-             dispatch_id, runtime_epoch, state, stage, start_options
-           ) VALUES (?, ?, 'starting', 'accepted', ?)`
+             dispatch_id, runtime_epoch, state, stage, start_options,
+             deadline_at, max_runtime_ms, max_requests, request_cap_enforcement,
+             max_review_cycles, review_cycle, leaf
+           ) VALUES (?, ?, 'starting', 'accepted', ?, ?, ?, ?, ?, ?, ?, 1)`
         )
-        .run(id, params.runtimeEpoch ?? null, JSON.stringify(params.startOptions))
+        .run(
+          id,
+          params.runtimeEpoch ?? null,
+          JSON.stringify(params.startOptions),
+          params.deadlineAt,
+          params.budget.maxRuntimeMs,
+          params.budget.maxRequests,
+          params.budget.requestCapEnforcement,
+          params.budget.maxReviewCycles,
+          params.budget.reviewCycle ?? null
+        )
       if (params.federation) {
         this.db
           .prepare(
@@ -4094,6 +4277,386 @@ export class OrchestrationDb {
       return {
         dispatch: this.getDispatchContextById(id) as DispatchContextRow,
         worker: this.getWorkerDispatch(id) as WorkerDispatchRow
+      }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  private reserveDispatchBudget(
+    runId: string,
+    dispatchId: string,
+    budget: DispatchBudgetInput
+  ): void {
+    const group = budget.group.trim()
+    if (!group || group !== budget.group || group.length > 128) {
+      throw new OrchestrationError(
+        'invalid_dispatch_budget',
+        'Dispatch budget group must be 1..128 characters with no surrounding whitespace.'
+      )
+    }
+    if (
+      !Number.isSafeInteger(budget.maxDispatches) ||
+      budget.maxDispatches < 1 ||
+      budget.maxDispatches > 64
+    ) {
+      throw new OrchestrationError(
+        'invalid_dispatch_budget',
+        'maxDispatches must be an integer between 1 and 64.'
+      )
+    }
+    if (
+      !Number.isSafeInteger(budget.index) ||
+      budget.index < 1 ||
+      budget.index > budget.maxDispatches
+    ) {
+      throw new OrchestrationError(
+        'dispatch_budget_exhausted',
+        `Dispatch index ${budget.index} is outside budget group ${group} maximum ${budget.maxDispatches}.`
+      )
+    }
+    if (
+      !Number.isSafeInteger(budget.maxRuntimeMs) ||
+      budget.maxRuntimeMs < 1000 ||
+      budget.maxRuntimeMs > 7_200_000
+    ) {
+      throw new OrchestrationError(
+        'invalid_dispatch_budget',
+        'maxRuntimeMs must be an integer between 1000 and 7200000.'
+      )
+    }
+    if (
+      !Number.isSafeInteger(budget.maxRequests) ||
+      budget.maxRequests < 1 ||
+      budget.maxRequests > 100
+    ) {
+      throw new OrchestrationError(
+        'invalid_dispatch_budget',
+        'maxRequests must be an integer between 1 and 100.'
+      )
+    }
+    if (
+      !['hard', 'prompt_only', 'unsupported'].includes(budget.requestCapEnforcement) ||
+      budget.leaf !== true
+    ) {
+      throw new OrchestrationError(
+        'invalid_dispatch_budget',
+        'Dispatch budget requires a recognized request-cap enforcement mode and leaf=true.'
+      )
+    }
+    if (
+      !Number.isSafeInteger(budget.maxReviewCycles) ||
+      budget.maxReviewCycles < 0 ||
+      budget.maxReviewCycles > 2
+    ) {
+      throw new OrchestrationError(
+        'invalid_review_cycle',
+        'maxReviewCycles must be an integer between 0 and 2.'
+      )
+    }
+    if (
+      (budget.maxReviewCycles === 0 && budget.reviewCycle !== undefined) ||
+      (budget.maxReviewCycles > 0 &&
+        (!Number.isSafeInteger(budget.reviewCycle) ||
+          (budget.reviewCycle as number) < 1 ||
+          (budget.reviewCycle as number) > budget.maxReviewCycles))
+    ) {
+      throw new OrchestrationError(
+        'invalid_review_cycle',
+        'reviewCycle must be omitted when maxReviewCycles is zero, otherwise it must be within the configured maximum.'
+      )
+    }
+    const existingRunGroup = this.db
+      .prepare(
+        `SELECT group_id, max_dispatches
+         FROM dispatch_budget_groups
+         WHERE run_id = ?
+         ORDER BY created_at, group_id
+         LIMIT 1`
+      )
+      .get(runId) as { group_id: string; max_dispatches: number } | undefined
+    if (existingRunGroup && existingRunGroup.group_id !== group) {
+      throw new OrchestrationError(
+        'dispatch_budget_conflict',
+        `Run ${runId} is already bound to Dispatch budget group ${existingRunGroup.group_id}.`
+      )
+    }
+
+    this.db
+      .prepare(
+        `INSERT INTO dispatch_budget_groups (run_id, group_id, max_dispatches)
+         VALUES (?, ?, ?)
+         ON CONFLICT(run_id, group_id) DO NOTHING`
+      )
+      .run(runId, group, budget.maxDispatches)
+    const existingGroup = this.db
+      .prepare(
+        `SELECT run_id, group_id, max_dispatches, created_at
+         FROM dispatch_budget_groups WHERE run_id = ? AND group_id = ?`
+      )
+      .get(runId, group) as DispatchBudgetGroupRow
+    if (existingGroup.max_dispatches !== budget.maxDispatches) {
+      throw new OrchestrationError(
+        'dispatch_budget_conflict',
+        `Dispatch budget group ${group} already has maximum ${existingGroup.max_dispatches}, not ${budget.maxDispatches}.`
+      )
+    }
+    const existingReservation = this.db
+      .prepare(
+        `SELECT dispatch_id FROM dispatch_budget_reservations
+         WHERE run_id = ? AND group_id = ? AND dispatch_index = ?`
+      )
+      .get(runId, group, budget.index) as { dispatch_id: string } | undefined
+    if (existingReservation) {
+      throw new OrchestrationError(
+        'dispatch_budget_index_consumed',
+        `Dispatch budget group ${group} index ${budget.index} is already consumed by ${existingReservation.dispatch_id}.`
+      )
+    }
+    this.db
+      .prepare(
+        `INSERT INTO dispatch_budget_reservations (
+           run_id, group_id, dispatch_index, dispatch_id
+         ) VALUES (?, ?, ?, ?)`
+      )
+      .run(runId, group, budget.index, dispatchId)
+  }
+
+  getDispatchBudgetGroup(runId: string, groupId: string): DispatchBudgetGroupRow | undefined {
+    return this.db
+      .prepare(
+        `SELECT run_id, group_id, max_dispatches, created_at
+         FROM dispatch_budget_groups WHERE run_id = ? AND group_id = ?`
+      )
+      .get(runId, groupId) as DispatchBudgetGroupRow | undefined
+  }
+
+  listDispatchBudgetReservations(runId: string, groupId: string): DispatchBudgetReservationRow[] {
+    return this.db
+      .prepare(
+        `SELECT run_id, group_id, dispatch_index, dispatch_id, created_at
+         FROM dispatch_budget_reservations
+         WHERE run_id = ? AND group_id = ?
+         ORDER BY dispatch_index`
+      )
+      .all(runId, groupId) as DispatchBudgetReservationRow[]
+  }
+
+  setWorkerWatchdogSentinelPath(dispatchId: string, sentinelPath: string): WorkerDispatchRow {
+    const result = this.db
+      .prepare(
+        `UPDATE worker_dispatches
+         SET watchdog_sentinel_path = ?, updated_at = datetime('now')
+         WHERE dispatch_id = ? AND state = 'starting'`
+      )
+      .run(sentinelPath, dispatchId)
+    if (result.changes !== 1) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Dispatch ${dispatchId} is not an active starting worker.`
+      )
+    }
+    return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+  }
+
+  recordStartingWorkerTerminalResource(params: {
+    dispatchId: string
+    worktreeId: string
+    terminalHandle: string
+  }): WorkerTerminalResourceRow {
+    const worker = this.getWorkerDispatch(params.dispatchId)
+    if (!worker || worker.state !== 'starting') {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Dispatch ${params.dispatchId} is not starting.`
+      )
+    }
+    const existing = this.getWorkerTerminalResourceByOwner(params.dispatchId)
+    if (existing) {
+      return existing
+    }
+    return this.createWorkerTerminalResourceStatement({
+      dispatchId: params.dispatchId,
+      worktreeId: params.worktreeId,
+      terminalHandle: params.terminalHandle,
+      paneKey: null,
+      processIncarnation: null,
+      ownership: 'owned'
+    })
+  }
+
+  listActiveBoundedWorkerDeadlines(): BoundedWorkerDeadlineRow[] {
+    return this.db
+      .prepare(
+        `SELECT w.dispatch_id, d.task_id, d.status AS dispatch_status,
+                t.status AS task_status, w.state AS worker_state,
+                w.deadline_at, w.watchdog_sentinel_path
+         FROM worker_dispatches w
+         JOIN dispatch_contexts d ON d.id = w.dispatch_id
+         JOIN tasks t ON t.id = d.task_id
+         WHERE w.watchdog_sentinel_path IS NOT NULL
+           AND w.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+         ORDER BY w.deadline_at, w.dispatch_id`
+      )
+      .all() as BoundedWorkerDeadlineRow[]
+  }
+
+  markWorkerDeadlineSentinelMissing(dispatchId: string): {
+    worker: WorkerDispatchRow
+    changed: boolean
+  } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const worker = this.getWorkerDispatch(dispatchId)
+      const dispatch = this.getDispatchContextById(dispatchId)
+      if (!worker || !dispatch) {
+        throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
+      }
+      const task = this.getTask(dispatch.task_id)
+      const currentDispatch = this.getDispatchContext(dispatch.task_id)
+      const settlesCurrentTask =
+        ['pending', 'dispatched'].includes(dispatch.status) &&
+        task?.status === 'dispatched' &&
+        currentDispatch?.id === dispatchId
+      if (worker.state === 'stop_unknown' && worker.stage === 'deadline_sentinel_missing') {
+        this.db.exec('COMMIT')
+        return { worker, changed: false }
+      }
+      if (!['starting', 'ready', 'start_unknown', 'stopping'].includes(worker.state)) {
+        this.db.exec('COMMIT')
+        return { worker, changed: false }
+      }
+      const reason = 'Watchdog deadline passed without an authoritative termination sentinel.'
+      this.db
+        .prepare(
+          `UPDATE worker_dispatches
+           SET state = 'stop_unknown', stage = 'deadline_sentinel_missing',
+               last_error = ?, updated_at = datetime('now')
+           WHERE dispatch_id = ?`
+        )
+        .run(reason, dispatchId)
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET capability_revoked_at = COALESCE(capability_revoked_at, datetime('now')),
+               last_failure = ?
+           WHERE id = ?`
+        )
+        .run(reason, dispatchId)
+      if (settlesCurrentTask) {
+        this.db
+          .prepare(
+            `UPDATE tasks
+             SET status = 'blocked', result = ?
+             WHERE id = ? AND status = 'dispatched'`
+          )
+          .run(
+            JSON.stringify({ reason: 'runtime_budget_stop_unknown', dispatchId }),
+            dispatch.task_id
+          )
+      }
+      this.closeQuestionsForDispatch(dispatchId)
+      this.db.exec('COMMIT')
+      return {
+        worker: this.getWorkerDispatch(dispatchId) as WorkerDispatchRow,
+        changed: true
+      }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  reconcileWorkerWatchdogSentinel(
+    dispatchId: string,
+    sentinel: WorkerWatchdogSentinel
+  ): { worker: WorkerDispatchRow; changed: boolean; reason: string | null } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const worker = this.getWorkerDispatch(dispatchId)
+      const dispatch = this.getDispatchContextById(dispatchId)
+      if (!worker || !dispatch) {
+        throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
+      }
+      const task = this.getTask(dispatch.task_id)
+      const currentDispatch = this.getDispatchContext(dispatch.task_id)
+      const settlesCurrentTask =
+        ['pending', 'dispatched'].includes(dispatch.status) &&
+        task?.status === 'dispatched' &&
+        currentDispatch?.id === dispatchId
+      if (sentinel.dispatchId !== dispatchId || sentinel.deadlineAt !== worker.deadline_at) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `Watchdog sentinel does not match Dispatch ${dispatchId}.`
+        )
+      }
+      if (
+        ['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state) ||
+        (worker.state === 'stop_unknown' && sentinel.stop === 'tree_kill_unknown')
+      ) {
+        this.db.exec('COMMIT')
+        return { worker, changed: false, reason: null }
+      }
+      const unknownStop = sentinel.stop === 'tree_kill_unknown'
+      const exhausted = !['natural', 'shutdown'].includes(sentinel.stop) && !unknownStop
+      const reason = unknownStop
+        ? 'runtime_budget_stop_unknown'
+        : exhausted
+          ? `runtime_budget_exhausted:${sentinel.stop}`
+          : 'worker_exited_without_report'
+      this.db
+        .prepare(
+          `UPDATE worker_dispatches
+           SET state = ?, stage = ?, last_error = ?, updated_at = datetime('now')
+           WHERE dispatch_id = ?`
+        )
+        .run(
+          unknownStop ? 'stop_unknown' : 'stopped',
+          unknownStop
+            ? 'deadline_sentinel_missing'
+            : exhausted
+              ? 'runtime_budget_exhausted'
+              : 'process_exited_without_report',
+          reason,
+          dispatchId
+        )
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET status = 'failed', completed_at = COALESCE(completed_at, datetime('now')),
+               capability_revoked_at = COALESCE(capability_revoked_at, datetime('now')),
+               failure_count = failure_count + CASE WHEN status IN ('pending', 'dispatched') THEN 1 ELSE 0 END,
+               last_failure = ?
+           WHERE id = ?`
+        )
+        .run(reason, dispatchId)
+      if (settlesCurrentTask) {
+        this.db
+          .prepare(
+            `UPDATE tasks
+             SET status = 'blocked', result = ?
+             WHERE id = ? AND status = 'dispatched'`
+          )
+          .run(
+            JSON.stringify({
+              reason: unknownStop
+                ? 'runtime_budget_stop_unknown'
+                : exhausted
+                  ? 'runtime_budget_exhausted'
+                  : 'worker_exited_without_report',
+              dispatchId,
+              watchdog: sentinel
+            }),
+            dispatch.task_id
+          )
+      }
+      this.closeQuestionsForDispatch(dispatchId)
+      this.db.exec('COMMIT')
+      return {
+        worker: this.getWorkerDispatch(dispatchId) as WorkerDispatchRow,
+        changed: true,
+        reason
       }
     } catch (error) {
       this.db.exec('ROLLBACK')
@@ -4133,7 +4696,7 @@ export class OrchestrationDb {
         params.worktreeId ?? current.worktree_id,
         params.terminalHandle ?? current.agent_terminal_handle,
         params.setupState ?? current.setup_state,
-        params.effects ? JSON.stringify(params.effects) : current.effects,
+        params.effects ? mergeSerializedEffects(current.effects, params.effects) : current.effects,
         params.residualResources
           ? JSON.stringify(params.residualResources)
           : current.residual_resources,
@@ -4155,7 +4718,7 @@ export class OrchestrationDb {
         `Dispatch ${params.dispatchId} was not found.`
       )
     }
-    const effects = JSON.stringify(params.effects)
+    const effects = mergeSerializedEffects(current.effects, params.effects)
     if (current.setup_state === params.setupState && current.effects === effects) {
       return { worker: current, changed: false }
     }
@@ -4182,10 +4745,7 @@ export class OrchestrationDb {
     effects: unknown[]
     setupState: string
     hostScope?: string | null
-    // 'created': this worker-start operation created the agent terminal (including agent-first
-    // worktree creation, whose effects receipt says 'reused_agent_terminal'). 'external': an
-    // explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
-    terminalOwnership?: 'created' | 'external'
+    terminalOwnership?: 'created'
   }): string {
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
@@ -4241,15 +4801,31 @@ export class OrchestrationDb {
               Boolean(
                 effect &&
                 typeof effect === 'object' &&
-                ((effect as { action?: string }).action?.startsWith('created') ||
-                  (effect as { action?: string }).action === 'reused_agent_terminal')
+                (effect as { action?: string }).action?.startsWith('created')
               )
             )
           ),
           params.dispatchId
         )
-      if (params.terminalOwnership && !this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
-        if (params.terminalOwnership === 'created') {
+      if (params.terminalOwnership) {
+        const resource = this.getWorkerTerminalResourceByOwner(params.dispatchId)
+        if (resource) {
+          this.db
+            .prepare(
+              `UPDATE worker_terminal_resources
+               SET worktree_id = ?, terminal_handle = ?, pane_key = ?,
+                   process_incarnation = ?, host_scope = ?, updated_at = datetime('now')
+               WHERE owner_dispatch_id = ? AND ownership_state = 'owned'`
+            )
+            .run(
+              params.worktreeId,
+              params.handle,
+              params.paneKey,
+              params.processIncarnation,
+              params.hostScope ?? null,
+              params.dispatchId
+            )
+        } else {
           this.createWorkerTerminalResourceStatement({
             dispatchId: params.dispatchId,
             worktreeId: params.worktreeId,
@@ -4259,33 +4835,6 @@ export class OrchestrationDb {
             hostScope: params.hostScope,
             ownership: 'owned'
           })
-        } else {
-          const transferable = this.findTransferableWorkerTerminalResource({
-            terminalHandle: params.handle,
-            paneKey: params.paneKey,
-            processIncarnation: params.processIncarnation,
-            hostScope: params.hostScope ?? null
-          })
-          if (transferable) {
-            this.transferWorkerTerminalResourceStatement({
-              resourceId: transferable.id,
-              toDispatchId: params.dispatchId,
-              terminalHandle: params.handle,
-              paneKey: params.paneKey,
-              processIncarnation: params.processIncarnation,
-              hostScope: params.hostScope ?? null
-            })
-          } else {
-            this.createWorkerTerminalResourceStatement({
-              dispatchId: params.dispatchId,
-              worktreeId: params.worktreeId,
-              terminalHandle: params.handle,
-              paneKey: params.paneKey,
-              processIncarnation: params.processIncarnation,
-              hostScope: params.hostScope,
-              ownership: 'external'
-            })
-          }
         }
       }
       this.db.exec('COMMIT')
@@ -4610,6 +5159,8 @@ export class OrchestrationDb {
     homePeerFingerprint: string
     protocolVersion: number
     runtimeEpoch: string
+    deadlineAt: string
+    maxRequests: number
     mutationReceipt: {
       callerFingerprint: string
       requestId: string
@@ -4655,15 +5206,18 @@ export class OrchestrationDb {
       this.db
         .prepare(
           `INSERT INTO remote_dispatch_attachments (
-             dispatch_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch
-           ) VALUES (?, ?, ?, ?, ?)`
+             dispatch_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch,
+             deadline_at, max_requests
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           params.dispatchId,
           params.taskId,
           params.homePeerFingerprint,
           params.protocolVersion,
-          params.runtimeEpoch
+          params.runtimeEpoch,
+          params.deadlineAt,
+          params.maxRequests
         )
       this.db.exec('COMMIT')
       return this.getRemoteDispatchAttachment(params.dispatchId) as RemoteDispatchAttachmentRow
@@ -4677,6 +5231,203 @@ export class OrchestrationDb {
     return this.db
       .prepare('SELECT * FROM remote_dispatch_attachments WHERE dispatch_id = ?')
       .get(dispatchId) as RemoteDispatchAttachmentRow | undefined
+  }
+
+  setRemoteWorkerWatchdogSentinelPath(
+    dispatchId: string,
+    sentinelPath: string
+  ): RemoteDispatchAttachmentRow {
+    const result = this.db
+      .prepare(
+        `UPDATE remote_dispatch_attachments
+         SET watchdog_sentinel_path = ?, updated_at = datetime('now')
+         WHERE dispatch_id = ? AND state = 'starting'`
+      )
+      .run(sentinelPath, dispatchId)
+    if (result.changes !== 1) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Remote Dispatch ${dispatchId} is not starting.`
+      )
+    }
+    return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
+  }
+
+  listActiveRemoteWorkerDeadlines(): {
+    dispatch_id: string
+    deadline_at: string
+    watchdog_sentinel_path: string | null
+  }[] {
+    return this.db
+      .prepare(
+        `SELECT dispatch_id, deadline_at, watchdog_sentinel_path
+         FROM remote_dispatch_attachments
+         WHERE watchdog_sentinel_path IS NOT NULL
+           AND stage != 'released'
+           AND state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+         ORDER BY deadline_at, dispatch_id`
+      )
+      .all() as {
+      dispatch_id: string
+      deadline_at: string
+      watchdog_sentinel_path: string | null
+    }[]
+  }
+
+  markRemoteWorkerDeadlineSentinelMissing(dispatchId: string): {
+    attachment: RemoteDispatchAttachmentRow
+    changed: boolean
+  } {
+    const current = this.getRemoteDispatchAttachment(dispatchId)
+    if (!current) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Remote Dispatch ${dispatchId} was not found.`
+      )
+    }
+    if (current.state === 'stop_unknown' && current.stage === 'deadline_sentinel_missing') {
+      return { attachment: current, changed: false }
+    }
+    if (!['starting', 'ready', 'start_unknown', 'stopping'].includes(current.state)) {
+      return { attachment: current, changed: false }
+    }
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.insertRemoteDeadlineFailureRelayInTransaction(
+        current,
+        'runtime_budget_stop_unknown',
+        'Watchdog deadline passed without an authoritative termination sentinel.'
+      )
+      this.db
+        .prepare(
+          `UPDATE remote_dispatch_attachments
+           SET state = 'stop_unknown', stage = 'deadline_sentinel_missing',
+               last_error = 'Watchdog deadline passed without an authoritative termination sentinel.',
+               updated_at = datetime('now')
+           WHERE dispatch_id = ?`
+        )
+        .run(dispatchId)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    return {
+      attachment: this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow,
+      changed: true
+    }
+  }
+
+  reconcileRemoteWorkerWatchdogSentinel(
+    dispatchId: string,
+    sentinel: WorkerWatchdogSentinel
+  ): { attachment: RemoteDispatchAttachmentRow; changed: boolean; reason: string | null } {
+    const current = this.getRemoteDispatchAttachment(dispatchId)
+    if (!current) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Remote Dispatch ${dispatchId} was not found.`
+      )
+    }
+    if (sentinel.dispatchId !== dispatchId || sentinel.deadlineAt !== current.deadline_at) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `Watchdog sentinel does not match remote Dispatch ${dispatchId}.`
+      )
+    }
+    if (
+      ['succeeded', 'failed', 'stopped', 'abandoned'].includes(current.state) ||
+      (current.state === 'stop_unknown' && sentinel.stop === 'tree_kill_unknown')
+    ) {
+      return { attachment: current, changed: false, reason: null }
+    }
+    const unknownStop = sentinel.stop === 'tree_kill_unknown'
+    const reason = unknownStop
+      ? 'runtime_budget_stop_unknown'
+      : ['natural', 'shutdown'].includes(sentinel.stop)
+        ? 'worker_exited_without_report'
+        : `runtime_budget_exhausted:${sentinel.stop}`
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.insertRemoteDeadlineFailureRelayInTransaction(current, reason, reason)
+      this.db
+        .prepare(
+          `UPDATE remote_dispatch_attachments
+           SET state = ?, stage = ?, last_error = ?, updated_at = datetime('now')
+           WHERE dispatch_id = ?`
+        )
+        .run(
+          unknownStop ? 'stop_unknown' : 'stopped',
+          unknownStop
+            ? 'deadline_sentinel_missing'
+            : ['natural', 'shutdown'].includes(sentinel.stop)
+              ? 'process_exited_without_report'
+              : 'runtime_budget_exhausted',
+          reason,
+          dispatchId
+        )
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    return {
+      attachment: this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow,
+      changed: true,
+      reason
+    }
+  }
+
+  private insertRemoteDeadlineFailureRelayInTransaction(
+    attachment: RemoteDispatchAttachmentRow,
+    reason: string,
+    body: string
+  ): void {
+    const messageId = `watchdog_deadline_${attachment.dispatch_id}`
+    const existing = this.db
+      .prepare(
+        `SELECT 1 FROM federation_relay_items
+         WHERE dispatch_id = ? AND direction = 'to_home' AND message_id = ?`
+      )
+      .get(attachment.dispatch_id, messageId)
+    if (existing) {
+      return
+    }
+    const latest = this.db
+      .prepare(
+        `SELECT COALESCE(MAX(sequence), 0) AS sequence
+         FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home'`
+      )
+      .get(attachment.dispatch_id) as { sequence: number }
+    const payload = JSON.stringify({
+      from: `dispatch:${attachment.dispatch_id}`,
+      subject: reason,
+      body,
+      type: 'worker_done',
+      priority: 'high',
+      threadId: null,
+      payload: JSON.stringify({
+        taskId: attachment.task_id,
+        dispatchId: attachment.dispatch_id,
+        outcome: 'failed',
+        filesModified: [],
+        reportPath: null,
+        runtimeFailure: reason
+      })
+    })
+    this.db
+      .prepare(
+        `INSERT INTO federation_relay_items (
+           dispatch_id, direction, sequence, message_id, kind, payload, byte_count
+         ) VALUES (?, 'to_home', ?, ?, 'runtime_failure', ?, ?)`
+      )
+      .run(
+        attachment.dispatch_id,
+        latest.sequence + 1,
+        messageId,
+        payload,
+        Buffer.byteLength(payload, 'utf8')
+      )
   }
 
   recordRemoteAttachmentStage(params: {
@@ -4710,7 +5461,7 @@ export class OrchestrationDb {
         params.worktreeId ?? current.worktree_id,
         params.terminalHandle ?? current.terminal_handle,
         params.setupState ?? current.setup_state,
-        params.effects ? JSON.stringify(params.effects) : current.effects,
+        params.effects ? mergeSerializedEffects(current.effects, params.effects) : current.effects,
         params.residualResources
           ? JSON.stringify(params.residualResources)
           : current.residual_resources,
@@ -4732,7 +5483,7 @@ export class OrchestrationDb {
         `Remote Dispatch ${params.dispatchId} was not found.`
       )
     }
-    const effects = JSON.stringify(params.effects)
+    const effects = mergeSerializedEffects(current.effects, params.effects)
     if (current.setup_state === params.setupState && current.effects === effects) {
       return { attachment: current, changed: false }
     }
@@ -4768,35 +5519,68 @@ export class OrchestrationDb {
       )
     }
     const capability = `dcap_${randomBytes(32).toString('base64url')}`
-    this.db
-      .prepare(
-        `UPDATE remote_dispatch_attachments
-         SET stage = 'authority_attached', capability_hash = ?, pane_key = ?,
-             process_incarnation = ?, worktree_id = ?, terminal_handle = ?, setup_state = ?,
-             effects = ?, residual_resources = ?, updated_at = datetime('now')
-         WHERE dispatch_id = ? AND state = 'starting'`
-      )
-      .run(
-        hashDispatchCapability(capability),
-        params.paneKey,
-        params.processIncarnation,
-        params.worktreeId,
-        params.terminalHandle,
-        params.setupState,
-        JSON.stringify(params.effects),
-        JSON.stringify(
-          params.effects.filter((effect) =>
-            Boolean(
-              effect &&
-              typeof effect === 'object' &&
-              ((effect as { action?: string }).action?.startsWith('created') ||
-                (effect as { action?: string }).action === 'reused_agent_terminal')
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          `UPDATE remote_dispatch_attachments
+           SET stage = 'authority_attached', capability_hash = ?, pane_key = ?,
+               process_incarnation = ?, worktree_id = ?, terminal_handle = ?, setup_state = ?,
+               effects = ?, residual_resources = ?, updated_at = datetime('now')
+           WHERE dispatch_id = ? AND state = 'starting'`
+        )
+        .run(
+          hashDispatchCapability(capability),
+          params.paneKey,
+          params.processIncarnation,
+          params.worktreeId,
+          params.terminalHandle,
+          params.setupState,
+          JSON.stringify(params.effects),
+          JSON.stringify(
+            params.effects.filter((effect) =>
+              Boolean(
+                effect &&
+                typeof effect === 'object' &&
+                ((effect as { action?: string }).action?.startsWith('created') ||
+                  (effect as { action?: string }).action === 'reused_agent_terminal')
+              )
             )
+          ),
+          params.dispatchId
+        )
+      const resource = this.getWorkerTerminalResourceByOwner(params.dispatchId)
+      if (resource) {
+        this.db
+          .prepare(
+            `UPDATE worker_terminal_resources
+             SET worktree_id = ?, terminal_handle = ?, pane_key = ?,
+                 process_incarnation = ?, updated_at = datetime('now')
+             WHERE owner_dispatch_id = ? AND ownership_state = 'owned'`
           )
-        ),
-        params.dispatchId
-      )
-    return capability
+          .run(
+            params.worktreeId,
+            params.terminalHandle,
+            params.paneKey,
+            params.processIncarnation,
+            params.dispatchId
+          )
+      } else {
+        this.createWorkerTerminalResourceStatement({
+          dispatchId: params.dispatchId,
+          worktreeId: params.worktreeId,
+          terminalHandle: params.terminalHandle,
+          paneKey: params.paneKey,
+          processIncarnation: params.processIncarnation,
+          ownership: 'owned'
+        })
+      }
+      this.db.exec('COMMIT')
+      return capability
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   markRemoteAttachmentReady(dispatchId: string, effects?: unknown[]): RemoteDispatchAttachmentRow {
@@ -5169,6 +5953,12 @@ export class OrchestrationDb {
           outcome: WorkerReportOutcome
           result: string
         }
+      | {
+          kind: 'runtime_failure'
+          taskId: string
+          reason: string
+          result: string
+        }
       | { kind: 'rejected'; code: string; reason: string }
   }): { message: MessageRow; duplicate: boolean } {
     this.db.exec('BEGIN IMMEDIATE')
@@ -5234,6 +6024,20 @@ export class OrchestrationDb {
             settlement.reason
           ) as MessageRow
         }
+      } else if (params.lifecycle.kind === 'runtime_failure') {
+        const settlement = this.settleFederatedRuntimeFailureInTransaction({
+          taskId: params.lifecycle.taskId,
+          dispatchId: params.dispatchId,
+          reason: params.lifecycle.reason,
+          result: params.lifecycle.result
+        })
+        if (!settlement) {
+          message = this.convertLifecycleMessageToRejection(
+            message.id,
+            'inactive_dispatch',
+            `Dispatch ${params.dispatchId} is no longer active.`
+          ) as MessageRow
+        }
       } else if (params.lifecycle.kind === 'rejected') {
         message = this.convertLifecycleMessageToRejection(
           message.id,
@@ -5244,6 +6048,84 @@ export class OrchestrationDb {
       this.setFederatedHomeImportSequence(params.dispatchId, params.sequence)
       this.db.exec('COMMIT')
       return { message, duplicate: false }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  private settleFederatedRuntimeFailureInTransaction(params: {
+    taskId: string
+    dispatchId: string
+    reason: string
+    result: string
+  }): boolean {
+    const task = this.getTask(params.taskId)
+    const dispatch = this.getDispatchContextById(params.dispatchId)
+    const worker = this.getWorkerDispatch(params.dispatchId)
+    if (
+      !task ||
+      !dispatch ||
+      !worker ||
+      dispatch.task_id !== params.taskId ||
+      !['pending', 'dispatched'].includes(dispatch.status) ||
+      task.status !== 'dispatched' ||
+      this.getDispatchContext(params.taskId)?.id !== params.dispatchId
+    ) {
+      return false
+    }
+    this.db
+      .prepare(
+        `UPDATE worker_dispatches
+         SET state = ?, stage = ?, last_error = ?, updated_at = datetime('now')
+         WHERE dispatch_id = ? AND state IN ('starting', 'ready')`
+      )
+      .run(
+        params.reason === 'runtime_budget_stop_unknown' ? 'stop_unknown' : 'stopped',
+        params.reason === 'worker_exited_without_report'
+          ? 'process_exited_without_report'
+          : params.reason === 'runtime_budget_stop_unknown'
+            ? 'deadline_sentinel_missing'
+            : 'runtime_budget_exhausted',
+        params.reason,
+        params.dispatchId
+      )
+    this.db
+      .prepare(
+        `UPDATE dispatch_contexts
+         SET status = 'failed', completed_at = datetime('now'),
+             capability_revoked_at = COALESCE(capability_revoked_at, datetime('now')),
+             failure_count = failure_count + 1, last_failure = ?
+         WHERE id = ? AND status IN ('pending', 'dispatched')`
+      )
+      .run(params.reason, params.dispatchId)
+    this.db
+      .prepare(
+        `UPDATE tasks
+         SET status = 'blocked', result = ?, completed_at = datetime('now')
+         WHERE id = ? AND status = 'dispatched'`
+      )
+      .run(params.result, params.taskId)
+    this.closeQuestionsForDispatch(params.dispatchId)
+    return true
+  }
+
+  settleFederatedStartRuntimeFailure(params: {
+    taskId: string
+    dispatchId: string
+    reason: string
+    result: string
+  }): WorkerDispatchRow {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      if (!this.settleFederatedRuntimeFailureInTransaction(params)) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Federated Dispatch ${params.dispatchId} is no longer current for runtime settlement.`
+        )
+      }
+      this.db.exec('COMMIT')
+      return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
@@ -5819,12 +6701,12 @@ export class OrchestrationDb {
       if (!worker) {
         throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
       }
-      if (!['succeeded', 'failed'].includes(worker.state)) {
+      if (!['succeeded', 'failed', 'stopped'].includes(worker.state)) {
         // Why: release is post-completion cleanup only; recording intent for an unsettled or
         // uncertain worker would let recovery close a terminal the coordinator never reviewed.
         throw new OrchestrationError(
           'dispatch_inactive',
-          `Dispatch ${dispatchId} is ${worker.state}; only a succeeded or failed worker can release. Use worker-stop to cancel an active worker.`
+          `Dispatch ${dispatchId} is ${worker.state}; only a succeeded, failed, or stopped worker can release. Use worker-stop to cancel an active worker.`
         )
       }
       const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
@@ -5855,10 +6737,78 @@ export class OrchestrationDb {
         this.db.exec('COMMIT')
         return { disposition: 'retained', resource, reason: 'ownership_transferred' }
       }
+      if (resource.release_state === 'retained' && resource.retained_reason === 'user_requested') {
+        this.db
+          .prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?')
+          .run(dispatchId)
+      }
+      this.db
+        .prepare(
+          `UPDATE worker_terminal_resources
+           SET release_state = CASE
+                 WHEN release_state = 'releasing' THEN 'releasing'
+                 ELSE 'requested'
+               END,
+               retained_reason = NULL,
+               release_requested_at = COALESCE(release_requested_at, datetime('now')),
+               release_error = NULL, updated_at = datetime('now')
+           WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested', 'releasing', 'unknown')`
+        )
+        .run(resource.id)
+      this.db.exec('COMMIT')
+      return {
+        disposition: 'requested',
+        resource: this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
+      }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  requestRemoteAttachmentTerminalRelease(dispatchId: string):
+    | { disposition: 'requested'; resource: WorkerTerminalResourceRow }
+    | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
+    | {
+        disposition: 'retained'
+        resource: WorkerTerminalResourceRow | null
+        reason: WorkerTerminalRetainedReason
+      } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const attachment = this.getRemoteDispatchAttachment(dispatchId)
       if (
-        resource.release_state === 'unknown' ||
-        (resource.release_state === 'retained' && resource.retained_reason === 'user_requested')
+        !attachment ||
+        !['succeeded', 'failed', 'stopped', 'stop_unknown'].includes(attachment.state)
       ) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Remote Dispatch ${dispatchId} is not settled for release.`
+        )
+      }
+      const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
+      if (!resource) {
+        this.db.exec('COMMIT')
+        return { disposition: 'retained', resource: null, reason: 'no_owned_resource' }
+      }
+      if (resource.release_state === 'released' || resource.ownership_state === 'released') {
+        this.db.exec('COMMIT')
+        return { disposition: 'already_released', resource }
+      }
+      if (resource.ownership_state === 'user_owned') {
+        this.db.exec('COMMIT')
+        return { disposition: 'retained', resource, reason: 'user_takeover' }
+      }
+      if (resource.ownership_state !== 'owned') {
+        this.db.exec('COMMIT')
+        return {
+          disposition: 'retained',
+          resource,
+          reason:
+            (resource.retained_reason as WorkerTerminalRetainedReason) ?? 'ownership_transferred'
+        }
+      }
+      if (resource.release_state === 'retained' && resource.retained_reason === 'user_requested') {
         this.db
           .prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?')
           .run(dispatchId)
@@ -6092,6 +7042,13 @@ export class OrchestrationDb {
       .prepare(
         `SELECT * FROM worker_terminal_resources
           WHERE release_state IN ('requested', 'releasing')
+             OR (
+               release_state = 'unknown'
+               AND EXISTS (
+                 SELECT 1 FROM remote_dispatch_attachments
+                 WHERE dispatch_id = worker_terminal_resources.owner_dispatch_id
+               )
+             )
           ORDER BY release_requested_at ASC`
       )
       .all() as WorkerTerminalResourceRow[]

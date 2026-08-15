@@ -12,6 +12,7 @@ export type PreambleParams = {
   taskSpec: string
   coordinatorHandle: string
   workerHandle: string
+  maxRequests?: number
   devMode?: boolean
   // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
   // other execution hosts keep their existing bare `orca` bridge.
@@ -60,6 +61,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
 Your task ID is: ${params.taskId}
+${params.maxRequests ? `You may make at most ${params.maxRequests} provider requests for this Dispatch. Stop and report failure before exceeding this cap.` : ''}
 
 You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
