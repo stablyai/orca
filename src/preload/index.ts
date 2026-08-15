@@ -3470,6 +3470,7 @@ const api = {
       agentId: string
       worktreePath?: string
       connectionId?: string
+      ptyId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:discoverCommitMessageModels', args),
     cancelGenerateCommitMessage: (args: {
       worktreePath: string
