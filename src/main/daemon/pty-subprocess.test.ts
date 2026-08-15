@@ -1,6 +1,6 @@
 // Spawn setup: node-pty launch options, Unix shell resolution and daemon cwd repair.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
@@ -80,6 +80,7 @@ import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 import {
   mockPtyProcess,
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
+  stubMissingDaemonCwd,
   useDaemonPtySubprocessEnv
 } from './pty-subprocess-test-harness'
 
@@ -332,25 +333,22 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    const originalCwd = process.cwd()
-    const deletedDaemonCwd = mkdtempSync(join(tmpdir(), 'orca-deleted-daemon-cwd-'))
+    const terminalCwd = process.cwd()
     Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const { restoreCwdStubs, chdirSpy } = stubMissingDaemonCwd()
 
     try {
-      process.chdir(deletedDaemonCwd)
-      rmSync(deletedDaemonCwd, { recursive: true, force: true })
-
       createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
-        cwd: originalCwd,
+        cwd: terminalCwd,
         env: { SHELL: '/bin/bash' }
       })
 
-      expect(process.cwd()).toBe(realpathSync(ptyEnv.userDataPath))
+      expect(chdirSpy).toHaveBeenCalledWith(ptyEnv.userDataPath)
     } finally {
-      process.chdir(originalCwd)
+      restoreCwdStubs()
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -361,7 +359,7 @@ describe('createPtySubprocess', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       '/bin/bash',
       expect.any(Array),
-      expect.objectContaining({ cwd: originalCwd })
+      expect.objectContaining({ cwd: terminalCwd })
     )
   })
 
@@ -369,25 +367,22 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    const originalCwd = process.cwd()
-    const deletedDaemonCwd = mkdtempSync(join(tmpdir(), 'orca-deleted-daemon-cwd-'))
+    const terminalCwd = process.cwd()
     Object.defineProperty(process, 'platform', { value: 'linux' })
+    const { restoreCwdStubs, chdirSpy } = stubMissingDaemonCwd()
 
     try {
-      process.chdir(deletedDaemonCwd)
-      rmSync(deletedDaemonCwd, { recursive: true, force: true })
-
       createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
-        cwd: originalCwd,
+        cwd: terminalCwd,
         env: { SHELL: '/bin/bash' }
       })
 
-      expect(process.cwd()).toBe(realpathSync(ptyEnv.userDataPath))
+      expect(chdirSpy).toHaveBeenCalledWith(ptyEnv.userDataPath)
     } finally {
-      process.chdir(originalCwd)
+      restoreCwdStubs()
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -396,7 +391,7 @@ describe('createPtySubprocess', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       '/bin/bash',
       expect.any(Array),
-      expect.objectContaining({ cwd: originalCwd })
+      expect.objectContaining({ cwd: terminalCwd })
     )
   })
 

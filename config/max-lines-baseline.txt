@@ -181,7 +181,6 @@ inline src/renderer/src/components/sidebar/RemoteFileBrowser.tsx
 inline src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
 inline src/renderer/src/components/sidebar/WorktreeContextMenu.tsx
 inline src/renderer/src/components/sidebar/use-workspace-kanban-area-selection.ts
-inline src/renderer/src/components/sidebar/worktree-list-groups.ts
 inline src/renderer/src/components/stats/usage-overview-model.ts
 inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx
 inline src/renderer/src/components/status-bar/StatusBar.tsx

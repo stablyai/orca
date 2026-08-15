@@ -25,7 +25,11 @@ describe('SshGitProvider', () => {
     mux.request.mockResolvedValue(statusResult)
 
     const result = await provider.getStatus('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith('git.status', { worktreePath: '/home/user/repo' })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.status',
+      { worktreePath: '/home/user/repo' },
+      { signal: expect.any(AbortSignal) }
+    )
     expect(result).toEqual(statusResult)
   })
 
@@ -36,13 +40,21 @@ describe('SshGitProvider', () => {
     await provider.getStatus('/home/user/repo', { includeIgnored: true })
     await provider.getStatus('/home/user/repo', { includeIgnored: false })
 
-    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.status', {
-      worktreePath: '/home/user/repo',
-      includeIgnored: true
-    })
-    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
-      worktreePath: '/home/user/repo'
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      1,
+      'git.status',
+      {
+        worktreePath: '/home/user/repo',
+        includeIgnored: true
+      },
+      { signal: expect.any(AbortSignal) }
+    )
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'git.status',
+      { worktreePath: '/home/user/repo' },
+      { signal: expect.any(AbortSignal) }
+    )
   })
 
   it('getStatus forwards upstream-negative-cache bypass only when requested', async () => {
@@ -52,13 +64,21 @@ describe('SshGitProvider', () => {
     await provider.getStatus('/home/user/repo', { bypassEffectiveUpstreamNegativeCache: true })
     await provider.getStatus('/home/user/repo', { bypassEffectiveUpstreamNegativeCache: false })
 
-    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.status', {
-      worktreePath: '/home/user/repo',
-      bypassEffectiveUpstreamNegativeCache: true
-    })
-    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
-      worktreePath: '/home/user/repo'
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      1,
+      'git.status',
+      {
+        worktreePath: '/home/user/repo',
+        bypassEffectiveUpstreamNegativeCache: true
+      },
+      { signal: expect.any(AbortSignal) }
+    )
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'git.status',
+      { worktreePath: '/home/user/repo' },
+      { signal: expect.any(AbortSignal) }
+    )
   })
 
   it('getStatus forwards line-stat reuse and cancellation to the relay', async () => {
@@ -73,8 +93,9 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledWith(
       'git.status',
       { worktreePath: '/home/user/repo', reuseLineStats: true },
-      { signal: controller.signal }
+      { signal: expect.any(AbortSignal) }
     )
+    expect(mux.request.mock.calls[0][2].signal).not.toBe(controller.signal)
   })
 
   it('getSubmoduleStatus sends git.submoduleStatus request', async () => {
