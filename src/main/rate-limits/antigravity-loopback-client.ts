@@ -146,6 +146,7 @@ export function requestAntigravityLoopbackPage(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let responseStarted = false
+    let responseCompleted = false
     const body = options?.body
     const headers: Record<string, string | number> = { Connection: 'close' }
     if (body !== undefined) {
@@ -187,6 +188,7 @@ export function requestAntigravityLoopbackPage(
           chunks.push(chunk)
         })
         response.on('end', () => {
+          responseCompleted = true
           if (response.statusCode !== 200) {
             reject(
               new AntigravityLoopbackResponseError(
@@ -227,6 +229,17 @@ export function requestAntigravityLoopbackPage(
         return
       }
       reject(error)
+    })
+    req.on('close', () => {
+      if (!responseCompleted) {
+        // Why: some supported Node runtimes can close a request without
+        // forwarding a separate response error.
+        reject(
+          new AntigravityLoopbackResponseError(
+            'Antigravity quota request closed before the response completed'
+          )
+        )
+      }
     })
     req.end(body)
   })

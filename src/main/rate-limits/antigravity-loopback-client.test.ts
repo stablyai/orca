@@ -63,6 +63,14 @@ describe('Antigravity loopback client', () => {
     ).toEqual({ productName: 'antigravity', csrfToken: 'formatted-token' })
   })
 
+  it('does not parse app configuration across a closing script boundary', () => {
+    expect(
+      parseAntigravityAppConfig(
+        '<script>window.__APP_CONFIG__ = {"productName":"antigravity","csrfToken":"before</script>after"};</script>'
+      )
+    ).toBeNull()
+  })
+
   it('rejects a loopback response that exceeds the byte limit', async () => {
     const server = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' })
