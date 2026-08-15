@@ -12,10 +12,12 @@ import {
 } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { RuntimeClient } from '../../src/cli/runtime/client'
+import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalListResult,
-  RuntimeTerminalSplit
+  RuntimeTerminalSplit,
+  RuntimeWorktreeRecord
 } from '../../src/shared/runtime-types'
 
 test.describe.configure({ mode: 'serial' })
@@ -56,6 +58,24 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     expect(await getWorktreeTabs(firstLaunch.page, worktreeId)).toHaveLength(1)
 
     const client = new RuntimeClient(session.userDataDir, 30_000)
+    await expect
+      .poll(
+        async () => {
+          try {
+            const shown = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+              worktree: `id:${worktreeId}`
+            })
+            return shown.result.worktree.id
+          } catch (error) {
+            if (error instanceof RuntimeRpcFailureError && error.code === 'selector_not_found') {
+              return null
+            }
+            throw error
+          }
+        },
+        { message: 'Split target did not become runtime-worktree-resolvable' }
+      )
+      .toBe(worktreeId)
     let activeHandle: string | null = null
     await expect
       .poll(
