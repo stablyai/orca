@@ -13,6 +13,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
+import { buildJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 
 const isWindowsHost = process.platform === 'win32'
@@ -1811,6 +1812,24 @@ describe('registerPtyHandlers', () => {
     it('inherits LANG from process.env when already set', async () => {
       const env = await spawnAndGetEnv(undefined, { LANG: 'ja_JP.UTF-8' })
       expect(env.LANG).toBe('ja_JP.UTF-8')
+    })
+
+    it('stamps a per-pane jcode runtime dir on local spawns', async () => {
+      const leafId = '7bad1a11-ba5f-4d47-9761-d5d7ac6e975f'
+      const tabId = 'tab-1'
+      const paneKey = makePaneKey(tabId, leafId)
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_PANE_KEY: paneKey },
+        tabId,
+        leafId,
+        worktreeId: 'wt-1'
+      })
+      const spawnOptions = spawnMock.mock.calls.at(-1)![2] as { env: Record<string, string> }
+      expect(spawnOptions.env.JCODE_RUNTIME_DIR).toBe(buildJcodeRuntimeDir(paneKey))
     })
 
     it('lets caller-provided env override LANG', async () => {

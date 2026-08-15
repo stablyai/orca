@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: PTY IPC is centralized in one main-process module so spawn env scoping, lifecycle cleanup, process inspection, and renderer IPC stay behind one audited boundary. */
 import { join, delimiter } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { statSync } from 'node:fs'
+import { mkdirSync, statSync } from 'node:fs'
 import {
   type BrowserWindow,
   type IpcMainEvent,
@@ -17,6 +17,7 @@ import type { Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
+import { buildJcodeRuntimeDirEnv, JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared/jcode-runtime-dir'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -5698,6 +5699,18 @@ export function registerPtyHandlers(
             baseEnv.ORCA_WORKTREE_ID = args.worktreeId
           } else if (!args.connectionId) {
             delete baseEnv.ORCA_WORKTREE_ID
+          }
+          // Why: jcode runs one server/client daemon per runtime dir, so a
+          // per-pane dir keeps every PTY on its own daemon (hooks inherit the
+          // pane key instead of the first pane's). Local unix sockets only;
+          // the dir is created idempotently here for both the renderer
+          // pty:spawn path and the runtime createTerminal path.
+          if (!args.connectionId) {
+            const jcodeEnv = buildJcodeRuntimeDirEnv(stablePaneKey)
+            if (jcodeEnv) {
+              mkdirSync(jcodeEnv[JCODE_RUNTIME_DIR_ENV_KEY], { recursive: true })
+              Object.assign(baseEnv, jcodeEnv)
+            }
           }
         } else if (baseEnv) {
           // Why: ORCA_PANE_KEY crosses into shells/hook registries; only a key proven to match this spawn's tab+leaf may cross the IPC boundary.
