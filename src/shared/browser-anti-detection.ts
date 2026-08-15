@@ -16,10 +16,16 @@ type BrowserPermissionsPrototype = {
 
 export function installBrowserAntiDetection(): void {
   // Why: this self-contained function runs both in the first-document preload and as a CDP source string.
-  Object.defineProperty(navigator, 'webdriver', { get: () => false })
+  const webdriverDescriptor = Object.getOwnPropertyDescriptor(navigator, 'webdriver')
+  try {
+    if (webdriverDescriptor?.get?.call(navigator) === false) {
+      return
+    }
+  } catch {}
   // Electron webviews expose an empty plugin list, unlike ordinary Chrome.
   if (navigator.plugins.length === 0) {
     Object.defineProperty(navigator, 'plugins', {
+      configurable: true,
       get: () => [
         { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
         { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
@@ -107,6 +113,7 @@ export function installBrowserAntiDetection(): void {
 
   try {
     Object.defineProperty(browserNotification, 'permission', {
+      configurable: true,
       get: () => notificationPermission
     })
     const originalRequestPermission = browserNotification.requestPermission
@@ -129,9 +136,14 @@ export function installBrowserAntiDetection(): void {
 
   if (!navigator.languages || navigator.languages.length === 0) {
     Object.defineProperty(navigator, 'languages', {
+      configurable: true,
       get: () => ['en-US', 'en']
     })
   }
+  Object.defineProperty(navigator, 'webdriver', {
+    configurable: true,
+    get: () => false
+  })
 }
 
 export const ANTI_DETECTION_SCRIPT = `(${installBrowserAntiDetection.toString()})()`

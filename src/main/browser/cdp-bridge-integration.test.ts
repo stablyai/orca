@@ -77,7 +77,7 @@ function createMockGuest(
   id: number,
   url: string,
   title: string,
-  options?: { readyState?: string | (() => string) }
+  options?: { readyState?: string | (() => string); webContentsType?: string }
 ) {
   let currentUrl = url
   let currentTitle = title
@@ -187,7 +187,7 @@ function createMockGuest(
   const guest = {
     id,
     isDestroyed: vi.fn(() => false),
-    getType: vi.fn(() => 'webview'),
+    getType: vi.fn(() => options?.webContentsType ?? 'webview'),
     getURL: vi.fn(() => currentUrl),
     getTitle: vi.fn(() => currentTitle),
     setBackgroundThrottling: vi.fn(),
@@ -357,6 +357,31 @@ describe('Browser automation pipeline (integration)', () => {
         ([method]) => method === 'Page.addScriptToEvaluateOnNewDocument'
       )
     ).toBe(false)
+  })
+
+  it('does not duplicate BrowserManager anti-detection for an offscreen guest', async () => {
+    const harness = createMockGuest(5002, 'https://example.com', 'Offscreen', {
+      webContentsType: 'window'
+    })
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === harness.guest.id ? harness.guest : null
+    )
+    const manager = new BrowserManager()
+    manager.registerOffscreenGuest({
+      browserPageId: 'offscreen-page',
+      webContentsId: harness.guest.id
+    })
+    const bridge = new CdpBridge(manager)
+    bridge.setActiveTab(harness.guest.id)
+
+    await bridge.snapshot()
+
+    expect(
+      harness.sendCommandMock.mock.calls.filter(
+        ([method]) => method === 'Page.addScriptToEvaluateOnNewDocument'
+      )
+    ).toHaveLength(1)
+    manager.unregisterAll()
   })
 
   it('preserves debugger listeners owned by other browser streams', async () => {

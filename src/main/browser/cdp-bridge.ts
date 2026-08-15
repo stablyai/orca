@@ -47,7 +47,6 @@ import {
 } from './snapshot-engine'
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
-import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 
 const CAPTURE_LOG_LIMIT = 1000
 
@@ -1156,13 +1155,6 @@ export class CdpBridge {
       waitForDebuggerOnStart: false,
       flatten: true
     })
-
-    // Why: embedded webviews install this in their preload; a second main-world install throws on non-configurable webdriver.
-    if (guest.getType() !== 'webview') {
-      await sender('Page.addScriptToEvaluateOnNewDocument', {
-        source: ANTI_DETECTION_SCRIPT
-      })
-    }
 
     // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.
     this.removeDebuggerListeners(guest, state)

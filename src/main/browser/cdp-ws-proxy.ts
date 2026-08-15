@@ -8,6 +8,7 @@ import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
+type AntiDetectionOwner = 'browser-manager' | 'proxy'
 
 export class CdpWsProxy {
   // Why: holds each session's last DOM.focus params to replay right before the next
@@ -34,7 +35,10 @@ export class CdpWsProxy {
   private nextClientBrowserSessionOrdinal = 0
   private readonly pdfStreams = new CdpPdfStreamStore()
 
-  constructor(private readonly webContents: WebContents) {}
+  constructor(
+    private readonly webContents: WebContents,
+    private readonly antiDetectionOwner: AntiDetectionOwner = 'proxy'
+  ) {}
 
   async start(): Promise<string> {
     await this.attachDebugger()
@@ -221,8 +225,8 @@ export class CdpWsProxy {
     }
     this.attached = true
 
-    // Why: embedded webviews already install anti-detection in preload; duplicate main-world installation throws.
-    if (this.webContents.getType() !== 'webview') {
+    // Why: BrowserManager owns every registered guest; standalone proxy callers still need the fallback.
+    if (this.antiDetectionOwner === 'proxy' && this.webContents.getType() !== 'webview') {
       try {
         await this.webContents.debugger.sendCommand('Page.enable', {})
         await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {

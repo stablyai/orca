@@ -3,6 +3,11 @@ import { installBrowserAntiDetection } from './browser-anti-detection-installati
 import { installBrowserWindowCloseGuard } from './browser-window-close-installation'
 
 export function installBrowserGuestMainWorld(contextBridge: ContextBridge): void {
-  contextBridge.executeInMainWorld({ func: installBrowserWindowCloseGuard })
-  contextBridge.executeInMainWorld({ func: installBrowserAntiDetection })
+  for (const func of [installBrowserWindowCloseGuard, installBrowserAntiDetection]) {
+    try {
+      contextBridge.executeInMainWorld({ func })
+    } catch {
+      // Best-effort: one main-world patch must not block the other or escape the preload.
+    }
+  }
 }
