@@ -185,7 +185,9 @@ describe('a cursor chord pressed during a composition', () => {
     harness.dispose()
   })
 
-  // The Japanese shape: still marked composing when the chord is resolved.
+  // The Japanese shape: still marked composing when the chord is resolved. The preedit spans
+  // several characters here on purpose — a relocated multi-character preedit also overwrote the
+  // glyph already at the destination cell, so the whole run has to commit in place first.
   it('holds the chord while the keydown is still marked composing', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
@@ -224,6 +226,99 @@ describe('a cursor chord pressed during a composition', () => {
     pressCmdArrowLeft(harness, false)
 
     expect(harness.wire).toEqual(['\x01'])
+    hook.unmount()
+    harness.dispose()
+  })
+
+  /**
+   * The Korean 2-Set gesture end to end. The marked press is remembered rather than sent; the
+   * syllable commits while the key is still down, so the release arrives already unmarked and the
+   * recovery declines it; and the platform then replays the chord for the pane to resolve the
+   * ordinary way. One byte per press is the contract — a second one jumps two words.
+   */
+  function playCommittingChord(
+    harness: ReturnType<typeof createHarness>,
+    chord: { code: string; keyCode: number; mods: KeyboardEventInit }
+  ): void {
+    const { code, keyCode, mods } = chord
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', { key: code, code, keyCode: 229, isComposing: true, ...mods })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keyup', { key: code, code, keyCode, ...mods })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', { key: code, code, keyCode, ...mods })
+    )
+  }
+
+  // With "가나 다라 마바" on the line and "사" still composing, each of these relocated the
+  // composing syllable to wherever the cursor landed. The Cmd+← cases above reach neither the
+  // other direction nor Option's word jump, and each byte is a separate resolver branch.
+  it.each([
+    {
+      name: 'Option+ArrowLeft word jump',
+      code: 'ArrowLeft',
+      keyCode: 37,
+      mods: { altKey: true },
+      sent: '\x1bb'
+    },
+    {
+      name: 'Option+ArrowRight word jump',
+      code: 'ArrowRight',
+      keyCode: 39,
+      mods: { altKey: true },
+      sent: '\x1bf'
+    },
+    {
+      name: 'Cmd+ArrowRight line-end jump',
+      code: 'ArrowRight',
+      keyCode: 39,
+      mods: { metaKey: true },
+      sent: '\x05'
+    }
+  ])('sends a $name once, behind the syllable it committed', ({ code, keyCode, mods, sent }) => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
+    harness.startComposition()
+    playCommittingChord(harness, { code, keyCode, mods })
+    expect(harness.wire, 'nothing may reach the pty while the syllable is pending').toEqual([])
+
+    harness.endComposition('사')
+    vi.runAllTimers()
+
+    expect(harness.wire).toEqual(['사', sent])
+    hook.unmount()
+    harness.dispose()
+  })
+
+  // Off macOS the release-keyed recovery never arms, so the chord waits for the commit instead and
+  // no release takes part at all. Transcribed from the same macOS session as the cases above rather
+  // than captured on win32: what it pins is the resolver's non-mac branch, not the platform.
+  it('holds a Windows Ctrl+ArrowLeft word jump behind the composing syllable', () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
+    harness.startComposition()
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        keyCode: 37,
+        ctrlKey: true,
+        isComposing: true
+      })
+    )
+    expect(harness.wire).toEqual([])
+
+    harness.endComposition('사')
+    vi.runAllTimers()
+
+    expect(harness.wire).toEqual(['사', '\x1bb'])
     hook.unmount()
     harness.dispose()
   })
