@@ -45,17 +45,11 @@ function locTableRow(label, bucket) {
 }
 
 export function formatLocTable({ test, nonTest }) {
-  const total = {
-    files: test.files + nonTest.files,
-    added: test.added + nonTest.added,
-    deleted: test.deleted + nonTest.deleted
-  }
   return [
     '| | Files | Added | Deleted | Net |',
     '| :--- | ---: | ---: | ---: | ---: |',
     locTableRow('Test', test),
-    locTableRow('Prod', nonTest),
-    locTableRow('Total', total)
+    locTableRow('Prod', nonTest)
   ].join('\n')
 }
 
