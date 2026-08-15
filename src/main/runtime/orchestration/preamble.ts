@@ -85,7 +85,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # update sent this way ends your run and makes every later worker_done and
   # heartbeat fail. For an interim update use --type status below.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
-    --type worker_done --subject "<short status>" \\
+    --type worker_done --subject "<short completion headline>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
     --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded \\
     --files-modified "path/a,path/b" \\
@@ -93,10 +93,13 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
 
   # Report mid-run progress without ending the task.
   #
-  # RULE: status is the only content-bearing message that settles nothing, so
-  # every "phase one is done, starting phase two" update belongs here. Reach
-  # for it whenever you have something to say and the task is not finished;
-  # heartbeat carries no body, and worker_done would end the run.
+  # RULE: use status for "phase one is done, starting phase two" progress —
+  # you are neither finished nor blocked, and heartbeat carries no body to
+  # say it in. Put the headline in --subject: the coordinator loop logs the
+  # subject and leaves the body for whoever opens the message.
+  #
+  # It does not replace the commands below: ask when you need an answer,
+  # escalation when you are blocked, worker_done only when the task is over.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
     --type status --subject "<short progress headline>" \\
     --body "<what just finished, what you are starting next>" \\

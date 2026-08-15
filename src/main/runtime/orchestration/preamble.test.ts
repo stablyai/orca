@@ -86,9 +86,10 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--type status')
     expect(result).toMatch(/--subject "<short progress headline>"/)
     expect(result).toContain('--body "<what just finished, what you are starting next>"')
-    // Attribution matches the other lifecycle-adjacent commands so the
-    // coordinator can place the update on the right dispatch, not just the task.
-    expect(result).toMatch(/--type status[\s\S]*--task-id task_abc123 --dispatch-id ctx_def456/)
+    // Why: the IDs must be on the status command itself, not merely somewhere
+    // in the preamble, so the match is anchored inside one command block —
+    // `[^#]*` cannot cross the comment header that starts the next one.
+    expect(result).toMatch(/--type status[^#]*--task-id task_abc123 --dispatch-id ctx_def456/)
     expect(result).toMatch(/orchestration send --from term_worker/)
   })
 
@@ -100,6 +101,19 @@ describe('buildDispatchPreamble', () => {
     expect(result).toMatch(/worker_done is terminal, not a progress report/)
     expect(result).toMatch(/revokes your dispatch capability/)
     expect(result).toMatch(/use --type status/)
+    // Why: the terminal command must not describe its own subject as a status
+    // line while status sits next to it as the non-terminal option.
+    expect(result).not.toContain('--type worker_done --subject "<short status>"')
+  })
+
+  it('keeps status from displacing ask and escalation', () => {
+    const result = buildDispatchPreamble(baseParams())
+    // Why: "use it whenever you have something to say" would pull blockers and
+    // questions into a message the coordinator only logs by subject. The status
+    // rule has to name its neighbours to stay in its lane.
+    expect(result).toMatch(/ask when you need an answer/)
+    expect(result).toMatch(/escalation when you are blocked/)
+    expect(result).toMatch(/Put the headline in --subject/)
   })
 
   it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {
@@ -148,9 +162,10 @@ describe('buildDispatchPreamble', () => {
       dispatchCapability: 'dcap_test_secret'
     })
 
-    // worker_done, status, heartbeat, ask, escalation. Only the first and the
-    // heartbeat are capability-gated at the runtime, but every worker-originated
-    // command carries the flag so one omission cannot become the odd one out.
+    // worker_done, status, heartbeat, ask, escalation. The runtime verifies the
+    // capability for worker_done and heartbeat on the send path and for ask on
+    // its own; status and escalation are not verified. Every worker-originated
+    // command still carries the flag so one omission cannot become the odd one out.
     expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(5)
     expect(result).not.toContain('"dispatchCapability"')
   })

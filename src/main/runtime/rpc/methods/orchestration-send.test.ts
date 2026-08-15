@@ -880,6 +880,45 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_worker')).toBeDefined()
     })
 
+    it('leaves the dispatch live for a worker status update so the later worker_done still settles', async () => {
+      setup()
+      const task = db.createTask({ spec: 'multi-phase work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      // Why: this is the exact shape the dispatch preamble teaches for mid-run
+      // progress. If status ever gained a settling path, the preamble would be
+      // steering workers into the completion-and-revoke failure it exists to
+      // prevent, and only a test at this layer would catch it.
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'phase one done',
+        body: 'finished the survey, starting the diagnosis',
+        type: 'status',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.capability_revoked_at).toBeNull()
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'work complete',
+        type: 'worker_done',
+        payload: JSON.stringify({
+          taskId: task.id,
+          dispatchId: dispatch.id,
+          outcome: 'succeeded'
+        })
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+    })
+
     it('does not release dispatch lock for non-lifecycle sends', async () => {
       setup()
       const task = db.createTask({ spec: 'in-flight work' })
