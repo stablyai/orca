@@ -13,7 +13,8 @@ import {
   parseGitHubIssueOrPRLink,
   normalizeGitHubLinkQuery
 } from '@/lib/github-links'
-import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import {
   findPendingLinkedWorkItemCreationId,
