@@ -51,4 +51,13 @@ describe('scanPaneExitMarker', () => {
       exitCode: 42
     })
   })
+
+  it('does not treat a numeric prefix as a pane-exit status', () => {
+    const state = createPaneExitScanState()
+    expect(scanPaneExitMarker(state, `${PANE_EXIT_MARKER_PREFIX}42junk\x07keep`)).toEqual({
+      output: 'keep',
+      exitCode: null
+    })
+    expect(resolvePaneProcessExitCode(0, null)).toBe(0)
+  })
 })

@@ -71,9 +71,13 @@ export function scanPaneExitMarker(state: PaneExitScanState, data: string): Pane
           : candidate
       break
     }
-    const parsed = Number.parseInt(suffix.slice(0, terminator), 10)
-    if (Number.isSafeInteger(parsed)) {
-      exitCode = parsed
+    const payload = suffix.slice(0, terminator)
+    // Why: parseInt("42junk") is 42; only a complete integer is a pane status.
+    if (/^-?\d+$/.test(payload)) {
+      const parsed = Number.parseInt(payload, 10)
+      if (Number.isSafeInteger(parsed)) {
+        exitCode = parsed
+      }
     }
     combined = suffix.slice(terminator + 1)
   }
