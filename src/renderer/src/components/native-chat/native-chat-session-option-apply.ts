@@ -38,6 +38,10 @@ type SessionOptionApplyContext = {
    *  null-model guard and whether the id may be adopted as the launch default. */
   persist: (modelId: string | null, optionId: string, value: SessionOptionValue) => void
   onDraftValuesChanged?: (values: Record<string, SessionOptionValue>) => void
+  applyModeCycle?: (
+    optionId: string,
+    value: SessionOptionValue
+  ) => Promise<{ outcome: 'applied' | 'unavailable' | 'unknown'; detail: string }>
   publish: () => SessionOptionDescriptor[]
   clearModelTruth: () => void
   setTrackedValue: (
@@ -73,7 +77,8 @@ function currentApply(
     return { apply: ctx.catalog.modelApply, modelId }
   }
   const model = modelId ? findCatalogModel({ ...ctx.catalog, models }, modelId) : undefined
-  const option = findCatalogOption(model, optionId)
+  const sessionOption = ctx.catalog.sessionOptions?.find((candidate) => candidate.id === optionId)
+  const option = sessionOption ?? findCatalogOption(model, optionId)
   return option ? { apply: option.apply, modelId } : null
 }
 
@@ -194,6 +199,18 @@ async function applySetOption(
     throw new Error('This option must be changed in the agent picker.')
   }
 
+  if (ctx.mode === 'live' && apply.midSession?.kind === 'cycle-key') {
+    if (!ctx.applyModeCycle) {
+      throw new Error('This option cannot be changed from chat.')
+    }
+    const { outcome, detail } = await ctx.applyModeCycle(id, value)
+    if (outcome !== 'applied') {
+      throw new Error(detail)
+    }
+    ctx.setTrackedValue(id, value, 'applied')
+    return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+  }
+
   const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
   const trackedToggle = liveFlipOnly
     ? getTrackedOption(ctx.getRecord(), previousModelId, id)
@@ -270,7 +287,9 @@ async function applySetOption(
   }
 
   const modelId = ctx.setTrackedValue(id, value, source)
-  return finish(ctx, { modelId: modelId ?? previousModelId, optionId: id, value })
+  // Why: a session option is session-scoped truth, never persisted under a model.
+  const skipPersist = ctx.catalog.sessionOptions?.some((option) => option.id === id) ?? false
+  return finish(ctx, { modelId: modelId ?? previousModelId, optionId: id, value, skipPersist })
 }
 
 async function applyInvokeAction(

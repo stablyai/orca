@@ -35,6 +35,8 @@ describe('native chat PTY session options', () => {
       dispatchCommand: vi.fn()
     })!
 
+    // Session-scoped options (e.g. Claude's permission mode) always appear alongside the model.
+    expect(surface.getSnapshot()).toHaveLength(2)
     expect(surface.getSnapshot()[0]).toMatchObject({
       id: 'model',
       valueSource: 'unknown',
@@ -114,7 +116,12 @@ describe('native chat PTY session options', () => {
 
     const effortResult = await surface.setOption('effort', 'high')
     expect(dispatch).toHaveBeenCalledWith('/effort high')
-    expect(effortResult.snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
+    expect(effortResult.snapshot.map(({ id }) => id)).toEqual([
+      'model',
+      'permissionMode',
+      'effort',
+      'fastMode'
+    ])
     expect(effortResult.snapshot.find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
       kind: { currentValue: 'high' }
@@ -229,7 +236,7 @@ describe('native chat PTY session options', () => {
       'Could not verify the model change; open the terminal to check.'
     )
 
-    expect(surface.getSnapshot()).toHaveLength(1)
+    expect(surface.getSnapshot()).toHaveLength(2)
     expect(surface.getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
     expect(persist).not.toHaveBeenCalled()
     expect(onAgentPicker).not.toHaveBeenCalled()
@@ -610,7 +617,7 @@ describe('native chat PTY session options', () => {
     surface.recordOutgoingCommand('/model')
 
     expect(onAgentPicker).toHaveBeenCalledOnce()
-    expect(surface.getSnapshot()).toHaveLength(1)
+    expect(surface.getSnapshot()).toHaveLength(2)
     expect(surface.getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
   })
 

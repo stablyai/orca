@@ -13,6 +13,26 @@ import {
   type NativeChatSessionOptionRecord,
   type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
+import { hasYoloTuiAgentLaunch } from './tui-agent-permissions'
+
+const PERMISSION_MODE_OPTION_ID = 'permissionMode'
+const BYPASS_PERMISSIONS_VALUE = 'bypassPermissions'
+
+// Why: Claude refuses bypassPermissions unless launched with
+// --dangerously-skip-permissions; gate the choice rather than offer a mode it rejects.
+function gatePermissionModeChoices(
+  choices: readonly SessionOptionSelectChoice[],
+  bypassAvailable: boolean
+): SessionOptionSelectChoice[] {
+  if (bypassAvailable) {
+    return [...choices]
+  }
+  return choices.map((choice) =>
+    choice.value === BYPASS_PERMISSIONS_VALUE
+      ? { ...choice, unavailable: { action: 'open-agent-permissions-setting' as const } }
+      : choice
+  )
+}
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
 
@@ -69,8 +89,11 @@ function optionDescriptor(args: {
   mode: NativeChatSessionOptionMode
   modelIsCliDefault: boolean
   composedModelApply: AgentSessionOptionCatalog['modelApply']
+  permissionModeBypassAvailable?: boolean
 }): SessionOptionDescriptor | null {
   const { option, tracked, mode, modelIsCliDefault, composedModelApply } = args
+  const permissionModeBypassAvailable = args.permissionModeBypassAvailable ?? false
+  const isPermissionMode = option.id === PERMISSION_MODE_OPTION_ID
   const action = actionForApply(option.apply, tracked, mode)
   const settable = settableState({ mode, apply: option.apply, composedModelApply })
   // Why: the launch only emits `values[id] ?? defaultValue` alongside a model flag, so
@@ -79,16 +102,23 @@ function optionDescriptor(args: {
   const showDefault = mode === 'draft' && !tracked && !modelIsCliDefault
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
-    const choices = choiceWithCurrent(option.kind.choices, tracked)
+    const withCurrent = choiceWithCurrent(option.kind.choices, tracked)
+    const choices = isPermissionMode
+      ? gatePermissionModeChoices(withCurrent, permissionModeBypassAvailable)
+      : withCurrent
     if (choices.length <= 1) {
       return null
     }
+    // Why: Claude starts in bypass under the launch flag, so infer it as the
+    // checkmarked mode until the terminal scrape reports the real one.
+    const inferredBypass =
+      isPermissionMode && !tracked && permissionModeBypassAvailable
+        ? BYPASS_PERMISSIONS_VALUE
+        : undefined
     const currentValue =
       typeof tracked?.value === 'string'
         ? tracked.value
-        : showDefault
-          ? option.kind.defaultValue
-          : undefined
+        : (inferredBypass ?? (showDefault ? option.kind.defaultValue : undefined))
     return {
       id: option.id,
       label: option.label,
@@ -195,6 +225,10 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   modelLabel: string
+  /** The live session's actual launch args (not the settings default for new
+   *  sessions) — used only to gate Claude's bypassPermissions choice. */
+  agentArgs?: string | null
+  agentEnv?: Record<string, string> | null
 }): SessionOptionDescriptor[] {
   const { catalog, models, record, mode, modelLabel } = args
   if (models.length === 0) {
@@ -228,6 +262,29 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       ...(modelAction ? { action: modelAction } : {})
     }
   ]
+  // Before the unknown-model return below: session options outlive model truth.
+  // An observed bypass mode is itself proof of the grant — Claude would not be
+  // in that mode otherwise — so it backstops a launch-args lookup miss.
+  const trackedPermissionMode = record.sessionValues[PERMISSION_MODE_OPTION_ID]?.value
+  const permissionModeBypassAvailable =
+    hasYoloTuiAgentLaunch({
+      agent: 'claude',
+      agentArgs: args.agentArgs,
+      agentEnv: args.agentEnv
+    }) || trackedPermissionMode === BYPASS_PERMISSIONS_VALUE
+  for (const option of catalog.sessionOptions ?? []) {
+    const descriptor = optionDescriptor({
+      option,
+      tracked: record.sessionValues[option.id],
+      mode,
+      modelIsCliDefault: false,
+      composedModelApply: catalog.modelApply,
+      permissionModeBypassAvailable
+    })
+    if (descriptor) {
+      snapshot.push(descriptor)
+    }
+  }
   if (!effectiveModelId) {
     return snapshot
   }

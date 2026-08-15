@@ -30,7 +30,8 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       mode: 'live',
       modelLabel: 'Model'
     })
-    expect(snapshot).toHaveLength(1)
+    // Claude also carries a session-scoped permission-mode descriptor.
+    expect(snapshot).toHaveLength(2)
     const model = snapshot[0]!
     expect(model).toMatchObject({ id: 'model', category: 'model', valueSource: 'unknown' })
     if (model.kind.type !== 'select') {
@@ -52,7 +53,11 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       mode: 'live',
       modelLabel: 'Model'
     })
-    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
+    expect(snapshot.map((descriptor) => descriptor.id)).toEqual([
+      'model',
+      'permissionMode',
+      'effort'
+    ])
     expect(snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
   })
 
@@ -319,7 +324,8 @@ describe('defaults on load', () => {
     })
     expect(CLAUDE_SESSION_OPTION_CATALOG.models.some((model) => model.isDefault)).toBe(true)
     expect(CLAUDE_SESSION_OPTION_CATALOG.defaultModelIsCliDefault).toBeUndefined()
-    expect(snapshot).toHaveLength(1)
+    // Claude also carries a session-scoped permission-mode descriptor.
+    expect(snapshot).toHaveLength(2)
     expect(snapshot[0]).toMatchObject({ valueSource: 'unknown' })
   })
 

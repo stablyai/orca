@@ -20,13 +20,17 @@ import {
   writeNativeChatSessionOptionCache
 } from './native-chat-session-option-cache'
 import { createSessionOptionAppliers } from './native-chat-session-option-apply'
+import { describeClaudePermissionModeCycle } from './claude-permission-mode-cycle'
 import {
   buildNativeChatSessionOptionSnapshot,
   resolveEffectiveNativeChatModelId,
   withTrackedNativeChatModel,
   type NativeChatSessionOptionMode
 } from './native-chat-session-option-snapshot'
-import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
+import type {
+  NativeChatModeCycleDispatch,
+  NativeChatSessionOptionDispatchCommand
+} from './native-chat-session-option-command-dispatch'
 
 type PersistSelection = (args: {
   modelId: string
@@ -49,7 +53,12 @@ export type CreateNativeChatPtySessionOptionsArgs = {
   initialModels?: readonly CatalogModel[]
   mode: NativeChatSessionOptionMode
   reportedValues?: Record<string, SessionOptionValue> | null
+  /** The live session's actual launch args/env (not the settings default for
+   *  new sessions) — gates Claude's bypassPermissions choice. */
+  agentArgs?: string | null
+  agentEnv?: Record<string, string> | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
+  dispatchModeCycle?: NativeChatModeCycleDispatch
   onAgentPicker?: () => void
   persistSelection?: PersistSelection
   onDraftValuesChanged?: (values: Record<string, SessionOptionValue>) => void
@@ -98,7 +107,9 @@ export function createNativeChatPtySessionOptions(
     catalog,
     models: activeModels(),
     record,
-    mode: args.mode
+    mode: args.mode,
+    agentArgs: args.agentArgs,
+    agentEnv: args.agentEnv
   })
   const listeners = new Set<(value: SessionOptionDescriptor[]) => void>()
 
@@ -108,7 +119,9 @@ export function createNativeChatPtySessionOptions(
       catalog,
       models: activeModels(),
       record,
-      mode: args.mode
+      mode: args.mode,
+      agentArgs: args.agentArgs,
+      agentEnv: args.agentEnv
     })
     for (const listener of listeners) {
       listener(snapshot)
@@ -167,6 +180,21 @@ export function createNativeChatPtySessionOptions(
     onAgentPicker: args.onAgentPicker,
     persist,
     onDraftValuesChanged: args.onDraftValuesChanged,
+    applyModeCycle: async (optionId, value) => {
+      const option = catalog.sessionOptions?.find((candidate) => candidate.id === optionId)
+      const midSession = option?.apply.midSession
+      if (midSession?.kind !== 'cycle-key' || typeof value !== 'string') {
+        return { outcome: 'unknown', detail: 'This option cannot be changed from chat.' }
+      }
+      if (!args.dispatchModeCycle) {
+        return { outcome: 'unknown', detail: 'No live terminal is attached to this chat.' }
+      }
+      const result = await args.dispatchModeCycle({ key: midSession.key, target: value })
+      return {
+        outcome: result.outcome,
+        detail: describeClaudePermissionModeCycle(value, result)
+      }
+    },
     publish,
     clearModelTruth,
     setTrackedValue

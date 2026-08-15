@@ -17,7 +17,10 @@ import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
 } from './native-chat-pty-session-options'
-import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
+import type {
+  NativeChatModeCycleDispatch,
+  NativeChatSessionOptionDispatchCommand
+} from './native-chat-session-option-command-dispatch'
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,
@@ -27,7 +30,12 @@ import {
   discoverNativeChatCatalogModels,
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
-import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
+import {
+  readClaudePermissionModeFromTerminalScreen,
+  readClaudeSessionOptionsFromTerminalScreen
+} from './claude-terminal-session-options'
+import { collectNativeChatLiveScreens } from './native-chat-live-screen'
+import { resolveNativeChatLiveSessionLaunchArgs } from './native-chat-live-session-launch-args'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -86,16 +94,26 @@ export async function retirePersistedModelMissingFromDiscovery(
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
   terminalTabId: string
+  paneKey?: string
   targetPtyId: string | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
+  dispatchModeCycle?: NativeChatModeCycleDispatch
   onAgentPicker?: () => void
   readTerminalScreen?: () => string | null
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
 } {
-  const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, readTerminalScreen } =
-    args
+  const {
+    agent,
+    terminalTabId,
+    paneKey,
+    targetPtyId,
+    dispatchCommand,
+    dispatchModeCycle,
+    onAgentPicker,
+    readTerminalScreen
+  } = args
   // The screen text that last parsed into reported values, so a later model
   // discovery can re-resolve it against the host's real ids.
   const reportedScreenRef = useRef<string | null>(null)
@@ -113,6 +131,7 @@ export function useNativeChatSessionOptions(args: {
     const discoveredModels = discoveryContext
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
+    const { agentArgs, agentEnv } = resolveNativeChatLiveSessionLaunchArgs(paneKey)
     const reportedValues =
       agent === 'claude'
         ? readClaudeSessionOptionsFromTerminalScreen(
@@ -130,7 +149,10 @@ export function useNativeChatSessionOptions(args: {
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
       reportedValues,
+      agentArgs,
+      agentEnv,
       dispatchCommand,
+      dispatchModeCycle,
       onAgentPicker,
       persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
         enqueueSessionOptionSettingsWrite((persisted) =>
@@ -147,8 +169,10 @@ export function useNativeChatSessionOptions(args: {
   }, [
     agent,
     dispatchCommand,
+    dispatchModeCycle,
     discoveryContext,
     onAgentPicker,
+    paneKey,
     readTerminalScreen,
     targetPtyId,
     terminalTabId
@@ -161,23 +185,18 @@ export function useNativeChatSessionOptions(args: {
     let cancelled = false
     reportedScreenRef.current = null
     const reportCurrentValues = async (): Promise<void> => {
-      let authoritativeScreen: string | null = null
-      if (targetPtyId && window.api?.pty?.getMainBufferSnapshot) {
-        try {
-          const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
-            scrollbackRows: 0
-          })
-          // Why: the API snapshots the main buffer, which is stale while a TUI
-          // owns the alternate screen. The mounted xterm is authoritative then.
-          authoritativeScreen = snapshot?.alternateScreen ? null : (snapshot?.data ?? null)
-        } catch {
-          // The mounted renderer buffer remains a transport-neutral fallback.
-        }
-      }
+      const screens = await collectNativeChatLiveScreens({ ptyId: targetPtyId, readTerminalScreen })
       const models = discoveryContext
         ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
         : null
-      for (const screen of [authoritativeScreen, readTerminalScreen?.() ?? null]) {
+      // Why: the model read needs Claude's banner, which scrolls away after the
+      // first screenful. The status line does not, so read the mode separately
+      // or it goes unknown for the rest of the session.
+      const permissionMode = screens.reduce<string | null>(
+        (found, screen) => found ?? readClaudePermissionModeFromTerminalScreen(screen),
+        null
+      )
+      for (const screen of screens) {
         const reportedValues = readClaudeSessionOptionsFromTerminalScreen(
           screen,
           models ?? undefined
@@ -192,8 +211,14 @@ export function useNativeChatSessionOptions(args: {
           return
         }
         reportedScreenRef.current = screen
-        surface.reportSessionOptions(reportedValues)
+        surface.reportSessionOptions({
+          ...reportedValues,
+          ...(permissionMode ? { permissionMode } : {})
+        })
         return
+      }
+      if (!cancelled && permissionMode) {
+        surface.reportSessionOptions({ permissionMode })
       }
     }
     void reportCurrentValues()
