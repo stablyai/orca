@@ -125,9 +125,11 @@ import type {
 } from '../shared/terminal-custom-themes'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type {
+  ShellListOpenWithApplicationsResult,
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellOpenPathWithApplicationRequest
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -2506,6 +2508,14 @@ const api = {
 
     openFilePath: (path: string): Promise<boolean> =>
       ipcRenderer.invoke('shell:openFilePath', path),
+
+    listOpenWithApplications: (path: string): Promise<ShellListOpenWithApplicationsResult> =>
+      ipcRenderer.invoke('shell:listOpenWithApplications', path),
+
+    openPathWithApplication: (
+      request: ShellOpenPathWithApplicationRequest
+    ): Promise<ShellOpenLocalPathResult> =>
+      ipcRenderer.invoke('shell:openPathWithApplication', request),
 
     openFileUri: (uri: string): Promise<void> => ipcRenderer.invoke('shell:openFileUri', uri),
 

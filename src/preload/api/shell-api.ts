@@ -1,13 +1,17 @@
 import type {
+  ShellListOpenWithApplicationsResult,
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellOpenPathWithApplicationRequest
 } from '../../shared/shell-open-types'
 
 export type {
+  ShellListOpenWithApplicationsResult,
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellOpenPathWithApplicationRequest
 } from '../../shared/shell-open-types'
 
 export type ShellApi = {
@@ -18,6 +22,10 @@ export type ShellApi = {
   ) => Promise<ShellOpenExternalEditorResult>
   openUrl: (url: string) => Promise<void>
   openFilePath: (path: string) => Promise<boolean>
+  listOpenWithApplications: (path: string) => Promise<ShellListOpenWithApplicationsResult>
+  openPathWithApplication: (
+    request: ShellOpenPathWithApplicationRequest
+  ) => Promise<ShellOpenLocalPathResult>
   openFileUri: (uri: string) => Promise<void>
   pathExists: (path: string) => Promise<boolean>
   pickAttachment: () => Promise<string | null>

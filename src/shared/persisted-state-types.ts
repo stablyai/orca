@@ -108,4 +108,6 @@ export type PersistedState = {
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
+  /** Main-owned Open With recency (extension → application ids, most recent first); never expose through renderer settings APIs. */
+  openWithRecentApplicationsByExtension?: Record<string, string[]>
 }

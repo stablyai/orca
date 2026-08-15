@@ -7,6 +7,8 @@ import type {
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
+import { hasActiveRuntime, pathExists, validateLocalPathTarget } from './local-path-target-guard'
+import { registerShellOpenWithHandlers } from './shell-open-with-handlers'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import type { Store } from '../persistence'
 import {
@@ -21,32 +23,6 @@ export { EXTERNAL_EDITOR_CLI_COMMAND }
 
 const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png'
-}
-
-async function pathExists(pathValue: string): Promise<boolean> {
-  try {
-    await stat(pathValue)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function validateLocalPathTarget(
-  pathValue: string
-): Promise<{ ok: true; path: string } | { ok: false; reason: 'not-absolute' | 'not-found' }> {
-  const normalizedPath = normalize(pathValue)
-  if (!isAbsolute(normalizedPath)) {
-    return { ok: false, reason: 'not-absolute' }
-  }
-  if (!(await pathExists(normalizedPath))) {
-    return { ok: false, reason: 'not-found' }
-  }
-  return { ok: true, path: normalizedPath }
-}
-
-function hasActiveRuntime(store: Store): boolean {
-  return Boolean(store.getSettings().activeRuntimeEnvironmentId?.trim())
 }
 
 async function openInFileManager(
@@ -171,6 +147,8 @@ export function registerShellHandlers(store: Store): void {
   ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
     return openWithSystemDefault(filePath)
   })
+
+  registerShellOpenWithHandlers(store)
 
   ipcMain.handle('shell:openFileUri', async (_event, rawUri: string) => {
     let parsed: URL
