@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: OrcaRuntimeService still owns the mutable live graph, PTY handles, waiters, mobile floor/layout state, and managed-worktree reconciliation. Stateless browser and file command adapters live beside it; the remaining split points need state-owner extraction before enforcing max-lines. */
 /* eslint-disable unicorn/no-useless-spread -- Why: waiter sets and handle keys are cloned intentionally before mutation so resolution and rejection can safely remove entries while iterating. */
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
+import { mkdirSync } from 'node:fs'
 import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle,
@@ -10,6 +11,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { buildJcodeRuntimeDirEnv, JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared/jcode-runtime-dir'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
@@ -27382,10 +27384,20 @@ export class OrcaRuntimeService {
     for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
       delete cleanBaseEnv[key]
     }
+    const jcodeRuntimeDirEnv =
+      scope.connectionId === null ? buildJcodeRuntimeDirEnv(paneKey) : undefined
+    if (jcodeRuntimeDirEnv) {
+      // Why: jcode fails fast when its runtime dir is missing; the daemon lock
+      // and sockets live inside it. mkdir is idempotent per pane.
+      mkdirSync(jcodeRuntimeDirEnv[JCODE_RUNTIME_DIR_ENV_KEY], { recursive: true })
+    }
     const env = {
       ...cleanBaseEnv,
       ...agentTeamsEnv,
       ...this.buildAgentHookPtyEnv?.(),
+      // Why: the runtime dir is a local unix-socket path; remote (SSH)
+      // terminals must keep jcode on its own guest-side default daemon.
+      ...jcodeRuntimeDirEnv,
       ORCA_PANE_KEY: paneKey,
       ORCA_TAB_ID: tabId,
       ORCA_WORKTREE_ID: scope.id
