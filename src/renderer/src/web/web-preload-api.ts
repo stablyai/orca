@@ -867,6 +867,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     runtime: createRuntimeApi(),
     nativeChat: createNativeChatApi(),
+    portableSettingsSync: createPortableSettingsSyncApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),
@@ -1429,6 +1430,19 @@ function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
     onTerminalDriverChanged: () => noopUnsubscribe,
     onNativeChatLaunchDraftResolved: () => noopUnsubscribe,
     onBrowserDriverChanged: () => noopUnsubscribe
+  }
+}
+
+function createPortableSettingsSyncApi(): NonNullable<Partial<PreloadApi>['portableSettingsSync']> {
+  const unavailable = (): Promise<never> =>
+    Promise.reject(new Error('Continuous settings sync is available in the desktop app.'))
+  return {
+    list: () => Promise.resolve([]),
+    configure: unavailable,
+    pause: unavailable,
+    stop: unavailable,
+    syncNow: unavailable,
+    onChanged: () => noopUnsubscribe
   }
 }
 

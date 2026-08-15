@@ -57,6 +57,14 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.c6e5a03aa0',
         'dev box'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.importSettings',
+        'import settings'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.syncSettings',
+        'sync settings'
       )
     ]
   })
@@ -104,6 +112,14 @@ export const getWebRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.772e3b4753',
         'vm'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.importSettings',
+        'import settings'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.syncSettings',
+        'sync settings'
       )
     ]
   })

@@ -63,7 +63,10 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): vo
   closeSubscriptionsForEnvironment(environmentId)
 }
 
-export function registerRuntimeEnvironmentHandlers(store: Store): void {
+export function registerRuntimeEnvironmentHandlers(
+  store: Store,
+  options: { onEnvironmentReachable?: (environmentId: string) => void } = {}
+): void {
   // Why: keep direct re-registration safe even though register-core-handlers
   // normally guards this path; otherwise the binary send listener can stack.
   resetSharedControlSupport()
@@ -71,6 +74,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     ipcMain.removeHandler(channel)
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
+  const reachableEnvironmentIds = new Set<string>()
 
   registerRuntimeEnvironmentConnectivityHandlers({
     store,
@@ -78,7 +82,17 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
   registerRuntimeEnvironmentRecoveryHandler()
-  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
+  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath, {
+    onEnvironmentReachable: (environmentId) => {
+      if (!reachableEnvironmentIds.has(environmentId)) {
+        reachableEnvironmentIds.add(environmentId)
+        options.onEnvironmentReachable?.(environmentId)
+      }
+    },
+    onEnvironmentUnreachable: (environmentId) => {
+      reachableEnvironmentIds.delete(environmentId)
+    }
+  })
   ipcMain.handle(
     'runtimeEnvironments:subscribe',
     async (

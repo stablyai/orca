@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getEffectiveKeybindingsForAction,
   keybindingMatchesAction,
@@ -204,6 +204,38 @@ describe('KeybindingService tab-switch cohort seeding', () => {
         LEGACY_TAB_SWITCH_BINDINGS[actionId]
       )
     }
+  })
+
+  it('notifies listeners after persisted bindings change', () => {
+    const service = new KeybindingService({ homePath: home, platform: 'linux' })
+    const listener = vi.fn()
+    const unsubscribe = service.onChanged(listener)
+
+    service.setActionBindings('app.settings', ['Ctrl+Comma'])
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ overrides: { 'app.settings': ['Ctrl+Comma'] } })
+    )
+    unsubscribe()
+  })
+
+  it('isolates keybinding change listener failures after persistence', () => {
+    const service = new KeybindingService({ homePath: home, platform: 'linux' })
+    const laterListener = vi.fn()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    service.onChanged(() => {
+      throw new Error('listener failed')
+    })
+    service.onChanged(laterListener)
+
+    expect(() => service.setActionBindings('app.settings', ['Ctrl+Comma'])).not.toThrow()
+    expect(laterListener).toHaveBeenCalledOnce()
+    expect(service.getOverrides()).toEqual({ 'app.settings': ['Ctrl+Comma'] })
+    expect(consoleError).toHaveBeenCalledWith(
+      'Keybinding change listener failed:',
+      expect.any(Error)
+    )
+    consoleError.mockRestore()
   })
 
   it('leaves the cohort pending when the seed write fails (retries next launch)', () => {

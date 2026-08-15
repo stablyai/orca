@@ -2,6 +2,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import { defineMethod, type RpcMethod } from '../core'
 import {
   FeatureInteractionIdParam,
+  PortableSettingsApplyRequest,
   PRBotAuthorOverrideUpdate,
   SettingsUpdate,
   UiUpdate
@@ -39,6 +40,16 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
     handler: (params, { runtime }) => ({
       terminalQuickCommands: runtime.updateClientTerminalQuickCommands(params.mutation)
     })
+  }),
+  defineMethod({
+    name: 'settings.portable.get',
+    params: null,
+    handler: (_params, { runtime }) => ({ bundle: runtime.getPortableSettingsBundle() })
+  }),
+  defineMethod({
+    name: 'settings.portable.apply',
+    params: PortableSettingsApplyRequest,
+    handler: (params, { runtime }) => runtime.applyPortableSettings(params)
   }),
   defineMethod({
     name: 'settings.updatePRBotAuthorOverride',

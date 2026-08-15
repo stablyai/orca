@@ -24,6 +24,7 @@ import { TaskResumeState } from './task-resume-state-schema'
 import { WorkspaceCleanup } from './workspace-cleanup-ui-schema'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'
 import { WorktreeVisibilityDefaultsUpdate } from './worktree-visibility-defaults-schema'
+import { PortableSettingsApplyRequestSchema } from '../../../../shared/portable-settings'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
@@ -124,6 +125,8 @@ const GitHubProjectSettings = z
     activeProject: GitHubProjectRef.nullable()
   })
   .strict()
+
+export const PortableSettingsApplyRequest = PortableSettingsApplyRequestSchema
 
 export const SettingsUpdate = z
   .object({

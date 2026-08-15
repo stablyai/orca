@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState } from '../../../../shared/constants'
+import { getDefaultSettings, getDefaultUIState } from '../../../../shared/constants'
 import {
   MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
   MAX_QUICK_COMMAND_ID_LENGTH,
@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/terminal-quick-commands'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import { createPortableSettingsBundle } from '../../../../shared/portable-settings'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -19,6 +20,70 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('client UI RPC methods', () => {
+  it('gets and applies an allowlisted portable settings bundle', async () => {
+    const bundle = createPortableSettingsBundle(getDefaultSettings('/home/test'), {
+      platform: 'linux',
+      overrides: {}
+    })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getPortableSettingsBundle: vi.fn(() => bundle),
+      applyPortableSettings: vi.fn(() => ({
+        bundle,
+        appliedCategories: ['appearance']
+      }))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    await expect(dispatcher.dispatch(makeRequest('settings.portable.get'))).resolves.toMatchObject({
+      ok: true,
+      result: { bundle }
+    })
+    await expect(
+      dispatcher.dispatch(
+        makeRequest('settings.portable.apply', { categories: ['appearance'], bundle })
+      )
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { bundle, appliedCategories: ['appearance'] }
+    })
+    expect(runtime.applyPortableSettings).toHaveBeenCalledWith({
+      categories: ['appearance'],
+      bundle
+    })
+  })
+
+  it('rejects non-portable settings before they reach the runtime', async () => {
+    const bundle = createPortableSettingsBundle(getDefaultSettings('/home/test'), {
+      platform: 'linux',
+      overrides: {}
+    })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      applyPortableSettings: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.portable.apply', {
+        categories: ['appearance'],
+        bundle: {
+          ...bundle,
+          categories: {
+            ...bundle.categories,
+            appearance: {
+              ...bundle.categories.appearance,
+              opencodeSessionCookie: 'secret'
+            }
+          }
+        }
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(runtime.applyPortableSettings).not.toHaveBeenCalled()
+  })
+
   it('returns the runtime host agent settings needed by mobile create flows', async () => {
     const settings = {
       worktreeVisibilityDefaults: { external: 'show' as const },

@@ -48,6 +48,11 @@ type ConnectivityHandlerOptions = {
   invalidateTransport: (environmentId: string) => void
 }
 
+type PassiveStatusOptions = {
+  onEnvironmentReachable?: (environmentId: string) => void
+  onEnvironmentUnreachable?: (environmentId: string) => void
+}
+
 export function registerRuntimeEnvironmentConnectivityHandlers({
   store,
   getUserDataPath,
@@ -117,8 +122,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
 }
 
-export function registerRuntimeEnvironmentPassiveHandlers(getUserDataPath: () => string): void {
-  registerPassiveStatusHandler(getUserDataPath)
+export function registerRuntimeEnvironmentPassiveHandlers(
+  getUserDataPath: () => string,
+  options: PassiveStatusOptions = {}
+): void {
+  registerPassiveStatusHandler(getUserDataPath, options)
   registerPassiveCallHandler(getUserDataPath)
 }
 
@@ -130,7 +138,10 @@ function closeLegacySelectorTransport(selector: string, environmentId: string): 
   clearSharedControlSupport(selector)
 }
 
-function registerPassiveStatusHandler(getUserDataPath: () => string): void {
+function registerPassiveStatusHandler(
+  getUserDataPath: () => string,
+  options: PassiveStatusOptions = {}
+): void {
   ipcMain.handle(
     'runtimeEnvironments:getStatus',
     async (
@@ -139,6 +150,7 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+        options.onEnvironmentUnreachable?.(environment.id)
         return manuallyDisconnectedResponse(environment)
       }
       const response = await getRuntimeEnvironmentStatus(
@@ -146,9 +158,14 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
         environment.id,
         args.timeoutMs
       )
-      return isRuntimeEnvironmentManuallyDisconnected(environment.id)
-        ? manuallyDisconnectedResponse(environment)
-        : response
+      if (!response.ok || isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+        options.onEnvironmentUnreachable?.(environment.id)
+        return isRuntimeEnvironmentManuallyDisconnected(environment.id)
+          ? manuallyDisconnectedResponse(environment)
+          : response
+      }
+      options.onEnvironmentReachable?.(environment.id)
+      return response
     }
   )
 }

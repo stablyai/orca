@@ -147,6 +147,10 @@ import type {
 } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type {
+  PortableSettingsSyncConfigureArgs,
+  PortableSettingsSyncState
+} from '../shared/portable-settings-sync'
 import type { RemoteWorkspaceChangedEvent } from '../shared/remote-workspace-types'
 import type {
   RuntimeMobileMarkdownRequest,
@@ -4407,6 +4411,27 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('runtime:browserDriverChanged', listener)
       return () => ipcRenderer.removeListener('runtime:browserDriverChanged', listener)
+    }
+  },
+
+  portableSettingsSync: {
+    list: (): Promise<PortableSettingsSyncState[]> =>
+      ipcRenderer.invoke('portableSettingsSync:list'),
+    configure: (args: PortableSettingsSyncConfigureArgs): Promise<PortableSettingsSyncState> =>
+      ipcRenderer.invoke('portableSettingsSync:configure', args),
+    pause: (args: { environmentId: string }): Promise<PortableSettingsSyncState> =>
+      ipcRenderer.invoke('portableSettingsSync:pause', args),
+    stop: (args: { environmentId: string }): Promise<void> =>
+      ipcRenderer.invoke('portableSettingsSync:stop', args),
+    syncNow: (args: { environmentId: string }): Promise<PortableSettingsSyncState> =>
+      ipcRenderer.invoke('portableSettingsSync:syncNow', args),
+    onChanged: (callback: (states: PortableSettingsSyncState[]) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        states: PortableSettingsSyncState[]
+      ): void => callback(states)
+      ipcRenderer.on('portableSettingsSync:changed', listener)
+      return () => ipcRenderer.removeListener('portableSettingsSync:changed', listener)
     }
   },
 

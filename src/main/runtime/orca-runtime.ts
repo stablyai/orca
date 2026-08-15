@@ -490,6 +490,7 @@ import {
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
+import type { PortableSettingsRuntimeService } from '../portable-settings-service'
 import {
   isWindowsAbsolutePathLike,
   isPathInsideOrEqual,
@@ -3420,6 +3421,7 @@ export class OrcaRuntimeService {
   private ptyControllerInventorySequence = 0
   private ptyControllerAggregateInventoryGeneration = 0
   private ptyControllerInventoryGenerationByProvider = new Map<string, number>()
+  private readonly portableSettings: PortableSettingsRuntimeService | null
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -3475,6 +3477,7 @@ export class OrcaRuntimeService {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
+      portableSettings?: PortableSettingsRuntimeService
     }
   ) {
     this.store = store
@@ -3523,6 +3526,7 @@ export class OrcaRuntimeService {
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null
     this.agentSessionClaimSigner =
       deps?.agentSessionClaimSigner ?? createEphemeralAgentSessionClaimSigner(this.runtimeId)
+    this.portableSettings = deps?.portableSettings ?? null
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
     // Why: the ConPTY spawn mark can land after daemon stream data already
     // created this PTY's emulator; the mark retrofits the DA1 override here
@@ -3608,6 +3612,20 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     return this.store.recordFeatureInteraction(id)
+  }
+
+  getPortableSettingsBundle() {
+    if (!this.portableSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.portableSettings.getBundle()
+  }
+
+  applyPortableSettings(request: Parameters<PortableSettingsRuntimeService['apply']>[0]) {
+    if (!this.portableSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.portableSettings.apply(request)
   }
 
   getClientSettings(): Pick<

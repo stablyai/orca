@@ -49,6 +49,7 @@ import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
+import { broadcastKeybindingsChanged } from './ipc/keybindings'
 import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
@@ -339,6 +340,11 @@ import {
 } from '../shared/runtime-types'
 import { LocalPtyProvider } from './providers/local-pty-provider'
 import { KeybindingService } from './keybindings/keybinding-service'
+import { createPortableSettingsRuntimeService } from './portable-settings-service'
+import { PortableSettingsSyncService } from './portable-settings-sync-service'
+import { registerPortableSettingsSyncHandlers } from './ipc/portable-settings-sync'
+import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
+import { listEnvironments } from '../shared/runtime-environment-store'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
@@ -381,6 +387,7 @@ let pluginKillListService: PluginKillListService | null = null
 let pluginMarketplaceService: PluginMarketplaceService | null = null
 let pluginMarketplaceInstaller: PluginMarketplaceInstaller | null = null
 let keybindings: KeybindingService | null = null
+let portableSettingsSync: PortableSettingsSyncService | null = null
 
 function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   pluginService?.emitEvent(
@@ -1452,7 +1459,13 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
       },
       onOrcaProfileAuthMutation: () => desktopRelayService?.authMutated(),
-      onBeforeOrcaProfileSignOut: () => desktopRelayService?.fenceAndCloseNow()
+      onBeforeOrcaProfileSignOut: () => desktopRelayService?.fenceAndCloseNow(),
+      onRuntimeEnvironmentReachable: (environmentId) => {
+        const sync = portableSettingsSync
+        if (sync?.getState(environmentId)?.enabled) {
+          void sync.syncNow(environmentId).catch(() => undefined)
+        }
+      }
     },
     pluginService ?? undefined,
     pluginMarketplaceService && pluginMarketplaceInstaller
@@ -2457,6 +2470,20 @@ void app.whenReady().then(async () => {
       }
     }
   })
+  const settingsSyncService = new PortableSettingsSyncService({
+    configPath: join(activeOrcaProfile.profileDirectory, 'portable-settings-sync.json'),
+    store,
+    keybindings,
+    callEnvironment: (environmentId, method, params, timeoutMs) =>
+      callRuntimeEnvironment(app.getPath('userData'), environmentId, method, params, timeoutMs),
+    environmentExists: (environmentId) =>
+      listEnvironments(app.getPath('userData')).some(
+        (environment) => environment.id === environmentId
+      )
+  })
+  portableSettingsSync = settingsSyncService
+  settingsSyncService.start()
+  registerPortableSettingsSyncHandlers(settingsSyncService)
   browserManager.setSettingsResolver(() => ({ keybindings: keybindings?.getOverrides() }))
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store!.getSettings()
@@ -2555,7 +2582,11 @@ void app.whenReady().then(async () => {
       }),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
-    orchestrationEnvironmentTransport
+    orchestrationEnvironmentTransport,
+    portableSettings: createPortableSettingsRuntimeService(store, keybindings, {
+      onKeybindingsChanged: broadcastKeybindingsChanged,
+      runWithoutOutboundSync: (operation) => settingsSyncService.runWithoutOutboundSync(operation)
+    })
   })
   runtime = runtimeService
   runtimeService.prepareLegacyWorkerTerminalRecovery()

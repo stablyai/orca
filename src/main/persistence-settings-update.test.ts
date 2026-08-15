@@ -720,4 +720,30 @@ describe('Store', () => {
     expect(reloaded.getSettings().sourceControlGroupOrder).toBe('staged-first')
     expect(reloaded.getWorkspaceSession().activeWorktreeId).toBe('repo1::/worktree-a')
   })
+
+  it('restores an exact settings snapshot without reapplying companion mutations', async () => {
+    const store = await createStore()
+    store.updateSettings({ agentYoloDefaultsMigrated: false })
+    const snapshot = structuredClone(store.getSettings())
+    delete snapshot.terminalWordSeparator
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings({
+      agentDefaultArgs: { claude: '--side-effect' },
+      terminalWordSeparator: 'temporary'
+    })
+    expect(store.getSettings().agentYoloDefaultsMigrated).toBe(true)
+    listener.mockClear()
+
+    store.restoreSettingsSnapshot(snapshot, { notifyListeners: true })
+
+    expect(store.getSettings()).toEqual(snapshot)
+    expect(store.getSettings().agentYoloDefaultsMigrated).toBe(false)
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalWordSeparator: undefined }),
+      snapshot,
+      undefined
+    )
+  })
 })

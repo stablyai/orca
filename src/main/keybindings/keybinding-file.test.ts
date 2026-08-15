@@ -7,6 +7,7 @@ import {
   getUserKeybindingsPath,
   migrateLegacyKeybindings,
   readKeybindingFile,
+  replaceKeybindingOverrides,
   seedLegacyTabSwitchBindings,
   writeKeybindingOverride
 } from './keybinding-file'
@@ -167,6 +168,43 @@ describe('keybinding-file', () => {
     expect(written.keybindings['worktree.quickOpen']).toBe('Mod+Shift+P')
     expect(written.platforms.darwin['terminal.search']).toBe('Mod+F')
     expect(written.platforms.linux['terminal.search']).toEqual(['Ctrl+Shift+F'])
+  })
+
+  it('replaces effective target-platform overrides without changing other platforms', () => {
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        version: 1,
+        keybindings: { 'terminal.clear': 'Ctrl+Alt+L' },
+        platforms: {
+          darwin: { 'terminal.search': 'Mod+F' },
+          linux: { 'terminal.paste': 'Ctrl+Shift+V' }
+        }
+      }),
+      'utf8'
+    )
+
+    const snapshot = replaceKeybindingOverrides(filePath, 'linux', {
+      'app.settings': ['Ctrl+Comma'],
+      'terminal.search': ['Ctrl+F']
+    })
+
+    expect(snapshot.overrides).toEqual({
+      'app.settings': ['Ctrl+Comma'],
+      'terminal.search': ['Ctrl+F']
+    })
+    expect(snapshot.commonOverrides).toEqual({})
+    expect(snapshot.platformOverrides.darwin).toEqual({
+      'terminal.clear': ['Ctrl+Alt+L'],
+      'terminal.search': ['Mod+F']
+    })
+    expect(readKeybindingFile(filePath, 'darwin').overrides).toEqual({
+      'terminal.clear': ['Ctrl+Alt+L'],
+      'terminal.search': ['Mod+F']
+    })
+    expect(readKeybindingFile(filePath, 'win32').overrides).toEqual({
+      'terminal.clear': ['Ctrl+Alt+L']
+    })
   })
 
   it('migrates root-level legacy overrides before writing settings edits', () => {

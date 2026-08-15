@@ -21,6 +21,7 @@ import {
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import type {
   Automation,
   AutomationCreateInput,
@@ -6220,6 +6221,31 @@ export class Store {
     }
     if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
       this.notifySettingsChanged(changedUpdates, options.originWebContentsId)
+    }
+    return this.state.settings
+  }
+
+  restoreSettingsSnapshot(
+    snapshot: GlobalSettings,
+    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+  ): GlobalSettings {
+    const previousSettings = this.state.settings
+    // Why: rollback snapshots originate inside this Store and must bypass write-time
+    // companion mutations so a cross-file transaction restores the exact prior state.
+    this.state.settings = structuredClone(snapshot)
+    this.scheduleSave()
+    const restoredUpdates = {} as Partial<GlobalSettings> & Record<string, unknown>
+    const restoredKeys = new Set<keyof GlobalSettings>([
+      ...(Object.keys(snapshot) as (keyof GlobalSettings)[]),
+      ...(Object.keys(previousSettings) as (keyof GlobalSettings)[])
+    ])
+    for (const key of restoredKeys) {
+      if (!isDeepStrictEqual(previousSettings[key], this.state.settings[key])) {
+        restoredUpdates[String(key)] = this.state.settings[key]
+      }
+    }
+    if (options.notifyListeners === true && Object.keys(restoredUpdates).length > 0) {
+      this.notifySettingsChanged(restoredUpdates, options.originWebContentsId)
     }
     return this.state.settings
   }

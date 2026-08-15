@@ -4,7 +4,7 @@ import type { KeybindingService } from '../keybindings/keybinding-service'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { authorizeExternalPath } from './filesystem-auth'
 
-function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
+export function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
       window.webContents.send('keybindings:changed', snapshot)

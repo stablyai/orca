@@ -8,6 +8,10 @@ import type {
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
+import type {
+  PortableSettingsSyncConfigureArgs,
+  PortableSettingsSyncState
+} from '../../shared/portable-settings-sync'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -114,5 +118,13 @@ export type RuntimeApi = {
   }
   gitBash: {
     isAvailable: () => Promise<boolean>
+  }
+  portableSettingsSync: {
+    list: () => Promise<PortableSettingsSyncState[]>
+    configure: (args: PortableSettingsSyncConfigureArgs) => Promise<PortableSettingsSyncState>
+    pause: (args: { environmentId: string }) => Promise<PortableSettingsSyncState>
+    stop: (args: { environmentId: string }) => Promise<void>
+    syncNow: (args: { environmentId: string }) => Promise<PortableSettingsSyncState>
+    onChanged: (callback: (states: PortableSettingsSyncState[]) => void) => () => void
   }
 }

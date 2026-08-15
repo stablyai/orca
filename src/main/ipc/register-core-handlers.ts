@@ -104,6 +104,7 @@ type CoreHandlerLifecycleOptions = {
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
   ) => Promise<AiVaultPrepareSessionResumeResult>
+  onRuntimeEnvironmentReachable?: (environmentId: string) => void
 }
 
 export function registerCoreHandlers(
@@ -213,7 +214,9 @@ export function registerCoreHandlers(
   }
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
-  registerRuntimeEnvironmentHandlers(store)
+  registerRuntimeEnvironmentHandlers(store, {
+    onEnvironmentReachable: lifecycleOptions.onRuntimeEnvironmentReachable
+  })
   registerEphemeralVmHandlers(store, pluginService)
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
