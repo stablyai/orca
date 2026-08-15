@@ -177,6 +177,7 @@ export class TerminalQueryOwnerTracker {
   private pendingOwner: string | null | undefined
   private pendingToken: ForegroundProcessToken = undefined
   private value: string | null | undefined
+  private lastObservedOwner: string | null | undefined
   private readonly outstanding: OutstandingQuery[] = []
 
   constructor(
@@ -194,9 +195,16 @@ export class TerminalQueryOwnerTracker {
     const scan = scanTerminalReplyQuerySequences(span.data, span.rawStartSeq, previous)
     this.scanState = scan.state
     const currentOwner = readForegroundProcess(this.reader)
+    // Why: node-pty samples .process after query bytes reach onData. A short-lived
+    // querier can exit first, so this span records the shell. If a prior span
+    // observed a different non-shell owner, the query still belongs to that
+    // departed instance — an observed-owner transition, not a timer.
+    const spanOwner = this.ownerAfterObservedTransition(currentOwner)
+    const attributedViaTransition = spanOwner !== currentOwner
     // Why lazy: the token costs a `ps` subprocess, so it is only read when this
     // span actually captures a fresh query or opens a split, never per output
     // span. A split *completion* reuses the token captured at its start.
+    // A transition-attributed owner must not inherit the shell tpgid.
     let tokenRead = false
     let currentToken: ForegroundProcessToken = undefined
     for (const query of scan.queries) {
@@ -205,11 +213,11 @@ export class TerminalQueryOwnerTracker {
         continue
       }
       const split = query.startSeq < span.rawStartSeq
-      if (!split && !tokenRead) {
+      if (!split && !tokenRead && !attributedViaTransition) {
         tokenRead = true
         currentToken = readForegroundProcessToken(this.tokenReader)
       }
-      const owner = split ? this.pendingOwner : currentOwner
+      const owner = split ? this.pendingOwner : spanOwner
       const token = split ? this.pendingToken : currentToken
       this.value = owner
       // Reply grammars carry no request id, so only the selector a reply echoes
@@ -240,13 +248,36 @@ export class TerminalQueryOwnerTracker {
     }
     if (scan.state.pendingStartSeq !== previous.pendingStartSeq) {
       if (scan.state.pending) {
-        this.pendingOwner = currentOwner
-        this.pendingToken = readForegroundProcessToken(this.tokenReader)
+        this.pendingOwner = spanOwner
+        this.pendingToken = attributedViaTransition
+          ? undefined
+          : readForegroundProcessToken(this.tokenReader)
       } else {
         this.pendingOwner = undefined
         this.pendingToken = undefined
       }
     }
+    if (currentOwner != null && currentOwner !== '') {
+      this.lastObservedOwner = currentOwner
+    }
+  }
+
+  private ownerAfterObservedTransition(
+    currentOwner: string | null | undefined
+  ): string | null | undefined {
+    const previous = this.lastObservedOwner
+    if (
+      previous != null &&
+      previous !== '' &&
+      previous !== currentOwner &&
+      !isShellProcess(previous) &&
+      currentOwner != null &&
+      currentOwner !== '' &&
+      isShellProcess(currentOwner)
+    ) {
+      return previous
+    }
+    return currentOwner
   }
 
   claimReplyOwner(reply: string): TerminalQueryReplyOwnerClaim {

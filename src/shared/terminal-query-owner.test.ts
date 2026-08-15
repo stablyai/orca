@@ -287,6 +287,43 @@ describe('TerminalQueryOwnerTracker', () => {
     expect(reads).toBe(1)
   })
 
+  it('attributes a query to the previous non-shell owner when sampled after that owner exits', () => {
+    let foreground = 'gh'
+    const tracker = new TerminalQueryOwnerTracker(() => foreground)
+    tracker.accept({ data: 'gh output', rawStartSeq: 0, rawEndSeq: 9 })
+    foreground = 'zsh'
+    tracker.accept({ data: '\x1b]11;?\x07', rawStartSeq: 9, rawEndSeq: 16 })
+
+    expect(tracker.claimReplyOwner('\x1b]11;rgb:00/00/00\x07')).toEqual({
+      matched: true,
+      owner: 'gh'
+    })
+  })
+
+  it('keeps a later shell query after an intervening shell span commits the transition', () => {
+    let foreground = 'gh'
+    const tracker = new TerminalQueryOwnerTracker(() => foreground)
+    tracker.accept({ data: 'gh output', rawStartSeq: 0, rawEndSeq: 9 })
+    foreground = 'zsh'
+    tracker.accept({ data: 'prompt> ', rawStartSeq: 9, rawEndSeq: 17 })
+    tracker.accept({ data: '\x1b]11;?\x07', rawStartSeq: 17, rawEndSeq: 24 })
+
+    expect(tracker.claimReplyOwner('\x1b]11;rgb:00/00/00\x07')).toEqual({
+      matched: true,
+      owner: 'zsh'
+    })
+  })
+
+  it('does not invent a prior owner when the first sampled query is already the shell', () => {
+    const tracker = new TerminalQueryOwnerTracker(() => 'zsh')
+    tracker.accept({ data: '\x1b]11;?\x07', rawStartSeq: 0, rawEndSeq: 7 })
+
+    expect(tracker.claimReplyOwner('\x1b]11;rgb:00/00/00\x07')).toEqual({
+      matched: true,
+      owner: 'zsh'
+    })
+  })
+
   it('expires a stale CPR claim so Shift-F3 is no longer consumed after the owner exits', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))

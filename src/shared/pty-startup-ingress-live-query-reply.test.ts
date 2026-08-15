@@ -282,6 +282,30 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
+  it('drops an OSC 11 reply when the querier exits before the query span is sampled', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    let foreground = 'gh'
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => foreground
+    })
+
+    // Observed while the querier is still alive.
+    ingress.accept('gh: querying colors')
+    // Query bytes reach onData after the querier has already exited.
+    foreground = 'zsh'
+    ingress.accept('\x1b]11;?\x07')
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([])
+    vi.advanceTimersByTime(200)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
   it('delivers an in-order OSC 11 reply while the querier still owns the tty', () => {
     vi.useFakeTimers()
     const writes: string[] = []
