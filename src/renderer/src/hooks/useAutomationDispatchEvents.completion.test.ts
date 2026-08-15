@@ -761,6 +761,7 @@ describe('useAutomationDispatchEvents completion', () => {
       providerSession: { key: 'session_id', id: 'reuse-nested' },
       lastAssistantMessage: 'nested should not win'
     })
+    await Promise.resolve()
     expect(
       mockMarkDispatchResult.mock.calls.some(([result]) => result.status === 'completed')
     ).toBe(false)
