@@ -298,7 +298,9 @@
         "workspace": {
           "cleanup": {
             "9d6e531da6": "Workspace no longer exists.",
-            "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing."
+            "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing.",
+            "hostCollision": "Error: this workspace exists on multiple hosts at the same path",
+            "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again."
           }
         },
         "worktrees": {

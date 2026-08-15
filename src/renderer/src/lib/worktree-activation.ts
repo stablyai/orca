@@ -507,7 +507,13 @@ export function ensureWorktreeHasInitialTerminal(
     return null
   }
 
-  if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+  const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
+  const shouldAutoCreate = shouldAutoCreateInitialTerminal(
+    renderableTabCount,
+    Object.hasOwn(store.tabsByWorktree, worktreeId)
+  )
+  const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
+  if (!shouldAutoCreate && !shouldCreateForExplicitWork) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       // Why: main may have adopted the startup tab but failed to spawn setup; renderer must still launch the returned fallback setup.
