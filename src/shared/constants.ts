@@ -25,6 +25,7 @@ import {
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
 } from './terminal/appearance/terminal-platform-defaults'
+import { DEFAULT_GITHUB_TASK_PRIMARY_ACTION } from './github-task-primary-action'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -248,7 +249,8 @@ export function getDefaultUIState(): PersistedUIState {
     featureTipsSeenIds: [],
     featureInteractions: {},
     contextualToursSeenIds: [],
-    browserDefaultZoomLevel: DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
+    browserDefaultZoomLevel: DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+    githubTaskPrimaryAction: DEFAULT_GITHUB_TASK_PRIMARY_ACTION
   }
 }
 

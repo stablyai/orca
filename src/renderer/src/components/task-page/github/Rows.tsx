@@ -44,6 +44,9 @@ import {
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { useAppStore } from '@/store'
+import { resolveGitHubTaskSplitActions } from '../../../../../shared/github-task-primary-action'
+
 export function TaskPageGitHubRows({
   model
 }: {
@@ -51,6 +54,9 @@ export function TaskPageGitHubRows({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
+  const githubTaskPrimaryAction = useAppStore((s) => s.githubTaskPrimaryAction)
+  const setGitHubTaskPrimaryAction = useAppStore((s) => s.setGitHubTaskPrimaryAction)
+  const githubTaskSplitActions = resolveGitHubTaskSplitActions(githubTaskPrimaryAction)
   const {
     repos,
     allWorktrees,
@@ -279,6 +285,12 @@ export function TaskPageGitHubRows({
                         data-contextual-tour-target="tasks-start-workspace"
                         onClick={(event) => {
                           event.stopPropagation()
+                          if (githubTaskSplitActions.primary === 'open-in-browser') {
+                            setGitHubTaskPrimaryAction('open-in-browser')
+                            openAppHttpLink(item.url)
+                            return
+                          }
+                          setGitHubTaskPrimaryAction('start')
                           handleOpenOrUseGitHubWorkItem(item)
                         }}
                         className={cn(
@@ -286,18 +298,32 @@ export function TaskPageGitHubRows({
                           attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
                         )}
                         aria-label={
-                          attachedWorkspace
-                            ? t(
-                                'auto.components.TaskPage.67d881244c',
-                                'Resume workspace attached to PR'
-                              )
-                            : t('auto.components.TaskPage.e4b29c5bcf', 'Start workspace from PR')
+                          githubTaskSplitActions.primary === 'open-in-browser'
+                            ? t('auto.components.TaskPage.c1d1600362', 'Open in browser')
+                            : attachedWorkspace
+                              ? t(
+                                  'auto.components.TaskPage.67d881244c',
+                                  'Resume workspace attached to PR'
+                                )
+                              : t(
+                                  'auto.components.TaskPage.e4b29c5bcf',
+                                  'Start workspace from PR'
+                                )
                         }
                       >
-                        {attachedWorkspace
-                          ? t('auto.components.TaskPage.7753652524', 'Resume')
-                          : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
-                        <ArrowRight className="size-3" />
+                        {githubTaskSplitActions.primary === 'open-in-browser' ? (
+                          <>
+                            {t('auto.components.TaskPage.c1d1600362', 'Open in browser')}
+                            <ExternalLink className="size-3" />
+                          </>
+                        ) : (
+                          <>
+                            {attachedWorkspace
+                              ? t('auto.components.TaskPage.7753652524', 'Resume')
+                              : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                            <ArrowRight className="size-3" />
+                          </>
+                        )}
                       </Button>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -313,16 +339,36 @@ export function TaskPageGitHubRows({
                       </DropdownMenuTrigger>
                     </ButtonGroup>
                     <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                      {githubTaskSplitActions.menu.includes('start') ? (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setGitHubTaskPrimaryAction('start')
+                            handleOpenOrUseGitHubWorkItem(item)
+                          }}
+                        >
+                          <ArrowRight className="size-4" />
+                          {attachedWorkspace
+                            ? t('auto.components.TaskPage.7753652524', 'Resume')
+                            : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                        </DropdownMenuItem>
+                      ) : null}
                       {attachedWorkspace ? (
                         <DropdownMenuItem onSelect={() => handleUseWorkItem(item)}>
                           <Plus className="size-4" />
                           {t('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
-                        <ExternalLink className="size-4" />
-                        {t('auto.components.TaskPage.c1d1600362', 'Open in browser')}
-                      </DropdownMenuItem>
+                      {githubTaskSplitActions.menu.includes('open-in-browser') ? (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setGitHubTaskPrimaryAction('open-in-browser')
+                            openAppHttpLink(item.url)
+                          }}
+                        >
+                          <ExternalLink className="size-4" />
+                          {t('auto.components.TaskPage.c1d1600362', 'Open in browser')}
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
@@ -334,6 +380,12 @@ export function TaskPageGitHubRows({
                     data-contextual-tour-target="tasks-start-workspace"
                     onClick={(event) => {
                       event.stopPropagation()
+                      if (githubTaskSplitActions.primary === 'open-in-browser') {
+                        setGitHubTaskPrimaryAction('open-in-browser')
+                        openAppHttpLink(item.url)
+                        return
+                      }
+                      setGitHubTaskPrimaryAction('start')
                       handleOpenOrUseGitHubWorkItem(item)
                     }}
                     className={cn(
@@ -341,18 +393,32 @@ export function TaskPageGitHubRows({
                       attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
                     )}
                     aria-label={
-                      attachedWorkspace
-                        ? t(
-                            'auto.components.TaskPage.2193a99ec1',
-                            'Open workspace attached to issue'
-                          )
-                        : t('auto.components.TaskPage.e104fa3d3d', 'Start workspace from issue')
+                      githubTaskSplitActions.primary === 'open-in-browser'
+                        ? t('auto.components.TaskPage.c1d1600362', 'Open in browser')
+                        : attachedWorkspace
+                          ? t(
+                              'auto.components.TaskPage.2193a99ec1',
+                              'Open workspace attached to issue'
+                            )
+                          : t(
+                              'auto.components.TaskPage.e104fa3d3d',
+                              'Start workspace from issue'
+                            )
                     }
                   >
-                    {attachedWorkspace
-                      ? t('auto.components.TaskPage.606a85c774', 'Open')
-                      : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
-                    <ArrowRight className="size-3" />
+                    {githubTaskSplitActions.primary === 'open-in-browser' ? (
+                      <>
+                        {t('auto.components.TaskPage.c1d1600362', 'Open in browser')}
+                        <ExternalLink className="size-3" />
+                      </>
+                    ) : (
+                      <>
+                        {attachedWorkspace
+                          ? t('auto.components.TaskPage.606a85c774', 'Open')
+                          : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                        <ArrowRight className="size-3" />
+                      </>
+                    )}
                   </Button>
                 )}
                 {item.type !== 'pr' ? (
@@ -368,16 +434,36 @@ export function TaskPageGitHubRows({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      {githubTaskSplitActions.menu.includes('start') ? (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setGitHubTaskPrimaryAction('start')
+                            handleOpenOrUseGitHubWorkItem(item)
+                          }}
+                        >
+                          <ArrowRight className="size-4" />
+                          {attachedWorkspace
+                            ? t('auto.components.TaskPage.606a85c774', 'Open')
+                            : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                        </DropdownMenuItem>
+                      ) : null}
                       {attachedWorkspace ? (
                         <DropdownMenuItem onSelect={() => handleUseWorkItem(item)}>
                           <Plus className="size-4" />
                           {t('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
-                        <ExternalLink className="size-4" />
-                        {t('auto.components.TaskPage.c1d1600362', 'Open in browser')}
-                      </DropdownMenuItem>
+                      {githubTaskSplitActions.menu.includes('open-in-browser') ? (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setGitHubTaskPrimaryAction('open-in-browser')
+                            openAppHttpLink(item.url)
+                          }}
+                        >
+                          <ExternalLink className="size-4" />
+                          {t('auto.components.TaskPage.c1d1600362', 'Open in browser')}
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : null}
