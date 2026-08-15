@@ -12,17 +12,32 @@ import type { OrchestrationDb } from '../orchestration-db'
 // again. State only what the row proves: whether this dispatch was settled or
 // released, when, and the one channel that still works. Never guess why.
 function describeRevokedDispatch(dispatch: DispatchContextRow): string {
-  const settled = dispatch.status === 'completed' || dispatch.status === 'failed'
-  const at = exposeUtcTimestamp(dispatch.completed_at ?? dispatch.capability_revoked_at)
-  const cause = settled
-    ? `Dispatch ${dispatch.id} was already settled as ${dispatch.status}${at ? ` at ${at}` : ''}, which revoked its lifecycle capability.`
-    : `Dispatch ${dispatch.id} was released${at ? ` at ${at}` : ''}, which revoked its lifecycle capability.`
   return [
-    cause,
+    describeRevocationCause(dispatch),
     'This is final for worker_done and heartbeat: resending them cannot change it.',
-    'If the task is not actually finished, say so with --type escalation, which does not need this capability.',
+    // Why not "escalation will reach the coordinator": that depends on topology
+    // this function cannot see. The gate's scope is a fact; delivery is not.
+    'This capability gates only worker_done and heartbeat, so if the task is not actually finished, report that with --type escalation.',
     'Do not exit with uncommitted work.'
   ].join('\n')
+}
+
+// Why every branch reads a stored column: a revoked row does not record who
+// revoked it, so any sentence about stopping, releasing, or reporting early
+// would be inference. `status` distinguishes the terminal cases, `last_failure`
+// carries the real cause behind a `failed` row ('stopped', 'abandoned'), and a
+// still-open status means the capability went before the dispatch settled.
+function describeRevocationCause(dispatch: DispatchContextRow): string {
+  const at = exposeUtcTimestamp(dispatch.completed_at ?? dispatch.capability_revoked_at)
+  const when = at ? ` at ${at}` : ''
+  if (dispatch.status === 'circuit_broken') {
+    return `Dispatch ${dispatch.id} circuit-broke after ${dispatch.failure_count} failures${when}, which revoked its lifecycle capability.`
+  }
+  if (dispatch.status === 'completed' || dispatch.status === 'failed') {
+    const cause = dispatch.last_failure ? ` (${dispatch.last_failure})` : ''
+    return `Dispatch ${dispatch.id} was settled as ${dispatch.status}${cause}${when}, which revoked its lifecycle capability.`
+  }
+  return `Dispatch ${dispatch.id} had its lifecycle capability revoked${when} while still ${dispatch.status}.`
 }
 
 export function mintDispatchCapability(

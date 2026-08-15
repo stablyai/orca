@@ -455,7 +455,7 @@ describe('orchestration RPC methods', () => {
       // reason must say what happened and what still works. A bare "capability
       // is revoked" reads to an agent as its authorization dying, and the
       // reported failure is a worker that exits with work uncommitted.
-      expect(revoked.lifecycle.reason).toContain('already settled as completed')
+      expect(revoked.lifecycle.reason).toContain('was settled as completed')
       expect(revoked.lifecycle.reason).toContain('--type escalation')
       expect(revoked.lifecycle.reason).toContain('Do not exit with uncommitted work')
     })
