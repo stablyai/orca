@@ -614,6 +614,20 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
   return { text: '', source: null }
 }
 
+const KIMI_USER_PROMPT_HOOK_RESULT_ENVELOPE =
+  /^<hook_result hook_event="UserPromptSubmit">[\s\S]*?<\/hook_result>\s*/
+
+function stripLeadingKimiUserPromptHookResults(promptText: string): string {
+  let text = promptText
+  let stripped: string
+  do {
+    stripped = text
+    text = text.replace(KIMI_USER_PROMPT_HOOK_RESULT_ENVELOPE, '')
+  } while (text !== stripped)
+  // Why: Kimi appends hook results as user-role envelopes; prompt-derived UI should see only the typed suffix.
+  return text.trim()
+}
+
 function stripGrokUserQueryWrapper(promptText: string): string {
   const opener = '<user_query>'
   if (!promptText.startsWith(opener)) {
@@ -4329,7 +4343,10 @@ export function normalizeHookPayload(
     state.lastPromptByPaneKey.set(paneKey, previousStatus.payload.prompt)
   }
   const extractedPrompt = extractPromptText(hookPayload as Record<string, unknown>)
-  const promptText = extractedPrompt.text
+  const promptText =
+    source === 'kimi' && eventName === 'UserPromptSubmit'
+      ? stripLeadingKimiUserPromptHookResults(extractedPrompt.text)
+      : extractedPrompt.text
   let resolvedPromptText = promptText
   let hasTranscriptPromptEvidence = false
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently misrouting.
@@ -4454,7 +4471,10 @@ export function normalizeHookPayload(
       payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'kimi':
-      payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload =
+        eventName === 'UserPromptSubmit' && extractedPrompt.text && !promptText
+          ? null
+          : normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
   }
 
