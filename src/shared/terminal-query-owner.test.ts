@@ -34,4 +34,48 @@ describe('TerminalQueryOwnerTracker', () => {
 
     expect(tracker.owner).toBe('node')
   })
+
+  it.each([
+    ['\x1b[6n', '\x1b[12;34R'],
+    ['\x1b[c', '\x1b[?1;2c'],
+    ['\x1b[14t', '\x1b[4;768;1024t'],
+    ['\x1b[?25$p', '\x1b[?25;1$y'],
+    ['\x1b[?u', '\x1b[?3u'],
+    ['\x1bP$qm\x1b\\', '\x1bP1$r0m\x1b\\'],
+    ['\x1b[>q', '\x1bP>|Orca 1.4\x1b\\']
+  ])('claims the owner of %j for its matching reply', (query, reply) => {
+    const tracker = new TerminalQueryOwnerTracker(() => 'orb')
+
+    tracker.accept({ data: query, rawStartSeq: 0, rawEndSeq: query.length })
+
+    expect(tracker.claimReplyOwner(reply)).toEqual({ matched: true, owner: 'orb' })
+  })
+
+  it('does not claim a modified F3 keystroke without an outstanding CPR query', () => {
+    const tracker = new TerminalQueryOwnerTracker(() => 'zsh')
+
+    expect(tracker.claimReplyOwner('\x1b[1;2R')).toEqual({ matched: false })
+  })
+
+  it('matches outstanding queries by reply kind instead of only the latest query', () => {
+    let foreground = 'first'
+    const tracker = new TerminalQueryOwnerTracker(() => foreground)
+    tracker.accept({ data: '\x1b[6n', rawStartSeq: 0, rawEndSeq: 4 })
+    foreground = 'second'
+    tracker.accept({ data: '\x1b[c', rawStartSeq: 4, rawEndSeq: 7 })
+
+    expect(tracker.claimReplyOwner('\x1b[?1;2c')).toEqual({ matched: true, owner: 'second' })
+    expect(tracker.claimReplyOwner('\x1b[12;34R')).toEqual({ matched: true, owner: 'first' })
+  })
+
+  it('replaces an abandoned same-kind query when a new owner asks again', () => {
+    let foreground = 'first'
+    const tracker = new TerminalQueryOwnerTracker(() => foreground)
+    tracker.accept({ data: '\x1b[6n', rawStartSeq: 0, rawEndSeq: 4 })
+    foreground = 'second'
+    tracker.accept({ data: '\x1b[6n', rawStartSeq: 4, rawEndSeq: 8 })
+
+    expect(tracker.claimReplyOwner('\x1b[12;34R')).toEqual({ matched: true, owner: 'second' })
+    expect(tracker.claimReplyOwner('\x1b[12;34R')).toEqual({ matched: false })
+  })
 })

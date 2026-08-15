@@ -6,7 +6,8 @@ import {
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
-import { answerEachCookedEchoSafeQueryReply } from './terminal-query-reply'
+// oxfmt-ignore
+import { extractOnlyCookedEchoSafeQueryReplies, isTerminalQueryReply } from './terminal-query-reply'
 import {
   combinePtyIngressSourceSpans,
   slicePtyIngressSourceSpan,
@@ -94,10 +95,11 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
-  // Live color replies reuse startup's cooked-echo containment (#13137).
+  // Live replies are accepted only when a matching observed query supplies provenance.
   // oxfmt-ignore
   answerLiveQueryReply(reply: string): boolean {
-    return !this.closed && reply.length > 0 ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answer(part, undefined, true)) : false
+    const replies = extractOnlyCookedEchoSafeQueryReplies(reply)
+    return !this.closed && (replies ? replies.every((part) => this.delivery.answerLive(part)) : isTerminalQueryReply(reply) && this.delivery.answerLive(reply))
   }
 
   drainAndClose(): number {

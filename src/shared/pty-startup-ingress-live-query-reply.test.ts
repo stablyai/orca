@@ -36,6 +36,17 @@ function visible(emissions: readonly PtyIngressEmission[]): string {
   return emissions.map((emission) => emission.data).join('')
 }
 
+function observeQueryForReply(ingress: PtyStartupIngress, reply: string): void {
+  /* oxlint-disable-next-line no-control-regex -- terminal OSC begins with ESC by definition */
+  const oscSlot = /^\u001b\](\d+);/.exec(reply)?.[1]
+  ingress.accept(oscSlot ? `\x1b]${oscSlot};?\x07` : '\x1b[?996n')
+}
+
+function answerObservedLiveReply(ingress: PtyStartupIngress, reply: string): boolean {
+  observeQueryForReply(ingress, reply)
+  return ingress.answerLiveQueryReply(reply)
+}
+
 afterEach(() => vi.useRealTimers())
 
 describe('PtyStartupIngress live query replies (#13137)', () => {
@@ -59,7 +70,9 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       onEmission: (emission) => emissions.push(emission)
     })
 
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    const accepted = answerObservedLiveReply(ingress, COLOR_SCHEME_REPLY)
+    emissions.length = 0
+    expect(accepted).toBe(true)
     vi.advanceTimersByTime(0)
     expect(writes).toEqual([COLOR_SCHEME_REPLY])
     expect(visible(emissions)).toBe('')
@@ -88,7 +101,9 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
         onEmission: (emission) => emissions.push(emission)
       })
 
-      expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+      const accepted = answerObservedLiveReply(ingress, OSC_COLOR_REPLY)
+      emissions.length = 0
+      expect(accepted).toBe(true)
       vi.advanceTimersByTime(0)
       expect(writes).toEqual([OSC_COLOR_REPLY])
       expect(visible(emissions)).toBe('')
@@ -107,7 +122,7 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       onEmission: () => {}
     })
 
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, COLOR_SCHEME_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(0)
     expect(writes).toEqual([])
     await vi.advanceTimersByTimeAsync(20)
@@ -131,7 +146,7 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       onEmission: () => {}
     })
 
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, COLOR_SCHEME_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(199)
     expect(writes).toEqual([])
     await vi.advanceTimersByTimeAsync(1)
@@ -150,12 +165,12 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       onEmission: () => {}
     })
 
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, COLOR_SCHEME_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(200)
     expect(probe.calls).toBe(10)
     expect(writes).toEqual([COLOR_SCHEME_REPLY])
 
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, COLOR_SCHEME_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(0)
     expect(probe.calls).toBe(10)
     expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
@@ -189,6 +204,9 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       COLOR_SCHEME_REPLY,
       COLOR_SCHEME_REPLY
     ])
+    observeQueryForReply(ingress, COLOR_SCHEME_REPLY)
+    observeQueryForReply(ingress, COLOR_SCHEME_REPLY)
+    emissions.length = 0
     expect(ingress.answerLiveQueryReply(coalesced)).toBe(true)
     vi.advanceTimersByTime(0)
     expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
@@ -208,11 +226,11 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       onEmission: () => {}
     })
 
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, COLOR_SCHEME_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(0)
     expect(writes).toEqual([COLOR_SCHEME_REPLY])
 
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, COLOR_SCHEME_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(0)
     expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
     ingress.drainAndClose()
@@ -221,13 +239,16 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
   it('drops a mid-session OSC 11 reply after the querier has left (shell foreground)', () => {
     vi.useFakeTimers()
     const writes: string[] = []
+    let foreground = 'gh'
     const ingress = new PtyStartupIngress({
       ownerBackend: 'posix-pty',
       write: (data) => writes.push(data),
       onEmission: () => {},
-      readForegroundProcess: () => 'zsh'
+      readForegroundProcess: () => foreground
     })
 
+    ingress.accept('\x1b]11;?\x07')
+    foreground = 'zsh'
     expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
     vi.advanceTimersByTime(0)
     expect(writes).toEqual([])
@@ -246,7 +267,7 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       readForegroundProcess: () => 'gh'
     })
 
-    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, OSC_COLOR_REPLY)).toBe(true)
     vi.advanceTimersByTime(0)
     expect(writes).toEqual([OSC_COLOR_REPLY])
     ingress.drainAndClose()
@@ -271,6 +292,45 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
+  it.each([
+    ['CPR', '\x1b[6n', '\x1b[12;34R'],
+    ['DA', '\x1b[c', '\x1b[?1;2c'],
+    ['window report', '\x1b[14t', '\x1b[4;768;1024t'],
+    ['mode report', '\x1b[?25$p', '\x1b[?25;1$y'],
+    ['kitty flags', '\x1b[?u', '\x1b[?3u'],
+    ['DCS report', '\x1bP$qm\x1b\\', '\x1bP1$r0m\x1b\\'],
+    ['XTVERSION report', '\x1b[>q', '\x1bP>|Orca 1.4\x1b\\']
+  ])('drops a stale %s reply after the querier exits', (_label, query, reply) => {
+    const writes: string[] = []
+    let foreground = 'orb'
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => foreground
+    })
+
+    ingress.accept(query)
+    foreground = 'zsh'
+    expect(ingress.answerLiveQueryReply(reply)).toBe(true)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
+  it('does not consume a modified F3 keystroke without an outstanding CPR query', () => {
+    const writes: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'zsh'
+    })
+
+    expect(ingress.answerLiveQueryReply('\x1b[1;2R')).toBe(false)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
   it('keeps Windows-owned WSL replies even when a shell owns the tty', () => {
     const writes: string[] = []
     const ingress = new PtyStartupIngress({
@@ -280,7 +340,7 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       readForegroundProcess: () => 'zsh'
     })
 
-    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, OSC_COLOR_REPLY)).toBe(true)
     expect(writes).toEqual([OSC_COLOR_REPLY])
     ingress.drainAndClose()
   })
@@ -298,6 +358,7 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       readForegroundProcess: () => foreground
     })
 
+    observeQueryForReply(ingress, OSC_COLOR_REPLY)
     expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(40)
     expect(writes).toEqual([])
@@ -319,7 +380,7 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       readForegroundProcess: () => null
     })
 
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(answerObservedLiveReply(ingress, COLOR_SCHEME_REPLY)).toBe(true)
     await vi.advanceTimersByTimeAsync(199)
     expect(writes).toEqual([])
     await vi.advanceTimersByTimeAsync(1)
@@ -342,7 +403,7 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     )
 
     for (const reply of replies) {
-      expect(ingress.answerLiveQueryReply(reply)).toBe(true)
+      expect(answerObservedLiveReply(ingress, reply)).toBe(true)
     }
     // The 65th enqueue forces the bounded pending set to flush without dropping data.
     expect(writes).toHaveLength(64)

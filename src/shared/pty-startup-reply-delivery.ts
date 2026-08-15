@@ -1,11 +1,9 @@
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import type { PtySlaveEchoProbe } from './pty-slave-line-discipline-echo'
 import type { PtyIngressSourceSpan } from './pty-startup-ingress-contract'
-import {
-  shouldInjectQueryReplyForOwnerFromProcess,
-  type ForegroundProcessReader,
-  TerminalQueryOwnerTracker
-} from './terminal-query-owner'
+// oxfmt-ignore
+import { shouldInjectQueryReplyForOwnerFromProcess, type ForegroundProcessReader, TerminalQueryOwnerTracker } from './terminal-query-owner'
+import { routeTerminalLiveQueryReply } from './terminal-live-query-reply'
 
 // Why this module exists: a startup color reply is written to the PTY master, so
 // whatever line discipline sits between Orca and the querying program can echo it
@@ -203,6 +201,11 @@ export class PtyStartupReplyDelivery {
     this.queryOwner.accept(span)
   }
 
+  // oxfmt-ignore
+  answerLive(reply: string): boolean {
+    return !this.closed && routeTerminalLiveQueryReply(reply, this.ownerBackend, this.queryOwner, this.foregroundProcessReader, (owner) => this.answer(reply, undefined, true, owner), (owner) => this.writeReply(reply, undefined, false, true, owner))
+  }
+
   /**
    * True once the reply has been written or accepted for a later write.
    *
@@ -212,7 +215,7 @@ export class PtyStartupReplyDelivery {
    * written independently — one failing says nothing about the ones that landed.
    */
   // oxfmt-ignore
-  answer(reply: string, onFailed?: () => void, verifyForeground = false): boolean {
+  answer(reply: string, onFailed?: () => void, verifyForeground = false, queryOwner = verifyForeground ? this.queryOwner.owner : undefined): boolean {
     if (this.closed) {
       return false
     }
@@ -231,7 +234,7 @@ export class PtyStartupReplyDelivery {
     this.pendingWrites.push({
       reply,
       onFailed,
-      queryOwner: verifyForeground ? this.queryOwner.owner : undefined,
+      queryOwner,
       verifyForeground
     })
     this.armWriteTimer()

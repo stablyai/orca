@@ -49,6 +49,48 @@ const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
 )
 /* oxlint-enable no-control-regex */
 
+export type TerminalQueryReplyKind =
+  | 'cpr'
+  | 'dsr'
+  | 'private-dsr'
+  | 'device-attributes'
+  | 'window-report'
+  | 'mode-report'
+  | 'kitty-flags'
+  | 'osc-color'
+  | 'dcs-report'
+
+export function classifyTerminalQueryReply(data: string): TerminalQueryReplyKind | null {
+  if (data.length < 3 || data[0] !== ESC) {
+    return null
+  }
+  if (CPR_OR_DSR_RE.test(data)) {
+    if (data.endsWith('R')) {
+      return 'cpr'
+    }
+    return data.startsWith(`${ESC}[?`) ? 'private-dsr' : 'dsr'
+  }
+  if (DEVICE_ATTRIBUTES_RE.test(data)) {
+    return 'device-attributes'
+  }
+  if (WINDOW_SIZE_REPORT_RE.test(data)) {
+    return 'window-report'
+  }
+  if (DECRPM_RE.test(data)) {
+    return 'mode-report'
+  }
+  if (KITTY_FLAGS_RE.test(data)) {
+    return 'kitty-flags'
+  }
+  if (OSC_RESPONSE_RE.test(data)) {
+    return 'osc-color'
+  }
+  if (DCS_RESPONSE_RE.test(data)) {
+    return 'dcs-report'
+  }
+  return null
+}
+
 /**
  * True when `data` (from xterm.onData) is a synthetic reply the emulator
  * generated in response to a query — not something the user typed. These are
@@ -60,18 +102,7 @@ const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
  * as replies — with the single documented modified-F3/CPR collision above.
  */
 export function isTerminalQueryReply(data: string): boolean {
-  if (data.length < 3 || data[0] !== ESC) {
-    return false
-  }
-  return (
-    CPR_OR_DSR_RE.test(data) ||
-    DEVICE_ATTRIBUTES_RE.test(data) ||
-    WINDOW_SIZE_REPORT_RE.test(data) ||
-    DECRPM_RE.test(data) ||
-    KITTY_FLAGS_RE.test(data) ||
-    OSC_RESPONSE_RE.test(data) ||
-    DCS_RESPONSE_RE.test(data)
-  )
+  return classifyTerminalQueryReply(data) !== null
 }
 
 /** End index (exclusive) of one cooked-echo-risk reply at `start`, else -1. */
