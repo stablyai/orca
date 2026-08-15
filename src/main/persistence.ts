@@ -1498,6 +1498,7 @@ function sanitizeRepoUpdatesForPersistence<
       | 'upstream'
       | 'gitRemoteIdentity'
       | 'worktreeBasePath'
+      | 'worktreeLocationMode'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
       | 'customWorktreeVisibilitySources'
@@ -1545,6 +1546,14 @@ function sanitizeRepoUpdatesForPersistence<
     } else {
       delete sanitized.worktreeBasePath
     }
+  }
+  if (
+    'worktreeLocationMode' in sanitized &&
+    sanitized.worktreeLocationMode !== undefined &&
+    sanitized.worktreeLocationMode !== 'sibling' &&
+    sanitized.worktreeLocationMode !== 'nested'
+  ) {
+    delete sanitized.worktreeLocationMode
   }
   if ('projectHostSetupMethod' in sanitized) {
     const setupMethod = sanitizeRepoProjectHostSetupMethod(sanitized.projectHostSetupMethod)
@@ -5077,6 +5086,7 @@ export class Store {
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
+        | 'worktreeLocationMode'
         | 'kind'
         | 'executionHostId'
         | 'symlinkPaths'
@@ -5154,6 +5164,13 @@ export class Store {
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath
       delete sanitizedUpdates.worktreeBasePath
+    }
+    if (
+      'worktreeLocationMode' in sanitizedUpdates &&
+      sanitizedUpdates.worktreeLocationMode === undefined
+    ) {
+      delete repo.worktreeLocationMode
+      delete sanitizedUpdates.worktreeLocationMode
     }
     if (
       'externalWorktreeVisibility' in sanitizedUpdates &&
@@ -5304,6 +5321,7 @@ export class Store {
       forkSyncMode: rawForkSyncMode,
       customWorktreeVisibilitySources: rawCustomWorktreeVisibilitySources,
       worktreeVisibilitySourcePreferences: rawWorktreeVisibilitySourcePreferences,
+      worktreeLocationMode: rawWorktreeLocationMode,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
@@ -5318,6 +5336,12 @@ export class Store {
     const worktreeVisibilitySourcePreferences = normalizeWorktreeVisibilitySourcePreferences(
       rawWorktreeVisibilitySourcePreferences
     )
+    // Why: writes are guarded, but a malformed on-disk value must not survive a
+    // reload — normalize unknown modes to undefined so the global default applies.
+    const worktreeLocationMode =
+      rawWorktreeLocationMode === 'sibling' || rawWorktreeLocationMode === 'nested'
+        ? rawWorktreeLocationMode
+        : undefined
     // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
     const gitUsername = isFolderRepo(repo)
       ? ''
@@ -5335,6 +5359,7 @@ export class Store {
       ...(worktreeVisibilitySourcePreferences !== undefined
         ? { worktreeVisibilitySourcePreferences }
         : {}),
+      ...(worktreeLocationMode !== undefined ? { worktreeLocationMode } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {

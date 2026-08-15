@@ -31,6 +31,7 @@ import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
+import { DEFAULT_WORKTREE_LOCATION_MODE } from './worktree-location-mode'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -173,6 +174,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     workspaceDir: getDefaultWorkspaceDir(homedir),
     worktreeVisibilityDefaults: { external: 'hide' },
     nestWorkspaces: true,
+    defaultWorktreeLocationMode: DEFAULT_WORKTREE_LOCATION_MODE,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
     localBaseRefSuggestionDismissed: false,

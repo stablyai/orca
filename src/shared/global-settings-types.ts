@@ -5,6 +5,7 @@ import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { AppIconId } from './app-icon'
+import type { WorktreeLocationMode } from './worktree-location-mode'
 import type { SourceControlAiSettings } from './source-control-ai-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
@@ -59,6 +60,8 @@ export type GlobalSettings = {
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   nestWorkspaces: boolean
+  /** App-level default for repos without an explicit worktreeLocationMode. */
+  defaultWorktreeLocationMode?: WorktreeLocationMode
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Set once the user dismisses the "local main is behind" suggestion toast, so
@@ -458,6 +461,7 @@ export type GlobalSettings = {
 export type OrcaWorkspaceLayout = {
   path: string
   nestWorkspaces: boolean
+  worktreeLocationMode?: WorktreeLocationMode
 }
 
 export type GhosttyImportPreview = {

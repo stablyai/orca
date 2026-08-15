@@ -135,6 +135,7 @@ export type RepoUpdate = Partial<
     | 'hookSettings'
     | 'worktreeBaseRef'
     | 'worktreeBasePath'
+    | 'worktreeLocationMode'
     | 'kind'
     | 'symlinkPaths'
     | 'issueSourcePreference'
@@ -275,6 +276,14 @@ function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   }
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
     sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
+  }
+  if (
+    'worktreeLocationMode' in sanitized &&
+    sanitized.worktreeLocationMode !== undefined &&
+    sanitized.worktreeLocationMode !== 'sibling' &&
+    sanitized.worktreeLocationMode !== 'nested'
+  ) {
+    delete sanitized.worktreeLocationMode
   }
   if (
     'forkSyncMode' in sanitized &&

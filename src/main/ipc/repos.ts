@@ -2119,6 +2119,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'hookSettings'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'
+            | 'worktreeLocationMode'
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
@@ -2175,6 +2176,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         } else {
           updates.worktreeBasePath = v.trim() || undefined
         }
+      }
+      if (
+        'worktreeLocationMode' in updates &&
+        updates.worktreeLocationMode !== undefined &&
+        updates.worktreeLocationMode !== 'sibling' &&
+        updates.worktreeLocationMode !== 'nested'
+      ) {
+        delete updates.worktreeLocationMode
       }
       if ('repoIcon' in updates) {
         const repoIcon = sanitizeRepoIcon(updates.repoIcon)
@@ -2292,7 +2301,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         ? store.updateRepo(args.repoId, updates, hostId)
         : store.updateRepo(args.repoId, updates)
       if (updated) {
-        if ('worktreeBasePath' in updates) {
+        if ('worktreeBasePath' in updates || 'worktreeLocationMode' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()
         }

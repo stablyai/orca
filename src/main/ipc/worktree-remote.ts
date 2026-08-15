@@ -47,6 +47,10 @@ import type {
   RemoteFetchResult,
   RemoteTrackingBase
 } from '../runtime/orca-runtime'
+import {
+  ensureLocalNestedWorktreeRootIgnored,
+  ensureRemoteNestedWorktreeRootIgnored
+} from '../git/nested-worktree-exclude'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import {
   buildPosixRunnerScript,
@@ -87,6 +91,7 @@ import {
   getWorktreeCreationLayout,
   getWorktreePathSettings,
   hasRepoWorktreeBasePath,
+  usesNestedWorktreeLocation,
   shouldSetDisplayName,
   mergeWorktree
 } from './worktree-logic'
@@ -1699,6 +1704,13 @@ export async function createRemoteWorktree(
     }
   }
 
+  if (usesNestedWorktreeLocation(repo, settings)) {
+    if (!fsProvider) {
+      throw new Error('Could not prepare nested worktree ignore rules for this SSH repo.')
+    }
+    await ensureRemoteNestedWorktreeRootIgnored(repo.path, provider, fsProvider)
+  }
+
   const localBaseRefRefresh =
     settings.refreshLocalBaseRefOnWorktreeCreate && !checkoutExistingBranch && remoteTrackingBase
       ? await refreshLocalBaseRefForRemoteWorktreeCreate(provider, repo.path, remoteTrackingBase)
@@ -2332,6 +2344,9 @@ export async function createLocalWorktree(
     checkoutExistingBranch,
     ...remoteTrackingBaseOption,
     ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
+  }
+  if (usesNestedWorktreeLocation(repo, settings)) {
+    await ensureLocalNestedWorktreeRootIgnored(repo.path, localWorktreeGitOptions)
   }
   let addResult: AddWorktreeResult
   try {

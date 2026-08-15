@@ -5965,7 +5965,9 @@
           "externalWorktrees": "외부 작업 트리",
           "externalWorktreesDescription": "Orca 외부에서 만든 작업 트리를 기본적으로 표시할지 선택합니다.",
           "show": "표시",
-          "hide": "숨기기"
+          "hide": "숨기기",
+          "defaultNestedWorktreesTitle": "Store worktrees inside each project by default",
+          "defaultNestedWorktreesDescription": "New projects create their worktrees in .worktrees inside the project root and keep that folder ignored. Individual projects can override this."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "변경 사항 적용",
@@ -6635,7 +6637,17 @@
           "show": "표시",
           "hide": "숨기기",
           "externalWorktreesGlobal": "전역 기본값: {{value0}}",
-          "useGlobal": "전역 설정 사용"
+          "useGlobal": "전역 설정 사용",
+          "nestedWorktreesLabel": "Store worktrees inside this project",
+          "nestedWorktreesDescription": "Create new worktrees in .worktrees inside the project root and keep that folder ignored.",
+          "nestedWorktreesPath": "New worktrees will be created under .worktrees in this project.",
+          "nestedWorktreesPlaceholder": ".worktrees",
+          "worktreeLocationFollowingGlobalNested": "Following global default (nested)",
+          "worktreeLocationFollowingGlobalSibling": "Following global default (sibling)",
+          "worktreeLocationExplicitNested": "Project override (nested)",
+          "worktreeLocationExplicitSibling": "Project override (sibling)",
+          "worktreeLocationModeScope": "Worktree location mode",
+          "nestedMode": "Nested"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "명령 템플릿",
@@ -8258,7 +8270,12 @@
             "editorFontFamily": "편집기 글꼴",
             "editorFontFamilyDesc": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다.",
             "externalWorktrees": "외부 작업 트리",
-            "externalWorktreesDescription": "Orca 외부에서 만든 작업 트리를 기본적으로 표시할지 선택합니다."
+            "externalWorktreesDescription": "Orca 외부에서 만든 작업 트리를 기본적으로 표시할지 선택합니다.",
+            "defaultNestedWorktreesTitle": "Store worktrees inside each project by default",
+            "defaultNestedWorktreesDescription": "New projects create their worktrees in .worktrees inside the project root and keep that folder ignored. Individual projects can override this.",
+            "defaultNestedDotWorktrees": ".worktrees",
+            "defaultNestedProject": "project",
+            "defaultNestedDefault": "default"
           }
         },
         "git": {

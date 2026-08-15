@@ -78,6 +78,36 @@ export function GeneralWorkspaceSettingsSection({
 
       <SearchableSetting
         title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.defaultNestedWorktreesTitle',
+          'Store worktrees inside each project by default'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.defaultNestedWorktreesDescription',
+          'New projects create their worktrees in .worktrees inside the project root and keep that folder ignored. Individual projects can override this.'
+        )}
+        keywords={['worktree', 'nested', '.worktrees', 'project', 'default']}
+      >
+        <SettingsSwitchRow
+          label={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.defaultNestedWorktreesTitle',
+            'Store worktrees inside each project by default'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.defaultNestedWorktreesDescription',
+            'New projects create their worktrees in .worktrees inside the project root and keep that folder ignored. Individual projects can override this.'
+          )}
+          checked={settings.defaultWorktreeLocationMode === 'nested'}
+          onChange={() =>
+            updateSettings({
+              defaultWorktreeLocationMode:
+                settings.defaultWorktreeLocationMode === 'nested' ? 'sibling' : 'nested'
+            })
+          }
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate(
           'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
           'Nest Workspaces'
         )}

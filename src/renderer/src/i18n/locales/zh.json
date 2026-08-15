@@ -5977,7 +5977,9 @@
           "externalWorktrees": "外部工作树",
           "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。",
           "show": "显示",
-          "hide": "隐藏"
+          "hide": "隐藏",
+          "defaultNestedWorktreesTitle": "Store worktrees inside each project by default",
+          "defaultNestedWorktreesDescription": "New projects create their worktrees in .worktrees inside the project root and keep that folder ignored. Individual projects can override this."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "应用更改",
@@ -6647,7 +6649,17 @@
           "show": "显示",
           "hide": "隐藏",
           "externalWorktreesGlobal": "全局默认值：{{value0}}",
-          "useGlobal": "使用全局设置"
+          "useGlobal": "使用全局设置",
+          "nestedWorktreesLabel": "Store worktrees inside this project",
+          "nestedWorktreesDescription": "Create new worktrees in .worktrees inside the project root and keep that folder ignored.",
+          "nestedWorktreesPath": "New worktrees will be created under .worktrees in this project.",
+          "nestedWorktreesPlaceholder": ".worktrees",
+          "worktreeLocationFollowingGlobalNested": "Following global default (nested)",
+          "worktreeLocationFollowingGlobalSibling": "Following global default (sibling)",
+          "worktreeLocationExplicitNested": "Project override (nested)",
+          "worktreeLocationExplicitSibling": "Project override (sibling)",
+          "worktreeLocationModeScope": "Worktree location mode",
+          "nestedMode": "Nested"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",
@@ -8270,7 +8282,12 @@
             "editorFontFamily": "编辑器字体",
             "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体，留空则跟随终端字体。",
             "externalWorktrees": "外部工作树",
-            "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。"
+            "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。",
+            "defaultNestedWorktreesTitle": "Store worktrees inside each project by default",
+            "defaultNestedWorktreesDescription": "New projects create their worktrees in .worktrees inside the project root and keep that folder ignored. Individual projects can override this.",
+            "defaultNestedDotWorktrees": ".worktrees",
+            "defaultNestedProject": "project",
+            "defaultNestedDefault": "default"
           }
         },
         "git": {

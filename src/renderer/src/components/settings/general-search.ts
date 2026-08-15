@@ -43,6 +43,32 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.defaultNestedWorktreesTitle',
+      'Store worktrees inside each project by default'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.defaultNestedWorktreesDescription',
+      'New projects create their worktrees in .worktrees inside the project root and keep that folder ignored. Individual projects can override this.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree'),
+      ...translateSearchKeyword('auto.components.settings.general.search.ec5049e510', 'nested'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.defaultNestedDotWorktrees',
+        '.worktrees'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.defaultNestedProject',
+        'project'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.defaultNestedDefault',
+        'default'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.141f71c69f', 'Nest Workspaces'),
     description: translate(
       'auto.components.settings.general.search.b9cffd374d',

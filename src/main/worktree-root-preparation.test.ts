@@ -54,6 +54,15 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     expect(mkdirMock).toHaveBeenCalledWith('/projects/worktrees', { recursive: true })
   })
 
+  it('prepares the project-nested worktree root', async () => {
+    await prepareLocalWorktreeRootForRepo(store as never, {
+      ...repo,
+      worktreeLocationMode: 'nested'
+    })
+
+    expect(mkdirMock).toHaveBeenCalledWith('/projects/app/.worktrees', { recursive: true })
+  })
+
   it('skips non-local and folder repos', async () => {
     await prepareLocalWorktreeRootForRepo(store as never, { ...repo, connectionId: 'ssh-1' })
     await prepareLocalWorktreeRootForRepo(store as never, {

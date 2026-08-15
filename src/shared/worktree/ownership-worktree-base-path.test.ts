@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../global-settings-types'
 import type { Repo } from '../repo-types'
 import type { Worktree } from './types'
-import { buildKnownOrcaWorkspaceLayouts, classifyWorktreeOwnership } from './ownership'
+import { classifyWorktreeOwnership, matchesStrongOrcaCreatePath } from './ownership'
+import { buildKnownOrcaWorkspaceLayouts } from '../worktree-layouts'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -78,6 +79,48 @@ describe('repo-specific worktree ownership layouts', () => {
     ).toBe('external')
   })
 
+  it('classifies project-nested .worktrees paths as Orca-managed', () => {
+    const repo = makeRepo({ worktreeLocationMode: 'nested' })
+    const settings = makeSettings({ workspaceDir: '/global/workspaces', nestWorkspaces: true })
+
+    expect(buildKnownOrcaWorkspaceLayouts(settings, repo)[0]).toEqual({
+      path: '/projects/a/repo/.worktrees',
+      nestWorkspaces: false,
+      worktreeLocationMode: 'nested'
+    })
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree('/projects/a/repo/.worktrees/feature'),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      })
+    ).toBe('orca-managed')
+  })
+
+  it('classifies global-default nested .worktrees paths as Orca-managed', () => {
+    const repo = makeRepo()
+    const settings = makeSettings({
+      workspaceDir: '/global/workspaces',
+      nestWorkspaces: true,
+      defaultWorktreeLocationMode: 'nested'
+    })
+
+    expect(buildKnownOrcaWorkspaceLayouts(settings, repo)[0]).toEqual({
+      path: '/projects/a/repo/.worktrees',
+      nestWorkspaces: false,
+      worktreeLocationMode: 'nested'
+    })
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree('/projects/a/repo/.worktrees/feature'),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      })
+    ).toBe('orca-managed')
+  })
+
   it('includes relative global layouts for SSH repos without applying absolute desktop paths', () => {
     const repo = makeRepo({ path: '/remote/repo', connectionId: 'ssh-1' })
     const relativeSettings = makeSettings({ workspaceDir: '../worktrees' })
@@ -92,5 +135,23 @@ describe('repo-specific worktree ownership layouts', () => {
         (layout) => layout.path === '/local/worktrees'
       )
     ).toBe(false)
+  })
+
+  it('falls through a non-matching nested layout to a later matching layout', () => {
+    // Regression: a nested layout whose worktree has more than one segment
+    // beneath it must not short-circuit to false — a later layout for the same
+    // root can still match (else an Orca worktree is misclassified as external).
+    const repo = makeRepo({ path: '/projects/a/repo' })
+    const worktreePath = '/projects/a/worktrees/repo/feature'
+    const layouts = [
+      {
+        path: '/projects/a/worktrees',
+        nestWorkspaces: false,
+        worktreeLocationMode: 'nested' as const
+      },
+      { path: '/projects/a/worktrees', nestWorkspaces: true }
+    ]
+
+    expect(matchesStrongOrcaCreatePath(worktreePath, layouts, repo)).toBe(true)
   })
 })
