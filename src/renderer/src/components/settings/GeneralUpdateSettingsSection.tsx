@@ -250,11 +250,14 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                   'Update error. {{value0}}',
                   { value0: updateStatus.message }
                 )
-              : translate(
-                  'auto.components.settings.GeneralUpdateSettingsSection.bd79d412f0',
-                  'Update check failed. {{value0}}',
-                  { value0: updateStatus.message }
-                ))}
+              : updateStatus.reason === 'release-not-ready'
+                ? // Why: a mid-publish release isn't a failed check — the calm copy stands alone.
+                  updateStatus.message
+                : translate(
+                    'auto.components.settings.GeneralUpdateSettingsSection.bd79d412f0',
+                    'Update check failed. {{value0}}',
+                    { value0: updateStatus.message }
+                  ))}
         </p>
       </SearchableSetting>
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}

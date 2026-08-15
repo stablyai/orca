@@ -2102,6 +2102,7 @@
         "5194358929": "Hide details",
         "8bc9e17d8f": "Show details",
         "8cf17b10af": "Local Build Error",
+        "5a87d9393c": "No Update Available Yet",
         "a4650b0dc4": "Could Not Use Local Build",
         "b1e390250d": "Could not complete the local build switch.",
         "d29740d175": "The selected build could not be used.",
@@ -3472,6 +3473,9 @@
             "stoppingAria": "Stopping the skill update. Click to open details."
           },
           "UpdateStatusSegment": {
+            "567f5ad945": "No update yet",
+            "406323c810": "A newer release isn't available yet — click for details",
+            "fcfa20b782": "No update available yet. Click to expand.",
             "5cd13105a3": "Update failed. Click to expand.",
             "2201df6987": "Update failed — click to see details",
             "8533c12c3c": "Update failed",

@@ -21,7 +21,8 @@ function getPlatformManifestName(): string {
     return 'latest-mac.yml'
   }
   if (process.platform === 'linux') {
-    return 'latest-linux.yml'
+    // Why: electron-updater requests arch-suffixed manifests on non-x64 Linux.
+    return process.arch === 'x64' ? 'latest-linux.yml' : `latest-linux-${process.arch}.yml`
   }
   return 'latest.yml'
 }
@@ -105,16 +106,67 @@ function getManifestAssetNames(manifestText: string): string[] {
 
 type ReleaseReadiness = 'ready' | 'not-ready' | 'unavailable'
 
-async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<ReleaseReadiness> {
+function getGitHubReleaseAssetReadiness(assetUrl: string): Promise<ReleaseReadiness> {
+  return new Promise((resolve) => {
+    const request = net.request({ method: 'HEAD', url: assetUrl, redirect: 'manual' })
+    let settled = false
+    const settle = (readiness: ReleaseReadiness): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      resolve(readiness)
+    }
+    const timeout = setTimeout(() => {
+      request.abort()
+      settle('unavailable')
+    }, FETCH_TIMEOUT_MS)
+
+    request.on('redirect', (statusCode) => {
+      // Why: GitHub 302s HEADs for existing assets to signed storage and 404s missing ones
+      // directly, so the redirect alone proves existence without depending on the storage host's
+      // HEAD handling; Electron cancels an unfollowed manual redirect itself. Any other 3xx
+      // (e.g. a 301 from a repo move) proves nothing about the asset.
+      settle(statusCode === 302 ? 'ready' : 'unavailable')
+    })
+    request.on('response', (response) => {
+      settle(
+        response.statusCode === 404
+          ? 'not-ready'
+          : response.statusCode >= 200 && response.statusCode < 300
+            ? 'ready'
+            : 'unavailable'
+      )
+    })
+    request.on('error', () => settle('unavailable'))
+    // Why: settling on a sync throw also clears the timeout, so the stale timer can't abort() a request that never started.
+    try {
+      request.end()
+    } catch {
+      settle('unavailable')
+    }
+  })
+}
+
+async function getReleaseAssetReadiness(tag: string, assetName: string): Promise<ReleaseReadiness> {
+  const isGitHubReleaseAsset = !/^https?:\/\//i.test(assetName)
+  const assetUrl = isGitHubReleaseAsset
+    ? getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
+    : assetName
+  if (isGitHubReleaseAsset) {
+    return getGitHubReleaseAssetReadiness(assetUrl)
+  }
+
   try {
-    const assetUrl = assetName.startsWith('http')
-      ? assetName
-      : getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
     const res = await net.fetch(assetUrl, {
       method: 'HEAD',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
     })
-    return res.status === 404 ? 'not-ready' : res.ok ? 'ready' : 'unavailable'
+    if (res.status === 404) {
+      return 'not-ready'
+    }
+    return res.ok ? 'ready' : 'unavailable'
   } catch {
     return 'unavailable'
   }
@@ -144,7 +196,7 @@ async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadine
       return 'not-ready'
     }
     const assetResults = await Promise.all(
-      assetNames.map((assetName) => isReleaseAssetAvailable(tag, assetName))
+      assetNames.map((assetName) => getReleaseAssetReadiness(tag, assetName))
     )
     return assetResults.includes('not-ready')
       ? 'not-ready'
@@ -217,39 +269,34 @@ export async function fetchNewerReleaseTagsWithReadiness(
       : includePrerelease
         ? tags.filter(({ tag }) => !isPerfPrereleaseTag(tag))
         : tags.filter(({ version }) => !isPrereleaseVersion(version))
-  const newestNewerIndex = candidates.findIndex(
+  // Why: probing anything at or below the installed version can hand back a
+  // last-good pin equal to what is already installed, which electron-updater
+  // then reports as "you're on the latest version" while a newer build exists.
+  const newerCandidates = candidates.filter(
     ({ version }) => compareVersions(version, currentVersion) > 0
   )
-  if (newestNewerIndex === -1) {
+  if (newerCandidates.length === 0) {
     return { tags: [], state: 'no-newer' }
   }
 
   // Why: a cancelled release can leave several feed entries without manifests,
   // but update checks must not stall on an unbounded run of 5s probes.
-  const probeCandidates = candidates.slice(
-    newestNewerIndex,
-    newestNewerIndex + MAX_MANIFEST_PROBE_CANDIDATES
-  )
+  const probeCandidates = newerCandidates.slice(0, MAX_MANIFEST_PROBE_CANDIDATES)
   const manifestResults = await Promise.all(
-    probeCandidates.map(async ({ tag, version }) => ({
+    probeCandidates.map(async ({ tag }) => ({
       tag,
-      version,
       readiness: await getPlatformManifestReadiness(tag)
     }))
   )
 
-  const primaryIndex = manifestResults.findIndex(
-    ({ readiness, version }) =>
-      readiness === 'ready' && compareVersions(version, currentVersion) > 0
-  )
+  // Why: every probe candidate is already strictly newer than the installed
+  // version, so any ready one is a safe pin.
+  const primaryIndex = manifestResults.findIndex(({ readiness }) => readiness === 'ready')
   if (primaryIndex === -1) {
     if (manifestResults[0]?.readiness === 'unavailable') {
       return { tags: [], state: 'unavailable', unavailableReason: 'manifest' }
     }
-    const lastGoodTag = manifestResults.find(({ readiness }) => readiness === 'ready')?.tag
-    return lastGoodTag
-      ? { tags: [], state: 'not-ready', lastGoodTag }
-      : { tags: [], state: 'not-ready' }
+    return { tags: [], state: 'not-ready' }
   }
 
   if (primaryIndex > 0) {

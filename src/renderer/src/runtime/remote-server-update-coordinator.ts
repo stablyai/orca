@@ -149,7 +149,11 @@ export async function inspectRemoteServerUpdate(
               transport,
               timing,
               (snapshot) =>
-                snapshot.status.state === 'available' || snapshot.status.state === 'not-available',
+                snapshot.status.state === 'available' ||
+                snapshot.status.state === 'not-available' ||
+                // Why: a mid-publish release is "no update yet", not a failed server — it maps to 'current' below.
+                (snapshot.status.state === 'error' &&
+                  snapshot.status.reason === 'release-not-ready'),
               () => undefined
             )
       if (checked.status.state === 'available') {

@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installNetRequestFetchAdapter } from './updater-net-request.fixture'
 import { publishingIncident } from './updater-prerelease-feed-reproduction.fixture'
 
-const { netFetchMock } = vi.hoisted(() => ({
-  netFetchMock: vi.fn()
+const ORIGINAL_PLATFORM = process.platform
+
+const { netFetchMock, netRequestMock } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
+  netRequestMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
-  net: { fetch: netFetchMock }
+  net: { fetch: netFetchMock, request: netRequestMock }
 }))
 
 function buildAtomFeed(tags: string[]): string {
@@ -31,6 +35,20 @@ function buildManifest(tag: string): string {
 
 function isPlatformManifestRequest(url: string): boolean {
   return /\/latest(?:-[a-z]+)?\.yml$/.test(url)
+}
+
+function setPlatformForTest(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform })
+}
+
+function buildWindowsManifest(version: string): string {
+  return [
+    `version: ${version}`,
+    'files:',
+    '  - url: orca-windows-setup.exe',
+    '    sha512: test',
+    'path: orca-windows-setup.exe'
+  ].join('\n')
 }
 
 function respondWithAtom(
@@ -86,18 +104,187 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
   beforeEach(() => {
     vi.resetModules()
     netFetchMock.mockReset()
+    netRequestMock.mockReset()
+    installNetRequestFetchAdapter(netRequestMock, netFetchMock)
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
+    setPlatformForTest(ORIGINAL_PLATFORM)
   })
 
-  it('reports not-ready with a verified last-good tag when the newest assets are unavailable', async () => {
+  it("offers a Windows release from GitHub's asset redirect without probing Azure", async () => {
+    setPlatformForTest('win32')
+    const manifestUrls: string[] = []
+    const assetRequestInits: { method?: string; redirect?: string }[] = []
+
+    netFetchMock.mockImplementation(
+      (url: string, init?: { method?: string; redirect?: string }) => {
+        if (url === 'https://github.com/stablyai/orca/releases.atom') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.resolve(buildAtomFeed(['v1.4.182']))
+          })
+        }
+        if (isPlatformManifestRequest(url)) {
+          manifestUrls.push(url)
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.resolve(buildWindowsManifest('1.4.182'))
+          })
+        }
+        if (init?.method === 'HEAD') {
+          assetRequestInits.push(init)
+          return Promise.resolve({ ok: false, status: 302, text: () => Promise.resolve('') })
+        }
+        return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
+      }
+    )
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.178-rc.2', 1)).resolves.toEqual({
+      tags: ['v1.4.182'],
+      state: 'ready'
+    })
+    expect(manifestUrls[0]).toBe(
+      'https://github.com/stablyai/orca/releases/download/v1.4.182/latest.yml'
+    )
+    expect(assetRequestInits).toEqual([expect.objectContaining({ redirect: 'manual' })])
+  })
+
+  it.each([
+    ['a timed-out', () => Promise.reject(new Error('The operation was aborted due to timeout'))],
+    [
+      'a forbidden',
+      () => Promise.resolve({ ok: false, status: 403, text: () => Promise.resolve('') })
+    ],
+    [
+      'a server-error',
+      () => Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
+    ]
+  ] satisfies [string, () => Promise<unknown>][])(
+    'reports the Windows asset probe as unavailable after %s response',
+    async (_label, respondToHead) => {
+      setPlatformForTest('win32')
+      netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+        if (url === 'https://github.com/stablyai/orca/releases.atom') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.resolve(buildAtomFeed(['v1.4.182']))
+          })
+        }
+        if (isPlatformManifestRequest(url)) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.resolve(buildWindowsManifest('1.4.182'))
+          })
+        }
+        if (init?.method === 'HEAD') {
+          return respondToHead()
+        }
+        return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
+      })
+
+      const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+      await expect(fetchNewerReleaseTagsWithReadiness('1.4.178-rc.2', 1)).resolves.toEqual({
+        tags: [],
+        state: 'unavailable',
+        unavailableReason: 'manifest'
+      })
+    }
+  )
+
+  it('aborts a stalled Windows asset probe after the readiness timeout', async () => {
+    vi.useFakeTimers()
+    setPlatformForTest('win32')
+    netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildAtomFeed(['v1.4.182']))
+        })
+      }
+      if (isPlatformManifestRequest(url)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildWindowsManifest('1.4.182'))
+        })
+      }
+      if (init?.method === 'HEAD') {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
+    })
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const result = fetchNewerReleaseTagsWithReadiness('1.4.178-rc.2', 1)
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await expect(result).resolves.toEqual({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'manifest'
+    })
+    expect(netRequestMock.mock.results[0]?.value.abort).toHaveBeenCalledOnce()
+  })
+
+  it('still reports a Windows release as not-ready when its installer 404s', async () => {
+    setPlatformForTest('win32')
+    netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildAtomFeed(['v1.4.182', 'v1.4.178-rc.2']))
+        })
+      }
+      if (isPlatformManifestRequest(url)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildWindowsManifest('1.4.182'))
+        })
+      }
+      if (init?.method === 'HEAD') {
+        return Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve('') })
+      }
+      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
+    })
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.178-rc.2', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready'
+    })
+  })
+
+  it('never pins the installed version as last-good when the newest assets are missing', async () => {
     respondWithAtom(['v1.4.27', 'v1.4.26'], [], ['v1.4.27'])
 
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
 
     await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready'
+    })
+  })
+
+  it('keeps a newer ready tag as last-good while the newest release is still publishing', async () => {
+    respondWithAtom(['v1.4.27', 'v1.4.26', 'v1.4.25'], [], ['v1.4.27'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.25', 1)).resolves.toEqual({
       tags: [],
       state: 'not-ready',
       lastGoodTag: 'v1.4.26'
@@ -399,11 +586,17 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
 
     await expect(
-      fetchNewerReleaseTagsWithReadiness('1.4.27-rc.1', 1, { includePrerelease: true })
+      fetchNewerReleaseTagsWithReadiness('1.4.26', 1, { includePrerelease: true })
     ).resolves.toEqual({
       tags: [],
       state: 'not-ready',
       lastGoodTag: 'v1.4.27-rc.1'
+    })
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.27-rc.1', 1, { includePrerelease: true })
+    ).resolves.toEqual({
+      tags: [],
+      state: 'not-ready'
     })
     await expect(
       fetchNewerReleaseTagsWithReadiness('1.4.26', 1, { includePrerelease: false })

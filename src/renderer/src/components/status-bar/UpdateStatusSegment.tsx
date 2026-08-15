@@ -57,6 +57,24 @@ export function UpdateStatusSegment({
         )
       }
     }
+    if (status.reason === 'release-not-ready') {
+      // Why: a mid-publish release isn't a failure — a yellow "Update failed" chip here would contradict the calm card and settings copy.
+      return {
+        icon: <CheckCircle2 className="size-3 text-muted-foreground" />,
+        label: translate(
+          'auto.components.status.bar.UpdateStatusSegment.567f5ad945',
+          'No update yet'
+        ),
+        tooltip: translate(
+          'auto.components.status.bar.UpdateStatusSegment.406323c810',
+          "A newer release isn't available yet — click for details"
+        ),
+        ariaLabel: translate(
+          'auto.components.status.bar.UpdateStatusSegment.fcfa20b782',
+          'No update available yet. Click to expand.'
+        )
+      }
+    }
     return {
       icon: <AlertCircle className="size-3 text-yellow-500" />,
       label: translate(

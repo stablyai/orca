@@ -80,6 +80,8 @@ export type UpdateStatus = (
       userInitiated?: boolean
       activeNudgeId?: string
       recovery?: LinuxPackageInstallRecovery
+      // Why: lets renderers show a calm "no update yet" treatment instead of a failure; optional, so snapshots from older remote hosts still decode.
+      reason?: 'release-not-ready'
     }
 ) & { source?: UpdateSource }
 

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { installNetRequestFetchAdapter } from './updater-net-request.fixture'
 import { publishingIncident } from './updater-prerelease-feed-reproduction.fixture'
 
-const { netFetchMock } = vi.hoisted(() => ({ netFetchMock: vi.fn() }))
+const { netFetchMock, netRequestMock } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
+  netRequestMock: vi.fn()
+}))
 
 const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, killAllPtyMock } =
   vi.hoisted(() => {
@@ -75,7 +79,7 @@ vi.mock('electron', () => ({
   BrowserWindow: browserWindowMock,
   autoUpdater: nativeUpdaterMock,
   powerMonitor: { on: vi.fn() },
-  net: { fetch: netFetchMock }
+  net: { fetch: netFetchMock, request: netRequestMock }
 }))
 
 vi.mock('electron-updater', () => ({
@@ -173,6 +177,8 @@ describe('updater check failure handling', () => {
       status: 200,
       text: () => Promise.resolve('<feed></feed>')
     })
+    netRequestMock.mockReset()
+    installNetRequestFetchAdapter(netRequestMock, netFetchMock)
   })
 
   it('surfaces GitHub release-transition failures with calmer copy and no short retry', async () => {
@@ -267,7 +273,8 @@ describe('updater check failure handling', () => {
         expect(sendMock).toHaveBeenCalledWith('updater:status', {
           state: 'error',
           message: RELEASE_NOT_READY_MESSAGE,
-          userInitiated: true
+          userInitiated: true,
+          reason: 'release-not-ready'
         })
       })
       expect(warnMock).toHaveBeenCalledWith('[updater] benign check failure:', NOT_READY_DIAGNOSTIC)
@@ -276,6 +283,31 @@ describe('updater check failure handling', () => {
       warnMock.mockRestore()
     }
   )
+
+  it('shows the calm not-ready copy to prerelease users during a publish window', async () => {
+    // Why: RC users hit release-not-ready on the 'prerelease' channel; the copy must not blame the network.
+    appMock.getVersion.mockReturnValue(`${publishingIncident.installedVersion}-rc.1`)
+    respondWithNotReadyRelease({
+      manifestStatus: publishingIncident.missingManifestStatus,
+      manifestText: ''
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: RELEASE_NOT_READY_MESSAGE,
+        userInitiated: true,
+        reason: 'release-not-ready'
+      })
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+  })
 
   it('silently drops background benign failures to idle and waits for the hourly retry', async () => {
     vi.useFakeTimers()

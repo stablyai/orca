@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installNetRequestFetchAdapter } from './updater-net-request.fixture'
 
 const ORIGINAL_PLATFORM = process.platform
+const ORIGINAL_ARCH = process.arch
 
-const { netFetchMock } = vi.hoisted(() => ({
-  netFetchMock: vi.fn()
+const { netFetchMock, netRequestMock } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
+  netRequestMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
-  net: { fetch: netFetchMock }
+  net: { fetch: netFetchMock, request: netRequestMock }
 }))
 
 function buildAtomFeed(tags: string[]): string {
@@ -85,14 +88,21 @@ function setPlatformForTest(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { value: platform })
 }
 
+function setArchForTest(arch: NodeJS.Architecture): void {
+  Object.defineProperty(process, 'arch', { value: arch })
+}
+
 describe('fetchNewerReleaseTag', () => {
   beforeEach(() => {
     vi.resetModules()
     netFetchMock.mockReset()
+    netRequestMock.mockReset()
+    installNetRequestFetchAdapter(netRequestMock, netFetchMock)
   })
 
   afterEach(() => {
     setPlatformForTest(ORIGINAL_PLATFORM)
+    setArchForTest(ORIGINAL_ARCH)
   })
 
   it('returns the newest stable tag when the user is on an RC and a newer stable exists', async () => {
@@ -121,6 +131,8 @@ describe('fetchNewerReleaseTag', () => {
     'probes the %s platform manifest',
     async (platform, manifestName) => {
       setPlatformForTest(platform)
+      // Why: the un-suffixed Linux manifest is the x64 one; the host runner may be arm64.
+      setArchForTest('x64')
       const manifestUrls: string[] = []
       const assetUrls: string[] = []
 
@@ -160,6 +172,43 @@ describe('fetchNewerReleaseTag', () => {
       ])
     }
   )
+
+  it('probes the arch-suffixed manifest on arm64 Linux', async () => {
+    // Why: electron-updater fetches latest-linux-arm64.yml there; probing the x64 manifest would vouch for assets the client never downloads.
+    setPlatformForTest('linux')
+    setArchForTest('arm64')
+    const manifestUrls: string[] = []
+
+    netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(buildAtomFeed(['v1.4.1']))
+        })
+      }
+
+      if (url.endsWith('.yml')) {
+        manifestUrls.push(url)
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(buildManifest('v1.4.1'))
+        })
+      }
+
+      if (init?.method === 'HEAD') {
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
+      }
+
+      return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
+    })
+
+    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+
+    expect(await fetchNewerReleaseTag('1.4.0')).toBe('v1.4.1')
+    expect(manifestUrls).toEqual([
+      'https://github.com/stablyai/orca/releases/download/v1.4.1/latest-linux-arm64.yml'
+    ])
+  })
 
   it('returns null for stable-channel checks when only prereleases are newer', async () => {
     respondWithAtom(['v1.4.1-rc.0', 'v1.3.52-rc.3', 'v1.3.51'])
@@ -281,7 +330,13 @@ describe('fetchNewerReleaseTag', () => {
   it('returns a bounded fallback candidate after the newest newer tag', async () => {
     respondWithAtom(['v1.3.51-rc.7', 'v1.3.51-rc.6', 'v1.3.51-rc.5'])
     const { fetchNewerReleaseTags } = await import('./updater-prerelease-feed')
-    expect(await fetchNewerReleaseTags('1.3.51-rc.6', 2)).toEqual(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+    expect(await fetchNewerReleaseTags('1.3.51-rc.5', 2)).toEqual(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+  })
+
+  it('never offers the installed version as a fallback candidate', async () => {
+    respondWithAtom(['v1.3.51-rc.7', 'v1.3.51-rc.6', 'v1.3.51-rc.5'])
+    const { fetchNewerReleaseTags } = await import('./updater-prerelease-feed')
+    expect(await fetchNewerReleaseTags('1.3.51-rc.6', 2)).toEqual(['v1.3.51-rc.7'])
   })
 
   it('reports not-ready with last-good when newer platform updater manifests are missing', async () => {

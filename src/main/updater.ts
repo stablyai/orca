@@ -90,7 +90,6 @@ type ReleaseFeedPreflightFailure = 'manifest-unavailable' | 'release-not-ready'
 class ReleaseFeedPreflightError extends Error {
   constructor(
     readonly reason: ReleaseFeedPreflightFailure,
-    readonly releaseChannel: UpdateCheckVariant,
     message: string
   ) {
     super(message)
@@ -143,6 +142,8 @@ let lastInstallAttemptDiagnostic: LinuxPackageInstallDiagnostic | null = null
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
+// Why: benign failures skip persisting lastUpdateCheckAt, so focus/wake checks need an in-memory rate limit or every focus re-checks through a publish window.
+let lastBackgroundCheckLaunchAt = 0
 // Why: a promoted background check can emit an error event before its promise catch runs; keep the promotion attached to that launch.
 let backgroundCheckPromotedToUserInitiated = false
 let updateCheckStallTimer: ReturnType<typeof setTimeout> | null = null
@@ -612,7 +613,11 @@ function shouldHandleUpdaterErrorEvent(): boolean {
   )
 }
 
-function sendErrorStatus(message: string, userInitiated?: boolean): void {
+function sendErrorStatus(
+  message: string,
+  userInitiated?: boolean,
+  reason?: 'release-not-ready'
+): void {
   if (
     currentStatus.state === 'error' &&
     currentStatus.message === message &&
@@ -627,7 +632,7 @@ function sendErrorStatus(message: string, userInitiated?: boolean): void {
       message: 'Windows update signature check could not run'
     })
   }
-  sendStatus({ state: 'error', message, userInitiated })
+  sendStatus({ state: 'error', message, userInitiated, ...(reason && { reason }) })
 }
 
 function getKnownReleaseUrl(): string | undefined {
@@ -1107,12 +1112,15 @@ async function sendCheckFailureStatus(
       scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
       if (userInitiated) {
         // Why: a user click needs visible feedback (idle looks broken); distinguish incomplete releases from transport failures.
-        sendErrorStatus(
-          isStableReleaseNotReadyFailure(sourceError)
-            ? "A newer release isn't available for this device yet. Check again later."
-            : "Couldn't reach the update server. Try again in a few minutes.",
-          true
-        )
+        if (isReleaseNotReadyFailure(sourceError)) {
+          sendErrorStatus(
+            "A newer release isn't available for this device yet. Check again later.",
+            true,
+            'release-not-ready'
+          )
+        } else {
+          sendErrorStatus("Couldn't reach the update server. Try again in a few minutes.", true)
+        }
       } else {
         if (isRetryableReleaseFeedPreflightFailure(sourceError)) {
           // Why: release probes can fail transiently; keep the campaign pending so the short retry can still show it.
@@ -1148,11 +1156,9 @@ function isRetryableReleaseFeedPreflightFailure(sourceError: unknown): boolean {
   )
 }
 
-function isStableReleaseNotReadyFailure(sourceError: unknown): boolean {
+function isReleaseNotReadyFailure(sourceError: unknown): boolean {
   return (
-    sourceError instanceof ReleaseFeedPreflightError &&
-    sourceError.reason === 'release-not-ready' &&
-    sourceError.releaseChannel === 'default'
+    sourceError instanceof ReleaseFeedPreflightError && sourceError.reason === 'release-not-ready'
   )
 }
 
@@ -1409,7 +1415,6 @@ async function pinDefaultReleaseFeed(
     )
     throw new ReleaseFeedPreflightError(
       'release-not-ready',
-      isPerfCheck ? 'perf' : includePrerelease ? 'prerelease' : 'default',
       'Latest release artifacts are not ready'
     )
   } else if (
@@ -1421,7 +1426,6 @@ async function pinDefaultReleaseFeed(
     clearPublishingWindowLastGoodCheck()
     throw new ReleaseFeedPreflightError(
       'manifest-unavailable',
-      'default',
       'Unable to find latest version on GitHub'
     )
   } else if (isPerfCheck) {
@@ -1528,6 +1532,7 @@ function runBackgroundUpdateCheck(
   // Why: set the nudge marker before any events arrive so later checks can't inherit a stale campaign id; persisted id keeps a nudge card dismissable after relaunch.
   activeUpdateNudgeId = nudgeId
   // Why: 'checking-for-update' arrives a tick later, so a second focus/resume can slip in before status flips; track launch in memory to dedupe that gap.
+  lastBackgroundCheckLaunchAt = Date.now()
   backgroundCheckLaunchPending = true
   backgroundCheckPromotedToUserInitiated = false
   const attemptId = beginUpdateCheckAttempt()
@@ -2271,7 +2276,10 @@ export function setupAutoUpdater(
     }
     const lastCheck = _getLastUpdateCheckAt?.() ?? null
     const msSince = lastCheck === null ? Number.POSITIVE_INFINITY : Date.now() - lastCheck
-    if (msSince >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
+    if (
+      msSince >= AUTO_UPDATE_CHECK_INTERVAL_MS &&
+      Date.now() - lastBackgroundCheckLaunchAt >= AUTO_UPDATE_RETRY_INTERVAL_MS
+    ) {
       runBackgroundUpdateCheck()
       scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
     }

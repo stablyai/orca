@@ -22,7 +22,8 @@ export async function pollRemoteServerUpdater(
   const deadline = now() + timing.operationTimeoutMs
   while (now() < deadline) {
     const snapshot = await transport.getUpdaterStatus(environmentId)
-    if (snapshot.status.state === 'error') {
+    // Why: callers opt specific error snapshots in via accept — e.g. release-not-ready is a calm terminal state for checks, not a failure.
+    if (snapshot.status.state === 'error' && !accept(snapshot)) {
       throw new Error(snapshot.status.message)
     }
     onSnapshot(snapshot)

@@ -1578,8 +1578,9 @@ describe('updater', () => {
     await vi.waitFor(() => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: "Couldn't reach the update server. Try again in a few minutes.",
-        userInitiated: true
+        message: "A newer release isn't available for this device yet. Check again later.",
+        userInitiated: true,
+        reason: 'release-not-ready'
       })
     })
 
@@ -1611,8 +1612,9 @@ describe('updater', () => {
     await vi.waitFor(() => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: "Couldn't reach the update server. Try again in a few minutes.",
-        userInitiated: true
+        message: "A newer release isn't available for this device yet. Check again later.",
+        userInitiated: true,
+        reason: 'release-not-ready'
       })
     })
     expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.4.120-rc.5', 2, {
@@ -2127,6 +2129,38 @@ describe('updater', () => {
     })
 
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+  })
+
+  it('rate-limits focus-triggered checks while benign failures keep the timestamp stale', async () => {
+    let lastUpdateCheckAt = Date.now()
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('error', new Error('net::ERR_FAILED'))
+      })
+      return Promise.reject(new Error('net::ERR_FAILED'))
+    })
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => lastUpdateCheckAt })
+
+    lastUpdateCheckAt = Date.now() - 25 * 60 * 60 * 1000
+    appMock.emit('browser-window-focus')
+
+    await vi.waitFor(() => {
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({ state: 'idle' })
+    })
+
+    // Why: the benign failure never persisted the timestamp, so without the in-memory launch mark this focus would fan out another full check.
+    appMock.emit('browser-window-focus')
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
   })
 
   it('retries background checks sooner after a failed automatic check', async () => {

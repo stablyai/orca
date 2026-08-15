@@ -379,27 +379,46 @@ export function UpdateCard() {
                     onClick: handleUpdate
                   }
                 }
-              : {
-                  // Why: title is scoped to the failed operation so check-time (GitHub-side) failures don't read as an Orca bug.
-                  title: cachedVersion ? 'Update Error' : 'Update Check Failed',
-                  summary: cachedVersion
-                    ? 'Could not complete the update.'
-                    : 'Could not check for updates.',
-                  detail: status.message,
-                  releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
-                  // Why: check-time failures are often transient, so offer a Re-check instead of forcing manual download.
-                  primaryAction: cachedVersion
-                    ? {
-                        label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
-                        onClick: handleUpdate
+              : status.reason === 'release-not-ready'
+                ? {
+                    // Why: a mid-publish release isn't an error — calm headline, and the calm copy is the whole story.
+                    title: translate(
+                      'auto.components.UpdateCard.5a87d9393c',
+                      'No Update Available Yet'
+                    ),
+                    summary: status.message,
+                    releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
+                    primaryAction: {
+                      label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
+                      onClick: () => {
+                        void window.api.updater.check({ includePrerelease: false })
                       }
-                    : {
-                        label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
-                        onClick: () => {
-                          void window.api.updater.check({ includePrerelease: false })
+                    }
+                  }
+                : {
+                    // Why: title is scoped to the failed operation so check-time (GitHub-side) failures don't read as an Orca bug.
+                    title: cachedVersion ? 'Update Error' : 'Update Check Failed',
+                    summary: cachedVersion
+                      ? 'Could not complete the update.'
+                      : 'Could not check for updates.',
+                    detail: status.message,
+                    releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
+                    // Why: check-time failures are often transient, so offer a Re-check instead of forcing manual download.
+                    primaryAction: cachedVersion
+                      ? {
+                          label: translate(
+                            'auto.components.UpdateCard.48565a32bc',
+                            'Retry Download'
+                          ),
+                          onClick: handleUpdate
                         }
-                      }
-                }
+                      : {
+                          label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
+                          onClick: () => {
+                            void window.api.updater.check({ includePrerelease: false })
+                          }
+                        }
+                  }
       : installError
         ? {
             title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
