@@ -61,7 +61,7 @@
     "view": "查看",
     "reload": "重新加载",
     "forceReload": "强制重新加载",
-    "resetSize": "重置大小",
+    "resetSize": "重置缩放",
     "zoomIn": "放大",
     "zoomOut": "缩小",
     "openWorktreePalette": "打开工作树面板",
@@ -78,7 +78,7 @@
       "body": "Orca 仍在系统托盘中运行"
     },
     "activityWaiting": "Orca - 活动等待中",
-    "activityWaitingSuffix": "活动等待中"
+    "activityWaitingSuffix": "等待活动"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -14470,7 +14470,7 @@
       "canvasLabel": "项目、工作区和智能体的嵌套关系图",
       "zoomOut": "缩小",
       "zoomIn": "放大",
-      "fit": "适合屏幕",
+      "fit": "适配屏幕",
       "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
       "agentCount": "{{count}} 个智能体"
     },
@@ -14510,7 +14510,7 @@
     },
     "terminal": {
       "closed": "没有活动的终端 — 该智能体的窗格已关闭。",
-      "focusWorktree": "打开工作树",
+      "focusWorktree": "聚焦工作树",
       "close": "关闭"
     },
     "close": "关闭仪表盘",
