@@ -8,9 +8,14 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import type { GrokAccountStatus } from '../../../../shared/rate-limit-types'
 import { SearchableSetting } from './SearchableSetting'
+import { ManagedCliHomeAccountsControl } from './ManagedCliHomeAccountsControl'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
-export function GrokAccountsSection(): React.JSX.Element {
+export function GrokAccountsSection({
+  showManagedAccounts = true
+}: {
+  showManagedAccounts?: boolean
+}): React.JSX.Element {
   const refreshGrokRateLimits = useAppStore((s) => s.refreshGrokRateLimits)
   const grokUsage = useAppStore((s) => s.rateLimits.grok)
   const [status, setStatus] = useState<GrokAccountStatus | null>(null)
@@ -82,6 +87,8 @@ export function GrokAccountsSection(): React.JSX.Element {
           <ExternalLink className="size-3" />
         </a>
       </div>
+
+      {showManagedAccounts ? <ManagedCliHomeAccountsControl provider="grok" /> : null}
 
       <div
         className={cn(

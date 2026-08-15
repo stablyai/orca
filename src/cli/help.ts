@@ -243,7 +243,7 @@ Common Commands:
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
-  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]
+  orca terminal create [--worktree <selector>] ([--title <name>] [--command <text>] | [--agent codex --account <uuid|system> [--account-runtime host|wsl] [--wsl-distro <name>]]) [--focus] [--json]
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--tab] [--json]
@@ -294,6 +294,8 @@ Agent Sessions And Worktrees:
   \`worktree create --agent\` creates a new checkout with an agent.
   To start a fresh agent in the current worktree, use:
     orca terminal create --worktree active --command "codex"
+  To start Codex with a managed account UUID, use:
+    orca terminal create --worktree active --agent codex --account <uuid>
 
 Browser Workflow:
   1. Create or navigate:  orca tab create --url https://example.com
@@ -521,6 +523,8 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
 
 export function formatFlagHelp(flag: string): string {
   const helpByFlag: Record<string, string> = {
+    account: '--account <uuid|system> Codex account selector for this launch',
+    'account-runtime': '--account-runtime <kind> Runtime for the system account: host or wsl',
     agent: '--agent <id>          Launch a known TUI agent in the first terminal',
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
     command: '--command <text>       Command to run in the terminal on startup',
@@ -534,6 +538,7 @@ export function formatFlagHelp(flag: string): string {
     'display-name': '--display-name <name>  Override the Orca display name',
     'element-index': '--element-index <n>   Element index from get-app-state',
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
+    'wsl-distro': '--wsl-distro <name>   WSL distribution for the system account',
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
     focus: '--focus                Reveal the created terminal session in Orca',

@@ -58,6 +58,8 @@ import { registerSpeechHandlers } from './speech'
 import { registerTerminalRenderDesyncEvidenceHandler } from './terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from './orca-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
+import { registerKimiAccountHandlers } from './kimi-accounts'
+import { registerCommandCodeAccountHandlers } from './command-code-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import { getPtyIdForPaneKey } from './pty'
@@ -65,6 +67,7 @@ import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
 import { registerGrokAccountHandlers } from './grok-accounts'
+import { registerGeminiAccountHandlers } from './gemini-accounts'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
 import {
   registerClipboardHandlers,
@@ -76,6 +79,9 @@ import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
+import type { KimiAccountService } from '../kimi-accounts/service'
+import type { CommandCodeAccountService } from '../command-code-accounts/service'
+import type { ManagedCliHomeAccountService } from '../provider-managed-homes/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
@@ -101,6 +107,7 @@ type CoreHandlerLifecycleOptions = {
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
+  getAdditionalAiVaultKimiHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
   ) => Promise<AiVaultPrepareSessionResumeResult>
@@ -114,6 +121,10 @@ export function registerCoreHandlers(
   codexUsage: CodexUsageStore,
   openCodeUsage: OpenCodeUsageStore,
   codexAccounts: CodexAccountService,
+  kimiAccounts: KimiAccountService,
+  commandCodeAccounts: CommandCodeAccountService,
+  grokAccounts: ManagedCliHomeAccountService,
+  geminiAccounts: ManagedCliHomeAccountService,
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
@@ -144,12 +155,15 @@ export function registerCoreHandlers(
   registerPreflightHandlers()
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
+  registerKimiAccountHandlers(kimiAccounts, rateLimits)
+  registerCommandCodeAccountHandlers(commandCodeAccounts)
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
-  registerGrokAccountHandlers()
+  registerGrokAccountHandlers(grokAccounts)
+  registerGeminiAccountHandlers(geminiAccounts)
   registerRateLimitHandlers(rateLimits, codexAccounts)
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)
@@ -217,6 +231,7 @@ export function registerCoreHandlers(
   registerEphemeralVmHandlers(store, pluginService)
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
+    getAdditionalKimiHomePaths: lifecycleOptions.getAdditionalAiVaultKimiHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
       getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),

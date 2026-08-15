@@ -94,6 +94,7 @@ describe('AgentHookServer listener replay', () => {
     expect(statuses).toHaveBeenCalledWith([])
     expect(sessions).toHaveBeenCalledWith([
       {
+        agentType: 'pi',
         paneKey: PANE,
         sessionId: 'pi-session-1',
         transcriptPath: '/tmp/pi-session-1.jsonl',

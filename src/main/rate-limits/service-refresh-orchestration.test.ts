@@ -434,7 +434,7 @@ describe('RateLimitService', () => {
 
     // Resolved per cycle so a runtime-policy change takes effect without a restart.
     expect(resolver).toHaveBeenCalledTimes(2)
-    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ home })
+    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ home, signal: expect.any(AbortSignal) })
   })
 
   it('reads the host Kimi home when no resolver is wired', async () => {
@@ -444,7 +444,10 @@ describe('RateLimitService', () => {
 
     await service.refresh()
 
-    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ home: undefined })
+    expect(fetchKimiRateLimits).toHaveBeenCalledWith({
+      home: undefined,
+      signal: expect.any(AbortSignal)
+    })
   })
 
   it('preserves Gemini buckets through getState after fetch', async () => {

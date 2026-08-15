@@ -3,7 +3,7 @@ import type { PreloadApi } from './api-types'
 
 type UsageProviderApiKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage'
 type UsageProviderApi = PreloadApi[UsageProviderApiKey]
-type UsageRangeArgs = { scope: string; range: string }
+type UsageRangeArgs = { scope: string; range: string; accountFilter?: unknown }
 
 export function createUsageProviderApi<Key extends UsageProviderApiKey>(
   ipc: Pick<IpcRenderer, 'invoke'>,

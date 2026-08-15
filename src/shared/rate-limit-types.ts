@@ -137,4 +137,6 @@ export type RateLimitState = {
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
   inactiveCodexAccounts: InactiveAccountUsage[]
+  /** Managed Kimi homes other than the currently selected account. */
+  inactiveKimiAccounts?: InactiveAccountUsage[]
 }

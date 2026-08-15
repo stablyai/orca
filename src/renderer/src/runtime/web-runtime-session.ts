@@ -20,9 +20,11 @@ import type {
   AgentProviderSessionMetadata
 } from '../../../shared/agent-session-resume'
 import {
+  AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
+import type { ProviderAccountRef } from '../../../shared/provider-account-ref'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery,
@@ -175,6 +177,7 @@ type CreateWebRuntimeSessionTerminalArgs = {
   /** Explicit CLI override; omission leaves the remote host's defaults authoritative. */
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
+  providerAccountRef?: ProviderAccountRef
   providerSession?: AgentProviderSessionMetadata
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
@@ -304,6 +307,9 @@ async function createWebRuntimeSessionTerminalResult(
                       ...(args.launchPreferences
                         ? { launchPreferences: args.launchPreferences }
                         : {}),
+                      ...(args.providerAccountRef
+                        ? { providerAccountRef: args.providerAccountRef }
+                        : {}),
                       presentation: 'background'
                     },
                     timeoutMs: 15_000
@@ -327,6 +333,9 @@ async function createWebRuntimeSessionTerminalResult(
                         ...(args.launchPreferences
                           ? { launchPreferences: args.launchPreferences }
                           : {}),
+                        ...(args.providerAccountRef
+                          ? { providerAccountRef: args.providerAccountRef }
+                          : {}),
                         ...(args.cwd ? { startupCwd: args.cwd } : {}),
                         ...(args.viewMode ? { viewMode: args.viewMode } : {}),
                         presentation: 'background'
@@ -342,9 +351,14 @@ async function createWebRuntimeSessionTerminalResult(
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(args.agentSessionKind === 'resume' && agent === 'omp'
-          ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
-          : {}),
+        ...(args.providerAccountRef
+          ? {
+              hostAuthorityCapability: AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY,
+              requireHostAuthority: true
+            }
+          : args.agentSessionKind === 'resume' && agent === 'omp'
+            ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+            : {}),
         legacy: async () => {
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
@@ -361,6 +375,7 @@ async function createWebRuntimeSessionTerminalResult(
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
+              ...(args.providerAccountRef ? { providerAccountRef: args.providerAccountRef } : {}),
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
               // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,

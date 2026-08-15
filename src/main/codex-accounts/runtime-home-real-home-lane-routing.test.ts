@@ -331,6 +331,33 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.prepareForCodexLaunch()).toBeNull()
   })
 
+  it('routes an explicit host system default onto the lanes prepareForCodexLaunch uses', async () => {
+    const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    const ref = { provider: 'codex', accountId: null, runtime: 'host' as const }
+    const customHome = join(testState.fakeHomeDir, 'explicit-custom-codex-home')
+
+    expect(service.isExplicitHostSystemDefaultRealHomeSelected()).toBe(true)
+    expect(service.prepareForCodexAccountLaunch(ref)).toBeNull()
+
+    // A custom CODEX_HOME is a lane Orca cannot hook, so both launch paths agree.
+    expect(service.isExplicitHostSystemDefaultRealHomeSelected({ CODEX_HOME: customHome })).toBe(
+      false
+    )
+    expect(
+      service.prepareForCodexAccountLaunch(ref, { launchEnv: { CODEX_HOME: customHome } })
+    ).toBe(getRuntimeCodexHomePath())
+    expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: customHome })).toBe(
+      getRuntimeCodexHomePath()
+    )
+
+    service.setRealHomeLaneGate(() => false)
+    expect(service.prepareForCodexAccountLaunch(ref)).toBe(getRuntimeCodexHomePath())
+    setShellStartupEnvProbeSupportedForTest(false)
+    expect(service.isExplicitHostSystemDefaultRealHomeSelected()).toBe(false)
+  })
+
   it('preserves retained managed auth across a real-home main-process restart', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     const managedAuth = createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')

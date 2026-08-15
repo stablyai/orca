@@ -23,6 +23,7 @@ import type { TerminalPaneSplitSource } from '../shared/feature-education-teleme
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import type { ProviderAccountRef } from '../shared/provider-account-ref'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -967,6 +968,7 @@ const api = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      providerAccountRef?: ProviderAccountRef
       startupCommandDelivery?: StartupCommandDelivery
       connectionId?: string | null
       worktreeId?: string
@@ -2159,6 +2161,44 @@ const api = {
       ipcRenderer.invoke('codexAccounts:listRecordedPaneLanes', args),
     forgetStalePanes: (args: { ptyIds: string[] }): Promise<void> =>
       ipcRenderer.invoke('codexAccounts:forgetStalePanes', args)
+  },
+
+  kimiAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('kimiAccounts:list'),
+    login: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:login', args),
+    import: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:import', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:select', args),
+    rename: (args: { accountId: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:rename', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:remove', args)
+  },
+
+  commandCodeAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('commandCodeAccounts:list'),
+    import: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('commandCodeAccounts:import', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('commandCodeAccounts:select', args),
+    rename: (args: { accountId: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('commandCodeAccounts:rename', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('commandCodeAccounts:remove', args)
+  },
+
+  geminiAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('geminiAccounts:list'),
+    import: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiAccounts:import', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiAccounts:select', args),
+    rename: (args: { accountId: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiAccounts:rename', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiAccounts:remove', args)
   },
 
   claudeAccounts: {
@@ -3470,6 +3510,7 @@ const api = {
       agentId: string
       worktreePath?: string
       connectionId?: string
+      ptyId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:discoverCommitMessageModels', args),
     cancelGenerateCommitMessage: (args: {
       worktreePath: string
@@ -4488,6 +4529,8 @@ const api = {
       ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
     fetchInactiveCodexAccounts: (): Promise<void> =>
       ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
+    fetchInactiveKimiAccounts: (): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:fetchInactiveKimiAccounts'),
     refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
     refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
@@ -4507,7 +4550,16 @@ const api = {
   },
 
   grokAccounts: {
-    getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
+    getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus'),
+    list: (): Promise<unknown> => ipcRenderer.invoke('grokAccounts:list'),
+    import: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:import', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:select', args),
+    rename: (args: { accountId: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:rename', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:remove', args)
   },
 
   ssh: {

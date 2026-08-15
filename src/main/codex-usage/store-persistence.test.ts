@@ -18,6 +18,7 @@ vi.mock('./scanner', () => ({
   scanCodexUsageFiles: vi.fn()
 }))
 
+import { CODEX_USAGE_SCHEMA_VERSION } from './codex-usage-provider'
 import { normalizePersistedState } from './store'
 import { scanCodexUsageFiles } from './scanner'
 
@@ -26,7 +27,7 @@ describe('CodexUsageStore', () => {
 
   it('adapts Codex scans to compact cache persistence', async () => {
     const store = createStoreWithState({
-      schemaVersion: 5,
+      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
       scanState: {
         enabled: true,
         lastScanStartedAt: null,
@@ -81,7 +82,7 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 5,
+      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],

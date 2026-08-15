@@ -22,6 +22,7 @@ import {
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { stripTerminalControlCharacters } from '../../shared/ansi-escape-sequences'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
   ClaudeRateLimitAccountsState,
@@ -41,7 +42,7 @@ type AccountsListSnapshot = {
 // Why: Claude and Codex managed-account summaries both carry id+email+active id,
 // so one formatter renders either provider's block.
 type AccountsBlock = {
-  accounts: readonly { id: string; email: string }[]
+  accounts: readonly { id: string; email: string; workspaceLabel?: string | null }[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: {
     host: string | null
@@ -49,8 +50,16 @@ type AccountsBlock = {
   }
 }
 
+function formatAccountDisplayName(account: {
+  email: string
+  workspaceLabel?: string | null
+}): string {
+  const label = stripTerminalControlCharacters(account.workspaceLabel?.trim() ?? '')
+  return label || stripTerminalControlCharacters(account.email)
+}
+
 /** Renders a provider's managed-account list as a human-readable block, marking the active account. */
-function formatAccountsBlock(label: string, block: AccountsBlock): string {
+export function formatAccountsBlock(label: string, block: AccountsBlock): string {
   if (block.accounts.length === 0) {
     return `No managed ${label} accounts.`
   }
@@ -60,7 +69,8 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
     ...Object.values(block.activeAccountIdsByRuntime?.wsl ?? {})
   ])
   const lines = block.accounts.map(
-    (account) => `  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}`
+    (account) =>
+      `  ${formatAccountDisplayName(account)}${activeAccountIds.has(account.id) ? ' (active)' : ''}  ${account.id}`
   )
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }

@@ -67,6 +67,73 @@ function createRuntime(provider?: {
 }
 
 describe('agent-session create operation ledger', () => {
+  it('passes an attested Codex account reference to PTY creation', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const providerAccountRef = {
+      provider: 'codex',
+      accountId: 'account-a',
+      runtime: 'host'
+    } as const
+
+    await runtime.createAgentSession(request(operationId(), { providerAccountRef }))
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ providerAccountRef })
+    )
+  })
+
+  it('rejects account references outside the launch agent and runtime owner', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await expect(
+      runtime.createAgentSession(
+        request(operationId(), {
+          agent: 'claude',
+          providerAccountRef: { provider: 'codex', accountId: 'account-a', runtime: 'host' }
+        })
+      )
+    ).rejects.toThrow('agent_session_account_agent_mismatch')
+    await expect(
+      runtime.createAgentSession(
+        request(operationId(Date.now() + 1), {
+          providerAccountRef: {
+            provider: 'codex',
+            accountId: 'account-a',
+            runtime: 'wsl',
+            wslDistro: 'Ubuntu'
+          }
+        })
+      )
+    ).rejects.toThrow('agent_session_account_runtime_mismatch')
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('passes an attested Codex account reference to a resumed PTY', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const providerAccountRef = {
+      provider: 'codex',
+      accountId: 'account-a',
+      runtime: 'host'
+    } as const
+
+    await runtime.ensureAgentSession({
+      kind: 'explicit',
+      worktree: 'id:worktree-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'provider-session-1' },
+      providerAccountRef
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ providerAccountRef })
+    )
+  })
+
   it('selects legacy before trust, spawn, or ledger state for an old daemon', async () => {
     const provider = {
       supportsAgentSessionClaims: vi.fn(() => false),
@@ -193,6 +260,18 @@ describe('agent-session create operation ledger', () => {
       runtime.createAgentSession(request(id, { agentArgs: '--profile changed' }), {
         clientId: 'device-a'
       })
+    ).rejects.toThrow('agent_session_operation_conflict')
+    await expect(
+      runtime.createAgentSession(
+        request(id, {
+          providerAccountRef: {
+            provider: 'codex',
+            accountId: 'account-b',
+            runtime: 'host'
+          }
+        }),
+        { clientId: 'device-a' }
+      )
     ).rejects.toThrow('agent_session_operation_conflict')
     finish(terminal())
     await expect(first).resolves.toMatchObject({ disposition: 'created' })

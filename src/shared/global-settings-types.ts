@@ -18,7 +18,10 @@ import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,
   CodexManagedAccount,
-  CodexManagedAccountRuntimeSelection
+  CodexManagedAccountRuntimeSelection,
+  CommandCodeManagedAccount,
+  KimiManagedAccount,
+  ManagedCliHomeAccount
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
@@ -270,6 +273,18 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
+  /** Kimi credentials and config stay inside main-owned homes; renderer-facing summaries omit this path. */
+  kimiManagedAccounts?: KimiManagedAccount[]
+  activeKimiManagedAccountId?: string | null
+  /** Command Code auth copies stay main-owned; only summaries cross the preload boundary. */
+  commandCodeManagedAccounts?: CommandCodeManagedAccount[]
+  activeCommandCodeManagedAccountId?: string | null
+  /** Grok homes use the CLI's official GROK_HOME isolation boundary. */
+  grokManagedAccounts?: ManagedCliHomeAccount[]
+  activeGrokManagedAccountId?: string | null
+  /** Gemini homes use the CLI's official GEMINI_CLI_HOME isolation boundary. */
+  geminiManagedAccounts?: ManagedCliHomeAccount[]
+  activeGeminiManagedAccountId?: string | null
   /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */

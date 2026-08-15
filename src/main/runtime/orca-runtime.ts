@@ -63,6 +63,8 @@ import type {
   RuntimeEnsureAgentSessionRequest,
   RuntimeEnsureAgentSessionResult
 } from '../../shared/agent-session-host-authority'
+import type { ProviderAccountRef } from '../../shared/provider-account-ref'
+import { assertProviderAccountRefForWorkspace } from './provider-account-workspace-scope'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
@@ -1418,6 +1420,7 @@ type TerminalCreateOptions = {
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  providerAccountRef?: ProviderAccountRef
   // Why: agent ids are not shell commands (`cursor` is the Cursor desktop app; its
   // CLI is `cursor-agent`). Callers that know the agent name it here instead of
   // guessing a command, and the runtime builds the configured launch.
@@ -1728,6 +1731,7 @@ type RuntimePtyController = {
     cwd?: string
     command?: string
     launchAgent?: TuiAgent
+    providerAccountRef?: ProviderAccountRef
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
@@ -3468,6 +3472,7 @@ export class OrcaRuntimeService {
       // runs under `orca serve`, so remote/SSH hosts would silently drop
       // managed-Codex sessions. The runtime ctor runs in BOTH window and serve.
       getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
+      getAdditionalAiVaultKimiHomePaths?: () => readonly string[]
       prepareAiVaultSessionResume?: (
         args: AiVaultPrepareSessionResumeArgs
       ) => Promise<AiVaultPrepareSessionResumeResult>
@@ -3503,9 +3508,10 @@ export class OrcaRuntimeService {
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
     // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
     // even on headless `orca serve` hosts where registerCoreHandlers never runs.
-    if (deps?.getAdditionalAiVaultCodexHomePaths) {
+    if (deps?.getAdditionalAiVaultCodexHomePaths || deps?.getAdditionalAiVaultKimiHomePaths) {
       configureAiVaultSessionSources({
-        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
+        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths,
+        getAdditionalKimiHomePaths: deps.getAdditionalAiVaultKimiHomePaths
       })
     }
     // Why: the daemon adapter is installed via `setLocalPtyProvider()` during
@@ -25746,6 +25752,11 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+    assertProviderAccountRefForWorkspace({
+      agent: request.agent,
+      providerAccountRef: request.providerAccountRef,
+      workspace
+    })
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||
@@ -25807,6 +25818,7 @@ export class OrcaRuntimeService {
       env: startup.env,
       launchConfig: startup.launchConfig,
       launchAgent: request.agent,
+      providerAccountRef: request.providerAccountRef,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
@@ -25853,7 +25865,11 @@ export class OrcaRuntimeService {
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
-          request.viewMode ?? null
+          request.viewMode ?? null,
+          request.providerAccountRef?.provider ?? null,
+          request.providerAccountRef?.accountId ?? null,
+          request.providerAccountRef?.runtime ?? null,
+          request.providerAccountRef?.wslDistro ?? null
         ])
       )
       .digest('base64url')
@@ -25900,6 +25916,11 @@ export class OrcaRuntimeService {
         // Why: the exact legacy launch remains client-owned until this pre-spawn check succeeds.
         throw new Error('agent_session_legacy_required')
       }
+      assertProviderAccountRefForWorkspace({
+        agent: request.agent,
+        providerAccountRef: request.providerAccountRef,
+        workspace
+      })
       const startupCwd = this.resolveWorkspaceTerminalStartupCwd(workspace, request.startupCwd)
       // Why: aliases and object property order are client syntax, not authority;
       // fingerprint the host-resolved fields in one fixed order.
@@ -25919,7 +25940,11 @@ export class OrcaRuntimeService {
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
-            request.viewMode ?? null
+            request.viewMode ?? null,
+            request.providerAccountRef?.provider ?? null,
+            request.providerAccountRef?.accountId ?? null,
+            request.providerAccountRef?.runtime ?? null,
+            request.providerAccountRef?.wslDistro ?? null
           ])
         )
         .digest('base64url')
@@ -25998,6 +26023,7 @@ export class OrcaRuntimeService {
           leafId: operationLeafId,
           preAllocatedHandle: operationHandle,
           viewMode: request.viewMode,
+          providerAccountRef: request.providerAccountRef,
           persistHostSessionBinding: true,
           agentSessionCreateOperationId: executionOperationId,
           signal: caller.signal,
@@ -26234,6 +26260,7 @@ export class OrcaRuntimeService {
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
+            providerAccountRef: launchOpts.providerAccountRef,
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,

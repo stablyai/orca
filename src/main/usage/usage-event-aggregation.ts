@@ -29,6 +29,7 @@ export function createUsageEventAggregation<
   function createEmptySession(event: TEvent): UsageSession<TMetric> {
     return {
       sessionId: event.sessionId,
+      ...(event.accountId !== undefined ? { accountId: event.accountId } : {}),
       firstTimestamp: event.timestamp,
       lastTimestamp: event.timestamp,
       primaryModel: event.model,
@@ -53,6 +54,7 @@ export function createUsageEventAggregation<
   function createEmptyDailyAggregate(event: TEvent): UsageDailyAggregate<TMetric> {
     return {
       day: event.day,
+      ...(event.accountId !== undefined ? { accountId: event.accountId } : {}),
       model: event.model,
       projectKey: event.projectKey,
       projectLabel: event.projectLabel,
@@ -215,6 +217,10 @@ export function createUsageEventAggregation<
       const session = sessionsById.get(event.sessionId) ?? createEmptySession(event)
       if (!sessionsById.has(event.sessionId)) {
         sessionsById.set(event.sessionId, session)
+      } else if (session.accountId !== event.accountId) {
+        // Why: same fail-closed rule as mergeUsageSessions — mixed account
+        // evidence cannot be represented by one session-level filter.
+        delete session.accountId
       }
       if (event.timestamp < session.firstTimestamp) {
         session.firstTimestamp = event.timestamp

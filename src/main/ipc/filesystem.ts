@@ -1561,11 +1561,17 @@ export function registerFilesystemHandlers(
     'git:discoverCommitMessageModels',
     async (
       _event,
-      args: { agentId: string; worktreePath?: string; connectionId?: string }
+      args: { agentId: string; worktreePath?: string; connectionId?: string; ptyId?: string }
     ): Promise<DiscoverCommitMessageModelsResult> => {
       const agentId = args.agentId
       const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
       if (args.connectionId) {
+        if (args.ptyId) {
+          return {
+            success: false,
+            error: 'Pinned PTY account scoping is not supported for remote model discovery.'
+          }
+        }
         if (!args.worktreePath) {
           return { success: false, error: 'Missing worktree path for remote model discovery.' }
         }
@@ -1601,7 +1607,8 @@ export function registerFilesystemHandlers(
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         agentId,
         commitMessageAgentEnv,
-        localRuntimeTarget
+        localRuntimeTarget,
+        args.ptyId
       )
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }

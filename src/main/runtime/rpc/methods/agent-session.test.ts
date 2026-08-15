@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -40,6 +41,60 @@ function runtimeStub() {
 }
 
 describe('agent session RPC methods', () => {
+  it('accepts a bounded provider account reference for a fresh launch', async () => {
+    const runtime = runtimeStub()
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS
+    })
+    const providerAccountRef = {
+      provider: 'codex',
+      accountId: 'account-a',
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    } as const
+
+    const response = await dispatcher.dispatch(
+      request('terminal.createAgentSession', {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerAccountRef
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.createAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({ providerAccountRef }),
+      {}
+    )
+  })
+
+  it.each([
+    { provider: '', accountId: 'account-a', runtime: 'host' },
+    { provider: 'codex', accountId: '', runtime: 'host' },
+    { provider: 'codex', accountId: 'account-a', runtime: 'host', wslDistro: 'Ubuntu' },
+    { provider: 'codex', accountId: 'account-a', runtime: 'other' }
+  ])('rejects an invalid provider account reference %#', async (providerAccountRef) => {
+    const runtime = runtimeStub()
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS
+    })
+
+    const response = await dispatcher.dispatch(
+      request('terminal.createAgentSession', {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerAccountRef
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.createAgentSession).not.toHaveBeenCalled()
+  })
+
   it('dispatches an explicit structured resume without an authoritative command', async () => {
     const runtime = runtimeStub()
     const dispatcher = new RpcDispatcher({
@@ -330,6 +385,26 @@ describe('agent session RPC methods', () => {
     expect(runtime.createAgentSession).not.toHaveBeenCalled()
   })
 
+  it('rejects a Codex account reference on a non-Codex create request', async () => {
+    const runtime = runtimeStub()
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS
+    })
+
+    const response = await dispatcher.dispatch(
+      request('terminal.createAgentSession', {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'claude',
+        providerAccountRef: { provider: 'codex', accountId: 'account-a', runtime: 'host' }
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.createAgentSession).not.toHaveBeenCalled()
+  })
+
   it('rejects oversized structured agent arguments before runtime mutation', async () => {
     const runtime = runtimeStub()
     const dispatcher = new RpcDispatcher({
@@ -373,5 +448,6 @@ describe('agent session RPC methods', () => {
     expect(MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION).toBe(2)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY)
   })
 })

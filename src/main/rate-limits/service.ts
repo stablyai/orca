@@ -38,6 +38,11 @@ export type InactiveCodexAccountInfo = {
   managedHomePath: string
 }
 
+export type InactiveKimiAccountInfo = {
+  id: string
+  managedHomePath: string
+}
+
 type CodexHomePathResolver = (target?: CodexAccountSelectionTarget) => string | null
 type KimiHomeResolver = () => Promise<KimiHomeResolution>
 type ClaudeAuthPreparationResolver = (
@@ -213,6 +218,7 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private kimiFetchGeneration = 0
   // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
   private lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   private opencodeFetchGeneration = 0
@@ -236,15 +242,20 @@ export class RateLimitService {
   private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
+  private inactiveKimiAccountsResolver: (() => InactiveKimiAccountInfo[]) | null = null
   private networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
   private inactiveClaudeCache = new Map<string, ProviderRateLimits>()
   private inactiveCodexCache = new Map<string, ProviderRateLimits>()
+  private inactiveKimiCache = new Map<string, ProviderRateLimits>()
   private inactiveClaudeFetching = new Set<string>()
   private inactiveCodexFetching = new Set<string>()
+  private inactiveKimiFetching = new Set<string>()
   private lastInactiveClaudeFetchAt = 0
   private inactiveClaudeAccountsGeneration = 0
   private lastInactiveCodexFetchAt = 0
   private inactiveCodexAccountsGeneration = 0
+  private lastInactiveKimiFetchAt = 0
+  private inactiveKimiAccountsGeneration = 0
   private stateListeners = new Set<(state: RateLimitState) => void>()
 
   constructor() {}
@@ -270,11 +281,11 @@ export class RateLimitService {
 
   // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
   // providers' fetches are started; chaining keeps the no-resolver path immediate.
-  private fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
+  private fetchKimiWithResolvedHome(signal?: AbortSignal): Promise<ProviderRateLimits> {
     const pendingHome = this.kimiHomeResolver?.()
     return pendingHome
-      ? pendingHome.then((home) => fetchKimiRateLimits({ home }))
-      : fetchKimiRateLimits({ home: undefined })
+      ? pendingHome.then((home) => fetchKimiRateLimits({ home, signal }))
+      : fetchKimiRateLimits({ home: undefined, signal })
   }
 
   setClaudeAuthPreparationResolver(resolver: ClaudeAuthPreparationResolver): void {
@@ -310,6 +321,12 @@ export class RateLimitService {
     this.inactiveCodexAccountsResolver = resolver
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
+  }
+
+  setInactiveKimiAccountsResolver(resolver: () => InactiveKimiAccountInfo[]): void {
+    this.inactiveKimiAccountsResolver = resolver
+    this.inactiveKimiAccountsGeneration += 1
+    this.pruneInactiveKimiState()
   }
 
   attach(mainWindow: BrowserWindow): void {
@@ -355,6 +372,7 @@ export class RateLimitService {
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()
     this.inactiveCodexFetching.clear()
+    this.inactiveKimiFetching.clear()
     this.resolveAndClearFetchIdleWaiters()
     this.stopTimer()
     this.clearDeferredStartupRefresh()
@@ -366,6 +384,7 @@ export class RateLimitService {
   getState(): RateLimitState {
     this.pruneInactiveClaudeState()
     this.pruneInactiveCodexState()
+    this.pruneInactiveKimiState()
     return {
       ...this.state,
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
@@ -380,6 +399,10 @@ export class RateLimitService {
       inactiveCodexAccounts: this.buildInactiveArray(
         this.inactiveCodexCache,
         this.inactiveCodexFetching
+      ),
+      inactiveKimiAccounts: this.buildInactiveArray(
+        this.inactiveKimiCache,
+        this.inactiveKimiFetching
       )
     }
   }
@@ -441,6 +464,22 @@ export class RateLimitService {
       codex: this.withFetchingStatus(null, 'codex')
     })
     await this.fetchCodexOnly({ force: true })
+    return this.getState()
+  }
+
+  async refreshForKimiAccountChange(outgoingAccountId?: string | null): Promise<RateLimitState> {
+    if (outgoingAccountId && (this.state.kimi?.session || this.state.kimi?.weekly)) {
+      this.inactiveKimiCache.set(outgoingAccountId, this.state.kimi)
+    }
+    this.kimiFetchGeneration += 1
+    this.inactiveKimiAccountsGeneration += 1
+    this.activeFailureStreakByProvider.kimi = 0
+    this.pruneInactiveKimiState()
+    this.updateState({
+      ...this.state,
+      kimi: this.withFetchingStatus(null, 'kimi')
+    })
+    await this.fetchAll({ force: true })
     return this.getState()
   }
 
@@ -728,6 +767,81 @@ export class RateLimitService {
     }
   }
 
+  async fetchInactiveKimiAccountsOnOpen(): Promise<void> {
+    if (Date.now() - this.lastInactiveKimiFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+      return
+    }
+    this.pruneInactiveKimiState()
+    if (this.inactiveKimiFetching.size > 0) {
+      return
+    }
+    const accounts = this.inactiveKimiAccountsResolver?.() ?? []
+    if (accounts.length === 0) {
+      return
+    }
+    const fetchGeneration = this.inactiveKimiAccountsGeneration
+    const controller = this.beginFetchCycle()
+    const signal = controller.signal
+
+    for (const account of accounts) {
+      this.inactiveKimiFetching.add(account.id)
+    }
+    this.pushToRenderer()
+
+    try {
+      for (const account of accounts) {
+        if (
+          signal.aborted ||
+          fetchGeneration !== this.inactiveKimiAccountsGeneration ||
+          !this.isCurrentInactiveKimiAccount(account.id)
+        ) {
+          this.inactiveKimiFetching.delete(account.id)
+          if (!this.isCurrentInactiveKimiAccount(account.id)) {
+            this.inactiveKimiCache.delete(account.id)
+          }
+          this.pushToRenderer()
+          continue
+        }
+        try {
+          const fresh = await fetchKimiRateLimits({
+            home: { runtime: 'host', wslDistro: null, path: account.managedHomePath },
+            signal
+          })
+          if (
+            signal.aborted ||
+            fetchGeneration !== this.inactiveKimiAccountsGeneration ||
+            !this.isCurrentInactiveKimiAccount(account.id)
+          ) {
+            this.inactiveKimiFetching.delete(account.id)
+            if (!this.isCurrentInactiveKimiAccount(account.id)) {
+              this.inactiveKimiCache.delete(account.id)
+            }
+            this.pushToRenderer()
+            continue
+          }
+          const cached = this.inactiveKimiCache.get(account.id) ?? null
+          this.inactiveKimiCache.set(account.id, this.applyStalePolicy(fresh, cached))
+        } catch {
+          if (
+            signal.aborted ||
+            fetchGeneration !== this.inactiveKimiAccountsGeneration ||
+            !this.isCurrentInactiveKimiAccount(account.id)
+          ) {
+            this.inactiveKimiCache.delete(account.id)
+          }
+        }
+        this.inactiveKimiFetching.delete(account.id)
+        this.pushToRenderer()
+      }
+
+      if (!signal.aborted && fetchGeneration === this.inactiveKimiAccountsGeneration) {
+        this.lastInactiveKimiFetchAt = Date.now()
+      }
+    } finally {
+      this.finishFetchCycle(controller)
+    }
+  }
+
   evictInactiveClaudeCache(accountId: string): void {
     this.inactiveClaudeAccountsGeneration += 1
     this.inactiveClaudeCache.delete(accountId)
@@ -745,6 +859,10 @@ export class RateLimitService {
     return (this.inactiveCodexAccountsResolver?.() ?? []).some(
       (account) => account.id === accountId
     )
+  }
+
+  private isCurrentInactiveKimiAccount(accountId: string): boolean {
+    return (this.inactiveKimiAccountsResolver?.() ?? []).some((account) => account.id === accountId)
   }
 
   private pruneInactiveClaudeState(): void {
@@ -779,10 +897,32 @@ export class RateLimitService {
     }
   }
 
+  private pruneInactiveKimiState(): void {
+    const currentIds = new Set(
+      (this.inactiveKimiAccountsResolver?.() ?? []).map((account) => account.id)
+    )
+    for (const accountId of this.inactiveKimiCache.keys()) {
+      if (!currentIds.has(accountId)) {
+        this.inactiveKimiCache.delete(accountId)
+      }
+    }
+    for (const accountId of this.inactiveKimiFetching) {
+      if (!currentIds.has(accountId)) {
+        this.inactiveKimiFetching.delete(accountId)
+      }
+    }
+  }
+
   evictInactiveCodexCache(accountId: string): void {
     // Why: clear only this account, not the generation — bumping it would discard sibling fetches still in flight and their fresh results.
     this.inactiveCodexCache.delete(accountId)
     this.inactiveCodexFetching.delete(accountId)
+    this.pushToRenderer()
+  }
+
+  evictInactiveKimiCache(accountId: string): void {
+    this.inactiveKimiCache.delete(accountId)
+    this.inactiveKimiFetching.delete(accountId)
     this.pushToRenderer()
   }
 
@@ -1593,6 +1733,7 @@ export class RateLimitService {
     const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
+    const kimiGeneration = this.kimiFetchGeneration
     const previousState = this.state
     const openCodeGoConfig = this.openCodeGoConfigResolver?.()
     const cookie = openCodeGoConfig?.sessionCookie ?? ''
@@ -1678,7 +1819,7 @@ export class RateLimitService {
           workspaceIdOverride || undefined,
           this.networkProxySettingsResolver?.()
         ),
-        this.fetchKimiWithResolvedHome(),
+        this.fetchKimiWithResolvedHome(signal),
         miniMaxConfigResult.error
           ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
           : fetchMiniMaxRateLimits({
@@ -1797,6 +1938,7 @@ export class RateLimitService {
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyKimi = kimiGeneration === this.kimiFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -1809,7 +1951,9 @@ export class RateLimitService {
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
-    this.trackActiveFailureStreak('kimi', kimi)
+    if (shouldApplyKimi) {
+      this.trackActiveFailureStreak('kimi', kimi)
+    }
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
@@ -1829,7 +1973,7 @@ export class RateLimitService {
           ? opencodeGo
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
-      kimi: this.applyStalePolicy(kimi, previousState.kimi),
+      kimi: shouldApplyKimi ? this.applyStalePolicy(kimi, previousState.kimi) : this.state.kimi,
       antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged

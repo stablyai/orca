@@ -45,6 +45,8 @@ import {
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
+import { recordCodexSessionAccount } from './codex/codex-session-account-registry'
+import { captureCodexSessionAccountAttributions } from './codex/codex-session-account-attribution'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
@@ -197,6 +199,9 @@ import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
+import { KimiAccountService } from './kimi-accounts/service'
+import { CommandCodeAccountService } from './command-code-accounts/service'
+import { ManagedCliHomeAccountService } from './provider-managed-homes/service'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import {
   attachMainWindowServices,
@@ -221,6 +226,7 @@ import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import { markCodexProjectTrusted } from './agent-trust-presets'
 import {
+  getCodexSelectionLaneKey,
   normalizeCodexRuntimeSelection,
   type CodexAccountSelectionTarget
 } from './codex-accounts/runtime-selection'
@@ -354,6 +360,10 @@ let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let openCodeUsage: OpenCodeUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
+let kimiAccounts: KimiAccountService | null = null
+let commandCodeAccounts: CommandCodeAccountService | null = null
+let grokAccounts: ManagedCliHomeAccountService | null = null
+let geminiAccounts: ManagedCliHomeAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let codexSessionMigration: ReturnType<typeof createCodexSessionMigrationScheduler> | null = null
 let claudeAccounts: ClaudeAccountService | null = null
@@ -1028,6 +1038,71 @@ function prepareCodexRuntimeHomeForLaunch(
       console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
     }
   }
+  const explicitAccountRef = launchContext?.providerAccountRef
+  if (explicitAccountRef) {
+    if (launchContext?.launchAgent !== 'codex' || explicitAccountRef.provider !== 'codex') {
+      throw new Error('agent_session_account_agent_mismatch')
+    }
+    const actualTarget = target ?? { runtime: 'host' as const }
+    const resolvedAccountRef =
+      explicitAccountRef.runtime === 'wsl' && !explicitAccountRef.wslDistro?.trim()
+        ? { ...explicitAccountRef, wslDistro: actualTarget.wslDistro ?? null }
+        : explicitAccountRef
+    if (
+      getCodexSelectionLaneKey(actualTarget) !==
+      getCodexSelectionLaneKey({
+        runtime: resolvedAccountRef.runtime,
+        wslDistro: resolvedAccountRef.wslDistro ?? null
+      })
+    ) {
+      throw new Error('agent_session_account_runtime_mismatch')
+    }
+    if (
+      explicitAccountRef.accountId === null &&
+      explicitAccountRef.runtime === 'host' &&
+      codexRuntimeHome!.isExplicitHostSystemDefaultRealHomeSelected(launchEnv)
+    ) {
+      // Why: establish the hook lane before account prep chooses real home vs
+      // the shared mirror. An unusable lane must not fail the launch.
+      ensureRealHomeCodexHookState({
+        hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
+        userDataPath: app.getPath('userData')
+      })
+    }
+    const runtimeHomePath = codexRuntimeHome!.prepareForCodexAccountLaunch(resolvedAccountRef, {
+      unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
+      launchEnv
+    })
+    if (runtimeHomePath === null) {
+      // Why: null is the real ~/.codex lane. Managed-home hook writes must not
+      // target a path Codex will not read for this launch.
+      return null
+    }
+    const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
+    const hookTarget =
+      resolvedAccountRef.runtime === 'wsl'
+        ? { runtime: 'wsl' as const, wslDistro: resolvedAccountRef.wslDistro ?? null }
+        : { runtime: 'host' as const }
+    try {
+      // Why: same best-effort rule as the implicit launch path — a malformed hooks
+      // file must not fail an account-scoped Codex start.
+      const status = hooksEnabled
+        ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
+          codexHookService.install(runtimeHomePath ?? undefined))
+        : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
+          codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined))
+      if (status.state === 'error') {
+        console.warn(
+          '[codex-hook-service] failed to prepare explicit account runtime hooks',
+          status.detail
+        )
+      }
+    } catch (error) {
+      console.warn('[codex-hook-service] failed to prepare explicit account runtime hooks', error)
+    }
+    return runtimeHomePath
+  }
+
   const ensureRealHomeHooksIfSelected = (): boolean => {
     if (
       target?.runtime === 'wsl' ||
@@ -1293,6 +1368,19 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   if (!codexAccounts) {
     throw new Error('Codex account service must be initialized before opening the main window')
   }
+  if (!kimiAccounts) {
+    throw new Error('Kimi account service must be initialized before opening the main window')
+  }
+  if (!commandCodeAccounts) {
+    throw new Error(
+      'Command Code account service must be initialized before opening the main window'
+    )
+  }
+  if (!grokAccounts || !geminiAccounts) {
+    throw new Error(
+      'Grok and Gemini account services must be initialized before opening the main window'
+    )
+  }
   if (!codexRuntimeHome) {
     throw new Error('Codex runtime home service must be initialized before opening the main window')
   }
@@ -1424,12 +1512,18 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     codexUsage,
     openCodeUsage,
     codexAccounts,
+    kimiAccounts,
+    commandCodeAccounts,
+    grokAccounts,
+    geminiAccounts,
     claudeAccounts,
     rateLimits,
     rendererWebContentsId,
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+      prepareForCodexPtyLaunch: (ptyId, target) =>
+        codexRuntimeHome!.resolveCodexHomeForPaneModelDiscovery(ptyId, target),
       prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
     },
     agentAwakeService ?? undefined,
@@ -1438,6 +1532,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     {
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
+      getAdditionalAiVaultKimiHomePaths: () =>
+        kimiAccounts?.getManagedHomePathsForSessionDiscovery() ?? [],
       prepareAiVaultSessionResume: (args) =>
         prepareLegacySharedCodexSessionResume(args, {
           isHostSystemDefaultRealHome: () =>
@@ -1469,6 +1565,10 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
+      getSelectedKimiHomePath: () => kimiAccounts!.getSelectedManagedHomePath(),
+      getSelectedCommandCodeApiKey: () => commandCodeAccounts!.getSelectedApiKey(),
+      getSelectedGrokHomePath: () => grokAccounts!.getSelectedManagedHomePath(),
+      getSelectedGeminiHomePath: () => geminiAccounts!.getSelectedManagedHomePath(),
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -2279,6 +2379,11 @@ void app.whenReady().then(async () => {
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
   const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
+    captureCodexSessionAccountAttributions(identities, {
+      getPtyIdForPaneKey,
+      getPaneAccount: getCodexPaneAccount,
+      recordSessionAccount: recordCodexSessionAccount
+    })
     const ownedIdentities = identities.map((identity) => ({
       ...identity,
       worktreeId:
@@ -2400,6 +2505,21 @@ void app.whenReady().then(async () => {
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome, {
     onHostSystemDefaultSelected: codexSessionMigration.requestRun
   })
+  kimiAccounts = new KimiAccountService(store, join(app.getPath('userData'), 'kimi-accounts'))
+  commandCodeAccounts = new CommandCodeAccountService(
+    store,
+    join(app.getPath('userData'), 'command-code-accounts')
+  )
+  grokAccounts = new ManagedCliHomeAccountService(
+    store,
+    'grok',
+    join(app.getPath('userData'), 'grok-accounts')
+  )
+  geminiAccounts = new ManagedCliHomeAccountService(
+    store,
+    'gemini',
+    join(app.getPath('userData'), 'gemini-accounts')
+  )
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   codexSessionMigration.scheduleInitialRun()
@@ -2411,7 +2531,12 @@ void app.whenReady().then(async () => {
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   // Why: Kimi's CLI refreshes its OAuth token in whichever runtime it runs in, so the
   // usage fetch must read the WSL-side credentials when that's the configured runtime (#12370).
-  rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store!.getSettings())))
+  rateLimits.setKimiHomeResolver(() => {
+    const managedHomePath = kimiAccounts!.getSelectedManagedHomePath()
+    return managedHomePath
+      ? Promise.resolve({ runtime: 'host', wslDistro: null, path: managedHomePath })
+      : resolveKimiHome(getKimiRuntimeTarget(store!.getSettings()))
+  })
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
@@ -2488,6 +2613,9 @@ void app.whenReady().then(async () => {
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
+  rateLimits.setInactiveKimiAccountsResolver(
+    () => kimiAccounts?.getInactiveManagedAccountsForUsage() ?? []
+  )
   const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => {
       const environment = resolveEnvironment(app.getPath('userData'), selector)
@@ -2546,6 +2674,8 @@ void app.whenReady().then(async () => {
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
+    getAdditionalAiVaultKimiHomePaths: () =>
+      kimiAccounts?.getManagedHomePathsForSessionDiscovery() ?? [],
     prepareAiVaultSessionResume: (args) =>
       prepareLegacySharedCodexSessionResume(args, {
         isHostSystemDefaultRealHome: () => codexRuntimeHome?.isHostSystemDefaultRealHome() === true,
@@ -2665,6 +2795,8 @@ void app.whenReady().then(async () => {
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+    prepareForCodexPtyLaunch: (ptyId, target) =>
+      codexRuntimeHome!.resolveCodexHomeForPaneModelDiscovery(ptyId, target),
     prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
   const pluginSystemStartupStartedAt = performance.now()
@@ -3039,6 +3171,10 @@ void app.whenReady().then(async () => {
       store,
       prepareCodexSessionResumeForLaunch,
       {
+        getSelectedKimiHomePath: () => kimiAccounts!.getSelectedManagedHomePath(),
+        getSelectedCommandCodeApiKey: () => commandCodeAccounts!.getSelectedApiKey(),
+        getSelectedGrokHomePath: () => grokAccounts!.getSelectedManagedHomePath(),
+        getSelectedGeminiHomePath: () => geminiAccounts!.getSelectedManagedHomePath(),
         onCodexHomePtySpawned: handleCodexHomePtySpawned,
         onPtyExit: handlePtyExit
       }

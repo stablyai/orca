@@ -2,6 +2,8 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
+import type { ProviderAccountRef } from '../../../shared/provider-account-ref'
+import { AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   createAgentSessionCreateOperation,
@@ -20,6 +22,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   agent: TuiAgent
   prompt?: string
   sessionOptions?: Record<string, SessionOptionValue>
+  providerAccountRef?: ProviderAccountRef
   legacy: {
     command: string
     env: Record<string, string>
@@ -46,6 +49,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
                 ? { prompt: args.prompt, promptDelivery: 'auto-submit' as const }
                 : {}),
               ...(launchPreferences ? { launchPreferences } : {}),
+              ...(args.providerAccountRef ? { providerAccountRef: args.providerAccountRef } : {}),
               placement: { tabId: args.tabId, leafId: args.leafId },
               // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
               presentation: 'background'
@@ -55,6 +59,12 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           { timeoutMs: 15_000 }
         )
       ),
+    ...(args.providerAccountRef
+      ? {
+          hostAuthorityCapability: AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY,
+          requireHostAuthority: true
+        }
+      : {}),
     legacy: ({ skipCompatibilityCheck }) =>
       callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
         { kind: 'environment', environmentId: args.environmentId },

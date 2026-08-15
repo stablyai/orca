@@ -46,7 +46,7 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommand: resolveCliCommandMock
 }))
 
-import { ACCOUNT_HANDLERS } from './account'
+import { ACCOUNT_HANDLERS, formatAccountsBlock } from './account'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import {
@@ -91,6 +91,48 @@ describe('account CLI handlers', () => {
   const callMock = vi.fn()
   const client = { call: callMock } as unknown as RuntimeClient
   let logSpy: ReturnType<typeof vi.spyOn>
+
+  it('renders a friendly label and canonical UUID for launch selection', () => {
+    expect(
+      formatAccountsBlock('Codex', {
+        accounts: [
+          { id: 'account-uuid-a', email: 'user@example.com', workspaceLabel: 'Acme workspace' }
+        ],
+        activeAccountId: 'account-uuid-a'
+      })
+    ).toContain('Acme workspace (active)  account-uuid-a')
+  })
+
+  it.each([null, '   '] as const)(
+    'falls back to email when workspaceLabel is %j',
+    (workspaceLabel) => {
+      expect(
+        formatAccountsBlock('Codex', {
+          accounts: [{ id: 'account-uuid-a', email: 'user@example.com', workspaceLabel }],
+          activeAccountId: 'account-uuid-a'
+        })
+      ).toContain('user@example.com (active)  account-uuid-a')
+    }
+  )
+
+  it('strips control characters from workspace labels before terminal output', () => {
+    const rendered = formatAccountsBlock('Codex', {
+      accounts: [
+        {
+          id: 'account-uuid-a',
+          email: 'user@example.com',
+          workspaceLabel: 'Acme\nworkspace\u001b[31m'
+        }
+      ],
+      activeAccountId: 'account-uuid-a'
+    })
+
+    expect(rendered).toContain('Acmeworkspace (active)  account-uuid-a')
+    expect(rendered).not.toContain('\n  workspace')
+    expect(rendered).not.toContain('\u001b')
+    expect(rendered).not.toContain('[31m')
+    expect(rendered.split('\n')).toHaveLength(2)
+  })
 
   function context(agent: string, json = false): HandlerContext {
     return {

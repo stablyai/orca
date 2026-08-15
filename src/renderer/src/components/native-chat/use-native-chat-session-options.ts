@@ -96,6 +96,7 @@ export function useNativeChatSessionOptions(args: {
 } {
   const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, readTerminalScreen } =
     args
+  const modelDiscoveryPtyId = agent === 'codex' ? (targetPtyId ?? undefined) : undefined
   // The screen text that last parsed into reported values, so a later model
   // discovery can re-resolve it against the host's real ids.
   const reportedScreenRef = useRef<string | null>(null)
@@ -111,7 +112,7 @@ export function useNativeChatSessionOptions(args: {
     }
     const scopeKey = targetPtyId ?? terminalTabId
     const discoveredModels = discoveryContext
-      ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
+      ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey, modelDiscoveryPtyId)
       : null
     const reportedValues =
       agent === 'claude'
@@ -125,7 +126,7 @@ export function useNativeChatSessionOptions(args: {
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
       // Why: the catalog seed carries version-neutral family labels, so it is
-      // safe on every host while the once-per-host probe runs or after it fails
+      // safe on every host while the scoped probe runs or after it fails
       // — without it the whole picker would pop in late or never appear.
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
@@ -148,6 +149,7 @@ export function useNativeChatSessionOptions(args: {
     agent,
     dispatchCommand,
     discoveryContext,
+    modelDiscoveryPtyId,
     onAgentPicker,
     readTerminalScreen,
     targetPtyId,
@@ -175,7 +177,7 @@ export function useNativeChatSessionOptions(args: {
         }
       }
       const models = discoveryContext
-        ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
+        ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey, modelDiscoveryPtyId)
         : null
       for (const screen of [authoritativeScreen, readTerminalScreen?.() ?? null]) {
         const reportedValues = readClaudeSessionOptionsFromTerminalScreen(
@@ -200,7 +202,7 @@ export function useNativeChatSessionOptions(args: {
     return () => {
       cancelled = true
     }
-  }, [agent, discoveryContext, readTerminalScreen, surface, targetPtyId])
+  }, [agent, discoveryContext, modelDiscoveryPtyId, readTerminalScreen, surface, targetPtyId])
 
   useEffect(() => {
     if (!surface || !discoveryContext) {
@@ -220,21 +222,29 @@ export function useNativeChatSessionOptions(args: {
         }
         // A failed settings write must not surface as an unhandled rejection.
         void retirePersistedModelMissingFromDiscovery(agent, models).catch(() => undefined)
-      }
+      },
+      modelDiscoveryPtyId
     )
     // Why: the subscription never replays, so a probe that settled before this
     // pane mounted would leave a retired persisted model in place forever.
-    const cached = readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
+    const cached = readNativeChatEnrichedModels(
+      agent,
+      discoveryContext.hostKey,
+      modelDiscoveryPtyId
+    )
     if (cached) {
+      surface.replaceModels(cached)
       void retirePersistedModelMissingFromDiscovery(agent, cached).catch(() => undefined)
     }
     ensureNativeChatModelEnrichment({
       agent,
       hostKey: discoveryContext.hostKey,
-      discover: () => discoverNativeChatCatalogModels(agent, discoveryContext.runtime)
+      ...(modelDiscoveryPtyId ? { ptyId: modelDiscoveryPtyId } : {}),
+      discover: () =>
+        discoverNativeChatCatalogModels(agent, discoveryContext.runtime, modelDiscoveryPtyId)
     })
     return unsubscribe
-  }, [agent, discoveryContext, surface])
+  }, [agent, discoveryContext, modelDiscoveryPtyId, surface])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,
