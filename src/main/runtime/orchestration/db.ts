@@ -4594,7 +4594,8 @@ export class OrchestrationDb {
       if (activeDispatch) {
         throw new OrchestrationError(
           'request_mismatch',
-          `Task ${id} has active dispatch ${activeDispatch.id}; settle or release it before returning the task to ready.`
+          `Task ${id} has active dispatch ${activeDispatch.id}; settle or release it before returning the task to ready.`,
+          { taskId: id, dispatchId: activeDispatch.id }
         )
       }
     }
