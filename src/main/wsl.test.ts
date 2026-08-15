@@ -813,18 +813,48 @@ describe('wslUncDirectoryExists', () => {
     expect(result).toBe(true)
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'sh',
-        '-c',
-        expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),
-        'sh',
-        '/home/jin/repo'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining('__ORCA_DIRECTORY_EXISTS__')],
       expect.objectContaining({ timeout: 5000 })
     )
+  })
+
+  it('inlines the path in the probe script instead of passing it positionally', () => {
+    // Why: a positional `$1` is consumed by the login shell before the guest sh runs.
+    execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_EXISTS__')
+    withPlatform('win32', () => wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'))
+    const [, args] = execFileSyncMock.mock.calls[0] as [string, string[]]
+    expect(args).toHaveLength(6)
+    expect(args[5]).toContain("'/home/jin/repo'")
+    expect(args[5]).not.toContain('$1')
+  })
+
+  it('escapes single quotes in the probed path', () => {
+    execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_EXISTS__')
+    withPlatform('win32', () =>
+      wslUncDirectoryExists("\\\\wsl.localhost\\Ubuntu\\home\\jin\\it's here")
+    )
+    const [, args] = execFileSyncMock.mock.calls[0] as [string, string[]]
+    expect(args[5]).toContain("'/home/jin/it'\\''s here'")
+  })
+
+  it('escapes a dollar sign in the probed path for the wsl.exe argv layer', () => {
+    // Why: an unescaped `$` is expanded before the guest shell sees the quotes.
+    execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_EXISTS__')
+    withPlatform('win32', () =>
+      wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\cost$dir')
+    )
+    const [, args] = execFileSyncMock.mock.calls[0] as [string, string[]]
+    expect(args[5]).toContain("'/home/jin/cost\\$dir'")
+  })
+
+  it('refuses to spawn for a backticked path and answers null', () => {
+    // Why: null sends the caller to existsSync rather than rejecting a live path.
+    execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_EXISTS__')
+    const result = withPlatform('win32', () =>
+      wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\a`id`b')
+    )
+    expect(result).toBeNull()
+    expect(execFileSyncMock).not.toHaveBeenCalled()
   })
 
   it('returns false when the guest reports the directory missing', () => {
@@ -873,16 +903,7 @@ describe('wslUncDirectoryExistsAsync', () => {
     ).resolves.toBe(true)
     expect(execFileMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'sh',
-        '-c',
-        expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),
-        'sh',
-        '/home/jin/repo'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("'/home/jin/repo'")],
       expect.objectContaining({ timeout: 5000 }),
       expect.any(Function)
     )
@@ -905,6 +926,19 @@ describe('wslUncDirectoryExistsAsync', () => {
         wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
       ).resolves.toBeNull()
     })
+  })
+
+  it('refuses to spawn asynchronously for a backticked path', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) =>
+      callback(null, '__ORCA_DIRECTORY_EXISTS__')
+    )
+
+    await expect(
+      withPlatformAsync('win32', () =>
+        wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin\\a`id`b')
+      )
+    ).resolves.toBeNull()
+    expect(execFileMock).not.toHaveBeenCalled()
   })
 
   it('returns null without spawning for paths outside WSL or off Windows', async () => {

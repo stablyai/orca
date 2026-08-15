@@ -1,4 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process'
+import { escapeWslShCommandForWindows, quotePosixShell } from '../shared/wsl-login-shell-command'
 import { parseWslUncPath, toWindowsWslPath } from '../shared/wsl-paths'
 import { filterUserWslDistros, parseWslDistros } from './wsl-distro-list-output'
 import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
@@ -24,6 +25,8 @@ export type WslPathInfo = {
 const WSL_DIRECTORY_EXISTS_MARKER = '__ORCA_DIRECTORY_EXISTS__'
 const WSL_DIRECTORY_MISSING_MARKER = '__ORCA_DIRECTORY_MISSING__'
 
+// Why: wsl.exe routes this through the distro's login shell, which expands the
+// script text before the requested `sh` sees it, so a positional `$1` arrives empty.
 function getWslDirectoryProbeArgs(info: WslPathInfo): string[] {
   return [
     '-d',
@@ -31,10 +34,16 @@ function getWslDirectoryProbeArgs(info: WslPathInfo): string[] {
     '--',
     'sh',
     '-c',
-    `if [ -d "$1" ]; then printf ${WSL_DIRECTORY_EXISTS_MARKER}; else printf ${WSL_DIRECTORY_MISSING_MARKER}; fi`,
-    'sh',
-    info.linuxPath
+    escapeWslShCommandForWindows(
+      `if [ -d ${quotePosixShell(info.linuxPath)} ]; then printf ${WSL_DIRECTORY_EXISTS_MARKER}; else printf ${WSL_DIRECTORY_MISSING_MARKER}; fi`
+    )
   ]
+}
+
+// Why: that same login shell command-substitutes a backtick under every payload
+// shape, so the path has to be refused rather than quoted.
+function isProbeSafeLinuxPath(linuxPath: string): boolean {
+  return !linuxPath.includes('`')
 }
 
 function parseWslDirectoryProbeOutput(stdout: unknown): boolean | null {
@@ -86,7 +95,7 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
     return null
   }
   const info = parseWslUncPath(uncPath)
-  if (!info) {
+  if (!info || !isProbeSafeLinuxPath(info.linuxPath)) {
     return null
   }
   try {
@@ -106,7 +115,7 @@ export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | n
     return Promise.resolve(null)
   }
   const info = parseWslUncPath(uncPath)
-  if (!info) {
+  if (!info || !isProbeSafeLinuxPath(info.linuxPath)) {
     return Promise.resolve(null)
   }
   return new Promise((resolve) => {
