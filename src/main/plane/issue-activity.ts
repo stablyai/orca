@@ -1,4 +1,5 @@
-import { apiPath, getClient, planeFetch } from './client'
+import { getClient } from './client'
+import { apiPath, planeFetch } from './api-request'
 import {
   arrayFromResponse,
   mapComment,

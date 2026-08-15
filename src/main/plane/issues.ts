@@ -1,4 +1,5 @@
-import { apiPath, getClient, getClients, planeFetch } from './client'
+import { getClient, getClients } from './client'
+import { apiPath, planeFetch } from './api-request'
 import { arrayFromResponse, mapWorkItem, notNull } from './response-mappers'
 import { listProjects } from './project-resources'
 import type {

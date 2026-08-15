@@ -1,14 +1,12 @@
-import { apiPath, getClient, planeFetch, type PlaneClientForInstance } from './client'
+import { getClient, type PlaneClientForInstance } from './client'
+import { apiPath, planeFetch } from './api-request'
+import { mapCycle, mapEstimate, mapModule, mapWorkItemType } from './project-resource-mappers'
 import {
   arrayFromResponse,
-  mapCycle,
-  mapEstimate,
   mapLabel,
   mapMember,
-  mapModule,
   mapProject,
   mapState,
-  mapWorkItemType,
   notNull
 } from './response-mappers'
 import type {
@@ -26,10 +24,24 @@ const PAGE_SIZE_MAX = 100
 
 export async function listProjects(instanceId?: string): Promise<PlaneProject[]> {
   const client = getClient(instanceId)
-  const data = await planeFetch<unknown>(client, apiPath(client, '/projects/'))
-  return arrayFromResponse(data)
-    .map((item) => mapProject(client, item))
-    .filter(notNull)
+  const items: PlaneProject[] = []
+  let cursor: string | null = null
+  do {
+    const query = new URLSearchParams({ per_page: String(PAGE_SIZE_MAX) })
+    if (cursor) {
+      query.set('cursor', cursor)
+    }
+    const data = await planeFetch<unknown>(client, apiPath(client, `/projects/?${query}`))
+    const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
+    items.push(
+      ...arrayFromResponse(data)
+        .map((item) => mapProject(client, item))
+        .filter(notNull)
+    )
+    cursor =
+      raw.next_page_results === true && typeof raw.next_cursor === 'string' ? raw.next_cursor : null
+  } while (cursor)
+  return items
 }
 
 export async function listStates(projectId: string, instanceId?: string): Promise<PlaneState[]> {

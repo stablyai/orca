@@ -6,10 +6,13 @@ const getClient = vi.fn()
 const getClients = vi.fn()
 
 vi.mock('./client', () => ({
+  getClient: (...args: unknown[]) => getClient(...args),
+  getClients: (...args: unknown[]) => getClients(...args)
+}))
+
+vi.mock('./api-request', () => ({
   apiPath: (client: PlaneClientForInstance, suffix: string) =>
     `/api/v1/workspaces/${client.instance.workspaceSlug}${suffix}`,
-  getClient: (...args: unknown[]) => getClient(...args),
-  getClients: (...args: unknown[]) => getClients(...args),
   planeFetch: (...args: unknown[]) => planeFetch(...args),
   planeWebUrl: (client: PlaneClientForInstance, identifier: string) =>
     `${client.instance.baseUrl}/${client.instance.workspaceSlug}/issues/${identifier}`
@@ -200,6 +203,21 @@ describe('Plane issue API adapter', () => {
     await expect(listModules('project-1')).resolves.toMatchObject([{ id: 'module-1' }])
     await expect(listWorkItemTypes('project-1')).resolves.toMatchObject([{ id: 'type-1' }])
     await expect(listEstimates('project-1')).resolves.toMatchObject([{ id: 'estimate-1' }])
+    expect(planeFetch.mock.calls[1][1]).toContain('cursor=100%3A1%3A0')
+  })
+
+  it('paginates project listing', async () => {
+    planeFetch
+      .mockResolvedValueOnce({
+        results: [project('project-1')],
+        next_cursor: '100:1:0',
+        next_page_results: true
+      })
+      .mockResolvedValueOnce({ results: [project('project-2')], next_page_results: false })
+    const { listProjects } = await import('./project-resources')
+
+    await expect(listProjects()).resolves.toMatchObject([{ id: 'project-1' }, { id: 'project-2' }])
+    expect(planeFetch.mock.calls[0][1]).toContain('per_page=100')
     expect(planeFetch.mock.calls[1][1]).toContain('cursor=100%3A1%3A0')
   })
 

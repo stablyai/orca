@@ -11,6 +11,7 @@ import {
   readStoredCredentialToken,
   writeEncryptedCredential
 } from '../integration-credential-file'
+import { fetchPlaneViewer, instanceId, normalizeBaseUrl } from './api-request'
 import type {
   PlaneConnectArgs,
   PlaneConnectionStatus,
@@ -40,18 +41,6 @@ let instanceFileLoadedFromDisk = false
 function ensureDirs(): void {
   mkdirSync(getOrcaDir(), { recursive: true })
   mkdirSync(getInstanceTokenDir(), { recursive: true })
-}
-
-function normalizeBaseUrl(value: string): string {
-  const url = new URL(value.trim())
-  url.pathname = ''
-  url.search = ''
-  url.hash = ''
-  return url.toString().replace(/\/$/, '')
-}
-
-function instanceId(baseUrl: string, workspaceSlug: string): string {
-  return `${normalizeBaseUrl(baseUrl)}::${workspaceSlug.trim()}`
 }
 
 function emptyInstanceFile(): PlaneInstanceFile {
@@ -217,9 +206,22 @@ export function disconnect(instanceId?: string): void {
       unlinkSync(getInstanceTokenPath(id))
     } catch {}
   }
+  const instances = file.instances.filter((instance) => !ids.includes(instance.id))
+  const activeInstanceId = instances.some((instance) => instance.id === file.activeInstanceId)
+    ? file.activeInstanceId
+    : (instances[0]?.id ?? null)
+  const selectedInstanceId =
+    file.selectedInstanceId === 'all'
+      ? 'all'
+      : file.selectedInstanceId &&
+          instances.some((instance) => instance.id === file.selectedInstanceId)
+        ? file.selectedInstanceId
+        : activeInstanceId
   writeInstanceFile({
     ...file,
-    instances: file.instances.filter((instance) => !ids.includes(instance.id))
+    activeInstanceId,
+    selectedInstanceId,
+    instances
   })
 }
 
@@ -301,52 +303,4 @@ export function getClients(selection?: PlaneInstanceSelection): PlaneClientForIn
     return file.instances.map((instance) => getClient(instance.id))
   }
   return [getClient(effectiveSelection ?? undefined)]
-}
-
-const PLANE_REQUEST_TIMEOUT_MS = 30_000
-
-export async function planeFetch<T>(
-  client: PlaneClientForInstance,
-  path: string,
-  init: RequestInit = {}
-): Promise<T> {
-  const timeoutSignal = AbortSignal.timeout(PLANE_REQUEST_TIMEOUT_MS)
-  const response = await fetch(`${client.instance.baseUrl}${path}`, {
-    ...init,
-    signal: init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'X-API-Key': client.apiKey,
-      ...init.headers
-    }
-  })
-  if (!response.ok) {
-    throw new Error(`Plane API ${response.status}: ${await response.text()}`.slice(0, 300))
-  }
-  if (response.status === 204) {
-    return undefined as T
-  }
-  return (await response.json()) as T
-}
-
-async function fetchPlaneViewer(client: PlaneClientForInstance): Promise<PlaneViewer> {
-  const data = await planeFetch<Record<string, unknown>>(client, '/api/v1/users/me/')
-  const id = stringField(data, 'id') ?? undefined
-  const displayName =
-    stringField(data, 'display_name') ?? stringField(data, 'first_name') ?? 'Plane user'
-  return { id, displayName, email: stringField(data, 'email') }
-}
-
-export function apiPath(client: PlaneClientForInstance, suffix: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(client.instance.workspaceSlug)}${suffix}`
-}
-
-export function planeWebUrl(client: PlaneClientForInstance, identifier: string): string {
-  return `${client.instance.baseUrl}/${client.instance.workspaceSlug}/issues/${identifier}`
-}
-
-function stringField(data: Record<string, unknown>, key: string): string | null {
-  const value = data[key]
-  return typeof value === 'string' && value.trim() ? value.trim() : null
 }
