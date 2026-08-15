@@ -16,6 +16,7 @@ import {
   Undo2,
   Check,
   Copy,
+  FileText,
   Folder,
   FolderOpen,
   GitFork,
@@ -83,6 +84,7 @@ import {
 } from './discard-all-sequence'
 import {
   canDiscardStatusEntry,
+  canOpenWorkingTreeStatusEntry,
   canStageStatusEntry,
   canUnstageStatusEntry
 } from './source-control-entry-actions'
@@ -4573,6 +4575,22 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
+  const handleOpenWorkingTreeFile = useCallback(
+    (entry: GitStatusEntry) => {
+      if (!activeWorktreeId || !worktreePath || !canOpenWorkingTreeStatusEntry(entry)) {
+        return
+      }
+      openFile({
+        filePath: joinPath(worktreePath, entry.path),
+        relativePath: entry.path,
+        worktreeId: activeWorktreeId,
+        language: detectLanguage(entry.path),
+        mode: 'edit'
+      })
+    },
+    [activeWorktreeId, openFile, worktreePath]
+  )
+
   const { selectedKeys, handleSelect, handleContextMenu, clearSelection } =
     useSourceControlSelection({
       flatEntries: visibleSelectionEntries,
@@ -6127,6 +6145,7 @@ function SourceControlInner(): React.JSX.Element {
                                 onRevealInExplorer={revealInExplorer}
                                 connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
+                                onOpenFile={handleOpenWorkingTreeFile}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
                                 onDiscard={requestDiscardEntry}
@@ -6182,6 +6201,7 @@ function SourceControlInner(): React.JSX.Element {
                                 onRevealInExplorer={revealInExplorer}
                                 connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
+                                onOpenFile={handleOpenWorkingTreeFile}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
                                 onDiscard={requestDiscardEntry}
@@ -7937,6 +7957,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onRevealInExplorer,
   connectionId,
   onOpen,
+  onOpenFile,
   onStage,
   onUnstage,
   onDiscard,
@@ -7956,6 +7977,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  onOpenFile: (entry: GitStatusEntry) => void
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
   onDiscard: (entry: GitStatusEntry) => void
@@ -7979,6 +8001,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const canStage = canStageStatusEntry(entry)
   // Why: a submodule-internal staged row is read-only from the parent worktree, so don't offer Unstage (mirrors bulk unstage).
   const canUnstage = canUnstageStatusEntry(entry)
+  const canOpenFile = canOpenWorkingTreeStatusEntry(entry)
 
   return (
     <SourceControlEntryContextMenu
@@ -7987,6 +8010,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
       relativePath={entry.path}
       connectionId={connectionId}
       onView={() => onOpen(entry)}
+      onOpenFile={canOpenFile ? () => onOpenFile(entry) : undefined}
       onRevealInExplorer={onRevealInExplorer}
       onOpenChange={(open) => {
         if (open && onContextMenu) {
@@ -8097,6 +8121,16 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           </>
         )}
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
+          {canOpenFile && (
+            <ActionButton
+              icon={FileText}
+              title={translate('auto.components.right.sidebar.SourceControl.openFile', 'Open file')}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenFile(entry)
+              }}
+            />
+          )}
           {canDiscard && (
             <ActionButton
               icon={entry.area === 'untracked' ? Trash : Undo2}

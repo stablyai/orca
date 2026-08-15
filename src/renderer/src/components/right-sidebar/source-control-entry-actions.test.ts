@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import {
   canDiscardStatusEntry,
+  canOpenWorkingTreeStatusEntry,
   canStageStatusEntry,
   canUnstageStatusEntry
 } from './source-control-entry-actions'
@@ -44,5 +45,23 @@ describe('source control entry actions', () => {
     expect(canStageStatusEntry(entry({ area: 'unstaged', submoduleRoot: 'vendor/lib' }))).toBe(
       false
     )
+  })
+
+  it('hides Open file for deleted rows and keeps it for rows that still exist on disk', () => {
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'modified' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'added' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'untracked' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'renamed' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ area: 'staged', status: 'modified' }))).toBe(true)
+    expect(canOpenWorkingTreeStatusEntry(entry({ status: 'deleted' }))).toBe(false)
+    expect(canOpenWorkingTreeStatusEntry(entry({ area: 'staged', status: 'deleted' }))).toBe(false)
+    expect(
+      canOpenWorkingTreeStatusEntry(
+        entry({
+          path: 'vendor/lib',
+          submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: false }
+        })
+      )
+    ).toBe(false)
   })
 })
