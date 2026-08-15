@@ -17,6 +17,16 @@ vi.mock('@/i18n/i18n', () => ({
   }
 }))
 
+const openSettingsPage = vi.fn()
+const openSettingsTarget = vi.fn()
+const mockStoreState = { openSettingsPage, openSettingsTarget }
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(mockStoreState), {
+    getState: () => mockStoreState
+  })
+}))
+
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props}>{children}</button>
@@ -31,6 +41,13 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 vi.mock('@/components/ui/dropdown-menu', () => {
   const React = require('react') as typeof ReactModule
+  // Why: mirrors real Radix RadioGroup — context, not Children.map — so a
+  // non-radio sibling (e.g. an unavailable-choice DropdownMenuItem) renders
+  // as itself instead of being coerced into a radio button.
+  const RadioGroupContext = React.createContext<{
+    value?: string
+    onValueChange?: (value: string) => void
+  }>({})
   return {
     DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuTrigger: ({
@@ -68,8 +85,8 @@ vi.mock('@/components/ui/dropdown-menu', () => {
         {children}
       </button>
     ),
-    // Why: exercises value binding + onValueChange contract the real Radix
-    // group provides; selected value is exposed via data-radio-value.
+    // Why: exposes the selected value + onValueChange wiring via
+    // data-radio-value / data-on-value-change for assertions on the group.
     DropdownMenuRadioGroup: ({
       children,
       value,
@@ -78,57 +95,38 @@ vi.mock('@/components/ui/dropdown-menu', () => {
       children: React.ReactNode
       value?: string
       onValueChange?: (value: string) => void
-    }) => (
-      <div
-        role="radiogroup"
-        data-radio-value={value ?? ''}
-        data-on-value-change={onValueChange ? '1' : '0'}
-      >
-        {React.Children.map(children, (child) => {
-          if (!React.isValidElement(child)) {
-            return child
-          }
-          const props = child.props as {
-            value?: string
-            disabled?: boolean
-            children?: React.ReactNode
-          }
-          const selected = props.value !== undefined && props.value === value
-          return (
-            <button
-              key={props.value}
-              role="radio"
-              aria-checked={selected}
-              disabled={props.disabled}
-              data-value={props.value}
-              data-state={selected ? 'checked' : 'unchecked'}
-              onClick={() => {
-                if (props.value !== undefined) {
-                  onValueChange?.(props.value)
-                }
-              }}
-            >
-              {props.children}
-            </button>
-          )
-        })}
-      </div>
-    ),
+    }) => {
+      const contextValue = React.useMemo(() => ({ value, onValueChange }), [value, onValueChange])
+      return (
+        <div
+          role="radiogroup"
+          data-radio-value={value ?? ''}
+          data-on-value-change={onValueChange ? '1' : '0'}
+        >
+          <RadioGroupContext.Provider value={contextValue}>{children}</RadioGroupContext.Provider>
+        </div>
+      )
+    },
     DropdownMenuRadioItem: ({
       children,
       disabled,
       value
-    }: React.ButtonHTMLAttributes<HTMLButtonElement> & { value: string }) => (
-      // Why: parent RadioGroup mock reads `value` via Children.map — keep it on
-      // props even though native span has no value attribute.
-      <span
-        data-radio-item
-        data-disabled={disabled || undefined}
-        {...({ value } as Record<string, string>)}
-      >
-        {children}
-      </span>
-    )
+    }: React.ButtonHTMLAttributes<HTMLButtonElement> & { value: string }) => {
+      const ctx = React.useContext(RadioGroupContext)
+      const selected = value === ctx.value
+      return (
+        <button
+          role="radio"
+          aria-checked={selected}
+          disabled={disabled}
+          data-value={value}
+          data-state={selected ? 'checked' : 'unchecked'}
+          onClick={() => ctx.onValueChange?.(value)}
+        >
+          {children}
+        </button>
+      )
+    }
   }
 })
 
@@ -185,7 +183,39 @@ const fast: SessionOptionDescriptor = {
   settable: true
 }
 
-afterEach(() => cleanup())
+const PERMISSION_MODE_CHOICES = [
+  { value: 'manual', label: 'Manual' },
+  { value: 'acceptEdits', label: 'Accept edits' },
+  { value: 'plan', label: 'Plan' },
+  { value: 'auto', label: 'Auto' },
+  {
+    value: 'bypassPermissions',
+    label: 'Bypass permissions',
+    unavailable: { action: 'open-agent-permissions-setting' as const }
+  }
+]
+
+function permissionMode(overrides: Partial<SessionOptionDescriptor> = {}): SessionOptionDescriptor {
+  return {
+    id: 'permissionMode',
+    label: 'Mode',
+    category: 'mode',
+    kind: {
+      type: 'select',
+      currentValue: 'manual',
+      choices: PERMISSION_MODE_CHOICES
+    },
+    valueSource: 'applied',
+    settable: true,
+    ...overrides
+  }
+}
+
+afterEach(() => {
+  cleanup()
+  openSettingsPage.mockClear()
+  openSettingsTarget.mockClear()
+})
 
 describe('NativeChatSessionOptionPickers', () => {
   it('prefers collision-aware upward placement for model and option menus', () => {
@@ -456,5 +486,151 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
     expect(screen.getByText('Sent to the agent — not confirmed')).not.toBeNull()
+  })
+
+  it('renders an unavailable choice as an Enable action while its siblings stay live radios', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), permissionMode()]}
+        isWorking={false}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Bypass permissions Enable' })).not.toBeNull()
+    expect(screen.queryByRole('radio', { name: /Bypass permissions/ })).toBeNull()
+    for (const name of ['Manual', 'Accept edits', 'Plan', 'Auto']) {
+      const radio = screen.getByRole('radio', { name })
+      expect(radio.hasAttribute('disabled')).toBe(false)
+    }
+  })
+
+  it('activating Enable deep-links to the agent permissions setting', async () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), permissionMode()]}
+        isWorking={false}
+      />
+    )
+    screen.getByRole('button', { name: 'Bypass permissions Enable' }).click()
+    await waitFor(() =>
+      expect(openSettingsTarget).toHaveBeenCalledWith({
+        pane: 'agents',
+        repoId: null,
+        sectionId: 'agent-permissions'
+      })
+    )
+    expect(openSettingsPage).toHaveBeenCalled()
+  })
+
+  it('selecting a normal mode row calls setOption with the chosen value', async () => {
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    const liveSurface = { ...surface, setOption }
+    render(
+      <NativeChatSessionOptionPickers
+        surface={liveSurface}
+        snapshot={[model(), permissionMode()]}
+        isWorking={false}
+      />
+    )
+    screen.getByRole('radio', { name: 'Plan' }).click()
+    await waitFor(() => expect(setOption).toHaveBeenCalledWith('permissionMode', 'plan'))
+  })
+
+  it('renders all five choices as radio items when the launch granted bypass', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[
+          model(),
+          permissionMode({
+            kind: {
+              type: 'select',
+              currentValue: 'manual',
+              choices: [
+                { value: 'manual', label: 'Manual' },
+                { value: 'acceptEdits', label: 'Accept edits' },
+                { value: 'plan', label: 'Plan' },
+                { value: 'auto', label: 'Auto' },
+                { value: 'bypassPermissions', label: 'Bypass permissions' }
+              ]
+            }
+          })
+        ]}
+        isWorking={false}
+      />
+    )
+    for (const name of ['Manual', 'Accept edits', 'Plan', 'Auto', 'Bypass permissions']) {
+      expect(screen.getByRole('radio', { name })).not.toBeNull()
+    }
+    expect(screen.queryByText('Enable')).toBeNull()
+  })
+
+  it('gives permission mode its own pill, separate from the options dropdown', () => {
+    const plan = permissionMode({
+      kind: { type: 'select', currentValue: 'plan', choices: PERMISSION_MODE_CHOICES }
+    })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort, plan]}
+        isWorking={false}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Mode Plan' })).not.toBeNull()
+    // Why: mode must not leak into the shared effort/options pill's label or menu.
+    expect(screen.getByRole('button', { name: 'Effort High' }).textContent).not.toContain('Plan')
+    expect(screen.queryByRole('radio', { name: 'Accept edits' })).not.toBeNull()
+  })
+
+  it('orders the pills mode, then options, then model', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort, permissionMode()]}
+        isWorking={false}
+      />
+    )
+    const modeButton = screen.getByRole('button', { name: 'Mode Manual' })
+    const optionsButton = screen.getByRole('button', { name: 'Effort High' })
+    const modelButton = screen.getByRole('button', { name: 'Model Opus 4.8' })
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING
+    expect(modeButton.compareDocumentPosition(optionsButton) & FOLLOWING).not.toBe(0)
+    expect(optionsButton.compareDocumentPosition(modelButton) & FOLLOWING).not.toBe(0)
+  })
+
+  it('shows Manual on the dedicated pill even though the shared pill would have stayed quiet', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), permissionMode()]}
+        isWorking={false}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Mode Manual' })).not.toBeNull()
+  })
+
+  it('falls back to "Mode" when the current value is unknown', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), permissionMode({ valueSource: 'unknown' })]}
+        isWorking={false}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Mode' })).not.toBeNull()
+  })
+
+  it('renders no Mode pill for a non-Claude agent, leaving the other pills unaffected', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /^Mode(\s|$)/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Effort High' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Model Opus 4.8' })).not.toBeNull()
   })
 })

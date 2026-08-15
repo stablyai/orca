@@ -15285,8 +15285,15 @@
           "max": "Max",
           "ultra": "Ultra",
           "on": "On",
-          "off": "Off"
-        }
+          "off": "Off",
+          "manual": "Manual",
+          "acceptEdits": "Accept edits",
+          "plan": "Plan",
+          "auto": "Auto",
+          "bypassPermissions": "Bypass permissions"
+        },
+        "enableChoice": "Enable",
+        "permissionMode": "Mode"
       },
       "tool": {
         "running": "Running…",

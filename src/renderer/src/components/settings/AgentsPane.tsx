@@ -211,7 +211,7 @@ export function AgentPermissionsSetting({
 }: AgentPermissionsSettingProps): React.JSX.Element {
   const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" data-settings-section="agent-permissions">
       <SettingsSubsectionHeader
         title={
           <span className="flex items-center gap-2">

@@ -15,7 +15,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
+import { useAppStore } from '@/store'
 import type {
+  SessionOptionChoiceAction,
   SessionOptionDescriptor,
   SessionOptionsSurface,
   SessionOptionValue
@@ -24,6 +26,7 @@ import {
   nativeChatModelPillLabel,
   nativeChatOptionsPillLabel,
   nativeChatOptionsPillTitle,
+  nativeChatPermissionModePillLabel,
   nativeChatSessionChoiceLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
@@ -114,8 +117,9 @@ function DescriptorMenuRows(props: {
   pending: boolean
   setValue: (value: SessionOptionValue) => void
   invokeAction: () => void
+  openChoiceAction: (action: SessionOptionChoiceAction) => void
 }): React.JSX.Element {
-  const { descriptor, pending, setValue, invokeAction } = props
+  const { descriptor, pending, setValue, invokeAction, openChoiceAction } = props
   // Why: flip-only without a baseline is an action — never claim On/Off.
   if (descriptor.action?.type === 'toggle-command') {
     return (
@@ -172,18 +176,38 @@ function DescriptorMenuRows(props: {
       value={descriptor.kind.currentValue}
       onValueChange={(value) => setValue(value)}
     >
-      {descriptor.kind.choices.map((choice) => (
-        <DropdownMenuRadioItem
-          key={choice.value}
-          value={choice.value}
-          disabled={!descriptor.settable || pending}
-        >
-          <ChoiceBody
-            label={nativeChatSessionChoiceLabel(choice)}
-            description={choice.description}
-          />
-        </DropdownMenuRadioItem>
-      ))}
+      {descriptor.kind.choices.map((choice) => {
+        const unavailable = choice.unavailable
+        if (unavailable) {
+          return (
+            <DropdownMenuItem
+              key={choice.value}
+              disabled={pending}
+              onSelect={() => openChoiceAction(unavailable.action)}
+            >
+              <ChoiceBody
+                label={nativeChatSessionChoiceLabel(choice, descriptor.id)}
+                description={choice.description}
+              />
+              <span className="ml-auto text-xs text-muted-foreground">
+                {translate('components.native-chat.composer.enableChoice', 'Enable')}
+              </span>
+            </DropdownMenuItem>
+          )
+        }
+        return (
+          <DropdownMenuRadioItem
+            key={choice.value}
+            value={choice.value}
+            disabled={!descriptor.settable || pending}
+          >
+            <ChoiceBody
+              label={nativeChatSessionChoiceLabel(choice, descriptor.id)}
+              description={choice.description}
+            />
+          </DropdownMenuRadioItem>
+        )
+      })}
     </DropdownMenuRadioGroup>
   )
 }
@@ -210,8 +234,14 @@ function NativeChatSessionOptionPickersInner({
   isWorking
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
-  const options = sortNativeChatSessionOptions(snapshot)
+  const mode = snapshot.find((descriptor) => descriptor.id === 'permissionMode')
+  // Mode has its own pill, so keep it out of the shared options dropdown.
+  const options = sortNativeChatSessionOptions(snapshot).filter(
+    (descriptor) => descriptor.id !== 'permissionMode'
+  )
   if (!surface || !model) {
     return null
   }
@@ -222,9 +252,20 @@ function NativeChatSessionOptionPickersInner({
   const invokeAction = (descriptor: SessionOptionDescriptor): void => {
     runSurfaceCall(descriptor.id, setPendingId, () => surface.invokeAction(descriptor.id))
   }
+  const openChoiceAction = (action: SessionOptionChoiceAction): void => {
+    // Exhaustive by switch-exhaustiveness-check: a new action fails the
+    // type-aware lint rather than silently rendering a dead Enable row.
+    switch (action) {
+      case 'open-agent-permissions-setting':
+        openSettingsTarget({ pane: 'agents', repoId: null, sectionId: 'agent-permissions' })
+        openSettingsPage()
+    }
+  }
 
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
   const modelTooltip = translate('components.native-chat.composer.model', 'Model')
+  const modeReason = mode ? nativeChatSessionOptionDisabledReason(mode.disabledReason) : null
+  const modeTooltip = translate('components.native-chat.composer.permissionMode', 'Mode')
   const optionsTooltip = nativeChatOptionsPillTitle(options)
   const optionsReason =
     options.length > 0 && options.every((descriptor) => !descriptor.settable)
@@ -233,6 +274,29 @@ function NativeChatSessionOptionPickersInner({
 
   return (
     <div className="flex min-w-0 items-center gap-0.5">
+      {mode ? (
+        <DropdownMenu>
+          <PickerTrigger
+            label={nativeChatPermissionModePillLabel(mode)}
+            tooltipLabel={modeTooltip}
+            disabled={isWorking || pendingId !== null}
+            disabledReason={modeReason}
+            dispatched={mode.valueSource === 'dispatched'}
+          />
+          <DropdownMenuContent align="start" className="w-60">
+            {modeReason && !mode.settable ? (
+              <DropdownMenuLabel className="font-normal">{modeReason}</DropdownMenuLabel>
+            ) : null}
+            <DescriptorMenuRows
+              descriptor={mode}
+              pending={pendingId !== null}
+              setValue={(value) => setOption(mode, value)}
+              invokeAction={() => invokeAction(mode)}
+              openChoiceAction={openChoiceAction}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
       {options.length > 0 ? (
         <DropdownMenu>
           <PickerTrigger
@@ -257,6 +321,7 @@ function NativeChatSessionOptionPickersInner({
                     pending={pendingId !== null}
                     setValue={(value) => setOption(descriptor, value)}
                     invokeAction={() => invokeAction(descriptor)}
+                    openChoiceAction={openChoiceAction}
                   />
                 </div>
               )
@@ -281,6 +346,7 @@ function NativeChatSessionOptionPickersInner({
             pending={pendingId !== null}
             setValue={(value) => setOption(model, value)}
             invokeAction={() => invokeAction(model)}
+            openChoiceAction={openChoiceAction}
           />
         </DropdownMenuContent>
       </DropdownMenu>
