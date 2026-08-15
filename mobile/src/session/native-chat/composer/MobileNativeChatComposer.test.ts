@@ -174,6 +174,9 @@ describe('MobileNativeChatComposer', () => {
         onKeyPress?: (event: {
           nativeEvent: { key: string; shiftKey?: boolean; isComposing?: boolean }
         }) => void
+        onSelectionChange?: (event: {
+          nativeEvent: { selection: { start: number; end: number } }
+        }) => void
       }
     }
   }
@@ -241,6 +244,31 @@ describe('MobileNativeChatComposer', () => {
     await act(async () => composerInput().props.onChangeText?.(' hello \n'))
 
     expect(onSend).toHaveBeenCalledWith(' hello ')
+    expect(onChangeText).not.toHaveBeenCalled()
+  })
+
+  it('swallows a mid-caret newline inserted after hardware submit', async () => {
+    const onChangeText = vi.fn()
+    const onSend = vi.fn().mockResolvedValue(true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: 'hello',
+          onChangeText,
+          onSend
+        })
+      )
+    })
+
+    await act(async () =>
+      composerInput().props.onSelectionChange?.({
+        nativeEvent: { selection: { start: 2, end: 2 } }
+      })
+    )
+    await act(async () => composerInput().props.onKeyPress?.({ nativeEvent: { key: 'Enter' } }))
+    await act(async () => composerInput().props.onChangeText?.('he\nllo'))
+
+    expect(onSend).toHaveBeenCalledWith('hello')
     expect(onChangeText).not.toHaveBeenCalled()
   })
 
