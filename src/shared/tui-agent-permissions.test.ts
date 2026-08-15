@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyAgentPermissionMode,
+  hasYoloTuiAgentLaunch,
   resolveAgentPermissionModeSummary,
   resolveTuiAgentPermissionMode,
   YOLO_TUI_AGENT_ARGS,
@@ -84,5 +85,39 @@ describe('tui agent permissions', () => {
         agentEnv: YOLO_TUI_AGENT_ENV.goose
       })
     ).toBe('yolo')
+  })
+})
+
+describe('hasYoloTuiAgentLaunch', () => {
+  it('grants bypass when the flag sits alongside other args', () => {
+    expect(
+      hasYoloTuiAgentLaunch({
+        agent: 'claude',
+        agentArgs: '--dangerously-skip-permissions --verbose'
+      })
+    ).toBe(true)
+  })
+
+  it('grants bypass for the bare flag', () => {
+    expect(
+      hasYoloTuiAgentLaunch({ agent: 'claude', agentArgs: '--dangerously-skip-permissions' })
+    ).toBe(true)
+  })
+
+  it('withholds bypass when the flag is absent', () => {
+    expect(hasYoloTuiAgentLaunch({ agent: 'claude', agentArgs: '--verbose' })).toBe(false)
+    expect(hasYoloTuiAgentLaunch({ agent: 'claude', agentArgs: '' })).toBe(false)
+    expect(hasYoloTuiAgentLaunch({ agent: 'claude' })).toBe(false)
+  })
+
+  it('reads env-granted yolo for agents that use it', () => {
+    expect(hasYoloTuiAgentLaunch({ agent: 'goose', agentEnv: { GOOSE_MODE: 'auto' } })).toBe(true)
+    expect(hasYoloTuiAgentLaunch({ agent: 'goose', agentEnv: {} })).toBe(false)
+  })
+
+  it('differs from the exact-preset check that reports mixed', () => {
+    const agentArgs = '--dangerously-skip-permissions --verbose'
+    expect(resolveTuiAgentPermissionMode({ agent: 'claude', agentArgs })).toBe('mixed')
+    expect(hasYoloTuiAgentLaunch({ agent: 'claude', agentArgs })).toBe(true)
   })
 })

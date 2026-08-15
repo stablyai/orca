@@ -1,9 +1,15 @@
 export type SessionOptionValue = string | boolean
 
+/** Closed set of actions offered in place of an unselectable choice. A key (not
+ *  free English) so the producer and the localized label stay in sync. */
+export type SessionOptionChoiceAction = 'open-agent-permissions-setting'
+
 export type SessionOptionSelectChoice = {
   value: string
   label: string
   description?: string
+  /** Not selectable now; the row offers this action instead. */
+  unavailable?: { action: SessionOptionChoiceAction }
 }
 
 /** `default` is the catalog's own value shown before anything is observed —

@@ -8,6 +8,8 @@ import type {
 export type CatalogAgentInteractionDetection = 'claude-model-switch-confirmation'
 export type CatalogCommandDelivery = 'type'
 
+export type CatalogCycleKeyDetection = 'claude-permission-mode'
+
 export type CatalogMidSessionApply =
   | {
       kind: 'command'
@@ -17,6 +19,9 @@ export type CatalogMidSessionApply =
     }
   | { kind: 'toggle-command'; command: string }
   | { kind: 'agent-picker'; command: string; delivery?: CatalogCommandDelivery }
+  /** Presses a key that cycles a session-scoped value by one step; the caller
+   *  reads the resulting state and presses again until the target appears. */
+  | { kind: 'cycle-key'; key: string; detect: CatalogCycleKeyDetection }
   | { kind: 'unsupported' }
 
 export type CatalogOptionApply = {
@@ -60,6 +65,8 @@ export type AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences?: true
   /** Launch-safe options for opaque model ids that are absent from the static catalog. */
   unknownModelOptions?: CatalogOption[]
+  /** Session-scoped options, independent of the selected model. */
+  sessionOptions?: CatalogOption[]
   composeModelValue?: (modelId: string, values: Record<string, SessionOptionValue>) => string
   /** Why: a seeded id the CLI has retired is a fatal launch, so a successful probe
    * must be able to drop it rather than only add. Membership only — option menus

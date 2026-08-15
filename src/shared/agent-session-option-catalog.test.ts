@@ -234,3 +234,47 @@ describe('agent session option catalog', () => {
     })
   })
 })
+
+describe('session-scoped options', () => {
+  it('exposes Claude permission mode as a session option, not a model option', () => {
+    const catalog = getAgentSessionOptionCatalog('claude')
+    const mode = catalog?.sessionOptions?.find((option) => option.id === 'permissionMode')
+    expect(mode?.kind.type).toBe('select')
+    expect(
+      catalog?.models.some((model) => model.options.some((o) => o.id === 'permissionMode'))
+    ).toBe(false)
+  })
+})
+
+describe('claude permission mode', () => {
+  const modeOption = () =>
+    getAgentSessionOptionCatalog('claude')?.sessionOptions?.find((o) => o.id === 'permissionMode')
+
+  it('maps every choice except bypass to --permission-mode', () => {
+    expect(modeOption()?.apply.launchArgs?.('plan')).toEqual(['--permission-mode', 'plan'])
+    expect(modeOption()?.apply.launchArgs?.('acceptEdits')).toEqual([
+      '--permission-mode',
+      'acceptEdits'
+    ])
+  })
+
+  it('maps bypass to the dangerous-skip flag Orca already uses for yolo', () => {
+    expect(modeOption()?.apply.launchArgs?.('bypassPermissions')).toEqual([
+      '--dangerously-skip-permissions'
+    ])
+  })
+
+  it('yields to user-supplied permission args', () => {
+    expect(modeOption()?.apply.agentArgsOverride?.(['--permission-mode', 'plan'])).toBe(true)
+    expect(modeOption()?.apply.agentArgsOverride?.(['--dangerously-skip-permissions'])).toBe(true)
+    expect(modeOption()?.apply.agentArgsOverride?.(['--model', 'opus'])).toBe(false)
+  })
+
+  it('drives the shift+tab cycle mid-session', () => {
+    expect(modeOption()?.apply.midSession).toEqual({
+      kind: 'cycle-key',
+      key: '\x1b[Z',
+      detect: 'claude-permission-mode'
+    })
+  })
+})

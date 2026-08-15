@@ -126,6 +126,36 @@ const CLAUDE_FAST_MODE: CatalogOption = {
   apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
 }
 
+const CLAUDE_PERMISSION_MODE: CatalogOption = {
+  id: 'permissionMode',
+  label: 'Mode',
+  category: 'mode',
+  kind: {
+    type: 'select',
+    choices: [
+      { value: 'manual', label: 'Manual' },
+      { value: 'acceptEdits', label: 'Accept edits' },
+      { value: 'plan', label: 'Plan' },
+      { value: 'auto', label: 'Auto' },
+      { value: 'bypassPermissions', label: 'Bypass permissions' }
+    ],
+    defaultValue: 'manual'
+  },
+  apply: {
+    // Why: Claude refuses bypassPermissions unless the process launched with
+    // --dangerously-skip-permissions, so that choice is launch-granted only.
+    launchArgs: (value) =>
+      value === 'bypassPermissions'
+        ? ['--dangerously-skip-permissions']
+        : ['--permission-mode', String(value)],
+    agentArgsOverride: (tokens) =>
+      hasFlag(tokens, ['--permission-mode', '--dangerously-skip-permissions']),
+    // Shift+Tab cycles Claude's mode one step per press; there is no slash
+    // command for mode and no menu — press-and-observe until the target shows.
+    midSession: { kind: 'cycle-key', key: '\x1b[Z', detect: 'claude-permission-mode' }
+  }
+}
+
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
   // Why: these ids are Claude CLI aliases that resolve to the newest model of
@@ -160,6 +190,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       options: []
     }
   ],
+  sessionOptions: [CLAUDE_PERMISSION_MODE],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),
