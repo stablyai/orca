@@ -2,13 +2,14 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openReadonlySyncDatabase } from './readonly-sync-database'
 import SyncDatabase from './sync-database'
 
 const temporaryDirectories: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(
     temporaryDirectories
       .splice(0)
@@ -23,19 +24,24 @@ const db = new DatabaseSync(workerData.dbPath)
 db.exec('CREATE TABLE items (id INTEGER); INSERT INTO items VALUES (1)')
 db.exec('BEGIN EXCLUSIVE')
 parentPort.postMessage('locked')
-setTimeout(() => {
-  db.exec('COMMIT')
-  db.close()
-  parentPort.postMessage('committed')
-}, workerData.holdMs)
+parentPort.once('message', (message) => {
+  if (message !== 'reader-started') {
+    throw new Error('Unexpected lock-holder message')
+  }
+  setTimeout(() => {
+    db.exec('COMMIT')
+    db.close()
+    parentPort.postMessage('committed')
+  }, workerData.releaseDelayMs)
+})
 `
 
-async function holdExclusive(dbPath: string, holdMs: number): Promise<Worker> {
+async function holdExclusive(dbPath: string, releaseDelayMs: number): Promise<Worker> {
   const directory = await mkdtemp(join(tmpdir(), 'orca-readonly-sqlite-worker-'))
   temporaryDirectories.push(directory)
   const workerPath = join(directory, 'holder.mjs')
   await writeFile(workerPath, HOLDER_SOURCE)
-  const worker = new Worker(workerPath, { workerData: { dbPath, holdMs } })
+  const worker = new Worker(workerPath, { workerData: { dbPath, releaseDelayMs } })
   await new Promise<void>((resolve, reject) => {
     worker.once('error', reject)
     worker.on('message', (message) => {
@@ -54,10 +60,9 @@ describe('openReadonlySyncDatabase', () => {
     const dbPath = join(directory, 'sessions.db')
     const worker = await holdExclusive(dbPath, 200)
     try {
-      const started = Date.now()
+      worker.postMessage('reader-started')
       const db = openReadonlySyncDatabase(dbPath, { timeoutMs: 2_000 })
       expect(db.prepare('SELECT id FROM items').get()).toEqual({ id: 1 })
-      expect(Date.now() - started).toBeGreaterThanOrEqual(150)
       db.close()
     } finally {
       await worker.terminate()
@@ -70,6 +75,7 @@ describe('openReadonlySyncDatabase', () => {
     const dbPath = join(directory, 'sessions.db')
     const worker = await holdExclusive(dbPath, 2_000)
     try {
+      worker.postMessage('reader-started')
       expect(() => {
         const db = openReadonlySyncDatabase(dbPath, { timeoutMs: 50 })
         try {
@@ -94,5 +100,45 @@ describe('openReadonlySyncDatabase', () => {
     const db = openReadonlySyncDatabase(dbPath)
     expect(() => db.exec('INSERT INTO items VALUES (2)')).toThrow()
     db.close()
+  })
+
+  it('closes the database when query_only setup fails', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-readonly-sqlite-'))
+    temporaryDirectories.push(directory)
+    const dbPath = join(directory, 'sessions.db')
+    const writer = new SyncDatabase(dbPath)
+    writer.exec('CREATE TABLE items (id INTEGER)')
+    writer.close()
+
+    const setupError = new Error('query_only setup failed')
+    vi.spyOn(SyncDatabase.prototype, 'pragma').mockImplementationOnce(() => {
+      throw setupError
+    })
+    const closeSpy = vi.spyOn(SyncDatabase.prototype, 'close')
+
+    expect(() => openReadonlySyncDatabase(dbPath)).toThrow(setupError)
+    expect(closeSpy).toHaveBeenCalledOnce()
+  })
+
+  it('preserves the setup error when closing also fails', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-readonly-sqlite-'))
+    temporaryDirectories.push(directory)
+    const dbPath = join(directory, 'sessions.db')
+    const writer = new SyncDatabase(dbPath)
+    writer.exec('CREATE TABLE items (id INTEGER)')
+    writer.close()
+
+    const setupError = new Error('query_only setup failed')
+    const closeError = new Error('close failed')
+    const originalClose = SyncDatabase.prototype.close
+    vi.spyOn(SyncDatabase.prototype, 'pragma').mockImplementationOnce(() => {
+      throw setupError
+    })
+    vi.spyOn(SyncDatabase.prototype, 'close').mockImplementationOnce(function (this: SyncDatabase) {
+      originalClose.call(this)
+      throw closeError
+    })
+
+    expect(() => openReadonlySyncDatabase(dbPath)).toThrow(setupError)
   })
 })

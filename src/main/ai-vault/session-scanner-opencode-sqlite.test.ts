@@ -311,13 +311,20 @@ db.exec('CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER NOT NUL
 db.exec("INSERT INTO session VALUES ('ses_busy', 1777634000000, 1777634001000)")
 db.exec('BEGIN EXCLUSIVE')
 parentPort.postMessage('locked')
-setTimeout(() => {
-  db.exec('COMMIT')
-  db.close()
-}, 150)
+parentPort.once('message', (message) => {
+  if (message !== 'reader-started') {
+    throw new Error('Unexpected lock-holder message')
+  }
+  setTimeout(() => {
+    db.exec('COMMIT')
+    db.close()
+  }, workerData.releaseDelayMs)
+})
 `
     )
-    const worker = new Worker(workerPath, { workerData: { dbPath: path } })
+    const worker = new Worker(workerPath, {
+      workerData: { dbPath: path, releaseDelayMs: 150 }
+    })
     await new Promise<void>((resolve, reject) => {
       worker.once('error', reject)
       worker.on('message', (message) => {
@@ -328,6 +335,7 @@ setTimeout(() => {
     })
     try {
       const issues: AiVaultScanIssue[] = []
+      worker.postMessage('reader-started')
       const candidates = await listOpenCodeSqliteSessions({
         dbPaths: [path],
         limit: 10,

@@ -15,6 +15,15 @@ export function openReadonlySyncDatabase(
     fileMustExist: options.fileMustExist ?? true,
     timeout: options.timeoutMs ?? READONLY_SQLITE_BUSY_TIMEOUT_MS
   })
-  db.pragma('query_only = ON')
-  return db
+  try {
+    db.pragma('query_only = ON')
+    return db
+  } catch (error) {
+    try {
+      db.close()
+    } catch {
+      // Preserve the actionable initialization failure.
+    }
+    throw error
+  }
 }
